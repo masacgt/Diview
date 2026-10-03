@@ -1,0 +1,1552 @@
+<!DOCTYPE html><html class="dark" lang="ja" style="width: 390px; height: 1542px; overflow: hidden; position: relative;"><head></head><body class="bg-surface font-body-md text-on-surface antialiased flex flex-col min-h-screen selection:bg-primary-container selection:text-on-primary-container"><svg aria-hidden="true" class="inline-defs-container" style="position:absolute;width:0;height:0;overflow:hidden"></svg>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport">
+<meta content="mobile_tab" name="shell-type">
+<title>年間配当（配当推移：複利成長カーブ＆インカム分析統合版） - Annual Dividend</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "tertiary-fixed": "#ffdad7",
+            "error": "#ffb4ab",
+            "error-container": "#93000a",
+            "outline-variant": "#3c4a42",
+            "primary-container": "#10b981",
+            "on-tertiary-container": "#79000e",
+            "secondary-container": "#3131c0",
+            "inverse-primary": "#006c49",
+            "inverse-on-surface": "#283044",
+            "on-secondary-fixed": "#07006c",
+            "on-secondary-container": "#b0b2ff",
+            "on-secondary": "#1000a9",
+            "surface-variant": "#2d3449",
+            "surface-bright": "#31394d",
+            "primary-fixed-dim": "#4edea3",
+            "surface-container-low": "#131b2e",
+            "background": "#0b1326",
+            "on-surface-variant": "#bbcabf",
+            "tertiary-container": "#ff7a73",
+            "on-primary-container": "#00422b",
+            "primary": "#4edea3",
+            "tertiary": "#ffb3ad",
+            "surface-container-lowest": "#060e20",
+            "secondary-fixed-dim": "#c0c1ff",
+            "outline": "#86948a",
+            "surface-container-highest": "#2d3449",
+            "on-primary-fixed": "#002113",
+            "primary-fixed": "#6ffbbe",
+            "surface": "#0b1326",
+            "surface-container": "#171f33",
+            "on-primary-fixed-variant": "#005236",
+            "on-tertiary-fixed-variant": "#930013",
+            "on-secondary-fixed-variant": "#2f2ebe",
+            "on-surface": "#dae2fd",
+            "secondary": "#c0c1ff",
+            "on-background": "#dae2fd",
+            "on-error": "#690005",
+            "secondary-fixed": "#e1e0ff",
+            "surface-tint": "#4edea3",
+            "tertiary-fixed-dim": "#ffb3ad",
+            "on-tertiary": "#68000a",
+            "on-primary": "#003824",
+            "on-error-container": "#ffdad6",
+            "surface-dim": "#0b1326",
+            "on-tertiary-fixed": "#410004",
+            "inverse-surface": "#dae2fd",
+            "surface-container-high": "#222a3d"
+          },
+          fontFamily: {
+            "headline-md": ["Space Grotesk", "sans-serif"],
+            "display-lg": ["Space Grotesk", "sans-serif"],
+            "title-md": ["Manrope", "sans-serif"],
+            "numeric-hero-mobile": ["Space Grotesk", "sans-serif"],
+            "label-lg": ["Manrope", "sans-serif"],
+            "headline-lg": ["Space Grotesk", "sans-serif"],
+            "title-lg": ["Manrope", "sans-serif"],
+            "numeric-hero": ["Space Grotesk", "sans-serif"],
+            "label-md": ["Manrope", "sans-serif"],
+            "label-sm": ["Manrope", "sans-serif"],
+            "body-lg": ["Manrope", "sans-serif"],
+            "body-sm": ["Manrope", "sans-serif"],
+            "body-md": ["Manrope", "sans-serif"]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    @layer base {
+      html, body {
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background-color: #0b1326;
+        color: #dae2fd;
+        font-family: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+      body {
+        overscroll-behavior-y: none;
+        -webkit-tap-highlight-color: transparent;
+        min-height: max(884px, 100dvh);
+      }
+      .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
+      .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        display: inline-block;
+        vertical-align: middle;
+      }
+    }
+    ::-webkit-scrollbar { display: none; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .stagger-1 { animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .stagger-2 { animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.08s forwards; opacity: 0; }
+
+    .donut-slice-anim {
+      transition: stroke-width 0.25s ease, filter 0.25s ease, opacity 0.25s ease;
+      cursor: pointer;
+    }
+    .donut-slice-anim:hover, .donut-slice-anim.active {
+      filter: drop-shadow(0 0 8px currentColor);
+      stroke-width: 14;
+    }
+
+    @keyframes fabPulse {
+      0%, 100% { box-shadow: 0 8px 24px -2px rgba(16, 185, 129, 0.45), 0 0 0 0 rgba(78, 222, 163, 0.4); }
+      50% { box-shadow: 0 10px 28px 2px rgba(16, 185, 129, 0.65), 0 0 0 8px rgba(78, 222, 163, 0); }
+    }
+    .fab-pulse {
+      animation: fabPulse 3s infinite ease-in-out;
+    }
+
+    .scrub-point {
+      transition: r 0.15s ease, fill 0.15s ease;
+      cursor: pointer;
+    }
+    .scrub-point:hover, .scrub-point.active {
+      r: 6px;
+      fill: #ffffff;
+      stroke: #4edea3;
+      stroke-width: 2.5px;
+    }
+
+    /* Year Bar Selection & Active State */
+    .year-bar-col {
+      cursor: pointer;
+      transition: transform 0.2s ease, filter 0.2s ease;
+    }
+    .year-bar-col:hover {
+      transform: translateY(-2px);
+    }
+    .year-bar-col.active-year .asset-bar-rect,
+    .div-bar-col.active-year .div-bar-rect {
+      filter: drop-shadow(0 0 8px rgba(78, 222, 163, 0.6));
+    }
+    .year-grid-cell, .div-grid-cell {
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+    .year-grid-cell.active, .div-grid-cell.active {
+      background-color: rgba(78, 222, 163, 0.12);
+      border-color: rgba(78, 222, 163, 0.35);
+    }
+    .div-interactive-card {
+      transition: border-color 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
+      cursor: pointer;
+    }
+    .div-interactive-card:active {
+      transform: scale(0.99);
+    }
+  </style>
+<!-- Fixed Top Header -->
+<header class="fixed top-0 inset-x-0 z-50 bg-surface-container-lowest/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.25)] pt-safe">
+<div class="h-16 px-4 flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-9 h-9 rounded-lg bg-surface-container-high flex items-center justify-center border border-white/5 shadow-inner">
+<span class="material-symbols-outlined text-primary text-[22px]" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-md text-[19px] tracking-tight text-on-surface font-bold">Annual Dividend</span>
+<span class="font-label-sm text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">配当管理・分析</span>
+</div>
+</div>
+<div class="flex items-center gap-1">
+<button aria-label="通知" class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-white/5 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+<button aria-label="銘柄検索" class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-white/5 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</button>
+<button aria-label="設定" class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-white/5 active:scale-95 transition-all" title="設定">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Scrollable Content -->
+<main class="flex flex-col relative w-full pt-20 pb-32 px-4 min-h-screen">
+<div class="flex flex-col w-full gap-4 max-w-md mx-auto">
+<!-- ================= 1. Hero Projected Dividend Summary Card ================= -->
+<section class="relative overflow-hidden rounded-2xl bg-surface-container-low p-4 shadow-xl border border-white/[0.04] stagger-1">
+<div class="absolute -top-16 -left-16 w-56 h-56 rounded-full bg-primary/10 blur-3xl pointer-events-none"></div>
+<div class="absolute -bottom-16 -right-16 w-48 h-48 rounded-full bg-secondary-container/20 blur-3xl pointer-events-none"></div>
+<div class="relative z-10 flex flex-col gap-3">
+<!-- Top Row: Label & Basis Pill Switcher -->
+<div class="flex items-center justify-between">
+<span class="text-[11px] text-on-surface-variant uppercase tracking-wider font-semibold flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+            年間受取見込額 (税引前)
+          </span>
+<div class="relative flex items-center bg-surface-container-highest p-0.5 rounded-full border border-white/5 shadow-inner">
+<button class="relative z-10 px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors duration-200 text-on-primary" id="toggle-eval" type="button">評価額基準</button>
+<button class="relative z-10 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors duration-200 text-on-surface-variant hover:text-on-surface" id="toggle-cost" type="button">取得額基準</button>
+<!-- Sliding Indicator Pill -->
+<div class="absolute top-0.5 left-0.5 h-[calc(100%-4px)] w-[68px] rounded-full bg-primary shadow-sm transition-all duration-300 ease-out pointer-events-none" id="basis-pill-bg"></div>
+</div>
+</div>
+<!-- Hero Number & Change Pill -->
+<div class="flex items-baseline justify-between gap-2 mt-0.5">
+<div class="flex items-baseline gap-1.5">
+<span class="font-headline-lg text-[32px] text-on-surface font-bold tracking-tight transition-all duration-300" id="dividend-hero-val">¥ 124,500</span>
+<span class="text-xs text-on-surface-variant font-medium">/ 年</span>
+</div>
+<div class="flex items-center gap-1 text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full text-xs font-bold shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[15px]">trending_up</span>
+<span class="">+12.4% 前年比</span>
+</div>
+</div>
+<!-- Secondary Metrics Grid -->
+<div class="grid grid-cols-2 gap-2 pt-1 border-t border-white/[0.04]">
+<div class="flex flex-col gap-1 p-2.5 rounded-xl bg-surface-container-lowest/50 border border-white/[0.03]">
+<span class="text-[11px] text-on-surface-variant flex items-center gap-1 font-medium">
+<span class="material-symbols-outlined text-primary text-[14px]">calendar_today</span>
+              月間平均配当
+            </span>
+<div class="flex items-baseline gap-1 mt-0.5">
+<span class="font-headline-md text-base text-on-surface font-bold" id="monthly-dividend-val">約 ¥10,375</span>
+<span class="text-[10px] text-on-surface-variant">/ 月</span>
+</div>
+</div>
+<div class="flex flex-col gap-1 p-2.5 rounded-xl bg-surface-container-lowest/50 border border-white/[0.03]">
+<span class="text-[11px] text-on-surface-variant flex items-center gap-1 font-medium">
+<span class="material-symbols-outlined text-primary text-[14px]">percent</span>
+              平均配当利回り
+            </span>
+<div class="flex items-baseline gap-0.5 mt-0.5">
+<span class="font-headline-md text-lg text-primary font-bold transition-all duration-200" id="yield-value">3.56</span>
+<span class="text-xs text-primary font-bold">%</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- ================= 2. 3-Way Tab Switcher ================= -->
+<div class="relative w-full flex p-1 rounded-xl bg-surface-container-low shadow-md border border-white/[0.04] stagger-2" id="main-tab-nav" role="tablist">
+<button aria-selected="false" class="chart-tab flex-1 py-2 rounded-lg text-on-surface-variant hover:text-on-surface text-xs font-semibold transition-all duration-200 active:scale-95 flex items-center justify-center gap-1.5" data-tab="analysis" id="tab-analysis" role="tab" type="button">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: &quot;FILL&quot; 0;">donut_large</span>
+<span class="">分析</span>
+</button>
+<button aria-selected="true" class="chart-tab flex-1 py-2 rounded-lg bg-surface-container-high text-primary font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all duration-200 active:scale-95" data-tab="dividend" id="tab-dividend" role="tab" type="button">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: &quot;FILL&quot; 1;">trending_up</span>
+<span class="">配当推移</span>
+</button>
+<button aria-selected="false" class="chart-tab flex-1 py-2 rounded-lg text-on-surface-variant hover:text-on-surface text-xs font-semibold transition-all duration-200 active:scale-95 flex items-center justify-center gap-1.5" data-tab="asset" id="tab-asset" role="tab" type="button">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: &quot;FILL&quot; 0;">account_balance</span>
+<span class="">資産推移</span>
+</button>
+</div>
+<!-- ================= TAB 1: 分析 (DONUT + SECTOR) ================= -->
+<div class="tab-content-panel flex flex-col gap-4 w-full hidden" id="panel-analysis" role="tabpanel" style="opacity: 1; transform: translateY(0px); transition: opacity 0.25s, transform 0.25s;">
+<section class="rounded-2xl bg-surface-container-low p-4 flex flex-col items-center shadow-lg border border-white/[0.04]">
+<div class="w-full flex items-center justify-between mb-1">
+<h2 class="font-title-md text-sm text-on-surface flex items-center gap-1.5 font-bold">
+<span class="material-symbols-outlined text-primary text-[20px]">donut_small</span>
+            構成銘柄・配当比率
+          </h2>
+<span class="text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full font-medium">4銘柄保有</span>
+</div>
+<div class="relative w-56 h-56 flex items-center justify-center my-2">
+<svg aria-label="配当比率円グラフ" class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
+<circle cx="50" cy="50" fill="transparent" r="38" stroke="#171f33" stroke-width="12"></circle>
+<circle class="donut-slice-anim text-primary" cx="50" cy="50" data-amount="¥47,310" data-name="トヨタ自動車" data-pct="38.0%" fill="transparent" id="slice-7203" r="38" stroke="#10b981" stroke-dasharray="90.73 238.76" stroke-dashoffset="0" stroke-width="12"></circle>
+<circle class="donut-slice-anim text-[#38bdf8]" cx="50" cy="50" data-amount="¥34,860" data-name="Apple Inc." data-pct="28.0%" fill="transparent" id="slice-aapl" r="38" stroke="#38bdf8" stroke-dasharray="66.85 238.76" stroke-dashoffset="-90.73" stroke-width="12"></circle>
+<circle class="donut-slice-anim text-[#c0c1ff]" cx="50" cy="50" data-amount="¥22,410" data-name="eMAXIS Slim" data-pct="18.0%" fill="transparent" id="slice-emaxis" r="38" stroke="#c0c1ff" stroke-dasharray="42.98 238.76" stroke-dashoffset="-157.58" stroke-width="12"></circle>
+<circle class="donut-slice-anim text-[#ffb3ad]" cx="50" cy="50" data-amount="¥19,920" data-name="NTT (9432)" data-pct="16.0%" fill="transparent" id="slice-9432" r="38" stroke="#ffb3ad" stroke-dasharray="38.20 238.76" stroke-dashoffset="-200.56" stroke-width="12"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-4 transition-all duration-300">
+<span class="text-[11px] text-on-surface-variant font-medium tracking-wide" id="donut-center-label">年間配当合計</span>
+<span class="font-headline-md text-xl text-on-surface font-bold mt-0.5 tracking-tight" id="donut-center-amount">¥124,500</span>
+<span class="text-[11px] text-primary mt-0.5 font-bold flex items-center gap-1" id="donut-center-status">
+<span class="w-1.5 h-1.5 rounded-full bg-primary inline-block"></span>4銘柄分散中
+            </span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-2 mt-2 w-full">
+<div class="legend-pill flex items-center justify-between p-2 rounded-xl bg-surface-container-lowest/60 border border-white/[0.03] hover:border-primary/40 cursor-pointer transition-all" data-amount="¥47,310" data-name="トヨタ自動車 (7203)" data-pct="38.0%" data-slice="slice-7203">
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-[#10b981]"></span>
+<span class="text-xs text-on-surface font-semibold truncate">トヨタ自動車</span>
+</div>
+<span class="text-xs font-bold text-primary">38.0%</span>
+</div>
+<div class="legend-pill flex items-center justify-between p-2 rounded-xl bg-surface-container-lowest/60 border border-white/[0.03] hover:border-[#38bdf8]/40 cursor-pointer transition-all" data-amount="¥34,860" data-name="Apple Inc. (AAPL)" data-pct="28.0%" data-slice="slice-aapl">
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-[#38bdf8]"></span>
+<span class="text-xs text-on-surface font-semibold truncate">Apple</span>
+</div>
+<span class="text-xs font-bold text-[#38bdf8]">28.0%</span>
+</div>
+<div class="legend-pill flex items-center justify-between p-2 rounded-xl bg-surface-container-lowest/60 border border-white/[0.03] hover:border-[#c0c1ff]/40 cursor-pointer transition-all" data-amount="¥22,410" data-name="eMAXIS Slim 全世界" data-pct="18.0%" data-slice="slice-emaxis">
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-[#c0c1ff]"></span>
+<span class="text-xs text-on-surface font-semibold truncate">eMAXIS Slim</span>
+</div>
+<span class="text-xs font-bold text-[#c0c1ff]">18.0%</span>
+</div>
+<div class="legend-pill flex items-center justify-between p-2 rounded-xl bg-surface-container-lowest/60 border border-white/[0.03] hover:border-[#ffb3ad]/40 cursor-pointer transition-all" data-amount="¥19,920" data-name="NTT (9432)" data-pct="16.0%" data-slice="slice-9432">
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-[#ffb3ad]"></span>
+<span class="text-xs text-on-surface font-semibold truncate">NTT (9432)</span>
+</div>
+<span class="text-xs font-bold text-[#ffb3ad]">16.0%</span>
+</div>
+</div>
+</section>
+<!-- セクター別比率（業種ポートフォリオ） -->
+<section class="rounded-2xl bg-surface-container-low p-4 flex flex-col gap-3 shadow-lg border border-white/[0.04]">
+  <div class="flex items-center justify-between">
+    <h3 class="font-title-md text-sm text-on-surface flex items-center gap-1.5 font-bold">
+      <span class="material-symbols-outlined text-primary text-[18px]">category</span>
+      セクター別比率</h3>
+    <span class="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full font-bold">3業種分散</span>
+  </div>
+
+  <!-- Stacked Horizontal Multi-segment Progress Bar -->
+  <div class="flex flex-col gap-1.5">
+    <div class="w-full h-3 rounded-full bg-surface-container-highest overflow-hidden flex shadow-inner">
+      <div class="h-full bg-primary transition-all duration-300" style="width: 45.2%;" title="輸送用機器 45.2%"></div>
+      <div class="h-full bg-[#38bdf8] transition-all duration-300" style="width: 32.8%;" title="情報・通信 32.8%"></div>
+      <div class="h-full bg-[#c0c1ff] transition-all duration-300" style="width: 22.0%;" title="全世界・米国 22.0%"></div>
+    </div>
+    <div class="flex items-center justify-between text-[11px] text-on-surface-variant font-medium px-0.5">
+      <span class="flex items-center gap-1">
+        <span class="w-2 h-2 rounded-full bg-primary inline-block"></span>輸送用機器 45.2%
+      </span>
+      <span class="flex items-center gap-1">
+        <span class="w-2 h-2 rounded-full bg-[#38bdf8] inline-block"></span>情報・通信 32.8%
+      </span>
+      <span class="flex items-center gap-1">
+        <span class="w-2 h-2 rounded-full bg-[#c0c1ff] inline-block"></span>全世界・米国 22.0%
+      </span>
+    </div>
+  </div>
+
+  <!-- Sector Cards Quick Summary -->
+  <div class="grid grid-cols-3 gap-2 pt-1">
+    <div class="flex flex-col p-2 rounded-xl bg-surface-container-lowest/60 border border-white/[0.03]">
+      <span class="text-[10px] text-on-surface-variant truncate">輸送用機器</span>
+      <span class="font-headline-md text-xs font-bold text-on-surface mt-0.5">¥56,274</span>
+      <span class="text-[9px] text-primary font-bold">45.2%</span>
+    </div>
+    <div class="flex flex-col p-2 rounded-xl bg-surface-container-lowest/60 border border-white/[0.03]">
+      <span class="text-[10px] text-on-surface-variant truncate">情報・通信</span>
+      <span class="font-headline-md text-xs font-bold text-on-surface mt-0.5">¥40,836</span>
+      <span class="text-[9px] text-[#38bdf8] font-bold">32.8%</span>
+    </div>
+    <div class="flex flex-col p-2 rounded-xl bg-surface-container-lowest/60 border border-white/[0.03]">
+      <span class="text-[10px] text-on-surface-variant truncate">全世界・米国</span>
+      <span class="font-headline-md text-xs font-bold text-on-surface mt-0.5">¥27,390</span>
+      <span class="text-[9px] text-[#c0c1ff] font-bold">22.0%</span>
+    </div>
+  </div>
+</section>
+
+<!-- セクター・銘柄構成詳細 (Accordion / List) -->
+<section class="flex flex-col gap-2.5">
+  <div class="flex items-center justify-between px-1">
+    <h3 class="font-title-md text-sm font-bold text-on-surface flex items-center gap-1.5">
+      <span class="material-symbols-outlined text-primary text-[20px]">view_list</span>
+      セクター・銘柄構成詳細
+    </h3>
+    <span class="text-xs text-on-surface-variant font-mono">4銘柄内訳</span>
+  </div>
+
+  <div class="flex flex-col gap-2.5" id="sector-accordion-list">
+  <!-- Group 1: 輸送用機器 -->
+  <div class="rounded-2xl bg-surface-container-low p-3.5 border border-white/[0.04] shadow-sm flex flex-col gap-2.5 transition-all duration-200">
+    <button aria-expanded="false" class="sector-accordion-btn w-full flex items-center justify-between border-white/[0.04] cursor-pointer text-left focus:outline-none" type="button">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-primary"></span>
+        <h4 class="text-xs font-bold text-on-surface">輸送用機器</h4>
+        <span class="text-[10px] text-primary bg-primary/10 px-1.5 py-0.2 rounded font-semibold">45.2%</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="font-headline-md text-xs font-bold text-primary">¥56,274 / 年</span>
+        <span class="material-symbols-outlined text-on-surface-variant text-[18px] transition-transform duration-200 sector-chevron">expand_more</span>
+      </div>
+    </button>
+    <div class="sector-content flex flex-col gap-2 overflow-hidden transition-all duration-300 hidden">
+      <div class="flex items-center justify-between p-2.5 rounded-xl bg-surface-container-lowest/70 border border-white/[0.03]">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-[11px] font-bold font-mono text-primary">7203</div>
+          <div>
+            <div class="text-xs font-bold text-on-surface">トヨタ自動車</div>
+            <div class="text-[10px] text-on-surface-variant">保有 300株 • 利回り 3.8%</div>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="font-headline-md text-xs font-bold text-on-surface">¥47,310</div>
+          <div class="text-[9px] text-primary font-bold">ポートフォリオ 38.0%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Group 2: 情報・通信 / テック -->
+  <div class="rounded-2xl bg-surface-container-low p-3.5 border border-white/[0.04] shadow-sm flex flex-col gap-2.5 transition-all duration-200">
+    <button aria-expanded="false" class="sector-accordion-btn w-full flex items-center justify-between border-white/[0.04] cursor-pointer text-left focus:outline-none" type="button">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-[#38bdf8]"></span>
+        <h4 class="text-xs font-bold text-on-surface">情報・通信 / テック</h4>
+        <span class="text-[10px] text-[#38bdf8] bg-[#38bdf8]/10 px-1.5 py-0.2 rounded font-semibold">32.8%</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="font-headline-md text-xs font-bold text-[#38bdf8]">¥40,836 / 年</span>
+        <span class="material-symbols-outlined text-on-surface-variant text-[18px] transition-transform duration-200 sector-chevron">expand_more</span>
+      </div>
+    </button>
+    <div class="sector-content flex flex-col gap-2 overflow-hidden transition-all duration-300 hidden">
+      <div class="flex items-center justify-between p-2.5 rounded-xl bg-surface-container-lowest/70 border border-white/[0.03]">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-[10px] font-bold font-mono text-[#38bdf8]">AAPL</div>
+          <div>
+            <div class="text-xs font-bold text-on-surface">Apple Inc.</div>
+            <div class="text-[10px] text-on-surface-variant">保有 40株 • 利回り 0.6% + 連続増配</div>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="font-headline-md text-xs font-bold text-on-surface">¥34,860</div>
+          <div class="text-[9px] text-[#38bdf8] font-bold">ポートフォリオ 28.0%</div>
+        </div>
+      </div>
+      <div class="flex items-center justify-between p-2.5 rounded-xl bg-surface-container-lowest/70 border border-white/[0.03]">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-[11px] font-bold font-mono text-[#ffb3ad]">9432</div>
+          <div>
+            <div class="text-xs font-bold text-on-surface">日本電信電話 (NTT)</div>
+            <div class="text-[10px] text-on-surface-variant">保有 1,200株 • 利回り 3.3%</div>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="font-headline-md text-xs font-bold text-on-surface">¥19,920</div>
+          <div class="text-[9px] text-[#ffb3ad] font-bold">ポートフォリオ 16.0%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Group 3: 投資信託 / 全世界株式 -->
+  <div class="rounded-2xl bg-surface-container-low p-3.5 border border-white/[0.04] shadow-sm flex flex-col gap-2.5 transition-all duration-200">
+    <button aria-expanded="false" class="sector-accordion-btn w-full flex items-center justify-between border-white/[0.04] cursor-pointer text-left focus:outline-none" type="button">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-[#c0c1ff]"></span>
+        <h4 class="text-xs font-bold text-on-surface">投資信託 / 全世界株式</h4>
+        <span class="text-[10px] text-[#c0c1ff] bg-[#c0c1ff]/10 px-1.5 py-0.2 rounded font-semibold">22.0%</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="font-headline-md text-xs font-bold text-[#c0c1ff]">¥27,390 / 年</span>
+        <span class="material-symbols-outlined text-on-surface-variant text-[18px] transition-transform duration-200 sector-chevron">expand_more</span>
+      </div>
+    </button>
+    <div class="sector-content flex flex-col gap-2 overflow-hidden transition-all duration-300 hidden">
+      <div class="flex items-center justify-between p-2.5 rounded-xl bg-surface-container-lowest/70 border border-white/[0.03]">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-[10px] font-bold font-mono text-[#c0c1ff]">ETF</div>
+          <div>
+            <div class="text-xs font-bold text-on-surface">eMAXIS Slim 全世界株式</div>
+            <div class="text-[10px] text-on-surface-variant">オルカン積立 • 複利再投資枠</div>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="font-headline-md text-xs font-bold text-on-surface">¥22,410</div>
+          <div class="text-[9px] text-[#c0c1ff] font-bold">ポートフォリオ 18.0%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><script>
+  (function() {
+    const accordionList = document.getElementById('sector-accordion-list');
+    if (!accordionList) return;
+    accordionList.addEventListener('click', (e) => {
+      const btn = e.target.closest('.sector-accordion-btn');
+      if (!btn) return;
+      const card = btn.closest('.rounded-2xl');
+      const content = card ? card.querySelector('.sector-content') : null;
+      const chevron = btn.querySelector('.sector-chevron');
+      if (!content || !chevron) return;
+      const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+      if (isExpanded) {
+        btn.setAttribute('aria-expanded', 'false');
+        content.classList.add('hidden');
+        btn.classList.remove('border-b', 'pb-2');
+        chevron.classList.remove('rotate-180');
+      } else {
+        btn.setAttribute('aria-expanded', 'true');
+        content.classList.remove('hidden');
+        btn.classList.add('border-b', 'pb-2');
+        chevron.classList.add('rotate-180');
+      }
+    });
+  })();
+</script>
+</section>
+
+<!-- AIポートフォリオ健全性 summary card -->
+<section class="rounded-2xl bg-surface-container-low p-4 shadow-xl border border-white/[0.04] flex flex-col gap-3">
+  <div class="flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <div class="w-7 h-7 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
+        <span class="material-symbols-outlined text-[18px]">verified</span>
+      </div>
+      <div>
+        <h3 class="font-title-md text-xs font-bold text-on-surface">AIポートフォリオ診断</h3>
+        <span class="text-[10px] text-on-surface-variant">分散スコア &amp; リスク評価</span>
+      </div>
+    </div>
+    <span class="text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">健全度: A (88/100)</span>
+  </div>
+  <p class="text-xs text-on-surface-variant leading-relaxed">
+    主力銘柄の連続増配実績が強固で、YOC（簿価利回り）は4.08%と高水準を維持しています。日米・オルカンの通貨および地域分散も良好です。
+  </p>
+  <div class="grid grid-cols-2 gap-2 pt-1 border-t border-white/[0.04]">
+    <div class="p-2 rounded-xl bg-surface-container-lowest/50 border border-white/[0.03]">
+      <span class="text-[10px] text-on-surface-variant">増配継続力</span>
+      <div class="font-headline-md text-xs font-bold text-primary mt-0.5">高 (安定期)</div>
+    </div>
+    <div class="p-2 rounded-xl bg-surface-container-lowest/50 border border-white/[0.03]">
+      <span class="text-[10px] text-on-surface-variant">減配リスク</span>
+      <div class="font-headline-md text-xs font-bold text-primary mt-0.5">極めて低 (0.8%)</div>
+    </div>
+  </div>
+</section></div>
+<!-- ================= TAB 2: 配当推移 (VARIANT 3: 複利成長カーブ＆インカム分析統合版) ================= -->
+<div class="tab-content-panel flex flex-col gap-4 w-full" id="panel-dividend" role="tabpanel" style="opacity: 1; transform: translateY(0px); transition: opacity 0.25s, transform 0.25s;">
+<!-- 配当推移概要KPIバッジ -->
+<section class="rounded-2xl bg-surface-container-low p-4 shadow-xl border border-white/[0.04] flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<div>
+<h2 class="font-title-md text-sm text-on-surface font-bold flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-primary inline-block"></span>
+            配当受取額の複利成長推移
+          </h2>
+<p class="text-[11px] text-on-surface-variant mt-0.5">2021年〜2025年(予想)&nbsp;</p><div>&nbsp;増配と再投資による累積カーブ</div><p></p>
+</div>
+<span class="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full font-bold">5期連続増配達成</span>
+</div>
+<!-- 3 KPI Cards -->
+<div class="grid grid-cols-3 gap-2">
+<div class="bg-surface-container-lowest/60 p-2.5 rounded-xl border border-white/[0.03] flex flex-col items-center text-center">
+<span class="text-[10px] text-on-surface-variant">5年平均増配率</span>
+<span class="font-headline-md text-base text-primary font-bold mt-0.5">+21.4%</span>
+<span class="text-[9px] text-on-surface-variant font-medium">年平均CAGR</span>
+</div>
+<div class="bg-surface-container-lowest/60 p-2.5 rounded-xl border border-white/[0.03] flex flex-col items-center text-center">
+<span class="text-[10px] text-on-surface-variant">累計受取総額</span>
+<span class="font-headline-md text-base text-on-surface font-bold mt-0.5">¥401,500</span>
+<span class="text-[9px] text-on-surface-variant font-medium">通算インカム</span>
+</div>
+<div class="bg-surface-container-lowest/60 p-2.5 rounded-xl border border-white/[0.03] flex flex-col items-center text-center">
+<span class="text-[10px] text-on-surface-variant">簿価利回り (YOC)</span>
+<span class="font-headline-md text-base text-secondary font-bold mt-0.5">4.08%</span>
+<span class="text-[9px] text-on-surface-variant font-medium">取得元本比</span>
+</div>
+</div>
+</section>
+<!-- Continuous Compounding Curve & Growth Bar Chart -->
+<div class="relative w-full rounded-2xl bg-surface-container-low p-3.5 shadow-lg border border-white/[0.04] flex flex-col">
+<!-- チャートヘッダー -->
+<div class="flex items-center justify-between pb-2.5 border-b border-white/[0.04]">
+<div class="flex items-center gap-3 text-xs">
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-sm bg-primary"></span>
+<span class="text-on-surface font-semibold text-[11px]">年次配当額 (受取)</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-1 bg-[#38bdf8] rounded-full inline-block"></span>
+<span class="text-on-surface-variant font-medium text-[11px]">複利成長曲線 (CAGR)</span>
+</div>
+</div>
+<span class="text-[10px] text-primary font-bold bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full shrink-0" id="div-chart-badge">+12.4% 増配 (2025予想)</span>
+</div>
+<!-- 年次配当バー上部のハイライトストリップ -->
+<div class="grid grid-cols-5 gap-1.5 my-2 text-center" id="div-bars-strip">
+<div class="flex flex-col items-center p-1 rounded-md bg-surface-container-lowest/60 border border-white/[0.03]">
+<span class="text-[8px] text-on-surface-variant">2021年</span>
+<span class="text-[9px] font-bold text-on-surface font-mono">¥48,000</span>
+<span class="text-[7.5px] text-on-surface-variant">基準期</span>
+</div>
+<div class="flex flex-col items-center p-1 rounded-md bg-surface-container-lowest/60 border border-white/[0.03]">
+<span class="text-[8px] text-on-surface-variant">2022年</span>
+<span class="text-[9px] font-bold text-on-surface font-mono">¥66,000</span>
+<span class="text-[7.5px] text-primary/90 font-bold">+37.5%</span>
+</div>
+<div class="flex flex-col items-center p-1 rounded-md bg-surface-container-lowest/60 border border-white/[0.03]">
+<span class="text-[8px] text-on-surface-variant">2023年</span>
+<span class="text-[9px] font-bold text-on-surface font-mono">¥87,000</span>
+<span class="text-[7.5px] text-primary/90 font-bold">+31.8%</span>
+</div>
+<div class="flex flex-col items-center p-1 rounded-md bg-surface-container-lowest/60 border border-white/[0.03]">
+<span class="text-[8px] text-on-surface-variant">2024年</span>
+<span class="text-[9px] font-bold text-on-surface font-mono">¥110,800</span>
+<span class="text-[7.5px] text-primary/90 font-bold">+27.4%</span>
+</div>
+<div class="flex flex-col items-center p-1 rounded-md bg-primary/10 border border-primary/30 ring-1 ring-primary/40">
+<span class="text-[8px] text-primary font-bold">2025年 予</span>
+<span class="text-[9px] font-bold text-primary font-mono">¥124,500</span>
+<span class="text-[7.5px] text-primary font-bold">+12.4%</span>
+</div>
+</div>
+<!-- SVG Chart: Vertical Bars + Continuous Spline Compounding Curve -->
+<div class="relative w-full h-44">
+<svg class="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 320 150">
+<defs>
+<linearGradient id="divBarGrad" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#4edea3" stop-opacity="0.95"></stop>
+<stop offset="100%" stop-color="#10b981" stop-opacity="0.45"></stop>
+</linearGradient>
+<linearGradient id="divSplineAreaGrad" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#38bdf8" stop-opacity="0.25"></stop>
+<stop offset="100%" stop-color="#0b1326" stop-opacity="0"></stop>
+</linearGradient>
+</defs>
+<!-- Horizontal Guide Lines -->
+<line stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 3" stroke-width="1" x1="5" x2="315" y1="20"></line>
+<text fill="#86948a" font-size="7" text-anchor="start" x="6" y="17">¥130,000</text>
+<line stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 3" stroke-width="1" x1="5" x2="315" y1="56"></line>
+<text fill="#86948a" font-size="7" text-anchor="start" x="6" y="53">¥90,000</text>
+<line stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 3" stroke-width="1" x1="5" x2="315" y1="92"></line>
+<text fill="#86948a" font-size="7" text-anchor="start" x="6" y="89">¥50,000</text>
+<line stroke="rgba(255,255,255,0.12)" stroke-width="1" x1="5" x2="315" y1="130"></line>
+<!-- Continuous Compounding Area & Spline Path -->
+<path d="M 31 102 C 60 90, 80 84, 95 78 C 125 68, 145 56, 159 52 C 185 45, 205 32, 223 27 C 250 20, 275 16, 287 14 L 287 130 L 31 130 Z" fill="url(#divSplineAreaGrad)"></path>
+<path d="M 31 102 C 60 90, 80 84, 95 78 C 125 68, 145 56, 159 52 C 185 45, 205 32, 223 27 C 250 20, 275 16, 287 14" fill="none" stroke="#38bdf8" stroke-linecap="round" stroke-width="2"></path>
+<!-- 2021 Bar -->
+<g class="div-bar-col" data-cagr="基準年" data-growth="¥48,000" data-monthly="¥4,000" data-pct="基準" data-status="受取確定" data-val="¥48,000" data-year="2021">
+<rect fill="#171f33" height="42" rx="3" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" width="22" x="20" y="88"></rect>
+<rect class="div-bar-rect" fill="url(#divBarGrad)" height="28" rx="3" width="22" x="20" y="102"></rect>
+<circle cx="31" cy="102" fill="#38bdf8" r="2.5"></circle>
+</g>
+<!-- 2022 Bar -->
+<g class="div-bar-col" data-cagr="+37.5%" data-growth="+¥18,000" data-monthly="¥5,500" data-pct="+37.5%" data-status="受取確定" data-val="¥66,000" data-year="2022">
+<rect fill="#171f33" height="60" rx="3" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" width="22" x="84" y="70"></rect>
+<rect class="div-bar-rect" fill="url(#divBarGrad)" height="52" rx="3" width="22" x="84" y="78"></rect>
+<circle cx="95" cy="78" fill="#38bdf8" r="2.5"></circle>
+</g>
+<!-- 2023 Bar -->
+<g class="div-bar-col" data-cagr="+31.8%" data-growth="+¥21,000" data-monthly="¥7,250" data-pct="+31.8%" data-status="受取確定" data-val="¥87,000" data-year="2023">
+<rect fill="#171f33" height="82" rx="3" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" width="22" x="148" y="48"></rect>
+<rect class="div-bar-rect" fill="url(#divBarGrad)" height="78" rx="3" width="22" x="148" y="52"></rect>
+<circle cx="159" cy="52" fill="#38bdf8" r="2.5"></circle>
+</g>
+<!-- 2024 Bar -->
+<g class="div-bar-col" data-cagr="+27.4%" data-growth="+¥23,800" data-monthly="¥9,233" data-pct="+27.4%" data-status="確定実績" data-val="¥110,800" data-year="2024">
+<rect fill="#171f33" height="106" rx="3" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" width="22" x="212" y="24"></rect>
+<rect class="div-bar-rect" fill="url(#divBarGrad)" height="103" rx="3" width="22" x="212" y="27"></rect>
+<circle cx="223" cy="27" fill="#38bdf8" r="2.5"></circle>
+</g>
+<!-- 2025 Bar (Active) -->
+<g class="div-bar-col active-year" data-cagr="+12.4%" data-growth="+¥13,700" data-monthly="¥10,375" data-pct="+12.4%" data-status="予想見込" data-val="¥124,500" data-year="2025">
+<rect fill="#171f33" height="118" rx="3" stroke="rgba(255,255,255,0.15)" stroke-width="0.5" width="22" x="276" y="12"></rect>
+<rect class="div-bar-rect" fill="url(#divBarGrad)" height="116" rx="3" width="22" x="276" y="14"></rect>
+<circle cx="287" cy="14" fill="#ffffff" r="3.5" stroke="#4edea3" stroke-width="2"></circle>
+</g>
+<!-- X-Axis Labels -->
+<g class="font-mono text-[9px] fill-current text-on-surface-variant font-semibold">
+<text text-anchor="middle" x="31" y="144">2021</text>
+<text text-anchor="middle" x="95" y="144">2022</text>
+<text text-anchor="middle" x="159" y="144">2023</text>
+<text text-anchor="middle" x="223" y="144">2024</text>
+<text class="font-bold fill-primary" text-anchor="middle" x="287" y="144">2025予</text>
+</g>
+</svg>
+</div>
+<!-- Interactive Focus Inspection Banner for Dividend -->
+<div class="mt-2.5 p-2.5 rounded-xl bg-surface-container-lowest/80 border border-white/[0.04] flex items-center justify-between transition-all duration-300" id="div-focus-banner">
+<div class="flex flex-col">
+<span class="text-[10px] text-on-surface-variant font-medium flex items-center gap-1" id="div-focus-year">
+<span class="w-1.5 h-1.5 rounded-full bg-primary inline-block"></span>
+          2025年 予想見込
+        </span>
+<span class="font-headline-md text-base text-primary font-bold mt-0.5" id="div-focus-val">¥124,500 / 年</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-[10px] text-on-surface-variant font-medium" id="div-focus-monthly">月換算 約¥10,375 / 月</span>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="text-xs font-bold text-primary font-mono" id="div-focus-growth">+¥13,700</span>
+<span class="text-[10px] text-primary font-bold bg-primary/10 px-1.5 py-0.2 rounded" id="div-focus-pct">+12.4% 増配</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Year-by-Year Interactive Inspection Cards (2025〜2021) -->
+<section class="flex flex-col gap-2.5">
+<div class="flex items-center justify-between px-1">
+<h3 class="font-title-md text-sm font-bold text-on-surface flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[20px]">calendar_month</span>
+<span class="">年別インカム詳細・月割シミュレーション</span>
+</h3>
+<span class="text-xs text-on-surface-variant font-mono">5年間増配記録</span>
+</div>
+<div class="flex flex-col gap-2" id="div-inspection-list">
+<!-- 2025 -->
+<article class="div-interactive-card p-3 rounded-2xl bg-surface-container-low border border-primary/40 shadow-sm flex items-center justify-between" data-year="2025">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold text-xs font-mono shrink-0">'25予</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-title-md text-sm font-bold text-on-surface">2025年 予想</h4>
+<span class="text-[10px] bg-primary/20 text-primary px-1.5 py-0.2 rounded font-semibold">過去最高配当</span>
+</div>
+<span class="text-[11px] text-on-surface-variant">月換算 約 ¥10,375 / 月 • YOC 4.08%</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-sm font-bold text-primary">¥124,500</span>
+<span class="block text-[10px] text-primary font-bold">+12.4% 前年比</span>
+</div>
+</article>
+<!-- 2024 -->
+<article class="div-interactive-card p-3 rounded-2xl bg-surface-container-low border border-white/[0.03] shadow-sm flex items-center justify-between hover:border-white/10" data-year="2024">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high text-on-surface flex items-center justify-center font-bold text-xs font-mono shrink-0">'24</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-title-md text-sm font-bold text-on-surface">2024年 実績</h4>
+<span class="text-[10px] bg-surface-container-high text-on-surface-variant px-1.5 py-0.2 rounded font-semibold">確定</span>
+</div>
+<span class="text-[11px] text-on-surface-variant">月換算 約 ¥9,233 / 月 • 4銘柄受取</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-sm font-bold text-on-surface">¥110,800</span>
+<span class="block text-[10px] text-primary font-bold">+27.4% 前年比</span>
+</div>
+</article>
+<!-- 2023 -->
+<article class="div-interactive-card p-3 rounded-2xl bg-surface-container-low border border-white/[0.03] shadow-sm flex items-center justify-between hover:border-white/10" data-year="2023">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high text-on-surface flex items-center justify-center font-bold text-xs font-mono shrink-0">'23</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-title-md text-sm font-bold text-on-surface">2023年 実績</h4>
+<span class="text-[10px] bg-surface-container-high text-on-surface-variant px-1.5 py-0.2 rounded font-semibold">確定</span>
+</div>
+<span class="text-[11px] text-on-surface-variant">月換算 約 ¥7,250 / 月 • 再投資本格化</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-sm font-bold text-on-surface">¥87,000</span>
+<span class="block text-[10px] text-primary font-bold">+31.8% 前年比</span>
+</div>
+</article>
+<!-- 2022 -->
+<article class="div-interactive-card p-3 rounded-2xl bg-surface-container-low border border-white/[0.03] shadow-sm flex items-center justify-between hover:border-white/10" data-year="2022">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high text-on-surface flex items-center justify-center font-bold text-xs font-mono shrink-0">'22</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-title-md text-sm font-bold text-on-surface">2022年 実績</h4>
+</div>
+<span class="text-[11px] text-on-surface-variant">月換算 約 ¥5,500 / 月 • 銘柄買い増し</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-sm font-bold text-on-surface">¥66,000</span>
+<span class="block text-[10px] text-primary font-bold">+37.5% 前年比</span>
+</div>
+</article>
+<!-- 2021 -->
+<article class="div-interactive-card p-3 rounded-2xl bg-surface-container-low border border-white/[0.03] shadow-sm flex items-center justify-between hover:border-white/10" data-year="2021">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high text-on-surface flex items-center justify-center font-bold text-xs font-mono shrink-0">'21</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-title-md text-sm font-bold text-on-surface">2021年 実績</h4>
+</div>
+<span class="text-[11px] text-on-surface-variant">月換算 約 ¥4,000 / 月 • 配当投資開始</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-sm font-bold text-on-surface">¥48,000</span>
+<span class="block text-[10px] text-on-surface-variant font-bold">基準年</span>
+</div>
+</article>
+</div>
+</section>
+</div>
+<!-- ================= TAB 3: 資産推移 (ASSET TRACKING VIEW) ================= -->
+<div class="tab-content-panel flex flex-col gap-4 w-full hidden" id="panel-asset" role="tabpanel" style="opacity: 1; transform: translateY(0px); transition: opacity 0.25s, transform 0.25s;">
+<section class="flex flex-col gap-3">
+<!-- Period Selector Header -->
+<div class="flex items-center justify-between">
+<div class="flex flex-col">
+<span class="font-title-md text-sm font-bold text-on-surface flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[18px]">ssid_chart</span>
+              資産・配当金推移
+            </span>
+<span class="text-[11px] text-on-surface-variant mt-0.5" id="asset-period-sublabel">2021年〜2025年(現在) • 年次成長トラッキング</span>
+</div>
+<!-- Duration Filter Chips: 5年(年次) vs 12ヶ月(月次) -->
+<div class="inline-flex p-0.5 rounded-xl bg-surface-container-high border border-white/5 shadow-inner">
+<button class="asset-period-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all text-on-primary bg-primary shadow-sm" data-period="5y" id="btn-period-5y" type="button">5年</button>
+<button class="asset-period-btn px-2.5 py-1 rounded-lg text-xs font-medium transition-all text-on-surface-variant hover:text-on-surface" data-period="12m" id="btn-period-12m" type="button">12ヶ月</button>
+</div>
+</div>
+<!-- Dynamic Summary Metrics Cards -->
+<div class="grid grid-cols-2 gap-2">
+<div class="flex flex-col p-2.5 rounded-xl bg-surface-container-low border border-white/[0.04]">
+<div class="flex items-center justify-between">
+<span class="text-[11px] text-on-surface-variant flex items-center gap-1 font-medium">
+<span class="material-symbols-outlined text-primary text-[14px]">account_balance</span>
+                資産評価額
+              </span>
+<span class="text-[10px] text-primary font-bold bg-primary/10 px-1 rounded" id="asset-metric-pct">+14.7%</span>
+</div>
+<div class="flex items-baseline gap-1 mt-1">
+<span class="font-headline-md text-base text-on-surface font-bold" id="asset-metric-val">¥3,500,000</span>
+</div>
+<span class="text-[10px] text-on-surface-variant mt-0.5" id="asset-metric-cost">投資元本 ¥3,050,000</span>
+</div>
+<div class="flex flex-col p-2.5 rounded-xl bg-surface-container-low border border-white/[0.04]">
+<div class="flex items-center justify-between">
+<span class="text-[11px] text-on-surface-variant flex items-center gap-1 font-medium">
+<span class="material-symbols-outlined text-primary text-[14px]">trending_up</span>
+                通算含み益
+              </span>
+<span class="text-[10px] text-primary font-bold" id="asset-metric-sublabel">簿価利回り</span>
+</div>
+<div class="flex items-baseline gap-1 mt-1">
+<span class="font-headline-md text-base text-primary font-bold" id="asset-metric-profit">+¥450,000</span>
+</div>
+<span class="text-[10px] text-on-surface-variant mt-0.5" id="asset-metric-subtext">Yield on Cost: <span class="text-primary font-bold">4.08%</span></span>
+</div>
+</div>
+<!-- 改善された資産推移チャート -->
+<div class="relative w-full rounded-2xl bg-surface-container-low p-3.5 shadow-lg border border-white/[0.04] flex flex-col">
+<!-- チャート上部：凡例＆ステータスバッジ -->
+<div class="flex items-center justify-between pb-2.5 border-b border-white/[0.04]">
+<div class="flex items-center gap-3 text-xs">
+<div class="flex items-center gap-1.5" id="legend-bar">
+<span class="w-2.5 h-2.5 rounded-sm bg-primary" id="legend-color-asset"></span>
+<span class="text-on-surface font-semibold text-[11px]" id="legend-label-asset">評価額 (時価)</span>
+</div>
+<div class="flex items-center gap-1.5" id="legend-line">
+<span class="w-2.5 h-2.5 rounded-sm bg-surface-container-highest border border-white/20" id="legend-color-cost"></span>
+<span class="text-on-surface-variant font-medium text-[11px]" id="legend-label-cost">累積投資元本 (簿価)</span>
+</div>
+<div class="flex items-center gap-1 text-[10px] text-primary font-mono hidden sm:flex">
+<span class="w-1.5 h-1.5 rounded-full bg-primary/70"></span>含み益
+</div>
+</div>
+<span class="text-[10px] text-primary font-bold bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full shrink-0" id="chart-badge-profit">含み益 +¥450,000 (+14.7%)</span>
+</div>
+<!-- View 1: 5-Year Step-Ladder & Comparison Bar Chart -->
+<div class="relative w-full pt-2 pb-1" id="chart-container-5y">
+<!-- 各年バー上部のリアルタイム・データストリップ -->
+<div class="grid grid-cols-5 gap-1.5 mb-2 px-1 text-center" id="bars-floating-strip">
+<div class="flex flex-col items-center p-1 rounded-md bg-surface-container-lowest/60 border border-white/[0.03]">
+<span class="text-[8px] text-on-surface-variant">時価: ¥85万</span>
+<span class="text-[9px] font-bold text-primary font-mono">+¥5万</span>
+<span class="text-[7.5px] text-primary/80">+6.2%</span>
+</div>
+<div class="flex flex-col items-center p-1 rounded-md bg-surface-container-lowest/60 border border-white/[0.03]">
+<span class="text-[8px] text-on-surface-variant">時価: ¥158万</span>
+<span class="text-[9px] font-bold text-primary font-mono">+¥13万</span>
+<span class="text-[7.5px] text-primary/80">+9.0%</span>
+</div>
+<div class="flex flex-col items-center p-1 rounded-md bg-surface-container-lowest/60 border border-white/[0.03]">
+<span class="text-[8px] text-on-surface-variant">時価: ¥242万</span>
+<span class="text-[9px] font-bold text-primary font-mono">+¥32万</span>
+<span class="text-[7.5px] text-primary/80">+15.2%</span>
+</div>
+<div class="flex flex-col items-center p-1 rounded-md bg-surface-container-lowest/60 border border-white/[0.03]">
+<span class="text-[8px] text-on-surface-variant">時価: ¥318万</span>
+<span class="text-[9px] font-bold text-primary font-mono">+¥43万</span>
+<span class="text-[7.5px] text-primary/80">+15.6%</span>
+</div>
+<div class="flex flex-col items-center p-1 rounded-md bg-primary/10 border border-primary/30 ring-1 ring-primary/40">
+<span class="text-[8px] text-primary font-bold">時価: ¥350万</span>
+<span class="text-[9px] font-bold text-primary font-mono">+¥45万</span>
+<span class="text-[7.5px] text-primary font-bold">+14.7%</span>
+</div>
+</div>
+<!-- SVG Step Ladder + Pair Bars -->
+<div class="relative w-full h-44">
+<svg class="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 320 150">
+<defs>
+<linearGradient id="assetBarGradV3" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#4edea3" stop-opacity="0.95"></stop>
+<stop offset="100%" stop-color="#10b981" stop-opacity="0.65"></stop>
+</linearGradient>
+<linearGradient id="costBarGradV3" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#31394d" stop-opacity="0.95"></stop>
+<stop offset="100%" stop-color="#171f33" stop-opacity="0.85"></stop>
+</linearGradient>
+<linearGradient id="stepLadderArea" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#4edea3" stop-opacity="0.12"></stop>
+<stop offset="100%" stop-color="#0b1326" stop-opacity="0"></stop>
+</linearGradient>
+</defs>
+<line stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 3" stroke-width="1" x1="5" x2="315" y1="18"></line>
+<text fill="#86948a" font-size="7" text-anchor="start" x="6" y="15">¥360万</text>
+<line stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 3" stroke-width="1" x1="5" x2="315" y1="55"></line>
+<text fill="#86948a" font-size="7" text-anchor="start" x="6" y="52">¥240万</text>
+<line stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 3" stroke-width="1" x1="5" x2="315" y1="92"></line>
+<text fill="#86948a" font-size="7" text-anchor="start" x="6" y="89">¥120万</text>
+<line stroke="rgba(255,255,255,0.12)" stroke-width="1" x1="5" x2="315" y1="130"></line>
+<!-- Step Ladder Connecting Path -->
+<path d="M 23 103 L 43 103 L 87 79 L 107 79 L 151 56 L 171 56 L 215 34 L 235 34 L 279 23 L 299 23" fill="none" stroke="#86948a" stroke-dasharray="2 2" stroke-width="1.2"></path>
+<!-- 2021 Year Group -->
+<g class="year-bar-col" data-cost="¥800,000" data-gain="+¥50,000" data-pct="+6.2%" data-val="¥850,000" data-year="2021">
+<rect fill="url(#costBarGradV3)" height="27" rx="3" stroke="rgba(255,255,255,0.12)" stroke-width="0.5" width="16" x="14" y="103"></rect>
+<rect class="asset-bar-rect" fill="url(#assetBarGradV3)" height="29" rx="3" width="16" x="32" y="101"></rect>
+<line stroke="#4edea3" stroke-linecap="round" stroke-width="1" x1="40" x2="40" y1="96" y2="101"></line>
+</g>
+<!-- 2022 Year Group -->
+<g class="year-bar-col" data-cost="¥1,450,000" data-gain="+¥130,000" data-pct="+9.0%" data-val="¥1,580,000" data-year="2022">
+<rect fill="url(#costBarGradV3)" height="51" rx="3" stroke="rgba(255,255,255,0.12)" stroke-width="0.5" width="16" x="78" y="79"></rect>
+<rect class="asset-bar-rect" fill="url(#assetBarGradV3)" height="56" rx="3" width="16" x="96" y="74"></rect>
+<line stroke="#4edea3" stroke-linecap="round" stroke-width="1" x1="104" x2="104" y1="69" y2="74"></line>
+</g>
+<!-- 2023 Year Group -->
+<g class="year-bar-col" data-cost="¥2,100,000" data-gain="+¥320,000" data-pct="+15.2%" data-val="¥2,420,000" data-year="2023">
+<rect fill="url(#costBarGradV3)" height="74" rx="3" stroke="rgba(255,255,255,0.12)" stroke-width="0.5" width="16" x="142" y="56"></rect>
+<rect class="asset-bar-rect" fill="url(#assetBarGradV3)" height="85" rx="3" width="16" x="160" y="45"></rect>
+<line stroke="#4edea3" stroke-linecap="round" stroke-width="1" x1="168" x2="168" y1="40" y2="45"></line>
+</g>
+<!-- 2024 Year Group -->
+<g class="year-bar-col" data-cost="¥2,750,000" data-gain="+¥430,000" data-pct="+15.6%" data-val="¥3,180,000" data-year="2024">
+<rect fill="url(#costBarGradV3)" height="96" rx="3" stroke="rgba(255,255,255,0.12)" stroke-width="0.5" width="16" x="206" y="34"></rect>
+<rect class="asset-bar-rect" fill="url(#assetBarGradV3)" height="111" rx="3" width="16" x="224" y="19"></rect>
+<line stroke="#4edea3" stroke-linecap="round" stroke-width="1" x1="232" x2="232" y1="14" y2="19"></line>
+</g>
+<!-- 2025 Year Group -->
+<g class="year-bar-col active-year" data-cost="¥3,050,000" data-gain="+¥450,000" data-pct="+14.7%" data-val="¥3,500,000" data-year="2025">
+<rect fill="url(#costBarGradV3)" height="107" rx="3" stroke="rgba(255,255,255,0.18)" stroke-width="0.5" width="16" x="270" y="23"></rect>
+<rect class="asset-bar-rect" fill="url(#assetBarGradV3)" height="122" rx="3" width="16" x="288" y="8"></rect>
+<circle cx="296" cy="8" fill="#ffffff" r="2.5" stroke="#4edea3" stroke-width="1.5"></circle>
+</g>
+<!-- X軸年度ラベル -->
+<g class="font-mono text-[9px] fill-current text-on-surface-variant font-semibold">
+<text text-anchor="middle" x="31" y="144">2021</text>
+<text text-anchor="middle" x="95" y="144">2022</text>
+<text text-anchor="middle" x="159" y="144">2023</text>
+<text text-anchor="middle" x="223" y="144">2024</text>
+<text class="font-bold fill-primary" text-anchor="middle" x="287" y="144">2025現</text>
+</g>
+</svg>
+</div>
+<!-- 年次別ミニデータグリッド -->
+<div class="mt-2 pt-2 border-t border-white/[0.04] flex flex-col gap-1">
+<div class="flex items-center justify-between text-[10px] text-on-surface-variant font-semibold px-1">
+<span class="">年次推移データグリッド（元本 vs 時価対比）</span>
+<span class="text-primary font-mono text-[9px]">タップで選択</span>
+</div>
+<div class="grid grid-cols-5 gap-1 text-[9px] font-mono mt-1" id="years-data-grid">
+<div class="year-grid-cell flex flex-col p-1.5 rounded-lg bg-surface-container-lowest/70 border border-white/[0.03] cursor-pointer hover:border-primary/30" data-year="2021">
+<span class="text-[9px] font-bold text-on-surface">2021</span>
+<span class="text-[8px] text-on-surface-variant mt-0.5">元: 80万</span>
+<span class="text-[8.5px] font-bold text-on-surface">時: 85万</span>
+<span class="text-[8px] text-primary font-bold mt-0.5">+5万</span>
+</div>
+<div class="year-grid-cell flex flex-col p-1.5 rounded-lg bg-surface-container-lowest/70 border border-white/[0.03] cursor-pointer hover:border-primary/30" data-year="2022">
+<span class="text-[9px] font-bold text-on-surface">2022</span>
+<span class="text-[8px] text-on-surface-variant mt-0.5">元: 145万</span>
+<span class="text-[8.5px] font-bold text-on-surface">時: 158万</span>
+<span class="text-[8px] text-primary font-bold mt-0.5">+13万</span>
+</div>
+<div class="year-grid-cell flex flex-col p-1.5 rounded-lg bg-surface-container-lowest/70 border border-white/[0.03] cursor-pointer hover:border-primary/30" data-year="2023">
+<span class="text-[9px] font-bold text-on-surface">2023</span>
+<span class="text-[8px] text-on-surface-variant mt-0.5">元: 210万</span>
+<span class="text-[8.5px] font-bold text-on-surface">時: 242万</span>
+<span class="text-[8px] text-primary font-bold mt-0.5">+32万</span>
+</div>
+<div class="year-grid-cell flex flex-col p-1.5 rounded-lg bg-surface-container-lowest/70 border border-white/[0.03] cursor-pointer hover:border-primary/30" data-year="2024">
+<span class="text-[9px] font-bold text-on-surface">2024</span>
+<span class="text-[8px] text-on-surface-variant mt-0.5">元: 275万</span>
+<span class="text-[8.5px] font-bold text-on-surface">時: 318万</span>
+<span class="text-[8px] text-primary font-bold mt-0.5">+43万</span>
+</div>
+<div class="year-grid-cell active flex flex-col p-1.5 rounded-lg bg-primary/10 border border-primary/30 cursor-pointer" data-year="2025">
+<span class="text-[9px] font-bold text-primary">2025現</span>
+<span class="text-[8px] text-on-surface-variant mt-0.5">元: 305万</span>
+<span class="text-[8.5px] font-bold text-primary">時: 350万</span>
+<span class="text-[8px] text-primary font-bold mt-0.5">+45万</span>
+</div>
+</div>
+</div>
+</div>
+<!-- View 2: 12-Month Continuous Spline Gradient Area Chart -->
+<div class="relative w-full h-56 pt-4 pb-2 hidden" id="chart-container-12m">
+<svg class="w-full h-full overflow-visible" id="svg-monthly-chart" preserveAspectRatio="none" viewBox="0 0 330 160">
+<defs>
+<linearGradient id="splineAreaGrad" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#4edea3" stop-opacity="0.45"></stop>
+<stop offset="60%" stop-color="#10b981" stop-opacity="0.12"></stop>
+<stop offset="100%" stop-color="#0b1326" stop-opacity="0"></stop>
+</linearGradient>
+</defs>
+<line stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3" stroke-width="1" x1="10" x2="320" y1="25"></line>
+<line stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3" stroke-width="1" x1="10" x2="320" y1="65"></line>
+<line stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3" stroke-width="1" x1="10" x2="320" y1="105"></line>
+<line stroke="rgba(255,255,255,0.12)" stroke-width="1" x1="10" x2="320" y1="138"></line>
+<path d="M 18 115 L 45 111 L 72 107 L 99 103 L 126 99 L 153 95 L 180 91 L 207 87 L 234 83 L 261 79 L 288 74 L 315 68" fill="none" stroke="#86948a" stroke-dasharray="3 3" stroke-width="1.5"></path>
+<path d="M 18 110 C 32 108, 40 102, 45 102 C 58 102, 65 96, 72 95 C 85 93, 92 88, 99 87 C 112 85, 119 82, 126 80 C 139 76, 146 72, 153 70 C 166 66, 173 63, 180 61 C 193 57, 200 52, 207 50 C 220 46, 227 44, 234 43 C 247 41, 254 35, 261 34 C 274 32, 281 28, 288 27 C 301 24, 308 22, 315 22 L 315 138 L 18 138 Z" fill="url(#splineAreaGrad)"></path>
+<path d="M 18 110 C 32 108, 40 102, 45 102 C 58 102, 65 96, 72 95 C 85 93, 92 88, 99 87 C 112 85, 119 82, 126 80 C 139 76, 146 72, 153 70 C 166 66, 173 63, 180 61 C 193 57, 200 52, 207 50 C 220 46, 227 44, 234 43 C 247 41, 254 35, 261 34 C 274 32, 281 28, 288 27 C 301 24, 308 22, 315 22" fill="none" stroke="#4edea3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
+<line id="scrubber-line" stroke="#4edea3" stroke-dasharray="2 2" stroke-width="1.5" style="display:none;" x1="315" x2="315" y1="15" y2="138"></line>
+<g id="monthly-points">
+<circle class="scrub-point" cx="18" cy="110" data-cost="¥2,775,000" data-gain="+¥45,000" data-month="1月" data-pace="+¥25k" data-pct="+1.6%" data-val="¥2,820,000" fill="#4edea3" r="3.5"></circle>
+<circle class="scrub-point" cx="45" cy="102" data-cost="¥2,800,000" data-gain="+¥70,000" data-month="2月" data-pace="+¥50k" data-pct="+2.5%" data-val="¥2,870,000" fill="#4edea3" r="3.5"></circle>
+<circle class="scrub-point" cx="72" cy="95" data-cost="¥2,825,000" data-gain="+¥95,000" data-month="3月" data-pace="+¥50k" data-pct="+3.4%" data-val="¥2,920,000" fill="#4edea3" r="3.5"></circle>
+<circle class="scrub-point" cx="99" cy="87" data-cost="¥2,850,000" data-gain="+¥130,000" data-month="4月" data-pace="+¥60k" data-pct="+4.6%" data-val="¥2,980,000" fill="#4edea3" r="3.5"></circle>
+<circle class="scrub-point" cx="126" cy="80" data-cost="¥2,875,000" data-gain="+¥165,000" data-month="5月" data-pace="+¥60k" data-pct="+5.7%" data-val="¥3,040,000" fill="#4edea3" r="3.5"></circle>
+<circle class="scrub-point" cx="153" cy="70" data-cost="¥2,900,000" data-gain="+¥210,000" data-month="6月" data-pace="+¥70k" data-pct="+7.2%" data-val="¥3,110,000" fill="#4edea3" r="3.5"></circle>
+<circle class="scrub-point" cx="180" cy="61" data-cost="¥2,925,000" data-gain="+¥255,000" data-month="7月" data-pace="+¥70k" data-pct="+8.7%" data-val="¥3,180,000" fill="#4edea3" r="3.5"></circle>
+<circle class="scrub-point" cx="207" cy="50" data-cost="¥2,950,000" data-gain="+¥310,000" data-month="8月" data-pace="+¥80k" data-pct="+10.5%" data-val="¥3,260,000" fill="#4edea3" r="3.5"></circle>
+<circle class="scrub-point" cx="234" cy="43" data-cost="¥2,975,000" data-gain="+¥345,000" data-month="9月" data-pace="+¥60k" data-pct="+11.6%" data-val="¥3,320,000" fill="#4edea3" r="3.5"></circle>
+<circle class="scrub-point" cx="261" cy="34" data-cost="¥3,000,000" data-gain="+¥390,000" data-month="10月" data-pace="+¥70k" data-pct="+13.0%" data-val="¥3,390,000" fill="#4edea3" r="3.5"></circle>
+<circle class="scrub-point" cx="288" cy="27" data-cost="¥3,025,000" data-gain="+¥425,000" data-month="11月" data-pace="+¥60k" data-pct="+14.0%" data-val="¥3,450,000" fill="#4edea3" r="3.5"></circle>
+<circle class="scrub-point active" cx="315" cy="22" data-cost="¥3,050,000" data-gain="+¥450,000" data-month="12月" data-pace="+¥50k" data-pct="+14.7%" data-val="¥3,500,000" fill="#ffffff" r="5" stroke="#4edea3" stroke-width="2.5"></circle>
+</g>
+<g class="font-mono text-[9px] fill-current text-on-surface-variant font-semibold">
+<text text-anchor="middle" x="18" y="152">1月</text>
+<text text-anchor="middle" x="99" y="152">4月</text>
+<text text-anchor="middle" x="180" y="152">7月</text>
+<text text-anchor="middle" x="261" y="152">10月</text>
+<text class="font-bold fill-primary" text-anchor="middle" x="315" y="152">12月</text>
+</g>
+</svg>
+</div>
+<!-- 選択年・フォーカスバナー -->
+<div class="mt-2.5 p-2.5 rounded-xl bg-surface-container-lowest/80 border border-white/[0.04] flex items-center justify-between transition-all duration-300" id="asset-focus-banner">
+<div class="flex flex-col">
+<span class="text-[10px] text-on-surface-variant font-medium" id="scrub-label-period">2025年 (現在)</span>
+<span class="font-headline-md text-base text-primary font-bold mt-0.5" id="scrub-label-asset">評価額: ¥3,500,000</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-[10px] text-on-surface-variant font-medium" id="scrub-label-cost">投資元本 ¥3,050,000</span>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="text-xs font-bold text-primary font-mono" id="scrub-label-profit">含み益 +¥450,000</span>
+<span class="text-[10px] text-primary font-bold bg-primary/10 px-1.5 py-0.2 rounded" id="scrub-label-pct">+14.7%</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Ledger Lists -->
+<section class="flex flex-col gap-2.5">
+<div class="flex items-center justify-between px-1">
+<h3 class="font-title-md text-sm font-bold text-on-surface flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[20px]">history</span>
+<span class="" id="ledger-title">年次推移・元本 vs 評価額</span>
+</h3>
+<span class="text-xs text-on-surface-variant font-mono" id="ledger-subtitle">2021〜2025</span>
+</div>
+<!-- 5-Year List Container -->
+<div class="flex flex-col gap-2" id="ledger-list-5y">
+<article class="p-3 rounded-2xl bg-surface-container-low border border-primary/30 shadow-sm flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold text-xs font-mono shrink-0">'25現</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-title-md text-sm font-bold text-on-surface">2025年 現在</h4>
+<span class="text-[10px] bg-primary/20 text-primary px-1.5 py-0.2 rounded font-semibold">含み益最大</span>
+</div>
+<span class="text-[11px] text-on-surface-variant">元本 ¥3,050,000 • 評価額 ¥3,500,000</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-sm font-bold text-primary">+¥450,000</span>
+<span class="block text-[10px] text-primary font-bold">+14.7% 利益</span>
+</div>
+</article>
+<article class="p-3 rounded-2xl bg-surface-container-low border border-white/[0.03] shadow-sm flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high text-on-surface flex items-center justify-center font-bold text-xs font-mono shrink-0">'24</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-title-md text-sm font-bold text-on-surface">2024年 実績</h4>
+<span class="text-[10px] bg-surface-container-high text-on-surface-variant px-1.5 py-0.2 rounded font-semibold">確定</span>
+</div>
+<span class="text-[11px] text-on-surface-variant">元本 ¥2,750,000 • 評価額 ¥3,180,000</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-sm font-bold text-on-surface">+¥430,000</span>
+<span class="block text-[10px] text-primary font-bold">+15.6% 利益</span>
+</div>
+</article>
+<article class="p-3 rounded-2xl bg-surface-container-low border border-white/[0.03] shadow-sm flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high text-on-surface flex items-center justify-center font-bold text-xs font-mono shrink-0">'23</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-title-md text-sm font-bold text-on-surface">2023年 実績</h4>
+<span class="text-[10px] bg-surface-container-high text-on-surface-variant px-1.5 py-0.2 rounded font-semibold">確定</span>
+</div>
+<span class="text-[11px] text-on-surface-variant">元本 ¥2,100,000 • 評価額 ¥2,420,000</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-sm font-bold text-on-surface">+¥320,000</span>
+<span class="block text-[10px] text-primary font-bold">+15.2% 利益</span>
+</div>
+</article>
+<article class="p-3 rounded-2xl bg-surface-container-low border border-white/[0.03] shadow-sm flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high text-on-surface flex items-center justify-center font-bold text-xs font-mono shrink-0">'22</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-title-md text-sm font-bold text-on-surface">2022年 実績</h4>
+</div>
+<span class="text-[11px] text-on-surface-variant">元本 ¥1,450,000 • 評価額 ¥1,580,000</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-sm font-bold text-on-surface">+¥130,000</span>
+<span class="block text-[10px] text-primary font-bold">+9.0% 利益</span>
+</div>
+</article>
+<article class="p-3 rounded-2xl bg-surface-container-low border border-white/[0.03] shadow-sm flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high text-on-surface flex items-center justify-center font-bold text-xs font-mono shrink-0">'21</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-title-md text-sm font-bold text-on-surface">2021年 実績</h4>
+</div>
+<span class="text-[11px] text-on-surface-variant">元本 ¥800,000 • 評価額 ¥850,000</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-sm font-bold text-on-surface">+¥50,000</span>
+<span class="block text-[10px] text-on-surface-variant font-bold">基準年</span>
+</div>
+</article>
+</div>
+<!-- 12-Month List Container (Initially hidden) -->
+<div class="flex flex-col gap-2 hidden" id="ledger-list-12m">
+<article class="p-3 rounded-2xl bg-surface-container-low border border-primary/30 shadow-sm flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-primary/20 text-primary flex items-center justify-center font-bold text-xs font-mono shrink-0">12月</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-title-md text-sm font-bold text-on-surface">12月 実績 (最新)</h4>
+<span class="text-[10px] bg-primary/20 text-primary px-1.5 py-0.2 rounded font-semibold">最高値</span>
+</div>
+<span class="text-[11px] text-on-surface-variant">元本 ¥3,050,000 • 積立 +¥25k</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-sm font-bold text-primary">¥3,500,000</span>
+<span class="block text-[10px] text-primary font-bold">+¥450,000 (+14.7%)</span>
+</div>
+</article>
+<article class="p-3 rounded-2xl bg-surface-container-low border border-white/[0.03] shadow-sm flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high text-on-surface-variant flex items-center justify-center font-bold text-xs font-mono shrink-0">11月</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-title-md text-sm font-bold text-on-surface">11月 実績</h4>
+<span class="text-[10px] bg-surface-container-high text-on-surface-variant px-1.5 py-0.2 rounded font-semibold">確定</span>
+</div>
+<span class="text-[11px] text-on-surface-variant">元本 ¥3,025,000 • 積立 +¥25k</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-sm font-bold text-on-surface">¥3,450,000</span>
+<span class="block text-[10px] text-primary font-bold">+¥425,000 (+14.0%)</span>
+</div>
+</article>
+<article class="p-3 rounded-2xl bg-surface-container-low border border-white/[0.03] shadow-sm flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high text-on-surface-variant flex items-center justify-center font-bold text-xs font-mono shrink-0">10月</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-title-md text-sm font-bold text-on-surface">10月 実績</h4>
+<span class="text-[10px] bg-surface-container-high text-on-surface-variant px-1.5 py-0.2 rounded font-semibold">確定</span>
+</div>
+<span class="text-[11px] text-on-surface-variant">元本 ¥3,000,000 • 積立 +¥25k</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-sm font-bold text-on-surface">¥3,390,000</span>
+<span class="block text-[10px] text-primary font-bold">+¥390,000 (+13.0%)</span>
+</div>
+</article>
+<article class="p-3 rounded-2xl bg-surface-container-low border border-white/[0.03] shadow-sm flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high text-on-surface-variant flex items-center justify-center font-bold text-xs font-mono shrink-0">9月</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h4 class="font-title-md text-sm font-bold text-on-surface">9月 実績</h4>
+</div>
+<span class="text-[11px] text-on-surface-variant">元本 ¥2,975,000 • 中間配当再投資</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-sm font-bold text-on-surface">¥3,320,000</span>
+<span class="block text-[10px] text-primary font-bold">+¥345,000 (+11.6%)</span>
+</div>
+</article>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- Floating Action Button -->
+<div class="fixed bottom-20 right-4 z-40 pb-safe">
+<button aria-label="銘柄追加" class="w-14 h-14 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-lg active:scale-90 transition-transform duration-150 fab-pulse" id="btn-add-holding" type="button">
+<span class="material-symbols-outlined text-[28px] font-bold">add</span>
+</button>
+</div>
+<!-- Bottom 4-Tab Navigation Bar -->
+<nav class="fixed bottom-0 inset-x-0 z-50 pb-safe bg-surface-container-lowest/90 backdrop-blur-xl border-t border-white/5 shadow-2xl" data-active-classes="text-primary font-semibold">
+<div class="flex justify-around items-center h-16 px-1 max-w-md mx-auto">
+<a class="flex flex-col items-center justify-center gap-1 w-16 h-12 text-on-surface-variant hover:text-on-surface transition-colors active:scale-95 group" data-path="asset-management" href="#">
+<span class="material-symbols-outlined text-[22px] group-hover:text-primary transition-colors">account_balance_wallet</span>
+<span class="text-[10px] font-medium">資産管理</span>
+</a>
+<a aria-current="page" class="flex flex-col items-center justify-center gap-1 w-16 h-12 text-primary font-bold active:scale-95 transition-transform" data-path="annual-dividend" href="#">
+<span class="material-symbols-outlined text-[22px]" style="font-variation-settings: 'FILL' 1;">pie_chart</span>
+<span class="text-[10px]">年間配当</span>
+</a>
+<a class="flex flex-col items-center justify-center gap-1 w-16 h-12 text-on-surface-variant hover:text-on-surface transition-colors active:scale-95 group" data-path="roadmap" href="#">
+<span class="material-symbols-outlined text-[22px] group-hover:text-primary transition-colors">flag</span>
+<span class="text-[10px] font-medium">ロードマップ</span>
+</a>
+<a class="flex flex-col items-center justify-center gap-1 w-16 h-12 text-on-surface-variant hover:text-on-surface transition-colors active:scale-95 group" data-path="monthly-chart" href="#">
+<span class="material-symbols-outlined text-[22px] group-hover:text-primary transition-colors">calendar_month</span>
+<span class="text-[10px] font-medium">月別グラフ</span>
+</a>
+</div>
+</nav>
+<!-- Interactive JavaScript -->
+<script>
+  (function() {
+    // 1. Valuation Basis Toggle & Number Animation
+    const btnEval = document.getElementById('toggle-eval');
+    const btnCost = document.getElementById('toggle-cost');
+    const pillBg = document.getElementById('basis-pill-bg');
+    const yieldText = document.getElementById('yield-value');
+    const heroNum = document.getElementById('dividend-hero-val');
+    const monthlyNum = document.getElementById('monthly-dividend-val');
+
+    function animateCounter(el, start, end, prefix = '¥ ', suffix = '', duration = 400) {
+      if (!el) return;
+      const startTime = performance.now();
+      function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        const currentVal = Math.round(start + (end - start) * easeProgress);
+        el.textContent = `${prefix}${currentVal.toLocaleString()}${suffix}`;
+        if (progress < 1) {
+          requestAnimationFrame(update);
+        }
+      }
+      requestAnimationFrame(update);
+    }
+
+    if (btnEval && btnCost && pillBg) {
+      btnEval.addEventListener('click', () => {
+        pillBg.style.left = '2px';
+        pillBg.style.width = '68px';
+        btnEval.className = 'relative z-10 px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors duration-200 text-on-primary';
+        btnCost.className = 'relative z-10 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors duration-200 text-on-surface-variant hover:text-on-surface';
+        yieldText.textContent = '3.56';
+        animateCounter(heroNum, 118200, 124500, '¥ ');
+        if (monthlyNum) monthlyNum.textContent = '約 ¥10,375';
+      });
+
+      btnCost.addEventListener('click', () => {
+        pillBg.style.left = '70px';
+        pillBg.style.width = '68px';
+        btnCost.className = 'relative z-10 px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors duration-200 text-on-primary';
+        btnEval.className = 'relative z-10 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors duration-200 text-on-surface-variant hover:text-on-surface';
+        yieldText.textContent = '4.18';
+        animateCounter(heroNum, 124500, 118200, '¥ ');
+        if (monthlyNum) monthlyNum.textContent = '約 ¥9,850';
+      });
+    }
+
+    // 2. 3-Way Tabs Switching Logic: "analysis", "dividend", "asset"
+    const tabBtns = document.querySelectorAll('.chart-tab');
+    const panels = {
+      analysis: document.getElementById('panel-analysis'),
+      dividend: document.getElementById('panel-dividend'),
+      asset: document.getElementById('panel-asset')
+    };
+
+    function switchMainTab(targetTab) {
+      tabBtns.forEach(b => {
+        const isTarget = b.dataset.tab === targetTab;
+        b.setAttribute('aria-selected', isTarget ? 'true' : 'false');
+        b.className = isTarget 
+          ? 'chart-tab flex-1 py-2 rounded-lg bg-surface-container-high text-primary font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all duration-200 active:scale-95'
+          : 'chart-tab flex-1 py-2 rounded-lg text-on-surface-variant hover:text-on-surface text-xs font-semibold transition-all duration-200 active:scale-95 flex items-center justify-center gap-1.5';
+        const icon = b.querySelector('.material-symbols-outlined');
+        if (icon) {
+          icon.style.fontVariationSettings = isTarget ? "'FILL' 1" : "'FILL' 0";
+        }
+      });
+
+      Object.keys(panels).forEach(key => {
+        const p = panels[key];
+        if (!p) return;
+        if (key === targetTab) {
+          p.classList.remove('hidden');
+          p.style.opacity = '0';
+          p.style.transform = 'translateY(6px)';
+          requestAnimationFrame(() => {
+            p.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+            p.style.opacity = '1';
+            p.style.transform = 'translateY(0)';
+          });
+        } else {
+          p.classList.add('hidden');
+        }
+      });
+    }
+
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        switchMainTab(btn.dataset.tab);
+      });
+    });
+
+    // 3. Dividend Trend (panel-dividend) Interactive Year Selection
+    const divBars = document.querySelectorAll('.div-bar-col');
+    const divCards = document.querySelectorAll('.div-interactive-card');
+    const divFocusYear = document.getElementById('div-focus-year');
+    const divFocusVal = document.getElementById('div-focus-val');
+    const divFocusMonthly = document.getElementById('div-focus-monthly');
+    const divFocusGrowth = document.getElementById('div-focus-growth');
+    const divFocusPct = document.getElementById('div-focus-pct');
+    const divChartBadge = document.getElementById('div-chart-badge');
+
+    function selectDividendYear(yr) {
+      divBars.forEach(b => {
+        if (b.dataset.year === yr) {
+          b.classList.add('active-year');
+          if (divFocusYear) {
+            divFocusYear.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-primary inline-block"></span> ${yr}年 ${b.dataset.status || ''}`;
+          }
+          if (divFocusVal) divFocusVal.textContent = `${b.dataset.val} / 年`;
+          if (divFocusMonthly) divFocusMonthly.textContent = `月換算 約${b.dataset.monthly} / 月`;
+          if (divFocusGrowth) divFocusGrowth.textContent = b.dataset.growth;
+          if (divFocusPct) divFocusPct.textContent = `${b.dataset.pct} 前年比`;
+          if (divChartBadge) divChartBadge.textContent = `${b.dataset.pct} 増配 (${yr}年)`;
+        } else {
+          b.classList.remove('active-year');
+        }
+      });
+
+      divCards.forEach(card => {
+        if (card.dataset.year === yr) {
+          card.classList.remove('border-white/[0.03]');
+          card.classList.add('border-primary/50', 'bg-surface-container-high/40');
+        } else {
+          card.classList.remove('border-primary/50', 'bg-surface-container-high/40');
+          card.classList.add('border-white/[0.03]');
+        }
+      });
+    }
+
+    divBars.forEach(bar => {
+      bar.addEventListener('click', () => selectDividendYear(bar.dataset.year));
+      bar.addEventListener('mouseenter', () => selectDividendYear(bar.dataset.year));
+    });
+
+    divCards.forEach(card => {
+      card.addEventListener('click', () => selectDividendYear(card.dataset.year));
+    });
+
+    // 4. Asset Trend Period Switching & Bar-Grid Sync
+    const btn5y = document.getElementById('btn-period-5y');
+    const btn12m = document.getElementById('btn-period-12m');
+    const chart5y = document.getElementById('chart-container-5y');
+    const chart12m = document.getElementById('chart-container-12m');
+    const ledger5y = document.getElementById('ledger-list-5y');
+    const ledger12m = document.getElementById('ledger-list-12m');
+    const periodSublabel = document.getElementById('asset-period-sublabel');
+    const ledgerTitle = document.getElementById('ledger-title');
+    const ledgerSubtitle = document.getElementById('ledger-subtitle');
+    const legendLabelAsset = document.getElementById('legend-label-asset');
+    const legendLabelCost = document.getElementById('legend-label-cost');
+    const chartBadgeProfit = document.getElementById('chart-badge-profit');
+
+    const scrubPeriod = document.getElementById('scrub-label-period');
+    const scrubAsset = document.getElementById('scrub-label-asset');
+    const scrubCost = document.getElementById('scrub-label-cost');
+    const scrubProfit = document.getElementById('scrub-label-profit');
+    const scrubPct = document.getElementById('scrub-label-pct');
+    const scrubberLine = document.getElementById('scrubber-line');
+
+    function switchAssetPeriod(period) {
+      if (period === '5y') {
+        btn5y.className = 'asset-period-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all text-on-primary bg-primary shadow-sm';
+        btn12m.className = 'asset-period-btn px-2.5 py-1 rounded-lg text-xs font-medium transition-all text-on-surface-variant hover:text-on-surface';
+
+        chart5y.classList.remove('hidden');
+        chart12m.classList.add('hidden');
+
+        ledger5y.classList.remove('hidden');
+        ledger12m.classList.add('hidden');
+
+        periodSublabel.textContent = '2021年〜2025年(現在) • 年次成長トラッキング';
+        ledgerTitle.textContent = '年次推移・元本 vs 評価額';
+        ledgerSubtitle.textContent = '2021〜2025';
+        legendLabelAsset.textContent = '評価額 (時価)';
+        legendLabelCost.textContent = '累積投資元本 (簿価)';
+        chartBadgeProfit.textContent = '含み益 +¥450,000 (+14.7%)';
+
+        scrubPeriod.textContent = '2025年 (現在)';
+        scrubAsset.textContent = '評価額: ¥3,500,000';
+        scrubCost.textContent = '投資元本 ¥3,050,000';
+        scrubProfit.textContent = '含み益 +¥450,000';
+        scrubPct.textContent = '+14.7%';
+      } else {
+        btn12m.className = 'asset-period-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all text-on-primary bg-primary shadow-sm';
+        btn5y.className = 'asset-period-btn px-2.5 py-1 rounded-lg text-xs font-medium transition-all text-on-surface-variant hover:text-on-surface';
+
+        chart5y.classList.add('hidden');
+        chart12m.classList.remove('hidden');
+
+        ledger5y.classList.add('hidden');
+        ledger12m.classList.remove('hidden');
+
+        periodSublabel.textContent = '2024年1月〜12月 • 月次複利スプライン推移';
+        ledgerTitle.textContent = '月次実績・元本推移と含み益';
+        ledgerSubtitle.textContent = '2024年 1月〜12月';
+        legendLabelAsset.textContent = '月次資産スプライン曲線';
+        legendLabelCost.textContent = '積立元本ライン (月+¥2.5万)';
+        chartBadgeProfit.textContent = '月平均 +¥2.8万 成長';
+
+        scrubPeriod.textContent = '2024年 12月 (現在)';
+        scrubAsset.textContent = '評価額: ¥3,500,000';
+        scrubCost.textContent = '投資元本 ¥3,050,000';
+        scrubProfit.textContent = '含み益 +¥450,000';
+        scrubPct.textContent = '+14.7%';
+      }
+    }
+
+    if (btn5y && btn12m) {
+      btn5y.addEventListener('click', () => switchAssetPeriod('5y'));
+      btn12m.addEventListener('click', () => switchAssetPeriod('12m'));
+    }
+
+    // 5. Interactive 5-Year Bar Selection in Asset View
+    const yearBars = document.querySelectorAll('.year-bar-col');
+    const gridCells = document.querySelectorAll('.year-grid-cell');
+
+    function selectYear(yr) {
+      yearBars.forEach(b => {
+        if (b.dataset.year === yr) {
+          b.classList.add('active-year');
+          if (scrubPeriod) scrubPeriod.textContent = `${yr}年 ${yr === '2025' ? '(現在)' : '実績'}`;
+          if (scrubAsset) scrubAsset.textContent = `評価額: ${b.dataset.val}`;
+          if (scrubCost) scrubCost.textContent = `投資元本 ${b.dataset.cost}`;
+          if (scrubProfit) scrubProfit.textContent = `含み益 ${b.dataset.gain}`;
+          if (scrubPct) scrubPct.textContent = b.dataset.pct;
+          if (chartBadgeProfit) chartBadgeProfit.textContent = `含み益 ${b.dataset.gain} (${b.dataset.pct})`;
+        } else {
+          b.classList.remove('active-year');
+        }
+      });
+
+      gridCells.forEach(cell => {
+        if (cell.dataset.year === yr) {
+          cell.classList.add('active');
+          cell.className = 'year-grid-cell active flex flex-col p-1.5 rounded-lg bg-primary/10 border border-primary/30 cursor-pointer';
+          const yrText = cell.querySelector('span:first-child');
+          if (yrText) yrText.className = 'text-[9px] font-bold text-primary';
+        } else {
+          cell.classList.remove('active');
+          cell.className = 'year-grid-cell flex flex-col p-1.5 rounded-lg bg-surface-container-lowest/70 border border-white/[0.03] cursor-pointer hover:border-primary/30';
+          const yrText = cell.querySelector('span:first-child');
+          if (yrText) yrText.className = 'text-[9px] font-bold text-on-surface';
+        }
+      });
+    }
+
+    yearBars.forEach(bar => {
+      bar.addEventListener('click', () => selectYear(bar.dataset.year));
+      bar.addEventListener('mouseenter', () => selectYear(bar.dataset.year));
+    });
+
+    gridCells.forEach(cell => {
+      cell.addEventListener('click', () => selectYear(cell.dataset.year));
+    });
+
+    // 6. Monthly scrubber interactive points
+    const monthlyPoints = document.querySelectorAll('.scrub-point');
+    monthlyPoints.forEach(pt => {
+      function activatePoint() {
+        monthlyPoints.forEach(p => {
+          p.classList.remove('active');
+          p.setAttribute('r', '3.5');
+          p.setAttribute('fill', '#4edea3');
+          p.removeAttribute('stroke');
+          p.removeAttribute('stroke-width');
+        });
+        pt.classList.add('active');
+        pt.setAttribute('r', '5.5');
+        pt.setAttribute('fill', '#ffffff');
+        pt.setAttribute('stroke', '#4edea3');
+        pt.setAttribute('stroke-width', '2.5');
+
+        const cx = pt.getAttribute('cx');
+        if (scrubberLine) {
+          scrubberLine.style.display = 'block';
+          scrubberLine.setAttribute('x1', cx);
+          scrubberLine.setAttribute('x2', cx);
+        }
+
+        const m = pt.dataset.month;
+        const val = pt.dataset.val;
+        const cost = pt.dataset.cost;
+        const gain = pt.dataset.gain;
+        const pct = pt.dataset.pct;
+        const pace = pt.dataset.pace;
+
+        if (scrubPeriod) scrubPeriod.textContent = `2024年 ${m} (月次)`;
+        if (scrubAsset) scrubAsset.textContent = `評価額: ${val}`;
+        if (scrubCost) scrubCost.textContent = `投資元本 ${cost}`;
+        if (scrubProfit) scrubProfit.textContent = `含み益 ${gain}`;
+        if (scrubPct) scrubPct.textContent = pct;
+        if (chartBadgeProfit) chartBadgeProfit.textContent = `前月比 ${pace}`;
+      }
+
+      pt.addEventListener('mouseenter', activatePoint);
+      pt.addEventListener('click', activatePoint);
+      pt.addEventListener('touchstart', () => activatePoint(), { passive: true });
+    });
+  })();
+</script>
+
+
+
+
+
+
+<div id="snapdom-sandbox" data-snapdom-sandbox="true" aria-hidden="true" style="position: absolute; left: -9999px; top: -9999px; width: 0px; height: 0px; overflow: hidden;"></div></body></html>

@@ -1,0 +1,319 @@
+{
+  "source": "IRBANK Connect screen_securities",
+  "retrieved_date": "2026-09-26",
+  "parameters": {
+    "as_of": "now",
+    "listed_status": "listed",
+    "sort_order": "desc"
+  },
+  "reported_total_count": 4211,
+  "returned_rows": 3973,
+  "unique_security_codes": 3960,
+  "pages": [
+    {
+      "offset": 0,
+      "count": 24
+    },
+    {
+      "offset": 30,
+      "count": 25
+    },
+    {
+      "offset": 60,
+      "count": 28
+    },
+    {
+      "offset": 90,
+      "count": 25
+    },
+    {
+      "offset": 120,
+      "count": 28
+    },
+    {
+      "offset": 150,
+      "count": 29
+    },
+    {
+      "offset": 180,
+      "count": 30
+    },
+    {
+      "offset": 210,
+      "count": 30
+    },
+    {
+      "offset": 240,
+      "count": 21
+    },
+    {
+      "offset": 270,
+      "count": 28
+    },
+    {
+      "offset": 300,
+      "count": 28
+    },
+    {
+      "offset": 330,
+      "count": 25
+    },
+    {
+      "offset": 360,
+      "count": 27
+    },
+    {
+      "offset": 390,
+      "count": 30
+    },
+    {
+      "offset": 420,
+      "count": 29
+    },
+    {
+      "offset": 450,
+      "count": 28
+    },
+    {
+      "offset": 480,
+      "count": 27
+    },
+    {
+      "offset": 510,
+      "count": 30
+    },
+    {
+      "offset": 540,
+      "count": 30
+    },
+    {
+      "offset": 570,
+      "count": 27
+    },
+    {
+      "offset": 600,
+      "count": 30
+    },
+    {
+      "offset": 630,
+      "count": 28
+    },
+    {
+      "offset": 660,
+      "count": 27
+    },
+    {
+      "offset": 690,
+      "count": 29
+    },
+    {
+      "offset": 720,
+      "count": 28
+    },
+    {
+      "offset": 750,
+      "count": 25
+    },
+    {
+      "offset": 780,
+      "count": 28
+    },
+    {
+      "offset": 810,
+      "count": 26
+    },
+    {
+      "offset": 840,
+      "count": 30
+    },
+    {
+      "offset": 870,
+      "count": 27
+    },
+    {
+      "offset": 900,
+      "count": 28
+    },
+    {
+      "offset": 930,
+      "count": 29
+    },
+    {
+      "offset": 960,
+      "count": 29
+    },
+    {
+      "offset": 990,
+      "count": 30
+    },
+    {
+      "offset": 1020,
+      "count": 28
+    },
+    {
+      "offset": 1050,
+      "count": 27
+    },
+    {
+      "offset": 1080,
+      "count": 27
+    },
+    {
+      "offset": 1110,
+      "count": 27
+    },
+    {
+      "offset": 1140,
+      "count": 30
+    },
+    {
+      "offset": 1170,
+      "count": 26
+    },
+    {
+      "offset": 1200,
+      "count": 30
+    },
+    {
+      "offset": 1230,
+      "count": 29
+    },
+    {
+      "offset": 1260,
+      "count": 29
+    },
+    {
+      "offset": 1290,
+      "count": 29
+    },
+    {
+      "offset": 1320,
+      "count": 29
+    },
+    {
+      "offset": 1350,
+      "count": 29
+    },
+    {
+      "offset": 1380,
+      "count": 96
+    },
+    {
+      "offset": 1480,
+      "count": 94
+    },
+    {
+      "offset": 1580,
+      "count": 96
+    },
+    {
+      "offset": 1680,
+      "count": 97
+    },
+    {
+      "offset": 1780,
+      "count": 97
+    },
+    {
+      "offset": 1880,
+      "count": 89
+    },
+    {
+      "offset": 1980,
+      "count": 83
+    },
+    {
+      "offset": 2080,
+      "count": 81
+    },
+    {
+      "offset": 2180,
+      "count": 71
+    },
+    {
+      "offset": 2280,
+      "count": 92
+    },
+    {
+      "offset": 2380,
+      "count": 84
+    },
+    {
+      "offset": 2480,
+      "count": 94
+    },
+    {
+      "offset": 2580,
+      "count": 99
+    },
+    {
+      "offset": 2680,
+      "count": 98
+    },
+    {
+      "offset": 2780,
+      "count": 100
+    },
+    {
+      "offset": 2880,
+      "count": 99
+    },
+    {
+      "offset": 2980,
+      "count": 95
+    },
+    {
+      "offset": 3080,
+      "count": 98
+    },
+    {
+      "offset": 3180,
+      "count": 96
+    },
+    {
+      "offset": 3280,
+      "count": 100
+    },
+    {
+      "offset": 3380,
+      "count": 100
+    },
+    {
+      "offset": 3480,
+      "count": 100
+    },
+    {
+      "offset": 3580,
+      "count": 100
+    },
+    {
+      "offset": 3680,
+      "count": 99
+    },
+    {
+      "offset": 3780,
+      "count": 94
+    },
+    {
+      "offset": 3880,
+      "count": 96
+    },
+    {
+      "offset": 3980,
+      "count": 100
+    },
+    {
+      "offset": 4080,
+      "count": 100
+    },
+    {
+      "offset": 4180,
+      "count": 31
+    },
+    {
+      "offset": 4200,
+      "count": 11
+    }
+  ],
+  "note": "The API returned fewer than requested on some pages, and the directory contains overlapping pages. Counts do not prove full coverage."
+}

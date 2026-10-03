@@ -1,0 +1,7 @@
+name = "diview-irbank"
+compatibility_date = "2026-10-03"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "diview-irbank"
+database_id = "e5046cbb-dd81-4f7c-aa25-1e7a2616d8d7"

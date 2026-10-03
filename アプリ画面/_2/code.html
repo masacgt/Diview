@@ -1,0 +1,1085 @@
+<!DOCTYPE html><html class="dark" lang="ja" style="width: 390px; height: 1944px; overflow: hidden; position: relative;"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"><meta content="mobile_tab" name="shell-type"><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Space+Grotesk:wght@600;700&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{width:100%;margin:0;padding:0;background-color:#0b1326;color:#dae2fd;}body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;display:inline-block;vertical-align:middle;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "secondary-fixed-dim": "#c0c1ff", "primary-fixed": "#6ffbbe", "primary-container": "#10b981", "on-secondary-fixed": "#07006c", "surface-dim": "#0b1326", "surface": "#0b1326", "on-primary-fixed-variant": "#005236", "on-primary-fixed": "#002113", "surface-container-highest": "#2d3449", "on-error-container": "#ffdad6", "error-container": "#93000a", "background": "#0b1326", "tertiary": "#ffb3ad", "on-secondary-container": "#b0b2ff", "on-surface": "#dae2fd", "surface-bright": "#31394d", "on-secondary": "#1000a9", "on-surface-variant": "#bbcabf", "inverse-surface": "#dae2fd", "secondary-fixed": "#e1e0ff", "on-tertiary": "#68000a", "surface-tint": "#4edea3", "tertiary-container": "#ff7a73", "on-error": "#690005", "secondary": "#c0c1ff", "surface-container-high": "#222a3d", "primary-fixed-dim": "#4edea3", "inverse-on-surface": "#283044", "surface-container-low": "#131b2e", "on-primary-container": "#00422b", "inverse-primary": "#006c49", "on-secondary-fixed-variant": "#2f2ebe", "tertiary-fixed": "#ffdad7", "surface-container": "#171f33", "surface-variant": "#2d3449", "on-background": "#dae2fd", "secondary-container": "#3131c0", "error": "#ffb4ab", "on-tertiary-container": "#79000e", "tertiary-fixed-dim": "#ffb3ad", "outline-variant": "#3c4a42", "on-primary": "#003824", "on-tertiary-fixed": "#410004", "on-tertiary-fixed-variant": "#930013", "surface-container-lowest": "#060e20", "primary": "#4edea3", "outline": "#86948a" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "gutter-sm": "0.75rem", "space-xs": "0.25rem", "gutter": "1rem", "space-xl": "2rem", "space-md": "1rem", "space-lg": "1.5rem", "margin": "1rem", "margin-tablet": "1.5rem", "space-sm": "0.5rem" }, "fontFamily": { "body-md": ["Manrope"], "display-lg": ["Space Grotesk"], "numeric-hero-mobile": ["Space Grotesk"], "display-lg-mobile": ["Space Grotesk"], "title-lg": ["Manrope"], "body-sm": ["Manrope"], "body-lg": ["Manrope"], "label-sm": ["Manrope"], "label-lg": ["Manrope"], "headline-md": ["Space Grotesk"], "headline-lg": ["Space Grotesk"], "title-md": ["Manrope"], "numeric-hero": ["Space Grotesk"], "label-md": ["Manrope"] }, "fontSize": { "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }], "display-lg": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "numeric-hero-mobile": ["30px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "display-lg-mobile": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "title-lg": ["18px", { "lineHeight": "24px", "fontWeight": "600" }], "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }], "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "label-sm": ["10px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "700" }], "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }], "headline-md": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "600" }], "title-md": ["16px", { "lineHeight": "22px", "fontWeight": "600" }], "numeric-hero": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }] } } } }</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<!-- JSON Master Data Specification for Roadmap Steps -->
+<script id="roadmap-step-master-data" type="application/json">
+{
+  "statusDefinition": {
+    "completed": {
+      "label": "達成済",
+      "icon": "check_circle",
+      "isLocked": false,
+      "isChallenge": false,
+      "badgeBg": "rgba(16, 185, 129, 0.2)",
+      "badgeText": "#10b981"
+    },
+    "in_progress": {
+      "label": "挑戦中",
+      "icon": "play_circle",
+      "isLocked": false,
+      "isChallenge": true,
+      "badgeBg": "rgba(16, 185, 129, 0.25)",
+      "badgeText": "#10b981"
+    },
+    "locked": {
+      "label": "未達成",
+      "icon": "lock",
+      "isLocked": true,
+      "isChallenge": false,
+      "badgeBg": "rgba(45, 52, 73, 0.6)",
+      "badgeText": "#86948a"
+    }
+  },
+  "levels": [
+    {
+      "id": 1,
+      "name": "LEVEL 1: 生活インフラ自給期",
+      "shortName": "インフラ自給期",
+      "stepRange": "STEP 1-5",
+      "status": "completed",
+      "totalSteps": 5,
+      "clearedSteps": 5,
+      "badgeText": "5/5 CLEAR"
+    },
+    {
+      "id": 2,
+      "name": "LEVEL 2: 生活費自給・ミニFIRE期",
+      "shortName": "生活費・ミニFIRE",
+      "stepRange": "STEP 6-7",
+      "status": "in_progress",
+      "totalSteps": 2,
+      "clearedSteps": 0,
+      "badgeText": "挑戦中ステージ"
+    },
+    {
+      "id": 3,
+      "name": "LEVEL 3: 完全経済的自由・FIRE期",
+      "shortName": "完全FIRE期",
+      "stepRange": "STEP 8-10",
+      "status": "locked",
+      "totalSteps": 3,
+      "clearedSteps": 0,
+      "badgeText": "最終ステージ帯"
+    }
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "level": 1,
+      "name": "STEP 1: 月3,000円",
+      "title": "電気代の基本料金・カフェ代を自給",
+      "description": "月3,000円 (年3.6万円)。毎月の電気代基本料金や休日のスターバックス等でのカフェ代が不労所得でゼロに。最初の不労所得の確かな手応えを得るステージです。",
+      "icon": "coffee",
+      "targetMonthly": 3000,
+      "targetAnnual": 36000,
+      "status": "completed",
+      "statusLabel": "達成済",
+      "badge": "達成済",
+      "lockIcon": null,
+      "statusIcon": "check_circle",
+      "isLocked": false,
+      "isChallenge": false,
+      "badgeBg": "rgba(16, 185, 129, 0.2)",
+      "badgeColor": "#10b981",
+      "currentRate": 100.0,
+      "rateLabel": "100%",
+      "subStatusLabel": "CLEAR",
+      "neededCapitalSim": {
+        "status": "all_cleared"
+      }
+    },
+    {
+      "step": 2,
+      "level": 1,
+      "name": "STEP 2: 月5,000円",
+      "title": "スマホ通信費＆サブスク代を自給",
+      "description": "月5,000円 (年6万円)。格安SIMの通信費やNetflix、Spotify、iCloudなどの主要デジタルサブスク利用料が自動でまかなえます。",
+      "icon": "smartphone",
+      "targetMonthly": 5000,
+      "targetAnnual": 60000,
+      "status": "completed",
+      "statusLabel": "達成済",
+      "badge": "達成済",
+      "lockIcon": null,
+      "statusIcon": "check_circle",
+      "isLocked": false,
+      "isChallenge": false,
+      "badgeBg": "rgba(16, 185, 129, 0.2)",
+      "badgeColor": "#10b981",
+      "currentRate": 100.0,
+      "rateLabel": "100%",
+      "subStatusLabel": "CLEAR",
+      "neededCapitalSim": {
+        "status": "all_cleared"
+      }
+    },
+    {
+      "step": 3,
+      "level": 1,
+      "name": "STEP 3: 月10,000円",
+      "title": "水道光熱費の基本料金をカバー",
+      "description": "月10,000円 (年12万円)。電気・ガス・水道の全基本料金が資本収入で賄われ、暮らしているだけで発生する固定費の土台が自動化されます。",
+      "icon": "lightbulb",
+      "targetMonthly": 10000,
+      "targetAnnual": 120000,
+      "status": "completed",
+      "statusLabel": "達成済",
+      "badge": "達成済",
+      "lockIcon": null,
+      "statusIcon": "check_circle",
+      "isLocked": false,
+      "isChallenge": false,
+      "badgeBg": "rgba(16, 185, 129, 0.2)",
+      "badgeColor": "#10b981",
+      "currentRate": 100.0,
+      "rateLabel": "100%",
+      "subStatusLabel": "CLEAR",
+      "neededCapitalSim": {
+        "status": "all_cleared"
+      }
+    },
+    {
+      "step": 4,
+      "level": 1,
+      "name": "STEP 4: 月20,000円",
+      "title": "週末外食・自己投資書籍費",
+      "description": "月20,000円 (年24万円)。毎週末の気兼ねないランチ・ディナーや、スキルアップのための技術書・ビジネス書購入費用が不労所得から拠出可能になります。",
+      "icon": "restaurant",
+      "targetMonthly": 20000,
+      "targetAnnual": 240000,
+      "status": "completed",
+      "statusLabel": "達成済",
+      "badge": "達成済",
+      "lockIcon": null,
+      "statusIcon": "check_circle",
+      "isLocked": false,
+      "isChallenge": false,
+      "badgeBg": "rgba(16, 185, 129, 0.2)",
+      "badgeColor": "#10b981",
+      "currentRate": 100.0,
+      "rateLabel": "100%",
+      "subStatusLabel": "CLEAR",
+      "neededCapitalSim": {
+        "status": "all_cleared"
+      }
+    },
+    {
+      "step": 5,
+      "level": 1,
+      "name": "STEP 5: 月30,000円",
+      "title": "水道光熱費の全額自給",
+      "description": "月30,000円 (年36万円)。一人暮らし・少人数世帯の水道・電気・ガス代全額を完全カバー。生活インフラを資本収入のみで賄う大記録を達成！",
+      "icon": "bolt",
+      "targetMonthly": 30000,
+      "targetAnnual": 360000,
+      "status": "completed",
+      "statusLabel": "達成済",
+      "badge": "達成済",
+      "lockIcon": null,
+      "statusIcon": "check_circle",
+      "isLocked": false,
+      "isChallenge": false,
+      "badgeBg": "rgba(16, 185, 129, 0.2)",
+      "badgeColor": "#10b981",
+      "currentRate": 100.0,
+      "rateLabel": "100%",
+      "subStatusLabel": "CLEAR",
+      "neededCapitalSim": {
+        "status": "all_cleared"
+      }
+    },
+    {
+      "step": 6,
+      "level": 2,
+      "name": "STEP 6: 月50,000円",
+      "title": "食費・日用品の全額自給",
+      "description": "毎月の配当金が5万円に到達すると、一人暮らしの食費や日用品などの生活基盤出費が労働対価なしで賄えるようになります。精神的自由度が劇的に跳ね上がる超重要マイルストーンです。",
+      "icon": "shopping_cart",
+      "targetMonthly": 50000,
+      "targetAnnual": 600000,
+      "status": "in_progress",
+      "statusLabel": "現在挑戦中",
+      "badge": "現在挑戦中",
+      "lockIcon": null,
+      "statusIcon": "play_circle",
+      "isLocked": false,
+      "isChallenge": true,
+      "badgeBg": "rgba(78, 222, 163, 1)",
+      "badgeColor": "#003824",
+      "currentRate": 62.4,
+      "rateLabel": "62.4%",
+      "subStatusLabel": "あと¥18,792",
+      "shortageMonthly": 18792,
+      "shortageAnnual": 225500,
+      "neededCapitalSim": {
+        "yield35": "¥644万",
+        "yield40": "¥563万",
+        "yield45": "¥501万"
+      }
+    },
+    {
+      "step": 7,
+      "level": 2,
+      "name": "STEP 7: 月100,000円",
+      "title": "住居費・家賃の完全カバー",
+      "description": "月100,000円 (年120万円)。人生最大の固定出費である家賃や住宅ローン返済を配当のみで支払える圧倒的安心感を手に入れます。",
+      "icon": "home",
+      "targetMonthly": 100000,
+      "targetAnnual": 1200000,
+      "status": "locked",
+      "statusLabel": "未達成",
+      "badge": "未達成",
+      "lockIcon": "lock",
+      "statusIcon": null,
+      "isLocked": true,
+      "isChallenge": false,
+      "badgeBg": "rgba(45, 52, 73, 0.6)",
+      "badgeColor": "#86948a",
+      "currentRate": 31.2,
+      "rateLabel": "31.2%",
+      "subStatusLabel": "あと¥68,792",
+      "shortageMonthly": 68792,
+      "shortageAnnual": 825500,
+      "neededCapitalSim": {
+        "yield35": "¥2,358万",
+        "yield40": "¥2,063万",
+        "yield45": "¥1,834万"
+      }
+    },
+    {
+      "step": 8,
+      "level": 3,
+      "name": "STEP 8: 月200,000円",
+      "title": "標準的生活費の全額自立（Lean FIRE水準）",
+      "description": "月200,000円 (年240万円)。必要最低限の生活費を超え、質素ながら自立した生活が配当だけで成立するLean FIREの達成域です。",
+      "icon": "beach_access",
+      "targetMonthly": 200000,
+      "targetAnnual": 2400000,
+      "status": "locked",
+      "statusLabel": "未達成",
+      "badge": "未達成",
+      "lockIcon": "lock",
+      "statusIcon": null,
+      "isLocked": true,
+      "isChallenge": false,
+      "badgeBg": "rgba(45, 52, 73, 0.6)",
+      "badgeColor": "#86948a",
+      "currentRate": 15.6,
+      "rateLabel": "15.6%",
+      "subStatusLabel": "あと¥168,792",
+      "shortageMonthly": 168792,
+      "shortageAnnual": 2025500,
+      "neededCapitalSim": {
+        "yield35": "¥5,787万",
+        "yield40": "¥5,063万",
+        "yield45": "¥4,501万"
+      }
+    },
+    {
+      "step": 9,
+      "level": 3,
+      "name": "STEP 9: 月300,000円",
+      "title": "ゆとりある生活（Full FIRE）",
+      "description": "月300,000円 (年36万円)。旅行や趣味、家族との豊かな時間を過ごしながらも元本が減らない理想の不労所得ライフスタイルを確立。",
+      "icon": "flight",
+      "targetMonthly": 300000,
+      "targetAnnual": 3600000,
+      "status": "locked",
+      "statusLabel": "未達成",
+      "badge": "未達成",
+      "lockIcon": "lock",
+      "statusIcon": null,
+      "isLocked": true,
+      "isChallenge": false,
+      "badgeBg": "rgba(45, 52, 73, 0.6)",
+      "badgeColor": "#86948a",
+      "currentRate": 10.4,
+      "rateLabel": "10.4%",
+      "subStatusLabel": "あと¥268,792",
+      "shortageMonthly": 268792,
+      "shortageAnnual": 3225500,
+      "neededCapitalSim": {
+        "yield35": "¥9,215万",
+        "yield40": "¥8,063万",
+        "yield45": "¥7,167万"
+      }
+    },
+    {
+      "step": 10,
+      "level": 3,
+      "name": "STEP 10: 月500,000円+",
+      "title": "経済的自由・資産自動増殖＆完全自由",
+      "description": "月500,000円以上 (年600万円以上)。使い切れない配当が自動再投資され、資産が加速度的に増殖する真の経済的自由（配当貴族の頂点）。",
+      "icon": "crown",
+      "targetMonthly": 500000,
+      "targetAnnual": 6000000,
+      "status": "locked",
+      "statusLabel": "未達成",
+      "badge": "未達成",
+      "lockIcon": "lock",
+      "statusIcon": null,
+      "isLocked": true,
+      "isChallenge": false,
+      "badgeBg": "rgba(45, 52, 73, 0.6)",
+      "badgeColor": "#86948a",
+      "currentRate": 6.2,
+      "rateLabel": "6.2%",
+      "subStatusLabel": "最終到達点",
+      "shortageMonthly": 468792,
+      "shortageAnnual": 5625500,
+      "neededCapitalSim": {
+        "yield35": "¥1億6,072万",
+        "yield40": "¥1億4,063万",
+        "yield45": "¥1億2,501万"
+      }
+    }
+  ],
+  "stateVariations": {
+    "allCompletedState": {
+      "currentLevel": 3,
+      "currentStep": 10,
+      "completedCount": 10,
+      "allCleared": true
+    },
+    "step3InProgressState": {
+      "currentLevel": 1,
+      "currentStep": 3,
+      "completedCount": 2,
+      "allCleared": false
+    },
+    "emptyInitialState": {
+      "currentLevel": 1,
+      "currentStep": 1,
+      "completedCount": 0,
+      "allCleared": false
+    }
+  }
+}
+</script>
+<script id="roadmap-step-status-master">
+  // Load and expose master data on window for global access
+  try {
+    const rawData = document.getElementById('roadmap-step-master-data').textContent;
+    window.ROADMAP_MASTER_DATA = JSON.parse(rawData);
+  } catch (err) {
+    console.error('Failed to parse roadmap master data:', err);
+  }
+</script>
+</head><body class="bg-surface font-body-md text-on-surface antialiased flex flex-col min-h-screen selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 inset-x-0 z-50 bg-surface-container-lowest/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.15)] pt-safe"><div class="h-16 px-margin flex items-center justify-between"><div class="flex items-center gap-space-sm"><div class="w-9 h-9 rounded-lg bg-surface-container-high flex items-center justify-center shadow-inner"><span class="material-symbols-outlined text-primary text-[22px]">flag</span></div><div class="flex flex-col"><span class="font-headline-md text-headline-md tracking-tight text-on-surface"><span class="" style="letter-spacing: -0.55px;">Roadmap Quest</span></span><span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">不労所得 RPG • ステージ攻略</span></div></div><div class="flex items-center gap-space-xs"><button aria-label="検索" class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" title="検索"><span class="material-symbols-outlined text-[22px]">search</span></button><button aria-label="通知" class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[22px]">notifications</span></button><button aria-label="設定" class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[22px]">settings</span></button></div></div></header><main class="flex flex-col relative w-full pt-16 pb-28 bg-surface px-margin min-h-screen"><div class="flex flex-col w-full gap-space-lg text-on-surface">
+<!-- Ambient Glow Background Decorator -->
+<div class="fixed top-20 left-1/2 -translate-x-1/2 w-[340px] h-[340px] bg-primary/10 rounded-full blur-[110px] pointer-events-none -z-10"></div>
+<div class="fixed bottom-32 right-[-60px] w-[260px] h-[260px] bg-secondary-container/20 rounded-full blur-[90px] pointer-events-none -z-10"></div>
+<!-- Top Gamification Quest Status Card -->
+<section class="relative w-full rounded-2xl bg-gradient-to-b from-surface-container-high via-surface-container to-surface-container p-space-md shadow-[0_8px_32px_rgba(2,6,23,0.6)] border border-outline-variant/30 overflow-hidden transition-all duration-300">
+<div class="absolute -top-14 -right-14 w-40 h-40 bg-gradient-to-br from-primary/25 via-primary/5 to-transparent rounded-full blur-2xl pointer-events-none"></div>
+<!-- Level Badges & Trophy Banner -->
+<div class="flex items-center justify-between gap-space-sm mb-3 relative z-10">
+<div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/15 text-primary border border-primary/30">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+</span>
+<span class="font-label-sm text-label-sm tracking-wide font-bold">LEVEL 2 進行中: STEP 6</span>
+</div>
+<div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary-container/40 text-secondary-fixed text-[11px] font-semibold">
+<span class="material-symbols-outlined text-[15px] text-amber-400">emoji_events</span>
+<span class="">LV.1 制覇済み (5/10)</span>
+</div>
+</div>
+<!-- Trophy Alert Card: LEVEL 1 Fully Cleared -->
+<div class="relative z-10 flex items-center justify-between p-2.5 mb-space-sm rounded-xl bg-gradient-to-r from-primary-container/20 via-primary/10 to-transparent border border-primary/30">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-lg bg-amber-400/20 text-amber-300 flex items-center justify-center shrink-0 border border-amber-400/30 shadow-sm"><span class="material-symbols-outlined text-[24px] text-amber-400" style="font-variation-settings: &quot;FILL&quot; 1;">military_tech</span></div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md font-bold text-primary flex items-center gap-1">
+        LEVEL 1 完全制覇達成！
+        <span class="material-symbols-outlined text-[15px]">verified</span>
+</span>
+<span class="font-body-sm text-[11px] text-on-surface-variant">生活インフラ自給期 (STEP 1〜5) を踏破完了</span>
+</div>
+</div>
+<span class="px-2 py-0.5 rounded bg-primary/20 text-primary font-label-sm text-[10px] font-bold shrink-0">ALL CLEAR</span>
+</div>
+<!-- Current Dividends Counter -->
+<div class="flex flex-col gap-1 mb-space-md relative z-10">
+<div class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-semibold flex items-center justify-between">
+<span class="">現在の配当獲得ステータス</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="font-numeric-hero-mobile text-numeric-hero-mobile text-on-surface tracking-tight" id="hero-annual-val">¥374,500</span>
+<span class="font-title-md text-title-md text-on-surface-variant font-medium">/ 年</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="font-body-sm text-body-sm">月間換算不労所得:</span>
+<span class="font-headline-md text-[18px] leading-tight text-primary font-bold tracking-tight" id="hero-monthly-val">約 ¥31,208</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">/ 月</span>
+</div>
+</div>
+<!-- Quest Progress to STEP 6 -->
+<div class="flex flex-col gap-2 p-space-sm rounded-xl bg-surface-container-low border border-outline-variant/20 mb-space-md relative z-10">
+<div class="flex justify-between items-center text-on-surface">
+<div class="flex items-center gap-1.5 font-label-md text-label-md"><span class="material-symbols-outlined text-[18px] text-primary">shopping_cart</span><span class="font-bold text-on-surface">QUEST 6 目標: <span class="text-primary">¥50,000 / 月</span></span></div>
+<div class="font-headline-md text-[15px] font-bold text-primary" id="hero-pct">62.4% 達成</div>
+</div>
+<!-- Animated Progress Bar -->
+<div class="w-full h-3 bg-surface-container-highest rounded-full overflow-hidden relative p-[1px]">
+<div class="h-full bg-gradient-to-r from-primary-container via-primary to-primary-fixed rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(78,222,163,0.5)]" style="width: 62.4%;"></div>
+</div>
+<div class="flex justify-between items-center font-label-sm text-label-sm text-on-surface-variant pt-0.5">
+<span class="">現在実績: <span class="text-on-surface font-semibold" id="hero-cur-sm">¥31,208</span></span>
+<span class="text-tertiary font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">flag</span>
+      あと <span class="" id="hero-gap-sm">¥18,792</span> / 月 で攻略
+    </span>
+</div>
+</div>
+<!-- Additional Principal Note -->
+<div class="flex items-start gap-2.5 p-3 rounded-lg bg-surface-container-high/60 mb-space-md border border-outline-variant/20">
+<span class="material-symbols-outlined text-primary text-[20px] shrink-0 mt-0.5">query_stats</span>
+<div class="font-body-sm text-body-sm leading-relaxed text-on-surface-variant">
+    年額 <span class="text-primary font-bold">+¥225,500</span> でSTEP 6クリア。配当利回り <span class="text-on-surface font-semibold">4.0%</span> 想定時、必要な追加投資元本は約 <span class="text-primary font-bold underline decoration-primary/40 underline-offset-2">¥563万円</span> です。
+  </div>
+</div>
+<!-- Action CTAs -->
+<div class="grid grid-cols-2 gap-2"><button class="h-11 rounded-lg bg-primary text-on-primary font-label-md text-label-md flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-[0_4px_14px_rgba(16,185,129,0.35)] font-bold" onclick="openShareModal()"><span class="material-symbols-outlined text-[18px]">share</span><span class="">達成度を共有する</span></button><button class="h-11 rounded-lg bg-surface-container-high text-on-surface hover:text-primary font-label-md text-label-md flex items-center justify-center gap-1.5 active:scale-95 transition-all border border-outline-variant/30 font-semibold" onclick="saveCardImage()"><span class="material-symbols-outlined text-[18px]">download</span><span class="">画像で保存</span></button></div>
+</section>
+<!-- 3-Tier Level Tier Navigator Pills -->
+<section class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-title-md text-title-md font-bold text-on-surface flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[19px]">hotel_class</span>
+      3大ステージ・レベル帯
+    </span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">タップしてジャンプ</span>
+</div>
+<div class="grid grid-cols-3 gap-2">
+<button class="flex flex-col items-center p-2.5 rounded-xl bg-surface-container border border-primary/40 text-center active:scale-95 transition-all" onclick="filterLevel(1)">
+<div class="flex items-center gap-1 text-[11px] font-bold text-primary">
+<span class="">LV.1 制覇</span>
+<span class="material-symbols-outlined text-[13px]">check_circle</span>
+</div>
+<span class="font-label-sm text-[10px] text-on-surface-variant truncate w-full mt-0.5">インフラ自給期</span>
+<span class="font-label-sm text-[10px] text-primary font-bold">STEP 1-5</span>
+</button>
+<button class="flex flex-col items-center p-2.5 rounded-xl bg-surface-container-high border-2 border-primary text-center shadow-[0_0_12px_rgba(78,222,163,0.25)] active:scale-95 transition-all" onclick="filterLevel(2)">
+<div class="flex items-center gap-1 text-[11px] font-bold text-primary animate-pulse">
+<span class="">LV.2 挑戦中</span>
+<span class="material-symbols-outlined text-[13px]">play_circle</span>
+</div>
+<span class="font-label-sm text-[10px] text-on-surface font-semibold truncate w-full mt-0.5">生活費・ミニFIRE</span>
+<span class="font-label-sm text-[10px] text-primary font-bold">STEP 6-7</span>
+</button>
+<button class="flex flex-col items-center p-2.5 rounded-xl bg-surface-container border border-outline-variant/30 text-center active:scale-95 transition-all opacity-80" onclick="filterLevel(3)">
+<div class="flex items-center gap-1 text-[11px] font-medium text-on-surface-variant">
+<span class="">LV.3 ロック</span>
+<span class="material-symbols-outlined text-[13px]">lock</span>
+</div>
+<span class="font-label-sm text-[10px] text-on-surface-variant truncate w-full mt-0.5">完全FIRE期</span>
+<span class="font-label-sm text-[10px] text-on-surface-variant">STEP 8-10</span>
+</button>
+</div>
+</section>
+<!-- Horizontal Step Carousel Selector -->
+<!-- Gamified Level Tiers & Full Milestone Quests Map with Inline Accordion -->
+<section class="flex flex-col gap-4">
+<div class="flex items-center justify-between">
+<span class="font-title-md text-title-md font-bold text-on-surface flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[20px]">assignment_turned_in</span>
+      全10マイルストーン・クエストマップ
+    </span>
+</div>
+<!-- LEVEL 1 GROUP: 生活インフラ自給期 (STEP 1-5) -->
+<div class="flex flex-col gap-2 p-3 rounded-2xl bg-surface-container-low border border-primary/30" id="level-group-1">
+<div class="flex items-center justify-between pb-1 px-1">
+<div class="flex items-center gap-2"><div class="flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[16px]">coffee</span><span class="material-symbols-outlined text-[16px]">bolt</span></div><span class="font-title-md text-[15px] font-bold text-primary">LEVEL 1: 生活インフラ自給期</span></div>
+<span class="px-2 py-0.5 rounded-full bg-primary/20 text-primary font-label-sm text-[10px] font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">done_all</span> 5/5 CLEAR
+      </span>
+</div>
+<!-- STEP 1 CONTAINER -->
+<div class="step-accordion-item rounded-xl overflow-hidden transition-all bg-surface-container border border-outline-variant/15" id="step-wrapper-1">
+<div class="flex items-center justify-between p-3 cursor-pointer hover:bg-surface-container-high/60 transition-all active:scale-[0.99]" onclick="selectRoadmapStep(1)">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center text-lg shrink-0"><span class="material-symbols-outlined text-[20px]">coffee</span></div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md font-bold text-on-surface">STEP 1: 月3,000円</span>
+<span class="font-label-sm text-[10px] px-1.5 py-0.2 rounded bg-primary/20 text-primary font-bold">達成済</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">電気代の基本料金・カフェ代を自給</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-[14px] text-primary font-bold">100%</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant">CLEAR</span>
+</div>
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant transition-transform duration-200 accordion-arrow">expand_more</span>
+</div>
+</div>
+<!-- ACCORDION CONTENT -->
+<div class="step-detail-panel px-3 pb-3 pt-1 border-t border-outline-variant/15 hidden">
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed mb-2.5">月3,000円 (年3.6万円)。毎月の電気代基本料金や休日のスターバックス等でのカフェ代が不労所得でゼロに。最初の不労所得の確かな手応えを得るステージです。</p>
+<div class="grid grid-cols-2 gap-2 mb-2.5">
+<div class="p-2.5 rounded-lg bg-surface-container-low flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">目標月額 / 年額換算</span><span class="font-headline-md text-[15px] font-bold text-on-surface">¥3,000 <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-on-surface-variant">年額 ¥36,000</span></div>
+<div class="p-2.5 rounded-lg bg-surface-container-low flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">達成ステータス</span><span class="font-headline-md text-[15px] font-bold text-primary">達成済 ✨</span><span class="font-body-sm text-[10px] text-primary font-medium">現在月額 ¥31,208 で超過中</span></div>
+</div>
+<div class="p-2 rounded-lg bg-surface-container-high/60 border border-outline-variant/20 flex flex-col gap-1.5"><div class="flex items-center justify-between text-on-surface"><span class="font-label-sm text-[11px] font-semibold flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[14px]">savings</span>利回り別・必要追加元本目安</span><span class="font-label-sm text-[10px] text-primary font-bold">完全クリア済み</span></div><div class="grid grid-cols-3 gap-1.5 text-center"><div class="p-1.5 rounded bg-surface-container"><span class="text-[10px] block text-on-surface-variant">3.5%</span><span class="font-bold text-[12px] text-primary">達成済</span></div><div class="p-1.5 rounded bg-primary/10 border border-primary/30"><span class="text-[10px] block text-primary">4.0%</span><span class="font-bold text-[12px] text-primary">達成済</span></div><div class="p-1.5 rounded bg-surface-container"><span class="text-[10px] block text-on-surface-variant">4.5%</span><span class="font-bold text-[12px] text-primary">達成済</span></div></div></div>
+</div>
+</div>
+<!-- STEP 2 CONTAINER -->
+<div class="step-accordion-item rounded-xl overflow-hidden transition-all bg-surface-container border border-outline-variant/15" id="step-wrapper-2">
+<div class="flex items-center justify-between p-3 cursor-pointer hover:bg-surface-container-high/60 transition-all active:scale-[0.99]" onclick="selectRoadmapStep(2)">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center text-lg shrink-0"><span class="material-symbols-outlined text-[20px]">smartphone</span></div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md font-bold text-on-surface">STEP 2: 月5,000円</span>
+<span class="font-label-sm text-[10px] px-1.5 py-0.2 rounded bg-primary/20 text-primary font-bold">達成済</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">スマホ通信費＆サブスク代を自給</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-[14px] text-primary font-bold">100%</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant">CLEAR</span>
+</div>
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant transition-transform duration-200 accordion-arrow">expand_more</span>
+</div>
+</div>
+<!-- ACCORDION CONTENT -->
+<div class="step-detail-panel px-3 pb-3 pt-1 border-t border-outline-variant/15 hidden">
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed mb-2.5">月5,000円 (年6万円)。格安SIMの通信費やNetflix、Spotify、iCloudなどの主要デジタルサブスク利用料が自動でまかなえます。</p>
+<div class="grid grid-cols-2 gap-2 mb-2.5">
+<div class="p-2.5 rounded-lg bg-surface-container-low flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">目標月額 / 年額換算</span><span class="font-headline-md text-[15px] font-bold text-on-surface">¥5,000 <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-on-surface-variant">年額 ¥60,000</span></div>
+<div class="p-2.5 rounded-lg bg-surface-container-low flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">達成ステータス</span><span class="font-headline-md text-[15px] font-bold text-primary">達成済 ✨</span><span class="font-body-sm text-[10px] text-primary font-medium">現在月額 ¥31,208 で超過中</span></div>
+</div>
+<div class="p-2 rounded-lg bg-surface-container-high/60 border border-outline-variant/20 flex flex-col gap-1.5"><div class="flex items-center justify-between text-on-surface"><span class="font-label-sm text-[11px] font-semibold flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[14px]">savings</span>利回り別・必要追加元本目安</span><span class="font-label-sm text-[10px] text-primary font-bold">完全クリア済み</span></div><div class="grid grid-cols-3 gap-1.5 text-center"><div class="p-1.5 rounded bg-surface-container"><span class="text-[10px] block text-on-surface-variant">3.5%</span><span class="font-bold text-[12px] text-primary">達成済</span></div><div class="p-1.5 rounded bg-primary/10 border border-primary/30"><span class="text-[10px] block text-primary">4.0%</span><span class="font-bold text-[12px] text-primary">達成済</span></div><div class="p-1.5 rounded bg-surface-container"><span class="text-[10px] block text-on-surface-variant">4.5%</span><span class="font-bold text-[12px] text-primary">達成済</span></div></div></div>
+</div>
+</div>
+<!-- STEP 3 CONTAINER -->
+<div class="step-accordion-item rounded-xl overflow-hidden transition-all bg-surface-container border border-outline-variant/15" id="step-wrapper-3">
+<div class="flex items-center justify-between p-3 cursor-pointer hover:bg-surface-container-high/60 transition-all active:scale-[0.99]" onclick="selectRoadmapStep(3)">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center text-lg shrink-0"><span class="material-symbols-outlined text-[20px]">lightbulb</span></div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md font-bold text-on-surface">STEP 3: 月10,000円</span>
+<span class="font-label-sm text-[10px] px-1.5 py-0.2 rounded bg-primary/20 text-primary font-bold">達成済</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">水道光熱費の基本料金をカバー</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-[14px] text-primary font-bold">100%</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant">CLEAR</span>
+</div>
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant transition-transform duration-200 accordion-arrow">expand_more</span>
+</div>
+</div>
+<!-- ACCORDION CONTENT -->
+<div class="step-detail-panel px-3 pb-3 pt-1 border-t border-outline-variant/15 hidden">
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed mb-2.5">月10,000円 (年12万円)。電気・ガス・水道の全基本料金が資本収入で賄われ、暮らしているだけで発生する固定費の土台が自動化されます。</p>
+<div class="grid grid-cols-2 gap-2 mb-2.5">
+<div class="p-2.5 rounded-lg bg-surface-container-low flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">目標月額 / 年額換算</span><span class="font-headline-md text-[15px] font-bold text-on-surface">¥10,000 <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-on-surface-variant">年額 ¥120,000</span></div>
+<div class="p-2.5 rounded-lg bg-surface-container-low flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">達成ステータス</span><span class="font-headline-md text-[15px] font-bold text-primary">達成済 ✨</span><span class="font-body-sm text-[10px] text-primary font-medium">現在月額 ¥31,208 で超過中</span></div>
+</div>
+<div class="p-2 rounded-lg bg-surface-container-high/60 border border-outline-variant/20 flex flex-col gap-1.5"><div class="flex items-center justify-between text-on-surface"><span class="font-label-sm text-[11px] font-semibold flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[14px]">savings</span>利回り別・必要追加元本目安</span><span class="font-label-sm text-[10px] text-primary font-bold">完全クリア済み</span></div><div class="grid grid-cols-3 gap-1.5 text-center"><div class="p-1.5 rounded bg-surface-container"><span class="text-[10px] block text-on-surface-variant">3.5%</span><span class="font-bold text-[12px] text-primary">達成済</span></div><div class="p-1.5 rounded bg-primary/10 border border-primary/30"><span class="text-[10px] block text-primary">4.0%</span><span class="font-bold text-[12px] text-primary">達成済</span></div><div class="p-1.5 rounded bg-surface-container"><span class="text-[10px] block text-on-surface-variant">4.5%</span><span class="font-bold text-[12px] text-primary">達成済</span></div></div></div>
+</div>
+</div>
+<!-- STEP 4 CONTAINER -->
+<div class="step-accordion-item rounded-xl overflow-hidden transition-all bg-surface-container border border-outline-variant/15" id="step-wrapper-4">
+<div class="flex items-center justify-between p-3 cursor-pointer hover:bg-surface-container-high/60 transition-all active:scale-[0.99]" onclick="selectRoadmapStep(4)">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center text-lg shrink-0"><span class="material-symbols-outlined text-[20px]">restaurant</span></div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md font-bold text-on-surface">STEP 4: 月20,000円</span>
+<span class="font-label-sm text-[10px] px-1.5 py-0.2 rounded bg-primary/20 text-primary font-bold">達成済</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">週末外食・自己投資書籍費</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-[14px] text-primary font-bold">100%</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant">CLEAR</span>
+</div>
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant transition-transform duration-200 accordion-arrow">expand_more</span>
+</div>
+</div>
+<!-- ACCORDION CONTENT -->
+<div class="step-detail-panel px-3 pb-3 pt-1 border-t border-outline-variant/15 hidden">
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed mb-2.5">月20,000円 (年24万円)。毎週末の気兼ねないランチ・ディナーや、スキルアップのための技術書・ビジネス書購入費用が不労所得から拠出可能になります。</p>
+<div class="grid grid-cols-2 gap-2 mb-2.5">
+<div class="p-2.5 rounded-lg bg-surface-container-low flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">目標月額 / 年額換算</span><span class="font-headline-md text-[15px] font-bold text-on-surface">¥20,000 <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-on-surface-variant">年額 ¥240,000</span></div>
+<div class="p-2.5 rounded-lg bg-surface-container-low flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">達成ステータス</span><span class="font-headline-md text-[15px] font-bold text-primary">達成済 ✨</span><span class="font-body-sm text-[10px] text-primary font-medium">現在月額 ¥31,208 で超過中</span></div>
+</div>
+<div class="p-2 rounded-lg bg-surface-container-high/60 border border-outline-variant/20 flex flex-col gap-1.5"><div class="flex items-center justify-between text-on-surface"><span class="font-label-sm text-[11px] font-semibold flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[14px]">savings</span>利回り別・必要追加元本目安</span><span class="font-label-sm text-[10px] text-primary font-bold">完全クリア済み</span></div><div class="grid grid-cols-3 gap-1.5 text-center"><div class="p-1.5 rounded bg-surface-container"><span class="text-[10px] block text-on-surface-variant">3.5%</span><span class="font-bold text-[12px] text-primary">達成済</span></div><div class="p-1.5 rounded bg-primary/10 border border-primary/30"><span class="text-[10px] block text-primary">4.0%</span><span class="font-bold text-[12px] text-primary">達成済</span></div><div class="p-1.5 rounded bg-surface-container"><span class="text-[10px] block text-on-surface-variant">4.5%</span><span class="font-bold text-[12px] text-primary">達成済</span></div></div></div>
+</div>
+</div>
+<!-- STEP 5 CONTAINER -->
+<div class="step-accordion-item rounded-xl overflow-hidden transition-all border border-outline-variant/15 bg-surface-container" id="step-wrapper-5">
+<div class="flex items-center justify-between p-3 cursor-pointer hover:bg-surface-container-high/60 transition-all active:scale-[0.99]" onclick="selectRoadmapStep(5)">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center text-lg shrink-0"><span class="material-symbols-outlined text-[20px]">bolt</span></div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md font-bold text-on-surface">STEP 5: 月30,000円</span>
+<span class="font-label-sm text-[10px] px-1.5 py-0.2 rounded bg-primary/20 text-primary font-bold">達成済</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">水道光熱費の全額自給</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-[14px] text-primary font-bold">100%</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant">CLEAR</span>
+</div>
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant transition-transform duration-200 accordion-arrow">expand_more</span>
+</div>
+</div>
+<!-- ACCORDION CONTENT -->
+<div class="step-detail-panel px-3 pb-3 pt-1 border-t border-outline-variant/15 hidden">
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed mb-2.5">月30,000円 (年36万円)。一人暮らし・少人数世帯の水道・電気・ガス代全額を完全カバー。生活インフラを資本収入のみで賄う大記録を達成！</p>
+<div class="grid grid-cols-2 gap-2 mb-2.5">
+<div class="p-2.5 rounded-lg bg-surface-container-low flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">目標月額 / 年額換算</span><span class="font-headline-md text-[15px] font-bold text-on-surface">¥30,000 <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-on-surface-variant">年額 ¥360,000</span></div>
+<div class="p-2.5 rounded-lg bg-surface-container-low flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">達成ステータス</span><span class="font-headline-md text-[15px] font-bold text-primary">達成済 ✨</span><span class="font-body-sm text-[10px] text-primary font-medium">現在月額 ¥31,208 で超過中</span></div>
+</div>
+<div class="p-2 rounded-lg bg-surface-container-high/60 border border-outline-variant/20 flex flex-col gap-1.5"><div class="flex items-center justify-between text-on-surface"><span class="font-label-sm text-[11px] font-semibold flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[14px]">savings</span>利回り別・必要追加元本目安</span><span class="font-label-sm text-[10px] text-primary font-bold">完全クリア済み</span></div><div class="grid grid-cols-3 gap-1.5 text-center"><div class="p-1.5 rounded bg-surface-container"><span class="text-[10px] block text-on-surface-variant">3.5%</span><span class="font-bold text-[12px] text-primary">達成済</span></div><div class="p-1.5 rounded bg-primary/10 border border-primary/30"><span class="text-[10px] block text-primary">4.0%</span><span class="font-bold text-[12px] text-primary">達成済</span></div><div class="p-1.5 rounded bg-surface-container"><span class="text-[10px] block text-on-surface-variant">4.5%</span><span class="font-bold text-[12px] text-primary">達成済</span></div></div></div>
+</div>
+</div>
+</div>
+<!-- LEVEL 2 GROUP: 生活費自給・ミニFIRE期 (STEP 6-7) -->
+<div class="flex flex-col gap-2 p-3 rounded-2xl bg-surface-container-low border-2 border-primary/50 shadow-md relative" id="level-group-2">
+<div class="flex items-center justify-between pb-1 px-1">
+<div class="flex items-center gap-2"><div class="flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[16px]">shopping_cart</span><span class="material-symbols-outlined text-[16px]">home</span></div><span class="font-title-md text-[15px] font-bold text-on-surface">LEVEL 2: 生活費自給・ミニFIRE期</span></div>
+<span class="px-2 py-0.5 rounded-full bg-primary text-on-primary font-label-sm text-[10px] font-bold animate-pulse">
+        挑戦中ステージ
+      </span>
+</div>
+<!-- STEP 6 CONTAINER (CURRENT ACTIVE QUEST - OPEN BY DEFAULT) -->
+<div class="step-accordion-item rounded-xl overflow-hidden transition-all bg-surface-container-high border-2 border-primary/50" id="step-wrapper-6">
+<div class="flex items-center justify-between p-3 cursor-pointer hover:bg-surface-container-high transition-all active:scale-[0.99]" onclick="selectRoadmapStep(6)">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-primary text-on-primary flex items-center justify-center text-xl shrink-0 shadow-[0_0_12px_rgba(78,222,163,0.5)]"><span class="material-symbols-outlined text-[22px]">shopping_cart</span></div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md font-bold text-primary">STEP 6: 月50,000円</span>
+<span class="font-label-sm text-[10px] px-1.5 py-0.2 rounded bg-primary text-on-primary font-bold">現在挑戦中</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface font-semibold">食費・日用品の全額自給</span>
+<span class="font-body-sm text-[11px] text-on-surface-variant">現在: ¥31,208 / 月</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-[15px] text-primary font-bold">62.4%</span>
+<span class="font-label-sm text-[11px] text-tertiary font-bold">あと¥18,792</span>
+</div>
+<span class="material-symbols-outlined text-[18px] text-primary transition-transform duration-200 accordion-arrow">expand_more</span>
+</div>
+</div>
+<!-- ACCORDION CONTENT -->
+<div class="step-detail-panel px-3 pb-3 pt-1 border-t border-primary/20 hidden">
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed mb-2.5">毎月の配当金が5万円に到達すると、一人暮らしの食費や日用品などの生活基盤出費が労働対価なしで賄えるようになります。精神的自由度が劇的に跳ね上がる超重要マイルストーンです。</p>
+<div class="grid grid-cols-2 gap-2 mb-2.5">
+<div class="p-2.5 rounded-lg bg-surface-container flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">目標月額 / 年額換算</span><span class="font-headline-md text-[15px] font-bold text-on-surface">¥50,000 <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-on-surface-variant">年額 ¥600,000</span></div>
+<div class="p-2.5 rounded-lg bg-surface-container flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">クエスト達成まで</span><span class="font-headline-md text-[15px] font-bold text-tertiary">¥18,792 <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-tertiary font-medium">年額 ¥225,500 不足</span></div>
+</div>
+<div class="p-2 rounded-lg bg-surface-container-high/90 border border-outline-variant/20 flex flex-col gap-1.5"><div class="flex items-center justify-between text-on-surface"><span class="font-label-sm text-[11px] font-semibold flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[14px]">query_stats</span>利回り別・必要追加元本目安</span><span class="font-label-sm text-[10px] text-on-surface-variant">年+¥22.5万不足</span></div><div class="grid grid-cols-3 gap-1.5 text-center"><div class="p-1.5 rounded bg-surface-container border border-outline-variant/20"><span class="text-[10px] block text-on-surface-variant">3.5%</span><span class="font-bold text-[13px] text-on-surface">¥644万</span></div><div class="p-1.5 rounded bg-primary/10 border border-primary/30"><span class="text-[10px] block text-primary font-semibold">4.0%</span><span class="font-bold text-[13px] text-primary">¥563万</span></div><div class="p-1.5 rounded bg-surface-container border border-outline-variant/20"><span class="text-[10px] block text-on-surface-variant">4.5%</span><span class="font-bold text-[13px] text-on-surface">¥501万</span></div></div></div>
+</div>
+</div>
+<!-- STEP 7 CONTAINER -->
+<div class="step-accordion-item rounded-xl overflow-hidden transition-all bg-surface-container/70 border border-outline-variant/15" id="step-wrapper-7">
+<div class="flex items-center justify-between p-3 cursor-pointer hover:bg-surface-container transition-all active:scale-[0.99]" onclick="selectRoadmapStep(7)">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-highest text-on-surface-variant flex items-center justify-center text-lg shrink-0"><span class="material-symbols-outlined text-[20px]">home</span></div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md font-semibold text-on-surface">STEP 7: 月100,000円</span>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant">lock</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">住居費・家賃の完全カバー</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-[14px] text-on-surface-variant font-medium">31.2%</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant">あと¥68,792</span>
+</div>
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant transition-transform duration-200 accordion-arrow">expand_more</span>
+</div>
+</div>
+<!-- ACCORDION CONTENT -->
+<div class="step-detail-panel px-3 pb-3 pt-1 border-t border-outline-variant/15 hidden">
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed mb-2.5">月100,000円 (年120万円)。人生最大の固定出費である家賃や住宅ローン返済を配当のみで支払える圧倒的安心感を手に入れます。</p>
+<div class="grid grid-cols-2 gap-2 mb-2.5">
+<div class="p-2.5 rounded-lg bg-surface-container flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">目標月額 / 年額換算</span><span class="font-headline-md text-[15px] font-bold text-on-surface">¥100,000 <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-on-surface-variant">年額 ¥1,200,000</span></div>
+<div class="p-2.5 rounded-lg bg-surface-container flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">クエスト達成まで</span><span class="font-headline-md text-[15px] font-bold text-tertiary">¥68,792 <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-tertiary font-medium">年額 ¥825,500 不足</span></div>
+</div>
+<div class="p-2 rounded-lg bg-surface-container-high/90 border border-outline-variant/20 flex flex-col gap-1.5"><div class="flex items-center justify-between text-on-surface"><span class="font-label-sm text-[11px] font-semibold flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[14px]">query_stats</span>利回り別・必要追加元本目安</span><span class="font-label-sm text-[10px] text-on-surface-variant">年+¥82.5万不足</span></div><div class="grid grid-cols-3 gap-1.5 text-center"><div class="p-1.5 rounded bg-surface-container border border-outline-variant/20"><span class="text-[10px] block text-on-surface-variant">3.5%</span><span class="font-bold text-[13px] text-on-surface">¥2,358万</span></div><div class="p-1.5 rounded bg-primary/10 border border-primary/30"><span class="text-[10px] block text-primary font-semibold">4.0%</span><span class="font-bold text-[13px] text-primary">¥2,063万</span></div><div class="p-1.5 rounded bg-surface-container border border-outline-variant/20"><span class="text-[10px] block text-on-surface-variant">4.5%</span><span class="font-bold text-[13px] text-on-surface">¥1,834万</span></div></div></div>
+</div>
+</div>
+</div>
+<!-- LEVEL 3 GROUP: 完全経済的自由・FIRE期 (STEP 8-10) -->
+<div class="flex flex-col gap-2 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/30" id="level-group-3">
+<div class="flex items-center justify-between pb-1 px-1">
+<div class="flex items-center gap-2"><div class="flex items-center gap-1 text-on-surface-variant"><span class="material-symbols-outlined text-[16px]">beach_access</span><span class="material-symbols-outlined text-[16px]">flight</span><span class="material-symbols-outlined text-[16px]">crown</span></div><span class="font-title-md text-[15px] font-bold text-on-surface-variant">LEVEL 3: 完全経済的自由・FIRE期</span></div>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-[10px] font-semibold">
+        最終ステージ帯
+      </span>
+</div>
+<!-- STEP 8 CONTAINER -->
+<div class="step-accordion-item rounded-xl overflow-hidden transition-all bg-surface-container/60 border border-outline-variant/10" id="step-wrapper-8">
+<div class="flex items-center justify-between p-3 cursor-pointer hover:bg-surface-container transition-all active:scale-[0.99]" onclick="selectRoadmapStep(8)">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-highest text-on-surface-variant flex items-center justify-center text-lg shrink-0"><span class="material-symbols-outlined text-[20px]">beach_access</span></div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md font-semibold text-on-surface">STEP 8: 月200,000円</span>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant">lock</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">標準的生活費の全額自立（Lean FIRE水準）</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-[14px] text-on-surface-variant font-medium">15.6%</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant">あと¥168,792</span>
+</div>
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant transition-transform duration-200 accordion-arrow">expand_more</span>
+</div>
+</div>
+<!-- ACCORDION CONTENT -->
+<div class="step-detail-panel px-3 pb-3 pt-1 border-t border-outline-variant/15 hidden">
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed mb-2.5">月200,000円 (年240万円)。必要最低限の生活費を超え、質素ながら自立した生活が配当だけで成立するLean FIREの達成域です。</p>
+<div class="grid grid-cols-2 gap-2 mb-2.5">
+<div class="p-2.5 rounded-lg bg-surface-container flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">目標月額 / 年額換算</span><span class="font-headline-md text-[15px] font-bold text-on-surface">¥200,000 <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-on-surface-variant">年額 ¥2,400,000</span></div>
+<div class="p-2.5 rounded-lg bg-surface-container flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">クエスト達成まで</span><span class="font-headline-md text-[15px] font-bold text-tertiary">¥168,792 <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-tertiary font-medium">年額 ¥2,025,500 不足</span></div>
+</div>
+<div class="p-2 rounded-lg bg-surface-container-high/90 border border-outline-variant/20 flex flex-col gap-1.5"><div class="flex items-center justify-between text-on-surface"><span class="font-label-sm text-[11px] font-semibold flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[14px]">query_stats</span>利回り別・必要追加元本目安</span><span class="font-label-sm text-[10px] text-on-surface-variant">年+¥202.5万不足</span></div><div class="grid grid-cols-3 gap-1.5 text-center"><div class="p-1.5 rounded bg-surface-container border border-outline-variant/20"><span class="text-[10px] block text-on-surface-variant">3.5%</span><span class="font-bold text-[13px] text-on-surface">¥5,787万</span></div><div class="p-1.5 rounded bg-primary/10 border border-primary/30"><span class="text-[10px] block text-primary font-semibold">4.0%</span><span class="font-bold text-[13px] text-primary">¥5,063万</span></div><div class="p-1.5 rounded bg-surface-container border border-outline-variant/20"><span class="text-[10px] block text-on-surface-variant">4.5%</span><span class="font-bold text-[13px] text-on-surface">¥4,501万</span></div></div></div>
+</div>
+</div>
+<!-- STEP 9 CONTAINER -->
+<div class="step-accordion-item rounded-xl overflow-hidden transition-all bg-surface-container/60 border border-outline-variant/10" id="step-wrapper-9">
+<div class="flex items-center justify-between p-3 cursor-pointer hover:bg-surface-container transition-all active:scale-[0.99]" onclick="selectRoadmapStep(9)">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-highest text-on-surface-variant flex items-center justify-center text-lg shrink-0"><span class="material-symbols-outlined text-[20px]">flight</span></div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md font-semibold text-on-surface">STEP 9: 月300,000円</span>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant">lock</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">ゆとりある生活（Full FIRE）</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-[14px] text-on-surface-variant font-medium">10.4%</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant">あと¥268,792</span>
+</div>
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant transition-transform duration-200 accordion-arrow">expand_more</span>
+</div>
+</div>
+<!-- ACCORDION CONTENT -->
+<div class="step-detail-panel px-3 pb-3 pt-1 border-t border-outline-variant/15 hidden">
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed mb-2.5">月300,000円 (年360万円)。旅行や趣味、家族との豊かな時間を過ごしながらも元本が減らない理想の不労所得ライフスタイルを確立。</p>
+<div class="grid grid-cols-2 gap-2 mb-2.5">
+<div class="p-2.5 rounded-lg bg-surface-container flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">目標月額 / 年額換算</span><span class="font-headline-md text-[15px] font-bold text-on-surface">¥300,000 <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-on-surface-variant">年額 ¥3,600,000</span></div>
+<div class="p-2.5 rounded-lg bg-surface-container flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">クエスト達成まで</span><span class="font-headline-md text-[15px] font-bold text-tertiary">¥268,792 <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-tertiary font-medium">年額 ¥3,225,500 不足</span></div>
+</div>
+<div class="p-2 rounded-lg bg-surface-container-high/90 border border-outline-variant/20 flex flex-col gap-1.5"><div class="flex items-center justify-between text-on-surface"><span class="font-label-sm text-[11px] font-semibold flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[14px]">query_stats</span>利回り別・必要追加元本目安</span><span class="font-label-sm text-[10px] text-on-surface-variant">年+¥322.5万不足</span></div><div class="grid grid-cols-3 gap-1.5 text-center"><div class="p-1.5 rounded bg-surface-container border border-outline-variant/20"><span class="text-[10px] block text-on-surface-variant">3.5%</span><span class="font-bold text-[13px] text-on-surface">¥9,215万</span></div><div class="p-1.5 rounded bg-primary/10 border border-primary/30"><span class="text-[10px] block text-primary font-semibold">4.0%</span><span class="font-bold text-[13px] text-primary">¥8,063万</span></div><div class="p-1.5 rounded bg-surface-container border border-outline-variant/20"><span class="text-[10px] block text-on-surface-variant">4.5%</span><span class="font-bold text-[13px] text-on-surface">¥7,167万</span></div></div></div>
+</div>
+</div>
+<!-- STEP 10 CONTAINER -->
+<div class="step-accordion-item rounded-xl overflow-hidden transition-all bg-surface-container/60 border border-outline-variant/10" id="step-wrapper-10">
+<div class="flex items-center justify-between p-3 cursor-pointer hover:bg-surface-container transition-all active:scale-[0.99]" onclick="selectRoadmapStep(10)">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-surface-container-highest text-on-surface-variant flex items-center justify-center text-lg shrink-0"><span class="material-symbols-outlined text-[20px]">crown</span></div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md font-semibold text-on-surface">STEP 10: 月500,000円+</span>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant">lock</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">経済的自由・資産自動増殖＆完全自由</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-[14px] text-on-surface-variant font-medium">6.2%</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant">最終到達点</span>
+</div>
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant transition-transform duration-200 accordion-arrow">expand_more</span>
+</div>
+</div>
+<!-- ACCORDION CONTENT -->
+<div class="step-detail-panel px-3 pb-3 pt-1 border-t border-outline-variant/15 hidden">
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed mb-2.5">月500,000円以上 (年600万円以上)。使い切れない配当が自動再投資され、資産が加速度的に増殖する真の経済的自由（配当貴族の頂点）。</p>
+<div class="grid grid-cols-2 gap-2 mb-2.5">
+<div class="p-2.5 rounded-lg bg-surface-container flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">目標月額 / 年額換算</span><span class="font-headline-md text-[15px] font-bold text-on-surface">¥500,000+ <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-on-surface-variant">年額 ¥6,000,000+</span></div>
+<div class="p-2.5 rounded-lg bg-surface-container flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">クエスト達成まで</span><span class="font-headline-md text-[15px] font-bold text-tertiary">¥468,792 <span class="font-body-sm text-[11px] font-normal text-on-surface-variant">/月</span></span><span class="font-body-sm text-[10px] text-tertiary font-medium">年額 ¥5,625,500 不足</span></div>
+</div>
+<div class="p-2 rounded-lg bg-surface-container-high/90 border border-outline-variant/20 flex flex-col gap-1.5"><div class="flex items-center justify-between text-on-surface"><span class="font-label-sm text-[11px] font-semibold flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[14px]">query_stats</span>利回り別・必要追加元本目安</span><span class="font-label-sm text-[10px] text-on-surface-variant">年+¥562.5万不足</span></div><div class="grid grid-cols-3 gap-1.5 text-center"><div class="p-1.5 rounded bg-surface-container border border-outline-variant/20"><span class="text-[10px] block text-on-surface-variant">3.5%</span><span class="font-bold text-[13px] text-on-surface">¥1億6,072万</span></div><div class="p-1.5 rounded bg-primary/10 border border-primary/30"><span class="text-[10px] block text-primary font-semibold">4.0%</span><span class="font-bold text-[13px] text-primary">¥1億4,063万</span></div><div class="p-1.5 rounded bg-surface-container border border-outline-variant/20"><span class="text-[10px] block text-on-surface-variant">4.5%</span><span class="font-bold text-[13px] text-on-surface">¥1億2,501万</span></div></div></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Bottom CTA Actions -->
+<section class="flex flex-col gap-2.5 pb-4">
+<button class="w-full h-12 rounded-xl bg-surface-container-low text-primary font-label-lg text-label-lg flex items-center justify-center gap-2 active:scale-95 transition-all border border-primary/30 font-semibold" onclick="openShareModal()">
+<span class="material-symbols-outlined text-[20px]">workspace_premium</span>
+<span class="">目標達成カードをプレビューしてシェア</span>
+</button>
+</section>
+<!-- Interactive Share Modal / Bottom Sheet -->
+<div class="fixed inset-0 z-50 flex items-end justify-center bg-surface-container-lowest/80 backdrop-blur-md transition-opacity duration-300 opacity-0 pointer-events-none" id="share-modal">
+<div class="w-full max-w-lg bg-surface-container-low rounded-t-2xl p-space-md flex flex-col gap-space-md transition-transform duration-300 max-h-[85vh] overflow-y-auto no-scrollbar shadow-[0_-10px_40px_rgba(0,0,0,0.7)] translate-y-full" id="share-sheet">
+<!-- Modal Header -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">share</span>
+</div>
+<div>
+<span class="font-title-md text-title-md font-bold text-on-surface block">達成状況をシェア</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">SNSで進捗を共有できます</span>
+</div>
+</div>
+<button class="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface active:scale-90 transition-transform" onclick="closeShareModal()">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<!-- Tab Switcher: Card vs Certificate -->
+<div class="grid grid-cols-2 p-1 rounded-lg bg-surface-container">
+<button class="py-2 rounded-md font-label-md text-label-md font-bold transition-all bg-surface-container-high text-primary shadow-sm flex items-center justify-center gap-1.5" id="tab-progress" onclick="switchShareTab('progress')"><span class="material-symbols-outlined text-[18px] text-primary">shopping_cart</span><span class="font-bold text-on-surface">QUEST 6 進捗カード</span></button>
+<button class="py-2 rounded-md font-label-md text-label-md font-medium transition-all text-on-surface-variant flex items-center justify-center gap-1.5" id="tab-cert" onclick="switchShareTab('cert')"><span class="material-symbols-outlined text-[18px] text-primary">military_tech</span><span class="font-bold text-on-surface">LV.1 踏破認定証</span></button>
+</div>
+<!-- Mask Privacy Toggle -->
+<div class="flex items-center justify-between px-3 py-2.5 rounded-lg bg-surface-container">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant" id="mask-icon">visibility</span>
+<span class="font-label-md text-label-md text-on-surface">金額を伏字にする</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" id="mask-checkbox" onchange="toggleAmountMasking()" type="checkbox">
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- Preview Container: Progress View -->
+<div class="relative w-full rounded-xl bg-gradient-to-br from-surface-container-high to-surface-container p-space-md shadow-2xl flex flex-col gap-3 overflow-hidden border border-outline-variant/30" id="preview-progress"><div class="absolute -right-8 -top-8 w-32 h-32 bg-primary/10 rounded-full blur-xl pointer-events-none"></div><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="material-symbols-outlined text-primary text-[20px]">sports_esports</span><span class="font-headline-md text-[15px] font-bold text-on-surface">Roadmap Quest</span></div><span class="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-primary/20 text-primary font-bold">LEVEL 2 • STEP 6 挑戦中</span></div><div class="flex flex-col gap-0.5 my-1"><span class="font-label-sm text-label-sm text-on-surface-variant">現在の月間配当（受取実績換算）</span><div class="flex items-baseline gap-2"><span class="font-numeric-hero-mobile text-[28px] font-bold text-primary share-masked-target" data-real="¥31,208">¥31,208</span><span class="font-body-sm text-body-sm text-on-surface-variant">/ 月</span></div><span class="font-body-sm text-[11px] text-on-surface-variant">年間予想: <strong class="text-on-surface share-masked-target" data-real="¥374,500">¥374,500</strong></span></div><div class="flex flex-col gap-1.5 p-2.5 rounded-lg bg-surface-container-lowest/80 border border-outline-variant/20"><div class="flex justify-between items-center font-label-sm text-label-sm"><span class="text-on-surface flex items-center gap-1">目標: 月50,000円 (食費・日用品の自給 <span class="material-symbols-outlined text-[15px] text-primary">shopping_cart</span>)</span><span class="text-primary font-bold">62.4% 達成</span></div><div class="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-primary rounded-full" style="width: 62.4%;"></div></div></div><div class="flex items-center justify-between pt-1 text-on-surface-variant font-label-sm text-[10px]"><span class="">#高配当株投資 #配当金生活 #FIRE</span><span class="">Roadmap Quest</span></div></div>
+<!-- Preview Container: Certificate View (Hidden by default) -->
+<div class="hidden relative w-full rounded-xl bg-gradient-to-br from-surface-container-high via-surface-container to-surface-container-lowest p-space-md shadow-2xl flex flex-col items-center text-center gap-3 overflow-hidden border border-primary/30" id="preview-cert"><div class="w-14 h-14 rounded-2xl bg-primary/20 text-primary flex items-center justify-center mt-1 shadow-[0_0_20px_rgba(78,222,163,0.3)]"><span class="material-symbols-outlined text-[36px]">workspace_premium</span></div><div class="flex flex-col gap-1"><span class="font-label-sm text-label-sm text-primary tracking-widest uppercase font-bold">LEVEL 1 COMPLETE</span><span class="font-title-lg text-title-lg font-bold text-on-surface">生活インフラ自給期 踏破認定証</span><span class="font-body-sm text-body-sm text-on-surface-variant">STEP 1〜5 (月3万円・年36万円) を完全達成</span></div><div class="p-3 rounded-lg bg-surface-container-lowest/90 w-full flex flex-col gap-1 border border-outline-variant/20"><span class="font-label-sm text-[11px] text-on-surface-variant">獲得した生活権益</span><span class="font-title-md text-title-md font-bold text-primary flex items-center justify-center gap-1">水道光熱費・通信費の全額自給権 <span class="material-symbols-outlined text-[16px]">bolt</span><span class="material-symbols-outlined text-[16px]">smartphone</span></span><span class="font-body-sm text-[11px] text-on-surface-variant mt-1">到達実績: <span class="share-masked-target font-bold text-on-surface" data-real="¥31,208">¥31,208</span> / 月</span></div><div class="flex items-center justify-between w-full pt-1 text-on-surface-variant font-label-sm text-[10px]"><span class="">認定ランク: LEVEL 1 MASTER</span><span class="">Roadmap Quest</span></div></div>
+<!-- Share Action Buttons -->
+<div class="flex flex-col gap-2 pt-1">
+<button class="w-full h-12 rounded-lg bg-on-surface text-surface-container-lowest font-label-lg text-label-lg flex items-center justify-center gap-2 active:scale-95 transition-all font-bold" onclick="shareToX()">
+<span class="font-bold text-[16px]">𝕏</span>
+<span class="">𝕏 (Twitter) でクエスト進捗をシェア</span>
+</button>
+<div class="grid grid-cols-2 gap-2">
+<button class="h-11 rounded-lg bg-surface-container-high text-on-surface font-label-md text-label-md flex items-center justify-center gap-1.5 active:scale-95 transition-all border border-outline-variant/20" onclick="saveCardImage()"><span class="material-symbols-outlined text-[18px] text-primary">download</span><span class="font-bold text-on-surface">画像で保存</span></button>
+<button class="h-11 rounded-lg bg-surface-container-high text-on-surface font-label-md text-label-md flex items-center justify-center gap-1.5 active:scale-95 transition-all border border-outline-variant/20" onclick="copyShareText()"><span class="material-symbols-outlined text-[18px] text-primary">content_copy</span><span class="font-bold text-on-surface">テキストをコピー</span></button>
+</div>
+</div>
+</div>
+</div>
+<!-- Notification Toast -->
+<div class="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-surface-container-highest text-primary font-label-md text-label-md shadow-2xl transition-all duration-300 flex items-center gap-2 border border-primary/30 opacity-0 pointer-events-none" id="toast-notify">
+<span class="material-symbols-outlined text-[18px]" id="toast-icon">calculate</span>
+<span class="" id="toast-text">買い増しシミュレーターを起動中...</span>
+</div>
+</div>
+<!-- Interactive Client-side Scripting -->
+<script>
+  let currentSelectedStep = 6;
+
+  function selectRoadmapStep(stepId) {
+    currentSelectedStep = stepId;
+
+    // 1. Update Horizontal Step Carousel Pills
+    document.querySelectorAll('.step-pill').forEach(pill => {
+      pill.classList.remove('bg-primary/20', 'text-primary', 'font-bold', 'shadow-[0_0_12px_rgba(78,222,163,0.35)]', 'border', 'border-primary/40');
+      pill.classList.add('bg-surface-container-high', 'text-on-surface-variant');
+    });
+    const activePill = document.getElementById(`step-pill-${stepId}`);
+    if (activePill) {
+      activePill.classList.remove('bg-surface-container-high', 'text-on-surface-variant');
+      activePill.classList.add('bg-primary/20', 'text-primary', 'font-bold', 'shadow-[0_0_12px_rgba(78,222,163,0.35)]', 'border', 'border-primary/40');
+      activePill.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+
+    // 2. Toggle Accordion Panels
+    for (let i = 1; i <= 10; i++) {
+      const wrapper = document.getElementById(`step-wrapper-${i}`);
+      if (!wrapper) continue;
+      const panel = wrapper.querySelector('.step-detail-panel');
+      const arrow = wrapper.querySelector('.accordion-arrow');
+
+      if (i === stepId) {
+        // Toggle if clicked again or open if different
+        const isHidden = panel.classList.contains('hidden');
+        if (isHidden) {
+          panel.classList.remove('hidden');
+          arrow?.classList.add('rotate-180');
+          if (stepId === 6) {
+            wrapper.classList.remove('bg-surface-container');
+            wrapper.classList.add('bg-surface-container-high', 'border-2', 'border-primary', 'shadow-lg');
+          } else {
+            wrapper.classList.remove('bg-surface-container', 'bg-surface-container/60', 'bg-surface-container/70');
+            wrapper.classList.add('bg-surface-container-high', 'border', 'border-primary/50', 'shadow-md');
+          }
+          // Smooth scroll to the expanded item with slight delay
+          setTimeout(() => {
+            wrapper.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }, 50);
+        } else {
+          // If tapping already open item, collapse
+          panel.classList.add('hidden');
+          arrow?.classList.remove('rotate-180');
+          if (stepId === 6) {
+            wrapper.classList.remove('bg-surface-container-high', 'shadow-lg');
+            wrapper.classList.add('bg-surface-container', 'border-2', 'border-primary/50');
+          } else {
+            wrapper.classList.remove('bg-surface-container-high', 'border-primary/50', 'shadow-md');
+            wrapper.classList.add('bg-surface-container', 'border-outline-variant/15');
+          }
+        }
+      } else {
+        // Close other panels
+        panel.classList.add('hidden');
+        arrow?.classList.remove('rotate-180');
+        if (i === 6) {
+          wrapper.className = 'step-accordion-item rounded-xl overflow-hidden transition-all bg-surface-container-high border-2 border-primary/50';
+        } else if (i < 6) {
+          wrapper.className = 'step-accordion-item rounded-xl overflow-hidden transition-all bg-surface-container border border-outline-variant/15';
+        } else if (i === 7) {
+          wrapper.className = 'step-accordion-item rounded-xl overflow-hidden transition-all bg-surface-container/70 border border-outline-variant/15';
+        } else {
+          wrapper.className = 'step-accordion-item rounded-xl overflow-hidden transition-all bg-surface-container/60 border border-outline-variant/10';
+        }
+      }
+    }
+  }
+
+  function filterLevel(lvl) {
+    const targetElement = document.getElementById(`level-group-${lvl}`);
+    if (targetElement) {
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      targetElement.classList.add('ring-2', 'ring-primary');
+      setTimeout(() => targetElement.classList.remove('ring-2', 'ring-primary'), 1000);
+      // Also open first step of that level
+      if (lvl === 1) selectRoadmapStep(1);
+      else if (lvl === 2) selectRoadmapStep(6);
+      else if (lvl === 3) selectRoadmapStep(8);
+    }
+  }
+
+  // Share Modal Logic
+  function openShareModal() {
+    const modal = document.getElementById('share-modal');
+    const sheet = document.getElementById('share-sheet');
+    modal.classList.remove('pointer-events-none', 'opacity-0');
+    modal.classList.add('opacity-100');
+    sheet.classList.remove('translate-y-full');
+  }
+
+  function closeShareModal() {
+    const modal = document.getElementById('share-modal');
+    const sheet = document.getElementById('share-sheet');
+    sheet.classList.add('translate-y-full');
+    modal.classList.add('opacity-0', 'pointer-events-none');
+    modal.classList.remove('opacity-100');
+  }
+
+  function switchShareTab(tab) {
+    const tabProgress = document.getElementById('tab-progress');
+    const tabCert = document.getElementById('tab-cert');
+    const prevProgress = document.getElementById('preview-progress');
+    const prevCert = document.getElementById('preview-cert');
+
+    if (tab === 'progress') {
+      tabProgress.className = 'py-2 rounded-md font-label-md text-label-md font-bold transition-all bg-surface-container-high text-primary shadow-sm flex items-center justify-center gap-1.5';
+      tabCert.className = 'py-2 rounded-md font-label-md text-label-md font-medium transition-all text-on-surface-variant flex items-center justify-center gap-1.5';
+      prevProgress.classList.remove('hidden');
+      prevCert.classList.add('hidden');
+    } else {
+      tabCert.className = 'py-2 rounded-md font-label-md text-label-md font-bold transition-all bg-surface-container-high text-primary shadow-sm flex items-center justify-center gap-1.5';
+      tabProgress.className = 'py-2 rounded-md font-label-md text-label-md font-medium transition-all text-on-surface-variant flex items-center justify-center gap-1.5';
+      prevCert.classList.remove('hidden');
+      prevProgress.classList.add('hidden');
+    }
+  }
+
+  let isMasked = false;
+  function toggleAmountMasking() {
+    const checkbox = document.getElementById('mask-checkbox');
+    isMasked = checkbox.checked;
+    const elements = document.querySelectorAll('.share-masked-target');
+
+    elements.forEach(el => {
+      const realVal = el.getAttribute('data-real');
+      if (isMasked) {
+        el.textContent = '¥ ••••••••';
+      } else {
+        el.textContent = realVal;
+      }
+    });
+
+    const icon = document.getElementById('mask-icon');
+    icon.textContent = isMasked ? 'visibility_off' : 'visibility';
+  }
+
+  function showToast(message, icon = 'check_circle') {
+    const toast = document.getElementById('toast-notify');
+    const toastText = document.getElementById('toast-text');
+    const toastIcon = document.getElementById('toast-icon');
+
+    toastText.textContent = message;
+    toastIcon.textContent = icon;
+
+    toast.classList.remove('opacity-0', 'pointer-events-none');
+    toast.classList.add('opacity-100', 'translate-y-2');
+
+    setTimeout(() => {
+      toast.classList.add('opacity-0', 'pointer-events-none');
+      toast.classList.remove('opacity-100', 'translate-y-2');
+    }, 2400);
+  }
+
+  function shareToX() {
+    const val = isMasked ? '非公開' : '月¥31,208';
+    const text = encodeURIComponent(`【不労所得ロードマップ Quest】\n現在、配当金で ${val} を自給中！\nLEVEL 1を完全制覇し、現在 STEP 6「食費・日用品の全額自給 (月5万円)」を攻略中 🛒✨\n#配当管理 #高配当株 #FIRE #RoadmapQuest`);
+    const url = `https://twitter.com/intent/tweet?text=${text}`;
+    window.open(url, '_blank');
+  }
+
+  function saveCardImage() {
+    showToast('クエスト達成カードを保存しました', 'download_done');
+  }
+
+  function copyShareText() {
+    const text = `配当金ロードマップQuest進捗: 現在月31,208円達成 (STEP 6: 食費・日用品自給 62.4%達成)`;
+    navigator.clipboard?.writeText(text).then(() => {
+      showToast('シェアテキストをコピーしました');
+    }).catch(() => {
+      showToast('テキストをクリップボードに保存しました');
+    });
+  }
+
+  document.getElementById('share-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'share-modal') {
+      closeShareModal();
+    }
+  });
+</script></main>
+<!-- Floating Action Button for Adding Asset -->
+<div class="fixed bottom-24 right-margin z-40 pb-safe"><button aria-label="銘柄追加" class="w-14 h-14 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-[0_8px_24px_-4px_rgba(16,185,129,0.5)] active:scale-95 transition-all cursor-pointer" onclick="openAllocationModal()"><span class="material-symbols-outlined text-[28px]">add</span></button></div>
+<!-- Bottom Navigation: 資産管理, 年間配当, ロードマップ, Watchlist -->
+<nav class="fixed bottom-0 inset-x-0 z-50 pb-safe bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_-4px_20px_rgba(2,6,23,0.6)]" data-active-classes="text-primary font-semibold"><div class="grid items-center h-16 px-space-xs grid-cols-4"><a class="flex flex-col items-center justify-center gap-0.5 h-12 text-on-surface-variant hover:text-on-surface transition-colors group" data-path="asset-management" href="#"><span class="material-symbols-outlined text-[22px] group-hover:text-primary transition-colors">account_balance_wallet</span><span class="font-label-sm text-[11px] leading-tight text-center truncate w-full">資産管理</span></a><a class="flex flex-col items-center justify-center gap-0.5 h-12 text-on-surface-variant hover:text-on-surface transition-colors group" data-path="annual-dividend" href="#"><span class="material-symbols-outlined text-[22px] group-hover:text-primary transition-colors">pie_chart</span><span class="font-label-sm text-[11px] leading-tight text-center truncate w-full">年間配当</span></a><a class="flex flex-col items-center justify-center gap-0.5 h-12 hover:text-on-surface transition-colors group text-primary font-semibold" data-path="roadmap" href="#"><span class="material-symbols-outlined text-[22px] group-hover:text-primary transition-colors">flag</span><span class="font-label-sm text-[11px] leading-tight text-center truncate w-full">ロードマップ</span></a><a class="flex flex-col items-center justify-center gap-0.5 h-12 text-on-surface-variant hover:text-on-surface transition-colors group" data-path="watchlist" href="#"><span class="material-symbols-outlined text-[22px] group-hover:text-primary transition-colors">bookmark</span><span class="font-label-sm text-[11px] leading-tight text-center truncate w-full">Watchlist</span></a></div></nav>
+
+
+<div class="fixed inset-0 z-50 flex items-end justify-center bg-surface-container-lowest/80 backdrop-blur-md transition-opacity duration-300 opacity-0 pointer-events-none" id="allocation-modal"><div class="w-full max-w-lg bg-surface-container-low rounded-t-2xl flex flex-col transition-transform duration-300 max-h-[90vh] shadow-[0_-10px_40px_rgba(0,0,0,0.7)] translate-y-full border-t border-outline-variant/30 overflow-hidden" id="allocation-sheet"><div class="flex justify-center pt-2 pb-1 shrink-0"><div class="w-10 h-1 rounded-full bg-surface-container-highest"></div></div><div class="flex items-center justify-between px-space-md py-2 border-b border-outline-variant/15 shrink-0"><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary"><span class="material-symbols-outlined text-[18px]">library_add</span></div><div><div class="flex items-center gap-1.5"><span class="font-title-md text-title-md font-bold text-on-surface">複数口座一括配分登録</span><span class="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[10px] font-bold">マトリクス同時入力</span></div><span class="font-label-sm text-[11px] text-on-surface-variant">新NISA・特定・一般口座へ一度に登録</span></div></div><button aria-label="閉じる" class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface active:scale-90 transition-transform" onclick="closeAllocationModal()"><span class="material-symbols-outlined text-[18px]">close</span></button></div><div class="p-space-md flex flex-col gap-space-md overflow-y-auto no-scrollbar flex-1"><div class="flex flex-col gap-1.5"><label class="font-label-sm text-label-sm text-on-surface-variant font-semibold flex items-center justify-between" for="stock-search-input"><span class="">銘柄コード / 銘柄名</span><span class="text-[11px] text-primary cursor-pointer" onclick="clearAllocationMatrix()">入力をリセット</span></label><div class="relative flex items-center"><span class="material-symbols-outlined absolute left-3 text-on-surface-variant text-[20px]">search</span><input class="w-full h-11 pl-10 pr-20 rounded-xl bg-surface-container border border-outline-variant/30 text-on-surface text-[14px] placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary transition-colors" id="stock-search-input" onkeyup="if(event.key==='Enter')applyStockSearch()" placeholder="コードまたは企業名 (例: 7203)" type="text" value="7203"><button class="absolute right-1.5 px-3 py-1 rounded-lg bg-surface-container-high text-primary hover:bg-primary/20 text-xs font-bold transition-all" onclick="applyStockSearch()">確定</button></div><div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1"><span class="text-[10px] text-on-surface-variant shrink-0 font-medium">候補:</span><button class="px-2 py-1 rounded-lg bg-surface-container border border-outline-variant/20 text-[11px] text-on-surface hover:border-primary/40 shrink-0" onclick="selectStockSuggestion('7203', 'トヨタ自動車', 2600, 72.8, 2.80)">7203 トヨタ</button><button class="px-2 py-1 rounded-lg bg-surface-container border border-outline-variant/20 text-[11px] text-on-surface hover:border-primary/40 shrink-0" onclick="selectStockSuggestion('8316', '三井住友FG', 3450, 120, 3.48)">8316 三井住友</button><button class="px-2 py-1 rounded-lg bg-surface-container border border-outline-variant/20 text-[11px] text-on-surface hover:border-primary/40 shrink-0" onclick="selectStockSuggestion('9432', '日本電信電話', 152, 5.2, 3.42)">9432 NTT</button><button class="px-2 py-1 rounded-lg bg-surface-container border border-outline-variant/20 text-[11px] text-on-surface hover:border-primary/40 shrink-0" onclick="selectStockSuggestion('AAPL', 'Apple Inc.', 34500, 150, 0.43)">AAPL</button></div></div><div class="p-3 rounded-xl bg-surface-container border border-outline-variant/20 flex flex-col gap-2" id="stock-target-summary"><div class="flex items-center justify-between"><div class="flex items-center gap-2"><span class="px-2 py-0.5 rounded bg-primary/20 text-primary font-bold text-xs font-numeric-hero-mobile" id="selected-stock-code">7203</span><span class="font-title-md text-[15px] font-bold text-on-surface truncate" id="selected-stock-name">トヨタ自動車</span><span class="text-[11px] text-on-surface-variant">東証PRM</span></div><span class="text-[11px] px-2 py-0.5 rounded bg-surface-container-high text-on-surface-variant font-medium">株価連動中</span></div><div class="grid grid-cols-3 gap-2 pt-1 border-t border-outline-variant/15"><div class="flex flex-col"><span class="text-[10px] text-on-surface-variant">現在値</span><span class="font-bold text-[14px] text-on-surface" id="selected-stock-price-display">¥2,600</span></div><div class="flex flex-col"><span class="text-[10px] text-on-surface-variant">配当利回り</span><span class="font-bold text-[14px] text-primary" id="selected-stock-yield-display">2.80%</span></div><div class="flex flex-col"><span class="text-[10px] text-on-surface-variant">1株配当(年)</span><span class="font-bold text-[14px] text-on-surface" id="selected-stock-dps-display">¥72.8</span></div></div></div><div class="flex items-center justify-between"><span class="font-label-md text-label-md font-bold text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-primary text-[18px]">account_balance</span>口座別保有株数・取得単価配分</span><button class="text-[11px] text-primary hover:underline flex items-center gap-1" onclick="applyCurrentPriceToAll()"><span class="material-symbols-outlined text-[13px]">sync</span>現在値を全単価へ反映</button></div><div class="flex flex-col gap-2.5"><div class="p-3 rounded-xl bg-surface-container border border-primary/40 flex flex-col gap-2"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-primary"></span><span class="font-label-md text-[13px] font-bold text-on-surface">新NISA 成長投資枠</span><span class="px-1.5 py-0.2 rounded bg-primary/20 text-primary text-[10px] font-bold">非課税 0%</span></div><span class="text-[11px] text-primary font-bold" id="nisa-growth-subtotal">¥0</span></div><div class="grid grid-cols-2 gap-2"><div><span class="text-[10px] text-on-surface-variant block mb-1">保有数量 (株)</span><input class="account-shares-input w-full h-10 px-2.5 rounded-lg bg-surface-container-high border border-outline-variant/30 text-on-surface text-[14px] font-numeric-hero-mobile focus:outline-none focus:border-primary text-right" data-account="nisa_growth" id="input-shares-nisa-growth" oninput="recalcAllocationMatrix()" placeholder="0" type="number" value="0"></div><div><span class="text-[10px] text-on-surface-variant block mb-1">平均取得単価 (円)</span><input class="account-price-input w-full h-10 px-2.5 rounded-lg bg-surface-container-high border border-outline-variant/30 text-on-surface text-[14px] font-numeric-hero-mobile focus:outline-none focus:border-primary text-right" data-account="nisa_growth" id="input-price-nisa-growth" oninput="recalcAllocationMatrix()" placeholder="2,600" type="number" value="2600"></div></div><div class="flex items-center justify-between pt-1"><div class="flex items-center gap-1.5"><span class="text-[10px] text-on-surface-variant">クイック加算:</span><button class="px-2 py-0.5 rounded bg-surface-container-high text-[10px] text-on-surface hover:text-primary" onclick="addShares('nisa-growth', 10)">+10株</button><button class="px-2 py-0.5 rounded bg-surface-container-high text-[10px] text-on-surface hover:text-primary" onclick="addShares('nisa-growth', 100)">+100株</button></div><span class="text-[11px] text-on-surface-variant">予想配当: <strong class="text-primary font-numeric-hero-mobile" id="nisa-growth-dividend">¥0</strong>/年</span></div></div><div class="p-3 rounded-xl bg-surface-container border border-outline-variant/20 flex flex-col gap-2"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-secondary-fixed"></span><span class="font-label-md text-[13px] font-bold text-on-surface">新NISA つみたて枠</span><span class="px-1.5 py-0.2 rounded bg-secondary-container/40 text-secondary-fixed text-[10px] font-bold">非課税 0%</span></div><span class="text-[11px] text-on-surface font-semibold" id="nisa-tsumitate-subtotal">¥0</span></div><div class="grid grid-cols-2 gap-2"><div><span class="text-[10px] text-on-surface-variant block mb-1">保有数量 (株)</span><input class="account-shares-input w-full h-10 px-2.5 rounded-lg bg-surface-container-high border border-outline-variant/30 text-on-surface text-[14px] font-numeric-hero-mobile focus:outline-none focus:border-primary text-right" data-account="nisa_tsumitate" id="input-shares-nisa-tsumitate" oninput="recalcAllocationMatrix()" placeholder="0" type="number" value="0"></div><div><span class="text-[10px] text-on-surface-variant block mb-1">平均取得単価 (円)</span><input class="account-price-input w-full h-10 px-2.5 rounded-lg bg-surface-container-high border border-outline-variant/30 text-on-surface text-[14px] font-numeric-hero-mobile focus:outline-none focus:border-primary text-right" data-account="nisa_tsumitate" id="input-price-nisa-tsumitate" oninput="recalcAllocationMatrix()" placeholder="2,600" type="number" value="2600"></div></div><div class="flex items-center justify-between pt-1"><div class="flex items-center gap-1.5"><span class="text-[10px] text-on-surface-variant">クイック加算:</span><button class="px-2 py-0.5 rounded bg-surface-container-high text-[10px] text-on-surface hover:text-primary" onclick="addShares('nisa-tsumitate', 10)">+10株</button><button class="px-2 py-0.5 rounded bg-surface-container-high text-[10px] text-on-surface hover:text-primary" onclick="addShares('nisa-tsumitate', 100)">+100株</button></div><span class="text-[11px] text-on-surface-variant">予想配当: <strong class="text-on-surface font-numeric-hero-mobile" id="nisa-tsumitate-dividend">¥0</strong>/年</span></div></div><div class="p-3 rounded-xl bg-surface-container border border-outline-variant/20 flex flex-col gap-2"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-outline"></span><span class="font-label-md text-[13px] font-bold text-on-surface">特定口座</span><span class="px-1.5 py-0.2 rounded bg-surface-container-highest text-on-surface-variant text-[10px]">源泉徴収あり 20.315%</span></div><span class="text-[11px] text-on-surface font-semibold" id="tokutei-subtotal">¥0</span></div><div class="grid grid-cols-2 gap-2"><div><span class="text-[10px] text-on-surface-variant block mb-1">保有数量 (株)</span><input class="account-shares-input w-full h-10 px-2.5 rounded-lg bg-surface-container-high border border-outline-variant/30 text-on-surface text-[14px] font-numeric-hero-mobile focus:outline-none focus:border-primary text-right" data-account="tokutei" id="input-shares-tokutei" oninput="recalcAllocationMatrix()" placeholder="0" type="number" value="0"></div><div><span class="text-[10px] text-on-surface-variant block mb-1">平均取得単価 (円)</span><input class="account-price-input w-full h-10 px-2.5 rounded-lg bg-surface-container-high border border-outline-variant/30 text-on-surface text-[14px] font-numeric-hero-mobile focus:outline-none focus:border-primary text-right" data-account="tokutei" id="input-price-tokutei" oninput="recalcAllocationMatrix()" placeholder="2,600" type="number" value="2600"></div></div><div class="flex items-center justify-between pt-1"><div class="flex items-center gap-1.5"><span class="text-[10px] text-on-surface-variant">クイック加算:</span><button class="px-2 py-0.5 rounded bg-surface-container-high text-[10px] text-on-surface hover:text-primary" onclick="addShares('tokutei', 10)">+10株</button><button class="px-2 py-0.5 rounded bg-surface-container-high text-[10px] text-on-surface hover:text-primary" onclick="addShares('tokutei', 100)">+100株</button></div><span class="text-[11px] text-on-surface-variant">税引後予想: <strong class="text-on-surface font-numeric-hero-mobile" id="tokutei-dividend">¥0</strong>/年</span></div></div><div class="p-3 rounded-xl bg-surface-container border border-outline-variant/20 flex flex-col gap-2"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-outline-variant"></span><span class="font-label-md text-[13px] font-bold text-on-surface">一般口座</span><span class="px-1.5 py-0.2 rounded bg-surface-container-highest text-on-surface-variant text-[10px]">確定申告 20.315%</span></div><span class="text-[11px] text-on-surface font-semibold" id="ippan-subtotal">¥0</span></div><div class="grid grid-cols-2 gap-2"><div><span class="text-[10px] text-on-surface-variant block mb-1">保有数量 (株)</span><input class="account-shares-input w-full h-10 px-2.5 rounded-lg bg-surface-container-high border border-outline-variant/30 text-on-surface text-[14px] font-numeric-hero-mobile focus:outline-none focus:border-primary text-right" data-account="ippan" id="input-shares-ippan" oninput="recalcAllocationMatrix()" placeholder="0" type="number" value="0"></div><div><span class="text-[10px] text-on-surface-variant block mb-1">平均取得単価 (円)</span><input class="account-price-input w-full h-10 px-2.5 rounded-lg bg-surface-container-high border border-outline-variant/30 text-on-surface text-[14px] font-numeric-hero-mobile focus:outline-none focus:border-primary text-right" data-account="ippan" id="input-price-ippan" oninput="recalcAllocationMatrix()" placeholder="2,600" type="number" value="2600"></div></div><div class="flex items-center justify-between pt-1"><div class="flex items-center gap-1.5"><span class="text-[10px] text-on-surface-variant">クイック加算:</span><button class="px-2 py-0.5 rounded bg-surface-container-high text-[10px] text-on-surface hover:text-primary" onclick="addShares('ippan', 10)">+10株</button><button class="px-2 py-0.5 rounded bg-surface-container-high text-[10px] text-on-surface hover:text-primary" onclick="addShares('ippan', 100)">+100株</button></div><span class="text-[11px] text-on-surface-variant">税引後予想: <strong class="text-on-surface font-numeric-hero-mobile" id="ippan-dividend">¥0</strong>/年</span></div></div></div></div><div class="p-space-md bg-surface-container border-t border-outline-variant/20 flex flex-col gap-2.5 shrink-0"><div class="flex items-center justify-between text-[12px]"><div class="flex flex-col"><span class="text-on-surface-variant text-[11px]">登録総株数 / 投資総額</span><span class="font-bold text-on-surface text-[14px]"><span id="matrix-total-shares" class="">0</span> 株 / <span class="text-primary font-numeric-hero-mobile" id="matrix-total-cost">¥0</span></span></div><div class="flex flex-col items-end"><span class="text-on-surface-variant text-[11px]">年間配当金 (税引後合算)</span><span class="font-bold text-primary text-[15px] font-numeric-hero-mobile" id="matrix-total-dividend">¥0 <span class="text-xs font-normal text-on-surface-variant">/年</span></span></div></div><button class="w-full h-12 rounded-xl bg-primary text-on-primary font-label-md text-label-md font-bold flex items-center justify-center gap-2 active:scale-95 shadow-[0_4px_14px_rgba(16,185,129,0.35)] transition-all cursor-pointer" onclick="saveAllocationToPortfolio()"><span class="material-symbols-outlined text-[20px]">save</span><span class="">ポートフォリオに反映して保存</span></button></div></div></div><script>let activeStockMeta={code:'7203',name:'トヨタ自動車',price:2600,dps:72.8,yieldRate:2.8};function openAllocationModal(){const modal=document.getElementById('allocation-modal');const sheet=document.getElementById('allocation-sheet');if(!modal||!sheet)return;modal.classList.remove('pointer-events-none','opacity-0');modal.classList.add('opacity-100');sheet.classList.remove('translate-y-full');recalcAllocationMatrix();}function closeAllocationModal(){const modal=document.getElementById('allocation-modal');const sheet=document.getElementById('allocation-sheet');if(!modal||!sheet)return;sheet.classList.add('translate-y-full');modal.classList.add('opacity-0','pointer-events-none');modal.classList.remove('opacity-100');}function selectStockSuggestion(code,name,price,dps,yieldRate){activeStockMeta={code,name,price,dps,yieldRate};document.getElementById('stock-search-input').value=code;document.getElementById('selected-stock-code').textContent=code;document.getElementById('selected-stock-name').textContent=name;document.getElementById('selected-stock-price-display').textContent='¥'+price.toLocaleString();document.getElementById('selected-stock-yield-display').textContent=yieldRate.toFixed(2)+'%';document.getElementById('selected-stock-dps-display').textContent='¥'+dps.toLocaleString();applyCurrentPriceToAll();recalcAllocationMatrix();}function applyStockSearch(){const val=document.getElementById('stock-search-input').value.trim();if(val==='8316')selectStockSuggestion('8316','三井住友FG',3450,120,3.48);else if(val==='9432')selectStockSuggestion('9432','日本電信電話',152,5.2,3.42);else if(val.toUpperCase()==='AAPL')selectStockSuggestion('AAPL','Apple Inc.',34500,150,0.43);else selectStockSuggestion('7203','トヨタ自動車',2600,72.8,2.8);}function addShares(accountKey,amount){const input=document.getElementById(`input-shares-${accountKey}`);if(input){const cur=parseInt(input.value,10)||0;input.value=cur+amount;recalcAllocationMatrix();}}function applyCurrentPriceToAll(){['nisa-growth','nisa-tsumitate','tokutei','ippan'].forEach(k=>{const pInput=document.getElementById(`input-price-${k}`);if(pInput)pInput.value=activeStockMeta.price;});recalcAllocationMatrix();}function clearAllocationMatrix(){['nisa-growth','nisa-tsumitate','tokutei','ippan'].forEach(k=>{const s=document.getElementById(`input-shares-${k}`);const p=document.getElementById(`input-price-${k}`);if(s)s.value='0';if(p)p.value=activeStockMeta.price;});recalcAllocationMatrix();}function recalcAllocationMatrix(){const accounts=[{id:'nisa-growth',taxRate:0},{id:'nisa-tsumitate',taxRate:0},{id:'tokutei',taxRate:0.20315},{id:'ippan',taxRate:0.20315}];let totalShares=0;let totalCost=0;let totalNetDividend=0;accounts.forEach(acc=>{const sInput=document.getElementById(`input-shares-${acc.id}`);const pInput=document.getElementById(`input-price-${acc.id}`);const shares=parseInt(sInput?.value,10)||0;const price=parseFloat(pInput?.value)||0;const subtotal=shares*price;const grossDiv=shares*activeStockMeta.dps;const netDiv=grossDiv*(1-acc.taxRate);totalShares+=shares;totalCost+=subtotal;totalNetDividend+=netDiv;const subtotalEl=document.getElementById(`${acc.id}-subtotal`);if(subtotalEl)subtotalEl.textContent='¥'+Math.round(subtotal).toLocaleString();const divEl=document.getElementById(`${acc.id}-dividend`);if(divEl)divEl.textContent='¥'+Math.round(netDiv).toLocaleString();});document.getElementById('matrix-total-shares').textContent=totalShares.toLocaleString();document.getElementById('matrix-total-cost').textContent='¥'+Math.round(totalCost).toLocaleString();document.getElementById('matrix-total-dividend').textContent='¥'+Math.round(totalNetDividend).toLocaleString()+' /年';}function saveAllocationToPortfolio(){const totalShares=parseInt(document.getElementById('matrix-total-shares').textContent.replace(/,/g,''),10)||0;if(totalShares<=0){showToast('保有株数を1株以上入力してください','warning');return;}closeAllocationModal();showToast(`${activeStockMeta.name} (${totalShares}株) を登録・反映しました`,'task_alt');}document.getElementById('allocation-modal')?.addEventListener('click',(e)=>{if(e.target.id==='allocation-modal')closeAllocationModal();});</script><div id="snapdom-sandbox" data-snapdom-sandbox="true" aria-hidden="true" style="position: absolute; left: -9999px; top: -9999px; width: 0px; height: 0px; overflow: hidden;"></div></body></html>

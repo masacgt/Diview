@@ -1,0 +1,408 @@
+{
+  "fields": [
+    {
+      "key": "annual_dps",
+      "label": "1株当たり年間配当(報告時実額)",
+      "unit": "jpy_per_share",
+      "note": "分割・併合は未調整(as-reported)"
+    },
+    {
+      "key": "annual_dps_adjusted",
+      "label": "1株当たり年間配当(分割・併合 遡及調整後)",
+      "unit": "jpy_per_share",
+      "note": "最新株数基準。時系列比較や change_type はこの値ベース"
+    },
+    {
+      "key": "payout_ratio",
+      "label": "配当性向",
+      "unit": "percent"
+    },
+    {
+      "key": "doe",
+      "label": "DOE(自己資本配当率)",
+      "unit": "percent",
+      "note": "配当金総額 ÷ 自己資本(owners_equity 優先, 無ければ shareholders_equity) × 100。分母 ≤0/null は null"
+    },
+    {
+      "key": "net_asset_dividend_rate",
+      "label": "純資産配当率",
+      "unit": "percent",
+      "note": "配当金総額 ÷ 純資産 × 100。分母 ≤0/null は null"
+    },
+    {
+      "key": "consecutive_dividend_increase_years",
+      "label": "連続増配年数",
+      "unit": "years",
+      "note": "事前計算値。欠損時 null"
+    }
+  ],
+  "edinet_code": "E00945",
+  "security_code": "45280",
+  "records": [
+    {
+      "fiscal_year": 2010,
+      "annual_dps": 180,
+      "annual_dps_adjusted": 36,
+      "payout_ratio": null,
+      "change_type": "new",
+      "doe": null,
+      "net_asset_dividend_rate": null,
+      "consecutive_dividend_increase_years": null,
+      "source_refs": [
+        {
+          "doc_id": "S1002ASP",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "S00068FW",
+          "source": "edinet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2011,
+      "annual_dps": 180,
+      "annual_dps_adjusted": 36,
+      "payout_ratio": 80.4,
+      "change_type": "flat",
+      "doe": 4.94712217694875,
+      "net_asset_dividend_rate": 4.898725707855601,
+      "consecutive_dividend_increase_years": 0,
+      "source_refs": [
+        {
+          "doc_id": "20120430021374",
+          "source": "tdnet"
+        },
+        {
+          "doc_id": "S0008SLF",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "S1002ASP",
+          "source": "edinet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2012,
+      "annual_dps": 180,
+      "annual_dps_adjusted": 36,
+      "payout_ratio": 78.3,
+      "change_type": "flat",
+      "doe": 4.7965277009841865,
+      "net_asset_dividend_rate": 4.759731449891262,
+      "consecutive_dividend_increase_years": 0,
+      "source_refs": [
+        {
+          "doc_id": "20120430021374",
+          "source": "tdnet"
+        },
+        {
+          "doc_id": "S000BC3M",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "S1002ASP",
+          "source": "edinet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2013,
+      "annual_dps": 180,
+      "annual_dps_adjusted": 36,
+      "payout_ratio": 79.10000000000001,
+      "change_type": "flat",
+      "doe": 4.35381691840557,
+      "net_asset_dividend_rate": 4.508729240000945,
+      "consecutive_dividend_increase_years": 0,
+      "source_refs": [
+        {
+          "doc_id": "20130322004696",
+          "source": "tdnet"
+        },
+        {
+          "doc_id": "S000DU3X",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "S1002ASP",
+          "source": "edinet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2014,
+      "annual_dps": 180,
+      "annual_dps_adjusted": 36,
+      "payout_ratio": 93.8,
+      "change_type": "flat",
+      "doe": 4.263637765053095,
+      "net_asset_dividend_rate": 4.421963375836765,
+      "consecutive_dividend_increase_years": 0,
+      "source_refs": [
+        {
+          "doc_id": "S1002ASP",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20140509058297",
+          "source": "tdnet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2015,
+      "annual_dps": 180,
+      "annual_dps_adjusted": 36,
+      "payout_ratio": 147.10000000000002,
+      "change_type": "flat",
+      "doe": 4.055464059926686,
+      "net_asset_dividend_rate": 4.01588340386311,
+      "consecutive_dividend_increase_years": 0,
+      "source_refs": [
+        {
+          "doc_id": "S1004XXL",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20150511468515",
+          "source": "tdnet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2016,
+      "annual_dps": 180,
+      "annual_dps_adjusted": 36,
+      "payout_ratio": 76.4,
+      "change_type": "flat",
+      "doe": 4.048214547097645,
+      "net_asset_dividend_rate": 4.006887066802448,
+      "consecutive_dividend_increase_years": 0,
+      "source_refs": [
+        {
+          "doc_id": "S1007SHD",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20160509478899",
+          "source": "tdnet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2017,
+      "annual_dps": 40,
+      "annual_dps_adjusted": 40,
+      "payout_ratio": 38,
+      "change_type": "increase",
+      "doe": 4.084490763036737,
+      "net_asset_dividend_rate": 4.044745341093567,
+      "consecutive_dividend_increase_years": 1,
+      "source_refs": [
+        {
+          "doc_id": "S100AORY",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20170508460579",
+          "source": "tdnet"
+        },
+        {
+          "doc_id": "S100G28G",
+          "source": "edinet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2018,
+      "annual_dps": 45,
+      "annual_dps_adjusted": 45,
+      "payout_ratio": 46.400000000000006,
+      "change_type": "increase",
+      "doe": 4.412364842960392,
+      "net_asset_dividend_rate": 4.368800968243209,
+      "consecutive_dividend_increase_years": 2,
+      "source_refs": [
+        {
+          "doc_id": "S100DALX",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20180508428866",
+          "source": "tdnet"
+        },
+        {
+          "doc_id": "S100G28G",
+          "source": "edinet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2019,
+      "annual_dps": 45,
+      "annual_dps_adjusted": 45,
+      "payout_ratio": 44.9,
+      "change_type": "flat",
+      "doe": 4.15143087826321,
+      "net_asset_dividend_rate": 4.111697136845697,
+      "consecutive_dividend_increase_years": 0,
+      "source_refs": [
+        {
+          "doc_id": "S100G28G",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20190424409392",
+          "source": "tdnet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2020,
+      "annual_dps": 45,
+      "annual_dps_adjusted": 45,
+      "payout_ratio": 38,
+      "change_type": "flat",
+      "doe": 3.993535816129881,
+      "net_asset_dividend_rate": 3.9546003499864444,
+      "consecutive_dividend_increase_years": 0,
+      "source_refs": [
+        {
+          "doc_id": "S100IQL8",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20200427400087",
+          "source": "tdnet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2021,
+      "annual_dps": 50,
+      "annual_dps_adjusted": 50,
+      "payout_ratio": 33.1,
+      "change_type": "increase",
+      "doe": 3.9273255951172774,
+      "net_asset_dividend_rate": 3.8929622541748747,
+      "consecutive_dividend_increase_years": 1,
+      "source_refs": [
+        {
+          "doc_id": "S100LIVI",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20210428403288",
+          "source": "tdnet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2022,
+      "annual_dps": 56,
+      "annual_dps_adjusted": 56,
+      "payout_ratio": 34.5,
+      "change_type": "increase",
+      "doe": 4.215695541739213,
+      "net_asset_dividend_rate": 4.178946127549216,
+      "consecutive_dividend_increase_years": 2,
+      "source_refs": [
+        {
+          "doc_id": "S100OBYA",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20220502533117",
+          "source": "tdnet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2023,
+      "annual_dps": 70,
+      "annual_dps_adjusted": 70,
+      "payout_ratio": 30.3,
+      "change_type": "increase",
+      "doe": 4.608360775285124,
+      "net_asset_dividend_rate": 4.571737281562746,
+      "consecutive_dividend_increase_years": 3,
+      "source_refs": [
+        {
+          "doc_id": "S100QU2A",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20230502558616",
+          "source": "tdnet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2024,
+      "annual_dps": 80,
+      "annual_dps_adjusted": 80,
+      "payout_ratio": 30,
+      "change_type": "increase",
+      "doe": 4.783463499465926,
+      "net_asset_dividend_rate": 4.749663162218071,
+      "consecutive_dividend_increase_years": 4,
+      "source_refs": [
+        {
+          "doc_id": "S100TMQ7",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20240502581921",
+          "source": "tdnet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2025,
+      "annual_dps": 80,
+      "annual_dps_adjusted": 80,
+      "payout_ratio": 75.1,
+      "change_type": "flat",
+      "doe": 4.803112271567165,
+      "net_asset_dividend_rate": 4.768061019813423,
+      "consecutive_dividend_increase_years": 0,
+      "source_refs": [
+        {
+          "doc_id": "S100W9NU",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20250424522336",
+          "source": "tdnet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2026,
+      "annual_dps": 80,
+      "annual_dps_adjusted": 80,
+      "payout_ratio": 53.900000000000006,
+      "change_type": "flat",
+      "doe": 4.4584220319797065,
+      "net_asset_dividend_rate": 4.427632047422322,
+      "consecutive_dividend_increase_years": 0,
+      "source_refs": [
+        {
+          "doc_id": "S100YOIE",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20260430515727",
+          "source": "tdnet"
+        }
+      ]
+    }
+  ],
+  "attribution": {
+    "source_label": "金融庁 EDINET / TDnet",
+    "license_note": "EDINET 由来データは金融庁 EDINET、TDnet 由来データは JPX TDnet を出典とし、加工は IRBANK が実施。再配信時は出典の明示が必要。",
+    "processed_by": "IRBANK"
+  }
+}

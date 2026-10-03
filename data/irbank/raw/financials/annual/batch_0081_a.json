@@ -1,0 +1,358 @@
+{
+  "fields": [
+    {
+      "key": "sales",
+      "label": "売上高",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "operating_profit",
+      "label": "営業利益",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "ordinary_income",
+      "label": "経常利益",
+      "unit": "million_jpy",
+      "note": "J-GAAP 固有。IFRS / US-GAAP 提出企業では null"
+    },
+    {
+      "key": "net_income",
+      "label": "当期純利益(親会社株主帰属)",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "eps",
+      "label": "1株当たり当期純利益(EPS)",
+      "unit": "jpy_per_share",
+      "note": "株式分割未調整(as-reported)。分割年をまたぐ期間は同一株数基準ではない。"
+    },
+    {
+      "key": "operating_cf",
+      "label": "営業活動によるCF",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "investing_cf",
+      "label": "投資活動によるCF",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "extraordinary_income",
+      "label": "特別利益",
+      "unit": "million_jpy",
+      "note": "J-GAAP 固有。IFRS / US-GAAP 提出企業では null"
+    },
+    {
+      "key": "extraordinary_loss",
+      "label": "特別損失",
+      "unit": "million_jpy",
+      "note": "J-GAAP 固有。IFRS / US-GAAP 提出企業では null"
+    },
+    {
+      "key": "total_assets",
+      "label": "総資産",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "net_assets",
+      "label": "純資産",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "total_liabilities",
+      "label": "負債合計",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "equity_ratio_computed",
+      "label": "自己資本比率",
+      "unit": "percent",
+      "note": "総資産と自己資本から算出した計算値 (%)。四半期・半期モードでは full_year 行にのみ値が入る"
+    }
+  ],
+  "results": [
+    {
+      "edinet_code": "E04812",
+      "periods": []
+    },
+    {
+      "edinet_code": "E05821",
+      "periods": []
+    },
+    {
+      "edinet_code": "E08970",
+      "periods": []
+    },
+    {
+      "edinet_code": "E33589",
+      "periods": []
+    },
+    {
+      "edinet_code": "E34111",
+      "periods": [
+        {
+          "fiscal_year": "2013/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": false,
+          "sales": 5141,
+          "operating_profit": null,
+          "ordinary_income": 61,
+          "net_income": 33,
+          "eps": 127.11,
+          "operating_cf": null,
+          "investing_cf": null,
+          "extraordinary_income": null,
+          "extraordinary_loss": null,
+          "total_assets": 2107,
+          "net_assets": 408,
+          "total_liabilities": 1699,
+          "equity_ratio_computed": 19.349565868
+        },
+        {
+          "fiscal_year": "2014/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": false,
+          "sales": 5636,
+          "operating_profit": null,
+          "ordinary_income": 100,
+          "net_income": 13,
+          "eps": 51.43,
+          "operating_cf": null,
+          "investing_cf": null,
+          "extraordinary_income": null,
+          "extraordinary_loss": null,
+          "total_assets": 2375,
+          "net_assets": 417,
+          "total_liabilities": 1958,
+          "equity_ratio_computed": 17.56206793
+        },
+        {
+          "fiscal_year": "2015/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": false,
+          "sales": 6002,
+          "operating_profit": null,
+          "ordinary_income": -179,
+          "net_income": -399,
+          "eps": -1397.46,
+          "operating_cf": null,
+          "investing_cf": null,
+          "extraordinary_income": null,
+          "extraordinary_loss": null,
+          "total_assets": 2530,
+          "net_assets": 147,
+          "total_liabilities": 2383,
+          "equity_ratio_computed": 5.79357544
+        },
+        {
+          "fiscal_year": "2016/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": true,
+          "sales": 8113,
+          "operating_profit": 202,
+          "ordinary_income": 181,
+          "net_income": 153,
+          "eps": 86.19,
+          "operating_cf": 300,
+          "investing_cf": -255,
+          "extraordinary_income": null,
+          "extraordinary_loss": 0,
+          "total_assets": 3436,
+          "net_assets": 99,
+          "total_liabilities": 3337,
+          "equity_ratio_computed": 2.867668394
+        },
+        {
+          "fiscal_year": "2017/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": true,
+          "sales": 8865,
+          "operating_profit": 278,
+          "ordinary_income": 255,
+          "net_income": 214,
+          "eps": 120.53,
+          "operating_cf": 482,
+          "investing_cf": -176,
+          "extraordinary_income": null,
+          "extraordinary_loss": 14,
+          "total_assets": 3665,
+          "net_assets": 344,
+          "total_liabilities": 3321,
+          "equity_ratio_computed": 9.396856355
+        },
+        {
+          "fiscal_year": "2018/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": true,
+          "sales": 9970,
+          "operating_profit": 403,
+          "ordinary_income": 369,
+          "net_income": 219,
+          "eps": 116.32,
+          "operating_cf": 638,
+          "investing_cf": -256,
+          "extraordinary_income": 0,
+          "extraordinary_loss": 28,
+          "total_assets": 4167,
+          "net_assets": 559,
+          "total_liabilities": 3608,
+          "equity_ratio_computed": 13.408517754
+        },
+        {
+          "fiscal_year": "2019/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": true,
+          "sales": 11762,
+          "operating_profit": 530,
+          "ordinary_income": 504,
+          "net_income": 345,
+          "eps": 70.39,
+          "operating_cf": 73,
+          "investing_cf": -234,
+          "extraordinary_income": null,
+          "extraordinary_loss": 3,
+          "total_assets": 5365,
+          "net_assets": 1977,
+          "total_liabilities": 3388,
+          "equity_ratio_computed": 36.855625526
+        },
+        {
+          "fiscal_year": "2020/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": true,
+          "sales": 13376,
+          "operating_profit": 755,
+          "ordinary_income": 712,
+          "net_income": 450,
+          "eps": 44.82,
+          "operating_cf": 1060,
+          "investing_cf": -308,
+          "extraordinary_income": 0,
+          "extraordinary_loss": 55,
+          "total_assets": 5948,
+          "net_assets": 2408,
+          "total_liabilities": 3540,
+          "equity_ratio_computed": 40.4824015
+        },
+        {
+          "fiscal_year": "2021/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": true,
+          "sales": 14431,
+          "operating_profit": 931,
+          "ordinary_income": 955,
+          "net_income": 674,
+          "eps": 65.45,
+          "operating_cf": 709,
+          "investing_cf": -277,
+          "extraordinary_income": null,
+          "extraordinary_loss": 24,
+          "total_assets": 6662,
+          "net_assets": 2993,
+          "total_liabilities": 3669,
+          "equity_ratio_computed": 44.92545029
+        },
+        {
+          "fiscal_year": "2022/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": true,
+          "sales": 16198,
+          "operating_profit": 1197,
+          "ordinary_income": 1191,
+          "net_income": 786,
+          "eps": 75.91,
+          "operating_cf": 1007,
+          "investing_cf": -275,
+          "extraordinary_income": null,
+          "extraordinary_loss": 14,
+          "total_assets": 7815,
+          "net_assets": 3422,
+          "total_liabilities": 4394,
+          "equity_ratio_computed": 43.779492619
+        },
+        {
+          "fiscal_year": "2023/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": true,
+          "sales": 19267,
+          "operating_profit": 1457,
+          "ordinary_income": 1466,
+          "net_income": 1010,
+          "eps": 97.52,
+          "operating_cf": 1067,
+          "investing_cf": -324,
+          "extraordinary_income": null,
+          "extraordinary_loss": 35,
+          "total_assets": 8871,
+          "net_assets": 4125,
+          "total_liabilities": 4746,
+          "equity_ratio_computed": 46.496662492
+        },
+        {
+          "fiscal_year": "2024/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": true,
+          "sales": 22030,
+          "operating_profit": 1671,
+          "ordinary_income": 1744,
+          "net_income": 1224,
+          "eps": 118.24,
+          "operating_cf": 1468,
+          "investing_cf": -420,
+          "extraordinary_income": 23,
+          "extraordinary_loss": 1,
+          "total_assets": 9929,
+          "net_assets": 5056,
+          "total_liabilities": 4873,
+          "equity_ratio_computed": 50.920566819
+        },
+        {
+          "fiscal_year": "2025/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": true,
+          "sales": 26938,
+          "operating_profit": 2219,
+          "ordinary_income": 2244,
+          "net_income": 1458,
+          "eps": 141.44,
+          "operating_cf": 2377,
+          "investing_cf": -793,
+          "extraordinary_income": null,
+          "extraordinary_loss": null,
+          "total_assets": 13628,
+          "net_assets": 6012,
+          "total_liabilities": 7616,
+          "equity_ratio_computed": 44.11475576
+        },
+        {
+          "fiscal_year": "2026/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": true,
+          "sales": 31092,
+          "operating_profit": 2967,
+          "ordinary_income": 2966,
+          "net_income": 1873,
+          "eps": 90.55,
+          "operating_cf": 2362,
+          "investing_cf": -1161,
+          "extraordinary_income": null,
+          "extraordinary_loss": 33,
+          "total_assets": 16342,
+          "net_assets": 7191,
+          "total_liabilities": 9151,
+          "equity_ratio_computed": 44.00271651
+        }
+      ]
+    }
+  ],
+  "not_found": [],
+  "attribution": {
+    "source_label": "金融庁 EDINET / TDnet",
+    "license_note": "EDINET 由来データは金融庁 EDINET、TDnet 由来データは JPX TDnet を出典とし、加工は IRBANK が実施。再配信時は出典の明示が必要。",
+    "processed_by": "IRBANK"
+  }
+}

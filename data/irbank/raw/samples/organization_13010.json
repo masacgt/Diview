@@ -1,0 +1,264 @@
+{
+  "fields": [
+    {
+      "key": "financials.sales",
+      "label": "売上高",
+      "unit": "jpy"
+    },
+    {
+      "key": "financials.operating_profit",
+      "label": "営業利益",
+      "unit": "jpy"
+    },
+    {
+      "key": "financials.net_income",
+      "label": "当期純利益(親会社株主帰属)",
+      "unit": "jpy"
+    },
+    {
+      "key": "financials.eps",
+      "label": "EPS(1株当たり当期純利益)",
+      "unit": "jpy_per_share",
+      "note": "有報・短信記載の実績値(as-reported)。株式分割未調整・現株数調整なし。"
+    },
+    {
+      "key": "financials.extraordinary_income",
+      "label": "特別利益",
+      "unit": "jpy",
+      "note": "J-GAAP 固有。IFRS / US-GAAP 提出企業では null"
+    },
+    {
+      "key": "financials.extraordinary_loss",
+      "label": "特別損失",
+      "unit": "jpy",
+      "note": "J-GAAP 固有。IFRS / US-GAAP 提出企業では null"
+    },
+    {
+      "key": "financials.roe",
+      "label": "ROE",
+      "unit": "percent"
+    },
+    {
+      "key": "financials.equity_ratio_computed",
+      "label": "自己資本比率",
+      "unit": "percent",
+      "note": "総資産と自己資本から算出した計算値 (%)。計算値の対象期が financials.period と一致しない場合は null"
+    },
+    {
+      "key": "securities[].valuation.per",
+      "label": "PER",
+      "unit": "times",
+      "note": "直近終値 ÷ 最新通期の分割調整済みEPS(現株数基準・期中平均株式数ベース)。調整値が無い企業は null(有報記載値へのフォールバックなし)。株価は price_as_of 基準。get_valuation_metrics_history.per は同じ調整済みEPSを分母に使うが、分子が各FY末の調整済み終値なので、本フィールドとは株価時点(直近 vs FY末)が異なり値は一致しない"
+    },
+    {
+      "key": "securities[].valuation.pbr",
+      "label": "PBR",
+      "unit": "times",
+      "note": "直近終値 ÷ 確定FY末の分割調整済みBPS(現株数基準)。調整値が無い企業は null(as-reported BPS へのフォールバックなし)。price_as_of 基準"
+    },
+    {
+      "key": "securities[].valuation.dividend_yield",
+      "label": "配当利回り",
+      "unit": "percent",
+      "note": "確定FYの1株当たり年間配当金(分割調整済み) ÷ 直近終値。実績であり予想配当ではない。参照FYは dividend_as_of。株価は price_as_of 基準。配当金総額と桁で矛盾する期(期中分割年の基準混在・原本内不整合)は算出せず null"
+    },
+    {
+      "key": "securities[].valuation.market_cap",
+      "label": "時価総額",
+      "unit": "hundred_million_jpy"
+    },
+    {
+      "key": "officers[].shares_held",
+      "label": "役員保有株数",
+      "unit": "shares"
+    }
+  ],
+  "basic": {
+    "name_ja": "株式会社　極洋",
+    "edinet_code": "E00012",
+    "address_ja": "港区赤坂三丁目3番5号"
+  },
+  "financials": {
+    "period": "2026-03",
+    "sales": 334612000000,
+    "operating_profit": 10731000000,
+    "net_income": 6841000000,
+    "eps": 576.02,
+    "extraordinary_income": 401000000,
+    "extraordinary_loss": 392000000,
+    "roe": 9.5,
+    "equity_ratio_computed": 36.116715236
+  },
+  "securities": [
+    {
+      "security_code": "13010",
+      "industry": "水産・農林業",
+      "valuation": {
+        "as_of": "2026-03",
+        "price_as_of": "2026-09-25",
+        "per": 8.185479670844762,
+        "pbr": 0.7287838005586513,
+        "dividend_yield": 3.1813361611876987,
+        "dividend_as_of": "2026-03",
+        "market_cap": 569.49104345
+      }
+    }
+  ],
+  "disclosures": [
+    {
+      "doc_id": "20260827526860",
+      "source": "tdnet",
+      "document_type": null,
+      "title": "キョクヨーグループ統合報告書2026",
+      "filing_date": "2026-09-01",
+      "disclosed_at": "2026-08-31T15:30:00.000Z"
+    },
+    {
+      "doc_id": "20260806512540",
+      "source": "tdnet",
+      "document_type": null,
+      "title": "Notice Concerning Disposal of Treasury Shares through Third-Party Allotment for Additional Contributions to Share Delivery Trust for Officers",
+      "filing_date": "2026-08-07",
+      "disclosed_at": "2026-08-07T02:30:00.000Z"
+    },
+    {
+      "doc_id": "20260806512469",
+      "source": "tdnet",
+      "document_type": null,
+      "title": "Consolidated Financial Results For the First Quarter of the Year Ending March 31, 2027 (Based on Japanese GAAP) ",
+      "filing_date": "2026-08-07",
+      "disclosed_at": "2026-08-07T02:30:00.000Z"
+    },
+    {
+      "doc_id": "20260806512043",
+      "source": "tdnet",
+      "document_type": null,
+      "title": "2027年3月期　第1四半期決算短信[日本基準]（連結）",
+      "filing_date": "2026-08-07",
+      "disclosed_at": "2026-08-07T02:30:00.000Z"
+    },
+    {
+      "doc_id": "20260805510830",
+      "source": "tdnet",
+      "document_type": null,
+      "title": "役員向け株式給付信託への追加拠出に伴う第三者割当による自己株式の処分に関するお知らせ",
+      "filing_date": "2026-08-07",
+      "disclosed_at": "2026-08-07T02:30:00.000Z"
+    }
+  ],
+  "officers": [
+    {
+      "name": "山田英司",
+      "title": "取締役",
+      "date_of_birth": "1955-07-18",
+      "shares_held": 0
+    },
+    {
+      "name": "鈴木淳二",
+      "title": "監査役",
+      "date_of_birth": "1959-06-05",
+      "shares_held": 2800
+    },
+    {
+      "name": "木山修一",
+      "title": "専務取締役業務本部長",
+      "date_of_birth": "1959-08-30",
+      "shares_held": 3900
+    },
+    {
+      "name": "町田勝弘",
+      "title": "取締役",
+      "date_of_birth": "1953-11-15",
+      "shares_held": 0
+    },
+    {
+      "name": "服部篤",
+      "title": "取締役水産事業本部長",
+      "date_of_birth": "1965-07-16",
+      "shares_held": 1400
+    },
+    {
+      "name": "福嶌茂",
+      "title": "監査役（常勤）",
+      "date_of_birth": "1968-10-16",
+      "shares_held": 0
+    },
+    {
+      "name": "三浦理代",
+      "title": "取締役",
+      "date_of_birth": "1946-05-16",
+      "shares_held": 700
+    },
+    {
+      "name": "田中豊",
+      "title": "取締役大阪支社長",
+      "date_of_birth": "1961-08-20",
+      "shares_held": 5300
+    },
+    {
+      "name": "佐々木力",
+      "title": "監査役（常勤）",
+      "date_of_birth": "1965-09-01",
+      "shares_held": 200
+    },
+    {
+      "name": "三山正樹",
+      "title": "取締役食品事業本部長水産加工事業本部長",
+      "date_of_birth": "1966-03-30",
+      "shares_held": 1200
+    },
+    {
+      "name": "檜垣仁志",
+      "title": "常務取締役管理本部長",
+      "date_of_birth": "1962-08-17",
+      "shares_held": 2500
+    },
+    {
+      "name": "小田匡彦",
+      "title": "取締役業務副本部長",
+      "date_of_birth": "1966-07-12",
+      "shares_held": 500
+    },
+    {
+      "name": "近藤茂",
+      "title": "取締役副社長",
+      "date_of_birth": "1958-12-08",
+      "shares_held": 7500
+    },
+    {
+      "name": "長野麻子",
+      "title": "取締役",
+      "date_of_birth": "1971-12-11",
+      "shares_held": 0
+    },
+    {
+      "name": "山口敬三",
+      "title": "取締役生鮮事業本部長",
+      "date_of_birth": "1962-01-08",
+      "shares_held": 2200
+    },
+    {
+      "name": "白尾美佳",
+      "title": "取締役",
+      "date_of_birth": "1960-02-28",
+      "shares_held": 0
+    },
+    {
+      "name": "傍島康之",
+      "title": "監査役",
+      "date_of_birth": "1957-04-23",
+      "shares_held": 1600
+    },
+    {
+      "name": "井上誠",
+      "title": "代表取締役社長",
+      "date_of_birth": "1957-12-05",
+      "shares_held": 10600
+    }
+  ],
+  "attribution": {
+    "source_label": "金融庁 EDINET / TDnet / JPX 東京証券取引所",
+    "license_note": "EDINET 由来データは金融庁 EDINET、TDnet 由来データは JPX TDnet、株価・時価総額など株価由来データは JPX 東京証券取引所を出典とし、加工は IRBANK が実施。再配信時は出典の明示が必要。",
+    "processed_by": "IRBANK"
+  }
+}
