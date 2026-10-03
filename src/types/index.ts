@@ -7,7 +7,8 @@ export type ScreenType =
   | 'settings'
   | 'csv-import'
   | 'contact-feedback'
-  | 'terms-privacy';
+  | 'terms-privacy'
+  | 'jetpack-compose';
 
 export type CategoryType = 'all' | 'japan' | 'us' | 'fund';
 

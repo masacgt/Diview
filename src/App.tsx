@@ -14,6 +14,7 @@ import { SettingsScreen } from './screens/SettingsScreen';
 import { CsvImportScreen } from './screens/CsvImportScreen';
 import { ContactFeedbackScreen } from './screens/ContactFeedbackScreen';
 import { TermsPrivacyScreen } from './screens/TermsPrivacyScreen';
+import { JetpackComposeScreen } from './screens/JetpackComposeScreen';
 
 // Modals
 import { SearchModal } from './components/modals/SearchModal';
@@ -44,6 +45,8 @@ const AppContent: React.FC = () => {
         return <ContactFeedbackScreen />;
       case 'terms-privacy':
         return <TermsPrivacyScreen />;
+      case 'jetpack-compose':
+        return <JetpackComposeScreen />;
       default:
         return <AssetManagementScreen />;
     }
