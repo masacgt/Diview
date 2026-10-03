@@ -9,6 +9,7 @@ import importlib
 import json
 import math
 import os
+import random
 import subprocess
 import sys
 import time
@@ -24,6 +25,10 @@ import yfinance as yf
 UTC = timezone.utc
 DATA_DIR = Path(os.environ.get("PRICE_DATA_DIR", "data/market/yfinance"))
 PREFIX = os.environ.get("R2_PREFIX", "market/yfinance").strip("/")
+
+
+class RateLimitAbort(RuntimeError):
+    """Stop a shard after Yahoo keeps rate-limiting requests."""
 
 
 def required_env(name: str) -> str:
@@ -117,7 +122,11 @@ def merge_dated(old: list[Any], new: list[Any], key: str) -> list[Any]:
     records = {str(item[key]): item for item in old if isinstance(item, dict) and item.get(key) is not None}
     for item in new:
         if isinstance(item, dict) and item.get(key) is not None:
-            records[str(item[key])] = item
+            record_key = str(item[key])
+            merged = dict(records.get(record_key, {}))
+            # A partial Yahoo response must not erase previously stored good values.
+            merged.update({name: value for name, value in item.items() if value is not None})
+            records[record_key] = merged
     return [records[k] for k in sorted(records)]
 
 
@@ -128,6 +137,12 @@ def is_transient_yfinance_error(exc: Exception) -> bool:
         "ratelimit", "connection", "timeout", "jsondecode", "temporarily", "service unavailable",
         "too many requests", "429", "502", "503", "504", "remote end closed", "network is unreachable",
     ))
+
+
+def is_rate_limit_error(exc: Exception) -> bool:
+    name = type(exc).__name__.lower()
+    message = str(exc).lower()
+    return "ratelimit" in name or any(token in message for token in ("too many requests", "429", "rate limit"))
 
 
 def call_yfinance(
@@ -154,9 +169,12 @@ def call_yfinance(
                 continue
             if attempt < retries and is_transient_yfinance_error(exc):
                 delay = min(60, float(os.environ.get("YFINANCE_RETRY_BASE_SECONDS", "5")) * (2 ** attempt))
-                print(f"Retrying {label} in {delay:g}s ({attempt + 1}/{retries})", file=sys.stderr)
-                time.sleep(delay)
+                jitter = random.uniform(0, min(2, delay * 0.2))
+                print(f"Retrying {label} in {delay + jitter:.1f}s ({attempt + 1}/{retries})", file=sys.stderr)
+                time.sleep(delay + jitter)
                 continue
+            if is_rate_limit_error(exc):
+                raise RateLimitAbort(f"Yahoo rate limit persisted for {label}; stopping this shard to avoid more requests") from exc
             warnings.append(f"{label}: {type(exc).__name__}: {exc}")
             return None
     return None
@@ -181,7 +199,8 @@ def refresh_yfinance_after_error(exc: Exception) -> bool:
     """Upgrade yfinance once after a provider/library failure, then let caller retry."""
     if os.environ.get("YFINANCE_AUTO_UPGRADE", "1").lower() not in {"1", "true", "yes"}:
         return False
-    minimum = tuple(int(part) for part in os.environ.get("YFINANCE_MIN_VERSION", "0.2").split(".")[:2])
+    minimum_text = os.environ.get("YFINANCE_MIN_VERSION", "0.2.66")
+    minimum = tuple(int(part) for part in minimum_text.split(".")[:2])
     installed_text = yfinance_version()
     try:
         installed = tuple(int(part) for part in installed_text.split(".")[:2])
@@ -190,12 +209,35 @@ def refresh_yfinance_after_error(exc: Exception) -> bool:
     print(f"yfinance error: {type(exc).__name__}: {exc}; installed version={installed_text}", file=sys.stderr)
     if installed >= minimum:
         return False
-    print(f"Upgrading yfinance {installed_text} to >= {'.'.join(map(str, minimum))},<2 and retrying once", file=sys.stderr)
-    subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "yfinance"], check=True)
+    print(f"Upgrading yfinance {installed_text} to >= {minimum_text},<2 and retrying once", file=sys.stderr)
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--upgrade", f"yfinance>={minimum_text},<2"],
+        check=True,
+    )
     # Replace the module in this process so the retry uses the upgraded package.
     importlib.invalidate_caches()
     importlib.reload(yf)
     return True
+
+
+def configure_yfinance() -> None:
+    """Set predictable locale, explicit library retries, and visible failures."""
+    config = getattr(yf, "config", None)
+    if config is None:
+        print(f"yfinance {yfinance_version()}: global config unavailable; using explicit request settings")
+        return
+    try:
+        config.network.retries = max(0, int(os.environ.get("YFINANCE_LIBRARY_RETRIES", "1")))
+        config.debug.hide_exceptions = False
+        config.debug.logging = os.environ.get("YFINANCE_DEBUG", "0").lower() in {"1", "true", "yes"}
+        config.locale.lang = "ja-JP"
+        config.locale.region = "JP"
+    except (AttributeError, TypeError, ValueError) as exc:
+        print(f"yfinance {yfinance_version()}: some global settings unavailable: {exc}", file=sys.stderr)
+    print(
+        f"Configured yfinance {yfinance_version()}: retries={getattr(config.network, 'retries', 'default')}, "
+        "locale=ja-JP"
+    )
 
 
 def get_client():
@@ -243,7 +285,15 @@ def load_existing(client: Any, bucket: str, symbol: str) -> dict[str, Any]:
 
 
 def history_rows(ticker: Any, interval: str, period: str) -> list[dict[str, Any]]:
-    frame = ticker.history(period=period, interval=interval, auto_adjust=False, actions=True, repair=False, raise_errors=True)
+    frame = ticker.history(
+        period=period,
+        interval=interval,
+        auto_adjust=False,
+        actions=True,
+        repair=False,
+        raise_errors=True,
+        timeout=float(os.environ.get("YFINANCE_HTTP_TIMEOUT_SECONDS", "30")),
+    )
     if frame is None or frame.empty:
         return []
     rows: list[dict[str, Any]] = []
@@ -369,6 +419,9 @@ def main() -> int:
     parser.add_argument("--aggregate", action="store_true", help="Merge shard snapshots into latest_market_data.json")
     args = parser.parse_args()
 
+    if not args.aggregate:
+        configure_yfinance()
+
     bucket = required_env("R2_BUCKET")
     client = get_client()
     shard_count = int(os.environ.get("YFINANCE_SHARD_COUNT", "1"))
@@ -379,7 +432,13 @@ def main() -> int:
             raw = read_object(client, bucket, key)
             if raw is None:
                 raise RuntimeError(f"Required snapshot shard is missing: {key}")
-            summaries.extend(json.loads(raw).get("securities", []))
+            shard_data = json.loads(raw)
+            if int(shard_data.get("failed_count", 0)):
+                raise RuntimeError(f"Shard {shard} reports {shard_data['failed_count']} failures; refusing to publish a partial latest snapshot")
+            summaries.extend(shard_data.get("securities", []))
+        symbols = [item.get("symbol") for item in summaries]
+        if len(symbols) != len(set(symbols)):
+            raise RuntimeError("Shard snapshots contain duplicate symbols; refusing to publish")
         put_json(client, bucket, f"{PREFIX}/latest_market_data.json", {
             "schema_version": 1,
             "source": "Yahoo Finance via yfinance",
@@ -412,6 +471,9 @@ def main() -> int:
         except Exception as exc:
             failed.append(f"{symbol}: {type(exc).__name__}: {exc}")
             print(f"ERROR {failed[-1]}", file=sys.stderr)
+            if isinstance(exc, RateLimitAbort):
+                print("Stopping this shard after persistent Yahoo rate limiting.", file=sys.stderr)
+                break
         if position % 10 == 0:
             print(f"shard {shard_index + 1}/{shard_count}: {position}/{len(selected)} processed")
         time.sleep(float(os.environ.get("YFINANCE_REQUEST_PAUSE_SECONDS", "1")))

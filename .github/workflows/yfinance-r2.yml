@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 360
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 2
       matrix:
         shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
     steps:
@@ -57,6 +57,11 @@ jobs:
           YFINANCE_INITIAL_PERIOD: max
           YFINANCE_MIN_VERSION: 0.2.66
           YFINANCE_AUTO_UPGRADE: "1"
+          YFINANCE_LIBRARY_RETRIES: "1"
+          YFINANCE_RETRIES: "3"
+          YFINANCE_RETRY_BASE_SECONDS: "5"
+          YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
+          YFINANCE_REQUEST_PAUSE_SECONDS: "2"
           YFINANCE_SHARD_INDEX: ${{ matrix.shard }}
           YFINANCE_SHARD_COUNT: "24"
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
