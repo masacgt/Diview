@@ -16,7 +16,11 @@ Each symbol is stored at `market/yfinance/securities/{symbol}.json`. The summary
 
 ## GitHub configuration
 
-Repository secrets required: `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`. They must be S3-compatible credentials with Object Read & Write access scoped to the `diview-market-data` bucket. The account ID is configured in the workflow. The workflow runs on weekdays at 03:30 JST and supports manual start from GitHub Actions.
+Repository secrets required: `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`. They must be S3-compatible credentials with Object Read & Write access scoped to the `diview-market-data` bucket. The account ID is configured in the workflow.
+
+Before starting the data jobs, the workflow checks the Tokyo Stock Exchange session for the current Japan date using `exchange_calendars` (`XTKS`). Weekends and JPX holidays skip collection and summary publication. The scheduled check runs at 03:30 JST on weekdays, and manual starts use the same check. The next trading day's incremental update catches up with the latest available data.
+
+The yfinance `Ticker.calendar` and `Calendars` interfaces describe company events (earnings, dividends, IPOs, splits, and economic events), not Japanese exchange sessions. yfinance's market-status endpoint currently reports U.S. status only, so it cannot reliably identify JPX holidays; the workflow uses the dedicated Tokyo exchange calendar instead.
 
 The collector logs the installed yfinance version. If an API/library error occurs while retrieving price history and the installed version is below `YFINANCE_MIN_VERSION`, it upgrades yfinance and retries that history request once. Other errors are recorded as warnings and do not cause fabricated data to be written. The scheduled environment starts with the current release allowed by `yfinance>=0.2.66,<2`.
 
