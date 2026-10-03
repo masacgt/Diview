@@ -1,0 +1,164 @@
+{
+  "fields": [
+    {
+      "key": "annual_dps",
+      "label": "1株当たり年間配当(報告時実額)",
+      "unit": "jpy_per_share",
+      "note": "分割・併合は未調整(as-reported)"
+    },
+    {
+      "key": "annual_dps_adjusted",
+      "label": "1株当たり年間配当(分割・併合 遡及調整後)",
+      "unit": "jpy_per_share",
+      "note": "最新株数基準。時系列比較や change_type はこの値ベース"
+    },
+    {
+      "key": "payout_ratio",
+      "label": "配当性向",
+      "unit": "percent"
+    },
+    {
+      "key": "doe",
+      "label": "DOE(自己資本配当率)",
+      "unit": "percent",
+      "note": "配当金総額 ÷ 自己資本(owners_equity 優先, 無ければ shareholders_equity) × 100。分母 ≤0/null は null"
+    },
+    {
+      "key": "net_asset_dividend_rate",
+      "label": "純資産配当率",
+      "unit": "percent",
+      "note": "配当金総額 ÷ 純資産 × 100。分母 ≤0/null は null"
+    },
+    {
+      "key": "consecutive_dividend_increase_years",
+      "label": "連続増配年数",
+      "unit": "years",
+      "note": "事前計算値。欠損時 null"
+    }
+  ],
+  "edinet_code": "E05682",
+  "security_code": "38450",
+  "records": [
+    {
+      "fiscal_year": 2011,
+      "annual_dps": 1300,
+      "annual_dps_adjusted": 5.493247882810712,
+      "payout_ratio": 31.6,
+      "change_type": "new",
+      "doe": 3.458043842232513,
+      "net_asset_dividend_rate": 3.4273571648901533,
+      "consecutive_dividend_increase_years": null,
+      "source_refs": [
+        {
+          "doc_id": "20120514033176",
+          "source": "tdnet"
+        },
+        {
+          "doc_id": "S1002CQN",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "S0008M0J",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20120509028326",
+          "source": "tdnet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2012,
+      "annual_dps": 400,
+      "annual_dps_adjusted": 4,
+      "payout_ratio": null,
+      "change_type": "decrease",
+      "doe": 3.710386325424203,
+      "net_asset_dividend_rate": 3.651005591254277,
+      "consecutive_dividend_increase_years": 0,
+      "source_refs": [
+        {
+          "doc_id": "20120509028326",
+          "source": "tdnet"
+        },
+        {
+          "doc_id": "S000B55I",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "S1002CQN",
+          "source": "edinet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2013,
+      "annual_dps": 0,
+      "annual_dps_adjusted": 0,
+      "payout_ratio": null,
+      "change_type": "cut",
+      "doe": null,
+      "net_asset_dividend_rate": null,
+      "consecutive_dividend_increase_years": 0,
+      "source_refs": [
+        {
+          "doc_id": "20130830018668",
+          "source": "tdnet"
+        },
+        {
+          "doc_id": "S000EERV",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "S1002CQN",
+          "source": "edinet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2022,
+      "annual_dps": 3,
+      "annual_dps_adjusted": 3,
+      "payout_ratio": 20.9,
+      "change_type": null,
+      "doe": 7.308399281294772,
+      "net_asset_dividend_rate": 7.277290870569949,
+      "consecutive_dividend_increase_years": 1,
+      "source_refs": [
+        {
+          "doc_id": "S100OKHQ",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20220513547023",
+          "source": "tdnet"
+        }
+      ]
+    },
+    {
+      "fiscal_year": 2023,
+      "annual_dps": 3,
+      "annual_dps_adjusted": 3,
+      "payout_ratio": 36,
+      "change_type": "flat",
+      "doe": 6.461224121578295,
+      "net_asset_dividend_rate": 6.414414763320197,
+      "consecutive_dividend_increase_years": 0,
+      "source_refs": [
+        {
+          "doc_id": "S100R7HY",
+          "source": "edinet"
+        },
+        {
+          "doc_id": "20230515572191",
+          "source": "tdnet"
+        }
+      ]
+    }
+  ],
+  "attribution": {
+    "source_label": "金融庁 EDINET / TDnet",
+    "license_note": "EDINET 由来データは金融庁 EDINET、TDnet 由来データは JPX TDnet を出典とし、加工は IRBANK が実施。再配信時は出典の明示が必要。",
+    "processed_by": "IRBANK"
+  }
+}

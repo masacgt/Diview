@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ja" style="--accent: #10b981; --accent-light: #34d399; --accent-glow: rgba(16, 185, 129, 0.35); --accent-badge-bg: rgba(16, 185, 129, 0.15); --dynamic-primary: #10b981; --dynamic-primary-rgb: 16, 185, 129; --dynamic-primary-dim: rgba(16, 185, 129, 0.15); --dynamic-primary-glow: rgba(16, 185, 129, 0.35); width: 390px; height: 1722px; overflow: hidden; position: relative;"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>設定・データ管理 - Kurogane Dividend</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;family=Noto+Sans+JP:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "primary": "#4edea3",
+            "tertiary-fixed-dim": "#ffb3ad",
+            "on-surface-variant": "#bbcabf",
+            "on-secondary-fixed": "#07006c",
+            "on-background": "#dae2fd",
+            "surface-variant": "#2d3449",
+            "inverse-on-surface": "#283044",
+            "background": "#0b1326",
+            "secondary": "#c0c1ff",
+            "on-surface": "#dae2fd",
+            "surface-container": "#171f33",
+            "surface-container-low": "#131b2e",
+            "surface-tint": "#4edea3",
+            "on-secondary-fixed-variant": "#2f2ebe",
+            "on-tertiary-fixed": "#410004",
+            "on-tertiary-container": "#79000e",
+            "surface-bright": "#31394d",
+            "error-container": "#93000a",
+            "on-primary-fixed-variant": "#005236",
+            "on-secondary-container": "#b0b2ff",
+            "outline": "#86948a",
+            "tertiary": "#ffb3ad",
+            "secondary-fixed": "#e1e0ff",
+            "on-secondary": "#1000a9",
+            "on-tertiary": "#68000a",
+            "surface-container-highest": "#2d3449",
+            "inverse-surface": "#dae2fd",
+            "surface-container-high": "#222a3d",
+            "surface-container-lowest": "#060e20",
+            "secondary-container": "#3131c0",
+            "on-tertiary-fixed-variant": "#930013",
+            "on-error-container": "#ffdad6",
+            "primary-fixed": "#6ffbbe",
+            "primary-fixed-dim": "#4edea3",
+            "surface": "#0b1326",
+            "error": "#ffb4ab",
+            "tertiary-container": "#ff7a73",
+            "outline-variant": "#3c4a42",
+            "on-primary-fixed": "#002113",
+            "on-primary-container": "#00422b",
+            "inverse-primary": "#006c49",
+            "secondary-fixed-dim": "#c0c1ff",
+            "tertiary-fixed": "#ffdad7",
+            "on-primary": "#003824",
+            "surface-dim": "#0b1326",
+            "primary-container": "#10b981",
+            "on-error": "#690005"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "fontFamily": {
+            "headline-lg": ["Space Grotesk", "Noto Sans JP", "sans-serif"],
+            "body-md": ["Manrope", "Noto Sans JP", "sans-serif"],
+            "label-sm": ["Manrope", "Noto Sans JP", "sans-serif"],
+            "display-lg": ["Space Grotesk", "Noto Sans JP", "sans-serif"],
+            "title-md": ["Manrope", "Noto Sans JP", "sans-serif"],
+            "numeric-hero": ["Space Grotesk", "sans-serif"],
+            "headline-md": ["Space Grotesk", "Noto Sans JP", "sans-serif"],
+            "label-lg": ["Manrope", "Noto Sans JP", "sans-serif"],
+            "body-sm": ["Manrope", "Noto Sans JP", "sans-serif"],
+            "body-lg": ["Manrope", "Noto Sans JP", "sans-serif"],
+            "label-md": ["Manrope", "Noto Sans JP", "sans-serif"],
+            "title-lg": ["Manrope", "Noto Sans JP", "sans-serif"]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      height: 18px;
+      width: 18px;
+      border-radius: 9999px;
+      background: #4edea3;
+      cursor: pointer;
+      -webkit-appearance: none;
+      margin-top: -6px;
+      box-shadow: 0 0 10px rgba(78, 222, 163, 0.5);
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 6px;
+      cursor: pointer;
+      background: #222a3d;
+      border-radius: 9999px;
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style id="dynamic-accent-style">:root { --dynamic-primary: #10b981; --dynamic-primary-rgb: 16, 185, 129; --dynamic-primary-dim: rgba(16, 185, 129, 0.15); --dynamic-primary-glow: rgba(16, 185, 129, 0.3); } .text-primary { color: var(--dynamic-primary) !important; } .bg-primary { background-color: var(--dynamic-primary) !important; } .border-primary { border-color: var(--dynamic-primary) !important; } .border-primary\/20 { border-color: rgba(var(--dynamic-primary-rgb), 0.25) !important; } .bg-primary\/10 { background-color: rgba(var(--dynamic-primary-rgb), 0.12) !important; } .shadow-primary\/20 { box-shadow: 0 4px 12px var(--dynamic-primary-glow) !important; } .peer:checked ~ div.peer-checked\:bg-primary { background-color: var(--dynamic-primary) !important; } input[type=range]::-webkit-slider-thumb { background: var(--dynamic-primary) !important; box-shadow: 0 0 10px var(--dynamic-primary-glow) !important; } input[type=range] { accent-color: var(--dynamic-primary) !important; } body.theme-light { background-color: #f1f5f9 !important; color: #0f172a !important; } body.theme-light header { background-color: rgba(255, 255, 255, 0.92) !important; border-color: #e2e8f0 !important; } body.theme-light header h1, body.theme-light header button { color: #0f172a !important; } body.theme-light nav { background-color: rgba(255, 255, 255, 0.95) !important; border-color: #e2e8f0 !important; } body.theme-light nav a span.text-on-surface-variant { color: #64748b !important; } body.theme-light .bg-surface-container { background-color: #ffffff !important; border-color: #e2e8f0 !important; box-shadow: 0 1px 3px rgba(0,0,0,0.05); } body.theme-light .bg-surface-container-high, body.theme-light .bg-surface-container-low, body.theme-light .bg-surface-container-lowest { background-color: #f8fafc !important; border-color: #e2e8f0 !important; } body.theme-light .bg-surface-container-highest { background-color: #cbd5e1 !important; } body.theme-light .text-on-surface { color: #0f172a !important; } body.theme-light .text-on-surface-variant { color: #475569 !important; } body.theme-light .border-outline-variant\/30, body.theme-light .border-outline-variant\/40 { border-color: #e2e8f0 !important; } body.theme-light .divide-outline-variant\/30 > :not([hidden]) ~ :not([hidden]) { border-color: #e2e8f0 !important; } body.theme-oled { background-color: #000000 !important; } body.theme-oled header, body.theme-oled nav { background-color: rgba(0, 0, 0, 0.95) !important; } body.theme-oled .bg-surface-container { background-color: #050505 !important; border-color: #1a1a1a !important; } body.theme-oled .bg-surface-container-high, body.theme-oled .bg-surface-container-low { background-color: #000000 !important; border-color: #222222 !important; }</style></head>
+<body class="bg-background text-on-surface font-body-md antialiased min-h-screen pb-28 select-none">
+<!-- Header / Navigation Anchor -->
+<header class="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-surface-container-lowest/90 backdrop-blur-md border-b border-outline-variant/40">
+<button aria-label="戻る" class="flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-surface-container text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-[24px]">arrow_back</span>
+</button>
+<h1 class="text-on-surface font-headline-md text-lg tracking-tight font-bold text-center flex-1">設定・データ管理</h1>
+<div class="flex size-10 items-center justify-end">
+</div>
+</header>
+<main class="max-w-md mx-auto px-4 py-4 space-y-6">
+<!-- 1. Kurogane Dividend PRO Subscription banner -->
+<!-- 2. データ管理＆バックアップ Section 【案1：デュアルセグメントタブ切替型】 -->
+<section class="space-y-3" id="data-management-section">
+<div class="flex items-center gap-2 px-1">
+<span class="material-symbols-outlined text-primary text-[20px]">database</span>
+<h3 class="text-sm font-bold text-on-surface tracking-wide uppercase font-headline-md">データ管理＆バックアップ</h3>
+</div>
+<div class="bg-surface-container rounded-xl p-4 border border-outline-variant/30 space-y-4 shadow-sm">
+<!-- Segmented Dual Tab Switcher -->
+<div class="p-1 bg-surface-container-low rounded-lg flex items-center border border-outline-variant/30 relative">
+<button class="flex-1 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-primary/15 text-primary border border-primary/30 shadow-sm" id="tab-btn-import" onclick="switchDataTab('import')" type="button">
+<span class="material-symbols-outlined text-[16px]">upload_file</span>
+<span>インポート（取込）</span>
+</button>
+<button class="flex-1 py-1.5 rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-all text-on-surface-variant hover:text-on-surface border border-transparent" id="tab-btn-export" onclick="switchDataTab('export')" type="button">
+<span class="material-symbols-outlined text-[16px]">download</span>
+<span>エクスポート（保存）</span>
+</button>
+</div>
+<!-- TAB CONTENT: IMPORT (取込) -->
+<div class="space-y-3.5" id="data-tab-import-pane">
+<!-- Supported Brokers Badges -->
+<div>
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[11px] font-semibold text-on-surface-variant">対応証券口座フォーマット</span>
+<span class="text-[10px] text-primary flex items-center gap-0.5 font-medium">
+<span class="material-symbols-outlined text-[12px]">verified</span>自動フォーマット判定
+        </span>
+</div>
+<div class="grid grid-cols-4 gap-1.5 text-center">
+<div class="py-1 px-1 rounded-md bg-surface-container-low border border-primary/20 text-on-surface flex flex-col items-center justify-center">
+<span class="text-[11px] font-bold text-primary">SBI証券</span>
+<span class="text-[9px] text-on-surface-variant/70">CSV読込</span>
+</div>
+<div class="py-1 px-1 rounded-md bg-surface-container-low border border-outline-variant/30 text-on-surface flex flex-col items-center justify-center">
+<span class="text-[11px] font-bold text-on-surface">楽天証券</span>
+<span class="text-[9px] text-on-surface-variant/70">CSV読込</span>
+</div>
+<div class="py-1 px-1 rounded-md bg-surface-container-low border border-outline-variant/30 text-on-surface flex flex-col items-center justify-center">
+<span class="text-[11px] font-bold text-on-surface">マネックス</span>
+<span class="text-[9px] text-on-surface-variant/70">CSV読込</span>
+</div>
+<div class="py-1 px-1 rounded-md bg-surface-container-low border border-outline-variant/30 text-on-surface flex flex-col items-center justify-center">
+<span class="text-[11px] font-bold text-on-surface">moomoo</span>
+<span class="text-[9px] text-on-surface-variant/70">CSV読込</span>
+</div>
+</div>
+</div>
+<!-- Drag & Drop Upload Zone -->
+<div class="relative">
+<label class="flex flex-col items-center justify-center p-4 border-2 border-dashed border-primary/35 hover:border-primary rounded-xl bg-surface-container-low/70 hover:bg-surface-container-low cursor-pointer transition-all group">
+<div class="size-11 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary/20 transition-all mb-2 shadow-inner">
+<span class="material-symbols-outlined text-[24px]">cloud_upload</span>
+</div>
+<span class="text-xs font-bold text-on-surface text-center">CSVファイルを選択 または ドロップ</span>
+<span class="text-[10px] text-on-surface-variant mt-1">.csv形式 / UTF-8・Shift-JIS自動識別（最大 10MB）</span>
+<div class="mt-2.5 px-3 py-1 rounded-full bg-surface-container text-primary text-[10px] font-semibold border border-primary/20 flex items-center gap-1 group-hover:border-primary/50 transition-colors">
+<span class="material-symbols-outlined text-[13px]">folder_open</span>
+<span>端末内のファイルを参照</span>
+</div>
+<input accept=".csv" class="sr-only" type="file"/>
+</label>
+</div>
+<!-- Format Guide / Help link & Last History -->
+<div class="space-y-2 pt-0.5">
+<div class="flex items-center justify-between text-[11px]">
+<span class="text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary">history</span>
+<span>前回インポート:</span>
+</span>
+<span class="font-numeric-hero text-[11px] text-on-surface font-semibold">2024/10/24 15:30 <span class="text-primary font-body-md font-bold text-[10px] bg-primary/10 px-1 py-0.2 rounded border border-primary/20 ml-1">SBI証券 48銘柄</span></span>
+</div>
+<div class="flex items-center justify-between text-[11px] pt-1 border-t border-outline-variant/20">
+<a class="text-primary text-[11px] font-medium flex items-center gap-1 hover:underline" href="#">
+<span class="material-symbols-outlined text-[13px]">help</span>
+<span>各証券会社CSVのダウンロード手順</span>
+</a>
+<span class="text-[10px] text-on-surface-variant">既存データへ上書き/追記</span>
+</div>
+</div>
+</div>
+<!-- TAB CONTENT: EXPORT (保存 / バックアップ) -->
+<div class="space-y-3.5 hidden" id="data-tab-export-pane">
+<div class="space-y-1.5">
+<div class="flex items-center justify-between">
+<span class="text-xs font-semibold text-on-surface">エクスポート対象データ</span>
+<span class="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full font-bold">全50銘柄 登録済</span>
+</div>
+<p class="text-[11px] text-on-surface-variant">保有株数、取得単価、受取予定配当金、為替レート設定などアプリ内の全構成データを書き出します。</p>
+</div>
+<!-- Export Format Selector -->
+<div>
+<span class="text-[11px] font-semibold text-on-surface-variant block mb-1.5">出力ファイル形式</span>
+<div class="grid grid-cols-2 gap-2">
+<label class="cursor-pointer border-2 border-primary bg-primary/10 rounded-lg p-2.5 flex items-center justify-between export-format-card" data-format="csv" onclick="selectExportFormat('csv')">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">table_view</span>
+<div>
+<p class="text-xs font-bold text-on-surface leading-none">CSV形式</p>
+<p class="text-[10px] text-on-surface-variant mt-0.5">Excel / 表計算対応</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-primary text-[16px] export-check-icon" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</label>
+<label class="cursor-pointer border border-outline-variant/40 bg-surface-container-low rounded-lg p-2.5 flex items-center justify-between hover:border-outline export-format-card" data-format="json" onclick="selectExportFormat('json')">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline text-[20px]">code_blocks</span>
+<div>
+<p class="text-xs font-bold text-on-surface-variant leading-none">JSON形式</p>
+<p class="text-[10px] text-on-surface-variant/80 mt-0.5">完全復元用バックアップ</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline text-[16px] export-check-icon">radio_button_unchecked</span>
+</label>
+</div>
+</div>
+<!-- Export Action Button -->
+<div class="space-y-1.5">
+<button class="w-full py-2.5 px-3 rounded-lg bg-primary hover:brightness-110 active:scale-[0.99] text-on-primary text-xs font-bold flex items-center justify-center gap-2 shadow-sm shadow-primary/25 transition-all" type="button">
+<span class="material-symbols-outlined text-[18px]">download_for_offline</span>
+<span>ポートフォリオデータを書き出す (.csv)</span>
+</button>
+<div class="flex items-center justify-between text-[10px] text-on-surface-variant px-1">
+<span>推定ファイル容量: 約 42 KB</span>
+<span>文字コード: UTF-8 (BOM付き)</span>
+</div>
+</div>
+</div>
+<!-- Security & Privacy Guarantee Footer -->
+<div class="border-t border-outline-variant/30 pt-2.5 flex items-start gap-1.5 text-[10px] text-on-surface-variant/75 bg-surface-container-low/40 p-2 rounded-lg">
+<span class="material-symbols-outlined text-[15px] text-primary shrink-0 mt-0.5">verified_user</span>
+<span class="leading-relaxed">
+<strong class="text-on-surface font-semibold">安心のローカル暗号化処理:</strong> CSV/JSONファイルは端末内でのみ処理されます。外部サーバーへの通信やデータ蓄積は一切行われません。
+    </span>
+</div>
+</div>
+</section>
+<!-- 3. 外観・テーマ設定 Section -->
+<section class="space-y-3" id="theme-settings-section">
+<div class="flex items-center gap-2 px-1">
+<span class="material-symbols-outlined text-primary text-[20px]" id="theme-section-icon">palette</span>
+<h3 class="text-sm font-bold text-on-surface tracking-wide uppercase font-headline-md">外観・テーマ設定</h3>
+</div>
+<div class="bg-surface-container rounded-xl p-4 border border-outline-variant/30 space-y-4">
+<!-- Theme Mode Selection -->
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="text-xs font-semibold text-on-surface">カラーテーマ</span>
+<span class="text-[10px] text-primary border px-2 py-0.5 rounded-full font-medium transition-colors" id="theme-status-badge" style="background-color: rgba(16, 185, 129, 0.15); border-color: rgb(16, 185, 129); color: rgb(16, 185, 129);">ダーク適用中</span>
+</div>
+<div class="grid grid-cols-3 gap-2" id="theme-btn-group"><button class="theme-mode-btn py-2 rounded-lg border-2 text-xs font-bold flex items-center justify-center gap-1.5 transition-all" data-theme="dark" id="btn-theme-dark" onclick="window.setAppTheme('dark')" style="border-color: rgb(16, 185, 129); color: rgb(16, 185, 129); background-color: rgba(var(--dynamic-primary-rgb, 16, 185, 129), 0.12); font-weight: 700; border-width: 2px;" type="button"><span class="material-symbols-outlined text-[16px]">dark_mode</span>ダーク</button><button class="theme-mode-btn py-2 rounded-lg border text-xs font-medium hover:text-on-surface flex items-center justify-center gap-1.5 transition-all text-on-surface-variant" data-theme="light" id="btn-theme-light" onclick="window.setAppTheme('light')" style="border-color: var(--border); color: var(--text-muted); font-weight: 500; border-width: 1px; background-color: transparent;" type="button"><span class="material-symbols-outlined text-[16px]">light_mode</span>ライト</button><button class="theme-mode-btn py-2 rounded-lg border text-xs font-medium hover:text-on-surface flex items-center justify-center gap-1.5 transition-all text-on-surface-variant" data-theme="system" id="btn-theme-system" onclick="window.setAppTheme('system')" style="border-color: var(--border); color: var(--text-muted); font-weight: 500; border-width: 1px; background-color: transparent;" type="button"><span class="material-symbols-outlined text-[16px]">devices</span>システム</button></div>
+</div>
+<!-- Accent Color Selection -->
+<div class="border-t border-outline-variant/30 pt-3">
+<div class="flex items-center justify-between mb-2.5">
+<span class="text-xs font-semibold text-on-surface">アクセントカラー</span>
+<span class="text-[11px] font-medium transition-colors" id="accent-label" style="color: rgb(16, 185, 129);">エメラルド</span>
+</div>
+<div class="flex items-center justify-between px-2" id="accent-color-group">
+<!-- Emerald -->
+<button aria-label="エメラルド" class="accent-btn size-8 rounded-full bg-[#10b981] ring-offset-2 flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 ring-2" data-accent="emerald" data-color="#10b981" data-glow="rgba(16, 185, 129, 0.25)" data-name="エメラルド" style="outline: none; border-color: rgb(16, 185, 129); box-shadow: rgb(23, 31, 51) 0px 0px 0px 2px, rgb(16, 185, 129) 0px 0px 0px 4px;" type="button"><span class="material-symbols-outlined text-[18px] text-white font-bold">check</span></button>
+<!-- Cyan -->
+<button aria-label="シアン" class="accent-btn size-8 rounded-full bg-[#06b6d4] hover:opacity-100 flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 opacity-80" data-accent="cyan" data-color="#06b6d4" data-glow="rgba(6, 182, 212, 0.25)" data-name="シアン" style="box-shadow: none; border-color: rgb(6, 182, 212);" type="button"></button>
+<!-- Blue -->
+<button aria-label="ブルー" class="accent-btn size-8 rounded-full bg-[#3b82f6] hover:opacity-100 flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 opacity-80" data-accent="blue" data-color="#3b82f6" data-glow="rgba(59, 130, 246, 0.25)" data-name="ブルー" style="box-shadow: none; border-color: rgb(59, 130, 246);" type="button"></button>
+<!-- Amber -->
+<button aria-label="アンバー" class="accent-btn size-8 rounded-full bg-[#f59e0b] hover:opacity-100 flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 opacity-80" data-accent="amber" data-color="#f59e0b" data-glow="rgba(245, 158, 11, 0.25)" data-name="アンバー" style="box-shadow: none; border-color: rgb(245, 158, 11);" type="button"></button>
+<!-- Purple -->
+<button aria-label="パープル" class="accent-btn size-8 rounded-full bg-[#8b5cf6] hover:opacity-100 flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 opacity-80" data-accent="purple" data-color="#8b5cf6" data-glow="rgba(139, 92, 246, 0.25)" data-name="パープル" style="box-shadow: none; border-color: rgb(139, 92, 246);" type="button"></button>
+</div>
+</div>
+<!-- OLED Black Toggle -->
+<div class="border-t border-outline-variant/30 pt-3 flex items-center justify-between">
+<div>
+<div class="flex items-center gap-1.5">
+<p class="text-xs font-semibold text-on-surface">有機ELダーク (完全ブラック)</p>
+<span class="text-[10px] border px-1.5 py-0.2 rounded font-bold" style="color: var(--accent); border-color: var(--accent); background-color: var(--accent-badge-bg);">節電</span>
+</div>
+<p class="text-[11px] text-on-surface-variant mt-0.5">ピクセル発光を最小化し黒色消費電力を抑制</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" id="oled-toggle" onchange="window.toggleOledMode(this.checked)" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+</section>
+<!-- 4. 表示・計算カスタマイズ Section -->
+<section class="space-y-3">
+<div class="flex items-center gap-2 px-1">
+<span class="material-symbols-outlined text-primary text-[20px]">tune</span>
+<h3 class="text-sm font-bold text-on-surface tracking-wide uppercase font-headline-md">表示・計算カスタマイズ</h3>
+</div>
+<div class="bg-surface-container rounded-xl p-4 border border-outline-variant/30 space-y-4">
+<!-- Yield basis -->
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="text-xs font-semibold text-on-surface">配当利回りの計算基準</span>
+<span class="text-[10px] text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded border border-outline-variant/30">利回り計算ロジック</span>
+</div>
+<div class="grid grid-cols-2 gap-2">
+<label class="cursor-pointer border-2 border-primary bg-primary/10 rounded-lg p-3 flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="text-xs font-bold text-on-surface">評価額基準</span>
+<span class="material-symbols-outlined text-primary text-[18px]" style="font-variation-settings: 'FILL' 1;">radio_button_checked</span>
+</div>
+<span class="text-[11px] text-on-surface-variant mt-1">現在値ベース</span>
+</label>
+<label class="cursor-pointer border border-outline-variant/40 bg-surface-container-low rounded-lg p-3 flex flex-col justify-between hover:border-outline">
+<div class="flex items-center justify-between">
+<span class="text-xs font-bold text-on-surface-variant">取得額基準</span>
+<span class="material-symbols-outlined text-outline text-[18px]">radio_button_unchecked</span>
+</div>
+<span class="text-[11px] text-on-surface-variant/80 mt-1">買付単価 (YOC)</span>
+</label>
+</div>
+</div>
+<!-- Tax 20.315% -->
+<div class="border-t border-outline-variant/30 pt-3 flex items-center justify-between">
+<div>
+<p class="text-xs font-semibold text-on-surface">税金計算設定</p>
+<p class="text-[11px] text-on-surface-variant">税引後表示 (国内税 20.315% を控除)</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- US Stock 10% Withholding -->
+<div class="border-t border-outline-variant/30 pt-3 flex items-center justify-between">
+<div>
+<div class="flex items-center gap-1.5">
+<p class="text-xs font-semibold text-on-surface">米国株 現地源泉徴収控除 (10%)</p>
+<span class="text-[10px] text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.2 rounded font-bold">新NISA連動</span>
+</div>
+<p class="text-[11px] text-on-surface-variant">外国税額控除前の手取り概算に反映</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- Target Yield -->
+<div class="border-t border-outline-variant/30 pt-3">
+<div class="flex items-center justify-between mb-2">
+<div>
+<span class="text-xs font-semibold text-on-surface">目標利回り (ロードマップ試算)</span>
+<span class="text-[10px] text-on-surface-variant bg-surface-container-low px-1.5 py-0.5 rounded border border-outline-variant/30 ml-1.5">シミュレーション基準</span>
+</div>
+<span class="text-sm font-bold text-primary font-numeric-hero">4.0%</span>
+</div>
+<div class="grid grid-cols-3 gap-1.5">
+<button class="py-1.5 rounded-md bg-surface-container-low border border-outline-variant/40 text-xs text-on-surface-variant hover:text-on-surface" type="button">3.5%(堅実)</button>
+<button class="py-1.5 rounded-md bg-primary text-on-primary font-bold text-xs shadow-sm shadow-primary/20" type="button">4.0%(標準)</button>
+<button class="py-1.5 rounded-md bg-surface-container-low border border-outline-variant/40 text-xs text-on-surface-variant hover:text-on-surface" type="button">4.5%(積極)</button>
+</div>
+</div>
+<!-- Sector "Other" threshold slider -->
+<div class="border-t border-outline-variant/30 pt-3">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-xs font-semibold text-on-surface">構成比「その他」集約閾値</span>
+<span class="text-xs font-bold text-primary font-numeric-hero">5%</span>
+</div>
+<input class="w-full accent-primary bg-surface-container-high h-1.5 rounded-lg appearance-none cursor-pointer" max="10" min="3" type="range" value="5"/>
+<div class="flex justify-between text-[10px] text-on-surface-variant mt-1.5">
+<span class="">3%(詳細)</span>
+<span class="font-bold text-primary">5%(推奨)</span>
+<span class="">10%(簡易)</span>
+</div>
+</div>
+</div>
+</section>
+<!-- 5. 通知・リマインダー設定 Section -->
+<section class="space-y-3">
+<div class="flex items-center gap-2 px-1">
+<span class="material-symbols-outlined text-primary text-[20px]">notifications</span>
+<h3 class="text-sm font-bold text-on-surface tracking-wide uppercase font-headline-md">通知・リマインダー設定</h3>
+</div>
+<div class="bg-surface-container rounded-xl p-4 border border-outline-variant/30 space-y-3">
+<!-- Ex-dividend / payment reminder -->
+<div class="flex items-center justify-between">
+<div>
+<div class="flex items-center gap-1.5">
+<p class="text-xs font-semibold text-on-surface">配当金の権利落ち日・入金通知</p>
+<span class="text-[9px] text-primary bg-primary/10 border border-primary/20 px-1 py-0.2 rounded font-bold">NEW</span>
+</div>
+<p class="text-[11px] text-on-surface-variant">権利付最終日および振込予定日をプッシュ通知</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- Buy signal alert -->
+<div class="border-t border-outline-variant/30 pt-3 flex items-center justify-between">
+<div>
+<p class="text-xs font-semibold text-on-surface">買場シグナル・株価アラート</p>
+<p class="text-[11px] text-on-surface-variant">利回り4.5%突破時や年初来安値更新時</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- Notification timing -->
+<div class="border-t border-outline-variant/30 pt-3 flex items-center justify-between">
+<div>
+<p class="text-xs font-semibold text-on-surface">通知時間帯の指定</p>
+<p class="text-[11px] text-on-surface-variant">市場寄り前・引け後まとめ</p>
+</div>
+<span class="px-2.5 py-1 text-xs font-semibold rounded-md bg-surface-container-high border border-outline-variant/40 text-primary">
+            朝 08:30 / 夕 17:30
+          </span>
+</div>
+</div>
+</section>
+<!-- 6. セキュリティ＆プライバシー Section -->
+<section class="space-y-3">
+<div class="flex items-center gap-2 px-1">
+<span class="material-symbols-outlined text-primary text-[20px]">shield</span>
+<h3 class="text-sm font-bold text-on-surface tracking-wide uppercase font-headline-md">セキュリティ＆プライバシー</h3>
+</div>
+<div class="bg-surface-container rounded-xl p-4 border border-outline-variant/30 space-y-3">
+<!-- Biometrics -->
+<div class="flex items-center justify-between">
+<div>
+<div class="flex items-center gap-1.5">
+<p class="text-xs font-semibold text-on-surface">生体認証 (Face ID / 指紋認証)</p>
+<span class="text-[10px] text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.2 rounded font-bold">推奨</span>
+</div>
+<p class="text-[11px] text-on-surface-variant">アプリ起動時のロック解除</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- Amount mask -->
+<div class="border-t border-outline-variant/30 pt-3 flex items-center justify-between">
+<div>
+<div class="flex items-center gap-1.5">
+<p class="text-xs font-semibold text-on-surface">起動時の金額伏字マスク</p>
+<span class="text-[10px] text-on-surface-variant bg-surface-container-low px-1.5 py-0.2 rounded border border-outline-variant/30">覗き見防止</span>
+</div>
+<p class="text-[11px] text-on-surface-variant">電車内など外出時の画面閲覧用</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- Reset Data -->
+<div class="border-t border-outline-variant/30 pt-3 flex items-center justify-between">
+<div>
+<p class="text-xs font-semibold text-tertiary">ローカルデータ完全消去</p>
+<p class="text-[11px] text-on-surface-variant">端末内の保有・設定データをすべて削除</p>
+</div>
+<button class="px-3 py-1 rounded bg-error-container/40 hover:bg-error-container text-error text-xs font-bold border border-error/30 transition-colors" type="button">
+            初期化
+          </button>
+</div>
+</div>
+</section>
+<!-- 7. アプリ情報・サポート Section -->
+<section class="space-y-3">
+<div class="flex items-center gap-2 px-1">
+<span class="material-symbols-outlined text-primary text-[20px]">info</span>
+<h3 class="text-sm font-bold text-on-surface tracking-wide uppercase font-headline-md">アプリ情報・サポート</h3>
+</div>
+<div class="bg-surface-container rounded-xl border border-outline-variant/30 divide-y divide-outline-variant/30 overflow-hidden text-xs">
+<a class="flex items-center justify-between p-3.5 hover:bg-surface-container-high transition-colors text-on-surface" href="#">
+<span class="font-medium">お問い合わせ・フィードバック</span>
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant">chevron_right</span>
+</a>
+<a class="flex items-center justify-between p-3.5 hover:bg-surface-container-high transition-colors text-on-surface" href="#">
+<span class="font-medium">利用規約＆プライバシーポリシー</span>
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant">chevron_right</span>
+</a>
+<a class="flex items-center justify-between p-3.5 hover:bg-surface-container-high transition-colors text-on-surface" href="#">
+<span class="font-medium">アプリをレビューで応援</span>
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant">open_in_new</span>
+</a>
+<div class="flex items-center justify-between p-3.5 bg-surface-container-low text-on-surface-variant">
+<span class="">バージョン</span>
+<span class="font-numeric-hero text-xs font-medium">v1.2.0 (Build 248)</span>
+</div>
+</div>
+</section>
+<!-- 8. Footer -->
+<footer class="pt-2 pb-6 text-center space-y-1 text-on-surface-variant/70 text-[11px]"><div class="flex items-center justify-center gap-1.5"><span class="material-symbols-outlined text-[14px] text-primary">lock</span><span class="">金融データは端末内暗号化保存されています</span></div><p class="font-headline-md text-[10px] tracking-wider text-outline">© 2025 Kurogane Dividend System</p><script>window.currentAppTheme = 'dark'; window.isOledBlack = false; function getSystemPreference() { return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; } window.setAppTheme = function(mode) { window.currentAppTheme = mode; const effectiveTheme = mode === 'system' ? getSystemPreference() : mode; const body = document.body; const root = document.documentElement; body.classList.remove('theme-light', 'theme-oled'); if (effectiveTheme === 'light') { root.classList.remove('dark'); body.classList.add('theme-light'); } else { root.classList.add('dark'); if (window.isOledBlack) body.classList.add('theme-oled'); } const badge = document.getElementById('theme-status-badge'); if (badge) { if (mode === 'dark') { badge.textContent = window.isOledBlack ? '有機ELダーク適用中' : 'ダーク適用中'; } else if (mode === 'light') { badge.textContent = 'ライト適用中'; } else { badge.textContent = 'システム連動中 (' + (effectiveTheme === 'light' ? '明' : '暗') + ')'; } } const curAccent = getComputedStyle(document.documentElement).getPropertyValue('--dynamic-primary').trim() || '#10b981'; ['dark', 'light', 'system'].forEach(function(m) { const btn = document.getElementById('btn-theme-' + m); if (btn) { if (m === mode) { btn.style.borderColor = curAccent; btn.style.color = curAccent; btn.style.borderWidth = '2px'; btn.style.fontWeight = '700'; btn.style.backgroundColor = 'rgba(var(--dynamic-primary-rgb, 16, 185, 129), 0.12)'; btn.classList.remove('text-on-surface-variant'); } else { btn.style.borderColor = effectiveTheme === 'light' ? '#cbd5e1' : '#3c4a42'; btn.style.color = effectiveTheme === 'light' ? '#64748b' : '#bbcabf'; btn.style.borderWidth = '1px'; btn.style.fontWeight = '500'; btn.style.backgroundColor = 'transparent'; btn.classList.add('text-on-surface-variant'); } } }); }; window.toggleOledMode = function(checked) { window.isOledBlack = checked; if (checked && window.currentAppTheme === 'light') { window.setAppTheme('dark'); } else { window.setAppTheme(window.currentAppTheme); } }; if (window.matchMedia) { window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', function() { if (window.currentAppTheme === 'system') window.setAppTheme('system'); }); }</script></footer>
+</main>
+<!-- Bottom Navigation Bar (Fixed 4 Tabs with REQUIRED icons: flag for ロードマップ) -->
+<nav class="fixed bottom-0 left-0 right-0 z-40 bg-surface-container-lowest/95 backdrop-blur-md border-t border-outline-variant/40">
+<div class="max-w-md mx-auto grid grid-cols-4 px-2 py-2">
+<!-- Tab 1: 資産管理 -->
+<a class="flex flex-col items-center justify-center gap-1 py-1 text-primary transition-colors group" href="#">
+<span class="material-symbols-outlined text-[24px] group-hover:scale-110 transition-transform">credit_card</span>
+<span class="text-[10px] font-medium tracking-tight">資産管理</span>
+</a>
+<!-- Tab 2: 年間配当 -->
+<a class="flex flex-col items-center justify-center gap-1 py-1 text-on-surface-variant hover:text-primary transition-colors group" href="#">
+<span class="material-symbols-outlined text-[24px] group-hover:scale-110 transition-transform">pie_chart</span>
+<span class="text-[10px] font-medium tracking-tight">年間配当</span>
+</a>
+<!-- Tab 3: ロードマップ (CRITICAL: Material Symbol "flag") -->
+<a class="flex flex-col items-center justify-center gap-1 py-1 text-on-surface-variant hover:text-primary transition-colors group" href="#">
+<span class="material-symbols-outlined text-[24px] group-hover:scale-110 transition-transform">flag</span>
+<span class="text-[10px] font-medium tracking-tight">ロードマップ</span>
+</a>
+<!-- Tab 4: 月別グラフ -->
+<a class="flex flex-col items-center justify-center gap-1 py-1 text-on-surface-variant hover:text-primary transition-colors group" href="#">
+<span class="material-symbols-outlined text-[24px] group-hover:scale-110 transition-transform">calendar_month</span>
+<span class="text-[10px] font-medium tracking-tight">月別グラフ</span>
+</a>
+</div>
+</nav>
+<!-- Data Management Tab Switcher Script -->
+<script>
+window.switchDataTab = function(tab) {
+  const importBtn = document.getElementById('tab-btn-import');
+  const exportBtn = document.getElementById('tab-btn-export');
+  const importPane = document.getElementById('data-tab-import-pane');
+  const exportPane = document.getElementById('data-tab-export-pane');
+
+  if (!importBtn || !exportBtn || !importPane || !exportPane) return;
+
+  if (tab === 'import') {
+    // Show import
+    importPane.classList.remove('hidden');
+    exportPane.classList.add('hidden');
+
+    importBtn.className = 'flex-1 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-primary/15 text-primary border border-primary/30 shadow-sm';
+    exportBtn.className = 'flex-1 py-1.5 rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-all text-on-surface-variant hover:text-on-surface border border-transparent';
+  } else {
+    // Show export
+    importPane.classList.add('hidden');
+    exportPane.classList.remove('hidden');
+
+    exportBtn.className = 'flex-1 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-primary/15 text-primary border border-primary/30 shadow-sm';
+    importBtn.className = 'flex-1 py-1.5 rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-all text-on-surface-variant hover:text-on-surface border border-transparent';
+  }
+};
+
+window.selectExportFormat = function(format) {
+  document.querySelectorAll('.export-format-card').forEach(card => {
+    const isSelected = card.dataset.format === format;
+    const icon = card.querySelector('.export-check-icon');
+    const title = card.querySelector('p:first-of-type');
+    const iconLead = card.querySelector('span:first-of-type');
+
+    if (isSelected) {
+      card.className = 'cursor-pointer border-2 border-primary bg-primary/10 rounded-lg p-2.5 flex items-center justify-between export-format-card';
+      if (icon) {
+        icon.textContent = 'check_circle';
+        icon.className = 'material-symbols-outlined text-primary text-[16px] export-check-icon';
+        icon.style.fontVariationSettings = "'FILL' 1";
+      }
+      if (title) title.className = 'text-xs font-bold text-on-surface leading-none';
+      if (iconLead) iconLead.className = 'material-symbols-outlined text-primary text-[20px]';
+    } else {
+      card.className = 'cursor-pointer border border-outline-variant/40 bg-surface-container-low rounded-lg p-2.5 flex items-center justify-between hover:border-outline export-format-card';
+      if (icon) {
+        icon.textContent = 'radio_button_unchecked';
+        icon.className = 'material-symbols-outlined text-outline text-[16px] export-check-icon';
+        icon.style.fontVariationSettings = "'FILL' 0";
+      }
+      if (title) title.className = 'text-xs font-bold text-on-surface-variant leading-none';
+      if (iconLead) iconLead.className = 'material-symbols-outlined text-outline text-[20px]';
+    }
+  });
+
+  const exportBtnText = document.querySelector('#data-tab-export-pane button span:last-child');
+  if (exportBtnText) {
+    exportBtnText.textContent = format === 'csv' ? 'ポートフォリオデータを書き出す (.csv)' : '完全バックアップを書き出す (.json)';
+  }
+};
+</script>
+<script id="theme-controller-script">
+(function() {
+  const root = document.documentElement;
+  const body = document.body;
+
+  let currentTheme = 'dark'; // 'dark' | 'light' | 'system'
+  let isOled = false;
+  let currentAccent = 'emerald';
+
+  const accents = {
+    emerald: { color: '#10b981', light: '#34d399', glow: 'rgba(16, 185, 129, 0.35)', badge: 'rgba(16, 185, 129, 0.15)', name: 'エメラルド' },
+    cyan:    { color: '#06b6d4', light: '#22d3ee', glow: 'rgba(6, 182, 212, 0.35)', badge: 'rgba(6, 182, 212, 0.15)', name: 'シアン' },
+    blue:    { color: '#3b82f6', light: '#60a5fa', glow: 'rgba(59, 130, 246, 0.35)', badge: 'rgba(59, 130, 246, 0.15)', name: 'ブルー' },
+    amber:   { color: '#f59e0b', light: '#fbbf24', glow: 'rgba(245, 158, 11, 0.35)', badge: 'rgba(245, 158, 11, 0.15)', name: 'アンバー' },
+    purple:  { color: '#8b5cf6', light: '#a78bfa', glow: 'rgba(139, 92, 246, 0.35)', badge: 'rgba(139, 92, 246, 0.15)', name: 'パープル' }
+  };
+
+  function applyTheme(theme, oledState) {
+    currentTheme = theme;
+    isOled = oledState;
+
+    let effectiveTheme = theme;
+    if (theme === 'system') {
+      effectiveTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+
+    body.classList.remove('theme-light', 'theme-oled', 'dark');
+
+    if (effectiveTheme === 'light') {
+      body.classList.add('theme-light');
+      root.classList.remove('dark');
+    } else {
+      root.classList.add('dark');
+      if (isOled) {
+        body.classList.add('theme-oled');
+      }
+    }
+
+    const themeBadge = document.getElementById('theme-status-badge');
+    if (themeBadge) {
+      if (theme === 'dark') themeBadge.textContent = isOled ? '有機ELダーク適用中' : 'ダーク適用中';
+      else if (theme === 'light') themeBadge.textContent = 'ライト適用中';
+      else themeBadge.textContent = 'システム連動中';
+    }
+
+    // Update theme button active indicators
+    document.querySelectorAll('.theme-mode-btn').forEach(btn => {
+      const t = btn.dataset.theme;
+      if (t === theme) {
+        btn.style.borderColor = 'var(--accent)';
+        btn.style.color = 'var(--accent)';
+        btn.style.fontWeight = '700';
+        btn.style.borderWidth = '2px';
+      } else {
+        btn.style.borderColor = 'var(--border)';
+        btn.style.color = 'var(--text-muted)';
+        btn.style.fontWeight = '500';
+        btn.style.borderWidth = '1px';
+      }
+    });
+  }
+
+  function applyAccent(key) {
+    if (!accents[key]) return;
+    currentAccent = key;
+    const conf = accents[key];
+
+    root.style.setProperty('--accent', conf.color);
+    root.style.setProperty('--accent-light', conf.light);
+    root.style.setProperty('--accent-glow', conf.glow);
+    root.style.setProperty('--accent-badge-bg', conf.badge);
+
+    const label = document.getElementById('accent-label');
+    if (label) {
+      label.textContent = conf.name;
+      label.style.color = conf.color;
+    }
+
+    document.querySelectorAll('.accent-btn').forEach(btn => {
+      const isSelected = btn.dataset.accent === key;
+      btn.innerHTML = '';
+      if (isSelected) {
+        btn.classList.remove('opacity-80');
+        btn.classList.add('ring-2');
+        btn.style.borderColor = conf.color;
+        btn.style.boxShadow = '0 0 0 2px var(--bg-card), 0 0 0 4px ' + conf.color;
+        const check = document.createElement('span');
+        check.className = 'material-symbols-outlined text-[18px] text-white font-bold';
+        check.textContent = 'check';
+        btn.appendChild(check);
+      } else {
+        btn.classList.add('opacity-80');
+        btn.classList.remove('ring-2');
+        btn.style.boxShadow = 'none';
+      }
+    });
+  }
+
+  // Theme button events
+  document.querySelectorAll('.theme-mode-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      applyTheme(this.dataset.theme, isOled);
+    });
+  });
+
+  // OLED switch event
+  const oledToggle = document.getElementById('oled-toggle');
+  if (oledToggle) {
+    oledToggle.addEventListener('change', function() {
+      isOled = this.checked;
+      if (currentTheme === 'light') {
+        // Switch to dark when OLED black requested
+        applyTheme('dark', isOled);
+      } else {
+        applyTheme(currentTheme, isOled);
+      }
+    });
+  }
+
+  // Accent buttons events
+  document.querySelectorAll('.accent-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      applyAccent(this.dataset.accent);
+    });
+  });
+
+  // Dynamic Target Yield Buttons
+  document.querySelectorAll('section:nth-of-type(3) .grid-cols-3 button').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const parent = this.parentElement;
+      parent.querySelectorAll('button').forEach(b => {
+        b.className = 'py-1.5 rounded-md bg-surface-container-low border border-outline-variant/40 text-xs text-on-surface-variant hover:text-on-surface';
+        b.style.backgroundColor = '';
+        b.style.color = '';
+      });
+      this.className = 'py-1.5 rounded-md font-bold text-xs shadow-sm';
+      this.style.backgroundColor = 'var(--accent)';
+      this.style.color = '#ffffff';
+      const heroVal = document.querySelector('main > section:nth-of-type(3) span.font-numeric-hero');
+      if (heroVal) {
+        const match = this.textContent.match(/([0-9.]+%)/);
+        if (match) heroVal.textContent = match[1];
+      }
+    });
+  });
+
+  // Threshold slider live update
+  const slider = document.querySelector('input[type=range]');
+  if (slider) {
+    slider.addEventListener('input', function() {
+      const valSpan = this.previousElementSibling ? this.previousElementSibling.querySelector('span:last-child') : null;
+      if (valSpan) valSpan.textContent = this.value + '%';
+    });
+  }
+
+  // Initial apply
+  applyAccent('emerald');
+  applyTheme('dark', false);
+})();
+</script><script>document.addEventListener('DOMContentLoaded', function() { const colors = { emerald: { hex: '#10b981', rgb: '16, 185, 129', name: 'エメラルド' }, cyan: { hex: '#06b6d4', rgb: '6, 182, 212', name: 'シアン' }, blue: { hex: '#3b82f6', rgb: '59, 130, 246', name: 'ブルー' }, amber: { hex: '#f59e0b', rgb: '245, 158, 11', name: 'アンバー' }, purple: { hex: '#8b5cf6', rgb: '139, 92, 246', name: 'パープル' } }; function updateAccent(key) { const c = colors[key]; if (!c) return; const root = document.documentElement; root.style.setProperty('--dynamic-primary', c.hex); root.style.setProperty('--dynamic-primary-rgb', c.rgb); root.style.setProperty('--dynamic-primary-dim', 'rgba(' + c.rgb + ', 0.15)'); root.style.setProperty('--dynamic-primary-glow', 'rgba(' + c.rgb + ', 0.35)'); const lbl = document.getElementById('accent-label'); if (lbl) { lbl.textContent = c.name; lbl.style.color = c.hex; } const badge = document.getElementById('theme-status-badge'); if (badge) { badge.style.borderColor = c.hex; badge.style.color = c.hex; badge.style.backgroundColor = 'rgba(' + c.rgb + ', 0.15)'; } const darkBtn = document.getElementById('btn-theme-dark'); if (darkBtn) { darkBtn.style.borderColor = c.hex; darkBtn.style.color = c.hex; } document.querySelectorAll('.accent-btn').forEach(btn => { const isMatch = btn.dataset.accent === key; btn.innerHTML = ''; if (isMatch) { btn.classList.remove('opacity-80'); btn.classList.add('ring-2'); btn.style.boxShadow = '0 0 0 2px #171f33, 0 0 0 4px ' + c.hex; const span = document.createElement('span'); span.className = 'material-symbols-outlined text-[18px] text-white font-bold'; span.textContent = 'check'; btn.appendChild(span); } else { btn.classList.add('opacity-80'); btn.classList.remove('ring-2'); btn.style.boxShadow = 'none'; } }); } document.querySelectorAll('.accent-btn').forEach(btn => { btn.addEventListener('click', function(e) { e.preventDefault(); const key = this.dataset.accent; updateAccent(key); }); }); updateAccent('emerald'); });</script>
+<div aria-hidden="true" data-snapdom-sandbox="true" id="snapdom-sandbox" style="position: absolute; left: -9999px; top: -9999px; width: 0px; height: 0px; overflow: hidden;"></div>
+</body></html>

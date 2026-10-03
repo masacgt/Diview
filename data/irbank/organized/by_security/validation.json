@@ -1,0 +1,12 @@
+{
+  "validated": true,
+  "securities": 3960,
+  "securities_csv_rows": 3960,
+  "financial_periods": 422987,
+  "financial_periods_csv_rows": 422987,
+  "dividend_events": 18906,
+  "dividend_csv_rows": 18906,
+  "companies_with_dividend_data": 1468,
+  "events_with_rights_date": 0,
+  "rights_dates_unavailable": 18906
+}

@@ -1,0 +1,25 @@
+{
+  "updated_at": "2026-09-27T05:54:54Z",
+  "total": 3741,
+  "saved": 3728,
+  "unsaved": 13,
+  "batch_files": 785,
+  "not_found": [],
+  "empty_periods": [
+    "E05821",
+    "E33589",
+    "E08970",
+    "E04812",
+    "E05958",
+    "E40729",
+    "E38785",
+    "E41495",
+    "E41542",
+    "E33555",
+    "E30817",
+    "E30773",
+    "E31130"
+  ],
+  "remaining_count": 13,
+  "note": "All 3741 EDINET codes queried via get_financials (years=30, period_type=annual, 5 codes/call). saved = codes with at least one annual period. 13 codes return empty periods on repeated queries (no annual financial data in EDINET); 0 not_found."
+}

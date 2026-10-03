@@ -1,0 +1,412 @@
+{
+  "fields": [
+    {
+      "key": "stock_price",
+      "label": "株価(終値)",
+      "unit": "jpy",
+      "note": "当該決算期末時点の株数基準。同一行の stock_price_high / stock_price_low / pbr_reported もこの基準に揃えてある。market_cap と per は現株数基準 (stock_price_adjusted × 調整済み発行済株式数 / ÷ 計算値EPS) で算出するためこの基準とは異なる。決算期末が分割の権利落ち日と効力発生日の間に挟まる期では、同一行の shares_outstanding (旧株数基準) とも基準が異なる"
+    },
+    {
+      "key": "stock_price_high",
+      "label": "株価(高値)",
+      "unit": "jpy",
+      "note": "決算期内の高値を stock_price と同じ株数基準へ換算した値。分割・併合を挟む期でも stock_price と直接比較できる。stock_price が null の期は換算の基準が無いため null"
+    },
+    {
+      "key": "stock_price_low",
+      "label": "株価(安値)",
+      "unit": "jpy",
+      "note": "決算期内の安値を stock_price と同じ株数基準へ換算した値。stock_price が null の期は null"
+    },
+    {
+      "key": "stock_price_adjusted",
+      "label": "株価(終値・調整後)",
+      "unit": "jpy",
+      "note": "株式分割・併合を遡及調整した最新株数基準。決算期をまたぐ株価の時系列比較には調整後の3値(終値・高値・安値)を使う"
+    },
+    {
+      "key": "stock_price_high_adjusted",
+      "label": "株価(高値・調整後)",
+      "unit": "jpy",
+      "note": "決算期内の高値を最新株数基準へ遡及調整した値"
+    },
+    {
+      "key": "stock_price_low_adjusted",
+      "label": "株価(安値・調整後)",
+      "unit": "jpy",
+      "note": "決算期内の安値を最新株数基準へ遡及調整した値"
+    },
+    {
+      "key": "market_cap",
+      "label": "時価総額(終値ベース)",
+      "unit": "hundred_million_jpy",
+      "note": "価格と株数を必ず同一の株数基準の組み合わせで算出。分子は stock_price_adjusted (現株数基準)、分母は分割・併合を遡及調整した発行済株式数 (現株数基準) で、同一行の stock_price(円)×shares_outstanding(株)÷1e8 とは一般に一致しない (shares_outstanding は as-reported の未調整値)。時価総額は本フィールドを使う。調整済み株数が取得できない期は null"
+    },
+    {
+      "key": "market_cap_high",
+      "label": "時価総額(高値ベース)",
+      "unit": "hundred_million_jpy"
+    },
+    {
+      "key": "market_cap_low",
+      "label": "時価総額(安値ベース)",
+      "unit": "hundred_million_jpy"
+    },
+    {
+      "key": "per",
+      "label": "PER(終値ベース)",
+      "unit": "times",
+      "note": "stock_price_adjusted(現株数基準)÷実績EPS(現株数基準)。実績EPSは会計文脈を先に決めてから、その文脈の報告値EPSを分割・併合で現株数基準へ遡及調整したものを優先し、無い決算期は計算値EPS(eps_adjusted と同じ値)を使う。採用元は per_source(reported / computed)。有報記載のままの eps は分母に使わない。株数基準を検証できない決算期は null(当該決算期の発行済株式数(現株数基準)が現在の発行済株式数と乖離して分割・併合等で説明できない(最新の決算期は 1.5 倍超、それより前は桁違い)、または取得できない場合。per / pbr / 配当利回りをまとめて返さない)"
+    },
+    {
+      "key": "per_high",
+      "label": "PER(高値ベース)",
+      "unit": "times",
+      "note": "分母は per と同じ実績EPS(現株数基準)。分子は stock_price_high / stock_price_low を現株数基準へ揃えたもの"
+    },
+    {
+      "key": "per_low",
+      "label": "PER(安値ベース)",
+      "unit": "times"
+    },
+    {
+      "key": "pbr_reported",
+      "label": "PBR(報告基準)",
+      "unit": "times",
+      "note": "計算値。報告値 BPS(bps_reported)を分母に IRBANK が算出したもので、有報に PBR の記載があるわけではない(「報告基準」は分母の基準を指す)。株数基準を検証できない決算期は null"
+    },
+    {
+      "key": "pbr_high_reported",
+      "label": "PBR(報告基準・高値)",
+      "unit": "times"
+    },
+    {
+      "key": "pbr_low_reported",
+      "label": "PBR(報告基準・安値)",
+      "unit": "times"
+    },
+    {
+      "key": "pbr_adjusted",
+      "label": "PBR(調整後)",
+      "unit": "times"
+    },
+    {
+      "key": "pbr_high_adjusted",
+      "label": "PBR(調整後・高値)",
+      "unit": "times"
+    },
+    {
+      "key": "pbr_low_adjusted",
+      "label": "PBR(調整後・安値)",
+      "unit": "times"
+    },
+    {
+      "key": "bps_adjusted",
+      "label": "BPS(調整後)",
+      "unit": "jpy_per_share",
+      "note": "株数基準を検証できない決算期は null(現株数基準に揃っていることを保証できないため、株価と組める値としては返さない。条件は per の説明を参照)"
+    },
+    {
+      "key": "dps_adjusted",
+      "label": "DPS(調整後)",
+      "unit": "jpy_per_share",
+      "note": "株数基準を検証できない決算期は null(現株数基準に揃っていることを保証できないため、株価と組める値としては返さない。条件は per の説明を参照)"
+    },
+    {
+      "key": "eps_adjusted",
+      "label": "EPS(調整後)",
+      "unit": "jpy_per_share",
+      "note": "計算値ベースで分割・併合を遡及調整済みの EPS(現株数基準)。eps(報告値そのまま。分割の前後で株数基準が切り替わることがある)とは算出基準が異なるため直接比較しないこと。決算期をまたぐ EPS の比較にはこちらを使う。未算出の期は null(報告値へのフォールバックはしない)。株数基準を検証できない決算期は null(現株数基準に揃っていることを保証できないため、株価と組める値としては返さない。条件は per の説明を参照)"
+    },
+    {
+      "key": "eps",
+      "label": "EPS",
+      "unit": "jpy_per_share",
+      "note": "有報報告値のみ(as-reported)。IRBANK 側の分割調整はしないが、決算日後・報告書提出前に効力発生した分割は発行体が遡及再表示するため、分割の前後で株数基準が切り替わり不連続になることがある。決算期をまたぐ比較には eps_adjusted を使う。**per の分母はこの値ではない**(現株数基準の実績EPS。出所は per_source)"
+    },
+    {
+      "key": "bps_reported",
+      "label": "BPS(報告基準)",
+      "unit": "jpy_per_share",
+      "note": "有報報告値のみ。pbr_reported 系の分母と一致する。eps と同じく発行体の遡及再表示により分割の前後で株数基準が切り替わることがある。決算期をまたぐ比較や、報告値が欠測する決算期には bps_adjusted / pbr_adjusted(現株数基準)を使う。株数基準を検証できない決算期は pbr_reported が null になるが、本フィールドは有報記載値としてそのまま返す(記載値であること自体は株数基準の検証可否と独立なため。株価と割って pbr を復元しないこと)"
+    },
+    {
+      "key": "shares_outstanding",
+      "label": "発行済株式数",
+      "unit": "shares",
+      "note": "各決算期の有報・短信記載値(as-reported)で、分割・併合の遡及調整をしていない。market_cap の分母は別値 (遡及調整済みの現株数基準) なので、stock_price(円)×shares_outstanding(株)÷1e8 では market_cap を再現できない(時価総額は market_cap を参照)。決算期末直前に権利落ちし効力発生日が期末後になる分割の期は、株数基準自体も stock_price とずれる"
+    },
+    {
+      "key": "roe",
+      "label": "ROE",
+      "unit": "percent",
+      "note": "**有報報告値のみ**。決算期によって XBRL タグ自体が無く欠測することがある(収録期間全体で約8割の決算期にのみ存在)。欠測期を埋めたい場合は roe_computed を参照"
+    },
+    {
+      "key": "roe_computed",
+      "label": "ROE(計算値)",
+      "unit": "percent",
+      "note": "当期純利益÷平均自己資本。報告値が欠測する決算期も埋まるため、穴の無い系列がほしい場合は roe ?? roe_computed で合成する。金額同士の比率で株式分割の影響を受けない。自己資本が極小・負の決算期で発散するため、絶対値が1000%を超える値は採用せず null を返す"
+    },
+    {
+      "key": "dividend_yield_reported",
+      "label": "配当利回り(報告基準)",
+      "unit": "percent"
+    },
+    {
+      "key": "dividend_yield_high_reported",
+      "label": "配当利回り(報告基準・利回り最大)",
+      "unit": "percent"
+    },
+    {
+      "key": "dividend_yield_low_reported",
+      "label": "配当利回り(報告基準・利回り最小)",
+      "unit": "percent"
+    },
+    {
+      "key": "dividend_yield_adjusted",
+      "label": "配当利回り(調整後)",
+      "unit": "percent"
+    },
+    {
+      "key": "dividend_yield_high_adjusted",
+      "label": "配当利回り(調整後・利回り最大)",
+      "unit": "percent"
+    },
+    {
+      "key": "dividend_yield_low_adjusted",
+      "label": "配当利回り(調整後・利回り最小)",
+      "unit": "percent"
+    },
+    {
+      "key": "per_5y_avg",
+      "label": "PER5年平均",
+      "unit": "times",
+      "note": "トップレベルスカラー (history[] 要素ではない)。直近5年の正の PER の単純平均。直近5年に正の PER が1つも無い場合のみ最新 PER にフォールバックするが、その条件下では最新 PER 自体が null/非正のため実質 null になる"
+    }
+  ],
+  "history": [
+    {
+      "fiscal_year": "2025/12",
+      "stock_price": 1002,
+      "stock_price_high": 1399,
+      "stock_price_low": 723,
+      "stock_price_adjusted": 1002,
+      "stock_price_high_adjusted": 1399,
+      "stock_price_low_adjusted": 723,
+      "market_cap": 58.41159,
+      "market_cap_high": 81.554705,
+      "market_cap_low": 42.147285,
+      "per": 21.40568254646443,
+      "per_source": "reported",
+      "per_high": 29.88677632984405,
+      "per_low": 15.445417645802179,
+      "pbr_reported": 3.126560159760359,
+      "pbr_high_reported": 4.365327009485771,
+      "pbr_low_reported": 2.2559910134797803,
+      "pbr_adjusted": 3.126633985707786,
+      "pbr_high_adjusted": 4.365430085833526,
+      "pbr_low_adjusted": 2.256044283100528,
+      "bps_adjusted": 320.47243284,
+      "dps_adjusted": 9,
+      "eps_adjusted": 46.814001737,
+      "eps": 46.81,
+      "bps_reported": 320.48,
+      "shares_outstanding": 5829500,
+      "roe": 15.6,
+      "roe_computed": 15.579309554,
+      "dividend_yield_reported": 0.8982035928143712,
+      "dividend_yield_high_reported": 1.2448132780082988,
+      "dividend_yield_low_reported": 0.6433166547533953,
+      "dividend_yield_adjusted": 0.8982035928143712,
+      "dividend_yield_high_adjusted": 1.2448132780082988,
+      "dividend_yield_low_adjusted": 0.6433166547533953
+    },
+    {
+      "fiscal_year": "2024/12",
+      "stock_price": 910,
+      "stock_price_high": 1519,
+      "stock_price_low": 697,
+      "stock_price_adjusted": 910,
+      "stock_price_high_adjusted": 1519,
+      "stock_price_low_adjusted": 697,
+      "market_cap": 52.86736,
+      "market_cap_high": 88.247824,
+      "market_cap_low": 40.492912,
+      "per": 20.795246800731263,
+      "per_source": "reported",
+      "per_high": 34.71206581352834,
+      "per_low": 15.927787934186473,
+      "pbr_reported": 3.248143917761279,
+      "pbr_high_reported": 5.421901770416905,
+      "pbr_low_reported": 2.4878640776699026,
+      "pbr_adjusted": 3.2481689038391317,
+      "pbr_high_adjusted": 5.421943477946858,
+      "pbr_low_adjusted": 2.4878832153581043,
+      "bps_adjusted": 280.157844909,
+      "dps_adjusted": 6,
+      "eps_adjusted": 43.762072248,
+      "eps": 43.76,
+      "bps_reported": 280.16,
+      "shares_outstanding": 5809600,
+      "roe": 16.9,
+      "roe_computed": 16.948356697,
+      "dividend_yield_reported": 0.6593406593406593,
+      "dividend_yield_high_reported": 0.860832137733142,
+      "dividend_yield_low_reported": 0.39499670836076367,
+      "dividend_yield_adjusted": 0.6593406593406593,
+      "dividend_yield_high_adjusted": 0.860832137733142,
+      "dividend_yield_low_adjusted": 0.39499670836076367
+    },
+    {
+      "fiscal_year": "2023/12",
+      "stock_price": 1153,
+      "stock_price_high": 1385,
+      "stock_price_low": 853,
+      "stock_price_adjusted": 1153,
+      "stock_price_high_adjusted": 1385,
+      "stock_price_low_adjusted": 853,
+      "market_cap": 66.564996,
+      "market_cap_high": 79.95882,
+      "market_cap_low": 49.245396,
+      "per": 33.81231671554252,
+      "per_source": "reported",
+      "per_high": 40.6158357771261,
+      "per_low": 25.014662756598238,
+      "pbr_reported": 4.9005440326419585,
+      "pbr_high_reported": 5.886603196191771,
+      "pbr_low_reported": 3.6254675280516833,
+      "pbr_adjusted": 4.900634115453404,
+      "pbr_high_adjusted": 5.8867114049461975,
+      "pbr_low_adjusted": 3.6255341721437593,
+      "bps_adjusted": 235.275675114,
+      "dps_adjusted": null,
+      "eps_adjusted": 34.102698716,
+      "eps": 34.1,
+      "bps_reported": 235.28,
+      "shares_outstanding": 5773200,
+      "roe": 15.6,
+      "roe_computed": 15.647379936,
+      "dividend_yield_reported": null,
+      "dividend_yield_high_reported": null,
+      "dividend_yield_low_reported": null,
+      "dividend_yield_adjusted": null,
+      "dividend_yield_high_adjusted": null,
+      "dividend_yield_low_adjusted": null
+    },
+    {
+      "fiscal_year": "2022/12",
+      "stock_price": 896,
+      "stock_price_high": 1369,
+      "stock_price_low": 820,
+      "stock_price_adjusted": 896,
+      "stock_price_high_adjusted": 1369,
+      "stock_price_low_adjusted": 820,
+      "market_cap": 51.510144,
+      "market_cap_high": 78.702441,
+      "market_cap_low": 47.14098,
+      "per": 27.705627705627702,
+      "per_source": "reported",
+      "per_high": 42.33147804576375,
+      "per_low": 25.35559678416821,
+      "pbr_reported": 4.46949668279543,
+      "pbr_high_reported": 6.828951962887215,
+      "pbr_low_reported": 4.090387589165461,
+      "pbr_adjusted": 4.469417380991144,
+      "pbr_high_adjusted": 6.828830797518836,
+      "pbr_low_adjusted": 4.090315013853503,
+      "bps_adjusted": 200.473556981,
+      "dps_adjusted": null,
+      "eps_adjusted": 32.33593262,
+      "eps": 32.34,
+      "bps_reported": 200.47,
+      "shares_outstanding": 5748900,
+      "roe": 17.6,
+      "roe_computed": 17.57270742,
+      "dividend_yield_reported": null,
+      "dividend_yield_high_reported": null,
+      "dividend_yield_low_reported": null,
+      "dividend_yield_adjusted": null,
+      "dividend_yield_high_adjusted": null,
+      "dividend_yield_low_adjusted": null
+    },
+    {
+      "fiscal_year": "2021/12",
+      "stock_price": 1345,
+      "stock_price_high": 2520,
+      "stock_price_low": 1135,
+      "stock_price_adjusted": 1345,
+      "stock_price_high_adjusted": 2520,
+      "stock_price_low_adjusted": 1135,
+      "market_cap": 76.604475,
+      "market_cap_high": 143.5266,
+      "market_cap_low": 64.643925,
+      "per": 39.934679334916865,
+      "per_source": "reported",
+      "per_high": 74.82185273159145,
+      "per_low": 33.69952494061758,
+      "pbr_reported": 8.080990146599376,
+      "pbr_high_reported": 15.140591204037491,
+      "pbr_low_reported": 6.819274212929584,
+      "pbr_adjusted": 8.080971976356187,
+      "pbr_high_adjusted": 15.140557160161777,
+      "pbr_low_adjusted": 6.819258879676038,
+      "bps_adjusted": 166.440374244,
+      "dps_adjusted": null,
+      "eps_adjusted": 33.677144191,
+      "eps": 33.68,
+      "bps_reported": 166.44,
+      "shares_outstanding": 5695500,
+      "roe": 22.7,
+      "roe_computed": 22.670989114,
+      "dividend_yield_reported": null,
+      "dividend_yield_high_reported": null,
+      "dividend_yield_low_reported": null,
+      "dividend_yield_adjusted": null,
+      "dividend_yield_high_adjusted": null,
+      "dividend_yield_low_adjusted": null
+    },
+    {
+      "fiscal_year": "2020/12",
+      "stock_price": 1814,
+      "stock_price_high": 4175,
+      "stock_price_low": 1701,
+      "stock_price_adjusted": 1814,
+      "stock_price_high_adjusted": 4175,
+      "stock_price_low_adjusted": 1701,
+      "market_cap": 100.140056,
+      "market_cap_high": 230.4767,
+      "market_cap_low": 93.902004,
+      "per": 57.84438775510204,
+      "per_source": "reported",
+      "per_high": 133.13137755102042,
+      "per_low": 54.24107142857143,
+      "pbr_reported": 13.963513201447157,
+      "pbr_high_reported": 32.137633746439846,
+      "pbr_low_reported": 13.09368024016627,
+      "pbr_adjusted": 13.96349692399317,
+      "pbr_high_adjusted": 32.13759628317061,
+      "pbr_low_adjusted": 13.093664976688192,
+      "bps_adjusted": 129.910151438,
+      "dps_adjusted": null,
+      "eps_adjusted": 31.356469942,
+      "eps": 31.36,
+      "bps_reported": 129.91,
+      "shares_outstanding": 5520400,
+      "roe": 32.5,
+      "roe_computed": 32.44992783,
+      "dividend_yield_reported": null,
+      "dividend_yield_high_reported": null,
+      "dividend_yield_low_reported": null,
+      "dividend_yield_adjusted": null,
+      "dividend_yield_high_adjusted": null,
+      "dividend_yield_low_adjusted": null
+    }
+  ],
+  "per_5y_avg": 28.730710620656556,
+  "attribution": {
+    "source_label": "金融庁 EDINET / TDnet / JPX 東京証券取引所",
+    "license_note": "EDINET 由来データは金融庁 EDINET、TDnet 由来データは JPX TDnet、株価・時価総額など株価由来データは JPX 東京証券取引所を出典とし、加工は IRBANK が実施。再配信時は出典の明示が必要。",
+    "processed_by": "IRBANK"
+  }
+}

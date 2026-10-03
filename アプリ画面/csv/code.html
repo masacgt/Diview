@@ -1,0 +1,1274 @@
+<!DOCTYPE html><html class="dark" lang="ja" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport">
+<meta content="mobile_stack" name="shell-type">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&amp;family=Space+Grotesk:wght@600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+    @layer base {
+      html, body {
+        width: 100vw;
+        margin: 0;
+        padding: 0;
+        background-color: #0b1326;
+        color: #dae2fd;
+      }
+      body {
+        overscroll-behavior: none;
+        min-height: max(884px, 100dvh);
+      }
+      .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+      .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+      main > :first-child { margin-top: 0 !important; }
+      main > :last-child { margin-bottom: 0 !important; }
+    }
+    ::-webkit-scrollbar { display: none; }
+
+    /* Custom Animation & Micro-interaction Keyframes */
+    @keyframes slideUpFade {
+      0% {
+        opacity: 0;
+        transform: translateY(14px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% {
+        box-shadow: 0 0 16px rgba(78, 222, 163, 0.25), 0 0 0 1px rgba(78, 222, 163, 0.35);
+      }
+      50% {
+        box-shadow: 0 0 28px rgba(78, 222, 163, 0.45), 0 0 0 1.5px rgba(78, 222, 163, 0.8);
+      }
+    }
+
+    @keyframes shimmerMove {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(200%); }
+    }
+
+    @keyframes radialPulse {
+      0%, 100% {
+        transform: scale(1);
+        opacity: 0.3;
+      }
+      50% {
+        transform: scale(1.15);
+        opacity: 0.6;
+      }
+    }
+
+    .animate-slide-up-1 {
+      animation: slideUpFade 0.45s cubic-bezier(0.16, 1, 0.3, 1) both 0.05s;
+    }
+    .animate-slide-up-2 {
+      animation: slideUpFade 0.45s cubic-bezier(0.16, 1, 0.3, 1) both 0.12s;
+    }
+    .animate-slide-up-3 {
+      animation: slideUpFade 0.45s cubic-bezier(0.16, 1, 0.3, 1) both 0.18s;
+    }
+    .animate-slide-up-4 {
+      animation: slideUpFade 0.45s cubic-bezier(0.16, 1, 0.3, 1) both 0.24s;
+    }
+    .animate-slide-up-5 {
+      animation: slideUpFade 0.45s cubic-bezier(0.16, 1, 0.3, 1) both 0.30s;
+    }
+
+    .broker-selected-glow {
+      animation: pulseGlow 2.8s ease-in-out infinite;
+    }
+
+    .shimmer-effect {
+      position: relative;
+      overflow: hidden;
+    }
+    .shimmer-effect::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%);
+      transform: translateX(-100%);
+      animation: shimmerMove 3.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      pointer-events: none;
+    }
+
+    .radial-glow-circle {
+      animation: radialPulse 3s ease-in-out infinite;
+    }
+
+    /* Smooth accordion reveal styling */
+    .accordion-transition {
+      transition: max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, margin 0.3s ease;
+      overflow: hidden;
+    }
+  </style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "on-tertiary-fixed": "#410004",
+            "secondary-fixed": "#e1e0ff",
+            "tertiary": "#ffb3ad",
+            "on-error": "#690005",
+            "on-tertiary-fixed-variant": "#930013",
+            "primary-container": "#10b981",
+            "primary-fixed": "#6ffbbe",
+            "surface-bright": "#31394d",
+            "outline-variant": "#3c4a42",
+            "surface-container-highest": "#2d3449",
+            "secondary": "#c0c1ff",
+            "tertiary-fixed-dim": "#ffb3ad",
+            "error": "#ffb4ab",
+            "surface-tint": "#4edea3",
+            "surface-container-high": "#222a3d",
+            "on-primary-fixed-variant": "#005236",
+            "on-background": "#dae2fd",
+            "surface-container-low": "#131b2e",
+            "surface-variant": "#2d3449",
+            "on-tertiary-container": "#79000e",
+            "tertiary-container": "#ff7a73",
+            "on-surface": "#dae2fd",
+            "on-secondary-container": "#b0b2ff",
+            "surface": "#0b1326",
+            "on-primary-container": "#00422b",
+            "secondary-fixed-dim": "#c0c1ff",
+            "inverse-on-surface": "#283044",
+            "on-primary-fixed": "#002113",
+            "surface-container": "#171f33",
+            "outline": "#86948a",
+            "on-tertiary": "#68000a",
+            "on-secondary": "#1000a9",
+            "primary": "#4edea3",
+            "on-secondary-fixed": "#07006c",
+            "surface-dim": "#0b1326",
+            "on-error-container": "#ffdad6",
+            "primary-fixed-dim": "#4edea3",
+            "on-surface-variant": "#bbcabf",
+            "inverse-primary": "#006c49",
+            "inverse-surface": "#dae2fd",
+            "on-primary": "#003824",
+            "secondary-container": "#3131c0",
+            "background": "#0b1326",
+            "error-container": "#93000a",
+            "surface-container-lowest": "#060e20",
+            "tertiary-fixed": "#ffdad7",
+            "on-secondary-fixed-variant": "#2f2ebe"
+          },
+          borderRadius: {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          spacing: {
+            "gutter": "1rem",
+            "space-xs": "0.25rem",
+            "margin": "1rem",
+            "space-sm": "0.5rem",
+            "space-lg": "1.5rem",
+            "gutter-sm": "0.75rem",
+            "space-md": "1rem",
+            "space-xl": "2rem",
+            "margin-tablet": "1.5rem"
+          },
+          fontFamily: {
+            "numeric-hero-mobile": ["Space Grotesk"],
+            "label-sm": ["Manrope"],
+            "label-md": ["Manrope"],
+            "label-lg": ["Manrope"],
+            "body-md": ["Manrope"],
+            "title-lg": ["Manrope"],
+            "numeric-hero": ["Space Grotesk"],
+            "headline-lg": ["Space Grotesk"],
+            "body-sm": ["Manrope"],
+            "headline-md": ["Space Grotesk"],
+            "display-lg-mobile": ["Space Grotesk"],
+            "body-lg": ["Manrope"],
+            "title-md": ["Manrope"],
+            "display-lg": ["Space Grotesk"]
+          },
+          fontSize: {
+            "numeric-hero-mobile": ["30px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+            "label-sm": ["10px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "700" }],
+            "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }],
+            "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }],
+            "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+            "title-lg": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+            "numeric-hero": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.03em", "fontWeight": "700" }],
+            "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "headline-md": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "display-lg-mobile": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+            "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+            "title-md": ["16px", { "lineHeight": "22px", "fontWeight": "600" }],
+            "display-lg": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.03em", "fontWeight": "700" }]
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-surface font-body-md text-on-surface flex flex-col min-h-screen">
+<!-- Header -->
+<header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.15)] transition-all duration-300">
+<div class="h-16 px-gutter flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<button aria-label="戻る" class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/60 active:scale-95 transition-all" onclick="window.location.href='{{DATA:SCREEN:SCREEN_40}}'" type="button">
+<span class="material-symbols-outlined text-[24px]">arrow_back</span>
+</button>
+<h1 class="font-title-lg text-title-lg text-on-surface font-bold tracking-tight truncate">CSVインポート</h1>
+</div>
+<div class="flex items-center gap-space-xs"><button aria-label="検索" class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/60 active:scale-95 transition-all" type="button">
+<span class="material-symbols-outlined text-[22px]">search</span>
+</button>
+<button aria-label="通知" class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/60 active:scale-95 transition-all" type="button">
+<span class="material-symbols-outlined text-[22px]">notifications_none</span>
+</button>
+<button aria-label="設定" class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/60 active:scale-95 transition-all" type="button">
+<span class="material-symbols-outlined text-[22px]">settings</span>
+</button></div>
+</div>
+</header>
+<main class="flex-1 flex flex-col relative w-full pt-16 pb-safe bg-surface">
+<div class="flex flex-col w-full pb-10 text-on-surface">
+<!-- ========================================== -->
+<!-- 0. PROTOTYPE CONTROLLER BAR (10 Scenarios Live) -->
+<!-- ========================================== -->
+<aside aria-label="状態切り替えシミュレーター" class="w-full bg-surface-container-lowest/95 px-gutter py-space-sm shadow-md sticky top-0 z-40 backdrop-blur-md border-b border-surface-container-high/40">
+<div class="flex items-center justify-between mb-1.5">
+<span class="font-label-sm text-label-sm text-primary flex items-center gap-1.5 uppercase tracking-wider font-semibold">
+<span class="inline-block w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_#4edea3] animate-pulse"></span>
+            Interactive Wizard Sandbox
+          </span>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-mono">10 Scenarios Live</span>
+</div>
+<div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1" id="scenario-nav">
+<button class="scenario-btn shrink-0 px-3 py-1 rounded-full font-label-md text-label-md bg-primary text-on-primary font-bold shadow-[0_2px_10px_rgba(78,222,163,0.35)] scale-100 hover:brightness-105 active:scale-95 transition-all duration-200" data-scenario="step1_file" onclick="switchState('step1_file')" type="button">S1: ファイル選択</button>
+<button class="scenario-btn shrink-0 px-3 py-1 rounded-full font-label-md text-label-md bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-bright active:scale-95 transition-all duration-200" data-scenario="step1_parsing" onclick="switchState('step1_parsing')" type="button">S1: 解析中アニメ</button>
+<button class="scenario-btn shrink-0 px-3 py-1 rounded-full font-label-md text-label-md bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-bright active:scale-95 transition-all duration-200" data-scenario="step1_error" onclick="switchState('step1_error')" type="button">S1: エラー画面</button>
+<button class="scenario-btn shrink-0 px-3 py-1 rounded-full font-label-md text-label-md bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-bright active:scale-95 transition-all duration-200" data-scenario="step2_preview" onclick="switchState('step2_preview')" type="button">S2: プレビュー</button>
+<button class="scenario-btn shrink-0 px-3 py-1 rounded-full font-label-md text-label-md bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-bright active:scale-95 transition-all duration-200" data-scenario="step2_diff" onclick="switchState('step2_diff')" type="button">S2: 差分・重複検出</button>
+<button class="scenario-btn shrink-0 px-3 py-1 rounded-full font-label-md text-label-md bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-bright active:scale-95 transition-all duration-200" data-scenario="step3_processing" onclick="switchState('step3_processing')" type="button">S3: 処理中</button>
+<button class="scenario-btn shrink-0 px-3 py-1 rounded-full font-label-md text-label-md bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-bright active:scale-95 transition-all duration-200" data-scenario="step3_complete" onclick="switchState('step3_complete')" type="button">S3: 完了・反映</button>
+<button class="scenario-btn shrink-0 px-3 py-1 rounded-full font-label-md text-label-md bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-bright active:scale-95 transition-all duration-200" data-scenario="step3_skip" onclick="switchState('step3_skip')" type="button">S3: 重複スキップ</button>
+<button class="scenario-btn shrink-0 px-3 py-1 rounded-full font-label-md text-label-md bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-bright active:scale-95 transition-all duration-200" data-scenario="step3_partial" onclick="switchState('step3_partial')" type="button">S3: 一部エラー</button>
+<button class="scenario-btn shrink-0 px-3 py-1 rounded-full font-label-md text-label-md bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-bright active:scale-95 transition-all duration-200" data-scenario="step3_offline" onclick="switchState('step3_offline')" type="button">S3: オフライン保存</button>
+</div>
+</aside>
+<!-- ========================================== -->
+<!-- 1. UNIFIED PROGRESS TRACKER & STEP HEADER  -->
+<!-- ========================================== -->
+<section class="animate-slide-up-1 px-gutter pt-space-md pb-space-sm flex flex-col gap-space-sm bg-surface-container-low/50 backdrop-blur-sm transition-all duration-300">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="px-2.5 py-1 rounded-md font-mono font-bold text-xs tracking-wider bg-primary/15 border border-primary/30 text-primary transition-all duration-300 shadow-[0_0_8px_rgba(78,222,163,0.15)]" id="step-tag">STEP 1 / 3</span>
+<h2 class="font-title-lg text-title-lg text-on-surface font-bold tracking-tight transition-all duration-200" id="step-title" style="opacity: 1;">CSVファイルの選択</h2>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm border border-outline-variant/30 shadow-sm transition-all duration-300" id="step-status-badge">
+<span class="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_6px_#4edea3]" id="step-status-dot"></span>
+<span class="transition-opacity duration-200" id="step-status-text">待機中</span>
+</div>
+</div>
+<!-- 3-Segment Synchronized Progress Bar with Glowing Tips -->
+<div class="grid grid-cols-3 gap-2 w-full pt-1">
+<div class="h-1.5 rounded-full bg-surface-container-highest overflow-hidden relative">
+<div class="h-full rounded-full transition-all duration-500 ease-out w-full bg-primary shadow-[0_0_8px_#4edea3]" id="p-bar-1"></div>
+</div>
+<div class="h-1.5 rounded-full bg-surface-container-highest overflow-hidden relative">
+<div class="h-full rounded-full transition-all duration-500 ease-out w-0" id="p-bar-2"></div>
+</div>
+<div class="h-1.5 rounded-full bg-surface-container-highest overflow-hidden relative">
+<div class="h-full rounded-full transition-all duration-500 ease-out w-0" id="p-bar-3"></div>
+</div>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- 2. SCENARIO VIEW CONTAINERS                -->
+<!-- ========================================== -->
+<div class="px-gutter pt-space-md flex flex-col gap-space-md">
+<!-- ---------------------------------------- -->
+<!-- STATE 1: step1_file (File Selection & 2x2 Rich Provider Cards) -->
+<!-- ---------------------------------------- -->
+<div class="scenario-view flex-col gap-space-md flex" id="state-step1_file">
+<!-- Brokerage Selector: 2x2 Rich Grid -->
+<section class="animate-slide-up-2 flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<label class="font-label-md text-label-md text-on-surface-variant font-medium">対象証券会社</label>
+
+</div>
+<div class="grid grid-cols-2 gap-2" id="broker-cards-grid">
+<button class="broker-card flex items-center justify-between p-3 rounded-lg bg-surface-container text-left transition-all duration-200 hover:bg-surface-container-high opacity-75 hover:opacity-100 cursor-pointer scale-100" id="broker-card-sbi" onclick="selectBroker('sbi')" type="button">
+<div class="flex items-center gap-2 min-w-0">
+<span class="broker-icon material-symbols-outlined text-[20px] shrink-0 transition-colors text-on-surface-variant">account_balance</span>
+<div class="min-w-0">
+<div class="font-title-md text-title-md font-semibold text-on-surface truncate">SBI証券</div>
+<div class="broker-subtitle font-label-sm text-label-sm truncate transition-colors text-on-surface-variant">自動判定 推奨</div>
+</div>
+</div>
+<span class="broker-radio material-symbols-outlined text-outline text-[18px] shrink-0 transition-transform duration-200 scale-100">radio_button_unchecked</span>
+</button>
+<button class="broker-card flex items-center justify-between p-3 rounded-lg bg-surface-container text-left transition-all duration-200 hover:bg-surface-container-high opacity-75 hover:opacity-100 cursor-pointer scale-100" id="broker-card-rakuten" onclick="selectBroker('rakuten')" type="button">
+<div class="flex items-center gap-2 min-w-0">
+<span class="broker-icon material-symbols-outlined text-[20px] shrink-0 transition-colors text-on-surface-variant">trending_up</span>
+<div class="min-w-0">
+<div class="font-title-md text-title-md font-semibold text-on-surface truncate">楽天証券</div>
+<div class="broker-subtitle font-label-sm text-label-sm truncate transition-colors text-on-surface-variant">全資産CSV対応</div>
+</div>
+</div>
+<span class="broker-radio material-symbols-outlined text-outline text-[18px] shrink-0 transition-transform duration-200 scale-100">radio_button_unchecked</span>
+</button>
+<button class="broker-card flex items-center justify-between p-3 rounded-lg text-left transition-all duration-200 ring-1 ring-primary bg-surface-container-high shadow-[0_0_14px_rgba(78,222,163,0.25)] opacity-100 broker-selected-glow cursor-pointer scale-[1.01]" id="broker-card-monex" onclick="selectBroker('monex')" type="button">
+<div class="flex items-center gap-2 min-w-0">
+<span class="broker-icon material-symbols-outlined text-[20px] shrink-0 transition-colors text-primary">sync</span>
+<div class="min-w-0">
+<div class="font-title-md text-title-md font-semibold text-on-surface truncate">マネックス</div>
+<div class="broker-subtitle font-label-sm text-label-sm truncate transition-colors text-primary">残高明細CSV</div>
+</div>
+</div>
+<span class="broker-radio material-symbols-outlined text-primary text-[18px] shrink-0 transition-transform duration-200 scale-110">radio_button_checked</span>
+</button>
+<button class="broker-card flex items-center justify-between p-3 rounded-lg bg-surface-container text-left transition-all duration-200 hover:bg-surface-container-high opacity-75 hover:opacity-100 cursor-pointer scale-100" id="broker-card-matsui" onclick="selectBroker('matsui')" type="button">
+<div class="flex items-center gap-2 min-w-0">
+<span class="broker-icon material-symbols-outlined text-[20px] shrink-0 transition-colors text-on-surface-variant">store</span>
+<div class="min-w-0">
+<div class="font-title-md text-title-md font-semibold text-on-surface truncate">松井証券</div>
+<div class="broker-subtitle font-label-sm text-label-sm truncate transition-colors text-on-surface-variant">現物残高CSV</div>
+</div>
+</div>
+<span class="broker-radio material-symbols-outlined text-outline text-[18px] shrink-0 transition-transform duration-200 scale-100">radio_button_unchecked</span>
+</button>
+</div>
+<button class="broker-card flex items-center justify-between p-3 rounded-lg bg-surface-container text-left transition-all duration-200 hover:bg-surface-container-high opacity-75 hover:opacity-100 cursor-pointer scale-100" id="broker-card-other" onclick="selectBroker('other')" type="button">
+<div class="flex items-center gap-2 min-w-0">
+<span class="broker-icon material-symbols-outlined text-[16px] shrink-0 text-on-surface-variant transition-colors">tune</span>
+<div class="min-w-0">
+<div class="font-label-md text-label-md font-semibold text-on-surface truncate">その他 (汎用)</div>
+<div class="broker-subtitle font-label-sm text-label-sm truncate text-on-surface-variant transition-colors">カスタムCSV / 各種フォーマット</div>
+</div>
+</div>
+<span class="broker-radio material-symbols-outlined text-outline text-[18px] shrink-0 transition-transform duration-200 scale-100">radio_button_unchecked</span>
+</button>
+</section>
+<!-- File Drop Box / File Card Area -->
+<div class="animate-slide-up-3 w-full" id="dropzone-area">
+<!-- Selected File State Card -->
+<div class="p-space-md rounded-xl bg-surface-container shadow-sm flex flex-col gap-3 relative overflow-hidden transition-all duration-300 border border-primary/20 hover:border-primary/40 group" id="file-selected-box">
+<div class="absolute -top-12 -right-12 w-28 h-28 rounded-full bg-primary/10 blur-xl pointer-events-none group-hover:scale-125 transition-transform duration-500"></div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-12 h-12 rounded-lg bg-primary-container/20 text-primary flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(78,222,163,0.2)] group-hover:scale-105 transition-transform duration-300">
+<span class="material-symbols-outlined text-[26px]">description</span>
+</div>
+<div class="flex flex-col min-w-0">
+<p class="font-title-md text-title-md text-on-surface font-bold truncate" id="selected-file-name">monex_portfolio_202412.csv</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1.5 mt-0.5">
+<span class="">24.8 KB</span>
+<span class="">•</span>
+<span class="">38行</span>
+<span class="">•</span>
+<span class="font-label-sm text-label-sm text-primary font-semibold">Shift-JIS 自動検知</span>
+</p>
+</div>
+</div>
+<button aria-label="ファイルを解除" class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-error hover:bg-error-container/30 active:scale-90 transition-all shrink-0 cursor-pointer" onclick="toggleDropState(false)" type="button">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<div class="flex items-center justify-between pt-1">
+<div class="flex items-center gap-1.5 text-primary font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[16px] animate-pulse">verified</span>
+<span class="">フォーマット構文照合完了（国内株式・新NISA成長枠を含む）</span>
+</div>
+<button class="font-label-sm text-label-sm text-on-surface-variant hover:text-primary transition-colors underline underline-offset-2 shrink-0 cursor-pointer active:scale-95" onclick="toggleDropState(false)" type="button">別のファイル</button>
+</div>
+</div>
+<!-- Empty File Dropzone State (Hidden initially) -->
+<div class="group cursor-pointer rounded-2xl bg-surface-container-low hover:bg-surface-container border border-dashed border-outline-variant/60 hover:border-primary/60 transition-all duration-300 p-8 flex flex-col items-center justify-center text-center gap-3 relative overflow-hidden shadow-inner active:scale-[0.99] hidden" id="file-empty-box" onclick="toggleDropState(true)">
+<div class="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center group-hover:scale-110 group-hover:bg-primary/20 transition-all duration-300 shadow-[0_0_12px_rgba(78,222,163,0.15)]">
+<span class="material-symbols-outlined text-[32px] group-hover:-translate-y-1 transition-transform duration-200">upload_file</span>
+</div>
+<div class="flex flex-col gap-0.5">
+<p class="font-title-md text-title-md text-on-surface font-bold group-hover:text-primary transition-colors">CSVファイルをタップまたはドロップ</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">UTF-8 / Shift-JIS 自動判別対応 (最大 10MB)</p>
+</div>
+<span class="mt-1 px-3.5 py-1 rounded-full bg-surface-container-high group-hover:bg-primary group-hover:text-on-primary text-on-surface font-label-sm text-label-sm font-semibold transition-all duration-200 shadow-sm">端末からファイルを選択</span>
+</div>
+</div>
+<!-- Broker CSV Export Guide Accordion -->
+<section class="animate-slide-up-4 rounded-xl bg-surface-container-low p-space-md flex flex-col gap-3 shadow-sm border border-outline-variant/20 hover:border-outline-variant/40 transition-colors" id="guide-accordion-section">
+<button class="w-full flex items-center justify-between text-left group cursor-pointer active:scale-[0.99] transition-transform" onclick="toggleAccordion('guide-content', 'guide-chevron')" type="button">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px] group-hover:scale-110 transition-transform">help_center</span>
+<span class="font-title-md text-title-md text-on-surface font-semibold group-hover:text-primary transition-colors">各証券会社のCSV出力方法ガイド</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant transition-transform duration-300 ease-out" id="guide-chevron" style="transform: rotate(180deg);">expand_more</span>
+</button>
+<div class="flex-col gap-3 pt-1 accordion-transition opacity-100 flex" id="guide-content">
+<!-- Guide Tabs: SBI証券, 楽天証券, 松井証券, マネックス証券, その他 -->
+<div class="flex items-center gap-1.5 border-b border-surface-variant/40 pb-2 overflow-x-auto no-scrollbar text-nowrap">
+<button class="guide-tab-btn px-3 py-1 rounded-full font-label-sm text-label-sm font-semibold bg-surface-container-high text-on-surface-variant hover:text-on-surface active:scale-95 transition-all duration-200 shrink-0" data-tab="sbi" onclick="setGuideTab('sbi', true)" type="button">SBI証券</button>
+<button class="guide-tab-btn px-3 py-1 rounded-full font-label-sm text-label-sm font-semibold bg-surface-container-high text-on-surface-variant hover:text-on-surface active:scale-95 transition-all duration-200 shrink-0" data-tab="rakuten" onclick="setGuideTab('rakuten', true)" type="button">楽天証券</button>
+<button class="guide-tab-btn px-3 py-1 rounded-full font-label-sm text-label-sm font-bold bg-primary text-on-primary shadow-sm active:scale-95 transition-all duration-200 shrink-0" data-tab="monex" onclick="setGuideTab('monex', true)" type="button">マネックス証券</button>
+<button class="guide-tab-btn px-3 py-1 rounded-full font-label-sm text-label-sm font-semibold bg-surface-container-high text-on-surface-variant hover:text-on-surface active:scale-95 transition-all duration-200 shrink-0" data-tab="matsui" onclick="setGuideTab('matsui', true)" type="button">松井証券</button>
+<button class="guide-tab-btn px-3 py-1 rounded-full font-label-sm text-label-sm font-semibold bg-surface-container-high text-on-surface-variant hover:text-on-surface active:scale-95 transition-all duration-200 shrink-0" data-tab="nomura" onclick="setGuideTab('nomura', true)" type="button">野村證券</button>
+<button class="guide-tab-btn px-3 py-1 rounded-full font-label-sm text-label-sm font-semibold bg-surface-container-high text-on-surface-variant hover:text-on-surface active:scale-95 transition-all duration-200 shrink-0" data-tab="other" onclick="setGuideTab('other', true)" type="button">その他</button>
+</div>
+<!-- Instruction Panels -->
+<div class="flex flex-col gap-2.5 font-body-sm text-body-sm" id="guide-instruction-container">
+<!-- SBI Content -->
+<div class="guide-panel flex-col gap-2.5 hidden" id="guide-panel-sbi">
+<div class="p-2.5 rounded-lg bg-surface-container-highest text-on-surface flex gap-2 border-l-2 border-primary">
+<span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">lightbulb</span>
+<span class="">本アプリは配当管理のため<strong>日本株・投資信託</strong>に対応しています。米国株は自動除外または別枠管理されます。</span>
+</div>
+<ol class="text-on-surface-variant space-y-1.5 pl-4 list-decimal marker:text-primary">
+<li class="">ログイン後、上部メニューの「口座管理」を開いて「保有証券」タブをクリック</li>
+<li class="">画面右側にある「CSVダウンロード」ボタンをクリック</li>
+<li class="">ブラウザにより「SaveFile.csv」がダウンロードされます。ダウンロードしたファイルを本アプリで読み込んでください。</li>
+</ol>
+</div>
+<!-- Rakuten Content -->
+<div class="guide-panel flex-col gap-2.5 hidden" id="guide-panel-rakuten"><div class="p-2.5 rounded-lg bg-surface-container-highest text-on-surface flex gap-2 border-l-2 border-primary"><span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">lightbulb</span><span class="">楽天証券の「資産残高・保有商品」画面から出力されたCSVに対応しています。<strong>必ず「すべて」</strong>セクションから出力してください。</span></div><ol class="text-on-surface-variant space-y-1.5 pl-4 list-decimal marker:text-primary"><li class="">ログイン後、「マイメニュー」＞「資産残高・保有商品」を開きます</li><li class="">保有商品一覧画面で、<strong>「すべて」</strong>のセクションの「CSVで保存」をクリックします</li><li class="">ダウンロードされたCSVファイルを本アプリで読み込んでください。</li></ol></div>
+<!-- Monex Content -->
+<div class="guide-panel flex-col gap-2.5 flex" id="guide-panel-monex"><div class="p-2.5 rounded-lg bg-surface-container-highest text-on-surface flex gap-2 border-l-2 border-primary"><span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">lightbulb</span><span class="">マネックス証券の「保有残高・口座管理」画面から出力された保有株CSVに対応しています。</span></div><ol class="text-on-surface-variant space-y-1.5 pl-4 list-decimal marker:text-primary"><li class="">ログイン後、「保有残高・口座管理」をクリックします</li><li class="">画面下部にある「CSVダウンロード」をクリックします</li><li class="">ダウンロードしたCSVを本アプリで読み込んでください。</li></ol></div>
+<!-- Matsui Content -->
+<div class="guide-panel flex-col gap-2.5 hidden" id="guide-panel-matsui">
+<div class="p-2.5 rounded-lg bg-surface-container-highest text-on-surface flex gap-2 border-l-2 border-primary">
+<span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">lightbulb</span>
+<span class="">松井証券の現物保有株式データを取り込めます。信用取引等のデータは対象外です。</span>
+</div>
+<ol class="text-on-surface-variant space-y-1.5 pl-4 list-decimal marker:text-primary">
+<li class="">ログイン後、【日本株】＞【現物売（残高照会）】を選択</li>
+<li class="">【現物残高照会】画面右上の「CSV出力」ボタンをクリック</li>
+<li class="">ダウンロードされたCSVファイルを本アプリで読み込んでください。</li>
+</ol>
+</div>
+<!-- Nomura Content -->
+<div class="guide-panel flex-col gap-2.5 hidden" id="guide-panel-nomura"><div class="p-2.5 rounded-lg bg-surface-container-highest text-on-surface flex gap-2 border-l-2 border-primary"><span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">lightbulb</span><span class="">野村證券（オンラインサービス）の保有資産一覧CSVを取り込めます。</span></div><ol class="text-on-surface-variant space-y-1.5 pl-4 list-decimal marker:text-primary"><li class="">ログイン後、「資産状況/履歴」＞「保有資産一覧」を選択</li><li class="">画面内にある「CSVダウンロード」ボタンをクリック</li><li class="">ダウンロードされたファイルを本アプリで読み込んでください。</li></ol></div>
+<!-- Other / Generic Content -->
+<div class="guide-panel flex-col gap-2.5 hidden" id="guide-panel-other">
+<div class="p-2.5 rounded-lg bg-surface-container-highest text-on-surface flex gap-2 border-l-2 border-primary">
+<span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">tune</span>
+<span class="">汎用CSVフォーマットの取り込みに対応しています。</span>
+</div>
+<div class="flex flex-col gap-1.5 rounded-lg bg-surface-container p-2.5">
+<div class="font-title-md text-title-md font-bold text-primary flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[18px]">checklist</span>必須列・フォーマット仕様
+                    </div>
+<ul class="text-on-surface-variant space-y-1 pl-3">
+<li class="">・<strong>銘柄コード</strong>（4桁の証券コードまたは米国ティッカー）</li>
+<li class="">・<strong>保有数量</strong>（保有株数または口数）</li>
+<li class="">・<strong>取得単価</strong>（平均取得価格）</li>
+<li class="">・文字コード：<strong>UTF-8</strong> または <strong>Shift-JIS</strong></li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Local Security Guarantee -->
+<section class="animate-slide-up-4 rounded-xl bg-surface-container-lowest p-space-md flex items-center gap-3 shadow-sm border border-outline-variant/15">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary shrink-0 shadow-[0_0_10px_rgba(78,222,163,0.15)]">
+<span class="material-symbols-outlined text-[20px]">lock</span>
+</div>
+<div class="flex flex-col">
+<span class="font-title-md text-title-md font-semibold text-on-surface">端末内ローカル処理保証</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">個人情報や保有資産データは外部サーバーへ送信されず、端末内のみでセキュアに解析されます。</span>
+</div>
+</section>
+<!-- Action Buttons -->
+<div class="animate-slide-up-5 flex items-center gap-3 pt-2">
+<button class="w-1/3 py-3 rounded-xl bg-surface-container text-on-surface-variant font-label-lg text-label-lg text-center hover:bg-surface-container-high hover:text-on-surface active:scale-95 transition-all duration-200 cursor-pointer" onclick="toggleDropState(false)" type="button">
+              クリア
+            </button>
+<button class="shimmer-effect flex-1 py-3.5 px-4 rounded-xl bg-primary text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(78,222,163,0.35)] hover:shadow-[0_6px_24px_rgba(78,222,163,0.5)] active:scale-[0.97] transition-all duration-200 cursor-pointer" onclick="runAnalysisPipeline()" type="button">
+<span class="font-bold tracking-wide">ファイルを解析する</span>
+<span class="material-symbols-outlined text-[20px] transition-transform duration-200 group-hover:translate-x-1">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- ---------------------------------------- -->
+<!-- STATE 2: step1_parsing (Parsing Simulation 85%) -->
+<!-- ---------------------------------------- -->
+<div class="scenario-view flex-col items-center justify-center py-8 gap-space-lg text-center hidden" id="state-step1_parsing">
+<div class="relative w-36 h-36 flex items-center justify-center">
+<!-- Pulsing Ambient Radial Glow -->
+<div class="absolute inset-0 rounded-full bg-primary/20 blur-2xl radial-glow-circle pointer-events-none"></div>
+<svg class="w-full h-full -rotate-90 transform relative z-10" viewBox="0 0 100 100">
+<circle class="text-surface-container-highest" cx="50" cy="50" fill="none" r="42" stroke="currentColor" stroke-width="8"></circle>
+<circle class="text-primary transition-all duration-700 ease-out" cx="50" cy="50" fill="none" id="parsing-circle" r="42" stroke="currentColor" stroke-dasharray="264" stroke-dashoffset="40" stroke-linecap="round" stroke-width="8" style="filter: drop-shadow(0 0 6px rgba(78,222,163,0.7));"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center z-20">
+<span class="font-numeric-hero-mobile text-numeric-hero-mobile text-primary font-bold">85<span class="text-label-md font-body-md">%</span></span>
+<span class="font-label-sm text-label-sm text-on-surface-variant tracking-wider uppercase">解析中</span>
+</div>
+</div>
+<div class="flex flex-col gap-1 max-w-xs">
+<h3 class="font-title-lg text-title-lg text-on-surface font-bold animate-pulse">ポートフォリオ構造を解析中</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">配当履歴マスターおよび権利付最終日データベースと照合しています...</p>
+</div>
+<!-- Pipeline Log Cards -->
+<div class="w-full max-w-sm rounded-xl bg-surface-container-low p-4 flex flex-col gap-2.5 text-left font-body-sm text-body-sm shadow-sm border border-outline-variant/20">
+<div class="flex items-center justify-between text-primary">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">check_circle</span>
+<span class="text-on-surface">文字コード検出 (Shift-JIS ➔ UTF-8)</span>
+</div>
+<span class="font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-primary/10">OK</span>
+</div>
+<div class="flex items-center justify-between text-primary">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">check_circle</span>
+<span class="text-on-surface">保有株テーブルヘッダー列マッピング</span>
+</div>
+<span class="font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-primary/10">MATCH</span>
+</div>
+<div class="flex items-center justify-between text-primary animate-pulse">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] animate-spin">sync</span>
+<span class="text-on-surface font-medium">東証・信託コード マスター照合中...</span>
+</div>
+<span class="font-mono text-xs font-bold">85%</span>
+</div>
+</div>
+<button class="px-5 py-2.5 rounded-xl bg-surface-container text-on-surface font-label-md text-label-md hover:bg-surface-container-high active:scale-95 transition-all cursor-pointer shadow-sm" onclick="switchState('step2_preview')" type="button">
+            スキップしてプレビューへ進む ➔
+          </button>
+</div>
+<!-- ---------------------------------------- -->
+<!-- STATE 3: step1_error (CSV Error Screen) -->
+<!-- ---------------------------------------- -->
+<div class="scenario-view flex-col gap-space-md hidden" id="state-step1_error">
+<div class="p-5 rounded-xl bg-error-container/20 text-on-surface flex flex-col gap-3 border border-error/30 shadow-[0_0_20px_rgba(255,180,171,0.1)]">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-error-container flex items-center justify-center text-on-error shrink-0 shadow-md">
+<span class="material-symbols-outlined text-[24px]">warning</span>
+</div>
+<div>
+<h3 class="font-title-md text-title-md text-error font-bold">CSVファイルの読み込みに失敗しました</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">フォーマットの不一致または文字コード異常が検出されました</p>
+</div>
+</div>
+<div class="p-3 rounded-lg bg-surface-container-lowest font-body-sm text-body-sm flex flex-col gap-2 border border-error/20">
+<div class="flex items-start gap-2">
+<span class="text-error font-bold">•</span>
+<span class="text-on-surface-variant"><strong class="text-on-surface">必須列欠損:</strong> 列 [保有数量] または [取得単価] が見つかりません。</span>
+</div>
+<div class="flex items-start gap-2">
+<span class="text-error font-bold">•</span>
+<span class="text-on-surface-variant"><strong class="text-on-surface">文字化け検知:</strong> ヘッダー1行目のデコードに失敗しました。</span>
+</div>
+</div>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low flex flex-col gap-2 shadow-sm border border-outline-variant/20">
+<span class="font-title-md text-title-md text-on-surface font-semibold">解決のためのチェック項目</span>
+<ul class="font-body-sm text-body-sm text-on-surface-variant space-y-1.5 list-disc list-inside">
+<li class="">証券会社WEBサイトから保存直後のCSVをそのまま指定してください</li>
+<li class="">Excel等で一度開いて別名保存すると文字コードが変わる場合があります</li>
+<li class="">非対応の証券会社フォーマットの場合は「その他 (汎用)」をご利用ください</li>
+</ul>
+</div>
+<div class="flex flex-col gap-2 pt-2">
+<button class="w-full py-3.5 rounded-xl bg-primary text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-[0_4px_16px_rgba(78,222,163,0.3)] hover:brightness-105 active:scale-95 transition-all cursor-pointer" onclick="switchState('step1_file')" type="button">
+<span class="material-symbols-outlined text-[18px]">replay</span>
+<span class="">別のCSVファイルを選択し直す</span>
+</button>
+</div>
+</div>
+<!-- ---------------------------------------- -->
+<!-- STATE 4: step2_preview (Holding Preview & Live Recalculation) -->
+<!-- ---------------------------------------- -->
+<div class="scenario-view flex-col gap-space-md hidden" id="state-step2_preview">
+<div class="flex items-center justify-between p-3 rounded-xl bg-surface-container-low shadow-sm border border-primary/20">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">task_alt</span>
+<span class="font-body-sm text-body-sm text-on-surface">解析完了: <strong class="text-primary font-mono font-bold">3件</strong>の銘柄を検出</span>
+</div>
+<span class="font-label-sm text-label-sm px-2.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono font-bold border border-primary/20">整合性 100%</span>
+</div>
+<!-- Holdings List -->
+<div class="flex flex-col gap-2.5" id="stock-item-list">
+<!-- Item 1: Toyota -->
+<div class="stock-card p-3.5 rounded-xl bg-surface-container-low flex flex-col gap-2.5 transition-all duration-200 shadow-sm border border-outline-variant/15 hover:border-primary/40" id="stock-row-7203">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-2.5">
+<span class="w-11 h-8 rounded bg-surface-container-high flex items-center justify-center font-mono font-bold text-label-md text-on-surface">7203</span>
+<div>
+<p class="font-title-md text-title-md text-on-surface font-bold leading-tight">トヨタ自動車</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">新NISA(成長) • 100株 @ ¥2,650</p>
+</div>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-on-surface-variant block">予想年間受取額</span>
+<span class="font-title-md text-title-md text-primary font-mono font-bold">+¥7,280</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary">event_repeat</span>年2回配当 (利回り 2.75%)
+                </span>
+<div class="flex items-center gap-1 bg-surface-container p-0.5 rounded-lg border border-outline-variant/20">
+<button class="stock-btn-7203 px-2 py-0.5 rounded text-label-sm font-label-sm bg-primary text-on-primary font-bold active:scale-95 transition-all" id="act-7203-new" onclick="setHoldingAction('7203', 'new', 7280, 265000)" type="button">新規</button>
+<button class="stock-btn-7203 px-2 py-0.5 rounded text-label-sm font-label-sm text-on-surface-variant hover:text-on-surface active:scale-95 transition-all" id="act-7203-merge" onclick="setHoldingAction('7203', 'merge', 7280, 265000)" type="button">合算</button>
+<button class="stock-btn-7203 px-2 py-0.5 rounded text-label-sm font-label-sm text-on-surface-variant hover:text-on-surface active:scale-95 transition-all" id="act-7203-skip" onclick="setHoldingAction('7203', 'skip', 0, 0)" type="button">スキップ</button>
+</div>
+</div>
+</div>
+<!-- Item 2: Apple -->
+<div class="stock-card p-3.5 rounded-xl bg-surface-container-low flex flex-col gap-2.5 transition-all duration-200 shadow-sm border border-outline-variant/15 hover:border-secondary/40" id="stock-row-AAPL">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-2.5">
+<span class="w-11 h-8 rounded bg-surface-container-high flex items-center justify-center font-mono font-bold text-label-md text-secondary">AAPL</span>
+<div>
+<p class="font-title-md text-title-md text-on-surface font-bold leading-tight">Apple Inc.</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">特定口座 • 10株 @ $180.50 (USD)</p>
+</div>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-on-surface-variant block">予想年間受取額</span>
+<span class="font-title-md text-title-md text-primary font-mono font-bold">+¥1,460</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-secondary">currency_exchange</span>$9.60/年 (為替 @152.1)
+                </span>
+<div class="flex items-center gap-1 bg-surface-container p-0.5 rounded-lg border border-outline-variant/20">
+<button class="stock-btn-AAPL px-2 py-0.5 rounded text-label-sm font-label-sm bg-primary text-on-primary font-bold active:scale-95 transition-all" id="act-AAPL-new" onclick="setHoldingAction('AAPL', 'new', 1460, 275000)" type="button">新規</button>
+<button class="stock-btn-AAPL px-2 py-0.5 rounded text-label-sm font-label-sm text-on-surface-variant hover:text-on-surface active:scale-95 transition-all" id="act-AAPL-merge" onclick="setHoldingAction('AAPL', 'merge', 1460, 275000)" type="button">合算</button>
+<button class="stock-btn-AAPL px-2 py-0.5 rounded text-label-sm font-label-sm text-on-surface-variant hover:text-on-surface active:scale-95 transition-all" id="act-AAPL-skip" onclick="setHoldingAction('AAPL', 'skip', 0, 0)" type="button">スキップ</button>
+</div>
+</div>
+</div>
+<!-- Item 3: Fund -->
+<div class="stock-card p-3.5 rounded-xl bg-surface-container-low flex flex-col gap-2.5 transition-all duration-200 shadow-sm border border-outline-variant/15 hover:border-tertiary/40" id="stock-row-eMAXIS">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-2.5">
+<span class="w-11 h-8 rounded bg-surface-container-high flex items-center justify-center font-mono font-bold text-label-md text-tertiary">FUND</span>
+<div>
+<p class="font-title-md text-title-md text-on-surface font-bold leading-tight truncate max-w-[170px]">eMAXIS Slim 全世界株式</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">つみたて投資枠 • 50,000口</p>
+</div>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-on-surface-variant block">予想年間受取額</span>
+<span class="font-title-md text-title-md text-on-surface-variant font-mono">¥0 (再投資)</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">評価額: 約 ¥180,000</span>
+<div class="flex items-center gap-1 bg-surface-container p-0.5 rounded-lg border border-outline-variant/20">
+<button class="stock-btn-eMAXIS px-2 py-0.5 rounded text-label-sm font-label-sm bg-primary text-on-primary font-bold active:scale-95 transition-all" id="act-eMAXIS-new" onclick="setHoldingAction('eMAXIS', 'new', 0, 180000)" type="button">新規</button>
+<button class="stock-btn-eMAXIS px-2 py-0.5 rounded text-label-sm font-label-sm text-on-surface-variant hover:text-on-surface active:scale-95 transition-all" id="act-eMAXIS-merge" onclick="setHoldingAction('eMAXIS', 'merge', 0, 180000)" type="button">合算</button>
+<button class="stock-btn-eMAXIS px-2 py-0.5 rounded text-label-sm font-label-sm text-on-surface-variant hover:text-on-surface active:scale-95 transition-all" id="act-eMAXIS-skip" onclick="setHoldingAction('eMAXIS', 'skip', 0, 0)" type="button">スキップ</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Calculated Projected Impact Card -->
+<div class="p-4 rounded-xl bg-surface-container-low shadow-md relative overflow-hidden border border-primary/20">
+<div class="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent pointer-events-none"></div>
+<div class="flex items-center justify-between mb-2">
+<span class="font-label-md text-label-md text-primary font-bold tracking-wide uppercase">ポートフォリオへの反映インパクト</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">税引前推計</span>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<span class="font-body-sm text-body-sm text-on-surface-variant block">年間配当金加算額</span>
+<span class="font-numeric-hero-mobile text-numeric-hero-mobile text-primary font-mono font-bold transition-all duration-300" id="impact-dividend">+¥8,740</span>
+</div>
+<div>
+<span class="font-body-sm text-body-sm text-on-surface-variant block">対象資産評価額</span>
+<span class="font-numeric-hero-mobile text-numeric-hero-mobile text-on-surface font-mono font-bold transition-all duration-300" id="impact-asset">¥720,000</span>
+</div>
+</div>
+</div>
+<!-- Navigation Footer -->
+<div class="flex items-center gap-3 pt-1">
+<button class="w-1/3 py-3 rounded-xl bg-surface-container text-on-surface-variant font-label-lg text-label-lg text-center hover:bg-surface-container-high hover:text-on-surface active:scale-95 transition-all duration-200 cursor-pointer" onclick="switchState('step1_file')" type="button">
+              やり直す
+            </button>
+<button class="shimmer-effect flex-1 py-3.5 px-4 rounded-xl bg-primary text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(78,222,163,0.35)] hover:shadow-[0_6px_24px_rgba(78,222,163,0.5)] active:scale-[0.97] transition-all duration-200 cursor-pointer" onclick="executeImport()" type="button">
+<span class="">資産に反映する</span>
+<span class="material-symbols-outlined text-[18px]">cloud_done</span>
+</button>
+</div>
+</div>
+<!-- ---------------------------------------- -->
+<!-- STATE 5: step2_diff (Difference & Duplication Detection) -->
+<!-- ---------------------------------------- -->
+<div class="scenario-view flex-col gap-space-md hidden" id="state-step2_diff">
+<div class="p-4 rounded-xl bg-surface-container-low flex items-start gap-3 shadow-sm border border-tertiary/20">
+<div class="w-9 h-9 rounded-lg bg-tertiary-container/30 text-tertiary flex items-center justify-center shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[20px]">content_copy</span>
+</div>
+<div>
+<h3 class="font-title-md text-title-md text-on-surface font-bold">2件の既存銘柄との重複を検出</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">現在登録中のポートフォリオに同一コードが存在します。取り込み方法を指定してください。</p>
+</div>
+</div>
+<!-- Duplication Items -->
+<div class="flex flex-col gap-3">
+<div class="p-3.5 rounded-xl bg-surface-container-low flex flex-col gap-2.5 shadow-sm border border-outline-variant/15">
+<div class="flex items-center justify-between">
+<span class="font-title-md text-title-md text-on-surface font-bold">トヨタ自動車 (7203)</span>
+<span class="px-2 py-0.5 rounded font-label-sm text-label-sm bg-tertiary/20 text-tertiary font-medium">保有中: 200株</span>
+</div>
+<div class="p-2.5 rounded-lg bg-surface-container text-on-surface font-body-sm text-body-sm grid grid-cols-2 gap-2">
+<div>
+<span class="text-on-surface-variant block text-label-sm">CSV検出分:</span>
+<span class="font-mono font-semibold">+100株 (約定 ¥2,650)</span>
+</div>
+<div>
+<span class="text-on-surface-variant block text-label-sm">合算後の保有数:</span>
+<span class="font-mono text-primary font-bold">300株 (年配当 ¥21,840)</span>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-1.5 pt-1">
+<button class="py-1.5 rounded-lg bg-primary text-on-primary font-label-sm text-label-sm font-bold shadow-sm active:scale-95 transition-all" type="button">合算する (推奨)</button>
+<button class="py-1.5 rounded-lg bg-surface-container text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm active:scale-95 transition-all" type="button">上書きする</button>
+<button class="py-1.5 rounded-lg bg-surface-container text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm active:scale-95 transition-all" type="button">スキップ</button>
+</div>
+</div>
+<div class="p-3.5 rounded-xl bg-surface-container-low flex flex-col gap-2.5 shadow-sm border border-outline-variant/15">
+<div class="flex items-center justify-between">
+<span class="font-title-md text-title-md text-on-surface font-bold">Apple Inc. (AAPL)</span>
+<span class="px-2 py-0.5 rounded font-label-sm text-label-sm bg-tertiary/20 text-tertiary font-medium">保有中: 15株</span>
+</div>
+<div class="p-2.5 rounded-lg bg-surface-container text-on-surface font-body-sm text-body-sm grid grid-cols-2 gap-2">
+<div>
+<span class="text-on-surface-variant block text-label-sm">CSV検出分:</span>
+<span class="font-mono font-semibold">+10株 (約定 $180.50)</span>
+</div>
+<div>
+<span class="text-on-surface-variant block text-label-sm">合算後の保有数:</span>
+<span class="font-mono text-primary font-bold">25株 (年配当 $24.00)</span>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-1.5 pt-1">
+<button class="py-1.5 rounded-lg bg-primary text-on-primary font-label-sm text-label-sm font-bold shadow-sm active:scale-95 transition-all" type="button">合算する (推奨)</button>
+<button class="py-1.5 rounded-lg bg-surface-container text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm active:scale-95 transition-all" type="button">上書きする</button>
+<button class="py-1.5 rounded-lg bg-surface-container text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm active:scale-95 transition-all" type="button">スキップ</button>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-3 pt-2">
+<button class="w-1/3 py-3 rounded-xl bg-surface-container text-on-surface-variant font-label-lg text-label-lg active:scale-95 transition-all cursor-pointer" onclick="switchState('step2_preview')" type="button">戻る</button>
+<button class="shimmer-effect flex-1 py-3.5 rounded-xl bg-primary text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(78,222,163,0.35)] active:scale-[0.97] transition-all cursor-pointer" onclick="switchState('step3_complete')" type="button">
+<span class="">差分を適用して反映</span>
+<span class="material-symbols-outlined text-[18px]">check</span>
+</button>
+</div>
+</div>
+<!-- ---------------------------------------- -->
+<!-- STATE 6: step3_processing (Processing Animation) -->
+<!-- ---------------------------------------- -->
+<div class="scenario-view hidden flex-col items-center justify-center py-10 gap-space-lg text-center" id="state-step3_processing">
+<div class="relative w-20 h-20 flex items-center justify-center">
+<div class="absolute inset-0 rounded-full bg-primary/20 blur-xl radial-glow-circle"></div>
+<div class="w-16 h-16 rounded-full bg-primary/20 text-primary flex items-center justify-center animate-spin relative z-10 shadow-[0_0_20px_rgba(78,222,163,0.3)]">
+<span class="material-symbols-outlined text-[36px]">sync</span>
+</div>
+</div>
+<div class="flex flex-col gap-1 max-w-xs">
+<h3 class="font-headline-md text-headline-md text-on-surface font-bold">ポートフォリオを更新中</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">配当カレンダーの再計算およびセクター比率の整合性を検証しています (78%完了)</p>
+</div>
+<div class="w-full max-w-xs h-2 bg-surface-container-highest rounded-full overflow-hidden relative shadow-inner">
+<div class="h-full bg-primary rounded-full w-3/4 animate-pulse shadow-[0_0_10px_#4edea3]"></div>
+</div>
+<button class="px-5 py-2 rounded-xl bg-surface-container text-on-surface font-label-md text-label-md hover:bg-surface-container-high active:scale-95 transition-all cursor-pointer shadow-sm" onclick="switchState('step3_complete')" type="button">
+            完了画面へスキップ
+          </button>
+</div>
+<!-- ---------------------------------------- -->
+<!-- STATE 7: step3_complete (Successful Completion) -->
+<!-- ---------------------------------------- -->
+<div class="scenario-view hidden flex-col gap-space-md items-center text-center" id="state-step3_complete">
+<div class="relative w-24 h-24 rounded-full bg-primary flex items-center justify-center shadow-[0_0_36px_rgba(78,222,163,0.5)] my-2 animate-bounce">
+<span class="material-symbols-outlined text-[48px] text-on-primary">check_circle</span>
+</div>
+<div class="flex flex-col gap-1">
+<h3 class="font-headline-md text-headline-md text-on-surface font-bold">3件の銘柄を取り込み完了</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">新規登録 2件 / 既存合算 1件 が正常に反映されました</p>
+</div>
+<div class="w-full p-4 rounded-xl bg-surface-container-low shadow-sm flex flex-col gap-3 text-left border border-primary/20">
+<span class="font-label-md text-label-md text-primary font-bold">年間配当の見通しが向上しました</span>
+<div class="grid grid-cols-2 gap-3">
+<div class="p-3 rounded-lg bg-surface-container border border-outline-variant/15">
+<span class="font-body-sm text-body-sm text-on-surface-variant block">年間配当の増加</span>
+<span class="font-numeric-hero-mobile text-numeric-hero-mobile text-primary font-mono font-bold">+¥8,740</span>
+</div>
+<div class="p-3 rounded-lg bg-surface-container border border-outline-variant/15">
+<span class="font-body-sm text-body-sm text-on-surface-variant block">反映後の総資産増</span>
+<span class="font-numeric-hero-mobile text-numeric-hero-mobile text-on-surface font-mono font-bold">+¥720,000</span>
+</div>
+</div>
+<div class="p-2.5 rounded-lg bg-surface-container flex items-center justify-between font-body-sm text-body-sm text-on-surface-variant border border-outline-variant/15">
+<span class="">次回受取予定日</span>
+<span class="text-on-surface font-semibold">2025年3月下旬 (トヨタ・AAPL)</span>
+</div>
+</div>
+<div class="w-full flex flex-col gap-2 pt-2">
+<button class="shimmer-effect w-full py-3.5 px-4 rounded-xl bg-primary text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(78,222,163,0.35)] active:scale-[0.97] transition-all cursor-pointer" onclick="alert('配当受取カレンダーへ移動します');" type="button">
+<span class="material-symbols-outlined text-[20px]">calendar_month</span>
+<span class="">月別受取カレンダーを確認する</span>
+</button>
+<button class="w-full py-3 rounded-xl bg-surface-container text-on-surface font-label-lg text-label-lg flex items-center justify-center gap-2 hover:bg-surface-container-high active:scale-95 transition-all cursor-pointer" onclick="switchState('step1_file')" type="button">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span class="">続けて別のCSVをインポートする</span>
+</button>
+</div>
+</div>
+<!-- ---------------------------------------- -->
+<!-- STATE 8: step3_skip (Duplicate Skip Outcome) -->
+<!-- ---------------------------------------- -->
+<div class="scenario-view hidden flex-col gap-space-md items-center text-center" id="state-step3_skip">
+<div class="w-16 h-16 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center my-2 shadow-sm">
+<span class="material-symbols-outlined text-[36px]">filter_list_off</span>
+</div>
+<div class="flex flex-col gap-1">
+<h3 class="font-headline-md text-headline-md text-on-surface font-bold">新規に取り込む銘柄はありませんでした</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">CSV内の銘柄（3件）は既に最新情報として登録されているため、二重計上を防ぐためスキップされました。</p>
+</div>
+<div class="w-full p-4 rounded-xl bg-surface-container-low flex items-center justify-between text-left shadow-sm border border-outline-variant/15">
+<div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">資産・配当変動インパクト</span>
+<p class="font-numeric-hero-mobile text-numeric-hero-mobile text-on-surface font-mono font-bold">±¥0</p>
+</div>
+<span class="px-2.5 py-1 rounded-full font-label-sm text-label-sm bg-surface-container text-on-surface-variant border border-outline-variant/20">全件既存一致</span>
+</div>
+<div class="w-full flex items-center gap-3 pt-2">
+<button class="flex-1 py-3 rounded-xl bg-surface-container text-on-surface font-label-lg text-label-lg hover:bg-surface-container-high active:scale-95 transition-all cursor-pointer" onclick="switchState('step1_file')" type="button">
+              別のファイルを選択
+            </button>
+<button class="flex-1 py-3 rounded-xl bg-primary text-on-primary font-label-lg text-label-lg font-bold shadow-[0_4px_16px_rgba(78,222,163,0.3)] active:scale-95 transition-all cursor-pointer" onclick="switchState('step2_preview')" type="button">
+              プレビューで確認
+            </button>
+</div>
+</div>
+<!-- ---------------------------------------- -->
+<!-- STATE 9: step3_partial (Partial Error Outcome) -->
+<!-- ---------------------------------------- -->
+<div class="scenario-view hidden flex-col gap-space-md" id="state-step3_partial">
+<div class="p-4 rounded-xl bg-tertiary-container/20 text-on-surface flex items-start gap-3 border border-tertiary/30 shadow-[0_0_16px_rgba(255,179,173,0.1)]">
+<div class="w-10 h-10 rounded-full bg-tertiary-container text-on-tertiary flex items-center justify-center shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[22px]">warning_amber</span>
+</div>
+<div>
+<h3 class="font-title-md text-title-md text-tertiary font-bold">2件成功 / 1件の取り込みに失敗</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">有効な銘柄はポートフォリオに反映されましたが、未識別コードが1件あります。</p>
+</div>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low flex flex-col gap-3 shadow-sm border border-outline-variant/15">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-tertiary font-bold tracking-wider uppercase">要確認・未対応銘柄</span>
+<span class="font-label-sm text-label-sm px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-mono">行: 14</span>
+</div>
+<div>
+<p class="font-title-md text-title-md text-on-surface font-semibold">銘柄コード: 9999 [未知の国内投信]</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">マスターDBに配当情報が登録されていないか、ETFコードが不正です。</p>
+</div>
+</div>
+<div class="flex flex-col gap-2 pt-2">
+<button class="w-full py-3.5 rounded-xl bg-primary text-on-primary font-label-lg text-label-lg font-bold shadow-[0_4px_16px_rgba(78,222,163,0.3)] active:scale-95 transition-all cursor-pointer" onclick="switchState('step3_complete')" type="button">
+              エラー銘柄を除外して完了する
+            </button>
+<button class="w-full py-2.5 rounded-xl bg-surface-container text-on-surface-variant font-label-md text-label-md text-center hover:text-on-surface hover:bg-surface-container-high active:scale-95 transition-all cursor-pointer" onclick="switchState('step1_file')" type="button">
+              CSVインポートを最初からやり直す
+            </button>
+</div>
+</div>
+<!-- ---------------------------------------- -->
+<!-- STATE 10: step3_offline (Offline Vault Storage) -->
+<!-- ---------------------------------------- -->
+<div class="scenario-view hidden flex-col gap-space-md items-center text-center" id="state-step3_offline">
+<div class="w-16 h-16 rounded-full bg-secondary-container/50 text-secondary-fixed flex items-center justify-center my-2 shadow-[0_0_20px_rgba(192,193,255,0.2)]">
+<span class="material-symbols-outlined text-[36px]">cloud_off</span>
+</div>
+<div class="flex flex-col gap-1">
+<h3 class="font-headline-md text-headline-md text-on-surface font-bold">端末内にオフライン保存しました</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">ネットワーク未接続のため、ローカル暗号化領域（Vault）にデータを一時保管しました。通信復旧時に自動同期されます。</p>
+</div>
+<div class="w-full p-4 rounded-xl bg-surface-container-low flex flex-col gap-2.5 text-left shadow-sm border border-secondary/20">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-secondary font-bold">オフライン暫定試算</span>
+<span class="font-label-sm text-label-sm px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-mono">キャッシュ反映</span>
+</div>
+<div class="flex justify-between items-baseline">
+<span class="font-body-sm text-body-sm text-on-surface-variant">暫定年間配当金</span>
+<span class="font-numeric-hero-mobile text-numeric-hero-mobile text-primary font-mono font-bold">+¥8,740</span>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant pt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">info</span>
+              為替レートは前回収得レート(@152.1)で概算しています
+            </p>
+</div>
+<div class="w-full flex items-center gap-3 pt-2">
+<button class="flex-1 py-3 rounded-xl bg-surface-container text-on-surface font-label-lg text-label-lg hover:bg-surface-container-high active:scale-95 transition-all cursor-pointer" onclick="switchState('step1_file')" type="button">
+              トップへ戻る
+            </button>
+<button class="flex-1 py-3 rounded-xl bg-secondary-container text-on-secondary-container font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 shadow-[0_4px_16px_rgba(49,49,192,0.3)] active:scale-95 transition-all cursor-pointer" onclick="alert('同期キューを確認中...');" type="button">
+<span class="material-symbols-outlined text-[18px]">sync</span>
+<span class="">再同期を試行</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- ========================================== -->
+<!-- 3. INLINE CONTROLLER LOGIC                 -->
+<!-- ========================================== -->
+<script>
+      // Scenario Configuration Mapping
+      const scenarioConfig = {
+        step1_file: {
+          stepNum: 'STEP 1 / 3',
+          title: 'CSVファイルの選択',
+          status: '待機中',
+          statusType: 'normal',
+          bars: ['w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-0', 'w-0']
+        },
+        step1_parsing: {
+          stepNum: 'STEP 1 / 3',
+          title: 'CSV構文解析中',
+          status: '解析処理中',
+          statusType: 'active',
+          bars: ['w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-0', 'w-0']
+        },
+        step1_error: {
+          stepNum: 'STEP 1 / 3',
+          title: '解析エラー',
+          status: 'エラー検知',
+          statusType: 'error',
+          bars: ['w-full bg-error shadow-[0_0_8px_#ffb4ab]', 'w-0', 'w-0']
+        },
+        step2_preview: {
+          stepNum: 'STEP 2 / 3',
+          title: '銘柄照合プレビュー',
+          status: '照合完了',
+          statusType: 'active',
+          bars: ['w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-0']
+        },
+        step2_diff: {
+          stepNum: 'STEP 2 / 3',
+          title: '差分・重複検出',
+          status: '重複あり',
+          statusType: 'warn',
+          bars: ['w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-0']
+        },
+        step3_processing: {
+          stepNum: 'STEP 3 / 3',
+          title: 'ポートフォリオ反映中',
+          status: '計算中',
+          statusType: 'active',
+          bars: ['w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-3/4 bg-primary shadow-[0_0_8px_#4edea3]']
+        },
+        step3_complete: {
+          stepNum: 'STEP 3 / 3',
+          title: 'インポート完了',
+          status: '反映完了',
+          statusType: 'success',
+          bars: ['w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-full bg-primary shadow-[0_0_8px_#4edea3]']
+        },
+        step3_skip: {
+          stepNum: 'STEP 3 / 3',
+          title: 'インポート完了 (スキップ)',
+          status: '変動なし',
+          statusType: 'normal',
+          bars: ['w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-full bg-primary shadow-[0_0_8px_#4edea3]']
+        },
+        step3_partial: {
+          stepNum: 'STEP 3 / 3',
+          title: '一部保留・エラー',
+          status: '一部警告',
+          statusType: 'warn',
+          bars: ['w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-full bg-tertiary shadow-[0_0_8px_#ffb3ad]']
+        },
+        step3_offline: {
+          stepNum: 'STEP 3 / 3',
+          title: 'オフライン保存完了',
+          status: 'ローカル保存',
+          statusType: 'secondary',
+          bars: ['w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-full bg-primary shadow-[0_0_8px_#4edea3]', 'w-full bg-secondary shadow-[0_0_8px_#c0c1ff]']
+        }
+      };
+
+      // State Switching with Animation Handling
+      function switchState(scenarioId) {
+        const config = scenarioConfig[scenarioId];
+        if (!config) return;
+
+        // 1. Hide all scenario views and show selected
+        document.querySelectorAll('.scenario-view').forEach(view => {
+          view.classList.add('hidden');
+          view.classList.remove('flex');
+        });
+        const target = document.getElementById('state-' + scenarioId);
+        if (target) {
+          target.classList.remove('hidden');
+          target.classList.add('flex');
+        }
+
+        // 2. Update Controller Quick Jump pills with bouncy active states
+        document.querySelectorAll('.scenario-btn').forEach(btn => {
+          if (btn.dataset.scenario === scenarioId) {
+            btn.className = 'scenario-btn shrink-0 px-3 py-1 rounded-full font-label-md text-label-md bg-primary text-on-primary font-bold shadow-[0_2px_10px_rgba(78,222,163,0.35)] scale-100 hover:brightness-105 active:scale-95 transition-all duration-200';
+          } else {
+            btn.className = 'scenario-btn shrink-0 px-3 py-1 rounded-full font-label-md text-label-md bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-bright active:scale-95 transition-all duration-200';
+          }
+        });
+
+        // 3. Update Progress Bar & Badges
+        const titleElem = document.getElementById('step-title');
+        titleElem.style.opacity = '0';
+        setTimeout(() => {
+          document.getElementById('step-tag').innerText = config.stepNum;
+          titleElem.innerText = config.title;
+          document.getElementById('step-status-text').innerText = config.status;
+          titleElem.style.opacity = '1';
+        }, 120);
+
+        // Reset Progress bars classes
+        const b1 = document.getElementById('p-bar-1');
+        const b2 = document.getElementById('p-bar-2');
+        const b3 = document.getElementById('p-bar-3');
+        b1.className = 'h-full rounded-full transition-all duration-500 ease-out ' + config.bars[0];
+        b2.className = 'h-full rounded-full transition-all duration-500 ease-out ' + config.bars[1];
+        b3.className = 'h-full rounded-full transition-all duration-500 ease-out ' + config.bars[2];
+
+        // Status Dot Color & Shadow
+        const dot = document.getElementById('step-status-dot');
+        if (config.statusType === 'error') {
+          dot.className = 'w-1.5 h-1.5 rounded-full bg-error shadow-[0_0_6px_#ffb4ab]';
+        } else if (config.statusType === 'warn') {
+          dot.className = 'w-1.5 h-1.5 rounded-full bg-tertiary shadow-[0_0_6px_#ffb3ad]';
+        } else if (config.statusType === 'secondary') {
+          dot.className = 'w-1.5 h-1.5 rounded-full bg-secondary shadow-[0_0_6px_#c0c1ff]';
+        } else {
+          dot.className = 'w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_6px_#4edea3]';
+        }
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      // Broker Data
+      const brokerDetails = {
+        sbi: { name: 'SBI証券', label: 'SBI証券 選択中', file: 'sbi_portfolio_202412.csv' },
+        rakuten: { name: '楽天証券', label: '楽天証券 選択中', file: 'rakuten_portfolio_202412.csv' },
+        monex: { name: 'マネックス証券', label: 'マネックス 選択中', file: 'monex_portfolio_202412.csv' },
+        matsui: { name: '松井証券', label: '松井証券 選択中', file: 'matsui_portfolio_202412.csv' },
+        nomura: { name: '野村證券', label: '野村證券 選択中', file: 'nomura_portfolio_202412.csv' },
+        other: { name: 'その他 (汎用)', label: 'その他 (汎用) 選択中', file: 'custom_portfolio_202412.csv' }
+      };
+
+      // Broker Selection Logic: Rich Card Feedback + Radial Accent Glow + Auto Tab Sync
+      function selectBroker(brokerKey) {
+        const brokers = ['sbi', 'rakuten', 'monex', 'matsui', 'other'];
+        
+        brokers.forEach(k => {
+          const card = document.getElementById('broker-card-' + k);
+          if (!card) return;
+          const icon = card.querySelector('.broker-icon');
+          const radio = card.querySelector('.broker-radio');
+          const subtitle = card.querySelector('.broker-subtitle');
+
+          if (k === brokerKey) {
+            // Selected style: spring feedback, glowing emerald border pulses, and scale transitions
+            card.className = 'broker-card flex items-center justify-between p-3 rounded-lg text-left transition-all duration-200 ring-1 ring-primary bg-surface-container-high shadow-[0_0_14px_rgba(78,222,163,0.25)] opacity-100 broker-selected-glow cursor-pointer scale-[1.01]';
+            if (icon) {
+              icon.classList.remove('text-on-surface-variant');
+              icon.classList.add('text-primary');
+            }
+            if (subtitle) {
+              subtitle.classList.remove('text-on-surface-variant');
+              subtitle.classList.add('text-primary');
+            }
+            if (radio) {
+              radio.textContent = 'radio_button_checked';
+              radio.className = 'broker-radio material-symbols-outlined text-primary text-[18px] shrink-0 transition-transform duration-200 scale-110';
+            }
+          } else {
+            // Unselected style
+            card.className = 'broker-card flex items-center justify-between p-3 rounded-lg bg-surface-container text-left transition-all duration-200 hover:bg-surface-container-high opacity-75 hover:opacity-100 cursor-pointer scale-100';
+            if (icon) {
+              icon.classList.remove('text-primary');
+              icon.classList.add('text-on-surface-variant');
+            }
+            if (subtitle) {
+              subtitle.classList.remove('text-primary');
+              subtitle.classList.add('text-on-surface-variant');
+            }
+            if (radio) {
+              radio.textContent = 'radio_button_unchecked';
+              radio.className = 'broker-radio material-symbols-outlined text-outline text-[18px] shrink-0 transition-transform duration-200 scale-100';
+            }
+          }
+        });
+
+        // Update status indicator text with subtle fade
+        const statusElem = document.getElementById('broker-status-indicator');
+        if (statusElem && brokerDetails[brokerKey]) {
+          statusElem.style.opacity = '0';
+          setTimeout(() => {
+            statusElem.textContent = brokerDetails[brokerKey].label;
+            statusElem.style.opacity = '1';
+          }, 150);
+        }
+
+        // Update selected file name
+        const fileElem = document.getElementById('selected-file-name');
+        if (fileElem && brokerDetails[brokerKey]) {
+          fileElem.textContent = brokerDetails[brokerKey].file;
+        }
+
+        // Automatically open the guide accordion if closed
+        const guideContent = document.getElementById('guide-content');
+        const guideChevron = document.getElementById('guide-chevron');
+        if (guideContent && guideContent.classList.contains('hidden')) {
+          guideContent.classList.remove('hidden');
+          guideContent.classList.add('flex');
+          if (guideChevron) guideChevron.style.transform = 'rotate(180deg)';
+        }
+
+        // Automatically activate matching guide tab
+        setGuideTab(brokerKey, false);
+      }
+
+      // Smooth Accordion Toggle Helper
+      function toggleAccordion(contentId, chevronId) {
+        const el = document.getElementById(contentId);
+        const chevron = document.getElementById(chevronId);
+        if (!el) return;
+        if (el.classList.contains('hidden')) {
+          el.classList.remove('hidden');
+          el.classList.add('flex');
+          if (chevron) chevron.style.transform = 'rotate(180deg)';
+        } else {
+          el.classList.add('hidden');
+          el.classList.remove('flex');
+          if (chevron) chevron.style.transform = 'rotate(0deg)';
+        }
+      }
+
+      // Guide Tab Switching & Syncing
+      function setGuideTab(tabKey, syncBrokerCard) {
+        const tabs = ['sbi', 'rakuten', 'monex', 'matsui', 'nomura', 'other'];
+
+        tabs.forEach(t => {
+          // Tab button style
+          const btn = document.querySelector(`.guide-tab-btn[data-tab="${t}"]`);
+          if (btn) {
+            if (t === tabKey) {
+              btn.className = 'guide-tab-btn px-3 py-1 rounded-full font-label-sm text-label-sm font-bold bg-primary text-on-primary shadow-sm active:scale-95 transition-all duration-200 shrink-0';
+            } else {
+              btn.className = 'guide-tab-btn px-3 py-1 rounded-full font-label-sm text-label-sm font-semibold bg-surface-container-high text-on-surface-variant hover:text-on-surface active:scale-95 transition-all duration-200 shrink-0';
+            }
+          }
+
+          // Tab panel visibility
+          const panel = document.getElementById('guide-panel-' + t);
+          if (panel) {
+            if (t === tabKey) {
+              panel.classList.remove('hidden');
+              panel.classList.add('flex');
+            } else {
+              panel.classList.add('hidden');
+              panel.classList.remove('flex');
+            }
+          }
+        });
+
+        // If user directly clicked a guide tab that corresponds to a broker card, sync the card
+        if (syncBrokerCard) {
+          const directCardBrokers = ['sbi', 'rakuten', 'monex', 'matsui', 'other'];
+          if (directCardBrokers.includes(tabKey)) {
+            selectBroker(tabKey);
+          }
+        }
+      }
+
+      // Dropzone toggle
+      function toggleDropState(hasFile) {
+        const selectedBox = document.getElementById('file-selected-box');
+        const emptyBox = document.getElementById('file-empty-box');
+        if (hasFile) {
+          selectedBox.classList.remove('hidden');
+          emptyBox.classList.add('hidden');
+        } else {
+          selectedBox.classList.add('hidden');
+          emptyBox.classList.remove('hidden');
+        }
+      }
+
+      // Holding Dynamic Impact State
+      const stockImpacts = {
+        '7203': { div: 7280, asset: 265000, action: 'new' },
+        'AAPL': { div: 1460, asset: 275000, action: 'new' },
+        'eMAXIS': { div: 0, asset: 180000, action: 'new' }
+      };
+
+      function setHoldingAction(ticker, action, divVal, assetVal) {
+        stockImpacts[ticker].action = action;
+        stockImpacts[ticker].div = (action === 'skip') ? 0 : divVal;
+        stockImpacts[ticker].asset = (action === 'skip') ? 0 : assetVal;
+
+        // Visual styles on row
+        const row = document.getElementById('stock-row-' + ticker);
+        if (action === 'skip') {
+          row.classList.add('opacity-40');
+        } else {
+          row.classList.remove('opacity-40');
+        }
+
+        // Toggle button active classes
+        document.querySelectorAll('.stock-btn-' + ticker).forEach(b => {
+          b.className = 'stock-btn-' + ticker + ' px-2 py-0.5 rounded text-label-sm font-label-sm text-on-surface-variant hover:text-on-surface active:scale-95 transition-all';
+        });
+        const activeBtn = document.getElementById('act-' + ticker + '-' + action);
+        if (activeBtn) {
+          activeBtn.className = 'stock-btn-' + ticker + ' px-2 py-0.5 rounded text-label-sm font-label-sm bg-primary text-on-primary font-bold active:scale-95 transition-all';
+        }
+
+        // Recalculate impact totals
+        let totalDiv = 0;
+        let totalAsset = 0;
+        Object.keys(stockImpacts).forEach(k => {
+          totalDiv += stockImpacts[k].div;
+          totalAsset += stockImpacts[k].asset;
+        });
+
+        document.getElementById('impact-dividend').innerText = '+¥' + totalDiv.toLocaleString();
+        document.getElementById('impact-asset').innerText = '¥' + totalAsset.toLocaleString();
+      }
+
+      // Simulated Auto Execution Pipelines
+      function runAnalysisPipeline() {
+        switchState('step1_parsing');
+        setTimeout(() => {
+          switchState('step2_preview');
+        }, 1600);
+      }
+
+      function executeImport() {
+        switchState('step3_processing');
+        setTimeout(() => {
+          switchState('step3_complete');
+        }, 1600);
+      }
+
+      // Initialize Default State
+      document.addEventListener('DOMContentLoaded', () => {
+        switchState('step1_file');
+      });
+    </script>
+</main>
+
+
+</body></html>
