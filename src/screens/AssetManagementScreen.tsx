@@ -3,6 +3,8 @@ import { useApp } from '../context/AppContext';
 import { CategoryType, SortCriteria, SortDirection, StateSimMode } from '../types';
 import { monthlyDividends2024 } from '../data/mockData';
 import { SortModal } from '../components/modals/SortModal';
+import { AnimatedNumber } from '../components/AnimatedNumber';
+import { motion, AnimatePresence } from 'motion/react';
 
 export const AssetManagementScreen: React.FC = () => {
   const {
@@ -365,19 +367,33 @@ export const AssetManagementScreen: React.FC = () => {
                 <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#10b981]/20 text-[#4edea3]">
                   <span className="material-symbols-outlined text-[16px]">trending_up</span>
                   <span className="text-xs font-bold font-mono">
-                    {isPrivacyActive ? '+¥ ••••••' : `+¥${totalGain.toLocaleString()} (+${gainPct}%)`}
+                    {isPrivacyActive ? '+¥ ••••••' : (
+                      <>
+                        +<AnimatedNumber value={totalGain} prefix="¥" /> (+{gainPct}%)
+                      </>
+                    )}
                   </span>
                 </div>
               </div>
 
               <div className="flex flex-col gap-0.5 mt-0.5">
                 <span className="font-mono text-2xl sm:text-3xl text-white font-bold tracking-tight">
-                  {isPrivacyActive ? '¥ ••••••••' : `¥${totalAssets.toLocaleString()}`}
+                  <AnimatedNumber
+                    value={totalAssets}
+                    prefix="¥"
+                    isMasked={isPrivacyActive}
+                    maskText="¥ ••••••••"
+                  />
                 </span>
                 <div className="flex items-center gap-1.5 text-xs text-[#bbcabf]">
                   <span>投資元本:</span>
                   <span className="font-mono font-medium text-slate-300">
-                    {isPrivacyActive ? '¥ ••••••••' : `¥${totalCost.toLocaleString()}`}
+                    <AnimatedNumber
+                      value={totalCost}
+                      prefix="¥"
+                      isMasked={isPrivacyActive}
+                      maskText="¥ ••••••••"
+                    />
                   </span>
                 </div>
               </div>
@@ -388,12 +404,17 @@ export const AssetManagementScreen: React.FC = () => {
                   <span className="text-[11px] text-[#bbcabf]">年間予想受取配当</span>
                   <div className="flex items-baseline gap-1 mt-0.5">
                     <span className="font-mono text-base font-bold text-[#4edea3]">
-                      {isPrivacyActive ? '¥ ••••••' : `¥${Math.round(totalAnnualDiv).toLocaleString()}`}
+                      <AnimatedNumber
+                        value={Math.round(totalAnnualDiv)}
+                        prefix="¥"
+                        isMasked={isPrivacyActive}
+                        maskText="¥ ••••••"
+                      />
                     </span>
                     <span className="text-[10px] text-[#bbcabf]">/年</span>
                   </div>
                   <span className="text-[10px] text-[#bbcabf] mt-0.5">
-                    税引後概算: {isPrivacyActive ? '¥ ••••••' : `¥${netAnnualDiv.toLocaleString()}`}
+                    税引後概算: <AnimatedNumber value={netAnnualDiv} prefix="¥" isMasked={isPrivacyActive} maskText="¥ ••••••" />
                   </span>
                 </div>
 
@@ -628,11 +649,18 @@ export const AssetManagementScreen: React.FC = () => {
                 const annualDiv = Math.round(holding.shares * holding.dps * (isUSD ? 154 : 1));
 
                 return (
-                  <article
+                  <motion.article
                     key={holding.id}
+                    layout
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    whileHover={{ y: -2, scale: 1.006 }}
+                    whileTap={{ scale: 0.985 }}
+                    transition={{ duration: 0.2 }}
                     onClick={() => navigateTo('stock-detail', holding.code)}
-                    className={`p-3.5 rounded-2xl bg-[#131b2e] border hover:bg-[#171f33] transition-all cursor-pointer relative overflow-hidden active:scale-[0.99] ${
-                      selectedMonth !== null ? 'border-[#4edea3]/50' : 'border-slate-800/80'
+                    className={`p-3.5 rounded-2xl bg-[#131b2e] border hover:bg-[#171f33] transition-colors cursor-pointer relative overflow-hidden ${
+                      selectedMonth !== null ? 'border-[#4edea3]/50 shadow-md shadow-[#4edea3]/5' : 'border-slate-800/80 shadow-md'
                     }`}
                   >
                     {/* Month Match Ribbon */}
@@ -732,7 +760,7 @@ export const AssetManagementScreen: React.FC = () => {
                         {holding.nextPayoutTiming}
                       </span>
                     </div>
-                  </article>
+                  </motion.article>
                 );
               })
             )}

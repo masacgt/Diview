@@ -13,13 +13,16 @@ export const composeFiles: ComposeFileItem[] = [
     name: 'MainActivity.kt',
     path: 'app/src/main/java/com/kurogane/dividend/MainActivity.kt',
     category: 'config',
-    description: 'Jetpack Composeのエントリーポイント。Navigation Composeによる画面遷移とMaterial 3 Scaffold / NavigationBarを構成。',
+    description: 'Jetpack Composeのエントリーポイント。Navigation Composeによる画面遷移アニメーション（slideIn/slideOut/fadeIn/fadeOut）とMaterial 3 Scaffold / NavigationBarを構成。',
     code: `package com.kurogane.dividend
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -119,7 +122,19 @@ class MainActivity : ComponentActivity() {
                     NavHost(
                         navController = navController,
                         startDestination = "asset",
-                        modifier = Modifier.padding(innerPadding)
+                        modifier = Modifier.padding(innerPadding),
+                        enterTransition = {
+                            slideInHorizontally(initialOffsetX = { 400 }, animationSpec = tween(300, easing = FastOutSlowInEasing)) + fadeIn(animationSpec = tween(300))
+                        },
+                        exitTransition = {
+                            slideOutHorizontally(targetOffsetX = { -400 }, animationSpec = tween(300, easing = FastOutSlowInEasing)) + fadeOut(animationSpec = tween(300))
+                        },
+                        popEnterTransition = {
+                            slideInHorizontally(initialOffsetX = { -400 }, animationSpec = tween(300, easing = FastOutSlowInEasing)) + fadeIn(animationSpec = tween(300))
+                        },
+                        popExitTransition = {
+                            slideOutHorizontally(targetOffsetX = { 400 }, animationSpec = tween(300, easing = FastOutSlowInEasing)) + fadeOut(animationSpec = tween(300))
+                        }
                     ) {
                         composable("asset") {
                             AssetManagementScreen(

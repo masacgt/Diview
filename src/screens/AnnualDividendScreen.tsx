@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { AnimatedNumber } from '../components/AnimatedNumber';
+import { motion, AnimatePresence } from 'motion/react';
 
 export const AnnualDividendScreen: React.FC = () => {
   const { holdings } = useApp();
@@ -81,7 +83,7 @@ export const AnnualDividendScreen: React.FC = () => {
           <div className="flex items-baseline justify-between gap-2 mt-0.5">
             <div className="flex items-baseline gap-1.5">
               <span className="font-mono text-3xl sm:text-4xl text-white font-bold tracking-tight">
-                {basis === 'eval' ? '¥ 124,500' : '¥ 118,200'}
+                <AnimatedNumber value={basis === 'eval' ? 124500 : 118200} prefix="¥ " />
               </span>
               <span className="text-xs text-[#bbcabf] font-medium">/ 年</span>
             </div>
@@ -100,7 +102,7 @@ export const AnnualDividendScreen: React.FC = () => {
               </span>
               <div className="flex items-baseline gap-1 mt-0.5">
                 <span className="font-mono text-base text-white font-bold">
-                  {basis === 'eval' ? '約 ¥10,375' : '約 ¥9,850'}
+                  約 <AnimatedNumber value={basis === 'eval' ? 10375 : 9850} prefix="¥" />
                 </span>
                 <span className="text-[10px] text-[#bbcabf]">/ 月</span>
               </div>

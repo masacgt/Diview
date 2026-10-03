@@ -15,6 +15,7 @@ import { CsvImportScreen } from './screens/CsvImportScreen';
 import { ContactFeedbackScreen } from './screens/ContactFeedbackScreen';
 import { TermsPrivacyScreen } from './screens/TermsPrivacyScreen';
 import { JetpackComposeScreen } from './screens/JetpackComposeScreen';
+import { AnimatePresence, motion } from 'motion/react';
 
 // Modals
 import { SearchModal } from './components/modals/SearchModal';
@@ -55,8 +56,19 @@ const AppContent: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#0b1326] text-[#dae2fd] font-sans flex flex-col relative antialiased">
       <Header />
-      <main className="flex-1 w-full">
-        {renderScreen()}
+      <main className="flex-1 w-full overflow-x-hidden">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentScreen}
+            initial={{ opacity: 0, y: 10, scale: 0.995 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.995 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full"
+          >
+            {renderScreen()}
+          </motion.div>
+        </AnimatePresence>
       </main>
       <BottomNav />
 

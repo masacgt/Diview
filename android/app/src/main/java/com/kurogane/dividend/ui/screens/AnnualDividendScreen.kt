@@ -1,6 +1,7 @@
 package com.kurogane.dividend.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -332,6 +333,17 @@ fun AnnualDividendScreen(
 
 @Composable
 private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.model.Holding>) {
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        isVisible = true
+    }
+
+    val animatedProgress by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+        label = "donutAnimation"
+    )
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -360,11 +372,11 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     val radius = (size.minDimension - strokeWidth) / 2
                     val centerOffset = Offset(size.width / 2, size.height / 2)
 
-                    // Sector arcs
+                    // Sector arcs animated with progress
                     drawArc(
                         color = Color(0xFF10B981), // Emerald - 輸送機器
                         startAngle = -90f,
-                        sweepAngle = 140f,
+                        sweepAngle = 140f * animatedProgress,
                         useCenter = false,
                         topLeft = Offset(centerOffset.x - radius, centerOffset.y - radius),
                         size = Size(radius * 2, radius * 2),
@@ -373,7 +385,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     drawArc(
                         color = Color(0xFF06B6D4), // Cyan - テクノロジー
                         startAngle = 55f,
-                        sweepAngle = 100f,
+                        sweepAngle = 100f * animatedProgress,
                         useCenter = false,
                         topLeft = Offset(centerOffset.x - radius, centerOffset.y - radius),
                         size = Size(radius * 2, radius * 2),
@@ -382,7 +394,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     drawArc(
                         color = Color(0xFF8B5CF6), // Purple - 銀行
                         startAngle = 160f,
-                        sweepAngle = 70f,
+                        sweepAngle = 70f * animatedProgress,
                         useCenter = false,
                         topLeft = Offset(centerOffset.x - radius, centerOffset.y - radius),
                         size = Size(radius * 2, radius * 2),
@@ -391,7 +403,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     drawArc(
                         color = Color(0xFFF59E0B), // Amber - その他
                         startAngle = 235f,
-                        sweepAngle = 30f,
+                        sweepAngle = 30f * animatedProgress,
                         useCenter = false,
                         topLeft = Offset(centerOffset.x - radius, centerOffset.y - radius),
                         size = Size(radius * 2, radius * 2),
@@ -502,6 +514,9 @@ private fun CompoundingSimulationSection() {
             val years = listOf("2024", "2025", "2026", "2027", "2028")
             val amounts = listOf(37, 46, 58, 73, 91) // 万円
 
+            var barAnimActive by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { barAnimActive = true }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -510,6 +525,13 @@ private fun CompoundingSimulationSection() {
                 verticalAlignment = Alignment.Bottom
             ) {
                 years.zip(amounts).forEach { (year, amt) ->
+                    val targetHeight = (amt * 1.3).dp
+                    val animatedHeight by animateDpAsState(
+                        targetValue = if (barAnimActive) targetHeight else 0.dp,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                        label = "barHeight_$year"
+                    )
+
                     Column(
                         horizontalAlignment = Alignment.CenterVertically
                     ) {
@@ -525,7 +547,7 @@ private fun CompoundingSimulationSection() {
                         Box(
                             modifier = Modifier
                                 .width(28.dp)
-                                .height((amt * 1.3).dp)
+                                .height(animatedHeight)
                                 .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
                                 .background(
                                     Brush.verticalGradient(
