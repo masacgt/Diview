@@ -1,20 +1,23 @@
-# yfinance → Cloudflare R2
+# Yahoo Finance data collection to Cloudflare R2
 
-This job stores daily Yahoo Finance OHLCV prices for Japanese listed share symbols (Yahoo `.T` tickers) in Cloudflare R2. Its universe is the project's existing 3,960-row security master at `data/irbank/organized/d1/securities.csv`.
+This scheduled GitHub Actions workflow reads the project's existing 3,960-row security master (`data/irbank/organized/d1/securities.csv`), converts each 4- or 5-character code to a Yahoo `.T` symbol, and stores the returned data per symbol in the private `diview-market-data` R2 bucket.
+
+## Collected data
+
+- Daily, weekly, and monthly OHLCV price history for the maximum period Yahoo makes available (`period="max"` on the first run). Adjusted close and Yahoo's dividend, split, and capital-gain actions are retained when returned.
+- Dividend and split events derived from that full daily history.
+- Current company profile and quote statistics, including current/trailing/forward PER, PBR, EPS, market capitalization, dividend rate/yield, and payout ratio when Yahoo supplies them.
+- Monthly, quarterly, and yearly historical valuation measures from yfinance's `get_valuation_measures(periods=None)` when available. These rows are the source for historical PER/PBR; the workflow does not estimate old PER from current values.
+- Available annual, quarterly, and trailing income statements, balance sheets, and cash-flow statements; available earnings history; and historical share-count observations.
+
+Yahoo does not provide unlimited history for every data family. Price/actions can go back to the earliest date returned for each symbol; valuation measures and financial statements only cover the periods Yahoo exposes, and profile/quote statistics are current snapshots. Missing fields or unavailable symbol histories remain absent/null rather than being inferred. The `YFINANCE_INITIAL_PERIOD=max` setting controls first-time price history; existing R2 histories are incrementally refreshed and merged.
+
+Each symbol is stored at `market/yfinance/securities/{symbol}.json`. The summary at `market/yfinance/latest_market_data.json` contains current statistics and latest price/dividend per symbol. The bucket is private; this workflow does not publish a public URL.
 
 ## GitHub configuration
 
-Add these repository secrets:
+Repository secrets required: `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`. They must be S3-compatible credentials with Object Read & Write access scoped to the `diview-market-data` bucket. The account ID is configured in the workflow. The workflow runs on weekdays at 03:30 JST and supports manual start from GitHub Actions.
 
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
+The collector logs the installed yfinance version. If an API/library error occurs while retrieving price history and the installed version is below `YFINANCE_MIN_VERSION`, it upgrades yfinance and retries that history request once. Other errors are recorded as warnings and do not cause fabricated data to be written. The scheduled environment starts with the current release allowed by `yfinance>=0.2.66,<2`.
 
-The workflow is configured for account `8d8f4f1f3c53232aaf7c7d6dd7b33944` and the private bucket `diview-market-data`. Its R2 token should have Object Read & Write permission scoped only to that bucket. A general Cloudflare API token is not used as an R2 S3 secret.
-
-The workflow reads the `security_code_display` column from the project master and turns each 4- or 5-character alphanumeric code into a Yahoo `.T` symbol. Update the project master when the listed universe changes. The master can include non-company listed instruments as well as operating companies.
-
-The workflow runs weekdays at 03:30 JST and can also be started manually. It fetches an initial one-year history for symbols without an R2 history object, then refreshes the most recent five days on later runs. It merges and retains the history object per symbol under `market/yfinance/history/` and replaces `market/yfinance/latest_prices.json`. Workflow runners do not commit fetched prices into the repository.
-
-To test locally, install `requirements.txt`, set `MARKET_UNIVERSE_CSV`, `YFINANCE_INITIAL_PERIOD`, `CLOUDFLARE_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`, then run `python scripts/yfinance_r2/fetch_and_upload.py`.
-
-This uses the Yahoo Finance access permission you stated you have. Confirm its scope covers automated full-universe daily collection, persistent R2 storage, and any later app delivery. This workflow does not publish a public R2 URL or configure a public bucket. The retrieved fields are daily open, high, low, close, adjusted close, and volume; it does not retrieve every kind of company information.
+The data source is Yahoo Finance accessed through yfinance, under the access permission the user stated they have. Verify that the permission scope covers full-universe automated retrieval, persistent R2 storage, and any later app use or delivery.

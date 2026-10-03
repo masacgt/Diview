@@ -10,13 +10,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: yfinance-r2-prices
+  group: yfinance-r2-full
   cancel-in-progress: false
 
 jobs:
-  update-prices:
+  fetch:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,11 +31,38 @@ jobs:
           cache-dependency-path: scripts/yfinance_r2/requirements.txt
       - name: Install dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
-      - name: Fetch and upload prices
+      - name: Fetch full history and upload to R2
         run: python scripts/yfinance_r2/fetch_and_upload.py
         env:
           MARKET_UNIVERSE_CSV: data/irbank/organized/d1/securities.csv
-          YFINANCE_INITIAL_PERIOD: 1y
+          YFINANCE_INITIAL_PERIOD: max
+          YFINANCE_MIN_VERSION: 0.2.66
+          YFINANCE_AUTO_UPGRADE: "1"
+          YFINANCE_SHARD_INDEX: ${{ matrix.shard }}
+          YFINANCE_SHARD_COUNT: "24"
+          CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: diview-market-data
+          R2_PREFIX: market/yfinance
+
+  aggregate:
+    needs: fetch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/yfinance_r2/requirements.txt
+      - name: Install dependencies
+        run: python -m pip install -r scripts/yfinance_r2/requirements.txt
+      - name: Publish latest summary
+        run: python scripts/yfinance_r2/fetch_and_upload.py --aggregate
+        env:
+          YFINANCE_SHARD_COUNT: "24"
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
