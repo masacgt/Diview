@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import importlib.metadata
+import importlib
 import json
 import math
 import os
@@ -35,7 +36,14 @@ def required_env(name: str) -> str:
 def configured_symbols() -> list[str]:
     raw = os.environ.get("YFINANCE_SYMBOLS", "").strip()
     if raw:
-        symbols = [s.strip().upper() for s in raw.split(",") if s.strip()]
+        symbols = []
+        for item in raw.split(","):
+            symbol = item.strip().upper()
+            if not symbol:
+                continue
+            if symbol.isalnum() and len(symbol) in (4, 5):
+                symbol = f"{symbol}.T"
+            symbols.append(symbol)
         if len(set(symbols)) != len(symbols):
             raise RuntimeError("YFINANCE_SYMBOLS contains duplicate symbols")
         return symbols
@@ -113,34 +121,78 @@ def merge_dated(old: list[Any], new: list[Any], key: str) -> list[Any]:
     return [records[k] for k in sorted(records)]
 
 
-def call_optional(label: str, fn: Callable[[], Any], warnings: list[str]) -> Any:
+def is_transient_yfinance_error(exc: Exception) -> bool:
+    name = type(exc).__name__.lower()
+    message = str(exc).lower()
+    return any(token in name or token in message for token in (
+        "ratelimit", "connection", "timeout", "jsondecode", "temporarily", "service unavailable",
+        "too many requests", "429", "502", "503", "504", "remote end closed", "network is unreachable",
+    ))
+
+
+def call_yfinance(
+    label: str,
+    fn: Callable[[], Any],
+    warnings: list[str],
+    upgrade_state: list[bool],
+) -> Any:
+    """Retry transient Yahoo/network errors and refresh an outdated yfinance once per symbol."""
+    retries = max(0, int(os.environ.get("YFINANCE_RETRIES", "3")))
+    for attempt in range(retries + 1):
+        try:
+            return fn()
+        except Exception as exc:
+            version_text = yfinance_version()
+            print(f"yfinance {version_text}; {label} failed ({type(exc).__name__}): {exc}", file=sys.stderr)
+            if not upgrade_state[0] and is_yfinance_outdated():
+                try:
+                    refresh_yfinance_after_error(exc)
+                    upgrade_state[0] = True
+                except Exception as update_exc:
+                    warnings.append(f"yfinance upgrade failed: {type(update_exc).__name__}: {update_exc}")
+                    break
+                continue
+            if attempt < retries and is_transient_yfinance_error(exc):
+                delay = min(60, float(os.environ.get("YFINANCE_RETRY_BASE_SECONDS", "5")) * (2 ** attempt))
+                print(f"Retrying {label} in {delay:g}s ({attempt + 1}/{retries})", file=sys.stderr)
+                time.sleep(delay)
+                continue
+            warnings.append(f"{label}: {type(exc).__name__}: {exc}")
+            return None
+    return None
+
+
+def yfinance_version() -> str:
     try:
-        return fn()
-    except Exception as exc:
-        warnings.append(f"{label}: {type(exc).__name__}: {exc}")
-        return None
+        return importlib.metadata.version("yfinance")
+    except importlib.metadata.PackageNotFoundError:
+        return str(getattr(yf, "__version__", "unknown"))
+
+
+def is_yfinance_outdated() -> bool:
+    try:
+        parts = tuple(int(part) for part in yfinance_version().split(".")[:2])
+    except ValueError:
+        return True
+    return parts < (0, 2)
 
 
 def refresh_yfinance_after_error(exc: Exception) -> bool:
     """Upgrade yfinance once after a provider/library failure, then let caller retry."""
     if os.environ.get("YFINANCE_AUTO_UPGRADE", "1").lower() not in {"1", "true", "yes"}:
         return False
-    minimum = tuple(int(part) for part in os.environ.get("YFINANCE_MIN_VERSION", "0.2.66").split(".")[:3])
+    minimum = tuple(int(part) for part in os.environ.get("YFINANCE_MIN_VERSION", "0.2").split(".")[:2])
+    installed_text = yfinance_version()
     try:
-        installed_text = importlib.metadata.version("yfinance")
-        installed = tuple(int(part) for part in installed_text.split(".")[:3])
-    except (importlib.metadata.PackageNotFoundError, ValueError):
-        installed_text, installed = getattr(yf, "__version__", "unknown"), (0,)
+        installed = tuple(int(part) for part in installed_text.split(".")[:2])
+    except ValueError:
+        installed = (0,)
     print(f"yfinance error: {type(exc).__name__}: {exc}; installed version={installed_text}", file=sys.stderr)
     if installed >= minimum:
         return False
     print(f"Upgrading yfinance {installed_text} to >= {'.'.join(map(str, minimum))},<2 and retrying once", file=sys.stderr)
-    subprocess.run(
-        [sys.executable, "-m", "pip", "install", "--upgrade", f"yfinance>={'.'.join(map(str, minimum))},<2"],
-        check=True,
-    )
+    subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "yfinance"], check=True)
     # Replace the module in this process so the retry uses the upgraded package.
-    import importlib
     importlib.invalidate_caches()
     importlib.reload(yf)
     return True
@@ -212,28 +264,21 @@ def history_rows(ticker: Any, interval: str, period: str) -> list[dict[str, Any]
 def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
     warnings: list[str] = []
     document = load_existing(client, bucket, symbol)
-    ticker = yf.Ticker(symbol)
     now = datetime.now(UTC).isoformat()
     initial_period = os.environ.get("YFINANCE_INITIAL_PERIOD", "max")
 
-    upgraded = False
+    upgrade_state = [False]
     for interval, incremental_period in (("1d", "5d"), ("1wk", "1mo"), ("1mo", "3mo")):
         old_rows = document["price_history"].get(interval, [])
         period = incremental_period if old_rows else initial_period
-        try:
-            rows = history_rows(ticker, interval, period)
-        except Exception as exc:
-            if upgraded or not refresh_yfinance_after_error(exc):
-                warnings.append(f"prices[{interval}]: {type(exc).__name__}: {exc}")
-                rows = None
-            else:
-                upgraded = True
-                ticker = yf.Ticker(symbol)
-                try:
-                    rows = history_rows(ticker, interval, period)
-                except Exception as retry_exc:
-                    warnings.append(f"prices[{interval}] retry after yfinance upgrade: {type(retry_exc).__name__}: {retry_exc}")
-                    rows = None
+        rows = call_yfinance(
+            f"prices[{interval}]",
+            lambda i=interval, p=period: history_rows(yf.Ticker(symbol), i, p),
+            warnings,
+            upgrade_state,
+        )
+        if rows == []:
+            warnings.append(f"prices[{interval}]: Yahoo returned no rows for {symbol}; verify symbol/listing/history availability")
         if rows:
             document["price_history"][interval] = merge_dated(old_rows, rows, "date")
 
@@ -243,7 +288,7 @@ def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any
     document["actions"]["dividends"] = merge_dated(document["actions"].get("dividends", []), new_dividends, "date")
     document["actions"]["stock_splits"] = merge_dated(document["actions"].get("stock_splits", []), new_splits, "date")
 
-    info = call_optional("profile_and_current_statistics", ticker.get_info, warnings)
+    info = call_yfinance("profile_and_current_statistics", lambda: yf.Ticker(symbol).get_info(), warnings, upgrade_state)
     if isinstance(info, dict) and info:
         document["profile"] = json_safe(info)
         current_fields = (
@@ -256,14 +301,11 @@ def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any
             "mostRecentQuarter", "targetMeanPrice", "recommendationKey",
         )
         document["statistics_current"] = {k: json_safe(info[k]) for k in current_fields if k in info}
+    elif info == {}:
+        warnings.append(f"profile: Yahoo returned no company information for {symbol}")
 
-    valuation_fetchers = {
-        "monthly": lambda: ticker.get_valuation_measures(freq="monthly", periods=None),
-        "quarterly": lambda: ticker.get_valuation_measures(freq="quarterly", periods=None),
-        "yearly": lambda: ticker.get_valuation_measures(freq="yearly", periods=None),
-    }
-    for frequency, fetch in valuation_fetchers.items():
-        periods = call_optional(f"valuation[{frequency}]", fetch, warnings)
+    for frequency in ("monthly", "quarterly", "yearly"):
+        periods = call_yfinance(f"valuation[{frequency}]", lambda f=frequency: yf.Ticker(symbol).get_valuation_measures(freq=f, periods=None), warnings, upgrade_state)
         if periods is not None:
             fresh = frame_periods(periods)
             old = document["valuation_history"].get(frequency, [])
@@ -274,26 +316,33 @@ def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any
             document["valuation_history"][frequency] = merge_dated(old, fresh, "period_end")
             if current:
                 document.setdefault("valuation_current", {})[frequency] = current
+            if not fresh and not current:
+                warnings.append(f"valuation[{frequency}]: Yahoo returned no valuation history for {symbol}")
 
-    statement_methods = {
-        "income_statement": ticker.get_income_stmt,
-        "balance_sheet": ticker.get_balance_sheet,
-        "cash_flow": ticker.get_cash_flow,
-    }
-    for statement, method in statement_methods.items():
+    statement_methods = ("income_statement", "balance_sheet", "cash_flow")
+    for statement in statement_methods:
         for frequency in ("yearly", "quarterly", "trailing"):
-            frame = call_optional(f"financials.{statement}.{frequency}", lambda m=method, f=frequency: m(freq=f), warnings)
+            frame = call_yfinance(
+                f"financials.{statement}.{frequency}",
+                lambda name=statement, f=frequency: getattr(yf.Ticker(symbol), {
+                    "income_statement": "get_income_stmt", "balance_sheet": "get_balance_sheet", "cash_flow": "get_cash_flow"
+                }[name])(freq=f),
+                warnings,
+                upgrade_state,
+            )
             if frame is not None:
                 fresh = frame_periods(frame)
                 old = document["financials"].setdefault(statement, {}).get(frequency, [])
                 document["financials"][statement][frequency] = merge_dated(old, fresh, "period_end")
+                if not fresh:
+                    warnings.append(f"financials.{statement}.{frequency}: Yahoo returned no rows for {symbol}")
 
-    earnings = call_optional("earnings_history", ticker.get_earnings_history, warnings)
+    earnings = call_yfinance("earnings_history", lambda: yf.Ticker(symbol).get_earnings_history(), warnings, upgrade_state)
     if earnings is not None:
         document["earnings_history"] = merge_dated(
             document.get("earnings_history", []), frame_records(earnings), "date"
         )
-    shares = call_optional("share_count_history", ticker.get_shares_full, warnings)
+    shares = call_yfinance("share_count_history", lambda: yf.Ticker(symbol).get_shares_full(), warnings, upgrade_state)
     if shares is not None:
         # shares_full returns a Series indexed by date.
         try:
@@ -365,7 +414,7 @@ def main() -> int:
             print(f"ERROR {failed[-1]}", file=sys.stderr)
         if position % 10 == 0:
             print(f"shard {shard_index + 1}/{shard_count}: {position}/{len(selected)} processed")
-        time.sleep(float(os.environ.get("YFINANCE_REQUEST_PAUSE_SECONDS", "0.15")))
+        time.sleep(float(os.environ.get("YFINANCE_REQUEST_PAUSE_SECONDS", "1")))
 
     put_json(client, bucket, f"{PREFIX}/latest/shards/{shard_index:02d}.json", {
         "schema_version": 1,
