@@ -1,5 +1,6 @@
 package com.kurogane.dividend.ui.screens
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -99,9 +100,17 @@ fun RoadmapScreen() {
                                     Text("QUEST 6 目標: ¥50,000 / 月", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     Text("62.4% 達成", color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                 }
+                                var isProgressActive by remember { mutableStateOf(false) }
+                                LaunchedEffect(Unit) { isProgressActive = true }
+                                val animatedProgress by animateFloatAsState(
+                                    targetValue = if (isProgressActive) 0.624f else 0f,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                                    label = "questProgress"
+                                )
+
                                 Spacer(modifier = Modifier.height(6.dp))
                                 LinearProgressIndicator(
-                                    progress = { 0.624f },
+                                    progress = { animatedProgress },
                                     modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
                                     color = PrimaryEmerald,
                                     trackColor = SurfaceContainerHighest

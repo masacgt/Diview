@@ -3,6 +3,8 @@ import { useApp } from '../context/AppContext';
 import { WatchlistStock } from '../types';
 import { ExDividendMatrixModal } from '../components/modals/ExDividendMatrixModal';
 import { MonthlyForecastModal } from '../components/modals/MonthlyForecastModal';
+import { AnimatedNumber } from '../components/AnimatedNumber';
+import { motion, AnimatePresence } from 'motion/react';
 
 export const WatchlistScreen: React.FC = () => {
   const { watchlist, updateTargetYield, toggleWatchlistStock, navigateTo, openAddHolding, showToast } = useApp();
@@ -206,9 +208,15 @@ export const WatchlistScreen: React.FC = () => {
           const priceDiff = targetPrice - stock.price;
 
           return (
-            <div
+            <motion.div
               key={stock.code}
-              className={`relative flex flex-col rounded-2xl bg-[#131b2e] p-3.5 shadow-md transition-all ${
+              layout
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              whileHover={{ y: -2 }}
+              transition={{ duration: 0.2 }}
+              className={`relative flex flex-col rounded-2xl bg-[#131b2e] p-3.5 shadow-md transition-colors ${
                 isReached
                   ? 'border border-[#4edea3]/60 glow-celebrate'
                   : 'border border-slate-800 hover:border-slate-700'
@@ -363,7 +371,7 @@ export const WatchlistScreen: React.FC = () => {
                   <span className="material-symbols-outlined text-[13px]">chevron_right</span>
                 </button>
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </section>
