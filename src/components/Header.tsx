@@ -26,6 +26,8 @@ export const Header: React.FC = () => {
         return { title: 'お問い合わせ・ご意見', sub: 'Contact & Feedback' };
       case 'terms-privacy':
         return { title: '利用規約・プライバシー', sub: 'Terms & Privacy' };
+      case 'jetpack-compose':
+        return { title: 'Jetpack Compose', sub: 'Kotlin • Material 3 Code Hub' };
       default:
         return { title: '資産管理', sub: 'Asset Management' };
     }
@@ -79,6 +81,21 @@ export const Header: React.FC = () => {
         )}
 
         <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => navigateTo(currentScreen === 'jetpack-compose' ? 'asset-management' : 'jetpack-compose')}
+            aria-label="Jetpack Compose コード"
+            title="Jetpack Compose (Kotlin) コードを表示"
+            className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              currentScreen === 'jetpack-compose'
+                ? 'bg-[#10b981] text-black shadow-md shadow-[#10b981]/30'
+                : 'bg-[#171f33] text-[#4edea3] hover:bg-[#222a3d] border border-[#10b981]/30'
+            }`}
+          >
+            <span className="text-xs">🤖</span>
+            <span className="text-[11px] font-mono">Compose</span>
+          </button>
+
           <button
             type="button"
             onClick={openSearch}
