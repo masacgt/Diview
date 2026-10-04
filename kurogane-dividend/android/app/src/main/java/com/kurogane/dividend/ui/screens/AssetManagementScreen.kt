@@ -169,10 +169,10 @@ fun AssetManagementScreen(
     }
 
     val badgeColor = when {
-        avgYield >= 4.0 -> Color(0xFFC084FC) // Purple
+        avgYield >= 4.0 -> SecondaryIndigo // Purple
         avgYield >= 3.0 -> NeonGreen // Emerald
         avgYield >= 2.0 -> Color(0xFF60A5FA) // Blue
-        avgYield >= 0.5 -> Color(0xFFFBBF24) // Amber
+        avgYield >= 0.5 -> AccentAmber // Amber
         else -> SoftGray // Slate
     }
 
@@ -200,7 +200,7 @@ fun AssetManagementScreen(
                     .clickable { onOpenAddHolding("") },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Asset", tint = Color(0xFF031C13), modifier = Modifier.size(28.dp))
+                Icon(Icons.Default.Add, contentDescription = "Add Asset", tint = OnPrimaryContainer, modifier = Modifier.size(28.dp))
             }
         },
         containerColor = SpaceNavy
@@ -234,9 +234,9 @@ fun AssetManagementScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(NeonGreen))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("STATE SIMULATOR", fontSize = 10.sp, fontWeight = FontWeight.Black, color = NeonGreenLight)
+                            Text("STATE SIMULATOR", fontSize = AppTextSize.dense, fontWeight = FontWeight.Black, color = NeonGreenLight)
                         }
-                        Text("画面状態の動的切替", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = SoftGray)
+                        Text("画面状態の動的切替", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     val simTabs = listOf(
@@ -267,9 +267,9 @@ fun AssetManagementScreen(
                                     .padding(horizontal = 10.dp, vertical = 6.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(icon, contentDescription = null, tint = if (isSelected) Color.Black else SoftGray, modifier = Modifier.size(12.dp))
+                                    Icon(icon, contentDescription = null, tint = if (isSelected) OnPrimaryContainer else SoftGray, modifier = Modifier.size(12.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text(label, fontSize = 10.sp, fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold, color = if (isSelected) Color.Black else SoftGray)
+                                    Text(label, fontSize = AppTextSize.dense, fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold, color = if (isSelected) OnPrimaryContainer else SoftGray)
                                 }
                             }
                         }
@@ -286,18 +286,18 @@ fun AssetManagementScreen(
                     border = BorderStroke(1.dp, Color(0x66F59E0B))
                 ) {
                     Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
-                        Icon(Icons.Default.CloudOff, contentDescription = null, tint = Color(0xFFFBBF24), modifier = Modifier.size(24.dp))
+                        Icon(Icons.Default.CloudOff, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(24.dp))
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("通信エラー / オフライン表示中", color = Color(0xFFFBBF24), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("通信エラー / オフライン表示中", color = AccentAmber, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Surface(shape = CircleShape, color = Color(0x33F59E0B)) {
-                                    Text("OFFLINE", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = Color(0xFFFDE68A), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    Text("OFFLINE", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = AccentAmber, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                 }
                             }
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text("最新株価の取得に失敗しました。前回キャッシュデータ（本日 15:00時点）を表示しています。", color = SoftGray, fontSize = 11.sp, lineHeight = 15.sp)
+                            Text("最新株価の取得に失敗しました。前回キャッシュデータ（本日 15:00時点）を表示しています。", color = SoftGray, fontSize = AppTextSize.dense, lineHeight = 15.sp)
                         }
                     }
                 }
@@ -314,16 +314,16 @@ fun AssetManagementScreen(
                     Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.SearchOff, contentDescription = null, tint = SoftGray, modifier = Modifier.size(40.dp))
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("該当する銘柄が見つかりません", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 14.sp)
+                        Text("該当する銘柄が見つかりません", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body)
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("検索条件 \"NVDA\" に一致する保有銘柄はありません。", color = SoftGray, fontSize = 11.sp, textAlign = TextAlign.Center)
+                        Text("検索条件 \"NVDA\" に一致する保有銘柄はありません。", color = SoftGray, fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
                         Spacer(modifier = Modifier.height(14.dp))
                         Button(
                             onClick = { stateSim = "normal" },
                             colors = ButtonDefaults.buttonColors(containerColor = NeonGreen),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text("フィルター・検索をリセット", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            Text("フィルター・検索をリセット", color = OnPrimaryContainer, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
                         }
                     }
                 }
@@ -340,16 +340,16 @@ fun AssetManagementScreen(
                     Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.Inbox, contentDescription = null, tint = SoftGray, modifier = Modifier.size(40.dp))
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("まだ保有銘柄が登録されていません", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 14.sp)
+                        Text("まだ保有銘柄が登録されていません", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body)
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("証券口座連携は不要です。右下の「＋」ボタンから1分ですぐに保有株式を登録できます。", color = SoftGray, fontSize = 11.sp, textAlign = TextAlign.Center)
+                        Text("証券口座連携は不要です。右下の「＋」ボタンから1分ですぐに保有株式を登録できます。", color = SoftGray, fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
                         Spacer(modifier = Modifier.height(14.dp))
                         Button(
                             onClick = { stateSim = "normal" },
                             colors = ButtonDefaults.buttonColors(containerColor = NeonGreen),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text("デモデータを復元する", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            Text("デモデータを復元する", color = OnPrimaryContainer, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
                         }
                     }
                 }
@@ -369,7 +369,7 @@ fun AssetManagementScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("総資産評価額", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SoftGray)
+                            Text("総資産評価額", fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, color = SoftGray)
                             Spacer(modifier = Modifier.width(6.dp))
                             Icon(
                                 if (isPrivacyActive) Icons.Default.VisibilityOff else Icons.Default.Visibility,
@@ -393,7 +393,7 @@ fun AssetManagementScreen(
                                     val sign = if (totalGainVal >= 0) "+" else ""
                                     "$sign¥${javaCurrencyFormat.format(totalGainVal.toLong())} ($sign${String.format("%.1f", gainPctVal)}%)"
                                 }
-                                Text(gainText, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = if (totalGainVal >= 0) NeonGreen else Color(0xFFFF4D4D))
+                                Text(gainText, fontSize = AppTextSize.dense, fontWeight = FontWeight.ExtraBold, color = if (totalGainVal >= 0) NeonGreen else ErrorRed)
                             }
                         }
                     }
@@ -401,7 +401,7 @@ fun AssetManagementScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         text = if (isPrivacyActive) "¥ •,•••,•••,•••" else "¥${javaCurrencyFormat.format(totalAssetsVal.toLong())}",
-                        fontSize = 32.sp,
+                        fontSize = AppTextSize.hero,
                         fontWeight = FontWeight.ExtraBold,
                         color = OnSurface,
                         fontFamily = FontFamily.SansSerif,
@@ -410,7 +410,7 @@ fun AssetManagementScreen(
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = if (isPrivacyActive) "投資元本: ¥ •,•••,•••,•••" else "投資元本: ¥${javaCurrencyFormat.format(totalCostVal.toLong())}",
-                        fontSize = 12.sp,
+                        fontSize = AppTextSize.caption,
                         fontWeight = FontWeight.Medium,
                         color = SoftGray
                     )
@@ -434,18 +434,18 @@ fun AssetManagementScreen(
                                 .padding(12.dp)
                         ) {
                             Column {
-                                Text("年間予想受取配当", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = SoftGray)
+                                Text("年間予想受取配当", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = if (isPrivacyActive) "¥ ••••• /年" else "¥${javaCurrencyFormat.format(totalAnnualDivVal.toLong())} /年",
-                                    fontSize = 18.sp,
+                                    fontSize = AppTextSize.headline,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = NeonGreen
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = if (isPrivacyActive) "税引後概算: ¥ •••••" else "税引後概算: ¥${javaCurrencyFormat.format(netAnnualDivVal.toLong())}",
-                                    fontSize = 10.sp,
+                                    fontSize = AppTextSize.dense,
                                     color = SoftGray
                                 )
                             }
@@ -461,17 +461,17 @@ fun AssetManagementScreen(
                                 .padding(12.dp)
                         ) {
                             Column {
-                                Text("平均配当利回り", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = SoftGray)
+                                Text("平均配当利回り", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
                                         text = if (isPrivacyActive) "•••" else String.format("%.2f", avgYield),
-                                        fontSize = 18.sp,
+                                        fontSize = AppTextSize.headline,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = OnSurface
                                     )
                                     Spacer(modifier = Modifier.width(2.dp))
-                                    Text("%", fontSize = 10.sp, color = SoftGray, modifier = Modifier.padding(bottom = 2.dp))
+                                    Text("%", fontSize = AppTextSize.dense, color = SoftGray, modifier = Modifier.padding(bottom = 2.dp))
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(
@@ -480,7 +480,7 @@ fun AssetManagementScreen(
                                 ) {
                                     Icon(badgeIcon, contentDescription = null, tint = badgeColor, modifier = Modifier.size(10.dp))
                                     Spacer(modifier = Modifier.width(2.dp))
-                                    Text(badgeText, fontSize = 8.sp, fontWeight = FontWeight.Black, color = badgeColor)
+                                    Text(badgeText, fontSize = AppTextSize.dense, fontWeight = FontWeight.Black, color = badgeColor)
                                 }
                             }
                         }
@@ -504,15 +504,15 @@ fun AssetManagementScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.DateRange, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("月別推移グラフ", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = OnSurface)
+                            Text("月別推移グラフ", fontSize = AppTextSize.body, fontWeight = FontWeight.ExtraBold, color = OnSurface)
                             Spacer(modifier = Modifier.width(6.dp))
                             Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(SurfaceContainerHigh).padding(horizontal = 4.dp, vertical = 2.dp)) {
-                                Text("2024", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = SoftGray)
+                                Text("2024", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
                             }
                         }
                         Text(
                             text = if (isPrivacyActive) "年間合計: ¥ ••••••" else "年間合計: ¥${javaCurrencyFormat.format(totalAnnualDivVal.toLong())}",
-                            fontSize = 12.sp,
+                            fontSize = AppTextSize.caption,
                             fontWeight = FontWeight.ExtraBold,
                             color = NeonGreenLight
                         )
@@ -542,9 +542,9 @@ fun AssetManagementScreen(
                                 Text(
                                     text = label,
                                     modifier = Modifier.fillMaxWidth(),
-                                    fontSize = 8.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Black,
-                                    color = if (isSelected) NeonGreenLight else if (isSpecialMonth) NeonGreenLight else Color(0xFF00B4D8),
+                                    color = if (isSelected) NeonGreenLight else if (isSpecialMonth) NeonGreenLight else SkyBlue,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     softWrap = false
@@ -569,7 +569,7 @@ fun AssetManagementScreen(
                                                 } else if (isSpecialMonth) {
                                                     Brush.verticalGradient(listOf(NeonGreenLight, NeonGreen))
                                                 } else {
-                                                    Brush.verticalGradient(listOf(Color(0xFF00B4D8), Color(0xFF0077B6)))
+                                                    Brush.verticalGradient(listOf(SkyBlue, Color(0xFF0077B6)))
                                                 }
                                             )
                                             .then(
@@ -581,7 +581,7 @@ fun AssetManagementScreen(
                                 Text(
                                     text = "$month",
                                     modifier = Modifier.fillMaxWidth(),
-                                    fontSize = 9.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
                                     color = if (isSelected || isSpecialMonth) NeonGreenLight else SoftGray,
                                     textAlign = TextAlign.Center,
@@ -606,17 +606,17 @@ fun AssetManagementScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(NeonGreenLight))
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text("日本株", fontSize = 9.sp, color = SoftGray)
+                                Text("日本株", fontSize = AppTextSize.dense, color = SoftGray)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF38BDF8)))
+                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(SkyBlue))
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text("米国株", fontSize = 9.sp, color = SoftGray)
+                                Text("米国株", fontSize = AppTextSize.dense, color = SoftGray)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF818CF8)))
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text("投信", fontSize = 9.sp, color = SoftGray)
+                                Text("投信", fontSize = AppTextSize.dense, color = SoftGray)
                             }
                         }
                         Surface(
@@ -628,7 +628,7 @@ fun AssetManagementScreen(
                                 text = if (selectedMonth != null) "${selectedMonth}月タップ中" else "月平均: 約¥${javaCurrencyFormat.format((totalAnnualDivVal / 12).toLong())}",
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                 color = NeonGreenLight,
-                                fontSize = 9.sp,
+                                fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -653,9 +653,9 @@ fun AssetManagementScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Flag, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("年間配当目標: ¥${javaCurrencyFormat.format(currentAnnualTarget)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = OnSurface)
+                            Text("年間配当目標: ¥${javaCurrencyFormat.format(currentAnnualTarget)}", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurface)
                         }
-                        Text(String.format("%.1f%%", progressPct), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = NeonGreen)
+                        Text(String.format("%.1f%%", progressPct), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = NeonGreen)
                     }
                     
                     Spacer(modifier = Modifier.height(8.dp))
@@ -674,7 +674,7 @@ fun AssetManagementScreen(
                     ) {
                         Text(
                             text = if (isPrivacyActive) "現在: ¥ ••••••" else "現在: ¥${javaCurrencyFormat.format(totalAnnualDivVal.toLong())}",
-                            fontSize = 10.sp,
+                            fontSize = AppTextSize.dense,
                             color = SoftGray
                         )
                         val shortage = currentAnnualTarget.toDouble() - totalAnnualDivVal
@@ -687,9 +687,9 @@ fun AssetManagementScreen(
                                     "あと ¥${javaCurrencyFormat.format(shortage.toLong())} で目標クリア"
                                 }
                             } else "目標達成済！不労所得生活達成✨",
-                            fontSize = 10.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold,
-                            color = if (shortage > 0) Color(0xFFFFB4AB) else NeonGreen
+                            color = if (shortage > 0) ErrorRed else NeonGreen
                         )
                     }
                 }
@@ -706,7 +706,7 @@ fun AssetManagementScreen(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = if (selectedMonth != null) "${selectedMonth}月の配当入金ポートフォリオ" else "保有銘柄一覧",
-                        fontSize = 13.sp,
+                        fontSize = AppTextSize.body,
                         fontWeight = FontWeight.Bold,
                         color = OnSurface
                     )
@@ -716,7 +716,7 @@ fun AssetManagementScreen(
                             "${displayedHoldings.size}件",
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             color = NeonGreenLight,
-                            fontSize = 10.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -727,7 +727,7 @@ fun AssetManagementScreen(
                         Text(
                             "全件表示",
                             color = NeonGreenLight,
-                            fontSize = 11.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.clickable { viewModel.selectMonth(selectedMonth!!) }
                         )
@@ -744,7 +744,7 @@ fun AssetManagementScreen(
                         ) {
                             Icon(Icons.Default.SwapVert, contentDescription = null, tint = NeonGreenLight, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(getSortLabel(), color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            Text(getSortLabel(), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -754,7 +754,7 @@ fun AssetManagementScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("銘柄コード・銘柄名・セクターでリアルタイム検索", color = SoftGray, fontSize = 11.sp) },
+                placeholder = { Text("銘柄コード・銘柄名・セクターでリアルタイム検索", color = SoftGray, fontSize = AppTextSize.dense) },
                 singleLine = true,
                 leadingIcon = {
                     Icon(Icons.Default.Search, contentDescription = null, tint = SoftGray, modifier = Modifier.size(16.dp))
@@ -802,8 +802,8 @@ fun AssetManagementScreen(
                         Text(
                             label,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            color = if (isSelected) Color.Black else SoftGray,
-                            fontSize = 11.sp,
+                            color = if (isSelected) OnPrimaryContainer else SoftGray,
+                            fontSize = AppTextSize.dense,
                             fontWeight = if (isSelected) FontWeight.Black else FontWeight.Medium
                         )
                     }
@@ -821,11 +821,11 @@ fun AssetManagementScreen(
                     Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.EventBusy, contentDescription = null, tint = SoftGray, modifier = Modifier.size(32.dp))
                         Spacer(modifier = Modifier.height(6.dp))
-                        Text("該当する保有銘柄はありません", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("該当する保有銘柄はありません", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
                         Text(
                             if (selectedMonth != null) "${selectedMonth}月に入金が予定されている銘柄はありません。" else "指定の条件に一致する銘柄がありません。",
                             color = SoftGray,
-                            fontSize = 11.sp,
+                            fontSize = AppTextSize.dense,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -874,15 +874,15 @@ fun AssetManagementScreen(
                                                 Category.FUND -> ErrorRed
                                                 else -> OnSurface
                                             },
-                                            fontSize = 11.sp,
+                                            fontSize = AppTextSize.dense,
                                             fontWeight = FontWeight.Bold,
                                             fontFamily = FontFamily.Monospace
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(holding.name, fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 13.sp, maxLines = 1)
-                                        Text(holding.sector, color = SoftGray, fontSize = 9.sp)
+                                        Text(holding.name, fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body, maxLines = 1)
+                                        Text(holding.sector, color = SoftGray, fontSize = AppTextSize.dense)
                                     }
                                     IconButton(
                                         onClick = {
@@ -902,15 +902,15 @@ fun AssetManagementScreen(
                                         "¥${javaCurrencyFormat.format(curVal.toLong())}",
                                         fontWeight = FontWeight.Bold,
                                         color = OnSurface,
-                                        fontSize = 14.sp,
+                                        fontSize = AppTextSize.body,
                                         fontFamily = FontFamily.Monospace
                                     )
                                     val sign = if (diff >= 0) "+" else ""
                                     Text(
                                         "$sign¥${javaCurrencyFormat.format(diff.toLong())} ($sign${String.format("%.1f", diffPct)}%)",
                                         fontWeight = FontWeight.Bold,
-                                        color = if (diff >= 0) NeonGreenLight else Color(0xFFFFB4AB),
-                                        fontSize = 10.sp,
+                                        color = if (diff >= 0) NeonGreenLight else ErrorRed,
+                                        fontSize = AppTextSize.dense,
                                         fontFamily = FontFamily.Monospace
                                     )
                                 }
@@ -926,31 +926,31 @@ fun AssetManagementScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Column {
-                                    Text("保有数量", color = SoftGray, fontSize = 9.sp)
+                                    Text("保有数量", color = SoftGray, fontSize = AppTextSize.dense)
                                     Text(
                                         "${holding.shares}株 (${holding.currency}${holding.price.toInt()})",
                                         color = OnSurface,
-                                        fontSize = 11.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.SemiBold,
                                         fontFamily = FontFamily.Monospace
                                     )
                                 }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("配当利回り", color = SoftGray, fontSize = 9.sp)
+                                    Text("配当利回り", color = SoftGray, fontSize = AppTextSize.dense)
                                     Text(
                                         "${holding.yieldRate}%",
                                         color = NeonGreenLight,
-                                        fontSize = 11.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = FontFamily.Monospace
                                     )
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
-                                    Text("予想配当金", color = SoftGray, fontSize = 9.sp)
+                                    Text("予想配当金", color = SoftGray, fontSize = AppTextSize.dense)
                                     Text(
                                         if (annualDiv > 0) "¥${javaCurrencyFormat.format(annualDiv.toLong())}/年" else "再投資型",
                                         color = OnSurface,
-                                        fontSize = 11.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = FontFamily.Monospace
                                     )
@@ -974,9 +974,9 @@ fun AssetManagementScreen(
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(Icons.Default.EventAvailable, contentDescription = null, tint = NeonGreenLight, modifier = Modifier.size(14.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text("入金予定: ${selectedMonth}月中旬予定", color = SoftGray, fontSize = 10.sp)
+                                            Text("入金予定: ${selectedMonth}月中旬予定", color = SoftGray, fontSize = AppTextSize.dense)
                                         }
-                                        Text(holding.nextPayoutAmount, color = NeonGreenLight, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                        Text(holding.nextPayoutAmount, color = NeonGreenLight, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                                     }
                                 }
                             }
@@ -989,12 +989,12 @@ fun AssetManagementScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Surface(shape = RoundedCornerShape(4.dp), color = BorderColor) {
-                                    Text(holding.accountType, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = Color(0xFFA5B4FC), fontSize = 9.sp, fontWeight = FontWeight.Medium)
+                                    Text(holding.accountType, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = SecondaryIndigo, fontSize = AppTextSize.dense, fontWeight = FontWeight.Medium)
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Default.Event, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(12.dp))
                                     Spacer(modifier = Modifier.width(3.dp))
-                                    Text(holding.nextPayoutTiming, color = SoftGray, fontSize = 9.sp)
+                                    Text(holding.nextPayoutTiming, color = SoftGray, fontSize = AppTextSize.dense)
                                 }
                             }
                         }
@@ -1048,13 +1048,13 @@ fun AssetManagementScreen(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
-                            Text("直近の配当受取予定", color = SoftGray, fontSize = 9.sp)
-                            Text(if (nextStock != null) "${nextMonth}月中旬 ${nextStock!!.name}" else "保有銘柄なし", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 12.sp)
+                            Text("直近の配当受取予定", color = SoftGray, fontSize = AppTextSize.dense)
+                            Text(if (nextStock != null) "${nextMonth}月中旬 ${nextStock!!.name}" else "保有銘柄なし", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.caption)
                         }
                     }
                     Column(horizontalAlignment = Alignment.End) {
-                        Text("¥${javaCurrencyFormat.format(nextDivAmt)}", fontWeight = FontWeight.Bold, color = NeonGreenLight, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
-                        Text("${nextStock?.dividendType ?: "配当金"} (${nextStock?.shares ?: 0}株)", color = SoftGray, fontSize = 9.sp)
+                        Text("¥${javaCurrencyFormat.format(nextDivAmt)}", fontWeight = FontWeight.Bold, color = NeonGreenLight, fontSize = AppTextSize.body, fontFamily = FontFamily.Monospace)
+                        Text("${nextStock?.dividendType ?: "配当金"} (${nextStock?.shares ?: 0}株)", color = SoftGray, fontSize = AppTextSize.dense)
                     }
                 }
             }
@@ -1073,16 +1073,16 @@ fun AssetManagementScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = NeonGreen),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("適用する", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("適用する", color = OnPrimaryContainer, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showSortModal = false }) {
-                    Text("閉じる", color = SoftGray, fontSize = 12.sp)
+                    Text("閉じる", color = SoftGray, fontSize = AppTextSize.caption)
                 }
             },
             title = {
-                Text("並べ替え条件の変更", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("並べ替え条件の変更", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section)
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1104,7 +1104,7 @@ fun AssetManagementScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(label, color = if (sortCriteria == key) NeonGreenLight else OnSurface, fontSize = 13.sp, fontWeight = if (sortCriteria == key) FontWeight.Bold else FontWeight.Normal)
+                            Text(label, color = if (sortCriteria == key) NeonGreenLight else OnSurface, fontSize = AppTextSize.body, fontWeight = if (sortCriteria == key) FontWeight.Bold else FontWeight.Normal)
                             if (sortCriteria == key) {
                                 Icon(Icons.Default.Check, contentDescription = null, tint = NeonGreenLight, modifier = Modifier.size(16.dp))
                             }
@@ -1118,7 +1118,7 @@ fun AssetManagementScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = if (sortDirection == "desc") NeonGreen else CardDarkLighter),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("降順 (大→小)", color = if (sortDirection == "desc") Color.Black else OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("降順 (大→小)", color = if (sortDirection == "desc") OnPrimaryContainer else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                         Button(
                             onClick = { sortDirection = "asc" },
@@ -1126,7 +1126,7 @@ fun AssetManagementScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = if (sortDirection == "asc") NeonGreen else CardDarkLighter),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("昇順 (小→大)", color = if (sortDirection == "asc") Color.Black else OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("昇順 (小→大)", color = if (sortDirection == "asc") OnPrimaryContainer else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -1157,28 +1157,28 @@ fun AssetManagementScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = NeonGreen),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("登録する", color = Color(0xFF031C13), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                    Text("登録する", color = OnPrimaryContainer, fontWeight = FontWeight.ExtraBold, fontSize = AppTextSize.caption)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showAddAssetModal = false }) {
-                    Text("キャンセル", color = SoftGray, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("キャンセル", color = SoftGray, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
                 }
             },
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.AddCircle, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(22.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("銘柄の新規登録・修正", color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("銘柄の新規登録・修正", color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.ExtraBold)
                 }
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    Text("保有している配当銘柄の情報を入力してください。ダッシュボードに即時反映されます。", color = SoftGray, fontSize = 11.sp, lineHeight = 15.sp)
+                    Text("保有している配当銘柄の情報を入力してください。ダッシュボードに即時反映されます。", color = SoftGray, fontSize = AppTextSize.dense, lineHeight = 15.sp)
                     OutlinedTextField(
                         value = stockCode,
                         onValueChange = { stockCode = it },
-                        label = { Text("銘柄コード (例: 7203)", fontSize = 11.sp) },
+                        label = { Text("銘柄コード (例: 7203)", fontSize = AppTextSize.dense) },
                         singleLine = true,
                         trailingIcon = {
                             if (stockCode.isNotEmpty()) {
@@ -1200,7 +1200,7 @@ fun AssetManagementScreen(
                     OutlinedTextField(
                         value = shareCount,
                         onValueChange = { shareCount = it },
-                        label = { Text("保有株数 (例: 100)", fontSize = 11.sp) },
+                        label = { Text("保有株数 (例: 100)", fontSize = AppTextSize.dense) },
                         singleLine = true,
                         trailingIcon = {
                             if (shareCount.isNotEmpty()) {
@@ -1223,7 +1223,7 @@ fun AssetManagementScreen(
                     OutlinedTextField(
                         value = acqPrice,
                         onValueChange = { acqPrice = it },
-                        label = { Text("取得単価 (例: 2450)", fontSize = 11.sp) },
+                        label = { Text("取得単価 (例: 2450)", fontSize = AppTextSize.dense) },
                         singleLine = true,
                         trailingIcon = {
                             if (acqPrice.isNotEmpty()) {
@@ -1303,8 +1303,8 @@ fun AssetManagementScreen(
                     }
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("保有情報のクイック編集", color = OnSurface, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-                        Text("${holding.code}  ${holding.name}  (${holding.market})", color = SoftGray, fontSize = 12.sp, maxLines = 1)
+                        Text("保有情報のクイック編集", color = OnSurface, fontSize = AppTextSize.headline, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                        Text("${holding.code}  ${holding.name}  (${holding.market})", color = SoftGray, fontSize = AppTextSize.caption, maxLines = 1)
                     }
                     IconButton(onClick = { quickEditHolding = null }) {
                         Icon(Icons.Default.Close, contentDescription = "閉じる", tint = SoftGray)
@@ -1318,15 +1318,15 @@ fun AssetManagementScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text("現在値", color = SoftGray, fontSize = 11.sp)
-                        Text("$modalCurrency${javaCurrencyFormat.format(currentPrice)}", color = OnSurface, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, fontFamily = FontFamily.Monospace)
+                        Text("現在値", color = SoftGray, fontSize = AppTextSize.dense)
+                        Text("$modalCurrency${javaCurrencyFormat.format(currentPrice)}", color = OnSurface, fontSize = AppTextSize.screenTitle, fontWeight = FontWeight.ExtraBold, fontFamily = FontFamily.Monospace)
                     }
                     Surface(shape = CircleShape, color = NeonGreen.copy(alpha = 0.18f)) {
                         Text(
                             "↗ 前日比 ${holding.dailyChange}",
                             Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                            color = if (holding.isPositive) NeonGreenLight else Color(0xFFFFB4AB),
-                            fontSize = 11.sp,
+                            color = if (holding.isPositive) NeonGreenLight else ErrorRed,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -1336,7 +1336,7 @@ fun AssetManagementScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    Text("株価試算", color = SoftGray, fontSize = 10.sp, modifier = Modifier.weight(1f))
+                    Text("株価試算", color = SoftGray, fontSize = AppTextSize.dense, modifier = Modifier.weight(1f))
                     listOf(-50.0, -10.0, 10.0, 50.0).forEach { delta ->
                         val label = if (delta > 0) "+${delta.toInt()}" else delta.toInt().toString()
                         Surface(
@@ -1344,11 +1344,11 @@ fun AssetManagementScreen(
                             shape = RoundedCornerShape(7.dp),
                             color = CardDarkLighter
                         ) {
-                            Text(label, Modifier.padding(horizontal = 7.dp, vertical = 6.dp), color = OnSurface, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(label, Modifier.padding(horizontal = 7.dp, vertical = 6.dp), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                     TextButton(onClick = { quickEditMarketPrice = holding.price }, contentPadding = PaddingValues(horizontal = 3.dp, vertical = 0.dp)) {
-                        Text("戻す", color = NeonGreenLight, fontSize = 10.sp)
+                        Text("戻す", color = NeonGreenLight, fontSize = AppTextSize.dense)
                     }
                 }
 
@@ -1357,9 +1357,9 @@ fun AssetManagementScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Inventory2, null, tint = NeonGreenLight, modifier = Modifier.size(19.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("保有数量 (株)", color = OnSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text("保有数量 (株)", color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold)
                         }
-                        Text("単元: 100株", color = SoftGray, fontSize = 12.sp)
+                        Text("単元: 100株", color = SoftGray, fontSize = AppTextSize.caption)
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         QuickEditStepButton("−", enabled = shares > 1) { quickEditShares = (shares - 10).coerceAtLeast(1).toString() }
@@ -1378,7 +1378,7 @@ fun AssetManagementScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         listOf("1単元 (100株)" to { quickEditShares = "100" }, "+10" to { quickEditShares = (shares + 10).toString() }, "+100" to { quickEditShares = (shares + 100).toString() }, "+500" to { quickEditShares = (shares + 500).toString() }).forEach { (label, action) ->
                             Surface(Modifier.clickable(onClick = action), shape = RoundedCornerShape(10.dp), color = CardDarkLighter, border = BorderStroke(1.dp, BorderBlue)) {
-                                Text(label, Modifier.padding(horizontal = 10.dp, vertical = 9.dp), color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                Text(label, Modifier.padding(horizontal = 10.dp, vertical = 9.dp), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                             }
                         }
                     }
@@ -1389,10 +1389,10 @@ fun AssetManagementScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Sell, null, tint = NeonGreenLight, modifier = Modifier.size(19.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("取得平均単価 ($modalCurrency)", color = OnSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text("取得平均単価 ($modalCurrency)", color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold)
                         }
                         TextButton(onClick = { quickEditAcqPrice = currentPrice.toString().removeSuffix(".0") }) {
-                            Text("現在値を適用", color = NeonGreenLight, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("現在値を適用", color = NeonGreenLight, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1420,16 +1420,16 @@ fun AssetManagementScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Analytics, null, tint = NeonGreenLight, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("更新後のリアルタイム試算", color = NeonGreenLight, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("更新後のリアルタイム試算", color = NeonGreenLight, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
                         }
                         Surface(shape = CircleShape, color = NeonGreen.copy(alpha = 0.18f)) {
-                            Text("即時再計算中", Modifier.padding(horizontal = 9.dp, vertical = 5.dp), color = NeonGreenLight, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("即時再計算中", Modifier.padding(horizontal = 9.dp, vertical = 5.dp), color = NeonGreenLight, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                     Divider(color = BorderBlue)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         QuickEditSummary("投資元本", "$modalCurrency${javaCurrencyFormat.format(cost.toLong())}", OnSurface, Modifier.weight(1f))
-                        QuickEditSummary("評価損益", "${if (gain >= 0) "+" else "−"}$modalCurrency${javaCurrencyFormat.format(kotlin.math.abs(gain).toLong())}\n(${String.format(Locale.JAPAN, "%+.1f%%", gainPct)})", if (gain >= 0) NeonGreenLight else Color(0xFFFFB4AB), Modifier.weight(1f), Alignment.CenterHorizontally)
+                        QuickEditSummary("評価損益", "${if (gain >= 0) "+" else "−"}$modalCurrency${javaCurrencyFormat.format(kotlin.math.abs(gain).toLong())}\n(${String.format(Locale.JAPAN, "%+.1f%%", gainPct)})", if (gain >= 0) NeonGreenLight else ErrorRed, Modifier.weight(1f), Alignment.CenterHorizontally)
                         QuickEditSummary("年間予想配当金", "$modalCurrency${javaCurrencyFormat.format(projectedDividend.toLong())}/年", NeonGreenLight, Modifier.weight(1f), Alignment.End)
                     }
                 }
@@ -1451,9 +1451,9 @@ fun AssetManagementScreen(
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = NeonGreen)
                     ) {
-                        Icon(Icons.Default.Check, null, tint = Color(0xFF003824))
+                        Icon(Icons.Default.Check, null, tint = OnPrimaryContainer)
                         Spacer(Modifier.width(8.dp))
-                        Text("変更を保存する", color = Color(0xFF003824), fontWeight = FontWeight.ExtraBold)
+                        Text("変更を保存する", color = OnPrimaryContainer, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }
@@ -1470,7 +1470,7 @@ private fun QuickEditStepButton(label: String, enabled: Boolean = true, onClick:
         border = BorderStroke(1.dp, BorderBlue)
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Text(label, color = if (enabled) OnSurface else SoftGray.copy(alpha = 0.4f), fontSize = 25.sp, fontWeight = FontWeight.Bold)
+            Text(label, color = if (enabled) OnSurface else SoftGray, fontSize = AppTextSize.metric, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -1478,7 +1478,7 @@ private fun QuickEditStepButton(label: String, enabled: Boolean = true, onClick:
 @Composable
 private fun QuickEditSummary(label: String, value: String, valueColor: Color, modifier: Modifier, alignment: Alignment.Horizontal = Alignment.Start) {
     Column(modifier, horizontalAlignment = alignment, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, color = SoftGray, fontSize = 10.sp, maxLines = 1)
-        Text(value, color = valueColor, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = 2)
+        Text(label, color = SoftGray, fontSize = AppTextSize.dense, maxLines = 1)
+        Text(value, color = valueColor, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = 2)
     }
 }

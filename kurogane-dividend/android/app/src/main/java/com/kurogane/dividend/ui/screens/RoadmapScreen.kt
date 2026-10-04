@@ -144,7 +144,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
             FloatingActionButton(
                 onClick = { showBottomSheet = true },
                 containerColor = PrimaryEmerald,
-                contentColor = Color.Black,
+                contentColor = OnPrimary,
                 shape = CircleShape,
                 modifier = Modifier.padding(bottom = 16.dp, end = 8.dp)
             ) {
@@ -201,7 +201,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 "不労所得 RPG・ステージ攻略",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
-                                    fontSize = 10.sp
+                                    fontSize = AppTextSize.dense
                                 )
                             )
                         }
@@ -238,7 +238,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                     text = "● LEVEL $currentLevel 進行中: STEP ${activeStep.step}",
                                     color = PrimaryEmerald,
                                     fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 10.sp,
+                                    fontSize = AppTextSize.dense,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
                             }
@@ -250,7 +250,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 Text(
                                     text = "🏆 クリア済み ($highestCompletedStep/30)",
                                     color = SecondaryIndigo,
-                                    fontSize = 10.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Black,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
@@ -292,12 +292,12 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                             "LEVEL 1 完全制覇達成！ 👑",
                                             color = OnSurface,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp
+                                            fontSize = AppTextSize.dense
                                         )
                                         Text(
                                             "生活インフラ自給期 (STEP 1〜10) を踏破完了",
                                             color = OnSurfaceVariant,
-                                            fontSize = 9.5.sp
+                                            fontSize = AppTextSize.dense
                                         )
                                     }
                                 }
@@ -309,7 +309,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         "ALL CLEAR",
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                         color = PrimaryEmerald,
-                                        fontSize = 9.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Black
                                     )
                                 }
@@ -318,12 +318,12 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        Text("現在の配当獲得ステータス", color = OnSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("現在の配当獲得ステータス", color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(4.dp))
                         
                         Text(
                             "¥${currencyFormat.format(totalAnnualExpectedDividend)} / 年",
-                            fontSize = 32.sp,
+                            fontSize = AppTextSize.hero,
                             fontWeight = FontWeight.Black,
                             color = OnSurface,
                             fontFamily = FontFamily.SansSerif
@@ -332,7 +332,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         Text(
                             text = "月間換算不労所得: 約 ¥${currencyFormat.format(monthlyIncome)} / 月",
                             color = PrimaryEmerald,
-                            fontSize = 13.sp,
+                            fontSize = AppTextSize.body,
                             fontWeight = FontWeight.ExtraBold
                         )
 
@@ -357,7 +357,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         Text(
                                             "QUEST ${activeStep.step} 目標: ¥${currencyFormat.format(activeStep.targetMonthly)} / 月",
                                             color = OnSurface,
-                                            fontSize = 11.sp,
+                                            fontSize = AppTextSize.dense,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
@@ -365,7 +365,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         "${(activeQuest.currentRate * 100).toInt()}% 達成",
                                         color = PrimaryEmerald,
                                         fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 12.sp
+                                        fontSize = AppTextSize.caption
                                     )
                                 }
                                 
@@ -396,7 +396,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                     Text(
                                         "現在実績: ¥${currencyFormat.format(monthlyIncome)}",
                                         color = OnSurfaceVariant,
-                                        fontSize = 9.5.sp
+                                        fontSize = AppTextSize.dense
                                     )
                                     
                                     val shortage = activeStep.targetMonthly - monthlyIncome
@@ -407,7 +407,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                             Text(
                                                 "あと ¥${currencyFormat.format(shortage)} / 月 で攻略",
                                                 color = ErrorRed,
-                                                fontSize = 10.sp,
+                                                fontSize = AppTextSize.dense,
                                                 fontWeight = FontWeight.Bold
                                             )
                                         }
@@ -415,7 +415,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         Text(
                                             "マイルストーン達成済！",
                                             color = PrimaryEmerald,
-                                            fontSize = 10.sp,
+                                            fontSize = AppTextSize.dense,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
@@ -445,7 +445,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 Text(
                                     text = "年額 +¥${currencyFormat.format(shortageAnnual)} でSTEP ${activeStep.step}クリア。配当利回り 4.0% 想定時、必要な追加投資元本は約 ¥${neededPrincipalAt4}万円 です。",
                                     color = OnSurfaceVariant,
-                                    fontSize = 9.5.sp,
+                                    fontSize = AppTextSize.dense,
                                     lineHeight = 14.sp
                                 )
                             }
@@ -466,9 +466,9 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                     .weight(1f)
                                     .height(42.dp)
                             ) {
-                                Icon(Icons.Default.Share, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Share, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("達成度を共有する", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("達成度を共有する", color = OnPrimary, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
 
                             Button(
@@ -481,7 +481,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             ) {
                                 Icon(Icons.Default.Download, contentDescription = null, tint = OnSurface, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("画像で保存", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("画像で保存", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -499,9 +499,9 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Star, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("3大ステージ・レベル帯", fontWeight = FontWeight.ExtraBold, color = OnSurface, fontSize = 13.sp)
+                            Text("3大ステージ・レベル帯", fontWeight = FontWeight.ExtraBold, color = OnSurface, fontSize = AppTextSize.body)
                         }
-                        Text("タップしてジャンプ", color = OnSurfaceVariant, fontSize = 10.sp)
+                        Text("タップしてジャンプ", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -529,17 +529,17 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(levelOneLabel, color = if (selectedStageFilter == 1) PrimaryEmerald else OnSurface, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text(levelOneLabel, color = if (selectedStageFilter == 1) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.width(3.dp))
                                     Icon(
                                         if (highestCompletedStep >= 10) Icons.Default.CheckCircle else Icons.Default.PlayCircle,
                                         contentDescription = null,
-                                        tint = if (highestCompletedStep >= 10) PrimaryEmerald else Color(0xFFF59E0B),
+                                        tint = if (highestCompletedStep >= 10) PrimaryEmerald else AccentAmber,
                                         modifier = Modifier.size(12.dp)
                                     )
                                 }
-                                Text("インフラ自給期", color = OnSurfaceVariant, fontSize = 9.sp)
-                                    Text("STEP 1-10", color = if (selectedStageFilter == 1) PrimaryEmerald else OnSurfaceVariant, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text("インフラ自給期", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    Text("STEP 1-10", color = if (selectedStageFilter == 1) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -562,7 +562,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(levelTwoLabel, color = if (selectedStageFilter == 2) PrimaryEmerald else OnSurface, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text(levelTwoLabel, color = if (selectedStageFilter == 2) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.width(3.dp))
                                     Icon(
                                         when {
@@ -573,14 +573,14 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         contentDescription = null,
                                         tint = when {
                                             highestCompletedStep >= 20 -> PrimaryEmerald
-                                            currentLevel == 2 -> Color(0xFFF59E0B)
+                                            currentLevel == 2 -> AccentAmber
                                             else -> OnSurfaceVariant
                                         },
                                         modifier = Modifier.size(12.dp)
                                     )
                                 }
-                                Text("生活費・ミニFIRE", color = OnSurfaceVariant, fontSize = 9.sp)
-                                Text("STEP 11-20", color = if (selectedStageFilter == 2) PrimaryEmerald else OnSurfaceVariant, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text("生活費・ミニFIRE", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                Text("STEP 11-20", color = if (selectedStageFilter == 2) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -603,7 +603,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(levelThreeLabel, color = if (selectedStageFilter == 3) PrimaryEmerald else OnSurface, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text(levelThreeLabel, color = if (selectedStageFilter == 3) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.width(3.dp))
                                     Icon(
                                         when {
@@ -614,14 +614,14 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         contentDescription = null,
                                         tint = when {
                                             highestCompletedStep >= 30 -> PrimaryEmerald
-                                            currentLevel == 3 -> Color(0xFFF59E0B)
+                                            currentLevel == 3 -> AccentAmber
                                             else -> OnSurfaceVariant
                                         },
                                         modifier = Modifier.size(12.dp)
                                     )
                                 }
-                                Text("完全FIRE期", color = OnSurfaceVariant, fontSize = 9.sp)
-                                Text("STEP 21-30", color = if (selectedStageFilter == 3) OnSurfaceVariant else OnSurfaceVariant, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text("完全FIRE期", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                Text("STEP 21-30", color = if (selectedStageFilter == 3) OnSurfaceVariant else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -637,7 +637,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         "全30マイルストーン・クエストマップ",
                         fontWeight = FontWeight.ExtraBold,
                         color = OnSurface,
-                        fontSize = 13.sp
+                        fontSize = AppTextSize.body
                     )
                 }
             }
@@ -663,7 +663,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                 val rowBadgeColor = if (isCleared) {
                     PrimaryEmerald
                 } else if (isCurrent) {
-                    Color(0xFFF59E0B) // Amber
+                    AccentAmber // Amber
                 } else {
                     OnSurfaceVariant // Gray/Slate
                 }
@@ -699,8 +699,8 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         Text(
                                             "${stepData.step}",
                                             fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 12.sp,
-                                            color = if (isCurrent) Color.Black else if (isCleared) PrimaryEmerald else OnSurfaceVariant
+                                            fontSize = AppTextSize.caption,
+                                            color = if (isCurrent) OnPrimary else if (isCleared) PrimaryEmerald else OnSurfaceVariant
                                         )
                                     }
                                 }
@@ -711,7 +711,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                             stepData.name,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = OnSurface,
-                                            fontSize = 12.sp
+                                            fontSize = AppTextSize.caption
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Box(
@@ -722,7 +722,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         ) {
                                             Text(
                                                 item.statusLabel,
-                                                fontSize = 8.sp,
+                                                fontSize = AppTextSize.dense,
                                                 fontWeight = FontWeight.Bold,
                                                 color = rowBadgeColor
                                             )
@@ -732,7 +732,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                     Text(
                                         stepData.title,
                                         color = OnSurfaceVariant,
-                                        fontSize = 10.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Medium
                                     )
                                 }
@@ -742,7 +742,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 Text(
                                     if (isCleared) "100% CLEAR" else "${(item.currentRate * 100).toInt()}%",
                                     color = if (isCleared || isCurrent) PrimaryEmerald else OnSurfaceVariant,
-                                    fontSize = 11.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Black,
                                     fontFamily = FontFamily.Monospace
                                 )
@@ -764,7 +764,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             Text(
                                 stepData.description,
                                 color = SecondaryIndigo,
-                                fontSize = 11.sp,
+                                fontSize = AppTextSize.dense,
                                 lineHeight = 15.sp
                             )
                             
@@ -784,9 +784,9 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         .padding(8.dp)
                                 ) {
                                     Column {
-                                        Text("目標額 (月額 / 年額)", fontSize = 9.sp, color = OnSurfaceVariant)
-                                        Text("¥${currencyFormat.format(stepData.targetMonthly)} /月", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = OnSurface)
-                                        Text("年額 ¥${currencyFormat.format(stepData.targetMonthly * 12)}", fontSize = 9.sp, color = OnSurfaceVariant)
+                                        Text("目標額 (月額 / 年額)", fontSize = AppTextSize.dense, color = OnSurfaceVariant)
+                                        Text("¥${currencyFormat.format(stepData.targetMonthly)} /月", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurface)
+                                        Text("年額 ¥${currencyFormat.format(stepData.targetMonthly * 12)}", fontSize = AppTextSize.dense, color = OnSurfaceVariant)
                                     }
                                 }
 
@@ -798,13 +798,13 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         .padding(8.dp)
                                 ) {
                                     Column {
-                                        Text("攻略状況", fontSize = 9.sp, color = OnSurfaceVariant)
+                                        Text("攻略状況", fontSize = AppTextSize.dense, color = OnSurfaceVariant)
                                         if (isCleared) {
-                                            Text("達成済 ✨", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
-                                            Text("現在月額 ¥${currencyFormat.format(monthlyIncome)}", fontSize = 9.sp, color = PrimaryEmerald)
+                                            Text("達成済 ✨", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
+                                            Text("現在月額 ¥${currencyFormat.format(monthlyIncome)}", fontSize = AppTextSize.dense, color = PrimaryEmerald)
                                         } else {
-                                            Text("あと ¥${currencyFormat.format(shortageAmt)} /月", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ErrorRed)
-                                            Text("年額 ¥${currencyFormat.format(shortageAmt * 12)} 不足", fontSize = 9.sp, color = OnSurfaceVariant)
+                                            Text("あと ¥${currencyFormat.format(shortageAmt)} /月", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = ErrorRed)
+                                            Text("年額 ¥${currencyFormat.format(shortageAmt * 12)} 不足", fontSize = AppTextSize.dense, color = OnSurfaceVariant)
                                         }
                                     }
                                 }
@@ -823,7 +823,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 ) {
                                     Text(
                                         "利回り別・必要追加元本シミュレーション",
-                                        fontSize = 10.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryEmerald,
                                         modifier = Modifier.padding(bottom = 6.dp)
@@ -845,8 +845,8 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                    Text(label, fontSize = 8.sp, color = if (yield == 4.0) PrimaryEmerald else OnSurfaceVariant)
-                                                    Text("¥${capital}万", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (yield == 4.0) PrimaryEmerald else OnSurface)
+                                                    Text(label, fontSize = AppTextSize.dense, color = if (yield == 4.0) PrimaryEmerald else OnSurfaceVariant)
+                                                    Text("¥${capital}万", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = if (yield == 4.0) PrimaryEmerald else OnSurface)
                                                 }
                                             }
                                         }
@@ -901,13 +901,13 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             Text(
                                 "複数口座一括配分登録",
                                 color = OnSurface,
-                                fontSize = 14.sp,
+                                fontSize = AppTextSize.body,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 "口座間の株数・取得単価を1画面でまとめて設定",
                                 color = OnSurfaceVariant,
-                                fontSize = 9.5.sp
+                                fontSize = AppTextSize.dense
                             )
                         }
                     }
@@ -980,7 +980,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         Text(
                             "銘柄コード・ティッカー番号入力",
                             color = OnSurfaceVariant,
-                            fontSize = 11.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -1005,7 +1005,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 focusedTextColor = OnSurface,
                                 unfocusedTextColor = OnSurface
                             ),
-                            placeholder = { Text("例: 7203, AAPL など", fontSize = 11.sp, color = OnSurfaceVariant) },
+                            placeholder = { Text("例: 7203, AAPL など", fontSize = AppTextSize.dense, color = OnSurfaceVariant) },
                             singleLine = true
                         )
                         Button(
@@ -1014,7 +1014,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.height(46.dp)
                         ) {
-                            Text("適用", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("適用", color = OnPrimary, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -1057,7 +1057,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 Text(
                                     text = label,
                                     color = if (activeTicker == code) PrimaryEmerald else OnSurface,
-                                    fontSize = 9.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
@@ -1090,7 +1090,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                     Text(
                                         activeTicker.take(4),
                                         color = PrimaryEmerald,
-                                        fontSize = 11.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Black
                                     )
                                 }
@@ -1099,13 +1099,13 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                     Text(
                                         activeStockName,
                                         color = OnSurface,
-                                        fontSize = 13.sp,
+                                        fontSize = AppTextSize.body,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
                                         activeStockMarket,
                                         color = OnSurfaceVariant,
-                                        fontSize = 9.5.sp
+                                        fontSize = AppTextSize.dense
                                     )
                                 }
                             }
@@ -1119,7 +1119,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         "買場目安近接",
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                         color = PrimaryEmerald,
-                                        fontSize = 8.5.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -1127,7 +1127,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 Text(
                                     "1株配当 $activeStockCurrency" + String.format("%.2f", activeStockDPS),
                                     color = OnSurface,
-                                    fontSize = 10.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -1144,14 +1144,14 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             Text(
                                 "現在値: $activeStockCurrency" + currencyFormat.format(activeStockPrice.toInt()),
                                 color = OnSurface,
-                                fontSize = 12.sp,
+                                fontSize = AppTextSize.caption,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace
                             )
                             Text(
                                 "現在配当利回り: " + String.format("%.2f%%", activeStockYield),
                                 color = PrimaryEmerald,
-                                fontSize = 11.sp,
+                                fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -1170,14 +1170,14 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         Text(
                             "口座別 ポートフォリオ配分マトリックス",
                             color = OnSurfaceVariant,
-                            fontSize = 10.5.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     Text(
                         "クリア",
                         color = ErrorRed,
-                        fontSize = 10.sp,
+                        fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.clickable {
                             sharesNisaGrowth = "0"
@@ -1278,12 +1278,12 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         .fillMaxWidth()
                         .height(48.dp)
                 ) {
-                    Icon(Icons.Default.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Check, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         "ポートフォリオに一括追加登録",
-                        color = Color.Black,
-                        fontSize = 13.sp,
+                        color = OnPrimary,
+                        fontSize = AppTextSize.body,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -1328,13 +1328,13 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             Text(
                                 "達成状況をシェア",
                                 color = OnSurface,
-                                fontSize = 14.sp,
+                                fontSize = AppTextSize.body,
                                 fontWeight = FontWeight.Black
                             )
                             Text(
                                 "SNSで進捗を共有できます",
                                 color = OnSurfaceVariant,
-                                fontSize = 10.sp
+                                fontSize = AppTextSize.dense
                             )
                         }
                     }
@@ -1370,7 +1370,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                     ) {
                         Icon(Icons.Default.ShoppingCart, contentDescription = null, tint = OnSurface, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("QUEST 6 進捗カード", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("QUEST 6 進捗カード", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                     }
 
                     Button(
@@ -1386,7 +1386,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                     ) {
                         Icon(Icons.Default.WorkspacePremium, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("LV.1 踏破認定証", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("LV.1 踏破認定証", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -1406,7 +1406,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.VisibilityOff, contentDescription = null, tint = OnSurfaceVariant, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("金額を伏字にする", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("金額を伏字にする", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                         Switch(
                             checked = isAmountMasked,
@@ -1461,7 +1461,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             Text(
                                 "LEVEL 1 COMPLETE",
                                 color = PrimaryEmerald,
-                                fontSize = 10.sp,
+                                fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 1.sp
                             )
@@ -1469,14 +1469,14 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             Text(
                                 "生活インフラ自給期 踏破認定証",
                                 color = OnSurface,
-                                fontSize = 16.sp,
+                                fontSize = AppTextSize.section,
                                 fontWeight = FontWeight.Black
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 "STEP 1〜10 (月2万円・年24万円) を完全達成",
                                 color = OnSurfaceVariant,
-                                fontSize = 11.sp,
+                                fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Medium
                             )
 
@@ -1496,14 +1496,14 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                     Text(
                                         "獲得した生活権益",
                                         color = OnSurfaceVariant,
-                                        fontSize = 10.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
                                         "水道光熱費・通信費の全額自給権 ⚡ 📱",
                                         color = PrimaryEmeraldContainer,
-                                        fontSize = 13.sp,
+                                        fontSize = AppTextSize.body,
                                         fontWeight = FontWeight.Black,
                                         textAlign = TextAlign.Center
                                     )
@@ -1511,7 +1511,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                     Text(
                                         text = "到達実績: " + if (isAmountMasked) "¥••,••• / 月" else "¥${currencyFormat.format(monthlyIncome)} / 月",
                                         color = OnSurface,
-                                        fontSize = 10.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = FontFamily.Monospace
                                     )
@@ -1528,13 +1528,13 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 Text(
                                     "認定ランク: LEVEL 1 MASTER",
                                     color = OnSurfaceVariant,
-                                    fontSize = 9.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
                                     "Roadmap Quest",
                                     color = OnSurfaceVariant,
-                                    fontSize = 9.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Black
                                 )
                             }
@@ -1544,20 +1544,20 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 modifier = Modifier
                                     .size(54.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF38BDF8).copy(alpha = 0.15f)),
+                                    .background(SkyBlue.copy(alpha = 0.15f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF38BDF8).copy(alpha = 0.25f)),
+                                        .background(SkyBlue.copy(alpha = 0.25f)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         Icons.Default.ShoppingCart,
                                         contentDescription = null,
-                                        tint = Color(0xFF38BDF8),
+                                        tint = SkyBlue,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -1566,8 +1566,8 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
                                 "CURRENT ACTIVE QUEST",
-                                color = Color(0xFF38BDF8),
-                                fontSize = 10.sp,
+                                color = SkyBlue,
+                                fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 1.sp
                             )
@@ -1575,14 +1575,14 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             Text(
                                 "QUEST ${activeStep.step}: " + activeStep.name.substringAfter(": "),
                                 color = OnSurface,
-                                fontSize = 15.sp,
+                                fontSize = AppTextSize.section,
                                 fontWeight = FontWeight.Black
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 "目標額: 月 ¥${currencyFormat.format(activeStep.targetMonthly)} 自給に向けて挑戦中",
                                 color = OnSurfaceVariant,
-                                fontSize = 11.sp,
+                                fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Medium
                             )
 
@@ -1602,21 +1602,21 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                     Text(
                                         "現在のクエスト進捗状況",
                                         color = OnSurfaceVariant,
-                                        fontSize = 10.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
                                         "目標達成率: ${(activeQuest.currentRate * 100).toInt()}% 🚀",
                                         color = PrimaryEmeraldContainer,
-                                        fontSize = 13.sp,
+                                        fontSize = AppTextSize.body,
                                         fontWeight = FontWeight.Black
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
                                         text = "現在実績: " + if (isAmountMasked) "¥••,••• / 月" else "¥${currencyFormat.format(monthlyIncome)} / 月",
                                         color = OnSurface,
-                                        fontSize = 10.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = FontFamily.Monospace
                                     )
@@ -1633,13 +1633,13 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 Text(
                                     "現在のステータス: LEVEL 2 CHALLENGER",
                                     color = OnSurfaceVariant,
-                                    fontSize = 9.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
                                     "Roadmap Quest",
                                     color = OnSurfaceVariant,
-                                    fontSize = 9.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Black
                                 )
                             }
@@ -1666,8 +1666,8 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                 ) {
                     Text(
                         "𝕏 𝕏 (Twitter) でクエスト進捗をシェア",
-                        color = Color.Black,
-                        fontSize = 12.sp,
+                        color = BackgroundDark,
+                        fontSize = AppTextSize.caption,
                         fontWeight = FontWeight.Black
                     )
                 }
@@ -1713,10 +1713,10 @@ private fun AccountMatrixCard(
                         modifier = Modifier
                             .size(6.dp)
                             .clip(CircleShape)
-                            .background(if (isTaxFree) PrimaryEmerald else Color(0xFFC084FC))
+                            .background(if (isTaxFree) PrimaryEmerald else SecondaryIndigo)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(title, color = OnSurface, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                    Text(title, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.width(4.dp))
                     Surface(
                         shape = RoundedCornerShape(4.dp),
@@ -1725,7 +1725,7 @@ private fun AccountMatrixCard(
                         Text(
                             text = if (isTaxFree) "非課税 0%" else "課税 20.315%",
                             color = if (isTaxFree) PrimaryEmerald else OnSurfaceVariant,
-                            fontSize = 7.5.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                         )
@@ -1735,7 +1735,7 @@ private fun AccountMatrixCard(
                 Text(
                     text = "手取り配当: $currency" + String.format("%.2f/年", finalDividend),
                     color = if (numShares > 0) PrimaryEmerald else OnSurfaceVariant,
-                    fontSize = 10.sp,
+                    fontSize = AppTextSize.dense,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -1750,7 +1750,7 @@ private fun AccountMatrixCard(
             ) {
                 // Shares Input Column
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("保有株数", color = OnSurfaceVariant, fontSize = 8.sp)
+                    Text("保有株数", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1773,7 +1773,7 @@ private fun AccountMatrixCard(
                             ),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontSize = 11.sp, textAlign = TextAlign.Center)
+                            textStyle = LocalTextStyle.current.copy(fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
                         )
                         // Quick add buttons
                         Box(
@@ -1783,7 +1783,7 @@ private fun AccountMatrixCard(
                                 .clickable { onSharesChange(((shares.toIntOrNull() ?: 0) + 10).toString()) }
                                 .padding(horizontal = 4.dp, vertical = 2.dp)
                         ) {
-                            Text("+10", color = OnSurface, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            Text("+10", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                         Box(
                             modifier = Modifier
@@ -1792,14 +1792,14 @@ private fun AccountMatrixCard(
                                 .clickable { onSharesChange(((shares.toIntOrNull() ?: 0) + 100).toString()) }
                                 .padding(horizontal = 4.dp, vertical = 2.dp)
                         ) {
-                            Text("+100", color = OnSurface, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            Text("+100", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
 
                 // Acquisition Price Input Column
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("取得単価 (平均)", color = OnSurfaceVariant, fontSize = 8.sp)
+                    Text("取得単価 (平均)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1822,9 +1822,9 @@ private fun AccountMatrixCard(
                             ),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontSize = 11.sp, textAlign = TextAlign.Center)
+                            textStyle = LocalTextStyle.current.copy(fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
                         )
-                        Text("/株", color = OnSurfaceVariant, fontSize = 9.sp)
+                        Text("/株", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
                 }
             }
@@ -1839,21 +1839,21 @@ private fun AccountMatrixCard(
                     Text(
                         "投資元本: $currency" + String.format("%.2f", totalCost),
                         color = OnSurfaceVariant,
-                        fontSize = 9.sp
+                        fontSize = AppTextSize.dense
                     )
 
                     if (isTaxFree) {
                         Text(
                             "NISA節税効果: +$currency" + String.format("%.2f", taxAmt),
                             color = PrimaryEmerald,
-                            fontSize = 9.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
                         )
                     } else {
                         Text(
                             "源泉控除税額: -$currency" + String.format("%.2f", taxAmt),
-                            color = Color(0xFFF43F5E),
-                            fontSize = 9.sp,
+                            color = ErrorRed,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
                         )
                     }

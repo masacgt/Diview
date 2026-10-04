@@ -217,7 +217,7 @@ fun AddHoldingSheet(
                                 "複数口座一括配分登録",
                                 color = OnSurface,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
+                                fontSize = AppTextSize.body
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Box(
@@ -230,7 +230,7 @@ fun AddHoldingSheet(
                                 Text(
                                     "マトリックス同時入力",
                                     color = PrimaryEmerald,
-                                    fontSize = 8.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -238,7 +238,7 @@ fun AddHoldingSheet(
                         Text(
                             "口座間の株数・取得単価を1画面でまとめて設定",
                             color = OnSurfaceVariant,
-                            fontSize = 10.sp
+                            fontSize = AppTextSize.dense
                         )
                     }
                 }
@@ -271,12 +271,12 @@ fun AddHoldingSheet(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(Icons.Default.Tag, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
-                        Text("銘柄コード / 企業名", color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("銘柄コード / 企業名", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                     }
                     Text(
                         "${selectedStock.name} (利回り ${selectedStock.yieldRate}%)",
                         color = PrimaryEmerald,
-                        fontSize = 11.sp,
+                        fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -300,7 +300,7 @@ fun AddHoldingSheet(
                     Text(
                         "Cloudflareの銘柄マスターを確認できませんでした。通信状態と銘柄コードを確認してください。",
                         color = MaterialTheme.colorScheme.error,
-                        fontSize = 10.sp
+                        fontSize = AppTextSize.dense
                     )
                 }
 
@@ -324,7 +324,7 @@ fun AddHoldingSheet(
                             Text(
                                 "${stock.code} ${stock.name}",
                                 color = if (active) PrimaryEmerald else OnSurfaceVariant,
-                                fontSize = 11.sp,
+                                fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
@@ -351,24 +351,24 @@ fun AddHoldingSheet(
                             selectedStock.code,
                             color = OnSurface,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
+                            fontSize = AppTextSize.dense,
                             fontFamily = FontFamily.Monospace
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(selectedStock.name, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        Text(selectedStock.sector, color = OnSurfaceVariant, fontSize = 10.sp)
+                        Text(selectedStock.name, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
+                        Text(selectedStock.sector, color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
                             "${selectedStock.currency}${currencyFormat.format(selectedStock.price.toLong())}",
                             color = OnSurface,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
+                            fontSize = AppTextSize.caption,
                             fontFamily = FontFamily.Monospace
                         )
-                        Text("配当利回り ${selectedStock.yieldRate}%", color = PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("配当利回り ${selectedStock.yieldRate}%", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -382,7 +382,7 @@ fun AddHoldingSheet(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(Icons.Default.CorporateFare, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
-                        Text("口座別 ポートフォリオ配分マトリックス", color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("口座別 ポートフォリオ配分マトリックス", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box(
@@ -399,7 +399,7 @@ fun AddHoldingSheet(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Icon(Icons.Default.Edit, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(10.dp))
-                                Text("現在値を適用", color = PrimaryEmerald, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text("現在値を適用", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
                         Box(
@@ -416,7 +416,7 @@ fun AddHoldingSheet(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Icon(Icons.Default.Refresh, contentDescription = null, tint = OnSurface, modifier = Modifier.size(10.dp))
-                                Text("株数クリア", color = OnSurface, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text("株数クリア", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -450,21 +450,21 @@ fun AddHoldingSheet(
                                             .clip(CircleShape)
                                             .background(if (title.contains("NISA")) PrimaryEmerald else Color(0xFF818CF8))
                                     )
-                                    Text(title, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text(title, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(4.dp))
                                             .background(SurfaceContainerHighest)
                                             .padding(horizontal = 4.dp, vertical = 2.dp)
                                     ) {
-                                        Text(tag, color = OnSurfaceVariant, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                        Text(tag, color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                     }
                                 }
                                 Text(
                                     "¥${currencyFormat.format(divAmount.toLong())}/年",
                                         color = if (divAmount > 0) PrimaryEmerald else OnSurfaceVariant,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp
+                                    fontSize = AppTextSize.caption
                                 )
                             }
 
@@ -479,7 +479,7 @@ fun AddHoldingSheet(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("株数 / 口数", color = OnSurfaceVariant, fontSize = 10.sp)
+                                        Text("株数 / 口数", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                             Box(
                                                 modifier = Modifier
@@ -491,7 +491,7 @@ fun AddHoldingSheet(
                                                     }
                                                     .padding(horizontal = 4.dp, vertical = 2.dp)
                                             ) {
-                                                Text("+10", color = OnSurface, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                                Text("+10", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                             }
                                             Box(
                                                 modifier = Modifier
@@ -503,7 +503,7 @@ fun AddHoldingSheet(
                                                     }
                                                     .padding(horizontal = 4.dp, vertical = 2.dp)
                                             ) {
-                                                Text("+100", color = OnSurface, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                                Text("+100", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                             }
                                         }
                                     }
@@ -528,7 +528,7 @@ fun AddHoldingSheet(
 
                                 // Price Input Field
                                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text("取得単価", color = OnSurfaceVariant, fontSize = 10.sp)
+                                    Text("取得単価", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     OutlinedTextField(
                                         value = priceVal,
                                         onValueChange = onPriceChange,
@@ -561,7 +561,7 @@ fun AddHoldingSheet(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(Icons.Default.Analytics, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
-                        Text("全口座 総合アロケーションサマリー", color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("全口座 総合アロケーションサマリー", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                     }
                     Box(
                         modifier = Modifier
@@ -569,7 +569,7 @@ fun AddHoldingSheet(
                             .background(PrimaryEmeraldContainer.copy(alpha = 0.2f))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
-                        Text("手取り最大化", color = PrimaryEmerald, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        Text("手取り最大化", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -582,9 +582,9 @@ fun AddHoldingSheet(
                             colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
-                                Text("合計保有株数", color = OnSurfaceVariant, fontSize = 9.sp)
+                                Text("合計保有株数", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text("${totalShares} 株", color = OnSurface, fontWeight = FontWeight.Black, fontSize = 14.sp)
+                                Text("${totalShares} 株", color = OnSurface, fontWeight = FontWeight.Black, fontSize = AppTextSize.body)
                             }
                         }
                         // Box 2
@@ -593,9 +593,9 @@ fun AddHoldingSheet(
                             colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
-                                Text("加重平均取得単価", color = OnSurfaceVariant, fontSize = 9.sp)
+                                Text("加重平均取得単価", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text("¥${currencyFormat.format(weightedAvgAcqPrice.toLong())}", color = OnSurface, fontWeight = FontWeight.Black, fontSize = 14.sp)
+                                Text("¥${currencyFormat.format(weightedAvgAcqPrice.toLong())}", color = OnSurface, fontWeight = FontWeight.Black, fontSize = AppTextSize.body)
                             }
                         }
                     }
@@ -607,9 +607,9 @@ fun AddHoldingSheet(
                             colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
-                                Text("年間配当 (手取り総額)", color = OnSurfaceVariant, fontSize = 9.sp)
+                                Text("年間配当 (手取り総額)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text("¥${currencyFormat.format(totalNetDividend.toLong())} /年", color = PrimaryEmerald, fontWeight = FontWeight.Black, fontSize = 14.sp)
+                                Text("¥${currencyFormat.format(totalNetDividend.toLong())} /年", color = PrimaryEmerald, fontWeight = FontWeight.Black, fontSize = AppTextSize.body)
                             }
                         }
                         // Box 4
@@ -618,9 +618,9 @@ fun AddHoldingSheet(
                             colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
-                                Text("NISA節税メリット", color = OnSurfaceVariant, fontSize = 9.sp)
+                                Text("NISA節税メリット", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text("+¥${currencyFormat.format(nisaTaxBenefits.toLong())} /年", color = Color(0xFF38BDF8), fontWeight = FontWeight.Black, fontSize = 14.sp)
+                                Text("+¥${currencyFormat.format(nisaTaxBenefits.toLong())} /年", color = SkyBlue, fontWeight = FontWeight.Black, fontSize = AppTextSize.body)
                             }
                         }
                     }
@@ -640,7 +640,7 @@ fun AddHoldingSheet(
                     colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainer),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("キャンセル", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("キャンセル", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
                 }
 
                 Button(
@@ -666,16 +666,19 @@ fun AddHoldingSheet(
                     },
                     modifier = Modifier.weight(0.6f).height(48.dp),
                     enabled = !isRegistering,
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmeraldContainer),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PrimaryEmeraldContainer,
+                        contentColor = OnPrimaryContainer
+                    ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (isRegistering) {
-                            CircularProgressIndicator(color = OnPrimary, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                            CircularProgressIndicator(color = OnPrimaryContainer, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                         } else {
-                            Icon(Icons.Default.Check, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Check, contentDescription = null, tint = OnPrimaryContainer, modifier = Modifier.size(16.dp))
                         }
-                        Text(if (isRegistering) "銘柄情報を確認中…" else "すべての口座にまとめて登録する", color = OnPrimary, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                        Text(if (isRegistering) "銘柄情報を確認中…" else "すべての口座にまとめて登録する", color = OnPrimaryContainer, fontWeight = FontWeight.Black, fontSize = AppTextSize.dense)
                     }
                 }
             }

@@ -61,7 +61,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val accents = listOf(
         "emerald" to Color(0xFF10B981), "cyan" to Color(0xFF06B6D4),
-        "blue" to Color(0xFF3B82F6), "amber" to Color(0xFFF59E0B),
+        "blue" to Color(0xFF3B82F6), "amber" to AccentAmber,
         "purple" to Color(0xFF8B5CF6)
     )
 
@@ -203,8 +203,8 @@ fun SettingsScreen(
                     SettingToggle("起動時の金額伏字マスク", "電車内など外出時の画面閲覧用", maskAtStartup, { maskAtStartup = it }, tag = "覗き見防止")
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column { Label("ローカルデータ完全消去", 9, Color(0xFFFF8A80), true); Label("端末内の保有・設定データをすべて削除", 7, SettingsMuted) }
-                        Box(Modifier.clip(RoundedCornerShape(5.dp)).background(Color(0xFF421D2A)).border(1.dp, Color(0xFF8D3341), RoundedCornerShape(5.dp)).clickable { confirmReset = true }.padding(horizontal = 9.dp, vertical = 5.dp)) { Label("初期化", 8, Color(0xFFFFB4AB), true) }
+                        Column { Label("ローカルデータ完全消去", 9, ErrorRed, true); Label("端末内の保有・設定データをすべて削除", 7, SettingsMuted) }
+                        Box(Modifier.clip(RoundedCornerShape(5.dp)).background(Color(0xFF421D2A)).border(1.dp, Color(0xFF8D3341), RoundedCornerShape(5.dp)).clickable { confirmReset = true }.padding(horizontal = 9.dp, vertical = 5.dp)) { Label("初期化", 8, ErrorRed, true) }
                     }
                 }
             }
@@ -227,7 +227,7 @@ fun SettingsScreen(
         item {
             Column(Modifier.fillMaxWidth().padding(top = 3.dp, bottom = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Label("♙  金融データは端末内暗号化保存されています", 7, SettingsMint)
-                Spacer(Modifier.height(3.dp)); Label("© 2025 Kurogane Dividend System", 6, SettingsMuted)
+                Spacer(Modifier.height(3.dp)); Label("© 2025 Diview", 6, SettingsMuted)
             }
         }
     }
@@ -236,7 +236,7 @@ fun SettingsScreen(
         onDismissRequest = { confirmReset = false },
         title = { Text("データを初期化", color = OnSurface) },
         text = { Text("端末内の保有・設定データを初期化しますか？", color = SettingsMuted) },
-        confirmButton = { TextButton(onClick = { confirmReset = false; Toast.makeText(context, "データを初期化しました", Toast.LENGTH_SHORT).show() }) { Text("初期化", color = Color(0xFFFF8A80)) } },
+        confirmButton = { TextButton(onClick = { confirmReset = false; Toast.makeText(context, "データを初期化しました", Toast.LENGTH_SHORT).show() }) { Text("初期化", color = ErrorRed) } },
         dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("キャンセル", color = SettingsMuted) } },
         containerColor = SettingsCard
     )
@@ -247,7 +247,7 @@ private fun SettingsSection(title: String, icon: androidx.compose.ui.graphics.ve
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.padding(start = 3.dp)) {
             Icon(icon, null, tint = SettingsMint, modifier = Modifier.size(14.dp))
-            Text(title, color = OnSurface, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text(title, color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
         }
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(SettingsCard).border(.7.dp, SettingsBorder, RoundedCornerShape(10.dp)).padding(10.dp), content = content)
     }
@@ -261,7 +261,7 @@ private fun Label(text: String, size: Int, color: Color, bold: Boolean = false) 
 @Composable
 private fun Segment(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(modifier.clip(RoundedCornerShape(6.dp)).then(if (selected) Modifier.background(SettingsMint.copy(alpha = .16f)).border(.8.dp, SettingsMint, RoundedCornerShape(6.dp)) else Modifier).clickable(onClick = onClick).padding(horizontal = 3.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
-        Text(text, color = if (selected) SettingsMint else SettingsMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, lineHeight = 14.sp)
+        Text(text, color = if (selected) SettingsMint else SettingsMuted, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, lineHeight = 14.sp)
     }
 }
 

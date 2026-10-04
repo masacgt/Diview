@@ -14,6 +14,7 @@ data class AppColorPalette(
     val primary: Color,
     val primaryContainer: Color,
     val onPrimary: Color,
+    val onPrimaryContainer: Color,
     val onSurface: Color,
     val onSurfaceVariant: Color,
     val textMuted: Color,
@@ -34,6 +35,7 @@ internal val DarkAppPalette = AppColorPalette(
     primary = Color(0xFF4EDEA3),
     primaryContainer = Color(0xFF10B981),
     onPrimary = Color(0xFF003824),
+    onPrimaryContainer = Color(0xFF003824),
     onSurface = Color(0xFFDAE2FD),
     onSurfaceVariant = Color(0xFFBBCABF),
     textMuted = Color(0xFF86948A),
@@ -54,11 +56,12 @@ internal val LightAppPalette = AppColorPalette(
     primary = Color(0xFF047857),
     primaryContainer = Color(0xFF059669),
     onPrimary = Color(0xFFFFFFFF),
+    onPrimaryContainer = Color(0xFFFFFFFF),
     onSurface = Color(0xFF172033),
     onSurfaceVariant = Color(0xFF475569),
     textMuted = Color(0xFF64748B),
     secondary = Color(0xFF5B5FC7),
-    skyBlue = Color(0xFF0284C7),
+    skyBlue = Color(0xFF0369A1),
     accentAmber = Color(0xFFB45309),
     error = Color(0xFFB42318),
     border = Color(0xFFCBD5E1)
@@ -75,6 +78,7 @@ val SurfaceContainerHighest: Color @Composable get() = LocalAppPalette.current.s
 val PrimaryEmerald: Color @Composable get() = LocalAppPalette.current.primary
 val PrimaryEmeraldContainer: Color @Composable get() = LocalAppPalette.current.primaryContainer
 val OnPrimary: Color @Composable get() = LocalAppPalette.current.onPrimary
+val OnPrimaryContainer: Color @Composable get() = LocalAppPalette.current.onPrimaryContainer
 val OnSurface: Color @Composable get() = LocalAppPalette.current.onSurface
 val OnSurfaceVariant: Color @Composable get() = LocalAppPalette.current.onSurfaceVariant
 val TextMuted: Color @Composable get() = LocalAppPalette.current.textMuted
