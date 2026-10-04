@@ -66,6 +66,13 @@ app.*.map.json
 /archive/legacy-flutter-scaffold/.dart_tool/
 /archive/legacy-flutter-scaffold/build/
 
+# Legacy copies, release artifacts, and Windows device-name debris
+**/build/
+**/node_modules/
+*.apk
+/NUL
+/irbankMCP/
+
 # Local environment files
 .env
 .env.*

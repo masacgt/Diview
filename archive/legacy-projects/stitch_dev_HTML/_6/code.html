@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ja" style=""><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_stack" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&amp;family=Space+Grotesk:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;margin:0;padding:0;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "error": "#ffb4ab", "tertiary-container": "#ff7a73", "background": "#0b1326", "on-tertiary-fixed": "#410004", "primary-fixed": "#6ffbbe", "outline-variant": "#3c4a42", "secondary": "#c0c1ff", "surface-container-highest": "#2d3449", "surface": "#0b1326", "secondary-fixed-dim": "#c0c1ff", "inverse-surface": "#dae2fd", "surface-container-high": "#222a3d", "on-error-container": "#ffdad6", "on-primary-fixed": "#002113", "on-primary-container": "#00422b", "surface-variant": "#2d3449", "on-secondary-fixed-variant": "#2f2ebe", "tertiary-fixed": "#ffdad7", "surface-container-low": "#131b2e", "primary-container": "#10b981", "primary": "#4edea3", "inverse-on-surface": "#283044", "secondary-container": "#3131c0", "on-surface": "#dae2fd", "error-container": "#93000a", "on-tertiary-container": "#79000e", "on-tertiary": "#68000a", "on-background": "#dae2fd", "primary-fixed-dim": "#4edea3", "on-surface-variant": "#bbcabf", "surface-container-lowest": "#060e20", "on-primary": "#003824", "inverse-primary": "#006c49", "on-tertiary-fixed-variant": "#930013", "surface-bright": "#31394d", "tertiary": "#ffb3ad", "on-error": "#690005", "on-secondary": "#1000a9", "outline": "#86948a", "tertiary-fixed-dim": "#ffb3ad", "surface-dim": "#0b1326", "on-primary-fixed-variant": "#005236", "surface-tint": "#4edea3", "secondary-fixed": "#e1e0ff", "on-secondary-container": "#b0b2ff", "surface-container": "#171f33", "on-secondary-fixed": "#07006c" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "space-xl": "2rem", "gutter-sm": "0.75rem", "space-lg": "1.5rem", "space-xs": "0.25rem", "margin-tablet": "1.5rem", "margin": "1rem", "gutter": "1rem", "space-sm": "0.5rem", "space-md": "1rem" }, "fontFamily": { "label-sm": ["Manrope"], "label-md": ["Manrope"], "numeric-hero": ["Space Grotesk"], "body-lg": ["Manrope"], "title-md": ["Manrope"], "display-lg-mobile": ["Space Grotesk"], "headline-md": ["Space Grotesk"], "label-lg": ["Manrope"], "body-md": ["Manrope"], "display-lg": ["Space Grotesk"], "numeric-hero-mobile": ["Space Grotesk"], "title-lg": ["Manrope"], "headline-lg": ["Space Grotesk"], "body-sm": ["Manrope"] }, "fontSize": { "label-sm": ["10px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "700" }], "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }], "numeric-hero": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "title-md": ["16px", { "lineHeight": "22px", "fontWeight": "600" }], "display-lg-mobile": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "headline-md": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }], "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }], "display-lg": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "numeric-hero-mobile": ["30px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "title-lg": ["18px", { "lineHeight": "24px", "fontWeight": "600" }], "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "600" }], "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }] } } } };</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-surface font-body-md text-body-md text-on-surface flex flex-col min-h-screen antialiased selection:bg-primary/20 selection:text-primary"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-16 px-margin flex items-center justify-between"><div class="flex items-center gap-space-sm"><a aria-label="設定・データ管理に戻る" class="w-11 h-11 -ml-space-xs rounded-full flex items-center justify-center text-on-surface hover:text-primary hover:bg-surface-container-high/60 active:scale-95 transition-all duration-150" href="{{DATA:SCREEN:SCREEN_74}}"><span class="material-symbols-outlined text-[24px]">arrow_back_ios_new</span></a><h1 class="font-title-lg text-title-lg text-on-surface truncate">Terms Of Service And Privacy Policy</h1></div><div class="flex items-center"></div></div></header><main class="flex flex-col relative w-full pt-16 bg-surface flex-1"><div class="flex flex-col w-full pb-28" id="app-viewport">
+<!-- Subtle ambient emerald glow at the top -->
+<div class="relative w-full overflow-hidden px-margin pt-space-md">
+<div class="absolute -top-16 -left-12 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none"></div>
+<div class="absolute top-10 right-0 w-48 h-48 bg-secondary/10 rounded-full blur-2xl pointer-events-none"></div>
+<!-- Security Core Badge with Interactive assurances & Glow pulse -->
+<div class="relative z-10 flex flex-col gap-2 bg-surface-container-low rounded-xl p-space-md mb-space-md shadow-sm border border-outline-variant/30">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="w-2.5 h-2.5 rounded-full bg-primary animate-pulse"></span>
+<span class="font-label-md text-label-md text-primary font-semibold tracking-wide">Kurogane Security Core</span>
+</div>
+<span class="font-label-sm text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">verified</span>
+          保護稼働中
+        </span>
+</div>
+<div class="grid grid-cols-2 gap-2 mt-1">
+<div class="flex items-center gap-2 p-2 rounded-lg bg-surface-container/60 hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-primary text-[18px]">encrypted</span>
+<div>
+<p class="font-label-sm text-[11px] text-on-surface font-semibold">端末内AES-256暗号化</p>
+<p class="font-body-sm text-[10px] text-on-surface-variant">クラウド送信 0 Byte</p>
+</div>
+</div>
+<div class="flex items-center gap-2 p-2 rounded-lg bg-surface-container/60 hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-primary text-[18px]">block</span>
+<div>
+<p class="font-label-sm text-[11px] text-on-surface font-semibold">第三者提供・売買ゼロ</p>
+<p class="font-body-sm text-[10px] text-on-surface-variant">証券認証情報は非保持</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Smooth Segment Switcher with Pill Indicator -->
+<div class="relative z-10 p-1 bg-surface-container-lowest rounded-xl flex items-center mb-space-md shadow-inner border border-outline-variant/20">
+<div class="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] bg-primary rounded-lg transition-tab-indicator shadow-md pointer-events-none" id="tab-pill-indicator" style="transform: translateX(100%);"></div>
+<button class="flex-1 py-space-sm px-space-xs text-center rounded-lg font-label-lg text-label-lg transition-all duration-200 flex items-center justify-center gap-1.5 relative z-10 text-on-surface-variant hover:text-on-surface active:scale-95" id="tab-btn-terms" onclick="switchPolicyTab('terms')">
+<span class="material-symbols-outlined text-[18px]">gavel</span>
+<span class="">利用規約</span>
+</button>
+<button class="flex-1 py-space-sm px-space-xs text-center rounded-lg font-label-lg text-label-lg transition-all duration-200 flex items-center justify-center gap-1.5 relative z-10 text-on-primary font-bold active:scale-95" id="tab-btn-privacy" onclick="switchPolicyTab('privacy')">
+<span class="material-symbols-outlined text-[18px]">verified_user</span>
+<span class="">プライバシー</span>
+</button>
+</div>
+<!-- Quick Jump Chips (目次) with Active Border & Smooth Jump -->
+</div>
+<!-- CONTENT PANELS CONTAINER -->
+<div class="px-margin flex flex-col gap-space-md">
+<!-- PANEL 1: TERMS OF SERVICE (利用規約) -->
+<div class="flex-col gap-space-md animate-fade-in hidden" id="panel-terms">
+<!-- Summary Callout with Quick Toggle -->
+<div class="bg-surface-container-low rounded-xl p-space-md shadow-sm border border-outline-variant/30 hover:border-primary/30 transition-all">
+<div class="flex items-center gap-space-sm mb-space-xs">
+<div class="w-9 h-9 rounded-lg bg-surface-container-high flex items-center justify-center text-primary glow-shield">
+<span class="material-symbols-outlined text-[20px]">assignment_turned_in</span>
+</div>
+<div class="flex-1">
+<h2 class="font-title-md text-title-md text-on-surface font-bold">Kurogane利用規約</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">配当蓄財と資産可視化シミュレーター規約</p>
+</div>
+<span class="font-label-sm text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">2025年改訂版</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant mt-space-xs leading-relaxed">
+          本規約は、合同会社Kurogane Labs（以下「当社」）が提供するポートフォリオ分析アプリ「Kurogane Dividend」の利用条件を定めるものです。
+        </p>
+</div>
+<!-- Article 1: Interactive Card with accordion takeaway -->
+<div class="bg-surface-container rounded-xl p-space-md shadow-sm scroll-mt-24 border border-outline-variant/20 hover:border-outline-variant/60 transition-all duration-300" id="term-art1">
+<div class="flex items-center justify-between mb-space-xs cursor-pointer select-none" onclick="toggleAccordion('art1-summary')">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-4 rounded-full bg-primary"></span>
+<h3 class="font-title-md text-title-md text-on-surface font-bold">第1条（総則・本サービスの目的）</h3>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="font-label-sm text-label-sm px-2 py-0.5 bg-surface-container-highest rounded text-on-surface-variant">管理ツール</span>
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant transition-transform duration-200" id="art1-summary-icon">expand_more</span>
+</div>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed mb-space-sm">
+          本アプリは、ユーザー自身が手動入力した保有銘柄、取得価格、保有株数に基づき、年間想定配当額、税引後キャッシュフロー、および受取月カレンダーを試算・可視化する「個人向け資産シミュレーションツール」です。
+        </p>
+<div class="overflow-hidden transition-all duration-300 max-h-40" id="art1-summary">
+<div class="bg-surface-container-high/60 rounded-lg p-space-sm flex items-start gap-space-xs border border-primary/20">
+<span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">check_circle</span>
+<p class="font-body-sm text-body-sm text-on-surface">証券口座の自動スクレイピング連携を行わず、ユーザーが主体的に配当構成を俯瞰・把握することを主眼としています。</p>
+</div>
+</div>
+</div>
+<!-- Article 2 (Disclaimer) -->
+<div class="bg-surface-container rounded-xl p-space-md shadow-sm scroll-mt-24 border border-tertiary-container/30 hover:border-tertiary-container/70 transition-all duration-300" id="term-art2">
+<div class="flex items-center justify-between mb-space-xs cursor-pointer select-none" onclick="toggleAccordion('art2-summary')">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-4 rounded-full bg-tertiary-container"></span>
+<h3 class="font-title-md text-title-md text-tertiary font-bold">第2条（投資助言に関する免責事項）</h3>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="font-label-sm text-label-sm px-2 py-0.5 bg-tertiary-container/20 rounded text-tertiary font-semibold">重要確認事項</span>
+<span class="material-symbols-outlined text-[18px] text-tertiary transition-transform duration-200" id="art2-summary-icon">expand_more</span>
+</div>
+</div>
+<div class="space-y-space-sm">
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+            1. 当社は、金融商品取引法に基づく「金融商品取引業者（投資助言・代理業等）」ではありません。本アプリ内で表示される利回り、配当支払予定月、過去実績増配率は参考指標であり、特定の有価証券の売買推奨や投資助言を行うものではありません。
+          </p>
+<div class="overflow-hidden transition-all duration-300 max-h-40" id="art2-summary">
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed pt-1 bg-surface-container-high/40 p-2.5 rounded-lg border border-tertiary-container/20">
+              2. 配当金は企業の財務状況や市場動向により減配・無配となる場合があります。試算結果および税計算の完全性・正確性を保証するものではなく、いかなる投資判断の損失についても当社は責任を負いません。
+            </p>
+</div>
+</div>
+</div>
+<!-- Article 3 -->
+<div class="bg-surface-container rounded-xl p-space-md shadow-sm scroll-mt-24 border border-outline-variant/20 hover:border-outline-variant/60 transition-all duration-300" id="term-art3">
+<div class="flex items-center justify-between mb-space-xs">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-4 rounded-full bg-primary"></span>
+<h3 class="font-title-md text-title-md text-on-surface font-bold">第3条（利用環境およびローカルデータ管理）</h3>
+</div>
+<span class="font-label-sm text-label-sm px-2 py-0.5 bg-surface-container-highest rounded text-on-surface-variant">非保持化</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed mb-space-xs">
+          本アプリは、証券会社のログインID・取引パスワードを一切取得・保管・要求いたしません。
+        </p>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+          入力された資産データはユーザー所持端末の安全な領域（サンドボックス）内に暗号化保存されます。端末紛失やOS破損によるデータ消失に備え、必要に応じてエクスポート機能によるバックアップをお客様ご自身の責任で行うものとします。
+        </p>
+</div>
+<!-- Article 4 -->
+<!-- Article 5 -->
+<div class="bg-surface-container rounded-xl p-space-md shadow-sm scroll-mt-24 border border-outline-variant/20 hover:border-outline-variant/60 transition-all duration-300" id="term-art5">
+<div class="flex items-center justify-between mb-space-xs">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-4 rounded-full bg-outline"></span>
+<h3 class="font-title-md text-title-md text-on-surface font-bold">第4条（知的財産権および禁止事項）</h3>
+</div>
+<span class="font-label-sm text-label-sm px-2 py-0.5 bg-surface-container-highest rounded text-on-surface-variant">コンプライアンス</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+          本アプリ内のUIデザイン、グラフィック、アルゴリズム、株価参照データベースの著作権は当社または正当な権利者に帰属します。リバースエンジニアリング、不正クローリング、複製行為は固く禁止いたします。
+        </p>
+</div>
+</div>
+<!-- PANEL 2: PRIVACY POLICY (プライバシーポリシー) -->
+<div class="flex-col gap-space-md animate-fade-in flex" id="panel-privacy">
+<!-- HERO PRIVACY BANNER: Zero Financial Leakage Guarantee -->
+<div class="bg-gradient-to-br from-surface-container-high via-surface-container to-surface-container-lowest rounded-xl p-space-md shadow-md border border-primary/20">
+<div class="flex items-center gap-space-sm mb-space-sm">
+<div class="w-10 h-10 rounded-full bg-primary-container/20 flex items-center justify-center text-primary shadow-sm glow-shield">
+<span class="material-symbols-outlined text-[24px]">shield_with_heart</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-primary uppercase font-bold tracking-wider">Zero Knowledge Architecture</span>
+<h2 class="font-headline-md text-headline-md text-on-surface font-bold">金融データ端末内完結宣言</h2>
+</div>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed mb-space-sm">
+          Kurogane Dividendは「あなたの蓄財状況を誰にも見せない」ことを思想として設計されています。入力された全株式データ・投資金額・配当キャッシュフローは、クラウドサーバーへ一切送信されず、端末内でのみ演算処理されます。
+        </p>
+<!-- Visual Verification Metric -->
+<div class="grid grid-cols-2 gap-space-xs pt-space-xs">
+<div class="bg-surface-container-lowest/80 rounded-lg p-space-sm border border-outline-variant/30 hover:border-primary/40 transition-colors">
+<div class="flex items-center gap-1 text-primary mb-0.5">
+<span class="material-symbols-outlined text-[16px]">cloud_off</span>
+<span class="font-label-md text-label-md font-bold">外部送信</span>
+</div>
+<div class="font-numeric-hero-mobile text-numeric-hero-mobile text-on-surface font-bold">0<span class="font-label-sm text-label-sm ml-0.5 text-primary">Bytes</span></div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">保有株・金額の送出なし</p>
+</div>
+<div class="bg-surface-container-lowest/80 rounded-lg p-space-sm border border-outline-variant/30 hover:border-primary/40 transition-colors">
+<div class="flex items-center gap-1 text-primary mb-0.5">
+<span class="material-symbols-outlined text-[16px]">lock</span>
+<span class="font-label-md text-label-md font-bold">保護規格</span>
+</div>
+<div class="font-headline-md text-headline-md text-on-surface font-bold">AES-256</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">SQLite端末暗号化</p>
+</div>
+</div>
+</div>
+<!-- Section 1 -->
+<div class="bg-surface-container rounded-xl p-space-md shadow-sm scroll-mt-24 border border-outline-variant/20 hover:border-outline-variant/60 transition-all duration-300" id="priv-sec1">
+<div class="flex items-center gap-2 mb-space-xs">
+<span class="w-1.5 h-4 rounded-full bg-primary"></span>
+<h3 class="font-title-md text-title-md text-on-surface font-bold">1. 取得する情報とその範囲</h3>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed mb-space-sm">
+          当社がアプリの安定運用および技術的改善のためにのみ取得する情報は以下の通りです：
+        </p>
+<ul class="space-y-space-xs">
+<li class="flex items-start gap-2 bg-surface-container-high/40 p-space-sm rounded-lg border border-outline-variant/20">
+<span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">check</span>
+<div class="font-body-sm text-body-sm text-on-surface">
+<strong class="text-on-surface font-title-md">匿名化クラッシュログ：</strong>
+              アプリクラッシュ時のスタックトレース、OSバージョン、デバイスモデル（個人を特定する情報は含まれません）
+            </div>
+</li>
+<li class="flex items-start gap-2 bg-surface-container-high/40 p-space-sm rounded-lg border border-outline-variant/20">
+<span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">check</span>
+<div class="font-body-sm text-body-sm text-on-surface">
+<strong class="text-on-surface font-title-md">匿名の機能利用統計：</strong>
+              画面遷移頻度などの集計情報（Firebase Analytics等の標準基盤を利用）
+            </div>
+</li>
+</ul>
+</div>
+<!-- Section 2 -->
+<div class="bg-surface-container rounded-xl p-space-md shadow-sm scroll-mt-24 border border-outline-variant/20 hover:border-outline-variant/60 transition-all duration-300" id="priv-sec2">
+<div class="flex items-center gap-2 mb-space-xs">
+<span class="w-1.5 h-4 rounded-full bg-primary"></span>
+<h3 class="font-title-md text-title-md text-on-surface font-bold">2. 情報の利用目的</h3>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+          収集した匿名ログデータは、バグの特定・解消、パフォーマンス改善、新機能（配当カレンダーの視認性向上等）の開発検証にのみ限定して使用されます。マーケティング目的での第三者名簿提供などは行いません。
+        </p>
+</div>
+<!-- Section 3 -->
+<div class="bg-surface-container rounded-xl p-space-md shadow-sm scroll-mt-24 border border-outline-variant/20 hover:border-outline-variant/60 transition-all duration-300" id="priv-sec3">
+<div class="flex items-center gap-2 mb-space-xs">
+<span class="w-1.5 h-4 rounded-full bg-primary"></span>
+<h3 class="font-title-md text-title-md text-on-surface font-bold">3. 第三者提供および外部SDK</h3>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed mb-space-sm">
+          本アプリの正常な動作および課金決済の管理のため、信頼性の高い以下のSDKモジュールを組み込んでいます。
+        </p>
+<div class="space-y-space-xs">
+<div class="flex justify-between items-center p-space-sm bg-surface-container-high/40 rounded-lg border border-outline-variant/20">
+<div>
+<span class="font-label-lg text-label-lg text-on-surface font-bold">StoreKit / Google Billing</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant">サブスクリプション購入領収証の検証</p>
+</div>
+<span class="font-label-sm text-label-sm px-2 py-0.5 rounded bg-surface-container-highest text-primary font-semibold">決済処理</span>
+</div>
+<div class="flex justify-between items-center p-space-sm bg-surface-container-high/40 rounded-lg border border-outline-variant/20">
+<div>
+<span class="font-label-lg text-label-lg text-on-surface font-bold">Crashlytics</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant">匿名クラッシュ診断・アプリ安定化</p>
+</div>
+<span class="font-label-sm text-label-sm px-2 py-0.5 rounded bg-surface-container-highest text-on-surface-variant font-semibold">診断</span>
+</div>
+</div>
+</div>
+<!-- Section 4 -->
+<div class="bg-surface-container rounded-xl p-space-md shadow-sm scroll-mt-24 border border-outline-variant/20 hover:border-outline-variant/60 transition-all duration-300" id="priv-sec4">
+<div class="flex items-center gap-2 mb-space-xs">
+<span class="w-1.5 h-4 rounded-full bg-primary"></span>
+<h3 class="font-title-md text-title-md text-on-surface font-bold">4. セキュリティ管理体制（SQLiteローカル暗号化）</h3>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+          ポートフォリオデータは、端末固有のセキュアキーストア（iOS Keychain / Android Keystore）から導出されたマスターキーにより、ローカルデータベース（SQLite）レベルで暗号化されています。端末が脱獄（Jailbreak）されていない限り、他のアプリケーションからの不正アクセスから強固に隔離保護されます。
+        </p>
+</div>
+<!-- Section 5 -->
+<div class="bg-surface-container rounded-xl p-space-md shadow-sm scroll-mt-24 border border-outline-variant/20 hover:border-outline-variant/60 transition-all duration-300" id="priv-sec5">
+<div class="flex items-center gap-2 mb-space-xs">
+<span class="w-1.5 h-4 rounded-full bg-primary"></span>
+<h3 class="font-title-md text-title-md text-on-surface font-bold">5. お問い合わせ窓口</h3>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed mb-space-sm">
+          規約内容、プライバシー情報の取り扱い、またはアプリに関するご不明点はサポート窓口までお寄せください。
+        </p>
+</div>
+</div>
+<!-- Security Affirmation Card (Shared) -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm border border-primary/20">
+<div class="flex items-start gap-space-sm">
+<div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[20px]">verified</span>
+</div>
+<div class="space-y-1">
+<h4 class="font-title-md text-title-md text-on-surface font-bold">安心してお使いいただくために</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+            Kurogane Dividendは金融機関の認証情報（ログインパスワード、取引暗証番号等）をお預かりすることは未来永劫ありません。日々の配当受取日と利回り可視化を、安全にお楽しみください。
+          </p>
+</div>
+</div>
+</div>
+<!-- Agreement Summary Callout -->
+<div class="bg-surface-container-high/90 backdrop-blur-md rounded-xl p-space-md shadow-lg border border-outline-variant/30">
+<div class="flex items-center gap-space-xs text-primary mb-1">
+<span class="material-symbols-outlined text-[18px]">info</span>
+<span class="font-label-md text-label-md font-bold">利用同意について</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+        本アプリのダウンロード、インストール、またはご利用の開始をもって、上記「利用規約」および「プライバシーポリシー」のすべての条項に同意いただいたものとみなします。
+      </p>
+</div>
+</div>
+</div>
+<!-- Floating Bottom Action Dock -->
+<div class="fixed bottom-0 left-0 w-full z-40 px-margin pb-safe pt-2 bg-gradient-to-t from-surface via-surface/95 to-transparent backdrop-blur-md">
+</div>
+<!-- Toast Notification Feedback -->
+<div class="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-surface-container-high/95 text-on-surface border border-primary/40 shadow-2xl backdrop-blur-xl flex items-center gap-2 text-sm font-semibold opacity-0 transition-opacity pointer-events-none toast-show" id="action-toast">
+<span class="material-symbols-outlined text-primary text-[18px]" id="toast-icon">download_done</span>
+<span class="" id="toast-msg">PDFエクスポートを完了しました</span>
+</div>
+<script>
+  let agreedState = false;
+
+  function switchPolicyTab(tab) {
+    const btnTerms = document.getElementById('tab-btn-terms');
+    const btnPrivacy = document.getElementById('tab-btn-privacy');
+    const indicator = document.getElementById('tab-pill-indicator');
+    const panelTerms = document.getElementById('panel-terms');
+    const panelPrivacy = document.getElementById('panel-privacy');
+    const chipsTerms = document.getElementById('terms-chips');
+    const chipsPrivacy = document.getElementById('privacy-chips');
+
+    if (tab === 'terms') {
+      indicator.style.transform = 'translateX(0%)';
+      btnTerms.className = 'flex-1 py-space-sm px-space-xs text-center rounded-lg font-label-lg text-label-lg transition-all duration-200 flex items-center justify-center gap-1.5 relative z-10 text-on-primary font-bold active:scale-95';
+      btnPrivacy.className = 'flex-1 py-space-sm px-space-xs text-center rounded-lg font-label-lg text-label-lg transition-all duration-200 flex items-center justify-center gap-1.5 relative z-10 text-on-surface-variant hover:text-on-surface active:scale-95';
+      
+      panelTerms.classList.remove('hidden');
+      panelTerms.classList.add('flex');
+      panelPrivacy.classList.add('hidden');
+      panelPrivacy.classList.remove('flex');
+
+      chipsTerms.classList.remove('hidden');
+      chipsTerms.classList.add('flex');
+      chipsPrivacy.classList.add('hidden');
+      chipsPrivacy.classList.remove('flex');
+    } else {
+      indicator.style.transform = 'translateX(100%)';
+      btnPrivacy.className = 'flex-1 py-space-sm px-space-xs text-center rounded-lg font-label-lg text-label-lg transition-all duration-200 flex items-center justify-center gap-1.5 relative z-10 text-on-primary font-bold active:scale-95';
+      btnTerms.className = 'flex-1 py-space-sm px-space-xs text-center rounded-lg font-label-lg text-label-lg transition-all duration-200 flex items-center justify-center gap-1.5 relative z-10 text-on-surface-variant hover:text-on-surface active:scale-95';
+
+      panelPrivacy.classList.remove('hidden');
+      panelPrivacy.classList.add('flex');
+      panelTerms.classList.add('hidden');
+      panelTerms.classList.remove('flex');
+
+      chipsPrivacy.classList.remove('hidden');
+      chipsPrivacy.classList.add('flex');
+      chipsTerms.classList.add('hidden');
+      chipsTerms.classList.remove('flex');
+    }
+  }
+
+  function scrollToSection(id, btnElement) {
+    // Visual indicator update on chip
+    document.querySelectorAll('.chip-btn').forEach(btn => {
+      btn.classList.remove('bg-primary-container', 'text-on-primary', 'border-primary');
+      btn.classList.add('bg-surface-container', 'text-on-surface');
+    });
+    if (btnElement) {
+      btnElement.classList.add('bg-primary-container', 'text-on-primary', 'border-primary');
+      btnElement.classList.remove('bg-surface-container');
+    }
+
+    const target = document.getElementById(id);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      target.classList.add('target-highlight');
+      setTimeout(() => {
+        target.classList.remove('target-highlight');
+      }, 1400);
+    }
+  }
+
+  function toggleAccordion(id) {
+    const el = document.getElementById(id);
+    const icon = document.getElementById(id + '-icon');
+    if (!el) return;
+    if (el.classList.contains('max-h-0')) {
+      el.classList.remove('max-h-0', 'opacity-0');
+      el.classList.add('max-h-40', 'opacity-100');
+      if (icon) icon.style.transform = 'rotate(0deg)';
+    } else {
+      el.classList.add('max-h-0', 'opacity-0');
+      el.classList.remove('max-h-40', 'opacity-100');
+      if (icon) icon.style.transform = 'rotate(-90deg)';
+    }
+  }
+
+  function toggleAgreement() {
+    agreedState = !agreedState;
+    const box = document.getElementById('custom-checkbox');
+    const checkIcon = document.getElementById('check-icon');
+    const label = document.getElementById('agree-label');
+    const btn = document.getElementById('btn-agree-toggle');
+
+    if (agreedState) {
+      box.classList.remove('border-outline-variant', 'bg-transparent');
+      box.classList.add('bg-primary', 'border-primary');
+      checkIcon.classList.remove('opacity-0');
+      label.innerText = '規約とポリシーに同意済み';
+      label.classList.add('text-primary');
+      btn.classList.add('border-primary/60');
+      showToast('check_circle', '規約・プライバシーに同意しました');
+    } else {
+      box.classList.remove('bg-primary', 'border-primary');
+      box.classList.add('border-outline-variant', 'bg-transparent');
+      checkIcon.classList.add('opacity-0');
+      label.innerText = '規約内容を確認・同意する';
+      label.classList.remove('text-primary');
+      btn.classList.remove('border-primary/60');
+      showToast('info', '同意チェックを解除しました');
+    }
+  }
+
+  function exportLegalDocument() {
+    showToast('share', '利用規約(PDF)の共有リンクを準備中...');
+    setTimeout(() => {
+      showToast('download_done', 'PDFエクスポートを完了しました');
+    }, 1200);
+  }
+
+  function showToast(icon, text) {
+    const toast = document.getElementById('action-toast');
+    const iconEl = document.getElementById('toast-icon');
+    const textEl = document.getElementById('toast-msg');
+    iconEl.innerText = icon;
+    textEl.innerText = text;
+    toast.classList.remove('toast-show');
+    void toast.offsetWidth; // trigger reflow
+    toast.classList.add('toast-show');
+  }
+</script></main>
+</body></html>

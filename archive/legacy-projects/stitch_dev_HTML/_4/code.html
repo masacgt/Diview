@@ -1,0 +1,1908 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ja" style="min-height: 100%; height: auto; touch-action: pan-y; opacity: 1 !important; visibility: visible !important;"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_stack" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "surface-tint": "#4edea3", "surface-container-low": "#131b2e", "secondary-fixed-dim": "#c0c1ff", "outline-variant": "#3c4a42", "surface-container": "#171f33", "surface-variant": "#2d3449", "inverse-on-surface": "#283044", "on-primary": "#003824", "secondary-container": "#3131c0", "inverse-surface": "#dae2fd", "on-tertiary": "#68000a", "tertiary-fixed": "#ffdad7", "primary-fixed": "#6ffbbe", "tertiary-fixed-dim": "#ffb3ad", "on-secondary-fixed-variant": "#2f2ebe", "secondary-fixed": "#e1e0ff", "surface-bright": "#31394d", "background": "#0b1326", "on-secondary-fixed": "#07006c", "primary": "#4edea3", "tertiary": "#ffb3ad", "on-surface": "#dae2fd", "surface-container-high": "#222a3d", "on-tertiary-fixed": "#410004", "on-error-container": "#ffdad6", "on-primary-fixed": "#002113", "on-tertiary-container": "#79000e", "secondary": "#c0c1ff", "primary-fixed-dim": "#4edea3", "on-error": "#690005", "on-background": "#dae2fd", "surface-container-lowest": "#060e20", "on-surface-variant": "#bbcabf", "error": "#ffb4ab", "on-primary-container": "#00422b", "on-primary-fixed-variant": "#005236", "error-container": "#93000a", "outline": "#86948a", "on-secondary": "#1000a9", "primary-container": "#10b981", "surface": "#0b1326", "on-tertiary-fixed-variant": "#930013", "surface-dim": "#0b1326", "on-secondary-container": "#b0b2ff", "inverse-primary": "#006c49", "tertiary-container": "#ff7a73", "surface-container-highest": "#2d3449" }, borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, spacing: { "space-xl": "2rem", "space-xs": "0.25rem", "margin": "1rem", "margin-tablet": "1.5rem", "space-lg": "1.5rem", "space-md": "1rem", "gutter-sm": "0.75rem", "gutter": "1rem", "space-sm": "0.5rem" }, fontFamily: { "label-md": ["Manrope"], "numeric-hero": ["Space Grotesk"], "label-lg": ["Manrope"], "display-lg": ["Space Grotesk"], "headline-md": ["Space Grotesk"], "display-lg-mobile": ["Space Grotesk"], "label-sm": ["Manrope"], "headline-lg": ["Space Grotesk"], "body-sm": ["Manrope"], "body-md": ["Manrope"], "title-lg": ["Manrope"], "title-md": ["Manrope"], "numeric-hero-mobile": ["Space Grotesk"], "body-lg": ["Manrope"] }, fontSize: { "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }], "numeric-hero": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }], "display-lg": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "headline-md": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "display-lg-mobile": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "label-sm": ["10px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "700" }], "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "600" }], "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }], "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }], "title-lg": ["18px", { "lineHeight": "24px", "fontWeight": "600" }], "title-md": ["16px", { "lineHeight": "22px", "fontWeight": "600" }], "numeric-hero-mobile": ["30px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }] } } } };</script><style>
+    @layer base {
+      html, body {
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background-color: #0b1326;
+        color: #dae2fd;
+      }
+      body {
+        overscroll-behavior-y: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+      .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        display: inline-block;
+        vertical-align: middle;
+      }
+      main > :first-child { margin-top: 0 !important; }
+      main > :last-child { margin-bottom: 0 !important; }
+    }
+    ::-webkit-scrollbar { display: none; }
+    body { min-height: max(884px, 100dvh); }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(14px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .card-animate {
+      animation: fadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    @keyframes pulseGlow {
+      0%, 100% {
+        box-shadow: 0 0 16px rgba(16, 185, 129, 0.35);
+      }
+      50% {
+        box-shadow: 0 0 24px rgba(78, 222, 163, 0.6);
+      }
+    }
+    .pulse-glow {
+      animation: pulseGlow 2.5s infinite ease-in-out;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, ::before, ::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+  </style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-background font-body-md text-on-surface antialiased flex flex-col min-h-screen selection:bg-primary-container selection:text-on-primary-container" style="min-height: 100vh; height: auto; overflow-y: auto; touch-action: pan-y; opacity: 1 !important; visibility: visible !important; display: flex !important; background-color: #0b1326 !important;"><!-- 1. Top App Bar -->
+<!-- Cloudflare D1/Workers KV Realtime Search Overlay Modal --><div class="fixed inset-0 z-50 bg-[#060e20]/80 backdrop-blur-md transition-opacity duration-300 opacity-0 pointer-events-none" id="searchModalBackdrop" onclick="closeSearchModal()"></div><section class="fixed top-0 inset-x-0 z-50 bg-surface-container-high/95 backdrop-blur-xl border-b border-primary/40 shadow-[0_8px_32px_rgba(0,0,0,0.7)] transform transition-transform duration-300 ease-out flex flex-col max-h-[813px] overflow-hidden -translate-y-full pt-safe" id="searchModalSheet"><div class="p-space-md flex flex-col gap-3"><div class="flex items-center justify-between gap-2"><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-lg bg-primary-container/20 border border-primary/40 flex items-center justify-center text-primary"><span class="material-symbols-outlined text-[20px]">database</span></div><div><h3 class="font-title-md text-title-md font-bold text-on-surface tracking-tight flex items-center gap-1.5">銘柄検索 <span class="px-2 py-0.2 rounded-full bg-primary-container/20 border border-primary/40 text-primary text-[10px] font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>Cloudflare D1 / Workers KV 高速応答 (~12ms)</span></h3><p class="font-label-sm text-[11px] text-on-surface-variant">エッジキャッシュ同期済・全銘柄リアルタイムサジェスト</p></div></div><button aria-label="閉じる" class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container active:scale-95 transition-all" onclick="closeSearchModal()" type="button"><span class="material-symbols-outlined text-[20px]">close</span></button></div><div class="relative flex items-center"><span class="material-symbols-outlined absolute left-3 text-primary text-[20px]">search</span><input class="w-full h-11 pl-10 pr-9 bg-surface-container-lowest rounded-xl border border-outline-variant/30 text-on-surface font-medium text-body-md focus:border-primary focus:outline-none transition-colors" id="stockSearchInput" oninput="onSearchInputChanged(this.value)" placeholder="銘柄名・コード・ティッカーを入力 (例: 8316, 9432, AAPL)" type="text"/><button class="absolute right-2.5 w-6 h-6 rounded flex items-center justify-center text-on-surface-variant hover:text-on-surface active:scale-90" onclick="clearSearchInput()" type="button"><span class="material-symbols-outlined text-[16px]">cancel</span></button></div><div class="flex items-center justify-between px-1 text-[11px] text-on-surface-variant font-medium"><span class="">サジェスト候補 (<span class="" id="searchCandidateCount">6</span>件)</span><span class="flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[13px]">bolt</span>Edge Cache Synced</span></div><div class="flex flex-col gap-2 overflow-y-auto max-h-[530px] pb-3" id="searchSuggestionsList"></div></div></section><header class="fixed top-0 inset-x-0 z-50 bg-surface-container-lowest/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.3)] pt-safe"><div class="h-14 px-margin flex items-center justify-between"><div class="flex items-center gap-space-xs"><a aria-label="設定画面へ戻る" class="w-10 h-10 -ml-1 flex items-center justify-center rounded-full text-on-surface hover:text-primary active:scale-95 transition-all" href="{{DATA:SCREEN:SCREEN_419}}" onclick="window.location.href='{{DATA:SCREEN:SCREEN_419}}'; return false;" title="設定画面へ"><span class="material-symbols-outlined text-[24px]">arrow_back</span></a><h1 class="font-title-lg text-title-lg font-semibold text-on-surface tracking-tight truncate max-w-[200px]">銘柄情報</h1></div><div class="flex items-center gap-1"><button aria-label="検索" class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface active:scale-95 transition-all" onclick="openSearchModal()" type="button"><span class="material-symbols-outlined text-[22px]">search</span></button><button aria-label="通知" class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface active:scale-95 transition-all" onclick="showToast('通知を開きました', 'notifications')" type="button"><span class="material-symbols-outlined text-[22px]">notifications</span></button><button aria-label="設定" class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface active:scale-95 transition-all" onclick="showToast('設定を開きました', 'settings')" type="button"><span class="material-symbols-outlined text-[22px]">settings</span></button></div></div></header><!-- Floating Toast Feedback Notification --><div class="fixed top-16 inset-x-0 z-50 flex justify-center px-4 pointer-events-none transition-all duration-300 -translate-y-4 opacity-0" id="toastNotification"><div class="bg-surface-container-high/95 backdrop-blur-md px-space-md py-2 rounded-full shadow-2xl flex items-center gap-2 text-on-surface border border-outline-variant/30"><span class="material-symbols-outlined text-[18px] text-primary" id="toastIcon">insights</span><span class="font-label-md text-label-md tracking-tight" id="toastMessage">買場シグナル詳細（超割安圏）を開きました</span></div></div><main class="flex flex-col relative w-full pt-16 pb-32 bg-background px-margin min-h-screen" style="touch-action: pan-y; opacity: 1 !important; visibility: visible !important; display: flex !important;"><div class="flex flex-col w-full gap-space-md pt-2">
+<!-- 2. Hero Stock Header Card (Variant 2 Concept: インライン・ピルボタンドック版) -->
+<section class="card-animate relative overflow-hidden rounded-xl bg-surface-container-high p-space-md shadow-lg border border-outline-variant/30 flex flex-col gap-3" style="animation-delay: 50ms;">
+<div class="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-primary/10 blur-3xl pointer-events-none"></div>
+<!-- Top Bar: Company Name, Code, Badges, Industry Icon -->
+<div class="flex items-start justify-between gap-2 relative z-10">
+<div class="flex items-col gap-1.5 min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<h2 class="font-headline-md text-headline-md font-bold text-on-surface tracking-tight truncate">トヨタ自動車</h2>
+<span class="px-2 py-0.5 rounded bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm font-bold tracking-wider">7203</span>
+</div>
+<div class="flex items-center gap-2 flex-wrap">
+<span class="px-2 py-0.5 rounded bg-surface-container-low border border-outline-variant/30 text-on-surface-variant font-label-sm text-label-sm font-medium">東証PRM</span>
+<span class="px-2 py-0.5 rounded-full bg-primary-container/20 border border-primary/30 text-primary font-label-sm text-label-sm font-semibold flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+          新NISA 成長投資枠
+        </span>
+</div>
+</div>
+<div class="flex items-center gap-2 shrink-0"><button aria-label="ウォッチリストに保存" class="w-10 h-10 rounded-xl flex items-center justify-center hover:text-primary hover:border-primary/40 border border-outline-variant/30 transition-all duration-200 active:scale-90 group relative bg-primary/15 border-primary/40 text-primary shadow-[0_0_12px_rgba(78,222,163,0.35)]" id="bookmarkStockBtn" onclick="toggleBookmarkUnified()" type="button"><span class="material-symbols-outlined text-[20px] transition-transform duration-200 group-hover:scale-110 scale-110 text-primary" id="bookmarkStockIcon" style='font-variation-settings: "FILL" 1;'>bookmark</span></button></div>
+</div>
+<!-- Price & Daily Change Section -->
+<div class="flex items-baseline justify-between pt-0.5 pb-1 relative z-10 border-b border-outline-variant/20">
+<div>
+<div class="flex items-center gap-1.5 mb-0.5">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">現在株価</span>
+<span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-surface-container text-[10px] text-primary font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+          リアルタイム
+        </span>
+</div>
+<p class="font-numeric-hero-mobile text-numeric-hero-mobile font-bold text-on-surface tracking-tight leading-none">
+        ¥2,600<span class="font-label-md text-label-md text-on-surface-variant ml-1 font-normal">/株</span>
+</p>
+</div>
+<div class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary-container/20 border border-primary/30 text-primary font-bold shadow-sm">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+<span class="font-label-md text-label-md tracking-tight">+¥35 (+1.36%)</span>
+</div>
+</div>
+<!-- 2x2 Structured Metric Tiles in surface-container-lowest -->
+<div class="grid grid-cols-2 gap-2 relative z-10 pt-0.5">
+<div class="p-2.5 rounded-lg bg-surface-container-lowest border border-outline-variant/25 flex flex-col justify-between hover:border-primary/40 transition-colors group cursor-pointer active:scale-[0.98]" onclick="openHoldingEditModal('shares')"><div class="flex items-center justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">保有数量</span><button aria-label="保有数量を編集" class="w-6 h-6 rounded flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container active:scale-90 transition-all" onclick="event.stopPropagation(); openHoldingEditModal('shares')" type="button"><span class="material-symbols-outlined text-[14px] group-hover:text-primary transition-colors">edit</span></button></div><div class="flex items-baseline justify-between mt-1"><span class="font-title-md text-title-md font-bold text-on-surface" id="holdingSharesDisplay">100株</span><span class="font-label-sm text-[10px] text-on-surface-variant" id="unitStatusDisplay">単元保有</span></div></div>
+<div class="p-2.5 rounded-lg bg-surface-container-lowest border border-outline-variant/25 flex flex-col justify-between hover:border-primary/40 transition-colors group cursor-pointer active:scale-[0.98] transition-all" onclick="openHoldingEditModal('price')"><div class="flex items-center justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">取得単価</span><button aria-label="取得単価を編集" class="w-6 h-6 rounded flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container active:scale-90 transition-all" onclick="event.stopPropagation(); openHoldingEditModal('price')" type="button"><span class="material-symbols-outlined text-[14px] group-hover:text-primary transition-colors">edit</span></button></div><div class="flex items-baseline justify-between mt-1"><span class="font-title-md text-title-md font-bold text-on-surface" id="acqPriceDisplay">¥2,450</span><span class="font-label-sm text-[10px] text-primary font-medium" id="acqProfitZoneDisplay">含み益圏</span></div></div>
+<div class="p-2.5 rounded-lg bg-surface-container-lowest border border-outline-variant/25 flex flex-col justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">評価額</span><div class="flex items-baseline justify-between mt-1"><span class="font-title-md text-title-md font-bold text-on-surface" id="valuationDisplay">¥260,000</span><span class="font-label-sm text-[10px] text-on-surface-variant">時価総額</span></div></div>
+<div class="p-2.5 rounded-lg bg-surface-container-lowest border border-outline-variant/25 flex flex-col justify-between bg-primary/5" id="gainLossTile"><div class="flex items-center justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">含み損益</span><span class="material-symbols-outlined text-[13px] text-primary" id="gainLossIcon">trending_up</span></div><div class="flex items-baseline justify-between mt-1"><span class="font-title-md text-title-md font-bold text-primary" id="gainLossAmount">+¥15,000</span><span class="font-label-sm text-[11px] text-primary font-bold" id="gainLossPercent">(+6.12%)</span></div></div>
+</div>
+<!-- 外部リサーチ: 1行インライン・ピルボタンドック (Variant 2 Concept) -->
+<div class="mt-1 pt-2 border-t border-outline-variant/25 flex items-center justify-between gap-2 relative z-10">
+<div class="flex items-center gap-1.5 shrink-0">
+<span class="material-symbols-outlined text-[15px] text-primary">travel_explore</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant font-semibold tracking-wider">外部リサーチ:</span>
+</div>
+<div class="flex items-center gap-1.5 flex-1 justify-end min-w-0">
+<!-- Y! ファイナンス ↗ -->
+<a class="group inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container-lowest/80 backdrop-blur-sm border border-outline-variant/30 hover:border-red-500/50 hover:bg-surface-container active:scale-95 transition-all text-on-surface" href="https://finance.yahoo.co.jp/quote/7203.T" rel="noopener noreferrer" target="_blank">
+<span class="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.7)] shrink-0"></span>
+<span class="font-label-sm text-[11px] font-bold text-on-surface group-hover:text-red-400 transition-colors whitespace-nowrap">Y! ファイナンス</span>
+<span class="material-symbols-outlined text-[13px] text-on-surface-variant group-hover:text-red-400 transition-colors shrink-0">open_in_new</span>
+</a>
+<!-- IR BANK ↗ -->
+<a class="group inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container-lowest/80 backdrop-blur-sm border border-outline-variant/30 hover:border-primary/50 hover:bg-surface-container active:scale-95 transition-all text-on-surface" href="https://irbank.net/7203" rel="noopener noreferrer" target="_blank">
+<span class="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_5px_rgba(78,222,163,0.7)] shrink-0"></span>
+<span class="font-label-sm text-[11px] font-bold text-on-surface group-hover:text-primary transition-colors whitespace-nowrap">IR BANK</span>
+<span class="material-symbols-outlined text-[13px] text-on-surface-variant group-hover:text-primary transition-colors shrink-0">open_in_new</span>
+</a>
+</div>
+</div>
+</section>
+<!-- 3. 年間配当シミュレーション Card -->
+<section class="card-animate rounded-xl bg-surface-container p-space-md shadow-md flex flex-col gap-space-sm" style="animation-delay: 100ms;">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[20px]" style='font-variation-settings: "FILL" 1;'>payments</span>
+<span class="font-title-md text-title-md font-bold text-on-surface">年間配当シミュレーション</span>
+</div>
+<span class="px-2.5 py-0.5 rounded-full bg-secondary-container/40 text-secondary-fixed font-label-sm text-label-sm font-bold">年2回配当</span>
+</div>
+<!-- Hero Projection -->
+<div class="p-space-md rounded-xl bg-surface-container-high relative overflow-hidden flex flex-col gap-1 border border-outline-variant/30">
+<div class="absolute -right-6 -bottom-6 w-32 h-32 rounded-full bg-primary/10 blur-2xl pointer-events-none"></div>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">年間受取予定額 (100株保有)</span>
+<div class="flex items-baseline gap-2">
+<span class="font-numeric-hero-mobile text-numeric-hero-mobile font-bold text-primary tracking-tight">¥7,280</span>
+<span class="font-label-md text-label-md text-on-surface-variant">(1株あたり ¥72.8)</span>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<div class="flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-[15px]">savings</span>
+<span class="font-label-sm text-label-sm font-bold">月換算 約¥606 / 月</span>
+</div>
+</div>
+</div>
+<!-- 4-Tile Metrics Bento -->
+<div class="grid grid-cols-2 gap-space-xs">
+<div class="p-space-sm rounded-lg bg-surface-container-low flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">配当利回り (現在)</span>
+<span class="font-title-lg text-title-lg font-bold text-on-surface mt-1">2.80%</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">現在株価 ¥2,600換算</span>
+</div>
+<div class="p-space-sm rounded-lg bg-surface-container-low flex flex-col">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant">取得ベース利回り</span>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant" title="Yield on Cost">info</span>
+</div>
+<span class="font-title-lg text-title-lg font-bold text-primary mt-1">2.97% <span class="font-label-sm text-label-sm font-normal">YOC</span></span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">取得単価 ¥2,450換算</span>
+</div>
+<div class="p-space-sm rounded-lg bg-surface-container-low flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">次回配当予定</span>
+<span class="font-title-md text-title-md font-bold text-on-surface mt-1">12月中旬</span>
+<span class="font-label-sm text-label-sm text-primary font-semibold">中間配当 ¥3,640</span>
+</div>
+<div class="p-space-sm rounded-lg bg-surface-container-low flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">権利確定月</span>
+<span class="font-title-md text-title-md font-bold text-on-surface mt-1">3月末 / 9月末</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">年2回中間・期末</span>
+</div>
+</div>
+</section>
+<!-- 4. 【直下配置】買い増しシミュレーター Card (バリエーション2: ビジュアル・インパクト特化型 / 現状vsシミュレーション対比強調) -->
+<section class="card-animate rounded-xl bg-surface-container p-space-md shadow-lg flex flex-col gap-space-sm border-2 border-primary/30 relative overflow-hidden" style="animation-delay: 130ms;">
+<div class="absolute -right-10 -bottom-10 w-44 h-44 rounded-full bg-primary/10 blur-3xl pointer-events-none"></div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[22px]" style='font-variation-settings: "FILL" 1;'>calculate</span>
+<span class="font-title-md text-title-md font-bold text-on-surface">買い増しシミュレーター</span>
+</div>
+<span class="font-label-sm text-label-sm text-primary font-bold bg-primary-container/20 border border-primary/30 px-2.5 py-0.5 rounded-full shadow-sm" id="simPresetPill">+100株 (合計200株)</span>
+</div>
+<!-- 現状 vs 追加シミュレーション 対比インパクトバナー -->
+<div class="p-space-sm rounded-xl bg-gradient-to-br from-surface-container-high via-surface-container-high to-surface-container-low border border-primary/30 shadow-md relative overflow-hidden">
+<div class="flex items-center justify-between gap-1 mb-2 pb-2 border-b border-outline-variant/30">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+<span class="font-label-sm text-label-sm text-on-surface font-bold tracking-tight">買い増しインパクト比較</span>
+</div>
+<div class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary text-on-primary font-label-sm text-[11px] font-bold shadow-sm" id="simImpactBadge"><span class="material-symbols-outlined text-[13px]">bolt</span>配当 2.0倍 UP</div>
+</div>
+<!-- Comparison 2-Column Grid -->
+<div class="grid grid-cols-2 gap-2 text-center">
+<!-- Current -->
+<div class="p-2 rounded-lg bg-surface-container-lowest/70 border border-outline-variant/20 flex flex-col justify-between">
+<div class="font-label-sm text-[11px] text-on-surface-variant font-medium">現在保有 (100株)</div>
+<div class="font-numeric-hero-mobile text-[20px] font-bold text-on-surface my-0.5">¥7,280<span class="text-[10px] font-normal text-on-surface-variant">/年</span></div>
+<div class="text-[11px] text-on-surface-variant bg-surface-container/60 rounded px-1 py-0.5 font-medium">月 ¥606 / 月</div>
+</div>
+<!-- Simulated Target -->
+<div class="p-2 rounded-lg bg-primary/10 border border-primary/40 flex flex-col justify-between shadow-[0_0_15px_rgba(78,222,163,0.15)] relative">
+<div class="absolute -top-2 right-2 px-1.5 py-0.2 rounded bg-primary text-on-primary text-[9px] font-bold">AFTER</div>
+<div class="font-label-sm text-[11px] text-primary font-bold" id="simTargetSharesLabel">シミュレーション (200株)</div>
+<div class="font-numeric-hero-mobile text-[20px] font-bold text-primary my-0.5" id="simTargetAnnualDiv">¥14,560<span class="text-[10px] font-normal text-on-surface-variant">/年</span></div>
+<div class="text-[11px] text-primary bg-primary/15 rounded px-1 py-0.5 font-bold" id="simTargetMonthlyDiv">月 約¥1,213 / 月</div>
+</div>
+</div>
+</div>
+<!-- Preset Buttons -->
+<div class="p-space-sm rounded-xl bg-surface-container-lowest/80 border border-outline-variant/30 flex flex-col gap-2"><div class="flex items-center justify-between"><label class="font-label-sm text-[12px] text-on-surface-variant font-medium flex items-center gap-1.5" for="manualSimSharesInput"><span class="material-symbols-outlined text-primary text-[16px]">edit_note</span>追加買増株数を手動指定</label><span class="text-primary font-bold text-[11px]" id="manualSimUnitLabel">単元 (100株単位)</span></div><div class="flex items-center gap-2"><div class="relative flex-1 flex items-center"><input class="w-full h-10 px-3 bg-surface-container-high rounded-lg border border-outline-variant/30 text-on-surface font-numeric-hero-mobile text-[17px] font-bold focus:border-primary focus:outline-none transition-colors text-right pr-9" id="manualSimSharesInput" max="10000" min="0" oninput="onManualSharesChanged(this.value)" placeholder="0" step="10" type="number" value="100"/><span class="absolute right-3 text-on-surface-variant font-label-md text-[13px]">株</span></div><div class="flex items-center gap-1 shrink-0"><button class="w-8 h-10 rounded-lg bg-surface-container-high border border-outline-variant/30 text-on-surface font-bold text-[14px] hover:bg-surface-bright active:scale-90 transition-all flex items-center justify-center" onclick="stepManualShares(-10)" title="10株減らす" type="button">−10</button><button class="w-8 h-10 rounded-lg bg-surface-container-high border border-outline-variant/30 text-on-surface font-bold text-[14px] hover:bg-surface-bright active:scale-90 transition-all flex items-center justify-center" onclick="stepManualShares(10)" title="10株増やす" type="button">+10</button><button class="px-2 h-10 rounded-lg bg-primary-container/20 border border-primary/40 text-primary font-bold text-[12px] hover:bg-primary/20 active:scale-90 transition-all flex items-center justify-center" onclick="stepManualShares(100)" title="100株増やす" type="button">+100</button><button class="w-8 h-10 rounded-lg bg-surface-container-high border border-outline-variant/30 text-on-surface-variant hover:text-error text-[11px] font-medium active:scale-90 transition-all flex items-center justify-center" onclick="setPresetShares(0)" title="リセット（現状維持）" type="button"><span class="material-symbols-outlined text-[16px]">restart_alt</span></button></div></div></div><div class="grid grid-cols-4 gap-1.5 pt-0.5">
+<button class="sim-chip py-1.5 rounded-lg bg-surface-container-high text-on-surface font-label-sm text-label-sm font-semibold transition-all active:scale-95 text-center" onclick="setPresetShares(0)" type="button">現状維持</button>
+<button class="sim-chip py-1.5 rounded-lg bg-surface-container-high text-on-surface font-label-sm text-label-sm font-semibold transition-all active:scale-95 text-center" onclick="setPresetShares(100)" type="button">+100株</button>
+<button class="sim-chip py-1.5 rounded-lg bg-surface-container-high text-on-surface font-label-sm text-label-sm font-semibold transition-all active:scale-95 text-center" onclick="setPresetShares(250)" type="button">+250株</button>
+<button class="sim-chip py-1.5 rounded-lg bg-primary text-on-primary font-label-sm text-label-sm font-bold transition-all active:scale-95 text-center shadow-sm" onclick="setPresetShares(500)" type="button">+500株</button>
+</div>
+<!-- Slider Input -->
+<div class="flex flex-col gap-space-xs pt-1">
+<input class="w-full h-2 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary focus:outline-none" id="sharesSlider" max="500" min="0" step="50" type="range" value="100"/>
+<div class="flex justify-between font-label-sm text-label-sm text-on-surface-variant px-0.5">
+<span class="">0株</span>
+<span class="">+250株</span>
+<span class="">+500株 (計600株)</span>
+</div>
+</div>
+<!-- Realtime Dynamic Calculation Bento -->
+<div class="grid grid-cols-2 gap-space-xs p-space-sm rounded-lg bg-surface-container-low transition-all border border-outline-variant/20">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">追加必要資金</span>
+<span class="font-numeric-hero-mobile text-title-md text-on-surface font-bold mt-0.5" id="simulatedCost">¥260,000</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">シミュレーション年間受取</span>
+<span class="font-numeric-hero-mobile text-title-md text-primary font-bold mt-0.5" id="simulatedTotalDividend">¥14,560</span>
+</div>
+<div class="flex flex-col pt-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">年間配当増額分</span>
+<span class="font-label-md text-label-md text-primary font-bold" id="simAddedAnnual">+¥7,280 / 年</span>
+</div>
+<div class="flex flex-col pt-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">新月間不労所得</span>
+<span class="font-label-md text-label-md text-on-surface font-bold" id="simMonthlyIncome">約¥1,213 / 月</span>
+</div>
+</div>
+<!-- Quick Decision Actions (買い増しを記録 / 買付アラート設定) -->
+</section>
+<!-- 5. 1株配当金の推移 (4期) Bar Chart Card -->
+<section class="card-animate rounded-xl bg-surface-container p-space-md shadow-md flex flex-col gap-space-sm" style="animation-delay: 150ms;">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[20px]">bar_chart</span>
+<span class="font-title-md text-title-md font-bold text-on-surface">1株配当金の推移 (4期)</span>
+</div>
+<div class="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+<span class="material-symbols-outlined text-[14px]">verified</span>
+<span class="font-label-sm text-label-sm font-bold">連続増配</span>
+</div>
+</div>
+<!-- Interactive Tooltip Pill -->
+<div class="p-space-xs px-space-sm rounded-lg bg-surface-container-high flex items-center justify-between transition-all" id="barChartTooltip">
+<span class="font-label-sm text-label-sm text-on-surface font-semibold" id="barTooltipPeriod">25.3期 予想 (当期)</span>
+<div class="flex items-center gap-2">
+<span class="font-label-sm text-label-sm text-primary font-bold" id="barTooltipDelta">+12.0% 増配</span>
+<span class="font-label-sm text-label-sm text-on-surface font-bold" id="barTooltipAmount">¥72.8</span>
+</div>
+</div>
+<!-- Animated Vertical Bars -->
+<div class="pt-space-xs pb-space-xs flex flex-col gap-2">
+<div class="w-full flex items-end justify-between gap-3 h-36 px-2">
+<!-- 22.3期 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group cursor-pointer" onclick="updateBarDetail(0, '22.3期 実績', '¥52.0', '+9.1% 増配')">
+<span class="font-label-sm text-label-sm font-bold text-on-surface-variant mb-1.5 group-hover:text-primary transition-colors">¥52</span>
+<div class="w-full rounded-t-lg bg-surface-container-highest transition-all duration-300 group-hover:bg-surface-bright flex items-end overflow-hidden" style="height: 60%;">
+<div class="w-full h-full bg-secondary/60 rounded-t-lg"></div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-2">22.3期</span>
+</div>
+<!-- 23.3期 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group cursor-pointer" onclick="updateBarDetail(1, '23.3期 実績', '¥60.0', '+15.4% 増配')">
+<span class="font-label-sm text-label-sm font-bold text-on-surface-variant mb-1.5 group-hover:text-primary transition-colors">¥60</span>
+<div class="w-full rounded-t-lg bg-surface-container-highest transition-all duration-300 group-hover:bg-surface-bright flex items-end overflow-hidden" style="height: 72%;">
+<div class="w-full h-full bg-secondary/80 rounded-t-lg"></div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-2">23.3期</span>
+</div>
+<!-- 24.3期 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group cursor-pointer" onclick="updateBarDetail(2, '24.3期 実績', '¥65.0', '+8.3% 増配')">
+<span class="font-label-sm text-label-sm font-bold text-on-surface-variant mb-1.5 group-hover:text-primary transition-colors">¥65</span>
+<div class="w-full rounded-t-lg bg-surface-container-highest transition-all duration-300 group-hover:bg-surface-bright flex items-end overflow-hidden" style="height: 80%;">
+<div class="w-full h-full bg-secondary rounded-t-lg"></div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-2">24.3期</span>
+</div>
+<!-- 25.3期 予想 -->
+<div class="flex-1 flex flex-col items-center h-full justify-end group cursor-pointer" onclick="updateBarDetail(3, '25.3期 予想 (当期)', '¥72.8', '+12.0% 増配')">
+<span class="font-label-sm text-label-sm font-bold text-primary mb-1.5">¥72.8</span>
+<div class="w-full rounded-t-lg bg-gradient-to-t from-primary-container to-primary flex items-end shadow-[0_2px_12px_rgba(16,185,129,0.45)] transition-all" style="height: 95%;">
+<div class="w-full h-full rounded-t-lg"></div>
+</div>
+<span class="font-label-sm text-label-sm text-primary font-bold mt-2">25.3予</span>
+</div>
+</div>
+<!-- Growth Summary Footnote -->
+<div class="flex items-center justify-between pt-1 px-1 text-on-surface-variant font-label-sm text-label-sm border-t border-outline-variant/20">
+<span class="">4期増配率: <strong class="text-primary font-bold">+40.0%</strong></span>
+<span class="">配当性向: <strong class="text-on-surface font-bold">約35.2%</strong></span>
+</div>
+</div>
+</section>
+<!-- 6. 【NEW】銘柄総合分析ステータス (2×2 サマリーグリッド ＋ インライン詳細展開タブ) -->
+<section class="card-animate rounded-xl bg-surface-container p-space-md shadow-md flex flex-col gap-space-sm border border-outline-variant/30" style="animation-delay: 200ms;">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[20px]" style='font-variation-settings: "FILL" 1;'>insights</span>
+<span class="font-title-md text-title-md font-bold text-on-surface">銘柄総合分析ステータス</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1">
+      タップで切替
+    </span>
+</div>
+<!-- 2x2 Summary Grid -->
+<div class="grid grid-cols-2 gap-space-xs" id="statusGrid">
+<!-- Card 1: 健全性ステータス -->
+<button class="status-tab-card text-left p-space-sm rounded-xl border-2 transition-all duration-200 active:scale-[0.98] shadow-sm relative overflow-hidden group bg-surface-container-low border-transparent" id="tab-btn-health" onclick="selectStatusTab('health')" type="button"><div class="flex items-center justify-between mb-1"><span class="font-label-sm text-label-sm text-on-surface-variant font-medium">① 健全性</span><span class="material-symbols-outlined text-[16px] text-primary">verified_user</span></div><div class="flex items-baseline gap-1.5"><span class="font-title-lg text-title-lg font-bold text-primary" id="healthCardGrade">A判定</span><span class="font-label-sm text-label-sm text-on-surface font-semibold" id="healthCardRatio">35.2%</span></div><div class="flex items-center justify-between mt-1"><span class="text-[11px] font-medium truncate text-primary" id="healthCardSummary">極めて安全</span><span class="material-symbols-outlined text-[14px] tab-indicator transition-transform duration-200 text-on-surface-variant/40">expand_more</span></div></button>
+<!-- Card 2: 買場シグナル -->
+<button class="status-tab-card text-left p-space-sm rounded-xl border-2 hover:border-outline-variant/50 transition-all duration-200 active:scale-[0.98] relative overflow-hidden group bg-surface-container-high border-primary" id="tab-btn-value" onclick="selectStatusTab('value')" type="button">
+<div class="flex items-center justify-between mb-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">② 買場シグナル</span>
+<span class="material-symbols-outlined text-[16px] text-primary">radar</span>
+</div>
+<div class="flex items-baseline gap-1.5">
+<span class="font-title-lg text-title-lg font-bold text-primary">検討圏</span>
+<span class="font-label-sm text-label-sm text-on-surface font-semibold">2.80%</span>
+</div>
+<div class="flex items-center justify-between mt-1">
+<span class="text-[11px] text-primary font-medium">超割安ゾーン</span>
+<span class="material-symbols-outlined text-[14px] tab-indicator transition-transform duration-200 text-primary">expand_more</span>
+</div>
+</button>
+<!-- Card 3: 増配耐性 -->
+<button class="status-tab-card text-left p-space-sm rounded-xl bg-surface-container-low border-2 border-transparent hover:border-outline-variant/50 transition-all duration-200 active:scale-[0.98] relative overflow-hidden group" id="tab-btn-growth" onclick="selectStatusTab('growth')" type="button">
+<div class="flex items-center justify-between mb-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">③ 増配耐性</span>
+<span class="material-symbols-outlined text-[16px] text-secondary-fixed">military_tech</span>
+</div>
+<div class="flex items-baseline gap-1.5">
+<span class="font-title-lg text-title-lg font-bold text-on-surface">10期連続</span>
+<span class="font-label-sm text-label-sm text-primary font-semibold">+8.5%</span>
+</div>
+<div class="flex items-center justify-between mt-1">
+<span class="text-[11px] text-primary font-medium">非減配25年</span>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant/40 tab-indicator transition-transform duration-200">expand_more</span>
+</div>
+</button>
+<!-- Card 4: 集中リスク -->
+<button class="status-tab-card text-left p-space-sm rounded-xl bg-surface-container-low border-2 border-transparent hover:border-outline-variant/50 transition-all duration-200 active:scale-[0.98] relative overflow-hidden group" id="tab-btn-risk" onclick="selectStatusTab('risk')" type="button">
+<div class="flex items-center justify-between mb-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">④ 集中リスク</span>
+<span class="material-symbols-outlined text-[16px] text-[#f59e0b]">donut_large</span>
+</div>
+<div class="flex items-baseline gap-1.5">
+<span class="font-title-lg text-title-lg font-bold text-[#f59e0b]">やや高め</span>
+<span class="font-label-sm text-label-sm text-on-surface font-semibold">18.2%</span>
+</div>
+<div class="flex items-center justify-between mt-1">
+<span class="text-[11px] text-[#f59e0b] font-medium">上限目安10%</span>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant/40 tab-indicator transition-transform duration-200">expand_more</span>
+</div>
+</button>
+</div>
+<!-- Inline Tab Detail Panels Container -->
+<div class="mt-1 pt-space-xs border-t border-outline-variant/20">
+<!-- TAB PANEL 1: 配当性向・健全性ステータス -->
+<div class="status-panel flex-col gap-space-sm hidden" id="tab-panel-health"><div class="flex items-center justify-between pb-1"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[20px]">verified_user</span><span class="font-title-md text-title-md font-bold text-on-surface">健全性詳細分析 (50シナリオ診断)</span></div><span class="px-2.5 py-0.5 rounded-full border font-label-sm text-[11px] font-bold flex items-center gap-1 bg-primary-container/20 border-primary/30 text-primary" id="healthBadgeContainer"><span class="w-1.5 h-1.5 rounded-full bg-primary"></span><span class="" id="healthBadgeGrade">A判定</span>（<span class="" id="healthBadgeText">極めて安全</span>）</span></div><div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col gap-2"><div class="flex items-baseline justify-between"><div class="flex items-center gap-1.5"><span class="font-label-sm text-[12px] text-on-surface-variant font-medium">配当性向 (当期見込)</span><span class="px-1.5 py-0.2 rounded bg-primary-container/15 text-primary text-[10px] font-bold" id="healthPayoutRangeLabel">適正レンジ内 (黄金比率)</span></div><span class="font-numeric-hero-mobile text-[22px] font-bold text-primary" id="healthPayoutRatioDisplay">35.2%</span></div><div class="w-full h-2 rounded-full bg-surface-container-highest overflow-hidden relative"><div class="h-full bg-gradient-to-r from-primary-container to-primary rounded-full transition-all duration-300" id="healthPayoutBar" style="width: 35.2%;"></div></div><div class="flex justify-between font-label-sm text-[10px] text-on-surface-variant pt-0.5"><span class="">0% (低負担)</span><span class="text-primary font-medium">適正目安 30〜50%</span><span class="">100% (高負担)</span></div></div><div class="grid grid-cols-2 gap-2.5"><div class="p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">自己資本比率</span><div class="my-1"><span class="font-title-lg text-title-lg font-bold text-on-surface" id="healthEquityRatioDisplay">39.8%</span></div><span class="font-label-sm text-[10px] truncate text-primary" id="healthEquitySubDisplay">業界高水準・安定</span></div><div class="p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">株主還元方針 (DOE/累進)</span><div class="my-1"><span class="font-title-lg text-title-lg font-bold text-on-surface" id="healthReturnPolicyDisplay">3.2% (DOE)</span></div><span class="font-label-sm text-[10px] text-primary font-medium truncate" id="healthReturnPolicySub">安定還元・DOE基準</span></div></div><div class="grid grid-cols-2 gap-2.5"><div class="p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">ネットD/Eレシオ</span><div class="my-1"><span class="font-title-lg text-title-lg font-bold text-on-surface" id="healthNetDERatioDisplay">-0.22倍 (実質無借金)</span></div><span class="font-label-sm text-[10px] text-on-surface-variant truncate">財務余力・借入健全性</span></div><div class="p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">営業利益率</span><div class="my-1"><span class="font-title-lg text-title-lg font-bold text-on-surface" id="healthOperatingMarginDisplay">11.4%</span></div><span class="font-label-sm text-[10px] text-on-surface-variant truncate">稼ぐ力・本業収益性</span></div></div><div class="p-2.5 rounded-lg bg-surface-container/60 border border-outline-variant/15 flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="material-symbols-outlined text-primary text-[17px]">water_drop</span><span class="font-label-sm text-[11px] text-on-surface font-semibold">フリーキャッシュフロー余力</span></div><div class="flex items-center gap-1 text-primary font-label-sm text-[11px] font-bold bg-primary-container/15 px-2 py-0.5 rounded-full"><span class="material-symbols-outlined text-[13px]">check_circle</span><span class="" id="healthFCFText">黒字維持（配当余力 十分）</span></div></div><div class="flex items-start gap-2.5 p-3 rounded-xl bg-primary/10 border border-primary/25" id="healthDiagnosisCard"><span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">auto_awesome</span><div class="flex flex-col gap-1"><div class="flex items-center justify-between gap-2"><span class="font-label-sm text-[11px] text-primary font-bold" id="healthCommentCategory">王道大型バリュー (トヨタ基準型)</span><span class="font-label-sm text-[10px] text-primary bg-primary/15 px-1.5 py-0.2 rounded font-bold" id="healthCommentScore">健全性スコア: 92/100</span></div><p class="font-body-sm text-[12px] text-on-surface-variant leading-snug" id="healthCommentBody"><strong class="text-on-surface font-semibold">総合自動診断：</strong>自己資本比率39.8%および実質無借金（ネットD/E -0.22倍）を誇り、本業の営業利益率11.4%と極めて堅牢。配当性向35.2%（適正目安30〜50%）に加えてDOE3.2%基準による安定還元を実施しており、中長期的な減配懸念は極小と評価されます。</p></div></div></div>
+<!-- TAB PANEL 2: 割安度・買場シグナル -->
+<div class="status-panel flex-col gap-space-sm flex" id="tab-panel-value"><div class="flex items-center justify-between pb-1"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[20px]">radar</span><span class="font-title-md text-title-md font-bold text-on-surface">買場シグナル詳細分析</span></div><span class="px-2.5 py-0.5 rounded-full bg-primary-container/20 border border-primary/30 text-primary font-label-sm text-[11px] font-bold flex items-center gap-1" id="valueSignalBadge"><span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span><span class="" id="valueSignalBadgeText">超割安ゾーン（検討圏）</span></span></div><!-- 利回りレンジバー --><div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col gap-2"><div class="flex items-baseline justify-between"><div class="flex items-center gap-1.5"><span class="font-label-sm text-[12px] text-on-surface-variant font-medium">配当利回りレンジ判定</span><span class="px-1.5 py-0.2 rounded bg-primary-container/15 text-primary text-[10px] font-bold" id="valueYieldRangeLabel">過去5年平均超え</span></div><span class="font-numeric-hero-mobile text-[22px] font-bold text-primary" id="valueYieldDisplay">2.80%</span></div><div class="w-full h-2 rounded-full bg-surface-container-highest overflow-hidden relative"><div class="h-full bg-gradient-to-r from-secondary to-primary rounded-full transition-all duration-300" id="valueYieldBar" style="width: 63.6%;"></div></div><div class="flex justify-between font-label-sm text-[10px] text-on-surface-variant pt-0.5"><span class="">安値圏 2.10%</span><span class="text-on-surface-variant font-medium">5年平均 2.45%</span><span class="text-primary font-bold">高値圏 3.20%</span></div></div><!-- 2x2 指標タイル（PER・PBR） --><div class="grid grid-cols-2 gap-2.5"><div class="p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col justify-between group cursor-pointer hover:border-primary/40 transition-colors"><div class="flex items-center justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">PER (株価収益率)</span><span class="material-symbols-outlined text-[14px] text-on-surface-variant">tune</span></div><div class="my-1"><span class="font-title-lg text-title-lg font-bold text-on-surface" id="valPERDisplay">10.4倍</span></div><span class="font-label-sm text-[10px] text-primary font-medium truncate" id="valPERStatus">市場平均比で割安</span></div><div class="p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col justify-between group cursor-pointer hover:border-primary/40 transition-colors"><div class="flex items-center justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">PBR (純資産倍率)</span><span class="material-symbols-outlined text-[14px] text-on-surface-variant">tune</span></div><div class="my-1"><span class="font-title-lg text-title-lg font-bold text-on-surface" id="valPBRDisplay">1.12倍</span></div><span class="font-label-sm text-[10px] text-primary font-medium truncate" id="valPBRStatus">1倍近傍・安定圏</span></div></div><!-- PER & PBR シミュレーションセレクター / クイックプリセットコントローラー --><div class="p-3 rounded-xl bg-surface-container-lowest/80 border border-outline-variant/30 flex flex-col gap-2.5"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="material-symbols-outlined text-primary text-[17px]">psychology</span><span class="font-label-sm text-[12px] font-bold text-on-surface">AI買場診断・バリュエーション判定 (50シナリオ)</span></div><button class="px-2 py-0.5 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface-variant hover:text-primary text-[10px] font-semibold flex items-center gap-1 transition-all active:scale-95" onclick="randomValuationScenario()" type="button"><span class="material-symbols-outlined text-[12px]">shuffle</span>ランダム</button></div><!-- カテゴリ別クイックフィルター --><div class="flex items-center gap-1.5 overflow-x-auto pb-0.5"><button class="val-cat-pill px-2 py-0.5 rounded-full bg-primary text-on-primary text-[10px] font-bold active:scale-95 shrink-0" onclick="filterValuationCategory('ALL')" type="button">全50種</button><button class="val-cat-pill px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant text-[10px] font-medium active:scale-95 shrink-0" onclick="filterValuationCategory('DEEP_VALUE')" type="button">解散価値割れ (PBR&lt;1)</button><button class="val-cat-pill px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant text-[10px] font-medium active:scale-95 shrink-0" onclick="filterValuationCategory('VALUE_DIV')" type="button">高配当バリュー</button><button class="val-cat-pill px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant text-[10px] font-medium active:scale-95 shrink-0" onclick="filterValuationCategory('GROWTH')" type="button">適正・成長株</button><button class="val-cat-pill px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant text-[10px] font-medium active:scale-95 shrink-0" onclick="filterValuationCategory('CAUTION')" type="button">過熱・トラップ警戒</button></div><!-- シナリオドロップダウン選択 --><div class="relative"><select class="w-full h-9 px-2.5 pr-8 bg-surface-container-high rounded-lg border border-outline-variant/30 text-on-surface text-[11px] font-medium focus:border-primary focus:outline-none transition-colors appearance-none cursor-pointer" id="valuationScenarioSelect" onchange="selectValuationScenario(parseInt(this.value, 10))"></select><span class="material-symbols-outlined absolute right-2.5 top-2 pointer-events-none text-[16px] text-on-surface-variant">expand_more</span></div><!-- PER・PBRスライダーによる手動微調整 --><div class="grid grid-cols-2 gap-2 pt-1 border-t border-outline-variant/15"><div class="flex flex-col gap-1"><div class="flex items-center justify-between"><span class="text-[10px] text-on-surface-variant font-medium">PER調整:</span><span class="text-primary font-bold text-[11px]" id="sliderValPERLabel">10.4倍</span></div><input class="w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary" id="sliderValPER" max="60" min="3" oninput="onSliderValuationChanged()" step="0.5" type="range" value="10.4"/></div><div class="flex flex-col gap-1"><div class="flex items-center justify-between"><span class="text-[10px] text-on-surface-variant font-medium">PBR調整:</span><span class="text-primary font-bold text-[11px]" id="sliderValPBRLabel">1.12倍</span></div><input class="w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary" id="sliderValPBR" max="5.0" min="0.2" oninput="onSliderValuationChanged()" step="0.05" type="range" value="1.12"/></div></div></div><!-- スプレッド指標 --><div class="p-2.5 rounded-lg bg-surface-container/60 border border-outline-variant/15 flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="material-symbols-outlined text-primary text-[17px]">trending_up</span><span class="font-label-sm text-[11px] text-on-surface font-semibold">買場シグナル総合スコア</span></div><div class="flex items-center gap-1 text-primary font-label-sm text-[11px] font-bold bg-primary-container/15 px-2 py-0.5 rounded-full" id="valScoreBadge"><span class="material-symbols-outlined text-[13px]">north_east</span><span class="" id="valScoreText">割安度スコア 88 / 100</span></div></div><!-- 50シナリオ対応 動的AI診断コメントカード --><div class="flex items-start gap-2.5 p-3 rounded-xl bg-primary/10 border border-primary/25 transition-all duration-300" id="valDiagnosisCard"><span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5" id="valDiagnosisIcon">auto_awesome</span><div class="flex flex-col gap-1 w-full"><div class="flex items-center justify-between gap-2 flex-wrap"><span class="font-label-sm text-[11px] text-primary font-bold" id="valCommentCategory">【王道大型バリュー圏】PER 10.4倍 × PBR 1.12倍</span><span class="font-label-sm text-[10px] text-primary bg-primary/15 px-1.5 py-0.2 rounded font-bold" id="valCommentTiming">絶好の買増し検討期</span></div><p class="font-body-sm text-[12px] text-on-surface-variant leading-snug" id="valCommentBody"><strong class="text-on-surface font-semibold" id="valCommentLead">総合診断コメント：</strong>現在利回りは5年平均（2.45%）を上回る割安圏。PER 10.4倍と過熱感がなく、中長期視点での好機シグナルが点灯しています。</p></div></div></div>
+<!-- TAB PANEL 3: 連続増配・減配耐性ステータス -->
+<div class="status-panel hidden flex-col gap-space-sm" id="tab-panel-growth"><div class="flex items-center justify-between pb-1"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-secondary-fixed text-[20px]">military_tech</span><span class="font-title-md text-title-md font-bold text-on-surface">増配耐性詳細分析</span></div><span class="px-2.5 py-0.5 rounded-full bg-primary-container/20 border border-primary/30 text-primary font-label-sm text-[11px] font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-primary"></span>最高峰の還元力</span></div><div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col gap-2"><div class="flex items-baseline justify-between"><div class="flex items-center gap-1.5"><span class="font-label-sm text-[12px] text-on-surface-variant font-medium">連続増配年数</span><span class="px-1.5 py-0.2 rounded bg-primary-container/15 text-primary text-[10px] font-bold">10期連続</span></div><span class="font-numeric-hero-mobile text-[22px] font-bold text-primary">10期</span></div><div class="w-full h-2 rounded-full bg-surface-container-highest overflow-hidden relative"><div class="h-full bg-gradient-to-r from-secondary to-primary rounded-full" style="width: 80%;"></div></div><div class="flex justify-between font-label-sm text-[10px] text-on-surface-variant pt-0.5"><span class="">非減配 25年間</span><span class="text-primary font-medium">累進配当方針継続中</span><span class="">上限基準 なし</span></div></div><div class="grid grid-cols-2 gap-2.5"><div class="p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">増配ペース (CAGR)</span><div class="my-1"><span class="font-title-lg text-title-lg font-bold text-primary">+8.5%</span></div><span class="font-label-sm text-[10px] text-on-surface-variant font-medium">過去3年平均増配率</span></div><div class="p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">ショック耐性実績</span><div class="my-1"><span class="font-title-lg text-title-lg font-bold text-on-surface">非減配</span></div><span class="font-label-sm text-[10px] text-primary font-medium">リーマン・コロナ耐性済</span></div></div><div class="p-2.5 rounded-lg bg-surface-container/60 border border-outline-variant/15 flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="material-symbols-outlined text-primary text-[17px]">security</span><span class="font-label-sm text-[11px] text-on-surface font-semibold">累進配当コミット</span></div><div class="flex items-center gap-1 text-primary font-label-sm text-[11px] font-bold bg-primary-container/15 px-2 py-0.5 rounded-full"><span class="material-symbols-outlined text-[13px]">verified</span>公式開示（減配せず維持か増配）</div></div><div class="flex items-start gap-2.5 p-3 rounded-xl bg-primary/10 border border-primary/25"><span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">auto_awesome</span><p class="font-body-sm text-[12px] text-on-surface-variant leading-snug"><strong class="text-on-surface font-semibold">診断コメント：</strong>過去25年間減配がなく10期連続増配中。累進配当方針により、中長期保有における減配リスクは極めて低いと評価されます。</p></div></div>
+<!-- TAB PANEL 4: ポートフォリオ依存度・集中リスク -->
+<div class="status-panel hidden flex-col gap-space-sm" id="tab-panel-risk"><div class="flex items-center justify-between pb-1"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-[#f59e0b] text-[20px]">donut_large</span><span class="font-title-md text-title-md font-bold text-on-surface">集中リスク詳細分析</span></div><span class="px-2.5 py-0.5 rounded-full bg-[#f59e0b]/20 border border-[#f59e0b]/30 text-[#f59e0b] font-label-sm text-[11px] font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[#f59e0b]"></span>やや高め（上限目安10%）</span></div><div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col gap-2"><div class="flex items-baseline justify-between"><div class="flex items-center gap-1.5"><span class="font-label-sm text-[12px] text-on-surface-variant font-medium">ポートフォリオ配当依存度</span><span class="px-1.5 py-0.2 rounded bg-[#f59e0b]/15 text-[#f59e0b] text-[10px] font-bold">上限超過</span></div><span class="font-numeric-hero-mobile text-[22px] font-bold text-[#f59e0b]">18.2%</span></div><div class="w-full h-2 rounded-full bg-surface-container-highest overflow-hidden relative"><div class="h-full bg-gradient-to-r from-primary to-[#f59e0b] rounded-full" style="width: 36.4%;"></div></div><div class="flex justify-between font-label-sm text-[10px] text-on-surface-variant pt-0.5"><span class="">0% (低依存)</span><span class="text-on-surface-variant font-medium">推奨目安 10%未満</span><span class="">トヨタ比率 18.2%</span></div></div><div class="grid grid-cols-2 gap-2.5"><div class="p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">セクター集中度</span><div class="my-1"><span class="font-title-lg text-title-lg font-bold text-on-surface">28.5%</span></div><span class="font-label-sm text-[10px] text-[#f59e0b] font-medium">輸送用機器・やや集中</span></div><div class="p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 flex flex-col justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">仮に50%減配の影響</span><div class="my-1"><span class="font-title-lg text-title-lg font-bold text-error">-¥3,640</span></div><span class="font-label-sm text-[10px] text-on-surface-variant font-medium">年間配当への影響度: 中</span></div></div><div class="p-2.5 rounded-lg bg-surface-container/60 border border-outline-variant/15 flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="material-symbols-outlined text-[#f59e0b] text-[17px]">pie_chart</span><span class="font-label-sm text-[11px] text-on-surface font-semibold">リバランス推奨</span></div><div class="flex items-center gap-1 text-[#f59e0b] font-label-sm text-[11px] font-bold bg-[#f59e0b]/15 px-2 py-0.5 rounded-full"><span class="material-symbols-outlined text-[13px]">tune</span>他セクター優先投資を推奨</div></div><div class="flex items-start gap-2.5 p-3 rounded-xl bg-primary/10 border border-primary/25"><span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">auto_awesome</span><p class="font-body-sm text-[12px] text-on-surface-variant leading-snug"><strong class="text-on-surface font-semibold">診断コメント：</strong>配当依存度が約18%と目安（10%以下）を上回っています。今後の追加投資では他セクターを優先し、依存度を薄めるリバランスが推奨されます。</p></div></div>
+</div>
+</section>
+<!-- 7. 次回権利落ち・直近イベント Card -->
+<section class="card-animate rounded-xl bg-surface-container p-space-md shadow-md flex flex-col gap-space-sm" style="animation-delay: 250ms;">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[20px]">calendar_month</span>
+<span class="font-title-md text-title-md font-bold text-on-surface">次回権利落ち・直近イベント</span>
+</div>
+<span class="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary font-label-sm text-label-sm font-bold flex items-center gap-1" id="notifyStatusBadge">
+<span class="material-symbols-outlined text-[13px]">notifications_active</span>通知設定中
+</span>
+</div>
+<!-- Countdown Highlight -->
+<div class="p-space-sm rounded-xl bg-surface-container-high border border-primary/30 flex items-center justify-between">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">9月末 中間配当</span>
+<span class="font-label-md text-label-md text-on-surface font-bold mt-0.5">権利付き最終日まで</span>
+</div>
+<div class="flex items-baseline gap-1 bg-primary-container/20 px-3 py-1.5 rounded-lg border border-primary-container/30">
+<span class="font-label-sm text-label-sm text-primary font-bold">あと</span>
+<span class="font-numeric-hero-mobile text-numeric-hero-mobile font-bold text-primary leading-none">18</span>
+<span class="font-label-sm text-label-sm text-primary font-bold">日</span>
+</div>
+</div>
+<div class="grid grid-cols-1 gap-space-xs">
+<div class="p-space-sm rounded-lg bg-surface-container-low flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[18px]">currency_yen</span>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface font-semibold">次回想定受取額</span>
+<span class="text-[11px] text-on-surface-variant">1株あたり ¥36.4 (保有 100株)</span>
+</div>
+</div>
+<span class="font-title-md text-title-md font-bold text-primary">¥3,640 想定入金</span>
+</div>
+<div class="p-space-sm rounded-lg bg-surface-container-low flex items-start justify-between gap-2">
+<div class="flex items-center gap-1.5 shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-secondary-fixed text-[18px]">event_note</span>
+<span class="font-label-sm text-label-sm text-on-surface font-semibold">直近重要イベント</span>
+</div>
+<div class="text-right">
+<div class="font-label-sm text-label-sm text-on-surface font-bold">第2四半期決算発表：11月1日</div>
+<span class="text-[11px] text-on-surface-variant">業績・配当予想の修正リスク注視</span>
+</div>
+</div>
+</div>
+<!-- Reminder toggle switch -->
+<div class="p-space-sm rounded-lg bg-surface-container-high flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">alarm_on</span>
+<span class="font-label-sm text-label-sm text-on-surface font-medium">権利落ち・決算前通知</span>
+</div>
+<button aria-checked="true" class="w-12 h-6 rounded-full bg-primary p-0.5 flex items-center transition-colors duration-200 focus:outline-none" id="eventNotifyToggle" role="switch" type="button">
+<span class="w-5 h-5 rounded-full bg-on-primary shadow transform translate-x-6 transition-transform duration-200" id="eventNotifyKnob"></span>
+</button>
+</div>
+</section>
+<!-- 8. 税務ステータス Card -->
+<section class="card-animate rounded-xl bg-surface-container p-space-md shadow-md flex flex-col gap-space-sm" style="animation-delay: 300ms;">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-secondary-fixed text-[20px]">shield_with_heart</span>
+<span class="font-title-md text-title-md font-bold text-on-surface">税務ステータス</span>
+</div>
+<div class="p-space-sm rounded-lg bg-surface-container-low flex items-start gap-space-sm">
+<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0 mt-0.5 border border-primary/20">
+<span class="material-symbols-outlined text-[20px]">redeem</span>
+</div>
+<div class="flex flex-col flex-1 min-w-0">
+<div class="flex items-center justify-between">
+<span class="font-label-lg text-label-lg font-bold text-on-surface">NISA 非課税口座 適用中</span>
+<span class="px-2 py-0.5 rounded-full bg-primary-container/20 text-primary font-label-sm text-label-sm font-bold">税率 0%</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1 leading-snug">
+          課税口座時の税額（20.315% = 約¥1,478/年）が全額非課税。受取額がそのまま手取り（¥7,280 / 100%受取）になります。
+        </p>
+</div>
+</div>
+</section>
+<!-- Action Buttons Stack (Inline secondary actions) -->
+<div class="grid grid-cols-2 gap-space-sm pt-1 pb-2">
+<button class="h-11 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-md text-label-md font-semibold flex items-center justify-center gap-1.5 active:scale-98 transition-all" onclick="openHoldingEditModal('shares')" type="button">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+        保有情報を編集
+      </button>
+<button class="h-11 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-error font-label-md text-label-md font-semibold flex items-center justify-center gap-1.5 active:scale-98 transition-all" onclick="showToast('銘柄解除の確認ダイアログ')" type="button">
+<span class="material-symbols-outlined text-[18px]">delete_outline</span>
+        銘柄を解除
+      </button>
+</div>
+</div>
+</main>
+<!-- Bottom Floating Action Bar -->
+<!-- Holding Edit Modal Backdrop --><div class="fixed inset-0 z-50 bg-[#060e20]/70 backdrop-blur-sm transition-opacity duration-300 opacity-0 pointer-events-none" id="editHoldingModalBackdrop" onclick="closeHoldingEditModal()"></div><!-- Holding Edit Modal Sheet --><section class="fixed bottom-0 inset-x-0 z-50 bg-surface-container-high/95 backdrop-blur-xl border-t border-primary/40 rounded-t-2xl shadow-[0_-8px_32px_rgba(0,0,0,0.65)] transform transition-transform duration-300 ease-out flex flex-col max-h-[751px] overflow-hidden pb-safe translate-y-full" id="editHoldingSheet"><div class="flex justify-center pt-3 pb-1.5 cursor-pointer" onclick="closeHoldingEditModal()"><div class="w-12 h-1.5 rounded-full bg-outline-variant/60 hover:bg-outline-variant transition-colors"></div></div><div class="px-space-md pt-1 pb-space-md flex flex-col gap-3 overflow-y-auto"><div class="flex items-center justify-between gap-2"><div class="flex items-center gap-2.5 min-w-0"><div class="w-9 h-9 rounded-xl bg-primary-container/20 border border-primary/40 flex items-center justify-center text-primary shadow-sm shrink-0"><span class="material-symbols-outlined text-[20px]">edit_note</span></div><div class="min-w-0"><h3 class="font-title-md text-title-md font-bold text-on-surface tracking-tight truncate">保有情報の編集</h3><p class="font-label-sm text-[11px] text-on-surface-variant truncate">トヨタ自動車 (7203)</p></div></div><button aria-label="閉じる" class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container active:scale-95 transition-all" onclick="closeHoldingEditModal()" type="button"><span class="material-symbols-outlined text-[20px]">close</span></button></div><div class="p-space-sm rounded-xl bg-surface-container-lowest/80 border border-outline-variant/30 flex flex-col gap-2.5"><div class="flex flex-col gap-1.5"><span class="font-label-sm text-[12px] text-on-surface-variant font-medium">適用口座種別</span><div class="grid grid-cols-2 gap-1.5" id="accountTypeGroup"><button class="py-1.5 px-2 rounded-lg text-left text-[11px] font-semibold flex items-center justify-between border transition-all duration-200 bg-primary/15 border-primary/50 text-primary shadow-sm" onclick="selectAccountType(this, 'nisa_growth')" type="button"><span class="">新NISA 成長投資枠</span><span class="material-symbols-outlined text-[14px]">check_circle</span></button><button class="py-1.5 px-2 rounded-lg text-left text-[11px] font-medium flex items-center justify-between border transition-all duration-200 bg-surface-container-high border-outline-variant/30 text-on-surface-variant hover:text-on-surface" onclick="selectAccountType(this, 'nisa_tsumitate')" type="button"><span class="">新NISA つみたて枠</span><span class="material-symbols-outlined text-[14px] opacity-0">check_circle</span></button><button class="py-1.5 px-2 rounded-lg text-left text-[11px] font-medium flex items-center justify-between border transition-all duration-200 bg-surface-container-high border-outline-variant/30 text-on-surface-variant hover:text-on-surface" onclick="selectAccountType(this, 'specific')" type="button"><span class="">特定口座 (源泉徴収あり)</span><span class="material-symbols-outlined text-[14px] opacity-0">check_circle</span></button><button class="py-1.5 px-2 rounded-lg text-left text-[11px] font-medium flex items-center justify-between border transition-all duration-200 bg-surface-container-high border-outline-variant/30 text-on-surface-variant hover:text-on-surface" onclick="selectAccountType(this, 'general')" type="button"><span class="">一般口座</span><span class="material-symbols-outlined text-[14px] opacity-0">check_circle</span></button></div></div><div class="flex flex-col gap-1.5 pt-1 border-t border-outline-variant/20"><div class="flex items-center justify-between"><label class="font-label-sm text-[12px] text-on-surface-variant font-medium" for="inputEditShares">保有株数</label><span class="text-secondary-fixed font-bold text-[11px]" id="editUnitHint">単元未満株 (端株保有)</span></div><div class="relative flex items-center"><input class="w-full h-11 px-3 bg-surface-container-high rounded-lg border border-outline-variant/30 text-on-surface font-numeric-hero-mobile text-[18px] font-bold focus:border-primary focus:outline-none transition-colors text-right pr-9" id="inputEditShares" min="1" oninput="onEditInputChanged()" step="1" type="number" value="100"/><span class="absolute right-3 text-on-surface-variant font-label-md text-[13px]">株</span></div><div class="flex items-center gap-1.5"><button class="flex-1 py-1 rounded bg-surface-container-high border border-outline-variant/30 text-on-surface font-semibold text-[11px] hover:bg-surface-bright active:scale-95 transition-all" onclick="quickAdjustShares(-10)" type="button">−10</button><button class="flex-1 py-1 rounded bg-surface-container-high border border-outline-variant/30 text-on-surface font-semibold text-[11px] hover:bg-surface-bright active:scale-95 transition-all" onclick="quickAdjustShares(10)" type="button">+10</button><button class="flex-1 py-1 rounded bg-surface-container-high border border-outline-variant/30 text-on-surface font-semibold text-[11px] hover:bg-surface-bright active:scale-95 transition-all" onclick="quickAdjustShares(100)" type="button">+100</button><button class="py-1 px-2.5 rounded bg-surface-container-high border border-outline-variant/30 text-on-surface-variant hover:text-error text-[11px] font-medium active:scale-95 transition-all" onclick="clearShares()" type="button">クリア</button></div></div><div class="flex flex-col gap-1.5 pt-1 border-t border-outline-variant/20"><div class="flex items-center justify-between"><label class="font-label-sm text-[12px] text-on-surface-variant font-medium" for="inputEditPrice">取得単価</label><button class="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-semibold bg-primary/10 px-2 py-0.5 rounded transition-all active:scale-95" onclick="setPriceToCurrent()" type="button"><span class="material-symbols-outlined text-[13px]">history</span>現在株価 (¥2,600) を反映</button></div><div class="relative flex items-center"><input class="w-full h-11 px-3 bg-surface-container-high rounded-lg border border-outline-variant/30 text-on-surface font-numeric-hero-mobile text-[18px] font-bold focus:border-primary focus:outline-none transition-colors text-right pr-9" id="inputEditPrice" min="1" oninput="onEditInputChanged()" placeholder="0" step="10" type="number" value="2450"/><span class="absolute right-3 text-on-surface-variant font-label-md text-[13px]">円</span></div><div class="flex items-center gap-1.5"><button class="flex-1 py-1 rounded bg-surface-container-high border border-outline-variant/30 text-on-surface font-semibold text-[11px] hover:bg-surface-bright active:scale-95 transition-all" onclick="quickAdjustPrice(-50)" type="button">−50</button><button class="flex-1 py-1 rounded bg-surface-container-high border border-outline-variant/30 text-on-surface font-semibold text-[11px] hover:bg-surface-bright active:scale-95 transition-all" onclick="quickAdjustPrice(50)" type="button">+50</button><button class="flex-1 py-1 rounded bg-surface-container-high border border-outline-variant/30 text-on-surface font-semibold text-[11px] hover:bg-surface-bright active:scale-95 transition-all" onclick="quickAdjustPrice(100)" type="button">+100</button></div></div></div><div class="p-space-sm rounded-xl bg-surface-container-low border border-outline-variant/25 flex flex-col gap-2"><div class="flex items-center justify-between pb-1.5 border-b border-outline-variant/20"><span class="font-label-sm text-[11px] text-on-surface font-semibold flex items-center gap-1"><span class="material-symbols-outlined text-primary text-[15px]">analytics</span>リアルタイム試算プレビュー</span><span class="font-label-sm text-[10px] text-primary font-bold" id="taxAccountBadge">NISA非課税 (税率0%)</span></div><div class="grid grid-cols-2 gap-2"><div class="flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">投資元本 (取得総額)</span><span class="font-numeric-hero-mobile text-[16px] font-bold text-on-surface mt-0.5" id="previewCost">¥1</span></div><div class="flex flex-col active:scale-[0.98] transition-all"><span class="font-label-sm text-[10px] text-on-surface-variant">時価評価額</span><span class="font-numeric-hero-mobile text-[16px] font-bold text-on-surface mt-0.5" id="previewValuation">¥2,600</span></div><div class="flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">年間配当受取見込</span><span class="font-numeric-hero-mobile text-[16px] font-bold text-primary mt-0.5" id="previewAnnualDiv">¥73</span></div><div class="flex flex-col"><span class="font-label-sm text-[10px] text-on-surface-variant">年間手取り額 (税引後)</span><span class="font-numeric-hero-mobile text-[16px] font-bold text-primary mt-0.5" id="previewNetDiv">¥73</span></div></div></div><div class="flex items-center gap-2 pt-1"><button class="h-11 px-4 rounded-xl bg-surface-container-highest text-on-surface font-label-md text-label-md font-semibold hover:bg-surface-bright active:scale-95 transition-all" onclick="closeHoldingEditModal()" type="button">キャンセル</button><button class="flex-1 h-11 px-space-md rounded-xl bg-primary text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 shadow-[0_4px_16px_rgba(16,185,129,0.35)] hover:brightness-105 active:scale-98 transition-all" onclick="saveHoldingEdit()" type="button"><span class="material-symbols-outlined text-[18px]">check</span><span class="">変更を保存する</span></button></div></div></section><aside class="fixed bottom-0 inset-x-0 z-40 pb-safe bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_-4px_20px_rgba(2,6,23,0.7)] border-t border-outline-variant/20"><div class="h-16 px-margin flex items-center justify-between gap-space-md"><button class="h-11 px-space-lg rounded-full bg-surface-container-high text-on-surface font-label-lg text-label-lg flex items-center justify-center hover:bg-surface-container-highest active:scale-95 transition-all" onclick="history.back()" type="button">キャンセル</button><button class="flex-1 h-11 px-space-lg rounded-full bg-primary text-on-primary font-label-lg text-label-lg font-semibold flex items-center justify-center gap-space-xs shadow-[0_4px_16px_rgba(16,185,129,0.35)] active:scale-98 transition-all" onclick="showToast('設定を正常に保存しました')" type="button"><span class="material-symbols-outlined text-[20px]">check</span>保存する</button></div></aside><!-- Watchlist Modal Backdrop --><div class="fixed inset-0 z-50 bg-[#060e20]/70 backdrop-blur-sm transition-opacity duration-300 opacity-0 pointer-events-none" id="watchlist-backdrop" onclick="toggleWatchlistDock(false)"></div><!-- Slide-up Watchlist Dock/Sheet --><section class="fixed bottom-0 inset-x-0 z-50 bg-surface-container-high/95 backdrop-blur-xl border-t border-primary/40 rounded-t-2xl shadow-[0_-8px_32px_rgba(0,0,0,0.65)] transform transition-transform duration-300 ease-out flex flex-col max-h-[751px] overflow-hidden pb-safe translate-y-full" id="watchlist-dock"><!-- Drag Handle Area --><div class="flex justify-center pt-3 pb-1.5 cursor-pointer" onclick="toggleWatchlistDock(false)"><div class="w-12 h-1.5 rounded-full bg-outline-variant/60 hover:bg-outline-variant transition-colors"></div></div><div class="px-space-md pt-1 pb-space-md flex flex-col gap-3 overflow-y-auto"><!-- Header: Title & Close Button --><div class="flex items-center justify-between gap-2"><div class="flex items-center gap-2.5 min-w-0"><div class="w-9 h-9 rounded-xl bg-primary-container/20 border border-primary/40 flex items-center justify-center text-primary shadow-sm shrink-0"><span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">bookmark_added</span></div><div class="min-w-0"><h3 class="font-title-md text-title-md font-bold text-on-surface tracking-tight truncate">Watchlistに登録しました</h3><p class="font-label-sm text-[11px] text-on-surface-variant truncate">トヨタ自動車 (7203) の目標利回りと買場通知</p></div></div><div class="flex items-center gap-2 shrink-0"><span class="px-2.5 py-0.5 rounded-full bg-primary/20 border border-primary/30 text-primary font-label-sm text-[10px] font-bold flex items-center gap-1 shrink-0 shadow-sm"><span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>監視中</span></div></div><!-- Interactive Calculator & Target Yield Stepper --><div class="p-space-sm rounded-xl bg-surface-container-lowest/80 border border-outline-variant/30 flex flex-col gap-2.5"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="material-symbols-outlined text-primary text-[18px]">adjust</span><span class="font-label-sm text-label-sm text-on-surface-variant font-semibold">目標配当利回り設定</span></div><div class="flex items-center gap-2"><button class="w-8 h-8 rounded-lg bg-surface-container-high border border-outline-variant/30 flex items-center justify-center text-on-surface font-bold hover:bg-surface-bright active:scale-90 transition-all" onclick="adjustTargetYield(-0.1)" type="button">−</button><span class="font-numeric-hero-mobile text-[18px] font-bold text-primary min-w-[58px] text-center select-none" id="targetYieldDisplay">3.00%</span><button class="w-8 h-8 rounded-lg bg-surface-container-high border border-outline-variant/30 flex items-center justify-center text-on-surface font-bold hover:bg-surface-bright active:scale-90 transition-all" onclick="adjustTargetYield(0.1)" type="button">+</button></div></div><div class="grid grid-cols-2 gap-2 pt-1 border-t border-outline-variant/20"><div class="p-2.5 rounded-lg bg-surface-container-lowest border border-outline-variant/25 flex flex-col justify-between hover:border-primary/40 transition-colors group cursor-pointer" onclick="openHoldingEditModal('shares')"><div class="flex items-center justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">保有数量</span><button aria-label="保有数量を編集" class="w-6 h-6 rounded flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container active:scale-90 transition-all" onclick="event.stopPropagation(); openHoldingEditModal('shares')" type="button"><span class="material-symbols-outlined text-[14px] group-hover:text-primary transition-colors">edit</span></button></div><div class="flex items-baseline justify-between mt-1"><span class="font-title-md text-title-md font-bold text-on-surface" id="holdingSharesDisplay">100株</span><span class="font-label-sm text-[10px] text-on-surface-variant" id="unitStatusDisplay">単元保有</span></div></div><div class="p-2.5 rounded-lg bg-surface-container-lowest border border-outline-variant/25 flex flex-col justify-between hover:border-primary/40 transition-colors group cursor-pointer" onclick="openHoldingEditModal('price')"><div class="flex items-center justify-between"><span class="font-label-sm text-[11px] text-on-surface-variant font-medium">取得単価</span><button aria-label="取得単価を編集" class="w-6 h-6 rounded flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container active:scale-90 transition-all" onclick="event.stopPropagation(); openHoldingEditModal('price')" type="button"><span class="material-symbols-outlined text-[14px] group-hover:text-primary transition-colors">edit</span></button></div><div class="flex items-baseline justify-between mt-1"><span class="font-title-md text-title-md font-bold text-on-surface" id="acqPriceDisplay">¥2,450</span><span class="font-label-sm text-[10px] text-primary font-medium" id="acqProfitZoneDisplay">含み益圏</span></div></div></div><!-- Realtime Notification Guide --><div class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-primary-container/15 border border-primary/30 text-primary text-[11px] font-medium"><span class="material-symbols-outlined text-[15px] shrink-0">notifications_active</span><span class="" id="dockInsightText">あと <strong class="font-bold">¥174 下落 (-6.7%)</strong> で買場到達（年間配当 ¥72.8 基準）</span></div></div><!-- Bottom Action CTA Buttons --><div class="flex items-center gap-2 pt-1"><button class="h-11 px-4 rounded-xl bg-surface-container-highest text-on-surface font-label-md text-label-md font-semibold hover:bg-surface-bright active:scale-95 transition-all" onclick="toggleWatchlistDock(false)" type="button">閉じる</button><button class="flex-1 h-11 px-space-md rounded-xl bg-gradient-to-r from-primary-container to-primary text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 shadow-[0_4px_16px_rgba(16,185,129,0.35)] hover:brightness-105 active:scale-98 transition-all" onclick="showToast('Watchlistへ移動します', 'bookmark'); toggleWatchlistDock(false);" type="button"><span class="">Watchlistへ移動</span><span class="material-symbols-outlined text-[18px]">arrow_forward</span></button></div></div></section>
+<script>
+  // --- Toast Utility ---
+  let toastTimeout = null;
+  function showToast(message, icon = 'check_circle') {
+    const toast = document.getElementById('toastNotification');
+    const msg = document.getElementById('toastMessage');
+    const ico = document.getElementById('toastIcon');
+    if (!toast) return;
+    if (msg) msg.textContent = message;
+    if (ico) ico.textContent = icon;
+
+    clearTimeout(toastTimeout);
+    toast.classList.remove('-translate-y-4', 'opacity-0');
+    toast.classList.add('translate-y-0', 'opacity-100');
+
+    toastTimeout = setTimeout(() => {
+      toast.classList.remove('translate-y-0', 'opacity-100');
+      toast.classList.add('-translate-y-4', 'opacity-0');
+    }, 2200);
+  }
+
+  // --- Status Tabs 2x2 Grid Interaction ---
+  const tabKeys = ['health', 'value', 'growth', 'risk'];
+  const tabTitles = {
+    health: '健全性ステータス（A判定）を開きました',
+    value: '買場シグナル詳細（超割安圏）を開きました',
+    growth: '連続増配・減配耐性を開きました',
+    risk: '集中リスク・依存度を開きました'
+  };
+
+  function selectStatusTab(selectedKey) {
+    tabKeys.forEach((key) => {
+      const btn = document.getElementById(`tab-btn-${key}`);
+      const panel = document.getElementById(`tab-panel-${key}`);
+      const indicator = btn ? btn.querySelector('.tab-indicator') : null;
+
+      if (key === selectedKey) {
+        if (btn) {
+          btn.classList.remove('bg-surface-container-low', 'border-transparent');
+          btn.classList.add('bg-surface-container-high', 'border-primary');
+          if (indicator) {
+            indicator.classList.remove('text-on-surface-variant/40');
+            indicator.classList.add('text-primary');
+          }
+        }
+        if (panel) {
+          panel.classList.remove('hidden');
+          panel.classList.add('flex');
+        }
+      } else {
+        if (btn) {
+          btn.classList.remove('bg-surface-container-high', 'border-primary');
+          btn.classList.add('bg-surface-container-low', 'border-transparent');
+          if (indicator) {
+            indicator.classList.remove('text-primary');
+            indicator.classList.add('text-on-surface-variant/40');
+          }
+        }
+        if (panel) {
+          panel.classList.remove('flex');
+          panel.classList.add('hidden');
+        }
+      }
+    });
+
+    if (tabTitles[selectedKey]) {
+      showToast(tabTitles[selectedKey], 'insights');
+    }
+  }
+
+  // --- Bar Chart Detail Interaction ---
+  function updateBarDetail(index, period, amount, delta) {
+    const pElem = document.getElementById('barTooltipPeriod');
+    const aElem = document.getElementById('barTooltipAmount');
+    const dElem = document.getElementById('barTooltipDelta');
+    if (pElem) pElem.textContent = period;
+    if (aElem) aElem.textContent = amount;
+    if (dElem) dElem.textContent = delta;
+  }
+
+  // --- Buy-More Simulator Reactive Engine (Enhanced for Variation 2 Impact) ---
+  const baseShares = 100;
+  const currentPrice = 2600;
+  const dps = 72.8;
+
+  const slider = document.getElementById('sharesSlider');
+  const simPresetPill = document.getElementById('simPresetPill');
+  const simTotalDividend = document.getElementById('simulatedTotalDividend');
+  const simCost = document.getElementById('simulatedCost');
+  const simAddedAnnual = document.getElementById('simAddedAnnual');
+  const simMonthlyIncome = document.getElementById('simMonthlyIncome');
+  
+  // Contrast impact elements
+  const simImpactBadge = document.getElementById('simImpactBadge');
+  const simTargetSharesLabel = document.getElementById('simTargetSharesLabel');
+  const simTargetAnnualDiv = document.getElementById('simTargetAnnualDiv');
+  const simTargetMonthlyDiv = document.getElementById('simTargetMonthlyDiv');
+
+  function calculateSimulation(addedShares) {
+    const totalShares = baseShares + addedShares;
+    const additionalCost = addedShares * currentPrice;
+    const addedAnnualDiv = Math.round(addedShares * dps);
+    const newTotalAnnualDiv = Math.round(totalShares * dps);
+    const newMonthly = Math.round(newTotalAnnualDiv / 12);
+    const multiplier = (totalShares / baseShares).toFixed(1);
+
+    if (simPresetPill) {
+      if (addedShares === 0) {
+        simPresetPill.textContent = '現状維持 (100株)';
+      } else {
+        simPresetPill.textContent = `+${addedShares}株 (合計${totalShares}株)`;
+      }
+    }
+    if (simCost) simCost.textContent = '¥' + additionalCost.toLocaleString('ja-JP');
+    if (simTotalDividend) simTotalDividend.textContent = '¥' + newTotalAnnualDiv.toLocaleString('ja-JP');
+    if (simAddedAnnual) simAddedAnnual.textContent = (addedShares > 0 ? '+¥' : '¥') + addedAnnualDiv.toLocaleString('ja-JP') + ' / 年';
+    if (simMonthlyIncome) simMonthlyIncome.textContent = '約¥' + newMonthly.toLocaleString('ja-JP') + ' / 月';
+
+    // Update Comparison Banner
+    if (simTargetSharesLabel) {
+      simTargetSharesLabel.textContent = `シミュレーション (${totalShares}株)`;
+    }
+    if (simTargetAnnualDiv) {
+      simTargetAnnualDiv.innerHTML = `¥${newTotalAnnualDiv.toLocaleString('ja-JP')}<span class="text-[10px] font-normal text-on-surface-variant">/年</span>`;
+    }
+    if (simTargetMonthlyDiv) {
+      simTargetMonthlyDiv.textContent = `月 約¥${newMonthly.toLocaleString('ja-JP')} / 月`;
+    }
+    if (simImpactBadge) {
+      if (addedShares === 0) {
+        simImpactBadge.innerHTML = '<span class="material-symbols-outlined text-[13px]">check</span>現状維持 (1.0倍)';
+      } else {
+        simImpactBadge.innerHTML = `<span class="material-symbols-outlined text-[13px]">bolt</span>配当 ${multiplier}倍 UP`;
+      }
+    }
+  }
+
+  if (slider) {
+    slider.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10) || 0;
+      calculateSimulation(val);
+      highlightPresetChip(val);
+    });
+  }
+
+  function setPresetShares(shares) {
+    if (slider) slider.value = shares;
+    calculateSimulation(shares);
+    highlightPresetChip(shares);
+  }
+
+  function highlightPresetChip(shares) {
+    const chips = document.querySelectorAll('.sim-chip');
+    const presets = [0, 100, 250, 500];
+    chips.forEach((chip, i) => {
+      if (presets[i] === shares) {
+        chip.className = 'sim-chip py-1.5 rounded-lg bg-primary text-on-primary font-label-sm text-label-sm font-bold transition-all active:scale-95 text-center shadow-sm';
+      } else {
+        chip.className = 'sim-chip py-1.5 rounded-lg bg-surface-container-high text-on-surface font-label-sm text-label-sm font-semibold transition-all active:scale-95 text-center';
+      }
+    });
+  }
+
+  // --- Notification Toggle ---
+  let isNotifying = true;
+  const toggleBtn = document.getElementById('eventNotifyToggle');
+  const toggleKnob = document.getElementById('eventNotifyKnob');
+  const notifyBadge = document.getElementById('notifyStatusBadge');
+
+  if (toggleBtn && toggleKnob) {
+    toggleBtn.addEventListener('click', () => {
+      isNotifying = !isNotifying;
+      if (isNotifying) {
+        toggleBtn.classList.remove('bg-surface-container-highest');
+        toggleBtn.classList.add('bg-primary');
+        toggleKnob.classList.remove('translate-x-0.5', 'bg-on-surface-variant');
+        toggleKnob.classList.add('translate-x-6', 'bg-on-primary');
+        if (notifyBadge) {
+          notifyBadge.innerHTML = '<span class="material-symbols-outlined text-[13px]">notifications_active</span>通知設定中';
+          notifyBadge.className = 'px-2.5 py-0.5 rounded-full bg-primary/10 text-primary font-label-sm text-label-sm font-bold flex items-center gap-1';
+        }
+        showToast('権利落ち & 決算通知をオンに設定しました', 'notifications_active');
+      } else {
+        toggleBtn.classList.remove('bg-primary');
+        toggleBtn.classList.add('bg-surface-container-highest');
+        toggleKnob.classList.remove('translate-x-6', 'bg-on-primary');
+        toggleKnob.classList.add('translate-x-0.5', 'bg-on-surface-variant');
+        if (notifyBadge) {
+          notifyBadge.innerHTML = '<span class="material-symbols-outlined text-[13px]">notifications_off</span>通知オフ';
+          notifyBadge.className = 'px-2.5 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm font-bold flex items-center gap-1';
+        }
+        showToast('通知をオフに設定しました', 'notifications_off');
+      }
+    });
+  }
+
+  // Initial Calculation Run
+  calculateSimulation(100);
+</script>
+<script class="">
+  let isBookmarked = false;
+  function toggleStockBookmark() {
+    isBookmarked = !isBookmarked;
+    const btn = document.getElementById('bookmarkStockBtn');
+    const ico = document.getElementById('bookmarkStockIcon');
+    if (!btn || !ico) return;
+
+    if (isBookmarked) {
+      btn.classList.add('bg-primary/15', 'border-primary/40', 'text-primary', 'shadow-[0_0_12px_rgba(78,222,163,0.35)]');
+      btn.classList.remove('bg-surface-container-highest', 'text-on-surface-variant');
+      ico.textContent = 'bookmark';
+      ico.style.fontVariationSettings = "'FILL' 1";
+      ico.classList.add('scale-110', 'text-primary');
+      showToastWithAction('ウォッチリストに追加しました', 'bookmark', 'Watchlistで確認');
+    } else {
+      btn.classList.remove('bg-primary/15', 'border-primary/40', 'text-primary', 'shadow-[0_0_12px_rgba(78,222,163,0.35)]');
+      btn.classList.add('bg-surface-container-highest', 'text-on-surface-variant');
+      ico.textContent = 'bookmark_border';
+      ico.style.fontVariationSettings = "'FILL' 0";
+      ico.classList.remove('scale-110', 'text-primary');
+      showToast('ウォッチリストから解除しました', 'bookmark_border');
+    }
+  }
+
+  function showToastWithAction(message, iconName, actionText) {
+    const toast = document.getElementById('toastNotification');
+    if (!toast) return;
+    clearTimeout(toastTimeout);
+    toast.innerHTML = `<div class="bg-surface-container-high/95 backdrop-blur-md px-space-md py-2 rounded-full shadow-2xl flex items-center justify-between gap-3 text-on-surface border border-primary/40 pointer-events-auto"><div class="flex items-center gap-1.5 min-w-0"><span class="material-symbols-outlined text-[18px] text-primary" style="font-variation-settings: 'FILL' 1;">${iconName}</span><span class="font-label-md text-label-md tracking-tight truncate">${message}</span></div><button type="button" onclick="history.back()" class="px-2.5 py-1 rounded-full bg-primary text-on-primary font-label-sm text-label-sm font-bold flex items-center gap-1 shrink-0 hover:brightness-110 active:scale-95 transition-all shadow-sm"><span>${actionText}</span><span class="material-symbols-outlined text-[14px]">arrow_forward</span></button></div>`;
+    toast.classList.remove('-translate-y-4', 'opacity-0', 'pointer-events-none');
+    toast.classList.add('translate-y-0', 'opacity-100');
+
+    toastTimeout = setTimeout(() => {
+      toast.classList.remove('translate-y-0', 'opacity-100');
+      toast.classList.add('-translate-y-4', 'opacity-0', 'pointer-events-none');
+    }, 3500);
+  }
+</script>
+<script>
+  let currentTargetYield = 3.0;
+  const stockAnnualDPS = 72.8;
+  const currentStockPrice = 2600;
+  let isWatchlistDockOpen = false;
+
+  function toggleWatchlistDock(forceState) {
+    const dock = document.getElementById('watchlist-dock');
+    const backdrop = document.getElementById('watchlist-backdrop');
+    const headerIcon = document.getElementById('headerBookmarkIcon');
+    const headerBtn = document.getElementById('bookmark-btn');
+
+    if (typeof forceState === 'boolean') {
+      isWatchlistDockOpen = forceState;
+    } else {
+      isWatchlistDockOpen = !isWatchlistDockOpen;
+    }
+
+    if (isWatchlistDockOpen) {
+      if (dock) {
+        dock.classList.remove('translate-y-full');
+        dock.classList.add('translate-y-0');
+      }
+      if (backdrop) {
+        backdrop.classList.remove('opacity-0', 'pointer-events-none');
+        backdrop.classList.add('opacity-100', 'pointer-events-auto');
+      }
+      if (headerIcon) {
+        headerIcon.textContent = 'bookmark';
+        headerIcon.style.fontVariationSettings = "'FILL' 1";
+        headerIcon.classList.add('text-primary');
+      }
+      if (headerBtn) {
+        headerBtn.classList.add('text-primary');
+      }
+    } else {
+      if (dock) {
+        dock.classList.remove('translate-y-0');
+        dock.classList.add('translate-y-full');
+      }
+      if (backdrop) {
+        backdrop.classList.remove('opacity-100', 'pointer-events-auto');
+        backdrop.classList.add('opacity-0', 'pointer-events-none');
+      }
+    }
+  }
+
+  function adjustTargetYield(delta) {
+    currentTargetYield = Math.max(1.0, Math.min(8.0, +(currentTargetYield + delta).toFixed(2)));
+    updateWatchlistCalculations();
+  }
+
+  function updateWatchlistCalculations() {
+    const display = document.getElementById('targetYieldDisplay');
+    const priceDisplay = document.getElementById('targetPriceDisplay');
+    const deltaDisplay = document.getElementById('targetDeltaDisplay');
+    const deltaPercentDisplay = document.getElementById('targetDeltaPercentDisplay');
+    const insightText = document.getElementById('dockInsightText');
+
+    if (display) display.textContent = currentTargetYield.toFixed(2) + '%';
+
+    const targetPrice = Math.floor((stockAnnualDPS / (currentTargetYield / 100)));
+    if (priceDisplay) priceDisplay.textContent = '¥' + targetPrice.toLocaleString('ja-JP');
+
+    const diff = targetPrice - currentStockPrice;
+    const diffPercent = ((diff / currentStockPrice) * 100).toFixed(1);
+
+    if (deltaDisplay) {
+      deltaDisplay.textContent = (diff > 0 ? '+' : '') + '¥' + diff.toLocaleString('ja-JP');
+      deltaDisplay.className = diff <= 0 ? 'font-numeric-hero-mobile text-title-md font-bold text-primary' : 'font-numeric-hero-mobile text-title-md font-bold text-on-surface';
+    }
+
+    if (deltaPercentDisplay) {
+      deltaPercentDisplay.textContent = `(${diffPercent}%)`;
+      deltaPercentDisplay.className = diff <= 0 ? 'font-label-sm text-[10px] text-primary font-bold' : 'font-label-sm text-[10px] text-on-surface-variant font-bold';
+    }
+
+    if (insightText) {
+      if (diff <= 0) {
+        insightText.innerHTML = `あと <strong class="font-bold">¥${Math.abs(diff).toLocaleString('ja-JP')} 下落 (${diffPercent}%)</strong> で買場到達（年間配当 ¥72.8 基準）`;
+      } else {
+        insightText.innerHTML = `現在株価は目標利回り水準を達成中（+¥${diff.toLocaleString('ja-JP')} 余裕あり）`;
+      }
+    }
+  }
+
+  // Initialize calculations
+  updateWatchlistCalculations();
+</script>
+<script>
+  window.isBookmarkedState = false;
+
+  function toggleBookmarkUnified(forceState) {
+    if (typeof forceState === 'boolean') {
+      window.isBookmarkedState = forceState;
+    } else {
+      window.isBookmarkedState = !window.isBookmarkedState;
+    }
+
+    const cardBtn = document.getElementById('bookmarkStockBtn');
+    const cardIcon = document.getElementById('bookmarkStockIcon');
+    const headerBtn = document.getElementById('bookmark-btn');
+    const headerIcon = document.getElementById('headerBookmarkIcon');
+
+    if (window.isBookmarkedState) {
+      if (cardBtn) {
+        cardBtn.classList.add('bg-primary/15', 'border-primary/40', 'text-primary', 'shadow-[0_0_12px_rgba(78,222,163,0.35)]');
+        cardBtn.classList.remove('bg-surface-container-highest', 'text-on-surface-variant');
+      }
+      if (cardIcon) {
+        cardIcon.textContent = 'bookmark';
+        cardIcon.style.fontVariationSettings = "'FILL' 1";
+        cardIcon.classList.add('scale-110', 'text-primary');
+      }
+      if (headerBtn) {
+        headerBtn.classList.add('text-primary');
+        headerBtn.classList.remove('text-on-surface-variant');
+      }
+      if (headerIcon) {
+        headerIcon.textContent = 'bookmark';
+        headerIcon.style.fontVariationSettings = "'FILL' 1";
+        headerIcon.classList.add('text-primary');
+      }
+      toggleWatchlistDock(true);
+    } else {
+      if (cardBtn) {
+        cardBtn.classList.remove('bg-primary/15', 'border-primary/40', 'text-primary', 'shadow-[0_0_12px_rgba(78,222,163,0.35)]');
+        cardBtn.classList.add('bg-surface-container-highest', 'text-on-surface-variant');
+      }
+      if (cardIcon) {
+        cardIcon.textContent = 'bookmark_border';
+        cardIcon.style.fontVariationSettings = "'FILL' 0";
+        cardIcon.classList.remove('scale-110', 'text-primary');
+      }
+      if (headerBtn) {
+        headerBtn.classList.remove('text-primary');
+        headerBtn.classList.add('text-on-surface-variant');
+      }
+      if (headerIcon) {
+        headerIcon.textContent = 'bookmark_border';
+        headerIcon.style.fontVariationSettings = "'FILL' 0";
+        headerIcon.classList.remove('text-primary');
+      }
+      toggleWatchlistDock(false);
+      showToast('Watchlistから解除しました', 'bookmark_border');
+    }
+  }
+
+  window.toggleStockBookmark = function() {
+    toggleBookmarkUnified();
+  };
+</script>
+<script>
+  let editModalShares = 100;
+  let editModalPrice = 2450;
+  const stockRate = 2600;
+  const annualDPS = 72.8;
+
+  function openHoldingEditModal(focusField) {
+    const sheet = document.getElementById('editHoldingSheet');
+    const backdrop = document.getElementById('editHoldingModalBackdrop');
+    if (sheet) {
+      sheet.classList.remove('translate-y-full');
+      sheet.classList.add('translate-y-0');
+    }
+    if (backdrop) {
+      backdrop.classList.remove('opacity-0', 'pointer-events-none');
+      backdrop.classList.add('opacity-100', 'pointer-events-auto');
+    }
+    if (focusField === 'shares') {
+      setTimeout(() => {
+        const input = document.getElementById('inputEditShares');
+        if (input) input.focus();
+      }, 300);
+    } else if (focusField === 'price') {
+      setTimeout(() => {
+        const input = document.getElementById('inputEditPrice');
+        if (input) input.focus();
+      }, 300);
+    }
+  }
+
+  window.openEditModal = function() {
+    openHoldingEditModal('shares');
+  };
+
+  function closeHoldingEditModal() {
+    const sheet = document.getElementById('editHoldingSheet');
+    const backdrop = document.getElementById('editHoldingModalBackdrop');
+    if (sheet) {
+      sheet.classList.remove('translate-y-0');
+      sheet.classList.add('translate-y-full');
+    }
+    if (backdrop) {
+      backdrop.classList.remove('opacity-100', 'pointer-events-auto');
+      backdrop.classList.add('opacity-0', 'pointer-events-none');
+    }
+  }
+
+  function onEditInputChanged() {
+    const sharesInput = document.getElementById('inputEditShares');
+    const priceInput = document.getElementById('inputEditPrice');
+    if (sharesInput) editModalShares = Math.max(1, parseInt(sharesInput.value, 10) || 1);
+    if (priceInput) editModalPrice = Math.max(1, parseInt(priceInput.value, 10) || 1);
+    updateEditModalCalculations();
+  }
+
+  function quickAdjustShares(delta) {
+    const sharesInput = document.getElementById('inputEditShares');
+    if (sharesInput) {
+      editModalShares = Math.max(1, (parseInt(sharesInput.value, 10) || 100) + delta);
+      sharesInput.value = editModalShares;
+      updateEditModalCalculations();
+    }
+  }
+
+  function clearShares() {
+    const sharesInput = document.getElementById('inputEditShares');
+    if (sharesInput) {
+      editModalShares = 1;
+      sharesInput.value = 1;
+      updateEditModalCalculations();
+    }
+  }
+
+  function quickAdjustPrice(delta) {
+    const priceInput = document.getElementById('inputEditPrice');
+    if (priceInput) {
+      editModalPrice = Math.max(1, (parseInt(priceInput.value, 10) || 2450) + delta);
+      priceInput.value = editModalPrice;
+      updateEditModalCalculations();
+    }
+  }
+
+  function setPriceToCurrent() {
+    const priceInput = document.getElementById('inputEditPrice');
+    if (priceInput) {
+      editModalPrice = stockRate;
+      priceInput.value = stockRate;
+      updateEditModalCalculations();
+    }
+  }
+
+  function selectAccountType(btn, type) {
+    const group = document.getElementById('accountTypeGroup');
+    if (!group) return;
+    const buttons = group.querySelectorAll('button');
+    buttons.forEach((b) => {
+      b.className = 'py-1.5 px-2 rounded-lg text-left text-[11px] font-medium flex items-center justify-between border transition-all duration-200 bg-surface-container-high border-outline-variant/30 text-on-surface-variant hover:text-on-surface';
+      const icon = b.querySelector('.material-symbols-outlined');
+      if (icon) icon.classList.add('opacity-0');
+    });
+    btn.className = 'py-1.5 px-2 rounded-lg text-left text-[11px] font-semibold flex items-center justify-between border transition-all duration-200 bg-primary/15 border-primary/50 text-primary shadow-sm';
+    const btnIcon = btn.querySelector('.material-symbols-outlined');
+    if (btnIcon) btnIcon.classList.remove('opacity-0');
+
+    const taxBadge = document.getElementById('taxAccountBadge');
+    if (taxBadge) {
+      if (type.startsWith('nisa')) {
+        taxBadge.textContent = 'NISA非課税 (税率0%)';
+        taxBadge.className = 'font-label-sm text-[10px] text-primary font-bold';
+      } else {
+        taxBadge.textContent = '課税口座 (税率20.315%)';
+        taxBadge.className = 'font-label-sm text-[10px] text-on-surface-variant font-bold';
+      }
+    }
+    updateEditModalCalculations();
+  }
+
+  function updateEditModalCalculations() {
+    const unitHint = document.getElementById('editUnitHint');
+    if (unitHint) {
+      if (editModalShares % 100 === 0) {
+        unitHint.textContent = `単元保有 (${editModalShares}株)`;
+        unitHint.className = 'text-primary font-bold text-[11px]';
+      } else {
+        unitHint.textContent = `単元未満株 (端株保有)`;
+        unitHint.className = 'text-secondary-fixed font-bold text-[11px]';
+      }
+    }
+
+    const cost = editModalShares * editModalPrice;
+    const val = editModalShares * stockRate;
+    const annualDiv = Math.round(editModalShares * annualDPS);
+    const taxBadge = document.getElementById('taxAccountBadge');
+    const isNisa = taxBadge ? taxBadge.textContent.includes('0%') : true;
+    const netDiv = isNisa ? annualDiv : Math.round(annualDiv * 0.79685);
+
+    const pCost = document.getElementById('previewCost');
+    const pVal = document.getElementById('previewValuation');
+    const pAnn = document.getElementById('previewAnnualDiv');
+    const pNet = document.getElementById('previewNetDiv');
+
+    if (pCost) pCost.textContent = '¥' + cost.toLocaleString('ja-JP');
+    if (pVal) pVal.textContent = '¥' + val.toLocaleString('ja-JP');
+    if (pAnn) pAnn.textContent = '¥' + annualDiv.toLocaleString('ja-JP');
+    if (pNet) pNet.textContent = '¥' + netDiv.toLocaleString('ja-JP');
+  }
+
+  function saveHoldingEdit() {
+    const sharesDisplay = document.getElementById('holdingSharesDisplay');
+    const acqDisplay = document.getElementById('acqPriceDisplay');
+    const valuationDisplay = document.getElementById('valuationDisplay');
+    const unitDisplay = document.getElementById('unitStatusDisplay');
+    const gainLossAmount = document.getElementById('gainLossAmount');
+    const gainLossPercent = document.getElementById('gainLossPercent');
+
+    if (sharesDisplay) sharesDisplay.textContent = `${editModalShares}株`;
+    if (acqDisplay) acqDisplay.textContent = `¥${editModalPrice.toLocaleString('ja-JP')}`;
+
+    const totalValuation = editModalShares * stockRate;
+    const totalCost = editModalShares * editModalPrice;
+    const diff = totalValuation - totalCost;
+    const diffPct = ((diff / totalCost) * 100).toFixed(2);
+
+    if (valuationDisplay) valuationDisplay.textContent = `¥${totalValuation.toLocaleString('ja-JP')}`;
+    if (unitDisplay) unitDisplay.textContent = editModalShares % 100 === 0 ? '単元保有' : '単元未満';
+    if (gainLossAmount) {
+      gainLossAmount.textContent = (diff >= 0 ? '+¥' : '-¥') + Math.abs(diff).toLocaleString('ja-JP');
+      gainLossAmount.className = diff >= 0 ? 'font-title-md text-title-md font-bold text-primary' : 'font-title-md text-title-md font-bold text-error';
+    }
+    if (gainLossPercent) {
+      gainLossPercent.textContent = `(${diff >= 0 ? '+' : ''}${diffPct}%)`;
+      gainLossPercent.className = diff >= 0 ? 'font-label-sm text-[11px] text-primary font-bold' : 'font-label-sm text-[11px] text-error font-bold';
+    }
+
+    closeHoldingEditModal();
+    showToast('保有情報を正常に更新しました', 'check_circle');
+  }
+</script>
+<script>
+const stockDatabase = [
+  {
+    code: '7203',
+    name: 'トヨタ自動車',
+    market: '東証PRM',
+    sector: '輸送用機器',
+    nisa: '新NISA 成長投資枠',
+    price: 2600,
+    change: '+¥35 (+1.36%)',
+    changePositive: true,
+    isHeld: true,
+    shares: 100,
+    acqPrice: 2450,
+    dps: 72.8,
+    yieldVal: 2.80,
+    yoc: 2.97,
+    nextDivDate: '12月中旬',
+    payoutRatio: '35.2%',
+    healthRank: 'A判定',
+    consecutiveGrowth: '10期連続'
+  },
+  {
+    code: '8316',
+    name: '三井住友FG',
+    market: '東証PRM',
+    sector: '銀行業',
+    nisa: '新NISA 成長投資枠',
+    price: 3650,
+    change: '+¥62 (+1.73%)',
+    changePositive: true,
+    isHeld: false,
+    shares: 0,
+    acqPrice: 0,
+    dps: 116.0,
+    yieldVal: 3.18,
+    yoc: 0,
+    nextDivDate: '12月上旬',
+    payoutRatio: '40.5%',
+    healthRank: 'A判定',
+    consecutiveGrowth: '累進配当方針'
+  },
+  {
+    code: '9432',
+    name: '日本電信電話 (NTT)',
+    market: '東証PRM',
+    sector: '情報・通信業',
+    nisa: '新NISA 成長/つみたて枠',
+    price: 154,
+    change: '+¥1.2 (+0.78%)',
+    changePositive: true,
+    isHeld: false,
+    shares: 0,
+    acqPrice: 0,
+    dps: 5.2,
+    yieldVal: 3.38,
+    yoc: 0,
+    nextDivDate: '12月下旬',
+    payoutRatio: '38.0%',
+    healthRank: 'S判定',
+    consecutiveGrowth: '13期連続増配'
+  },
+  {
+    code: '8058',
+    name: '三菱商事',
+    market: '東証PRM',
+    sector: '卸売業',
+    nisa: '新NISA 成長投資枠',
+    price: 3120,
+    change: '+¥45 (+1.46%)',
+    changePositive: true,
+    isHeld: false,
+    shares: 0,
+    acqPrice: 0,
+    dps: 100.0,
+    yieldVal: 3.21,
+    yoc: 0,
+    nextDivDate: '12月上旬',
+    payoutRatio: '36.8%',
+    healthRank: 'A判定',
+    consecutiveGrowth: '累進配当宣言'
+  },
+  {
+    code: 'AAPL',
+    name: 'Apple Inc.',
+    market: 'NASDAQ',
+    sector: 'テクノロジー',
+    nisa: '新NISA 成長投資枠',
+    price: 228,
+    change: '+¥3.4 (+1.51%)',
+    changePositive: true,
+    isHeld: false,
+    shares: 0,
+    acqPrice: 0,
+    dps: 1.0,
+    yieldVal: 0.44,
+    yoc: 0,
+    nextDivDate: '11月中旬',
+    payoutRatio: '15.4%',
+    healthRank: 'AAA判定',
+    consecutiveGrowth: '12期連続増配'
+  },
+  {
+    code: 'NVDA',
+    name: 'NVIDIA Corp.',
+    market: 'NASDAQ',
+    sector: '半導体',
+    nisa: '新NISA 成長投資枠',
+    price: 130,
+    change: '+¥4.8 (+3.83%)',
+    changePositive: true,
+    isHeld: false,
+    shares: 0,
+    acqPrice: 0,
+    dps: 0.16,
+    yieldVal: 0.12,
+    yoc: 0,
+    nextDivDate: '12月下旬',
+    payoutRatio: '2.1%',
+    healthRank: 'AAA判定',
+    consecutiveGrowth: '急成長・高CF'
+  }
+];
+
+function openSearchModal() {
+  const backdrop = document.getElementById('searchModalBackdrop');
+  const sheet = document.getElementById('searchModalSheet');
+  if (backdrop) backdrop.classList.remove('opacity-0', 'pointer-events-none');
+  if (sheet) sheet.classList.remove('-translate-y-full');
+  renderSearchSuggestions('');
+  setTimeout(() => {
+    const input = document.getElementById('stockSearchInput');
+    if (input) input.focus();
+  }, 250);
+}
+
+function closeSearchModal() {
+  const backdrop = document.getElementById('searchModalBackdrop');
+  const sheet = document.getElementById('searchModalSheet');
+  if (backdrop) backdrop.classList.add('opacity-0', 'pointer-events-none');
+  if (sheet) sheet.classList.add('-translate-y-full');
+}
+
+function clearSearchInput() {
+  const input = document.getElementById('stockSearchInput');
+  if (input) {
+    input.value = '';
+    input.focus();
+    renderSearchSuggestions('');
+  }
+}
+
+function onSearchInputChanged(query) {
+  renderSearchSuggestions(query);
+}
+
+function renderSearchSuggestions(query) {
+  const q = (query || '').toLowerCase().trim();
+  const filtered = stockDatabase.filter(item => {
+    if (!q) return true;
+    return item.code.toLowerCase().includes(q) || item.name.toLowerCase().includes(q) || item.sector.toLowerCase().includes(q);
+  });
+
+  const countElem = document.getElementById('searchCandidateCount');
+  if (countElem) countElem.textContent = filtered.length;
+
+  const container = document.getElementById('searchSuggestionsList');
+  if (!container) return;
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="p-4 rounded-xl bg-surface-container text-center text-on-surface-variant font-label-md">該当する銘柄が見つかりませんでした</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(item => {
+    const isCurrencyYen = !['AAPL', 'NVDA'].includes(item.code);
+    const symbol = isCurrencyYen ? '¥' : '$';
+    const formattedPrice = symbol + item.price.toLocaleString('ja-JP');
+    const statusBadge = item.isHeld 
+      ? '<span class="px-2 py-0.5 rounded-full bg-primary-container/20 border border-primary/30 text-primary font-bold text-[10px]">保有中 (' + item.shares + '株)</span>'
+      : '<span class="px-2 py-0.5 rounded-full bg-surface-container-highest border border-outline-variant/30 text-on-surface-variant font-bold text-[10px]">未保有・ウォッチリスト</span>';
+
+    return `
+      <div onclick="selectStockFromSearch('${item.code}')" class="group p-3 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline-variant/25 hover:border-primary/40 active:scale-[0.99] transition-all cursor-pointer flex flex-col gap-1.5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded bg-surface-container-highest text-on-surface-variant font-label-sm text-[11px] font-bold">${item.code}</span>
+            <span class="font-title-md text-title-md font-bold text-on-surface group-hover:text-primary transition-colors">${item.name}</span>
+            <span class="text-[11px] text-on-surface-variant">${item.sector}</span>
+          </div>
+          ${statusBadge}
+        </div>
+        <div class="flex items-center justify-between pt-1 border-t border-outline-variant/15 text-[12px]">
+          <div class="flex items-center gap-2">
+            <span class="font-numeric-hero-mobile font-bold text-on-surface">${formattedPrice}</span>
+            <span class="text-primary font-semibold">${item.change}</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-on-surface-variant">利回り: <strong class="text-primary font-bold">${item.yieldVal.toFixed(2)}%</strong></span>
+            <span class="text-on-surface-variant font-medium">${item.consecutiveGrowth}</span>
+            <span class="material-symbols-outlined text-[16px] text-on-surface-variant group-hover:text-primary group-hover:translate-x-0.5 transition-all">arrow_forward_ios</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function selectStockFromSearch(code) {
+  const stock = stockDatabase.find(s => s.code === code);
+  if (!stock) return;
+  closeSearchModal();
+  applyStockToScreen(stock);
+  showToast(`${stock.name} (${stock.code}) の銘柄情報を表示しました`, 'database');
+}
+
+function applyStockToScreen(stock) {
+  // 1. Header & Title Updates
+  const h2 = document.querySelector('h2');
+  if (h2) h2.textContent = stock.name;
+
+  const codeBadge = document.querySelector('span.px-2.py-0\.5.rounded.bg-surface-container-highest');
+  if (codeBadge) codeBadge.textContent = stock.code;
+
+  const marketBadge = document.querySelector('span.px-2.py-0\.5.rounded.bg-surface-container-low');
+  if (marketBadge) marketBadge.textContent = stock.market;
+
+  // NISA / Holding Status pill
+  const nisaPill = document.querySelector('span.px-2.py-0\.5.rounded-full.bg-primary-container\/20');
+  if (nisaPill) {
+    if (stock.isHeld) {
+      nisaPill.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-primary"></span> ${stock.nisa}`;
+      nisaPill.className = 'px-2 py-0.5 rounded-full bg-primary-container/20 border border-primary/30 text-primary font-label-sm text-label-sm font-semibold flex items-center gap-1';
+    } else {
+      nisaPill.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> 未保有・ウォッチリスト対象`;
+      nisaPill.className = 'px-2 py-0.5 rounded-full bg-secondary-container/30 border border-secondary/40 text-secondary-fixed font-label-sm text-label-sm font-semibold flex items-center gap-1';
+    }
+  }
+
+  // Price Display
+  const priceDisplay = document.querySelector('p.font-numeric-hero-mobile');
+  if (priceDisplay) {
+    const symbol = !['AAPL', 'NVDA'].includes(stock.code) ? '¥' : '$';
+    priceDisplay.innerHTML = `${symbol}${stock.price.toLocaleString('ja-JP')}<span class="font-label-md text-label-md text-on-surface-variant ml-1 font-normal">/株</span>`;
+  }
+
+  // Holding Details (Shares, Acq Price, Valuation, Gain/Loss)
+  const holdingSharesDisplay = document.getElementById('holdingSharesDisplay');
+  const unitStatusDisplay = document.getElementById('unitStatusDisplay');
+  const acqPriceDisplay = document.getElementById('acqPriceDisplay');
+  const acqProfitZoneDisplay = document.getElementById('acqProfitZoneDisplay');
+  const valuationDisplay = document.getElementById('valuationDisplay');
+  const gainLossAmount = document.getElementById('gainLossAmount');
+  const gainLossPercent = document.getElementById('gainLossPercent');
+
+  if (stock.isHeld) {
+    if (holdingSharesDisplay) holdingSharesDisplay.textContent = `${stock.shares}株`;
+    if (unitStatusDisplay) unitStatusDisplay.textContent = '単元保有';
+    if (acqPriceDisplay) acqPriceDisplay.textContent = `¥${stock.acqPrice.toLocaleString('ja-JP')}`;
+    if (acqProfitZoneDisplay) {
+      acqProfitZoneDisplay.textContent = '含み益圏';
+      acqProfitZoneDisplay.className = 'font-label-sm text-[10px] text-primary font-medium';
+    }
+    const totalVal = stock.shares * stock.price;
+    const totalCost = stock.shares * stock.acqPrice;
+    const diff = totalVal - totalCost;
+    const diffPct = ((diff / totalCost) * 100).toFixed(2);
+    if (valuationDisplay) valuationDisplay.textContent = `¥${totalVal.toLocaleString('ja-JP')}`;
+    if (gainLossAmount) {
+      gainLossAmount.textContent = `+¥${diff.toLocaleString('ja-JP')}`;
+      gainLossAmount.className = 'font-title-md text-title-md font-bold text-primary';
+    }
+    if (gainLossPercent) {
+      gainLossPercent.textContent = `(+${diffPct}%)`;
+      gainLossPercent.className = 'font-label-sm text-[11px] text-primary font-bold';
+    }
+  } else {
+    // UNHELD / WATCHLIST ONLY STATE
+    if (holdingSharesDisplay) holdingSharesDisplay.textContent = '0株';
+    if (unitStatusDisplay) unitStatusDisplay.textContent = '保有なし';
+    if (acqPriceDisplay) acqPriceDisplay.textContent = '¥0';
+    if (acqProfitZoneDisplay) {
+      acqProfitZoneDisplay.textContent = '未保有';
+      acqProfitZoneDisplay.className = 'font-label-sm text-[10px] text-on-surface-variant font-medium';
+    }
+    if (valuationDisplay) valuationDisplay.textContent = '¥0';
+    if (gainLossAmount) {
+      gainLossAmount.textContent = '¥0';
+      gainLossAmount.className = 'font-title-md text-title-md font-bold text-on-surface-variant';
+    }
+    if (gainLossPercent) {
+      gainLossPercent.textContent = '(0.00%)';
+      gainLossPercent.className = 'font-label-sm text-[11px] text-on-surface-variant font-bold';
+    }
+  }
+
+  // External Research Links Update
+  const links = document.querySelectorAll('section:nth-of-type(1) a[target="_blank"]');
+  if (links.length >= 2) {
+    links[0].href = `https://finance.yahoo.co.jp/quote/${stock.code}.T`;
+    links[1].href = `https://irbank.net/${stock.code}`;
+  }
+
+  // Bottom Action Stack Buttons update for unheld vs held
+  const actionStack = document.querySelector('div.grid.grid-cols-2.gap-space-sm.pt-1.pb-2');
+  if (actionStack) {
+    if (stock.isHeld) {
+      actionStack.innerHTML = `
+        <button type="button" onclick="openHoldingEditModal('shares')" class="h-11 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-md text-label-md font-semibold flex items-center justify-center gap-1.5 active:scale-98 transition-all">
+          <span class="material-symbols-outlined text-[18px]">edit</span>保有情報を編集
+        </button>
+        <button type="button" onclick="showToast('銘柄解除の確認ダイアログ')" class="h-11 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-error font-label-md text-label-md font-semibold flex items-center justify-center gap-1.5 active:scale-98 transition-all">
+          <span class="material-symbols-outlined text-[18px]">delete_outline</span>銘柄を解除
+        </button>
+      `;
+    } else {
+      actionStack.innerHTML = `
+        <button type="button" onclick="openHoldingEditModal('shares')" class="h-11 rounded-xl bg-primary text-on-primary font-label-md text-label-md font-bold flex items-center justify-center gap-1.5 shadow-[0_2px_10px_rgba(16,185,129,0.3)] active:scale-98 transition-all">
+          <span class="material-symbols-outlined text-[18px]">add_circle</span>＋ 保有株として新規登録
+        </button>
+        <button type="button" onclick="toggleBookmarkUnified(true)" class="h-11 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-primary font-label-md text-label-md font-semibold flex items-center justify-center gap-1.5 active:scale-98 transition-all border border-primary/30">
+          <span class="material-symbols-outlined text-[18px]">bookmark_add</span>ウォッチリストに登録
+        </button>
+      `;
+    }
+  }
+}
+</script>
+<script>
+  function onManualSharesChanged(val) {
+    let num = parseInt(val, 10);
+    if (isNaN(num) || num < 0) num = 0;
+    if (num > 10000) num = 10000;
+    if (slider) {
+      if (num <= 500) {
+        slider.value = num;
+      } else {
+        slider.value = 500;
+      }
+    }
+    calculateSimulation(num);
+    highlightPresetChip(num);
+    updateManualSimUnitHint(num);
+  }
+
+  function stepManualShares(delta) {
+    const manualInput = document.getElementById('manualSimSharesInput');
+    const currentVal = parseInt(manualInput ? manualInput.value : 0, 10) || 0;
+    const newVal = Math.max(0, Math.min(10000, currentVal + delta));
+    if (manualInput) manualInput.value = newVal;
+    onManualSharesChanged(newVal);
+  }
+
+  function updateManualSimUnitHint(shares) {
+    const hint = document.getElementById('manualSimUnitLabel');
+    if (!hint) return;
+    if (shares === 0) {
+      hint.textContent = '現状維持 (0株追加)';
+      hint.className = 'text-on-surface-variant font-medium text-[11px]';
+    } else if (shares % 100 === 0) {
+      hint.textContent = `単元 (${shares / 100}単元)`;
+      hint.className = 'text-primary font-bold text-[11px]';
+    } else {
+      hint.textContent = '単元未満株 (端株)';
+      hint.className = 'text-secondary-fixed font-bold text-[11px]';
+    }
+  }
+
+  const originalSetPresetShares = window.setPresetShares;
+  window.setPresetShares = function(shares) {
+    const manualInput = document.getElementById('manualSimSharesInput');
+    if (manualInput) manualInput.value = shares;
+    updateManualSimUnitHint(shares);
+    if (typeof originalSetPresetShares === 'function') {
+      originalSetPresetShares(shares);
+    }
+  };
+
+  if (slider) {
+    slider.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10) || 0;
+      const manualInput = document.getElementById('manualSimSharesInput');
+      if (manualInput) manualInput.value = val;
+      updateManualSimUnitHint(val);
+    });
+  }
+</script>
+<script>
+const healthScenarios = [
+  { id: 0, grade: 'A', name: '① トヨタ基準型 (高収益・累進DOE型)', payoutRatio: 35.2, equityRatio: 39.8, returnPolicy: '3.2% (DOE)', returnPolicySub: '安定還元・DOE基準', netDE: '-0.22倍 (実質無借金)', opMargin: '11.4%', fcfStatus: '黒字維持（配当余力 十分）', score: 92, category: '王道大型バリュー', comment: '配当性向は約35%と適正水準（目安30〜50%）を維持。過度な配当負担がなく、事業FCFも極めて潤沢で将来の減配リスクは極めて低い水準です。' },
+  { id: 1, grade: 'S', name: '② NTT型 鉄壁ディフェンシブ (低β・長期連続増配)', payoutRatio: 38.0, equityRatio: 35.6, returnPolicy: '累進配当コミット', returnPolicySub: '13期連続増配コミット', netDE: '0.85倍 (設備投資先行)', opMargin: '14.2%', fcfStatus: '安定創出 (通信インフラ強固)', score: 96, category: '通信インフラ', comment: '独占的な通信インフラ収益を背景に13期連続増配を継続。配当性向38%と極めて健全で、景気後退局面でも減配確率は極小です。' },
+  { id: 2, grade: 'S', name: '③ 三菱商事型 コングロマリット累進還元', payoutRatio: 36.8, equityRatio: 38.2, returnPolicy: '累進配当+機動的自社株買い', returnPolicySub: '総還元性向 40%目安', netDE: '0.45倍 (キャッシュフロー重視)', opMargin: '9.8%', fcfStatus: '強固な営業CF黒字', score: 95, category: '大手総合商社', comment: '資源・非資源のバランスが効いており基礎営業CFが強固。累進配当宣言により下値支持が強固で、財務健全性は最高峰です。' },
+  { id: 3, grade: 'A', name: '④ 三井住友FG型 金利反転メガバンク', payoutRatio: 40.5, equityRatio: 5.2, returnPolicy: '累進配当方針継続', returnPolicySub: 'CET1比率10%維持前提', netDE: '対象外 (銀行規制資本)', opMargin: '31.2%', fcfStatus: '自己資本規制基準を大幅クリア', score: 91, category: '銀行メガバンク', comment: '日銀の利上げ局面に伴い利ざや改善が鮮明。累進配当方針を正式掲示しており、株主還元への資本配分余力は十分です。' },
+  { id: 4, grade: 'S', name: '⑤ 信越化学型 無借金高収益キャッシュリッチ', payoutRatio: 34.0, equityRatio: 82.5, returnPolicy: '安定増配継続', returnPolicySub: '自己資本80%超の実質無借金', netDE: '-0.75倍 (完全ネットネット)', opMargin: '32.5%', fcfStatus: '巨額FCFフリー創出', score: 98, category: '化学・半導体材料', comment: '自己資本比率82%超かつ実質無借金の財務要塞。半導体シリコンウエハの高シェアにより圧倒的収益力を誇り、減配余地は皆無に近いです。' },
+  { id: 5, grade: 'S', name: '⑥ 東京海上HD型 グローバル分散・資本政策優等生', payoutRatio: 48.0, equityRatio: 12.8, returnPolicy: '修正純利益還元 50%', returnPolicySub: 'ESR資本充実度 120%', netDE: '対象外 (保険リスク資本)', opMargin: '18.4%', fcfStatus: '海外M&Aからの配当還流が加速', score: 94, category: 'メガ損害保険', comment: '政策保有株の完全売却方針と海外展開により利益率が向上。ESR比率が十分に高く、資本バッファと増配原資が極めて安定しています。' },
+  { id: 6, grade: 'A', name: '⑦ JT (日本たばこ産業)型 高配当キャッシュカウ', payoutRatio: 74.5, equityRatio: 52.4, returnPolicy: '配当性向目安 75%', returnPolicySub: '強固な価格決定力', netDE: '0.12倍 (安定的負債水準)', opMargin: '24.8%', fcfStatus: '極めて潤沢なFCF継続創出', score: 88, category: 'たばこ・ディフェンシブ', comment: '配当性向75%目安と数値は高めですが、原材料高を価格転嫁できるグローバル寡占力と潤沢なFCFにより高水準の配当が持続可能です。' },
+  { id: 7, grade: 'S', name: '⑧ キーエンス型 超高収益ファブレス・自己資本95%', payoutRatio: 20.0, equityRatio: 94.8, returnPolicy: '株主資本配当DOE型', returnPolicySub: '内部留保による圧倒的防壁', netDE: '-0.92倍 (極限キャッシュリッチ)', opMargin: '51.8%', fcfStatus: '毎期数千億円の営業CF黒字', score: 99, category: 'FAセンサー・超高収益', comment: '営業利益率50%超、自己資本比率94%超の規格外財務。配当性向20%と控え目ですが、業績悪化による減配の危険性はほぼ0%と診断されます。' },
+  { id: 8, grade: 'A', name: '⑨ KDDI型 通信+金融エコシステム連続増配', payoutRatio: 42.5, equityRatio: 44.2, returnPolicy: '23期連続増配目標', returnPolicySub: '配当性向 40%超水準維持', netDE: '0.62倍 (安定コントロール)', opMargin: '19.1%', fcfStatus: '安定月額課金CFがベース', score: 93, category: '通信メガキャリア', comment: '20期以上連続増配を継続する配当貴族銘柄。解約率の低い通信料課金と金融連携が下支えし、財務の健全性は盤石です。' },
+  { id: 9, grade: 'A', name: '⑩ 小松製作所型 グローバル建機・景気循環耐性', payoutRatio: 38.5, equityRatio: 55.4, returnPolicy: '連結配当性向 40%以上', returnPolicySub: '景気連動型＋自己株取得', netDE: '0.28倍 (健全水準)', opMargin: '14.5%', fcfStatus: '部品サービス部門の継続CF', score: 87, category: '産業機械・建機', comment: '新車販売だけでなくIoT補修サービス（KOMTRAX）によるストック収益が手堅く、資源サイクル下降局面でも健全な配当を維持できます。' },
+  { id: 10, grade: 'S', name: '⑪ 花王型 34期連続増配記録・国内トップランナー', payoutRatio: 65.2, equityRatio: 58.1, returnPolicy: '連続増配コミット', returnPolicySub: '日本歴代最長連続増配', netDE: '0.15倍 (低負債健全)', opMargin: '9.2%', fcfStatus: '生活必需品による安定FCF', score: 90, category: '日用品・トイレタリー', comment: '日本記録となる34期連続増配を継続中。構造改革による利益反発が進行しており、財務余力とブランド認知による安定度は折り紙付きです。' },
+  { id: 11, grade: 'A', name: '⑫ 日立製作所型 ポートフォリオ変革・Lumada伸長', payoutRatio: 32.0, equityRatio: 42.0, returnPolicy: '安定的増配+成長投資', returnPolicySub: 'グループ再編完了で資本効率UP', netDE: '0.35倍 (レバレッジ改善)', opMargin: '11.8%', fcfStatus: 'ITデジタルサービスCF拡大', score: 92, category: '重電・デジタルソリューション', comment: '上場子会社整理とLumada主軸の事業転換が成功。過剰債務を圧縮し、配当性向32%と増配余地が大きく残されています。' },
+  { id: 12, grade: 'B', name: '⑬ 武田薬品型 大型M&A負債返済期・高利回り型', payoutRatio: 98.5, equityRatio: 33.2, returnPolicy: '年間180円配当維持方針', returnPolicySub: 'フリーCFからの優先配当', netDE: '0.95倍 (負債圧縮を最優先)', opMargin: '12.4%', fcfStatus: 'コアベースFCFで配当賄う', score: 72, category: '製薬・バイオ', comment: '会計上の一時償却費で純利益が圧縮され性向が高く見えますが、コア営業CFは堅調。大型買収負債の返済進捗に引き続き注視が必要です。' },
+  { id: 13, grade: 'A', name: '⑭ 任天堂型 ファブレス・IPメガプラットフォーマー', payoutRatio: 50.0, equityRatio: 78.5, returnPolicy: '配当性向 50%連動', returnPolicySub: '巨額手元現預金バッファ', netDE: '-0.88倍 (実質無借金)', opMargin: '33.2%', fcfStatus: '強力なデジタル販売CF', score: 93, category: 'ゲーム・IPエンタメ', comment: 'ハードウェアのサイクルで利益変動はあるものの、2兆円規模の手元流動性と無借金経営により財務基盤は無傷の安全度です。' },
+  { id: 14, grade: 'S', name: '⑮ 伊藤忠商事型 非資源ナンバーワン・高ROE経営', payoutRatio: 30.5, equityRatio: 41.5, returnPolicy: '累進配当コミット (毎期引上げ)', returnPolicySub: '総還元性向 40%目安', netDE: '0.40倍 (商社トップクラス低位)', opMargin: '10.5%', fcfStatus: '生活消費分野の安定現金流入', score: 97, category: '総合商社', comment: '生活消費分野に強みを持ち資源価格への依存度が低い。累進配当方針をいち早く掲げ、下限配当を公約するなど株主重視の姿勢は盤石です。' },
+  { id: 15, grade: 'A', name: '⑯ オリックス型 多角化金融・高配当バリュー', payoutRatio: 35.0, equityRatio: 22.8, returnPolicy: '配当性向33%または公約下限', returnPolicySub: 'リース・事業投資の複合', netDE: '1.45倍 (金融アセット型)', opMargin: '13.5%', fcfStatus: 'アセット売却益とインフラCF', score: 86, category: '多角化金融サービス', comment: '金融リース業態のためD/Eレシオは標準的。事業ポートフォリオ入れ替えによるキャピタルゲインを還元に回す巧みな資本配分です。' },
+  { id: 16, grade: 'B', name: '⑰ 日本製鉄型 シクリカル高配当・資本配当重視', payoutRatio: 30.0, equityRatio: 42.6, returnPolicy: '年間配当性向 30%基準', returnPolicySub: '市況連動による配当変動あり', netDE: '0.52倍 (財務体質改善済)', opMargin: '8.4%', fcfStatus: '国内マージン改善で黒字安定', score: 76, category: '鉄鋼・素材シクリカル', comment: '過去の固定費削減とスプレッド改善で損益分岐点を大幅改善。市況サイクルによる振れ幅はあるものの、財務危機のリスクは大幅後退。' },
+  { id: 17, grade: 'A', name: '⑱ 三菱UFJ FG型 世界級メガバンク・株主還元加速', payoutRatio: 38.0, equityRatio: 4.8, returnPolicy: '累進配当コミット＋自社株買', returnPolicySub: '配当性向40%目標引き上げ', netDE: '対象外 (銀行自己資本)', opMargin: '28.5%', fcfStatus: '海外金利環境追い風', score: 92, category: '世界級メガバンク', comment: 'モルガン・スタンレーとの協業効果と日米金利差による好収益を享受。累進配当コミットメントにより減配リスクは極低水準です。' },
+  { id: 18, grade: 'B', name: '⑲ ソフトバンク(通信)型 高配当利回り・親会社連携', payoutRatio: 78.0, equityRatio: 16.5, returnPolicy: '年間86円安定配当方針', returnPolicySub: '高配当性向継続方針', netDE: '2.10倍 (投資先行レバレッジ)', opMargin: '18.2%', fcfStatus: '通信インフラ営業CFで高配当維持', score: 74, category: '通信インフラ・配当特化', comment: '純有利子負債は高水準ですが、PayPayや通信セグメントの安定収益で高配当を継続。配当性向が約80%近傍のため、金利上昇に留意。' },
+  { id: 19, grade: 'S', name: '⑳ SMC型 空気圧機器グローバル独占・実質無借金', payoutRatio: 28.5, equityRatio: 88.6, returnPolicy: '安定増配方針', returnPolicySub: '自己資本約90%の財務城塞', netDE: '-0.85倍 (莫大な純現金保有)', opMargin: '26.8%', fcfStatus: '全世界ファクトリー自動化需要', score: 98, category: '産業自動化・空圧機器', comment: '世界シェア3割超を握る空気圧の巨人。自己資本比率約89%かつ無借金で、リーマン級のショックが起きても増配を続けられる防衛力です。' },
+  { id: 20, grade: 'A', name: '㉑ アステラス製薬型 パテントクリフ克服期', payoutRatio: 68.0, equityRatio: 46.5, returnPolicy: 'DOE目標型配当政策', returnPolicySub: '主力の特許切れ対抗新薬伸長', netDE: '0.40倍 (適正レンジ)', opMargin: '10.8%', fcfStatus: '新薬売上拡大によりFCF反転', score: 81, category: 'バイオ製薬', comment: '看板薬の特許満了を新薬上市でカバー中。DOEを指標に掲げているため一時的な利益減少局面でも安定的配当が担保されています。' },
+  { id: 21, grade: 'A', name: '㉒ 積水ハウス型 戸建て+賃貸ストック・高株主還元', payoutRatio: 41.0, equityRatio: 51.2, returnPolicy: '配当性向40%以上+中期DOE', returnPolicySub: '12期連続増配計画', netDE: '0.38倍 (米国事業も買収消化)', opMargin: '9.8%', fcfStatus: '賃貸管理・不動産ストック好調', score: 89, category: '住宅・不動産ストック', comment: '賃貸管理などのストックビジネス比率が過半に達し収益が平準化。配当性向40%超水準を維持しながら連続増配を継続しています。' },
+  { id: 22, grade: 'S', name: '㉓ デンソー型 EV/ハイブリッド電装・無借金経営', payoutRatio: 33.5, equityRatio: 62.4, returnPolicy: 'DOE 3.5%以上を意識', returnPolicySub: 'トヨタG政策株売却で還元原資', netDE: '-0.15倍 (実質無借金)', opMargin: '8.8%', fcfStatus: '研究開発費投下後もFCF黒字', score: 94, category: '自動車電装サプライヤー', comment: '自己資本比率60%超、トヨタグループの持ち合い株売却により資本効率が急激に向上。EV化・インバータ需要を取り込み財務は万全です。' },
+  { id: 23, grade: 'A', name: '㉔ キヤノン型 多角化トランスフォーメーション', payoutRatio: 50.0, equityRatio: 64.5, returnPolicy: '安定増配コミット', returnPolicySub: 'メディカル・商業印刷への転換', netDE: '0.08倍 (ほぼ無借金)', opMargin: '10.2%', fcfStatus: '消耗品ビジネスによる確固たるCF', score: 88, category: '精密機器・光学メディカル', comment: 'カメラ・事務機から医療機器や監視カメラへの構造改革が進展。自己資本比率60%超と高く、配当性向50%で安定還元を行っています。' },
+  { id: 24, grade: 'C', name: '㉕ 日産自動車型 利益マージン低下・再建警戒ゾーン', payoutRatio: 85.0, equityRatio: 26.5, returnPolicy: '業績連動方針 (不安定)', returnPolicySub: '米国販売不振による下方修正', netDE: '0.78倍 (自動車単体は現金減少)', opMargin: '1.2%', fcfStatus: '自動車セグメントFCF一時的赤字', score: 54, category: '自動車OEM・業績警戒', comment: '米・中市場での値下げ競争とインセンティブ高騰により営業利益率が急減。配当性向が急上昇しており、中期の減配リスクに警戒が必要です。' },
+  { id: 25, grade: 'A', name: '㉖ ブリヂストン型 プレミアムタイヤ専業・高収益', payoutRatio: 46.0, equityRatio: 58.2, returnPolicy: '連結配当性向 40%〜50%', returnPolicySub: 'Dan-Totsu方針による収益改善', netDE: '0.18倍 (健全)', opMargin: '11.5%', fcfStatus: '高インチタイヤリプレイスCF堅調', score: 90, category: 'ゴム・自動車部材', comment: '低採算事業の撤退と高インチプレミアムタイヤへの集中が結実。配当性向40%台で規律ある資本政策を実施しています。' },
+  { id: 26, grade: 'S', name: '㉗ 東京エレクトロン型 半導体製造装置・超高還元', payoutRatio: 50.0, equityRatio: 69.8, returnPolicy: '配当性向 50%連動コミット', returnPolicySub: '年間2回配当連動', netDE: '-0.42倍 (実質無借金)', opMargin: '28.4%', fcfStatus: 'AI半導体向け巨額営業CF', score: 95, category: '半導体製造装置', comment: 'AIサーバー・先端パッケージング需要を捉え営業利益率28%。自己資本比率約70%の無借金体質で、業績変動に合わせた規律ある50%還元。' },
+  { id: 27, grade: 'B', name: '㉘ ENEOS HD型 資源市況・在庫影響シクリカル', payoutRatio: 42.0, equityRatio: 28.5, returnPolicy: '3カ年中期経営計画配当下限', returnPolicySub: '年間下限配当 22円を公約', netDE: '0.98倍 (製油所再編コスト)', opMargin: '3.8%', fcfStatus: '運転資本変動大も下限配当遵守', score: 71, category: '石油元売り・精製', comment: '原油在庫評価による純損益のブレは大きいものの、中期経営計画で下限配当を公約。低PBR改善に向けた増配インセンティブが働いています。' },
+  { id: 28, grade: 'A', name: '㉙ 三井物産型 資源高配当・非資源シフト強化', payoutRatio: 34.0, equityRatio: 44.0, returnPolicy: '累進配当コミット＋上限なし自己株', returnPolicySub: '基礎営業CF 1兆円基準', netDE: '0.42倍 (商社屈指の筋肉質)', opMargin: '11.0%', fcfStatus: 'LNG・鉄鉱石からの巨額CF', score: 95, category: '大手総合商社', comment: 'LNG・金属資源の低コスト権益を多数保有。累進配当を宣言しており、基礎営業キャッシュフローに対する配当比率は極めて健全です。' },
+  { id: 29, grade: 'B', name: '㉚ 商船三井型 海運市況ブーム反落・平常化ゾーン', payoutRatio: 28.0, equityRatio: 52.0, returnPolicy: '配当性向 30%連動 (下限有)', returnPolicySub: 'コンテナ船好況時の巨額余力', netDE: '0.65倍 (船腹投資抑制)', opMargin: '9.2%', fcfStatus: 'LNG船・自動車船の中長期契約CF', score: 77, category: '海運・国際物流', comment: 'コロナ禍の特需は収束したものの、過去の巨額利益を内部留保と自己資本充実に充当。LNG船等の長期安定契約比率を高め耐性を強化。' },
+  { id: 30, grade: 'S', name: '㉛ ファナック型 工作機械CNC世界首位・鉄壁財務', payoutRatio: 33.0, equityRatio: 86.4, returnPolicy: '配当性向 33%〜60%方針', returnPolicySub: '無借金+巨額現金保有', netDE: '-0.70倍 (キャッシュリッチ)', opMargin: '21.5%', fcfStatus: 'ファクトリーオートメーションCF', score: 97, category: '産業ロボット・NC装置', comment: '世界シェアトップの工作機械CNCメーカー。自己資本比率86%超、借入ゼロの強靭なバランスシートで不況耐性は最上級です。' },
+  { id: 31, grade: 'A', name: '㉜ オリエンタルランド型 圧倒的集客力・高ROE', payoutRatio: 25.0, equityRatio: 72.0, returnPolicy: '安定増配継続', returnPolicySub: '新エリア開業による単価UP', netDE: '-0.10倍 (ほぼ無借金)', opMargin: '26.4%', fcfStatus: 'ファンズフロー創出極めて強固', score: 94, category: 'テーマパーク・レジャー', comment: '東京ディズニーリゾートの圧倒的価格決定力。大型新エリア拡張投資が完了し、ここから莫大なFCF回収フェーズに入り増配余地大。' },
+  { id: 32, grade: 'C', name: '㉝ 関西電力型 原発再稼働安定も負債比率留意', payoutRatio: 32.0, equityRatio: 23.5, returnPolicy: '配当性向 30%以上目標', returnPolicySub: '復配・増配進むも借入過大', netDE: '2.45倍 (巨額設備産業インフラ)', opMargin: '9.5%', fcfStatus: '燃料費調整で営業CF黒字定着', score: 67, category: '電力インフラ', comment: '原発再稼働による燃料費削減で利益は急回復。ただしインフラ特有の有利子負債残高が重く、金利上昇期の利払い増加に注視が必要です。' },
+  { id: 33, grade: 'A', name: '㉞ 朝日インテック型 医療カテーテル独占技術', payoutRatio: 30.0, equityRatio: 79.5, returnPolicy: '安定成長増配', returnPolicySub: '循環器系ガイドワイヤー世界シェア', netDE: '-0.30倍 (実質無借金)', opMargin: '27.2%', fcfStatus: 'グローバル症例増でCF拡大', score: 96, category: '医療機器・ニッチトップ', comment: 'PCIガイドワイヤー世界シェア圧倒的首位。超ニッチ独占により営業利益率27%超。自己資本比率約80%で配当の安全性は極上です。' },
+  { id: 34, grade: 'A', name: '㉟ 日東電工型 高機能フィルム・ESGサステナブル', payoutRatio: 36.5, equityRatio: 75.2, returnPolicy: '年間配当下限コミット', returnPolicySub: 'ニッチトップ戦略', netDE: '-0.38倍 (キャッシュリッチ)', opMargin: '14.8%', fcfStatus: '車載・光学材料FCF堅調', score: 93, category: '高機能化学・ニッチ材料', comment: '「グローバルニッチトップ」を掲げスマホ・車載向けで高シェア。自己資本比率75%超で下限配当を公約するなど株主還元に積極的です。' },
+  { id: 35, grade: 'D', name: '㊱ あおぞら銀行型 不動産ノンリコースローン損失警戒', payoutRatio: 140.0, equityRatio: 4.1, returnPolicy: '四半期配当修正・再構築中', returnPolicySub: '米オフィス向け引当で減配歴', netDE: '対象外 (銀行自己資本)', opMargin: '4.2%', fcfStatus: '海外不動産引当金積み増し影響', score: 42, category: '単独地方・専門銀行', comment: '米国商業用不動産向け融資の追加損失処理で過去に赤字転落と減配を経験。資本再構築が進むまで、配当の継続性には厳しい監視が必要です。' },
+  { id: 36, grade: 'A', name: '㊲ 大和ハウス工業型 物流施設ストック・累進還元', payoutRatio: 38.0, equityRatio: 43.5, returnPolicy: '15期連続増配目標 (累進型)', returnPolicySub: '配当性向35%以上下限', netDE: '0.60倍 (物流施設開発投資)', opMargin: '9.4%', fcfStatus: '物流リース・賃貸住宅の安定CF', score: 91, category: '住宅・物流施設開発', comment: '戸建て依存から物流施設・データセンター開発へシフト。ストック収益が厚く、15期連続増配を視野に入れるなど財務規律が保たれています。' },
+  { id: 37, grade: 'B', name: '㊳ 住友化学型 医薬品・石油化学ダブル不振リカバリー', payoutRatio: 90.0, equityRatio: 26.8, returnPolicy: '業績回復連動 (配当再建中)', returnPolicySub: '大型子会社減損処理を通過', netDE: '1.25倍 (構造改革による圧縮中)', opMargin: '2.5%', fcfStatus: '資産売却と事業撤退でCF確保', score: 62, category: '総合化学・再建フェーズ', comment: 'ペトロラービグや子会社医薬の不振で過去に大幅減配。抜本的な資産売却と再編により最悪期を脱しつつありますが、配当余力回復には時間を要します。' },
+  { id: 38, grade: 'S', name: '㊴ シスメックス型 血液検査機器・試薬ストック', payoutRatio: 32.0, equityRatio: 72.8, returnPolicy: '安定増配継続', returnPolicySub: '検体検査の試薬ストック収益', netDE: '-0.35倍 (実質無借金)', opMargin: '19.5%', fcfStatus: '試薬消耗品からの自動的入金', score: 96, category: 'ヘルスケア・体外診断', comment: '血液凝固・血球計数検査で世界トップ。検査機器を納入した後の高収益な試薬消耗品が自動的に現金を創出し、減配確率は極小です。' },
+  { id: 39, grade: 'A', name: '㊵ 塩野義製薬型 新薬ロイヤルティ・高営業利益率', payoutRatio: 35.0, equityRatio: 84.5, returnPolicy: 'DOE 4.0%以上目標', returnPolicySub: 'HIV・インフル新薬ロイヤルティ', netDE: '-0.55倍 (無借金リッチ)', opMargin: '38.5%', fcfStatus: '製造コストかからぬ権利CF', score: 95, category: 'スペシャリティファーマ', comment: '提携先からのHIV治療薬ロイヤリティ収入が巨額。自己資本比率84%超、営業利益率38%と異次元の収益体質で、安定還元力は極めて優秀。' },
+  { id: 40, grade: 'B', name: '㊶ JFE HD型 高付加価値電磁鋼板シフト中', payoutRatio: 30.0, equityRatio: 36.5, returnPolicy: '配当性向 30%目安', returnPolicySub: '脱炭素・電炉投資負担', netDE: '0.82倍 (鉄鋼高炉設備負担)', opMargin: '5.8%', fcfStatus: '車載電磁鋼板でマージン防衛', score: 73, category: '鉄鋼素材・高炉', comment: 'EVモーター用無方向性電磁鋼板など高付加価値品へシフト。巨額の脱炭素電炉投資が控えるため、配当性向は30%目安で慎重運営。' },
+  { id: 41, grade: 'A', name: '㊷ 村田製作所型 MLCC世界シェア圧倒・キャッシュ豊富', payoutRatio: 35.0, equityRatio: 80.2, returnPolicy: '安定増配基調', returnPolicySub: '車載・スマホ向けMLCCトップ', netDE: '-0.45倍 (実質無借金)', opMargin: '18.2%', fcfStatus: '車載電装化で長期右肩上がり', score: 94, category: '電子部品・セラミック', comment: '積層セラミックコンデンサ（MLCC）で世界シェア4割超。自己資本比率80%超の実質無借金経営で、スマホ調整期を乗り切る財務余力を保持。' },
+  { id: 42, grade: 'C', name: '㊸ LINEヤフー型 経営統合シナジー模索・資本規制', payoutRatio: 45.0, equityRatio: 48.0, returnPolicy: '配当性向連動', returnPolicySub: '情報セキュリティ改善投資増', netDE: '0.35倍 (健全水準)', opMargin: '12.0%', fcfStatus: 'コマース・決済広告CF', score: 69, category: 'ネット・広告プラットフォーム', comment: '検索・広告・LINEの巨大基盤を持つものの、セキュリティ不祥事対応や資本構成見直しが重荷。成長投資と還元のバランスを再定義中。' },
+  { id: 43, grade: 'A', name: '㊹ ヒューリック型 銀座・駅近不動産リート・連続増配', payoutRatio: 40.0, equityRatio: 28.5, returnPolicy: '13期連続増配中 (公約維持)', returnPolicySub: '都心駅近物件による空室率ゼロ', netDE: '1.65倍 (不動産保有業態標準)', opMargin: '26.8%', fcfStatus: '極めて手堅い賃料収入CF', score: 88, category: '好立地オフィス不動産', comment: '東京23区・駅徒歩1分以内の超好立地ビルに特化し空室率ほぼゼロ。13期連続増配の実績と高い営業利益率で安定感は抜群です。' },
+  { id: 44, grade: 'S', name: '㊺ オービック型 勘定奉行・ERP高収益・自己資本92%', payoutRatio: 40.0, equityRatio: 92.4, returnPolicy: '連続増配・安定配当', returnPolicySub: 'クラウドERPサブスクリプション', netDE: '-0.88倍 (莫大キャッシュ)', opMargin: '62.5%', fcfStatus: '月額保守料金の毎月自動流入', score: 99, category: '業務システム・SaaSストック', comment: '営業利益率62%超という驚異的収益性。自己資本比率92%超、借入金ゼロで、顧客のスイッチングコストが高く不況でも業績がビクともしません。' },
+  { id: 45, grade: 'B', name: '㊻ ヤマダHD型 家電量販ストック+住宅連携', payoutRatio: 38.0, equityRatio: 46.5, returnPolicy: '配当性向 30%〜40%目標', returnPolicySub: 'リフォーム・家具一体型店舗展開', netDE: '0.45倍 (適正範囲)', opMargin: '3.6%', fcfStatus: '家電買い替え需要CF', score: 75, category: '家電・リテール流通', comment: 'EC台頭の中で「暮らしまるごと」提案（家具・リフォーム）へ転換。自己資本比率46%と安定しており、配当利回り・優待面で下値が堅い。' },
+  { id: 46, grade: 'D', name: '㊼ 楽天グループ型 モバイル巨額赤字・社債借換リスク', payoutRatio: 0.0, equityRatio: 4.8, returnPolicy: '無配継続 (復配未定)', returnPolicySub: 'モバイル基地局投資による巨額赤字', netDE: '4.80倍 (非金融有利子負債過大)', opMargin: '-4.2%', fcfStatus: '楽天銀行・証券売却で現金調達', score: 35, category: 'EC・モバイル通信・再建中', comment: 'モバイル基地局投資の巨額赤字により無配が継続中。2024〜2025年に迎える大量社債の償還と借換コストが重く、配当期待は持てない状況です。' },
+  { id: 47, grade: 'A', name: '㊽ 日本酸素HD型 産業ガス世界4強・価格決定力', payoutRatio: 30.0, equityRatio: 41.5, returnPolicy: '安定増配継続', returnPolicySub: 'オンサイトガス供給契約', netDE: '0.75倍 (海外買収負債着実返済)', opMargin: '13.2%', fcfStatus: '15年長期供給契約による硬直的CF', score: 91, category: '産業ガス・グローバル寡占', comment: '鉄鋼・半導体・医療向け産業ガスで世界シェア上位。10〜15年の長期オンサイト契約と電気代連動フォーミュラ制により価格転嫁が容易です。' },
+  { id: 48, grade: 'A', name: '㊾ 日揮HD型 プラントエンジ・LNGプロジェクト好調', payoutRatio: 35.0, equityRatio: 52.0, returnPolicy: '配当性向 35%基準', returnPolicySub: '海外エネルギープラント受注残', netDE: '-0.20倍 (実質無借金)', opMargin: '6.5%', fcfStatus: '大型プロジェクト前受金CF', score: 83, category: 'エンジニアリング・EPC', comment: '脱炭素LNGプラントや医薬ファインケミカルの受注が好調。手元流動性が厚く実質無借金で、プラント特有の追加工事損失リスクを吸収可能。' },
+  { id: 49, grade: 'S', name: '50 東京海上+三菱商事 ハイブリッド理想型', payoutRatio: 35.0, equityRatio: 65.0, returnPolicy: '累進配当コミット (毎期増配)', returnPolicySub: 'DOE 4.0%下限保証', netDE: '-0.30倍 (実質無借金)', opMargin: '22.0%', fcfStatus: '多角化CFと潤沢な余剰資金', score: 98, category: '理想的優良配当銘柄', comment: '自己資本比率65%、実質無借金、営業利益率22%の最高峰スペック。累進配当とDOE4%を併用し、市場急落時にも増配を続けられる究極の安全度です。' }
+];
+
+function initHealthScenarios() {
+  const select = document.getElementById('healthScenarioSelect');
+  if (!select) return;
+  select.innerHTML = '';
+  healthScenarios.forEach((sc, idx) => {
+    const opt = document.createElement('option');
+    opt.value = idx;
+    opt.textContent = `[${sc.grade}判定] ${sc.name}`;
+    select.appendChild(opt);
+  });
+  selectHealthScenario(0);
+}
+
+function selectHealthScenario(idx) {
+  if (idx < 0 || idx >= healthScenarios.length) idx = 0;
+  const sc = healthScenarios[idx];
+  const select = document.getElementById('healthScenarioSelect');
+  if (select) select.value = idx;
+
+  // 1. Update Tab Summary Card Elements
+  const cardGrade = document.getElementById('healthCardGrade');
+  const cardRatio = document.getElementById('healthCardRatio');
+  const cardSummary = document.getElementById('healthCardSummary');
+
+  let gradeColorClass = 'text-primary';
+  let barGradient = 'from-primary-container to-primary';
+  let badgeBg = 'bg-primary-container/20 border-primary/30 text-primary';
+
+  if (sc.grade === 'S') {
+    gradeColorClass = 'text-primary';
+    barGradient = 'from-primary-container to-primary';
+    badgeBg = 'bg-primary-container/20 border-primary/30 text-primary';
+  } else if (sc.grade === 'A') {
+    gradeColorClass = 'text-primary';
+    barGradient = 'from-primary-container to-primary';
+    badgeBg = 'bg-primary-container/20 border-primary/30 text-primary';
+  } else if (sc.grade === 'B') {
+    gradeColorClass = 'text-secondary-fixed';
+    barGradient = 'from-secondary to-primary';
+    badgeBg = 'bg-secondary-container/30 border-secondary/40 text-secondary-fixed';
+  } else if (sc.grade === 'C') {
+    gradeColorClass = 'text-[#f59e0b]';
+    barGradient = 'from-[#f59e0b] to-red-500';
+    badgeBg = 'bg-[#f59e0b]/20 border-[#f59e0b]/30 text-[#f59e0b]';
+  } else {
+    gradeColorClass = 'text-error';
+    barGradient = 'from-red-500 to-[#93000a]';
+    badgeBg = 'bg-red-500/20 border-red-500/30 text-error';
+  }
+
+  if (cardGrade) {
+    cardGrade.textContent = `${sc.grade}判定`;
+    cardGrade.className = `font-title-lg text-title-lg font-bold ${gradeColorClass}`;
+  }
+  if (cardRatio) cardRatio.textContent = `${sc.payoutRatio.toFixed(1)}%`;
+  if (cardSummary) {
+    cardSummary.textContent = sc.grade === 'S' ? '極めて健全・城塞' : sc.grade === 'A' ? '極めて安全' : sc.grade === 'B' ? '適正水準' : sc.grade === 'C' ? '要警戒・監視' : '高警戒・減配懸念';
+    cardSummary.className = `text-[11px] font-medium truncate ${gradeColorClass}`;
+  }
+
+  // 2. Update Header Badge
+  const badgeContainer = document.getElementById('healthBadgeContainer');
+  const badgeGrade = document.getElementById('healthBadgeGrade');
+  const badgeText = document.getElementById('healthBadgeText');
+  if (badgeContainer) badgeContainer.className = `px-2.5 py-0.5 rounded-full border font-label-sm text-[11px] font-bold flex items-center gap-1 ${badgeBg}`;
+  if (badgeGrade) badgeGrade.textContent = `${sc.grade}判定`;
+  if (badgeText) badgeText.textContent = sc.grade === 'S' ? '盤石の鉄壁財務' : sc.grade === 'A' ? '極めて安全' : sc.grade === 'B' ? '適正・許容範囲' : sc.grade === 'C' ? '業績監視・注意' : '高警戒・減配リスク大';
+
+  // 3. Update Payout Ratio & Bar
+  const payoutDisplay = document.getElementById('healthPayoutRatioDisplay');
+  const payoutBar = document.getElementById('healthPayoutBar');
+  const payoutRangeLabel = document.getElementById('healthPayoutRangeLabel');
+  if (payoutDisplay) {
+    payoutDisplay.textContent = `${sc.payoutRatio.toFixed(1)}%`;
+    payoutDisplay.className = `font-numeric-hero-mobile text-[22px] font-bold ${gradeColorClass}`;
+  }
+  if (payoutBar) {
+    payoutBar.style.width = `${Math.min(100, Math.max(0, sc.payoutRatio))}%`;
+    payoutBar.className = `h-full bg-gradient-to-r ${barGradient} rounded-full transition-all duration-300`;
+  }
+  if (payoutRangeLabel) {
+    if (sc.payoutRatio < 25) {
+      payoutRangeLabel.textContent = '低負担 (増配余力 極大)';
+      payoutRangeLabel.className = 'px-1.5 py-0.2 rounded bg-primary-container/15 text-primary text-[10px] font-bold';
+    } else if (sc.payoutRatio <= 50) {
+      payoutRangeLabel.textContent = '適正レンジ内 (黄金比率)';
+      payoutRangeLabel.className = 'px-1.5 py-0.2 rounded bg-primary-container/15 text-primary text-[10px] font-bold';
+    } else if (sc.payoutRatio <= 75) {
+      payoutRangeLabel.textContent = 'やや高負担 (利益動向注視)';
+      payoutRangeLabel.className = 'px-1.5 py-0.2 rounded bg-[#f59e0b]/20 text-[#f59e0b] text-[10px] font-bold';
+    } else {
+      payoutRangeLabel.textContent = '過大負担 (減配警戒)';
+      payoutRangeLabel.className = 'px-1.5 py-0.2 rounded bg-red-500/20 text-error text-[10px] font-bold';
+    }
+  }
+
+  // 4. Update Financial Grid Metrics
+  const eqDisplay = document.getElementById('healthEquityRatioDisplay');
+  const eqSub = document.getElementById('healthEquitySubDisplay');
+  const retDisplay = document.getElementById('healthReturnPolicyDisplay');
+  const retSub = document.getElementById('healthReturnPolicySub');
+  const netDEDisplay = document.getElementById('healthNetDERatioDisplay');
+  const opMarginDisplay = document.getElementById('healthOperatingMarginDisplay');
+  const fcfText = document.getElementById('healthFCFText');
+
+  if (eqDisplay) eqDisplay.textContent = `${sc.equityRatio.toFixed(1)}%`;
+  if (eqSub) {
+    eqSub.textContent = sc.equityRatio >= 60 ? '自己資本極めて強固' : sc.equityRatio >= 35 ? '業界高水準・安定' : 'レバレッジ活用中';
+    eqSub.className = `font-label-sm text-[10px] truncate ${sc.equityRatio >= 35 ? 'text-primary' : 'text-[#f59e0b]'}`;
+  }
+  if (retDisplay) retDisplay.textContent = sc.returnPolicy;
+  if (retSub) retSub.textContent = sc.returnPolicySub;
+  if (netDEDisplay) netDEDisplay.textContent = sc.netDE;
+  if (opMarginDisplay) opMarginDisplay.textContent = sc.opMargin;
+  if (fcfText) fcfText.textContent = sc.fcfStatus;
+
+  // 5. Update Diagnosis Comment Card
+  const commentCategory = document.getElementById('healthCommentCategory');
+  const commentScore = document.getElementById('healthCommentScore');
+  const commentBody = document.getElementById('healthCommentBody');
+
+  if (commentCategory) commentCategory.textContent = `${sc.category} (${sc.name.split(' ')[0]})`;
+  if (commentScore) commentScore.textContent = `健全性スコア: ${sc.score}/100`;
+  if (commentBody) commentBody.textContent = sc.comment;
+}
+
+function randomHealthScenario() {
+  const r = Math.floor(Math.random() * healthScenarios.length);
+  selectHealthScenario(r);
+  if (typeof showToast === 'function') {
+    showToast(`シナリオ #${r + 1} (${healthScenarios[r].grade}判定) を適用しました`, 'shuffle');
+  }
+}
+
+function filterScenariosByGrade(grade) {
+  const pills = document.querySelectorAll('.grade-filter-pill');
+  pills.forEach(p => {
+    if (p.textContent.startsWith(grade)) {
+      p.className = 'px-2 py-0.5 rounded-full bg-primary text-on-primary text-[10px] font-bold grade-filter-pill active:scale-95';
+    } else {
+      p.className = 'px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant text-[10px] font-medium grade-filter-pill active:scale-95';
+    }
+  });
+
+  const select = document.getElementById('healthScenarioSelect');
+  if (!select) return;
+  select.innerHTML = '';
+
+  const filtered = healthScenarios.filter(sc => grade === 'ALL' || sc.grade === grade);
+  filtered.forEach(sc => {
+    const opt = document.createElement('option');
+    opt.value = sc.id;
+    opt.textContent = `[${sc.grade}判定] ${sc.name}`;
+    select.appendChild(opt);
+  });
+
+  if (filtered.length > 0) {
+    selectHealthScenario(filtered[0].id);
+  }
+}
+
+// Run scenario initialization
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initHealthScenarios);
+} else {
+  initHealthScenarios();
+}
+</script>
+<script>
+const valuationScenarios = [
+  { id: 0, cat: 'VALUE_DIV', per: 10.4, pbr: 1.12, timing: '絶好の買増し検討期', title: '① 王道大型バリュー健全圏 (トヨタ型)', score: 88, status: '検討圏', tag: '超割安ゾーン', lead: '絶好の押し目買場判定：', body: 'PER 10.4倍・PBR 1.12倍と、日経平均平均（PER 15倍・PBR 1.4倍）を大幅に下回る優良バリュー水準。高収益性とキャッシュ創出力に対して割安に放置されており、配当再投資や中期的な買い増しに最適な好機シグナルです。' },
+  { id: 1, cat: 'DEEP_VALUE', per: 6.8, pbr: 0.52, timing: '純資産大幅ディスカウント', title: '② 超解散価値割れ・東証改革要請ターゲット', score: 95, status: '強気買場', tag: '極限ディスカウント', lead: '資産防衛バリューシグナル：', body: 'PBR 0.52倍と会社の保有純資産の半値水準で評価。資本効率（ROE）改善や自社株買い・増配などの株主還元圧力が高まりやすく、下値リスクが限定されたディープバリューの絶好水準です。' },
+  { id: 2, cat: 'DEEP_VALUE', per: 8.2, pbr: 0.75, timing: '解散価値割れ是正期', title: '③ PBR1倍割れ・還元強化期待銘柄', score: 92, status: '強気買場', tag: 'PBR1倍割れ圏', lead: '資本効率改善ドリブン判定：', body: 'PBR 0.75倍は東証の「資本コストや株価を意識した経営」の重点対象。低PER 8.2倍と相まって割安感が際立っており、DOE導入や大幅増配アナウンスによる急騰余地を秘めています。' },
+  { id: 3, cat: 'DEEP_VALUE', per: 5.5, pbr: 0.42, timing: 'ネットキャッシュ富裕・底値圏', title: '④ ネットネット株・キャッシュリッチ底値', score: 96, status: '極上買場', tag: '極限バリュー', lead: '資産超過バリュー判定：', body: 'PER 5.5倍、PBR 0.42倍。現預金と有価証券だけで時価総額を上回る実質マイナス清算価値ゾーン。ダウンサイドが極めて堅牢で、配当利回り下支えも厚いため長期配当目的での仕込み推奨域です。' },
+  { id: 4, cat: 'VALUE_DIV', per: 9.5, pbr: 0.88, timing: '大型優良・割安配当株', title: '⑤ 大手総合商社型 (三菱商事・三井物産水準)', score: 91, status: '積極買場', tag: '高配当バリュー', lead: '累進還元バリュー判定：', body: 'PER 1桁台かつPBR 1倍未満の最高峰還元ゾーン。累進配当コミットメントと自社株買いによる株主還元利回りが極めて高く、景気サイクルの一時的懸念で売り込まれた絶好のエントリータイミングです。' },
+  { id: 5, cat: 'VALUE_DIV', per: 8.8, pbr: 0.65, timing: '金利上昇恩恵・再評価初動', title: '⑥ メガバンク型 (三井住友・三菱UFJ水準)', score: 94, status: '積極買場', tag: '金利高バリュー', lead: '利ざや拡大シグナル判定：', body: 'PBR 0.65倍の割安放置に加え、金利正常化による収益急拡大局面。利ざや改善が配当原資をダイレクトに押し上げており、バリュエーションの訂正高が期待される強力な買場です。' },
+  { id: 6, cat: 'VALUE_DIV', per: 11.2, pbr: 0.95, timing: '安定インフラ・1倍回復直前', title: '⑦ 通信メガキャリア型 (NTT・KDDI水準)', score: 87, status: '堅調買場', tag: 'ディフェンシブ安値', lead: 'ディフェンシブ仕込み判定：', body: 'PER 11倍、PBR 0.95倍。解約率の極めて低い月額課金ストックビジネスと安定増配実績。金利や市況のブレに左右されず、下値不安なく手堅いインカムゲインを積み増せるタイミングです。' },
+  { id: 7, cat: 'GROWTH', per: 13.5, pbr: 1.25, timing: '適正フェアバリュー巡航', title: '⑧ 業界首位・中長期安定成長型', score: 82, status: '押し目買い', tag: '適正レンジ', lead: '巡航速度バリュー判定：', body: 'PER 13.5倍、PBR 1.25倍と過熱感も割安感も程よい適正レンジ。市場平均と同等ですが、高い営業利益率と連続増配トラックレコードを考慮すれば十分にお買い得な巡航速度ゾーンです。' },
+  { id: 8, cat: 'GROWTH', per: 15.0, pbr: 1.50, timing: 'クオリティ・グロース適正値', title: '⑨ グローバルニッチトップ・高収益型', score: 79, status: '適正圏', tag: 'クオリティ適正', lead: '品質重視の適正判定：', body: 'PER 15倍・PBR 1.5倍。世界シェア上位を握る高収益企業に見られる王道の評価。多少のプレミアムはあるものの、強固な価格決定力と増配力に支えられており、長期積立に適した水準です。' },
+  { id: 9, cat: 'GROWTH', per: 16.8, pbr: 1.85, timing: '先行投資期・やや強気評価', title: '⑩ 成長投資先行型・プレミアム評価', score: 72, status: '時間分散推奨', tag: 'やや強気', lead: '成長期待プレミアム判定：', body: 'PER 16.8倍、PBR 1.85倍。将来の増益期待が一部織り込まれた価格。一括投資よりも毎月の積立や、相場全体の調整による急落局面を待つ時間分散エントリーが賢明です。' },
+  { id: 10, cat: 'GROWTH', per: 19.5, pbr: 2.20, timing: '市場平均超過・業績織り込み', title: '⑪ DX・SaaSストック高評価型', score: 68, status: '慎重エントリー', tag: '適正上限', lead: '高成長株モニタリング判定：', body: 'PER 19.5倍、PBR 2.2倍。ストック性収益の拡大が評価され割高プレミアムが付与。急激な配当利回りの妙味は薄く、成長鈍化時の株価下落ボラティリティに留意が必要です。' },
+  { id: 11, cat: 'CAUTION', per: 24.5, pbr: 2.80, timing: '好決算後・モメンタム過熱', title: '⑫ テーマ物色過熱・短期高値圏', score: 55, status: '過熱警戒', tag: '買場シグナル消灯', lead: '過熱感アラート判定：', body: 'PER 24倍超、PBR 2.8倍。短期的な思惑やテーマ性で買われ過ぎの領域。利回りが過去平均を下回る水準まで低下しており、目先の新規買い増しは見送り、押し目を待つのが定石です。' },
+  { id: 12, cat: 'CAUTION', per: 32.0, pbr: 4.10, timing: 'AI半導体・急騰過熱ゾーン', title: '⑬ ハイパーグロース・割高警戒', score: 43, status: '買増し非推奨', tag: '大幅割高', lead: '割高リスク判定：', body: 'PER 32倍、PBR 4.1倍。市場平均を2倍以上上回る熱狂水準。将来の巨額成長をほぼ満額織り込んでおり、期待を少しでも下回る決算が出た場合の急落リスクが先行します。' },
+  { id: 13, cat: 'CAUTION', per: 4.2, pbr: 0.35, timing: 'バリュートラップ警戒・業績急減期', title: '⑭ シクリカル業績ピークアウト疑念', score: 58, status: 'トラップ警戒', tag: '業績急変注意', lead: '見かけの超割安トラップ警戒：', body: 'PER 4.2倍・PBR 0.35倍という異常な低水準は、次期以降の大幅減益や減配をマーケットが既に織り込んでいるサイン。過去利益ではなく将来の予想EPSの動向を厳重に確認してください。' },
+  { id: 14, cat: 'CAUTION', per: 45.0, pbr: 1.10, timing: '一時的赤字・純利益急減過渡期', title: '⑮ 特別損失発生・一時的PER急騰', score: 61, status: '一時的歪み', tag: '特損による歪み', lead: '利益急減ノイズ判定：', body: 'PBRは1.1倍と解散価値近傍ですが、減損特損で一時的にPERが45倍に跳ね上がっています。一過性の要因であれば本業CFに問題はなく、次期黒字化とともにPERは急低下する見込みです。' },
+  { id: 15, cat: 'VALUE_DIV', per: 7.2, pbr: 0.60, timing: '地方銀行・再編恩恵低PBR', title: '⑯ 地銀・地域金融再編ターゲット', score: 89, status: '割安買い', tag: 'PBR大幅割れ', lead: '再編・金利バリュー判定：', body: 'PBR 0.60倍。有価証券含み損の縮小と貸出金利引き上げによる収益回復の恩恵。自己資本が厚い優良地銀であれば配当利回り4%超が手堅く狙えるゾーンです。' },
+  { id: 16, cat: 'VALUE_DIV', per: 8.5, pbr: 0.70, timing: '自動車部品・EV移行過小評価', title: '⑰ 自動車一次サプライヤー・底堅いCF', score: 90, status: '絶好買場', tag: '製造バリュー', lead: '世界トップ部品メーカー判定：', body: 'PER 8.5倍、PBR 0.70倍。ハイブリッド車需要の再評価によりキャッシュ創出が急増。次世代投資を吸収しながらも増配余力があり、株価の戻り余地が極めて大きい水準です。' },
+  { id: 17, cat: 'DEEP_VALUE', per: 6.2, pbr: 0.48, timing: '不動産含み益莫大・資産割安', title: '⑱ 都心好立地不動産保有・資産リッチ', score: 95, status: '極上買場', tag: '資産価値乖離', lead: '隠れ含み資産バリュー判定：', body: '簿価PBR 0.48倍ですが、保有不動産の実質時価評価を含めると実質PBRは0.3倍台の超割安。物言う株主からの還元要請や自社株買いが期待できる防御力の高いポジションです。' },
+  { id: 18, cat: 'DEEP_VALUE', per: 7.9, pbr: 0.58, timing: '鉄鋼素材・構造改革進展', title: '⑲ 高炉・特殊鋼メーカー (日本製鉄水準)', score: 86, status: 'シクリカル安値', tag: '損益分岐点低下', lead: 'シクリカル底打ち判定：', body: '過去の固定費削減により損益分岐点が大幅に低下。市況低迷期でも赤字転落を回避できる体質に変貌しており、PBR 0.58倍は歴史的ボトム水準の買い場です。' },
+  { id: 19, cat: 'VALUE_DIV', per: 10.0, pbr: 0.90, timing: '化学・スペシャリティ高付加価値', title: '⑳ 高機能化学・半導体材料サプライヤー', score: 91, status: '堅調買場', tag: '素材バリュー', lead: '先端材料プレミアムバリュー判定：', body: '汎用化学の低迷でPER 10倍・PBR 0.9倍まで引きずられ安値放置。しかし先端半導体向け材料のシェアは圧倒的で、底打ち反転の初動を捉える優位なポジションです。' },
+  { id: 20, cat: 'VALUE_DIV', per: 11.5, pbr: 0.85, timing: '住宅・不動産ストック収益拡大', title: '㉑ 大手住宅メーカー (積水・大和水準)', score: 92, status: '積極買場', tag: 'ストック高配当', lead: '高配当ストック判定：', body: '賃貸住宅管理やリフォームなど安定した手数料収益が下支え。PER 11.5倍・PBR 0.85倍で配当利回り3.8%超はインカムゲイン投資家にとって申し分ない安全性です。' },
+  { id: 21, cat: 'GROWTH', per: 14.2, pbr: 1.35, timing: '精密医療機器・グローバル高シェア', title: '㉒ 医療カテーテル・内視鏡メーカー', score: 84, status: '押し目買い', tag: 'ディフェンシブ成長', lead: '景気不感応バリュー判定：', body: '世界的な高齢化と症例増加に伴い売上成長が担保。景気後退にびくともしないヘルスケア需要があり、適正水準（PER 14倍台）での買い増しは手堅い選択肢です。' },
+  { id: 22, cat: 'GROWTH', per: 17.5, pbr: 1.65, timing: '食品メガブランド・価格転嫁成功', title: '㉓ 生活必需品・メガ食品ブランド', score: 80, status: '適正仕込み', tag: 'ブランド力', lead: 'インフレ耐性バリュー判定：', body: '原材料高を価格転嫁し切って営業利益率が反転上昇。ブランド認知が確立しており、PER 17.5倍は安定配当継続の安心料として十分に許容できる水準です。' },
+  { id: 23, cat: 'CAUTION', per: 26.0, pbr: 3.20, timing: '防衛・宇宙関連・思惑急騰過熱', title: '㉔ 国策防衛関連・短期過熱圏', score: 52, status: '過熱警戒', tag: '国策急騰後', lead: '急騰警戒シグナル判定：', body: '国家予算増額のニュースで株価が急伸しPER 26倍。長期テーマとしては有望ですが、目先の配当利回りは急低下しており、冷静な価格調整を待つべき局面です。' },
+  { id: 24, cat: 'CAUTION', per: 3.8, pbr: 0.30, timing: '海運・コンテナ船市況暴落警戒', title: '㉕ 海運大手・市況反落平常化ゾーン', score: 60, status: 'ピーク後安値', tag: '過去利益マジック', lead: '海運シクリカル警戒判定：', body: '表面的なPER 3.8倍はコロナ特需の過去利益が計算に含まれているため。コンテナ運賃は既に平常化しており、今期・来期の減益減配リスクを厳重に織り込む必要があります。' },
+  { id: 25, cat: 'DEEP_VALUE', per: 7.5, pbr: 0.55, timing: '繊維・化学・不採算事業撤退', title: '㉖ 構造改革型オールドエコノミー', score: 88, status: '改善期待買い', tag: '構造改革バリュー', lead: 'リストラ果実先取り判定：', body: '不採算事業の売却・撤退が完了し、高収益セグメントへの集中が進展。解散価値の半値（PBR 0.55倍）というディスカウントは、利益体質改善に伴い急速に解消される可能性大です。' },
+  { id: 26, cat: 'VALUE_DIV', per: 9.2, pbr: 0.80, timing: '建機・鉱山機械・ストック部品好調', title: '㉗ 建機大手 (コマツ型・グローバル展開)', score: 90, status: '積極買場', tag: '部品補修ストック', lead: 'IoT保守ストック判定：', body: '新車販売の波を補修部品・サービス（ストック売上）が手堅くカバー。PER 9.2倍・PBR 0.80倍は不況耐性に対して明らかな割安評価であり、手堅い増配が望めます。' },
+  { id: 27, cat: 'VALUE_DIV', per: 10.8, pbr: 1.05, timing: 'メガ損保・政策保有株売却還元', title: '㉘ メガ損害保険グループ (東京海上型)', score: 93, status: '絶好買場', tag: '資本政策優等生', lead: '政策株売却還元判定：', body: 'PBR 1.05倍と適正圏ですが、巨額の政策保有株売却キャピタルゲインが毎期還元原資（増配＋自己株買い）に直結。総還元利回りが極めて高く、文句なしの買場シグナルです。' },
+  { id: 28, cat: 'GROWTH', per: 12.8, pbr: 1.18, timing: '重電・インフラデジタル変革', title: '㉙ 重電・社会イノベーション (日立水準)', score: 87, status: '堅調買場', tag: 'ポートフォリオ改革', lead: '体質強化プレミアム判定：', body: '低採算子会社の整理が一段落し、デジタルソリューション（IT+制御）主軸へシフト成功。PER 12.8倍・PBR 1.18倍は過去の重電評価から脱却途上の絶妙なエントリー水準です。' },
+  { id: 29, cat: 'GROWTH', per: 15.5, pbr: 1.45, timing: 'エネルギー商社・再エネ転換期', title: '㉚ エネルギー総合・LNG権益保有', score: 83, status: '押し目買い', tag: '資源非資源バランス', lead: '資源トランジション判定：', body: 'LNG長期契約のキャッシュが潤沢。脱炭素投資と株主還元の規律が保たれており、PER 15倍近傍はエネルギー安全保障の恩恵を長期で享受できる水準です。' },
+  { id: 30, cat: 'CAUTION', per: 38.0, pbr: 5.50, timing: 'AIデータセンター・インフラ思惑', title: '㉛ 光通信部材・AI電線テーマ急騰', score: 45, status: '買増し非推奨', tag: '急激なPER伸長', lead: 'テーマ過熱バブル判定：', body: '生成AI特需への期待で株価が先行急騰。PBR 5.5倍、PER 38倍まで買われており、配当利回り目的の長期投資家が今から新規参入するにはリスクリワードが悪化しています。' },
+  { id: 31, cat: 'DEEP_VALUE', per: 6.9, pbr: 0.45, timing: '電鉄・沿線不動産開発リッチ', title: '㉜ 私鉄・沿線商業施設ストック型', score: 94, status: '極上買場', tag: '含み益莫大', lead: 'インバウンド＆沿線再開発判定：', body: '定期券収入の回復に加え、沿線保有地の時価評価が巨額。PBR 0.45倍は解散価値を大きく割り込んでおり、不動産開発の利益確定による特別増配も期待できる水準です。' },
+  { id: 32, cat: 'DEEP_VALUE', per: 8.9, pbr: 0.62, timing: '産業ガス・グローバル寡占', title: '㉝ 産業ガス・オンサイト長期供給', score: 91, status: '積極買場', tag: 'インフレ連動', lead: '価格決定力ディープバリュー判定：', body: '電気代の上昇を製品価格にスライドできるフォーミュラ契約。15年間の長期供給契約で現金が確実に流入するため、PBR 0.62倍での放置は明らかな市場の過小評価です。' },
+  { id: 33, cat: 'VALUE_DIV', per: 9.8, pbr: 0.78, timing: 'タイヤ・プレミアム高インチ強化', title: '㉞ グローバルタイヤ専業 (ブリヂストン型)', score: 92, status: '積極買場', tag: 'リプレイス高収益', lead: '消耗品リプレイス判定：', body: '高インチ・EV向けタイヤの粗利益率が向上。景気に関わらず摩耗交換需要が発生するためCFが底堅く、PER 9.8倍・PBR 0.78倍は盤石の配当買いゾーンです。' },
+  { id: 34, cat: 'VALUE_DIV', per: 10.6, pbr: 0.92, timing: '電子計測器・EV半導体検査', title: '㉟ 電子計測・パワー半導体検査', score: 89, status: '堅調買場', tag: 'ニッチ強者', lead: '検査装置デファクトスタンダード判定：', body: 'PER 10.6倍、PBR 0.92倍。次世代パワー半導体向けの検査需要が拡大中。手元流動性が潤沢で実質無借金のため、株価下落耐性と増配継続力が極めて優秀です。' },
+  { id: 35, cat: 'GROWTH', per: 13.8, pbr: 1.30, timing: 'オフィスリート・都心駅直結', title: '㊱ 都心特化型オフィス・空室率極低', score: 85, status: '適正買い', tag: '賃料上昇局面', lead: '都心オフィス再生判定：', body: 'オフィス回帰と都心グレードAビルの賃料上昇が追い風。PER 13.8倍、PBR 1.3倍と健全な水準で、安定した分配金・配当利回り4%近傍を手堅く確保できます。' },
+  { id: 36, cat: 'GROWTH', per: 18.2, pbr: 2.10, timing: 'ゲーム・世界的IPコンテンツ保有', title: '㊲ グローバルIPメガホルダー (任天堂型)', score: 76, status: '適正押し目', tag: '無借金IPリッチ', lead: 'デジタルIPストック判定：', body: '実質無借金で2兆円近い手元資金。PER 18倍・PBR 2.1倍はIPの長期価値を考えれば妥当な範囲内ですが、次世代ハード発表サイクルのタイミングを見極めたい水準です。' },
+  { id: 37, cat: 'CAUTION', per: 28.5, pbr: 3.50, timing: 'インバウンド百貨店・業績急回復期', title: '㊳ インバウンド免税消費・円安好況過熱', score: 50, status: '過熱警戒', tag: '為替依存過大', lead: 'インバウンド特需一巡警戒判定：', body: '免税売上の急増で利益は急拡大したものの、株価も急騰しPER 28.5倍。為替が円高に振れた際の一時的反動減リスクがあり、配当狙いでの買い増しは分が悪いです。' },
+  { id: 38, cat: 'CAUTION', per: 55.0, pbr: 6.80, timing: '創薬バイオベンチャー・赤字転落後', title: '㊴ パイプライン期待先行・無配リスク', score: 32, status: '配当対象外', tag: '無配・希薄化', lead: 'インカム投資不適格判定：', body: 'PER 55倍、PBR 6.8倍。研究開発費が先行し営業CFが赤字。増資による株式希薄化リスクが高く、安定した配当収入を目的とするポートフォリオには不向きです。' },
+  { id: 39, cat: 'DEEP_VALUE', per: 7.0, pbr: 0.50, timing: '製紙・ダンボール包装・値上げ浸透', title: '㊵ 包装資材・通販EC需要下支え', score: 90, status: 'ディープバリュー', tag: '値上げ浸透', lead: 'ダンボール古紙スプレッド改善判定：', body: '価格転嫁の浸透によりマージンが正常化。PBR 0.50倍と解散価値の半値で放置されており、保有山林などの資産価値を勘案すれば下値リスクは極小です。' },
+  { id: 40, cat: 'DEEP_VALUE', per: 8.0, pbr: 0.59, timing: '非鉄金属・銅権益保有', title: '㊶ 銅・ニッケル資源サプライヤー', score: 92, status: '強気買場', tag: '脱炭素メタル', lead: '電化・EVメタルバリュー判定：', body: '送電網の増強やデータセンター向けに銅需要は中長期で逼迫。PBR 0.59倍で世界有数の銅権益の配当を享受できる、戦略的ディープバリュー水準です。' },
+  { id: 41, cat: 'VALUE_DIV', per: 9.0, pbr: 0.72, timing: 'ガラス・建材・ディスプレイ回復', title: '㊷ 板ガラス・半導体用特殊ガラス', score: 91, status: '積極買場', tag: '建築半導体', lead: '建材断熱・先端ガラス判定：', body: '省エネ建築向け複層ガラスと半導体向け合成石英が牽引。PER 9.0倍、PBR 0.72倍は割安感十分で、自社株買い発表の確度が高いシグナルです。' },
+  { id: 42, cat: 'VALUE_DIV', per: 10.2, pbr: 0.82, timing: '印刷・パッケージ・エレクトロニクス', title: '㊸ フォトマスク・半導体部材展開 (凸版・大日本型)', score: 93, status: '絶好買場', tag: '半導体部材', lead: '包装から半導体部材への転換判定：', body: '伝統的な印刷業態から半導体フォトマスクや透明バリアフィルムへ事業転換完了。PER 10.2倍・PBR 0.82倍は隠れた高付加価値企業の好例です。' },
+  { id: 43, cat: 'GROWTH', per: 13.0, pbr: 1.15, timing: '物流施設リート・空室ゼロ', title: '㊹ 先端マルチテナント物流施設', score: 86, status: '手堅い買場', tag: 'EC物流需要', lead: 'サプライチェーン効率化判定：', body: '2024年問題への対応で大型自動化物流倉庫の需要が旺盛。PER 13倍・PBR 1.15倍は安定した分配金・配当の利回り4%前後を確実に狙えるレンジです。' },
+  { id: 44, cat: 'GROWTH', per: 16.0, pbr: 1.55, timing: 'クラウドERP・業務ソフトストック', title: '㊺ 中小企業向け業務SaaS・高自己資本', score: 82, status: '適正買い', tag: '解約率極低', lead: 'インボイス・電帳法特需定着判定：', body: '制度改正を機にクラウド導入が進み月額保守料が雪だるま式に蓄積。PER 16倍は高利益率とキャッシュリッチ（実質無借金）の安全料として納得感があります。' },
+  { id: 45, cat: 'CAUTION', per: 30.0, pbr: 3.80, timing: '暗号資産・メタバース関連思惑', title: '㊻ 暗号資産・ブロックチェーン専業', score: 38, status: 'ボラティリティ過大', tag: '暗号市況連動', lead: 'ハイボラティリティ警戒判定：', body: '暗号資産の相場変動に収益が直結し、業績予想の信頼性が低いゾーン。配当方針も業績連動で安定せず、長期インカム投資の対象としては危険水準です。' },
+  { id: 46, cat: 'DEEP_VALUE', per: 6.5, pbr: 0.40, timing: '地方バス・鉄道・観光再生', title: '㊼ 地方公共交通・地域観光インフラ', score: 87, status: '資産割安底値', tag: '清算価値割れ', lead: '極小バリュエーション判定：', body: 'PBR 0.40倍と究極のディスカウント。株主優待と配当の総合利回りが高まりやすく、アクティビストによる資産有効活用要求が契機となりやすい水準です。' },
+  { id: 47, cat: 'VALUE_DIV', per: 8.6, pbr: 0.68, timing: '航空・整備・グランドハンドリング', title: '㊽ 国際線旅客需要・高搭乗率', score: 89, status: '割安反発圏', tag: '旅客需要堅調', lead: '高単価ビジネス旅客判定：', body: '国際線の高イールド（単価）維持により営業利益が急増。過剰債務の返済も進み、PER 8.6倍・PBR 0.68倍は復配・増配局面のベストタイミングです。' },
+  { id: 48, cat: 'GROWTH', per: 12.0, pbr: 1.05, timing: 'ドラッグストア・調剤併設高伸長', title: '㊾ 食品強化ドラッグストア・地域ドミナント', score: 88, status: '積極買場', tag: '食品調剤シナジー', lead: '生活防衛リテール判定：', body: 'ディスカウント食品で集客し調剤で高粗利を得るビジネスモデル。PER 12倍・PBR 1.05倍と過熱感がなく、毎期の連続増配が期待できます。' },
+  { id: 49, cat: 'VALUE_DIV', per: 9.8, pbr: 0.85, timing: '50シナリオ集大成・ハイブリッド理想買場', title: '50 王道高配当バリュー・パーフェクトゾーン', score: 96, status: '極上買場', tag: '最高峰シグナル', lead: '総合AI買場シグナル判定【満点級】：', body: 'PER 9.8倍 × PBR 0.85倍 × 利回り2.80%超。東証のPBR是正圧力・適正配当性向・潤沢なフリーキャッシュフローの三拍子が完全に揃った理想的バリューポジション。下値が極めて限定的で、長期インカム・キャピタル双方の最大化が狙える絶好の仕込み時です。' }
+];
+
+function initValuationScenarios() {
+  const select = document.getElementById('valuationScenarioSelect');
+  if (!select) return;
+  select.innerHTML = '';
+  valuationScenarios.forEach((sc, idx) => {
+    const opt = document.createElement('option');
+    opt.value = idx;
+    opt.textContent = `[スコア ${sc.score}] ${sc.title} (PER ${sc.per}倍 / PBR ${sc.pbr}倍)`;
+    select.appendChild(opt);
+  });
+  selectValuationScenario(0);
+}
+
+function selectValuationScenario(idx) {
+  if (idx < 0 || idx >= valuationScenarios.length) idx = 0;
+  const sc = valuationScenarios[idx];
+  const select = document.getElementById('valuationScenarioSelect');
+  if (select) select.value = idx;
+
+  // スライダーとラベル同期
+  const sliderPER = document.getElementById('sliderValPER');
+  const sliderPBR = document.getElementById('sliderValPBR');
+  const lblPER = document.getElementById('sliderValPERLabel');
+  const lblPBR = document.getElementById('sliderValPBRLabel');
+  if (sliderPER) sliderPER.value = sc.per;
+  if (sliderPBR) sliderPBR.value = sc.pbr;
+  if (lblPER) lblPER.textContent = `${sc.per.toFixed(1)}倍`;
+  if (lblPBR) lblPBR.textContent = `${sc.pbr.toFixed(2)}倍`;
+
+  applyValuationToUI(sc);
+}
+
+function applyValuationToUI(sc) {
+  // 1. バッジとステータス表示
+  const badgeText = document.getElementById('valueSignalBadgeText');
+  const badge = document.getElementById('valueSignalBadge');
+  const cardGrade = document.querySelector('#tab-btn-value .font-title-lg');
+  const cardSummary = document.querySelector('#tab-btn-value .text-\\[11px\\]');
+
+  let scoreClass = 'text-primary';
+  let badgeClass = 'bg-primary-container/20 border-primary/30 text-primary';
+  let cardBg = 'bg-primary/10 border-primary/25';
+
+  if (sc.score >= 85) {
+    scoreClass = 'text-primary';
+    badgeClass = 'bg-primary-container/20 border-primary/30 text-primary';
+    cardBg = 'bg-primary/10 border-primary/25';
+  } else if (sc.score >= 70) {
+    scoreClass = 'text-secondary-fixed';
+    badgeClass = 'bg-secondary-container/30 border-secondary/40 text-secondary-fixed';
+    cardBg = 'bg-secondary-container/20 border-secondary/30';
+  } else if (sc.score >= 55) {
+    scoreClass = 'text-[#f59e0b]';
+    badgeClass = 'bg-[#f59e0b]/20 border-[#f59e0b]/30 text-[#f59e0b]';
+    cardBg = 'bg-[#f59e0b]/10 border-[#f59e0b]/25';
+  } else {
+    scoreClass = 'text-error';
+    badgeClass = 'bg-red-500/20 border-red-500/30 text-error';
+    cardBg = 'bg-red-500/10 border-red-500/25';
+  }
+
+  if (badgeText) badgeText.textContent = `${sc.tag}（${sc.status}）`;
+  if (badge) badge.className = `px-2.5 py-0.5 rounded-full border font-label-sm text-[11px] font-bold flex items-center gap-1 ${badgeClass}`;
+  if (cardGrade) cardGrade.textContent = sc.status;
+  if (cardSummary) cardSummary.textContent = sc.tag;
+
+  // 2. 指標ディスプレイ
+  const perDisplay = document.getElementById('valPERDisplay');
+  const perStatus = document.getElementById('valPERStatus');
+  const pbrDisplay = document.getElementById('valPBRDisplay');
+  const pbrStatus = document.getElementById('valPBRStatus');
+
+  if (perDisplay) perDisplay.textContent = `${sc.per.toFixed(1)}倍`;
+  if (perStatus) {
+    perStatus.textContent = sc.per <= 10 ? '超割安・1桁水準' : sc.per <= 15 ? '市場平均比で割安' : sc.per <= 22 ? '適正巡航レンジ' : '過熱プレミアム領域';
+    perStatus.className = `font-label-sm text-[10px] font-medium truncate ${sc.per <= 15 ? 'text-primary' : sc.per <= 22 ? 'text-on-surface-variant' : 'text-[#f59e0b]'}`;
+  }
+
+  if (pbrDisplay) pbrDisplay.textContent = `${sc.pbr.toFixed(2)}倍`;
+  if (pbrStatus) {
+    pbrStatus.textContent = sc.pbr < 0.8 ? '極めて割安 (1倍割れ)' : sc.pbr <= 1.0 ? '解散価値割れ近傍' : sc.pbr <= 1.5 ? '資本効率適正圏' : '高PBRプレミアム';
+    pbrStatus.className = `font-label-sm text-[10px] font-medium truncate ${sc.pbr <= 1.0 ? 'text-primary' : 'text-on-surface-variant'}`;
+  }
+
+  // 3. スコアバッジ
+  const valScoreText = document.getElementById('valScoreText');
+  const valScoreBadge = document.getElementById('valScoreBadge');
+  if (valScoreText) valScoreText.textContent = `割安度スコア ${sc.score} / 100 (${sc.status})`;
+  if (valScoreBadge) valScoreBadge.className = `flex items-center gap-1 ${scoreClass} font-label-sm text-[11px] font-bold px-2 py-0.5 rounded-full ${badgeClass}`;
+
+  // 4. 診断コメントカード
+  const diagCard = document.getElementById('valDiagnosisCard');
+  const commentCategory = document.getElementById('valCommentCategory');
+  const commentTiming = document.getElementById('valCommentTiming');
+  const commentLead = document.getElementById('valCommentLead');
+  const commentBody = document.getElementById('valCommentBody');
+
+  if (diagCard) diagCard.className = `flex items-start gap-2.5 p-3 rounded-xl border transition-all duration-300 ${cardBg}`;
+  if (commentCategory) {
+    commentCategory.textContent = `【${sc.title.split(' ')[1] || sc.title}】PER ${sc.per.toFixed(1)}倍 × PBR ${sc.pbr.toFixed(2)}倍`;
+    commentCategory.className = `font-label-sm text-[11px] font-bold ${scoreClass}`;
+  }
+  if (commentTiming) {
+    commentTiming.textContent = sc.timing;
+    commentTiming.className = `font-label-sm text-[10px] px-1.5 py-0.2 rounded font-bold ${scoreClass} ${badgeClass}`;
+  }
+  if (commentLead) commentLead.textContent = sc.lead;
+  if (commentBody) commentBody.innerHTML = `<strong class="text-on-surface font-semibold">${sc.lead}</strong> ${sc.body}`;
+}
+
+function onSliderValuationChanged() {
+  const sliderPER = document.getElementById('sliderValPER');
+  const sliderPBR = document.getElementById('sliderValPBR');
+  if (!sliderPER || !sliderPBR) return;
+  const curPER = parseFloat(sliderPER.value);
+  const curPBR = parseFloat(sliderPBR.value);
+
+  const lblPER = document.getElementById('sliderValPERLabel');
+  const lblPBR = document.getElementById('sliderValPBRLabel');
+  if (lblPER) lblPER.textContent = `${curPER.toFixed(1)}倍`;
+  if (lblPBR) lblPBR.textContent = `${curPBR.toFixed(2)}倍`;
+
+  // ユークリッド距離で最も近い50シナリオを検索
+  let bestIdx = 0;
+  let minDistance = Infinity;
+  valuationScenarios.forEach((sc, idx) => {
+    // PERの差 (ウェイト1) + PBRの差 (ウェイト10)
+    const dist = Math.pow(sc.per - curPER, 2) + Math.pow((sc.pbr - curPBR) * 10, 2);
+    if (dist < minDistance) {
+      minDistance = dist;
+      bestIdx = idx;
+    }
+  });
+
+  const matched = { ...valuationScenarios[bestIdx] };
+  matched.per = curPER;
+  matched.pbr = curPBR;
+  applyValuationToUI(matched);
+
+  const select = document.getElementById('valuationScenarioSelect');
+  if (select) select.value = bestIdx;
+}
+
+function filterValuationCategory(cat) {
+  const pills = document.querySelectorAll('.val-cat-pill');
+  pills.forEach(p => {
+    const text = p.textContent;
+    const isActive = (cat === 'ALL' && text.includes('全50種')) ||
+                     (cat === 'DEEP_VALUE' && text.includes('解散価値')) ||
+                     (cat === 'VALUE_DIV' && text.includes('高配当')) ||
+                     (cat === 'GROWTH' && text.includes('適正・成長')) ||
+                     (cat === 'CAUTION' && text.includes('過熱'));
+    if (isActive) {
+      p.className = 'val-cat-pill px-2 py-0.5 rounded-full bg-primary text-on-primary text-[10px] font-bold active:scale-95 shrink-0';
+    } else {
+      p.className = 'val-cat-pill px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant text-[10px] font-medium active:scale-95 shrink-0';
+    }
+  });
+
+  const select = document.getElementById('valuationScenarioSelect');
+  if (!select) return;
+  select.innerHTML = '';
+
+  const filtered = valuationScenarios.filter(sc => cat === 'ALL' || sc.cat === cat);
+  filtered.forEach(sc => {
+    const opt = document.createElement('option');
+    opt.value = sc.id;
+    opt.textContent = `[スコア ${sc.score}] ${sc.title} (PER ${sc.per}倍 / PBR ${sc.pbr}倍)`;
+    select.appendChild(opt);
+  });
+
+  if (filtered.length > 0) {
+    selectValuationScenario(filtered[0].id);
+  }
+}
+
+function randomValuationScenario() {
+  const r = Math.floor(Math.random() * valuationScenarios.length);
+  selectValuationScenario(r);
+  if (typeof showToast === 'function') {
+    showToast(`買場シナリオ #${r + 1} (${valuationScenarios[r].title.split(' ')[1] || ''}) を適用しました`, 'radar');
+  }
+}
+
+// 初期化
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initValuationScenarios);
+} else {
+  initValuationScenarios();
+}
+</script></body></html>

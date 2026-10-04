@@ -1,0 +1,1803 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ja" style=""><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&amp;family=Space+Grotesk:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "secondary-container": "#3131c0", "tertiary": "#ffb3ad", "error-container": "#93000a", "surface-container-high": "#222a3d", "error": "#ffb4ab", "on-surface-variant": "#bbcabf", "surface": "#0b1326", "on-secondary": "#1000a9", "primary-fixed-dim": "#4edea3", "on-tertiary-fixed": "#410004", "primary": "#4edea3", "secondary-fixed-dim": "#c0c1ff", "tertiary-fixed": "#ffdad7", "surface-container": "#171f33", "on-background": "#dae2fd", "on-primary-container": "#00422b", "on-secondary-fixed-variant": "#2f2ebe", "tertiary-fixed-dim": "#ffb3ad", "tertiary-container": "#ff7a73", "surface-container-highest": "#2d3449", "primary-container": "#10b981", "surface-tint": "#4edea3", "surface-container-low": "#131b2e", "on-tertiary": "#68000a", "surface-container-lowest": "#060e20", "on-error": "#690005", "on-surface": "#dae2fd", "on-primary-fixed": "#002113", "inverse-on-surface": "#283044", "outline": "#86948a", "on-tertiary-fixed-variant": "#930013", "on-primary-fixed-variant": "#005236", "inverse-primary": "#006c49", "on-tertiary-container": "#79000e", "on-primary": "#003824", "secondary-fixed": "#e1e0ff", "background": "#0b1326", "on-secondary-fixed": "#07006c", "surface-variant": "#2d3449", "primary-fixed": "#6ffbbe", "outline-variant": "#3c4a42", "inverse-surface": "#dae2fd", "secondary": "#c0c1ff", "surface-bright": "#31394d", "surface-dim": "#0b1326", "on-secondary-container": "#b0b2ff", "on-error-container": "#ffdad6" }, borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, spacing: { "space-lg": "1.5rem", "space-md": "1rem", "space-sm": "0.5rem", "margin": "1rem", "space-xs": "0.25rem", "gutter-sm": "0.75rem", "margin-tablet": "1.5rem", "space-xl": "2rem", "gutter": "1rem" }, fontFamily: { "display-lg-mobile": ["Space Grotesk"], "body-sm": ["Manrope"], "label-lg": ["Manrope"], "title-md": ["Manrope"], "label-sm": ["Manrope"], "display-lg": ["Space Grotesk"], "body-md": ["Manrope"], "body-lg": ["Manrope"], "numeric-hero-mobile": ["Space Grotesk"], "title-lg": ["Manrope"], "headline-md": ["Space Grotesk"], "label-md": ["Manrope"], "numeric-hero": ["Space Grotesk"], "headline-lg": ["Space Grotesk"] }, fontSize: { "display-lg-mobile": ["32px", { lineHeight: "40px", letterSpacing: "-0.02em", fontWeight: "700" }], "body-sm": ["12px", { lineHeight: "16px", fontWeight: "400" }], "label-lg": ["14px", { lineHeight: "20px", letterSpacing: "0.01em", fontWeight: "600" }], "title-md": ["16px", { lineHeight: "22px", fontWeight: "600" }], "label-sm": ["10px", { lineHeight: "14px", letterSpacing: "0.04em", fontWeight: "700" }], "display-lg": ["40px", { lineHeight: "48px", letterSpacing: "-0.03em", fontWeight: "700" }], "body-md": ["14px", { lineHeight: "20px", fontWeight: "400" }], "body-lg": ["16px", { lineHeight: "24px", fontWeight: "400" }], "numeric-hero-mobile": ["30px", { lineHeight: "36px", letterSpacing: "-0.02em", fontWeight: "700" }], "title-lg": ["18px", { lineHeight: "24px", fontWeight: "600" }], "headline-md": ["22px", { lineHeight: "28px", letterSpacing: "-0.01em", fontWeight: "600" }], "label-md": ["12px", { lineHeight: "16px", letterSpacing: "0.02em", fontWeight: "600" }], "numeric-hero": ["36px", { lineHeight: "44px", letterSpacing: "-0.03em", fontWeight: "700" }], "headline-lg": ["28px", { lineHeight: "36px", letterSpacing: "-0.02em", fontWeight: "600" }] } } } }</script><style>@layer base{html,body{width:100%;margin:0;padding:0;background-color:#0b1326;color:#dae2fd;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 0.5rem);}.pt-safe{padding-top:env(safe-area-inset-top, 0px);}}::-webkit-scrollbar{display:none;}@keyframes pulse-emerald{0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,0.5);}50%{box-shadow:0 0 0 8px rgba(16,185,129,0);}}.fab-pulse{animation:pulse-emerald 2.5s infinite;}.mini-bar{transition:all 0.25s cubic-bezier(0.16,1,0.3,1);cursor:pointer;}.mini-bar:not(.is-active){opacity:0.65;}.mini-bar.is-active{opacity:1;transform:scale(1.04);}.holding-card-transition{transition:all 0.28s cubic-bezier(0.16,1,0.3,1);}</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-surface font-body-md text-body-md text-on-surface min-h-screen flex flex-col antialiased"><header class="fixed top-0 w-full z-50 bg-surface/85 backdrop-blur-xl pt-safe shadow-[0_4px_20px_rgba(0,0,0,0.35)]"><div class="h-16 px-margin flex items-center justify-between"><div class="flex items-center gap-space-sm min-w-0"><div class="w-9 h-9 rounded-xl bg-surface-container flex items-center justify-center text-primary-container shrink-0"><span class="material-symbols-outlined text-[22px]">trending_up</span></div><div class="flex flex-col truncate"><span class="font-title-md text-title-md text-on-surface tracking-tight truncate leading-tight">資産管理</span><span class="font-label-sm text-label-sm text-on-surface-variant tracking-wider uppercase font-semibold">Asset Management</span></div></div><div class="flex items-center gap-space-xs shrink-0"><button aria-label="Search" class="w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors" onclick="openSearchModal()" type="button"><span class="material-symbols-outlined text-[22px]">search</span></button><button aria-label="Notifications" class="w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors relative" onclick="openNotificationModal(); const b = document.getElementById('notification-unread-badge'); if(b) b.remove(); const hb = document.getElementById('notification-header-badge'); if(hb){ hb.innerText='すべて既読'; hb.className='px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-medium text-label-sm'; } document.querySelectorAll('.notification-item').forEach(el=&gt;{ el.setAttribute('data-unread','false'); el.classList.add('opacity-80','bg-surface-container'); el.classList.remove('bg-surface-container-high','border-primary/30'); const d = el.querySelector('.notif-unread-dot'); if(d){ d.classList.remove('bg-primary'); d.classList.add('bg-surface-container-highest'); } });" type="button"><span class="material-symbols-outlined text-[22px]">notifications</span><span class="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-surface shadow-[0_0_8px_rgba(78,222,163,0.8)] animate-pulse" id="notification-unread-badge"></span></button><button aria-label="Settings" class="w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors" type="button"><span class="material-symbols-outlined text-[22px]">settings</span></button></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 pb-28 bg-surface"><div class="flex flex-col w-full px-margin pb-6 gap-space-md">
+<!-- Interactive State Controller (Sticky Top Strip) -->
+<section class="flex flex-col gap-space-xs bg-surface-container-high/90 backdrop-blur-md p-space-sm rounded-xl shadow-lg -mx-margin px-margin">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-primary uppercase font-bold tracking-wider">State Simulator</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">画面状態の動的切替</span>
+</div>
+<div class="flex gap-space-xs overflow-x-auto no-scrollbar py-0.5" id="state-tab-container">
+<button class="state-tab-btn shrink-0 px-3 py-1.5 rounded-full font-label-sm text-label-sm flex items-center gap-1.5 transition-all active:scale-95 bg-primary-container text-on-primary-container font-bold shadow-sm" data-state="normal" onclick="switchState('normal')" type="button">
+<span class="material-symbols-outlined text-[16px]">stacked_bar_chart</span>
+<span class="">① 通常・一覧</span>
+</button>
+<button class="state-tab-btn shrink-0 px-3 py-1.5 rounded-full font-label-sm text-label-sm font-semibold flex items-center gap-1.5 transition-all active:scale-95 bg-surface-container text-on-surface-variant" data-state="offline" onclick="switchState('offline')" type="button">
+<span class="material-symbols-outlined text-[16px]">wifi_off</span>
+<span class="">② オフライン</span>
+</button>
+<button class="state-tab-btn shrink-0 px-3 py-1.5 rounded-full font-label-sm text-label-sm font-semibold flex items-center gap-1.5 transition-all active:scale-95 bg-surface-container text-on-surface-variant" data-state="loading" onclick="switchState('loading')" type="button">
+<span class="material-symbols-outlined text-[16px] animate-spin">sync</span>
+<span class="">③ 読込中</span>
+</button>
+<button class="state-tab-btn shrink-0 px-3 py-1.5 rounded-full font-label-sm text-label-sm font-semibold flex items-center gap-1.5 transition-all active:scale-95 bg-surface-container text-on-surface-variant" data-state="zero" onclick="switchState('zero')" type="button">
+<span class="material-symbols-outlined text-[16px]">search_off</span>
+<span class="">④ 検索ゼロ</span>
+</button>
+<button class="state-tab-btn shrink-0 px-3 py-1.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm font-semibold flex items-center gap-1.5 transition-all active:scale-95" data-state="empty" onclick="switchState('empty')" type="button">
+<span class="material-symbols-outlined text-[16px]">add_circle</span>
+<span class="">⑤ 初期未登録</span>
+</button>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- STATE 1: 通常・並び替え (Normal Portfolio) -->
+<!-- ========================================== -->
+<div class="state-panel flex-col gap-space-md w-full flex" id="state-normal">
+<!-- Hero Total Asset Card with Radial Glow Effect -->
+<section class="relative overflow-hidden rounded-xl bg-surface-container-low p-space-md shadow-xl">
+<!-- Glow ambient backdrop -->
+<div class="absolute -top-12 -left-12 w-48 h-48 rounded-full bg-primary-container/15 blur-3xl pointer-events-none"></div>
+<div class="relative z-10 flex flex-col gap-space-sm">
+<div class="flex items-center justify-between"><div class="flex items-center gap-space-xs"><span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">総資産評価額</span><button aria-label="Toggle Privacy" class="text-on-surface-variant hover:text-on-surface p-1 transition-colors" onclick="togglePrivacy()" type="button"><span class="material-symbols-outlined text-[18px]" id="privacy-icon">visibility</span></button></div><div class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-container/20 text-primary"><span class="material-symbols-outlined text-[16px]">trending_up</span><span class="font-label-md text-label-md font-bold tracking-tight" id="display-gain-val">+¥450,000</span><span class="font-label-sm text-label-sm font-semibold">(+14.7%)</span></div></div>
+<div class="flex flex-col gap-0.5 mt-0.5"><span class="font-numeric-hero-mobile text-numeric-hero-mobile text-on-surface tracking-tight leading-tight" id="display-total-assets">¥3,500,000</span><div class="flex items-center gap-1.5 text-on-surface-variant font-label-sm text-[12px]"><span class="text-on-surface-variant">投資元本:</span><span class="font-mono font-medium text-on-surface/80" id="display-total-cost">¥3,050,000</span></div></div>
+<!-- Dividend KPI Sub-grid -->
+<div class="grid grid-cols-2 gap-space-xs pt-space-xs">
+<div class="p-space-sm rounded-lg bg-surface-container/80 flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">年間予想受取配当</span>
+<div class="flex items-baseline gap-1 mt-0.5">
+<span class="font-headline-md text-headline-md text-primary font-bold" id="display-div-amt">¥124,500</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">/年</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-0.5">税引き後概算: ¥99,195</span>
+</div>
+<div class="p-space-sm rounded-lg bg-surface-container/80 flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">平均配当利回り</span>
+<div class="flex items-baseline gap-1 mt-0.5">
+<span class="font-headline-md text-headline-md text-on-surface font-bold">3.56</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">%</span>
+</div>
+<span class="font-label-sm text-label-sm text-primary font-semibold mt-0.5 flex items-center gap-0.5">
+<span class="material-symbols-outlined text-[14px]">verified</span>好配当水準
+            </span>
+</div>
+</div>
+</div>
+</section>
+<!-- ======================================================== -->
+<!-- 【NEW】月別推移グラフカード（カレンダーピボット＆タイムライン連動版） -->
+<!-- ======================================================== -->
+<section class="relative overflow-hidden rounded-xl bg-surface-container-low p-space-md shadow-xl border border-surface-container-highest/40 flex flex-col gap-space-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<div class="w-7 h-7 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">calendar_month</span>
+</div>
+<div class="flex items-center gap-1.5">
+<h3 class="font-title-md text-title-md text-on-surface font-bold">月別推移グラフ</h3>
+<span class="px-1.5 py-0.5 rounded bg-surface-container font-label-sm text-[10px] text-on-surface-variant font-mono">2024</span>
+</div>
+</div>
+<div class="flex items-center gap-1.5">
+<div class="flex items-center gap-1 text-right">
+<span class="font-label-sm text-label-sm text-on-surface-variant" id="home-chart-month-label">年間合計:</span>
+<span class="font-title-md text-title-md text-primary font-bold font-numeric-hero-mobile" id="home-chart-month-val">¥124,500</span>
+</div>
+</div>
+</div>
+<!-- Interactive Mini Bar Chart (1~12) -->
+<div class="relative w-full pt-4 pb-1">
+<div class="absolute inset-x-0 top-7 h-px bg-surface-container-highest/40 pointer-events-none"></div>
+<div class="flex items-end justify-between gap-1 h-24 px-0.5" id="home-mini-bar-container"><!-- 1月 -->
+<button class="mini-bar group relative flex flex-col items-center flex-1 h-full justify-end focus:outline-none" data-month="1" onclick="selectHomeMonth(1, '¥2,100')" type="button">
+<div class="text-[8px] text-[#38bdf8] mb-0.5 font-mono font-semibold">0.2万</div>
+<div class="w-full max-w-[14px] flex flex-col justify-end rounded-t-sm overflow-hidden bg-surface-container-highest/60 transition-all duration-200">
+<div class="w-full bg-[#38bdf8] shadow-[0_0_8px_rgba(56,189,248,0.5)]" style="height:6px"></div>
+</div>
+<span class="mt-1.5 font-label-sm text-[10px] text-on-surface-variant font-medium">1</span>
+</button>
+<!-- 2月 -->
+<button class="mini-bar group relative flex flex-col items-center flex-1 h-full justify-end focus:outline-none" data-month="2" onclick="selectHomeMonth(2, '¥3,800')" type="button">
+<div class="text-[8px] text-[#38bdf8] mb-0.5 font-mono font-semibold">0.4万</div>
+<div class="w-full max-w-[14px] flex flex-col justify-end rounded-t-sm overflow-hidden bg-surface-container-highest/60 transition-all duration-200">
+<div class="w-full bg-[#38bdf8]" style="height:4px"></div>
+<div class="w-full bg-[#818cf8]" style="height:7px"></div>
+</div>
+<span class="mt-1.5 font-label-sm text-[10px] text-on-surface-variant font-medium">2</span>
+</button>
+<!-- 3月 -->
+<button class="mini-bar group relative flex flex-col items-center flex-1 h-full justify-end focus:outline-none" data-month="3" onclick="selectHomeMonth(3, '¥12,400')" type="button">
+<div class="text-[8px] text-primary mb-0.5 font-mono font-bold">1.2万</div>
+<div class="w-full max-w-[14px] flex flex-col justify-end rounded-t-sm overflow-hidden bg-surface-container-highest/60 transition-all duration-200">
+<div class="w-full bg-primary shadow-[0_0_8px_rgba(78,222,163,0.6)]" style="height:22px"></div>
+<div class="w-full bg-[#38bdf8]" style="height:8px"></div>
+</div>
+<span class="mt-1.5 font-label-sm text-[10px] text-on-surface-variant font-medium">3</span>
+</button>
+<!-- 4月 -->
+<button class="mini-bar group relative flex flex-col items-center flex-1 h-full justify-end focus:outline-none" data-month="4" onclick="selectHomeMonth(4, '¥1,500')" type="button">
+<div class="text-[8px] text-[#38bdf8] mb-0.5 font-mono font-semibold">0.2万</div>
+<div class="w-full max-w-[14px] flex flex-col justify-end rounded-t-sm overflow-hidden bg-surface-container-highest/60 transition-all duration-200">
+<div class="w-full bg-[#38bdf8] shadow-[0_0_8px_rgba(56,189,248,0.5)]" style="height:5px"></div>
+</div>
+<span class="mt-1.5 font-label-sm text-[10px] text-on-surface-variant font-medium">4</span>
+</button>
+<!-- 5月 -->
+<button class="mini-bar group relative flex flex-col items-center flex-1 h-full justify-end focus:outline-none" data-month="5" onclick="selectHomeMonth(5, '¥4,200')" type="button">
+<div class="text-[8px] text-primary mb-0.5 font-mono font-semibold">0.4万</div>
+<div class="w-full max-w-[14px] flex flex-col justify-end rounded-t-sm overflow-hidden bg-surface-container-highest/60 transition-all duration-200">
+<div class="w-full bg-primary" style="height:6px"></div>
+<div class="w-full bg-[#818cf8]" style="height:8px"></div>
+</div>
+<span class="mt-1.5 font-label-sm text-[10px] text-on-surface-variant font-medium">5</span>
+</button>
+<!-- 6月 (大型配当月) -->
+<button class="mini-bar group relative flex flex-col items-center flex-1 h-full justify-end focus:outline-none" data-month="6" onclick="selectHomeMonth(6, '¥38,500')" type="button">
+<div class="text-[8px] text-primary mb-0.5 font-mono font-bold">3.8万</div>
+<div class="w-full max-w-[14px] flex flex-col justify-end rounded-t-sm overflow-hidden bg-surface-container-highest/60 transition-all duration-200 shadow-[0_0_12px_rgba(78,222,163,0.35)]">
+<div class="w-full bg-primary shadow-[0_0_10px_rgba(78,222,163,0.8)]" style="height:50px"></div>
+<div class="w-full bg-[#38bdf8]" style="height:10px"></div>
+<div class="w-full bg-[#818cf8]" style="height:8px"></div>
+</div>
+<span class="mt-1.5 font-label-sm text-[10px] text-primary font-bold">6</span>
+</button>
+<!-- 7月 -->
+<button class="mini-bar group relative flex flex-col items-center flex-1 h-full justify-end focus:outline-none" data-month="7" onclick="selectHomeMonth(7, '¥2,100')" type="button">
+<div class="text-[8px] text-[#38bdf8] mb-0.5 font-mono font-semibold">0.2万</div>
+<div class="w-full max-w-[14px] flex flex-col justify-end rounded-t-sm overflow-hidden bg-surface-container-highest/60 transition-all duration-200">
+<div class="w-full bg-[#38bdf8] shadow-[0_0_8px_rgba(56,189,248,0.5)]" style="height:6px"></div>
+</div>
+<span class="mt-1.5 font-label-sm text-[10px] text-on-surface-variant font-medium">7</span>
+</button>
+<!-- 8月 -->
+<button class="mini-bar group relative flex flex-col items-center flex-1 h-full justify-end focus:outline-none" data-month="8" onclick="selectHomeMonth(8, '¥3,200')" type="button">
+<div class="text-[8px] text-[#38bdf8] mb-0.5 font-mono font-semibold">0.3万</div>
+<div class="w-full max-w-[14px] flex flex-col justify-end rounded-t-sm overflow-hidden bg-surface-container-highest/60 transition-all duration-200">
+<div class="w-full bg-[#38bdf8]" style="height:5px"></div>
+<div class="w-full bg-[#818cf8]" style="height:6px"></div>
+</div>
+<span class="mt-1.5 font-label-sm text-[10px] text-on-surface-variant font-medium">8</span>
+</button>
+<!-- 9月 -->
+<button class="mini-bar group relative flex flex-col items-center flex-1 h-full justify-end focus:outline-none" data-month="9" onclick="selectHomeMonth(9, '¥9,800')" type="button">
+<div class="text-[8px] text-primary mb-0.5 font-mono font-bold">1.0万</div>
+<div class="w-full max-w-[14px] flex flex-col justify-end rounded-t-sm overflow-hidden bg-surface-container-highest/60 transition-all duration-200">
+<div class="w-full bg-primary shadow-[0_0_8px_rgba(78,222,163,0.6)]" style="height:18px"></div>
+<div class="w-full bg-[#38bdf8]" style="height:8px"></div>
+</div>
+<span class="mt-1.5 font-label-sm text-[10px] text-on-surface-variant font-medium">9</span>
+</button>
+<!-- 10月 -->
+<button class="mini-bar group relative flex flex-col items-center flex-1 h-full justify-end focus:outline-none" data-month="10" onclick="selectHomeMonth(10, '¥1,600')" type="button">
+<div class="text-[8px] text-[#38bdf8] mb-0.5 font-mono font-semibold">0.2万</div>
+<div class="w-full max-w-[14px] flex flex-col justify-end rounded-t-sm overflow-hidden bg-surface-container-highest/60 transition-all duration-200">
+<div class="w-full bg-[#38bdf8] shadow-[0_0_8px_rgba(56,189,248,0.5)]" style="height:5px"></div>
+</div>
+<span class="mt-1.5 font-label-sm text-[10px] text-on-surface-variant font-medium">10</span>
+</button>
+<!-- 11月 -->
+<button class="mini-bar group relative flex flex-col items-center flex-1 h-full justify-end focus:outline-none" data-month="11" onclick="selectHomeMonth(11, '¥4,800')" type="button">
+<div class="text-[8px] text-primary mb-0.5 font-mono font-semibold">0.5万</div>
+<div class="w-full max-w-[14px] flex flex-col justify-end rounded-t-sm overflow-hidden bg-surface-container-highest/60 transition-all duration-200">
+<div class="w-full bg-primary" style="height:6px"></div>
+<div class="w-full bg-[#818cf8]" style="height:8px"></div>
+</div>
+<span class="mt-1.5 font-label-sm text-[10px] text-on-surface-variant font-medium">11</span>
+</button>
+<!-- 12月 (最高受取月) -->
+<button class="mini-bar group relative flex flex-col items-center flex-1 h-full justify-end focus:outline-none" data-month="12" onclick="selectHomeMonth(12, '¥42,000')" type="button">
+<div class="text-[8px] text-primary mb-0.5 font-mono font-bold">4.2万</div>
+<div class="w-full max-w-[14px] flex flex-col justify-end rounded-t-sm overflow-hidden transition-all duration-200 bg-surface-container-highest/60 shadow-[0_0_14px_rgba(78,222,163,0.45)]">
+<div class="w-full bg-primary shadow-[0_0_10px_rgba(78,222,163,0.8)]" style="height:58px"></div>
+<div class="w-full bg-[#38bdf8]" style="height:12px"></div>
+</div>
+<span class="mt-1.5 font-label-sm text-[10px] text-primary font-bold">12</span>
+</button></div>
+</div>
+<!-- Legend & Footer -->
+<div class="flex items-center justify-between pt-1 border-t border-surface-container-highest/30 font-label-sm text-[11px]">
+<div class="flex items-center gap-3"><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-primary shadow-[0_0_6px_rgba(78,222,163,0.8)]"></span><span class="text-on-surface font-medium">日本株</span></div><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#38bdf8] shadow-[0_0_6px_rgba(56,189,248,0.8)]"></span><span class="text-on-surface font-medium">米国株</span></div><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#818cf8] shadow-[0_0_6px_rgba(129,140,248,0.8)]"></span><span class="text-on-surface font-medium">投信</span></div></div>
+<div class="flex flex-wrap items-center gap-1.5"><div class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/40 font-medium text-[10px]"><span class="material-symbols-outlined text-[12px]">event_repeat</span><span class="" id="chart-sub-summary">月平均: 約¥10,375</span></div></div>
+</div>
+</section>
+<!-- Goal Progress Card -->
+<section class="p-space-md rounded-xl bg-surface-container-low shadow-sm flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[20px]">flag</span>
+<span class="font-title-md text-title-md text-on-surface">年間配当目標: ¥300,000</span>
+</div>
+<span class="font-label-md text-label-md text-primary font-bold">41.5%</span>
+</div>
+<div class="w-full h-2 rounded-full bg-surface-container-highest overflow-hidden">
+<div class="h-full bg-primary-container rounded-full" style="width: 41.5%;"></div>
+</div>
+<div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
+<span class="">現在: ¥124,500</span>
+<span class="">あと ¥175,500 で月2.5万円達成</span>
+</div>
+</section>
+<!-- Filter & Sort Control Bar with Month Pivot Banner -->
+<section class="flex flex-col gap-space-xs"><!-- Dynamic Month Pivot Timeline Header (Changes when month is clicked) -->
+<div class="flex items-center justify-between px-1">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[18px]" id="holdings-header-icon">inventory_2</span>
+<h3 class="font-title-md text-title-md text-on-surface font-bold" id="holdings-header-title">保有銘柄一覧</h3>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-primary font-mono text-[11px] font-bold" id="holdings-header-count">3件</span>
+</div>
+<div class="flex items-center gap-2">
+<button class="text-primary hover:underline font-label-sm text-[12px] flex items-center gap-0.5 hidden" id="reset-holdings-filter-btn" onclick="resetToAllMonths()" type="button">
+<span class="">全銘柄を表示 (3件)</span>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+</button>
+<!-- Sort Trigger Button moved to Header Row -->
+<button class="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-label-sm font-label-sm font-semibold shadow-sm transition-colors active:scale-95" onclick="openSortModal()" type="button">
+<span class="material-symbols-outlined text-[16px] text-primary">swap_vert</span>
+<span class="" id="active-sort-label">評価額 (降順)</span>
+</button>
+</div>
+</div>
+<div class="flex items-center justify-between gap-space-xs">
+<!-- Horizontal Filter Chips taking full horizontal space -->
+<div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 w-full"><button class="filter-chip px-3 py-1.5 rounded-full bg-primary/20 text-primary font-label-sm text-label-sm font-bold shadow-sm shrink-0 transition-all" data-category="all" onclick="filterHoldingsByCategory(this, 'all')" type="button">すべて (3)</button><button class="filter-chip px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm font-medium shrink-0 transition-all" data-category="japan" onclick="filterHoldingsByCategory(this, 'japan')" type="button">日本株 (1)</button><button class="filter-chip px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm font-medium shrink-0 transition-all" data-category="us" onclick="filterHoldingsByCategory(this, 'us')" type="button">米国株 (1)</button><button class="filter-chip px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm font-medium shrink-0 transition-all" data-category="fund" onclick="filterHoldingsByCategory(this, 'fund')" type="button">投信 (1)</button></div>
+</div></section>
+<!-- Holdings List with Month Pivot Support -->
+<section class="flex flex-col gap-space-xs" id="holdings-list-container">
+<!-- Holding Card 1: 7203 トヨタ自動車 (配当月: 6月, 12月) -->
+<article class="holding-card-transition p-space-md rounded-xl bg-surface-container-low shadow-sm flex flex-col gap-space-xs transition-transform active:scale-[0.99] relative overflow-hidden cursor-pointer hover:bg-surface-container-high" data-category="japan" data-div="2.8" data-dividend-type="中間配当" data-gain="6.1" data-holding="toyota" data-month-amount="¥3,640" data-months="6,12" data-payout-timing="6月下旬・12月中旬" data-val="260000" onclick="window.location.href='{{DATA:SCREEN:SCREEN_65}}';">
+<!-- Dynamic Month Ribbon Badge -->
+<div class="month-ribbon absolute top-0 right-0 bg-primary/20 border-b border-l border-primary/40 px-3 py-0.5 rounded-bl-lg font-label-sm text-[11px] font-bold text-primary flex items-center gap-1 hidden">
+<span class="material-symbols-outlined text-[13px]">payments</span>
+<span class="ribbon-text">12月入金 (中間配当)</span>
+</div>
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="px-2 py-1 rounded bg-surface-container-highest font-display-lg-mobile text-label-sm text-on-surface font-bold">7203</span>
+<div>
+<h2 class="font-title-md text-title-md text-on-surface">トヨタ自動車</h2>
+<span class="font-body-sm text-body-sm text-on-surface-variant">東証P • 輸送用機器</span>
+</div>
+<button class="w-6 h-6 rounded-md hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant/80 hover:text-on-surface transition-colors ml-0.5 opacity-80" onclick="event.stopPropagation(); openQuickEditSheet('7203', 'トヨタ自動車', '東証P • 輸送用機器', 2600, 100, 2450, 2.80, '+1.36%');" title="保有情報を編集" type="button"><span class="material-symbols-outlined text-[14px]">edit</span></button></div>
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-headline-md text-on-surface font-bold holding-val">¥260,000</span>
+<span class="font-label-sm text-label-sm text-primary font-bold">+¥15,000 (+6.1%)</span>
+</div>
+</div>
+<div class="h-[1px] bg-surface-container-highest my-1"></div>
+<div class="grid grid-cols-3 gap-space-xs text-center font-label-sm text-label-sm">
+<div class="flex flex-col items-start">
+<span class="text-on-surface-variant">保有数量</span>
+<span class="text-on-surface font-semibold mt-0.5">100株 (@¥2,600)</span>
+</div>
+<div class="flex flex-col items-center">
+<span class="text-on-surface-variant">配当利回り</span>
+<span class="text-primary font-bold mt-0.5">2.80%</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-on-surface-variant">予想配当金</span>
+<span class="text-on-surface font-bold mt-0.5 holding-div">¥7,280/年</span>
+</div>
+</div>
+<!-- Dynamic Highlight Footer for selected month -->
+<div class="month-highlight-box mt-1 p-2 rounded-lg bg-surface-container-high/90 border border-primary/30 flex items-center justify-between hidden">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[16px]">event_available</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant">入金予定時期: <span class="text-on-surface font-bold timing-label">12月中旬予定</span></span>
+</div>
+<div class="flex items-center gap-1 font-mono font-bold text-primary text-title-md amount-label">¥3,640</div>
+</div>
+<div class="default-footer flex items-center justify-between pt-1">
+<span class="px-2 py-0.5 rounded bg-surface-container font-label-sm text-label-sm text-secondary font-medium">新NISA成長枠</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary">event</span>
+次回: 12月中旬 (¥3,640)
+</span>
+</div>
+</article>
+<!-- Holding Card 2: AAPL Apple Inc. (配当月: 2月, 5月, 8月, 11月) -->
+<article class="holding-card-transition p-space-md rounded-xl bg-surface-container-low shadow-sm flex flex-col gap-space-xs transition-transform active:scale-[0.99] relative overflow-hidden" data-category="us" data-div="0.5" data-dividend-type="四半期配当" data-gain="14.1" data-holding="apple" data-month-amount="¥425 ($2.50)" data-months="2,5,8,11" data-payout-timing="各月中旬 (四半期)" data-val="340000" onclick="openQuickEditSheet('AAPL', 'Apple Inc.', 'NASDAQ • テクノロジー', 220, 10, 192.8, 0.52, '+0.84%')">
+<!-- Dynamic Month Ribbon Badge -->
+<div class="month-ribbon hidden absolute top-0 right-0 bg-primary/20 border-b border-l border-primary/40 px-3 py-0.5 rounded-bl-lg font-label-sm text-[11px] font-bold text-primary flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">payments</span>
+<span class="ribbon-text">11月入金予定</span>
+</div>
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="px-2 py-1 rounded bg-secondary-container/40 font-display-lg-mobile text-label-sm text-secondary font-bold">AAPL</span>
+<div>
+<h2 class="font-title-md text-title-md text-on-surface">Apple Inc.</h2>
+<span class="font-body-sm text-body-sm text-on-surface-variant">NASDAQ • テクノロジー</span>
+</div>
+<button class="w-6 h-6 rounded-md hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant/80 hover:text-on-surface transition-colors ml-0.5 opacity-80" title="保有情報を編集" type="button"><span class="material-symbols-outlined text-[14px]">edit</span></button></div>
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-headline-md text-on-surface font-bold holding-val">¥340,000</span>
+<span class="font-label-sm text-label-sm text-primary font-bold">+¥42,000 (+14.1%)</span>
+</div>
+</div>
+<div class="h-[1px] bg-surface-container-highest my-1"></div>
+<div class="grid grid-cols-3 gap-space-xs text-center font-label-sm text-label-sm">
+<div class="flex flex-col items-start">
+<span class="text-on-surface-variant">保有数量</span>
+<span class="text-on-surface font-semibold mt-0.5">10株 (@$220.00)</span>
+</div>
+<div class="flex flex-col items-center">
+<span class="text-on-surface-variant">配当利回り</span>
+<span class="text-on-surface font-bold mt-0.5">0.52%</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-on-surface-variant">予想配当金</span>
+<span class="text-on-surface font-bold mt-0.5 holding-div">¥1,700/年</span>
+</div>
+</div>
+<!-- Dynamic Highlight Footer for selected month -->
+<div class="month-highlight-box hidden mt-1 p-2 rounded-lg bg-surface-container-high/90 border border-primary/30 flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[16px]">event_available</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant">入金予定時期: <span class="text-on-surface font-bold timing-label">11月中旬</span></span>
+</div>
+<div class="flex items-center gap-1 font-mono font-bold text-primary text-title-md amount-label">
+¥425 ($2.50)
+</div>
+</div>
+<div class="default-footer flex items-center justify-between pt-1">
+<span class="px-2 py-0.5 rounded bg-surface-container font-label-sm text-label-sm text-on-surface-variant font-medium">特定口座 (四半期)</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary">event</span>
+次回: 2月中旬 ($2.50)
+</span>
+</div>
+</article>
+<!-- Holding Card 3: eMAXIS Slim 全世界株式 (配当月: なし・毎月自動再投資) -->
+<article class="holding-card-transition p-space-md rounded-xl bg-surface-container-low shadow-sm flex flex-col gap-space-xs transition-transform active:scale-[0.99] relative overflow-hidden" data-category="fund" data-div="0.0" data-dividend-type="自動再投資" data-gain="-1.9" data-holding="emaxis" data-month-amount="¥0" data-months="" data-payout-timing="分配金なし" data-val="120000">
+<!-- Dynamic Month Ribbon Badge -->
+<div class="month-ribbon hidden absolute top-0 right-0 bg-surface-container border-b border-l border-surface-container-highest px-3 py-0.5 rounded-bl-lg font-label-sm text-[11px] font-bold text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">autorenew</span>
+<span class="ribbon-text">再投資</span>
+</div>
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="px-2 py-1 rounded bg-surface-container-highest font-display-lg-mobile text-label-sm text-tertiary-fixed font-bold">投信</span>
+<div class="min-w-0 pr-1">
+<h2 class="font-title-md text-title-md text-on-surface truncate">eMAXIS Slim 全世界株式</h2>
+<span class="font-body-sm text-body-sm text-on-surface-variant">オルカン • 三菱UFJアセット</span>
+</div>
+</div>
+<div class="flex flex-col items-end shrink-0">
+<span class="font-headline-md text-headline-md text-on-surface font-bold holding-val">¥120,000</span>
+<span class="font-label-sm text-label-sm text-tertiary font-bold">-¥2,300 (-1.9%)</span>
+</div>
+</div>
+<div class="h-[1px] bg-surface-container-highest my-1"></div>
+<div class="grid grid-cols-3 gap-space-xs text-center font-label-sm text-label-sm">
+<div class="flex flex-col items-start">
+<span class="text-on-surface-variant">保有口数</span>
+<span class="text-on-surface font-semibold mt-0.5">50,000口</span>
+</div>
+<div class="flex flex-col items-center">
+<span class="text-on-surface-variant">分配方針</span>
+<span class="text-on-surface font-semibold mt-0.5">再投資型</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-on-surface-variant">取得単価</span>
+<span class="text-on-surface font-semibold mt-0.5">¥24,460</span>
+</div>
+</div>
+<!-- Dynamic Highlight Footer for selected month -->
+<div class="month-highlight-box hidden mt-1 p-2 rounded-lg bg-surface-container-high/90 border border-surface-container-highest flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-on-surface-variant text-[16px]">sync</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant">分配方針: <span class="text-on-surface font-bold timing-label">自動再投資（無分配）</span></span>
+</div>
+<div class="flex items-center gap-1 font-mono font-bold text-on-surface-variant text-title-md amount-label">
+¥0
+</div>
+</div>
+<div class="default-footer flex items-center justify-between pt-1">
+<span class="px-2 py-0.5 rounded bg-surface-container font-label-sm text-label-sm text-primary font-medium">新NISAつみたて投資枠</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">無分配で複利最大化</span>
+</div>
+</article>
+<!-- Empty month fallback message container (When a selected month has 0 dividend holdings) -->
+<div class="hidden p-space-lg rounded-xl bg-surface-container-low border border-dashed border-surface-container-highest text-center flex-col items-center gap-space-xs" id="month-empty-state">
+<span class="material-symbols-outlined text-[36px] text-on-surface-variant">event_busy</span>
+<h4 class="font-title-md text-on-surface font-bold mt-1" id="empty-month-title">該当月の配当受取銘柄はありません</h4>
+<p class="font-body-sm text-on-surface-variant max-w-xs">選択した月に入金が確定している保有銘柄はありません。新しく銘柄を追加するか、年間全体の一覧に戻してください。</p>
+<button class="mt-2 px-4 py-2 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-primary font-label-md font-semibold flex items-center gap-1 transition-colors" onclick="resetToAllMonths()" type="button">
+<span class="material-symbols-outlined text-[16px]">refresh</span>
+<span class="">全銘柄一覧を表示</span>
+</button>
+</div>
+</section>
+<!-- Next Expected Dividend Strip -->
+<section class="p-space-md rounded-xl bg-surface-container-high shadow-sm flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-full bg-primary-container/20 flex items-center justify-center text-primary shrink-0">
+<span class="material-symbols-outlined text-[22px]">calendar_today</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">直近の配当受取予定</span>
+<p class="font-title-md text-title-md text-on-surface font-bold">12月中旬 トヨタ自動車</p>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-md text-headline-md text-primary font-bold">¥3,640</span>
+<span class="block font-label-sm text-label-sm text-on-surface-variant">中間配当 (100株)</span>
+</div>
+</section>
+</div>
+<!-- ========================================== -->
+<!-- STATE 2: 通信エラー・オフライン (Offline)  -->
+<!-- ========================================== -->
+<div class="state-panel flex-col gap-space-md w-full hidden" id="state-offline">
+<!-- Offline Warning Alert -->
+<div class="p-space-md rounded-xl bg-tertiary-container/20 text-on-surface flex items-start gap-space-sm shadow-md">
+<span class="material-symbols-outlined text-tertiary text-[24px] shrink-0 mt-0.5">cloud_off</span>
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-2">
+<span class="font-title-md text-title-md text-tertiary font-bold">通信エラー / オフライン表示中</span>
+<span class="px-2 py-0.5 rounded-full bg-tertiary/20 text-tertiary font-label-sm text-label-sm font-bold">OFFLINE</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+          最新株価の取得に失敗しました。前回キャッシュデータ（本日 15:00時点）を表示しています。
+        </p>
+</div>
+</div>
+<!-- Cached Asset Card with Offline Badge -->
+<section class="p-space-md rounded-xl bg-surface-container-low shadow-xl flex flex-col gap-space-sm relative">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant">総資産評価額 (キャッシュデータ)</span>
+<span class="px-2 py-0.5 rounded-md bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+          最終同期: 15:00
+        </span>
+</div>
+<div class="flex items-baseline gap-space-xs">
+<span class="font-numeric-hero-mobile text-numeric-hero-mobile text-on-surface/80">¥3,500,000</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">JPY (固定)</span>
+</div>
+</section>
+<!-- Error Recovery Action Card -->
+<section class="p-space-lg rounded-xl bg-surface-container shadow-md flex flex-col gap-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-full bg-error-container/30 flex items-center justify-center text-error shrink-0">
+<span class="material-symbols-outlined text-[24px]">signal_cellular_connected_no_internet_0_bar</span>
+</div>
+<div>
+<h3 class="font-title-md text-title-md text-on-surface font-bold">株価データの更新に失敗しました</h3>
+<span class="font-label-sm text-label-sm text-on-surface-variant">ネットワーク応答なし (Timeout 15s)</span>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+        手動登録された保有株数・取得単価は端末内暗号化ストレージに安全に保管されています。電波状況をご確認のうえ再度お試しください。
+      </p>
+<button class="w-full h-12 rounded-lg bg-primary-container text-on-primary-container font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-98" id="offline-retry-btn" onclick="triggerRetryAnimation()" type="button">
+<span class="material-symbols-outlined text-[20px]" id="retry-btn-icon">refresh</span>
+<span class="" id="retry-btn-label">再接続して最新株価を取得</span>
+</button>
+</section>
+<!-- Offline Holding List Showing Cached Indicators -->
+<section class="flex flex-col gap-space-xs">
+<span class="font-label-md text-label-md text-on-surface-variant px-1">前回保存データの明細</span>
+<div class="p-space-md rounded-xl bg-surface-container-low flex items-center justify-between opacity-80">
+<div class="flex items-center gap-space-xs">
+<span class="px-2 py-1 rounded bg-surface-container font-label-sm text-label-sm font-bold text-on-surface">7203</span>
+<div>
+<p class="font-title-md text-title-md text-on-surface">トヨタ自動車</p>
+<span class="font-label-sm text-label-sm text-on-surface-variant">100株 • 15:00終値</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-title-lg text-title-lg text-on-surface font-bold">¥260,000</span>
+<span class="block font-label-sm text-label-sm text-on-surface-variant">未更新</span>
+</div>
+</div>
+<div class="p-space-md rounded-xl bg-surface-container-low flex items-center justify-between opacity-80">
+<div class="flex items-center gap-space-xs">
+<span class="px-2 py-1 rounded bg-surface-container font-label-sm text-label-sm font-bold text-secondary">AAPL</span>
+<div>
+<p class="font-title-md text-title-md text-on-surface">Apple Inc.</p>
+<span class="font-label-sm text-label-sm text-on-surface-variant">10株 • 前日終値換算</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-title-lg text-title-lg text-on-surface font-bold">¥340,000</span>
+<span class="block font-label-sm text-label-sm text-on-surface-variant">為替レート保留</span>
+</div>
+</div>
+</section>
+</div>
+<!-- ========================================== -->
+<!-- STATE 3: ローディング・スケルトン (Loading) -->
+<!-- ========================================== -->
+<div class="state-panel flex-col gap-space-md w-full hidden" id="state-loading">
+<!-- Sync In Progress Top Notice -->
+<div class="p-space-sm px-space-md rounded-xl bg-surface-container-high flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-primary animate-ping"></span>
+<span class="font-label-md text-label-md text-on-surface font-semibold">最新株価・為替レートを取得中...</span>
+</div>
+<span class="material-symbols-outlined text-primary text-[20px] animate-spin">autorenew</span>
+</div>
+<!-- Skeleton Hero Asset Card -->
+<div class="p-space-md rounded-xl bg-surface-container-low flex flex-col gap-space-sm animate-pulse">
+<div class="flex items-center justify-between">
+<div class="h-4 w-28 rounded bg-surface-container-highest"></div>
+<div class="h-4 w-16 rounded-full bg-surface-container-highest"></div>
+</div>
+<div class="h-9 w-52 rounded bg-surface-container-highest my-1"></div>
+<div class="h-5 w-36 rounded-full bg-surface-container-highest"></div>
+<div class="grid grid-cols-2 gap-space-xs pt-space-xs">
+<div class="p-space-sm rounded-lg bg-surface-container flex flex-col gap-2">
+<div class="h-3 w-20 rounded bg-surface-container-highest"></div>
+<div class="h-6 w-24 rounded bg-surface-container-highest"></div>
+</div>
+<div class="p-space-sm rounded-lg bg-surface-container flex flex-col gap-2">
+<div class="h-3 w-20 rounded bg-surface-container-highest"></div>
+<div class="h-6 w-24 rounded bg-surface-container-highest"></div>
+</div>
+</div>
+</div>
+<!-- Skeleton Filter Chips -->
+<div class="flex gap-2 animate-pulse overflow-hidden">
+<div class="h-8 w-20 rounded-full bg-surface-container-high shrink-0"></div>
+<div class="h-8 w-20 rounded-full bg-surface-container-high shrink-0"></div>
+<div class="h-8 w-20 rounded-full bg-surface-container-high shrink-0"></div>
+<div class="h-8 w-28 rounded-lg bg-surface-container-high shrink-0 ml-auto"></div>
+</div>
+<!-- Skeleton Holding Card Items -->
+<div class="flex flex-col gap-space-xs animate-pulse">
+<div class="p-space-md rounded-xl bg-surface-container-low flex flex-col gap-space-sm">
+<div class="flex justify-between items-center">
+<div class="flex gap-2 items-center">
+<div class="w-12 h-6 rounded bg-surface-container-highest"></div>
+<div class="h-5 w-32 rounded bg-surface-container-highest"></div>
+</div>
+<div class="h-6 w-24 rounded bg-surface-container-highest"></div>
+</div>
+<div class="h-[1px] bg-surface-container-highest"></div>
+<div class="grid grid-cols-3 gap-2">
+<div class="h-4 rounded bg-surface-container-highest"></div>
+<div class="h-4 rounded bg-surface-container-highest"></div>
+<div class="h-4 rounded bg-surface-container-highest"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- ========================================== -->
+<!-- STATE 4: 検索ゼロ (Zero Search Results)     -->
+<!-- ========================================== -->
+<div class="state-panel flex-col gap-space-md w-full hidden" id="state-zero">
+<!-- Active Search Bar with Query Pill -->
+<div class="p-space-sm rounded-xl bg-surface-container-high flex items-center justify-between">
+<div class="flex items-center gap-space-xs min-w-0">
+<span class="material-symbols-outlined text-primary text-[20px]">search</span>
+<span class="font-label-md text-label-md text-on-surface-variant">検索条件:</span>
+<span class="px-2.5 py-0.5 rounded-full bg-primary-container/20 text-primary font-bold text-label-sm font-label-sm">
+          "NVDA"
+        </span>
+</div>
+<button class="flex items-center gap-0.5 text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm p-1" onclick="resetSearch()" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+<span class="">解除</span>
+</button>
+</div>
+<!-- Zero State Illustration & Messaging -->
+<section class="p-space-xl rounded-xl bg-surface-container-low flex flex-col items-center text-center gap-space-md shadow-md">
+<div class="relative w-20 h-20 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-[38px] text-on-surface-variant">search_off</span>
+<span class="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-error-container text-error flex items-center justify-center font-bold text-[12px]">0</span>
+</div>
+<div class="flex flex-col gap-space-xs max-w-xs">
+<h3 class="font-title-lg text-title-lg text-on-surface font-bold">該当する銘柄が見つかりません</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+          検索条件 <span class="text-primary font-semibold">"NVDA"</span> に一致する保有銘柄はありません。並び替え条件を維持したまま検索をクリアするか、新しく銘柄を追加してください。
+        </p>
+</div>
+<div class="flex flex-col w-full gap-space-xs">
+<button class="w-full h-12 rounded-lg bg-primary-container text-on-primary-container font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-lg active:scale-98 transition-all" onclick="resetSearch()" type="button">
+<span class="material-symbols-outlined text-[20px]">filter_alt_off</span>
+<span class="">フィルター・検索をリセット</span>
+</button>
+<button class="w-full h-11 rounded-lg bg-surface-container-high text-on-surface font-label-md text-label-md font-semibold flex items-center justify-center gap-1.5 active:scale-98 transition-all" onclick="quickAddNVDA()" type="button">
+<span class="material-symbols-outlined text-[18px] text-primary">add</span>
+<span class="">「NVDA」を新規保有銘柄に追加</span>
+</button>
+</div>
+</section>
+</div>
+<!-- ========================================== -->
+<!-- STATE 5: 初期未登録・空状態 (Initial Empty) -->
+<!-- ========================================== -->
+<div class="state-panel hidden flex-col gap-space-md w-full" id="state-empty">
+<!-- Blank Asset Summary Card -->
+<section class="p-space-md rounded-xl bg-surface-container-low shadow-sm flex flex-col gap-space-sm opacity-90">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant">総資産評価額</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm">未登録</span>
+</div>
+<div class="flex items-baseline gap-space-xs">
+<span class="font-numeric-hero-mobile text-numeric-hero-mobile text-on-surface-variant">¥0</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">JPY</span>
+</div>
+<div class="flex items-center gap-space-xs text-on-surface-variant font-label-sm text-label-sm">
+<span class="">通算損益: ±¥0 (0.00%)</span>
+<span class="">•</span>
+<span class="">年間予想配当金: ¥0/年</span>
+</div>
+</section>
+<!-- Empty Guidance Hero Hero Box -->
+<section class="p-space-xl rounded-xl bg-surface-container-low shadow-xl flex flex-col items-center text-center gap-space-md">
+<div class="relative w-24 h-24 rounded-full bg-surface-container-high flex items-center justify-center shadow-inner">
+<div class="absolute inset-0 rounded-full border-2 border-dashed border-primary/40 animate-spin" style="animation-duration: 20s;"></div>
+<span class="material-symbols-outlined text-[44px] text-primary">account_balance_wallet</span>
+<span class="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full bg-primary-container text-on-primary-container font-label-sm text-[10px] font-bold shadow">
+          1分で登録
+        </span>
+</div>
+<div class="flex flex-col gap-space-xs max-w-xs">
+<h3 class="font-headline-md text-headline-md text-on-surface font-bold">まだ保有銘柄が登録されていません</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+          証券口座連携は不要です。右下の「＋」ボタンまたはCSVインポートから1分ですぐに保有株式を登録できます。登録後は評価額や利回り順で自在に並び替え可能です。
+        </p>
+</div>
+<div class="flex flex-col w-full gap-space-xs">
+<button class="w-full h-12 rounded-lg bg-primary-container text-on-primary-container font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-lg active:scale-98 transition-all" onclick="switchState('normal')" type="button">
+<span class="material-symbols-outlined text-[22px]">add</span>
+<span class="">銘柄を手動で追加 (デモデータを復元)</span>
+</button>
+<button class="w-full h-11 rounded-lg bg-surface-container-high text-on-surface font-label-md text-label-md font-semibold flex items-center justify-center gap-2 active:scale-98 transition-all" type="button">
+<span class="material-symbols-outlined text-[18px]">upload_file</span>
+<span class="">CSVファイルから一括インポート</span>
+</button>
+</div>
+</section>
+</div>
+<!-- ========================================== -->
+<!-- SORT & FILTER MODAL SHEET                  -->
+<!-- ========================================== -->
+<div class="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex flex-col justify-end transition-opacity hidden" id="sort-modal" onclick="if(event.target === this) closeSortModal();">
+<div class="w-full bg-surface-container-low rounded-t-2xl p-space-md flex flex-col gap-space-md shadow-2xl max-h-[751px] overflow-y-auto" onclick="event.stopPropagation();">
+<!-- Modal Header -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[22px]">tune</span>
+<h3 class="font-title-lg text-title-lg text-on-surface font-bold">並び替え条件の選択</h3>
+</div>
+<button aria-label="Close" class="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface" onclick="closeSortModal()" type="button">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<!-- Direction Order Segmented Switch -->
+<div class="flex flex-col gap-space-xs">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-semibold">順序</span>
+<div class="grid grid-cols-2 p-1 rounded-xl bg-surface-container-high">
+<button class="h-9 rounded-lg bg-primary-container text-on-primary-container font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1" id="dir-desc-btn" onclick="setSortDirection('desc')" type="button">
+<span class="material-symbols-outlined text-[16px]">arrow_downward</span>
+<span class="">降順 (大きい順)</span>
+</button>
+<button class="h-9 rounded-lg text-on-surface-variant font-label-md text-label-md font-semibold transition-all flex items-center justify-center gap-1" id="dir-asc-btn" onclick="setSortDirection('asc')" type="button">
+<span class="material-symbols-outlined text-[16px]">arrow_upward</span>
+<span class="">昇順 (小さい順)</span>
+</button>
+</div>
+</div>
+<!-- Sort Criteria List -->
+<div class="flex flex-col gap-1.5">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-semibold">ソート項目</span>
+<button class="sort-option-btn p-3 rounded-xl bg-surface-container-high text-on-surface flex items-center justify-between font-label-md text-label-md font-semibold" data-criteria="val" onclick="selectCriteria('val', '評価額')" type="button">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">account_balance</span>
+<span class="">評価額 (保有資産ウェイト)</span>
+</div>
+<span class="material-symbols-outlined text-primary check-icon">check_circle</span>
+</button>
+<button class="sort-option-btn p-3 rounded-xl bg-surface-container text-on-surface-variant flex items-center justify-between font-label-md text-label-md font-medium" data-criteria="gain" onclick="selectCriteria('gain', '評価損益率')" type="button">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">trending_up</span>
+<span class="">評価損益率 (%)</span>
+</div>
+<span class="material-symbols-outlined text-primary check-icon hidden">check_circle</span>
+</button>
+<button class="sort-option-btn p-3 rounded-xl bg-surface-container text-on-surface-variant flex items-center justify-between font-label-md text-label-md font-medium" data-criteria="div" onclick="selectCriteria('div', '配当利回り')" type="button">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">percent</span>
+<span class="">配当利回り (高配当順)</span>
+</div>
+<span class="material-symbols-outlined text-primary check-icon hidden">check_circle</span>
+</button>
+<button class="sort-option-btn p-3 rounded-xl bg-surface-container text-on-surface-variant flex items-center justify-between font-label-md text-label-md font-medium" data-criteria="div_amt" onclick="selectCriteria('div_amt', '配当金額')" type="button">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">payments</span>
+<span class="">予想年間受取配当額 (受取貢献度)</span>
+</div>
+<span class="material-symbols-outlined text-primary check-icon hidden">check_circle</span>
+</button>
+<button class="sort-option-btn p-3 rounded-xl bg-surface-container text-on-surface-variant flex items-center justify-between font-label-md text-label-md font-medium" data-criteria="code" onclick="selectCriteria('code', '銘柄コード')" type="button">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">pin</span>
+<span class="">銘柄コード / ティッカー順</span>
+</div>
+<span class="material-symbols-outlined text-primary check-icon hidden">check_circle</span>
+</button>
+</div>
+<!-- Action Buttons -->
+<div class="flex gap-space-xs pt-1">
+<button class="flex-1 h-12 rounded-lg bg-surface-container-high text-on-surface font-label-lg text-label-lg font-semibold active:scale-98 transition-all" onclick="closeSortModal()" type="button">
+          キャンセル
+        </button>
+<button class="flex-1 h-12 rounded-lg bg-primary-container text-on-primary-container font-label-lg text-label-lg font-bold shadow-lg active:scale-98 transition-all" onclick="applySortAndClose()" type="button">
+          適用する
+        </button>
+</div>
+</div>
+</div><!-- SEARCH BOTTOM SHEET MODAL -->
+<div class="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex flex-col justify-end transition-opacity duration-300 opacity-0 hidden" id="search-modal" onclick="handleSearchBackdropClick(event)">
+<div class="w-full bg-surface-container-low rounded-t-2xl p-space-md flex flex-col gap-space-md shadow-2xl max-h-[751px] overflow-y-auto transform transition-transform duration-300 ease-out border-t border-surface-container-highest/40 translate-y-full" id="search-sheet-panel" onclick="event.stopPropagation()">
+<!-- Handle bar for swipe/bottom sheet affordance -->
+<div class="w-12 h-1.5 rounded-full bg-surface-container-highest mx-auto -mt-1 mb-1 shrink-0"></div>
+<!-- Header -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</div>
+<div>
+<h3 class="font-title-lg text-title-lg text-on-surface font-bold">銘柄検索・絞り込み</h3>
+<p class="font-label-sm text-[11px] text-on-surface-variant">保有銘柄の絞り込みまたは新規追加候補を探す</p>
+</div>
+</div>
+<button aria-label="閉じる" class="w-9 h-9 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors" onclick="closeSearchModal()" type="button">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<!-- Search Input Box -->
+<div class="relative flex items-center">
+<span class="absolute left-3 material-symbols-outlined text-[20px] text-on-surface-variant pointer-events-none">search</span>
+<input autofocus="" class="w-full h-12 pl-10 pr-10 rounded-xl bg-surface-container-high border border-surface-container-highest/60 text-on-surface font-body-md placeholder:text-on-surface-variant/60 focus:outline-none focus:border-primary transition-colors" id="search-sheet-input" oninput="handleSearchInput(this.value)" placeholder="銘柄名・コード・ティッカー（例: 7203, トヨタ, AAPL）" type="text"/>
+<button class="absolute right-3 w-6 h-6 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface-variant hover:text-on-surface hidden transition-opacity" id="search-clear-btn" onclick="clearSearchInput()" type="button">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+<!-- Category Filter Chips -->
+<div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+<button class="search-cat-chip px-3 py-1.5 rounded-full bg-primary-container text-on-primary-container font-label-sm text-label-sm font-bold shadow-sm shrink-0 transition-all" onclick="setSearchFilterCategory(this, 'all')" type="button">すべて</button>
+<button class="search-cat-chip px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm font-medium shrink-0 transition-all" onclick="setSearchFilterCategory(this, 'jp')" type="button">日本株</button>
+<button class="search-cat-chip px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm font-medium shrink-0 transition-all" onclick="setSearchFilterCategory(this, 'us')" type="button">米国株</button>
+<button class="search-cat-chip px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm font-medium shrink-0 transition-all" onclick="setSearchFilterCategory(this, 'fund')" type="button">投信</button>
+<button class="search-cat-chip px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm font-medium shrink-0 transition-all" onclick="setSearchFilterCategory(this, 'high-div')" type="button">高配当 (3%以上)</button>
+</div>
+<!-- Quick Hot Search Tags -->
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-[11px] text-on-surface-variant font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary">local_fire_department</span>
+          人気の検索・注目高配当銘柄
+        </span>
+</div>
+<div class="flex flex-wrap gap-1.5">
+<button class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-[12px] flex items-center gap-1 transition-colors" onclick="fillSearchKeyword('7203 トヨタ自動車')" type="button">
+<span class="font-mono font-bold text-primary">7203</span>
+<span class="">トヨタ</span>
+</button>
+<button class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-[12px] flex items-center gap-1 transition-colors" onclick="fillSearchKeyword('8316 三井住友FG')" type="button">
+<span class="font-mono font-bold text-primary">8316</span>
+<span class="">三井住友FG</span>
+</button>
+<button class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-[12px] flex items-center gap-1 transition-colors" onclick="fillSearchKeyword('9432 日本電信電話')" type="button">
+<span class="font-mono font-bold text-primary">9432</span>
+<span class="">NTT</span>
+</button>
+<button class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-[12px] flex items-center gap-1 transition-colors" onclick="fillSearchKeyword('AAPL Apple')" type="button">
+<span class="font-mono font-bold text-secondary">AAPL</span>
+<span class="">Apple</span>
+</button>
+<button class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-[12px] flex items-center gap-1 transition-colors" onclick="fillSearchKeyword('8058 三菱商事')" type="button">
+<span class="font-mono font-bold text-primary">8058</span>
+<span class="">三菱商事</span>
+</button>
+</div>
+</div>
+<!-- Candidate Results / Search Preview List -->
+<div class="flex flex-col gap-1.5 pt-1">
+<div class="flex items-center justify-between px-0.5">
+<span class="font-label-sm text-[11px] text-on-surface-variant font-semibold" id="search-result-count-label">候補銘柄プレビュー (3件保有中)</span>
+<span class="font-label-sm text-[10px] text-primary">タップで絞り込み</span>
+</div>
+<div class="flex flex-col gap-space-xs max-h-56 overflow-y-auto pr-0.5" id="search-candidates-list">
+<!-- Candidate 1: トヨタ -->
+<div class="p-space-sm rounded-xl bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-between cursor-pointer transition-colors border border-surface-container-highest/40" onclick="applySearchToMain('7203')">
+<div class="flex items-center gap-space-xs min-w-0">
+<span class="px-2 py-1 rounded bg-surface-container font-mono text-[11px] text-on-surface font-bold">7203</span>
+<div class="min-w-0">
+<div class="flex items-center gap-1">
+<p class="font-title-md text-[14px] text-on-surface font-bold truncate">トヨタ自動車</p>
+<span class="px-1.5 py-0.2 rounded bg-primary/20 text-primary text-[10px] font-bold">保有中</span>
+</div>
+<span class="font-body-sm text-[11px] text-on-surface-variant">東証P • 輸送用機器</span>
+</div>
+</div>
+<div class="text-right shrink-0">
+<span class="block font-mono font-bold text-[14px] text-on-surface">¥2,600</span>
+<span class="font-label-sm text-[11px] text-primary font-bold">利回り 2.80%</span>
+</div>
+</div>
+<!-- Candidate 2: Apple -->
+<div class="p-space-sm rounded-xl bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-between cursor-pointer transition-colors border border-surface-container-highest/40" onclick="applySearchToMain('AAPL')">
+<div class="flex items-center gap-space-xs min-w-0">
+<span class="px-2 py-1 rounded bg-secondary-container/40 font-mono text-[11px] text-secondary font-bold">AAPL</span>
+<div class="min-w-0">
+<div class="flex items-center gap-1">
+<p class="font-title-md text-[14px] text-on-surface font-bold truncate">Apple Inc.</p>
+<span class="px-1.5 py-0.2 rounded bg-primary/20 text-primary text-[10px] font-bold">保有中</span>
+</div>
+<span class="font-body-sm text-[11px] text-on-surface-variant">NASDAQ • 米国株</span>
+</div>
+</div>
+<div class="text-right shrink-0">
+<span class="block font-mono font-bold text-[14px] text-on-surface">$220.00</span>
+<span class="font-label-sm text-[11px] text-on-surface font-semibold">利回り 0.52%</span>
+</div>
+</div>
+<!-- Candidate 3: オルカン -->
+<div class="p-space-sm rounded-xl bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-between cursor-pointer transition-colors border border-surface-container-highest/40" onclick="applySearchToMain('全世界株式')">
+<div class="flex items-center gap-space-xs min-w-0">
+<span class="px-2 py-1 rounded bg-surface-container font-mono text-[11px] text-tertiary-fixed font-bold">投信</span>
+<div class="min-w-0">
+<div class="flex items-center gap-1">
+<p class="font-title-md text-[14px] text-on-surface font-bold truncate">eMAXIS Slim 全世界株式</p>
+<span class="px-1.5 py-0.2 rounded bg-primary/20 text-primary text-[10px] font-bold">保有中</span>
+</div>
+<span class="font-body-sm text-[11px] text-on-surface-variant">オルカン • 三菱UFJ</span>
+</div>
+</div>
+<div class="text-right shrink-0">
+<span class="block font-mono font-bold text-[14px] text-on-surface">¥24,460</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant">再投資型</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Action Button -->
+<div class="flex gap-space-xs pt-1">
+<button class="flex-1 h-12 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-lg text-label-lg font-semibold active:scale-98 transition-all" onclick="closeSearchModal()" type="button">
+        キャンセル
+      </button>
+<button class="flex-1 h-12 rounded-lg bg-primary-container text-on-primary-container font-label-lg text-label-lg font-bold shadow-lg active:scale-98 transition-all flex items-center justify-center gap-1" onclick="executeSearch()" type="button">
+<span class="material-symbols-outlined text-[20px]">search</span>
+<span class="">この条件で絞り込み</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- State Management & Dynamic Sort Client Script -->
+<script>
+  // Global State Variables
+  let currentSortCriteria = 'val';
+  let currentSortDirection = 'desc';
+  let currentCriteriaLabel = '評価額';
+  let isPrivacyActive = false;
+  let selectedMonth = null;
+
+  function switchState(stateName) {
+    const panels = document.querySelectorAll('.state-panel');
+    panels.forEach(p => {
+      p.classList.add('hidden');
+      p.classList.remove('flex');
+    });
+
+    const target = document.getElementById('state-' + stateName);
+    if (target) {
+      target.classList.remove('hidden');
+      target.classList.add('flex');
+    }
+
+    const tabBtns = document.querySelectorAll('.state-tab-btn');
+    tabBtns.forEach(btn => {
+      if (btn.getAttribute('data-state') === stateName) {
+        btn.classList.remove('bg-surface-container', 'text-on-surface-variant');
+        btn.classList.add('bg-primary-container', 'text-on-primary-container', 'font-bold', 'shadow-sm');
+      } else {
+        btn.classList.add('bg-surface-container', 'text-on-surface-variant');
+        btn.classList.remove('bg-primary-container', 'text-on-primary-container', 'font-bold', 'shadow-sm');
+      }
+    });
+
+    if (stateName === 'loading') {
+      setTimeout(() => {
+        if (document.getElementById('state-loading').classList.contains('flex')) {
+          switchState('normal');
+        }
+      }, 2200);
+    }
+  }
+
+  function togglePrivacy() {
+    isPrivacyActive = !isPrivacyActive;
+    const totalEl = document.getElementById('display-total-assets');
+    const gainEl = document.getElementById('display-gain-val');
+    const divEl = document.getElementById('display-div-amt');
+    const icon = document.getElementById('privacy-icon');
+
+    if (isPrivacyActive) {
+      totalEl.innerText = '¥ ••••••••';
+      gainEl.innerText = '+¥ ••••••';
+      divEl.innerText = '¥ ••••••';
+      icon.innerText = 'visibility_off';
+    } else {
+      totalEl.innerText = '¥3,500,000';
+      gainEl.innerText = '+¥450,000';
+      divEl.innerText = '¥124,500';
+      icon.innerText = 'visibility';
+    }
+  }
+
+  // Seamless Calendar Pivot & Interactive Monthly Filter
+  function selectHomeMonth(month, amt) {
+    // If clicking the currently selected month, toggle back to full year
+    if (selectedMonth === month) {
+      resetToAllMonths();
+      return;
+    }
+
+    selectedMonth = month;
+
+    // 1. Update Graph Card top label & value
+    const label = document.getElementById('home-chart-month-label');
+    const val = document.getElementById('home-chart-month-val');
+    const resetBtn = document.getElementById('chart-annual-reset-btn');
+    const subSummary = document.getElementById('chart-sub-summary');
+
+    if (label) label.innerText = `${month}月予定:`;
+    if (val) val.innerText = amt;
+    if (resetBtn) resetBtn.classList.remove('hidden');
+    if (subSummary) subSummary.innerText = `${month}月受取配当額: ${amt}`;
+
+    // 2. Highlight selected bar and remove highlight from others
+    const allBars = document.querySelectorAll('.mini-bar');
+    allBars.forEach(b => {
+      const isTarget = b.getAttribute('data-month') === String(month);
+      const span = b.querySelector('span');
+      const valText = b.querySelector('.text-\\[8px\\]');
+      const barWrapper = b.querySelector('.max-w-\\[14px\\]');
+      const existingIndicator = b.querySelector('.drop-indicator');
+
+      if (isTarget) {
+        b.classList.add('is-active');
+        if (span) span.className = 'mt-1.5 font-label-sm text-[10px] text-primary font-bold';
+        if (valText) valText.className = 'text-[8px] text-primary font-bold mb-0.5 font-mono';
+        if (barWrapper) {
+          barWrapper.classList.add('ring-2', 'ring-primary', 'ring-offset-1', 'ring-offset-surface-container-low', 'shadow-md');
+        }
+        if (!existingIndicator) {
+          const newInd = document.createElement('div');
+          newInd.className = 'drop-indicator absolute -top-3 flex items-center justify-center';
+          newInd.innerHTML = '<span class="material-symbols-outlined text-primary text-[12px]">arrow_drop_down</span>';
+          b.prepend(newInd);
+        }
+      } else {
+        b.classList.remove('is-active');
+        if (span) span.className = 'mt-1.5 font-label-sm text-[10px] text-on-surface-variant';
+        if (valText) valText.className = 'text-[8px] text-on-surface-variant mb-0.5 font-mono';
+        if (barWrapper) {
+          barWrapper.classList.remove('ring-2', 'ring-primary', 'ring-offset-1', 'ring-offset-surface-container-low', 'shadow-md');
+        }
+        if (existingIndicator) existingIndicator.remove();
+      }
+    });
+
+    // 3. Filter the holdings list below
+    filterHoldingsByMonth(month);
+  }
+
+  function resetToAllMonths() {
+    selectedMonth = null;
+
+    // Reset Top Graph Labels
+    const label = document.getElementById('home-chart-month-label');
+    const val = document.getElementById('home-chart-month-val');
+    const resetBtn = document.getElementById('chart-annual-reset-btn');
+    const subSummary = document.getElementById('chart-sub-summary');
+
+    if (label) label.innerText = '年間合計:';
+    if (val) val.innerText = '¥124,500';
+    if (resetBtn) resetBtn.classList.add('hidden');
+    if (subSummary) subSummary.innerText = '月平均: 約¥10,375';
+
+    // Clear active states on all bars
+    const allBars = document.querySelectorAll('.mini-bar');
+    allBars.forEach(b => {
+      b.classList.remove('is-active');
+      const span = b.querySelector('span');
+      const valText = b.querySelector('.text-\\[8px\\]');
+      const barWrapper = b.querySelector('.max-w-\\[14px\\]');
+      const existingIndicator = b.querySelector('.drop-indicator');
+
+      if (span) span.className = 'mt-1.5 font-label-sm text-[10px] text-on-surface-variant';
+      if (valText) valText.className = 'text-[8px] text-on-surface-variant mb-0.5 font-mono';
+      if (barWrapper) {
+        barWrapper.classList.remove('ring-2', 'ring-primary', 'ring-offset-1', 'ring-offset-surface-container-low', 'shadow-md');
+      }
+      if (existingIndicator) existingIndicator.remove();
+    });
+
+    // Reset Holdings Header
+    const headerTitle = document.getElementById('holdings-header-title');
+    const headerIcon = document.getElementById('holdings-header-icon');
+    const headerCount = document.getElementById('holdings-header-count');
+    const resetHoldingsBtn = document.getElementById('reset-holdings-filter-btn');
+
+    if (headerTitle) headerTitle.innerText = '保有銘柄一覧';
+    if (headerIcon) headerIcon.innerText = 'inventory_2';
+    if (headerCount) headerCount.innerText = '3件';
+    if (resetHoldingsBtn) resetHoldingsBtn.classList.add('hidden');
+
+    // Show all articles and reset decorations
+    const container = document.getElementById('holdings-list-container');
+    const articles = container.querySelectorAll('article');
+    articles.forEach(art => {
+      art.classList.remove('hidden');
+      art.classList.remove('border', 'border-primary/40', 'bg-surface-container-low/95');
+
+      const ribbon = art.querySelector('.month-ribbon');
+      if (ribbon) ribbon.classList.add('hidden');
+
+      const highlightBox = art.querySelector('.month-highlight-box');
+      if (highlightBox) highlightBox.classList.add('hidden');
+
+      const defaultFooter = art.querySelector('.default-footer');
+      if (defaultFooter) defaultFooter.classList.remove('hidden');
+    });
+
+    const emptyState = document.getElementById('month-empty-state');
+    if (emptyState) emptyState.classList.add('hidden');
+  }
+
+  function filterHoldingsByMonth(month) {
+    const container = document.getElementById('holdings-list-container');
+    const articles = container.querySelectorAll('article');
+    const emptyState = document.getElementById('month-empty-state');
+    const headerTitle = document.getElementById('holdings-header-title');
+    const headerIcon = document.getElementById('holdings-header-icon');
+    const headerCount = document.getElementById('holdings-header-count');
+    const resetHoldingsBtn = document.getElementById('reset-holdings-filter-btn');
+
+    let visibleCount = 0;
+
+    articles.forEach(art => {
+      const monthStr = art.getAttribute('data-months') || '';
+      const monthsArray = monthStr.split(',').map(m => m.trim()).filter(Boolean);
+      const isMatch = monthsArray.includes(String(month));
+
+      const ribbon = art.querySelector('.month-ribbon');
+      const ribbonText = art.querySelector('.ribbon-text');
+      const highlightBox = art.querySelector('.month-highlight-box');
+      const defaultFooter = art.querySelector('.default-footer');
+      const timingLabel = art.querySelector('.timing-label');
+      const amountLabel = art.querySelector('.amount-label');
+
+      if (isMatch) {
+        art.classList.remove('hidden');
+        art.classList.add('border', 'border-primary/40');
+        visibleCount++;
+
+        // Setup Month specific ribbon & highlight timing
+        const divType = art.getAttribute('data-dividend-type') || '配当';
+        const payoutAmt = art.getAttribute('data-month-amount') || '';
+
+        if (ribbon) {
+          ribbon.classList.remove('hidden');
+          if (ribbonText) ribbonText.innerText = `${month}月入金 (${divType})`;
+        }
+
+        if (highlightBox) {
+          highlightBox.classList.remove('hidden');
+          if (timingLabel) timingLabel.innerText = `${month}月中旬予定`;
+          if (amountLabel) amountLabel.innerText = payoutAmt;
+        }
+
+        if (defaultFooter) defaultFooter.classList.add('hidden');
+      } else {
+        art.classList.add('hidden');
+        art.classList.remove('border', 'border-primary/40');
+      }
+    });
+
+    // Update Header
+    if (headerTitle) headerTitle.innerText = `${month}月の配当入金ポートフォリオ`;
+    if (headerIcon) headerIcon.innerText = 'event_available';
+    if (headerCount) headerCount.innerText = `${visibleCount}件`;
+    if (resetHoldingsBtn) resetHoldingsBtn.classList.remove('hidden');
+
+    // Handle Empty State
+    if (visibleCount === 0) {
+      if (emptyState) {
+        emptyState.classList.remove('hidden');
+        emptyState.classList.add('flex');
+        const emptyTitle = document.getElementById('empty-month-title');
+        if (emptyTitle) emptyTitle.innerText = `${month}月の配当受取銘柄はありません`;
+      }
+    } else {
+      if (emptyState) {
+        emptyState.classList.add('hidden');
+        emptyState.classList.remove('flex');
+      }
+    }
+  }
+
+  function openSortModal() {
+    const modal = document.getElementById('sort-modal');
+    modal.classList.remove('hidden');
+  }
+
+  function closeSortModal() {
+    const modal = document.getElementById('sort-modal');
+    modal.classList.add('hidden');
+  }
+
+  function setSortDirection(dir) {
+    currentSortDirection = dir;
+    const descBtn = document.getElementById('dir-desc-btn');
+    const ascBtn = document.getElementById('dir-asc-btn');
+
+    if (dir === 'desc') {
+      descBtn.className = 'h-9 rounded-lg bg-primary-container text-on-primary-container font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1';
+      ascBtn.className = 'h-9 rounded-lg text-on-surface-variant font-label-md text-label-md font-semibold transition-all flex items-center justify-center gap-1';
+    } else {
+      ascBtn.className = 'h-9 rounded-lg bg-primary-container text-on-primary-container font-label-md text-label-md font-bold transition-all flex items-center justify-center gap-1';
+      descBtn.className = 'h-9 rounded-lg text-on-surface-variant font-label-md text-label-md font-semibold transition-all flex items-center justify-center gap-1';
+    }
+  }
+
+  function selectCriteria(criteria, label) {
+    currentSortCriteria = criteria;
+    currentCriteriaLabel = label;
+
+    const btns = document.querySelectorAll('.sort-option-btn');
+    btns.forEach(btn => {
+      const isTarget = btn.getAttribute('data-criteria') === criteria;
+      const checkIcon = btn.querySelector('.check-icon');
+      if (isTarget) {
+        btn.classList.add('bg-surface-container-high', 'text-on-surface', 'font-semibold');
+        btn.classList.remove('bg-surface-container', 'text-on-surface-variant');
+        if (checkIcon) checkIcon.classList.remove('hidden');
+      } else {
+        btn.classList.remove('bg-surface-container-high', 'text-on-surface', 'font-semibold');
+        btn.classList.add('bg-surface-container', 'text-on-surface-variant');
+        if (checkIcon) checkIcon.classList.add('hidden');
+      }
+    });
+  }
+
+  function applySortAndClose() {
+    const dirLabel = currentSortDirection === 'desc' ? '降順' : '昇順';
+    document.getElementById('active-sort-label').innerText = `${currentCriteriaLabel} (${dirLabel})`;
+
+    const container = document.getElementById('holdings-list-container');
+    const items = Array.from(container.querySelectorAll('article'));
+
+    items.sort((a, b) => {
+      let valA = 0;
+      let valB = 0;
+      if (currentSortCriteria === 'val') {
+        valA = parseFloat(a.getAttribute('data-val') || 0);
+        valB = parseFloat(b.getAttribute('data-val') || 0);
+      } else if (currentSortCriteria === 'gain') {
+        valA = parseFloat(a.getAttribute('data-gain') || 0);
+        valB = parseFloat(b.getAttribute('data-gain') || 0);
+      } else if (currentSortCriteria === 'div') {
+        valA = parseFloat(a.getAttribute('data-div') || 0);
+        valB = parseFloat(b.getAttribute('data-div') || 0);
+      }
+
+      if (currentSortDirection === 'desc') {
+        return valB - valA;
+      } else {
+        return valA - valB;
+      }
+    });
+
+    items.forEach(item => container.appendChild(item));
+    closeSortModal();
+  }
+
+  function resetSearch() {
+    switchState('normal');
+  }
+
+  function quickAddNVDA() {
+    switchState('normal');
+  }
+
+  function triggerRetryAnimation() {
+    const btn = document.getElementById('offline-retry-btn');
+    const icon = document.getElementById('retry-btn-icon');
+    const label = document.getElementById('retry-btn-label');
+
+    icon.classList.add('animate-spin');
+    label.innerText = 'サーバーと通信中...';
+    btn.disabled = true;
+
+    setTimeout(() => {
+      icon.classList.remove('animate-spin');
+      label.innerText = '接続成功！最新株価を反映';
+      btn.classList.remove('bg-primary-container', 'text-on-primary-container');
+      btn.classList.add('bg-primary', 'text-on-primary');
+
+      setTimeout(() => {
+        switchState('normal');
+      }, 700);
+    }, 1400);
+  }
+</script><script>
+  // Search Modal Management
+  function openSearchModal() {
+    const modal = document.getElementById('search-modal');
+    const panel = document.getElementById('search-sheet-panel');
+    const input = document.getElementById('search-sheet-input');
+    if (!modal || !panel) return;
+
+    modal.classList.remove('hidden');
+    // Force layout reflow before transitioning
+    requestAnimationFrame(() => {
+      modal.classList.remove('opacity-0');
+      panel.classList.remove('translate-y-full');
+      panel.classList.add('translate-y-0');
+      if (input) {
+        setTimeout(() => input.focus(), 150);
+      }
+    });
+  }
+
+  function closeSearchModal() {
+    const modal = document.getElementById('search-modal');
+    const panel = document.getElementById('search-sheet-panel');
+    if (!modal || !panel) return;
+
+    modal.classList.add('opacity-0');
+    panel.classList.remove('translate-y-0');
+    panel.classList.add('translate-y-full');
+
+    setTimeout(() => {
+      modal.classList.add('hidden');
+    }, 300);
+  }
+
+  function handleSearchBackdropClick(e) {
+    if (e.target.id === 'search-modal') {
+      closeSearchModal();
+    }
+  }
+
+  function clearSearchInput() {
+    const input = document.getElementById('search-sheet-input');
+    const clearBtn = document.getElementById('search-clear-btn');
+    if (input) {
+      input.value = '';
+      input.focus();
+    }
+    if (clearBtn) clearBtn.classList.add('hidden');
+  }
+
+  function handleSearchInput(val) {
+    const clearBtn = document.getElementById('search-clear-btn');
+    if (clearBtn) {
+      if (val && val.length > 0) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+    }
+  }
+
+  function fillSearchKeyword(text) {
+    const input = document.getElementById('search-sheet-input');
+    if (input) {
+      input.value = text;
+      handleSearchInput(text);
+      input.focus();
+    }
+  }
+
+  function setSearchFilterCategory(btn, category) {
+    const chips = document.querySelectorAll('.search-cat-chip');
+    chips.forEach(c => {
+      c.classList.remove('bg-primary-container', 'text-on-primary-container', 'font-bold');
+      c.classList.add('bg-surface-container-high', 'text-on-surface-variant', 'font-medium');
+    });
+    btn.classList.remove('bg-surface-container-high', 'text-on-surface-variant', 'font-medium');
+    btn.classList.add('bg-primary-container', 'text-on-primary-container', 'font-bold');
+  }
+
+  function applySearchToMain(keyword) {
+    closeSearchModal();
+    // If keyword corresponds to holding, switch to normal state and highlight
+    if (typeof switchState === 'function') {
+      switchState('normal');
+    }
+  }
+
+  function executeSearch() {
+    const input = document.getElementById('search-sheet-input');
+    const q = input ? input.value.trim().toLowerCase() : '';
+    closeSearchModal();
+    if (q === 'nvda' || q.includes('nvda')) {
+      if (typeof switchState === 'function') {
+        switchState('zero');
+      }
+    } else {
+      if (typeof switchState === 'function') {
+        switchState('normal');
+      }
+    }
+  }
+
+  // ESC key support
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      const modal = document.getElementById('search-modal');
+      if (modal && !modal.classList.contains('hidden')) {
+        closeSearchModal();
+      }
+    }
+  });
+</script><script>
+  let currentHoldingCategory = 'all';
+
+  function filterHoldingsByCategory(btn, category) {
+    currentHoldingCategory = category;
+
+    const chips = document.querySelectorAll('.filter-chip');
+    chips.forEach(c => {
+      c.classList.remove('bg-primary/20', 'text-primary', 'font-bold', 'shadow-sm');
+      c.classList.add('bg-surface-container-high', 'text-on-surface-variant', 'font-medium');
+    });
+
+    if (btn) {
+      btn.classList.remove('bg-surface-container-high', 'text-on-surface-variant', 'font-medium');
+      btn.classList.add('bg-primary/20', 'text-primary', 'font-bold', 'shadow-sm');
+    }
+
+    const container = document.getElementById('holdings-list-container');
+    if (!container) return;
+    const articles = container.querySelectorAll('article');
+    let visibleCount = 0;
+
+    articles.forEach(art => {
+      const artCat = art.getAttribute('data-category');
+      let isMonthMatch = true;
+      if (typeof selectedMonth !== 'undefined' && selectedMonth !== null) {
+        const mStr = art.getAttribute('data-months') || '';
+        isMonthMatch = mStr.split(',').map(m => m.trim()).includes(String(selectedMonth));
+      }
+
+      const isCategoryMatch = (category === 'all' || artCat === category);
+
+      if (isCategoryMatch && isMonthMatch) {
+        art.classList.remove('hidden');
+        visibleCount++;
+      } else {
+        art.classList.add('hidden');
+      }
+    });
+
+    const headerCount = document.getElementById('holdings-header-count');
+    if (headerCount) {
+      headerCount.innerText = visibleCount + '件';
+    }
+  }
+</script></main><aside class="fixed right-margin bottom-24 z-50"><button aria-label="Add Asset or Dividend" class="fab-pulse w-14 h-14 rounded-full bg-primary-container text-on-primary flex items-center justify-center shadow-[0_8px_24px_rgba(16,185,129,0.35)] active:scale-95 transition-transform" onclick="openAddHoldingSheetModal()" type="button"><span class="material-symbols-outlined text-[28px]">add</span></button></aside><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface-container-low/90 backdrop-blur-xl shadow-[0_-4px_24px_rgba(2,6,23,0.7)]" data-active-classes="text-primary-container"><div class="flex items-center justify-around h-16 px-space-xs"><a aria-current="page" class="flex-1 h-12 flex flex-col items-center justify-center gap-space-xs transition-colors text-primary-container" data-path="asset-management" href="#"><span class="material-symbols-outlined text-[22px]">account_balance_wallet</span><span class="font-label-sm text-label-sm font-semibold tracking-tight">資産管理</span></a><a class="flex-1 h-12 flex flex-col items-center justify-center gap-space-xs text-on-surface-variant hover:text-on-surface transition-colors" data-path="annual-dividend" href="#"><span class="material-symbols-outlined text-[22px]">pie_chart</span><span class="font-label-sm text-label-sm font-semibold tracking-tight">分析</span></a><a class="flex-1 h-12 flex flex-col items-center justify-center gap-space-xs text-on-surface-variant hover:text-on-surface transition-colors" data-path="roadmap" href="{{DATA:SCREEN:SCREEN_131}}"><span class="material-symbols-outlined text-[22px]">flag</span><span class="font-label-sm text-label-sm font-semibold tracking-tight">ロードマップ</span></a><a class="flex-1 h-12 flex flex-col items-center justify-center gap-space-xs text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer" data-path="watchlist" href="#" onclick="event.preventDefault(); if (typeof switchState === 'function') { alert('Watchlist画面へ遷移します'); }"><svg fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path></svg><span class="font-label-sm text-label-sm font-semibold tracking-tight">Watchlist</span></a></div></nav>
+<div class="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex flex-col justify-end md:justify-center items-center transition-opacity duration-300 opacity-0 hidden" id="notification-modal" onclick="handleNotificationBackdropClick(event)"><div class="w-full md:max-w-lg bg-surface-container-low rounded-t-2xl md:rounded-2xl p-space-md flex flex-col gap-space-md shadow-2xl max-h-[751px] overflow-y-auto transform transition-transform duration-300 ease-out border-t md:border border-surface-container-highest/40 translate-y-full md:translate-y-0" id="notification-sheet-panel" onclick="event.stopPropagation()"><div class="w-12 h-1.5 rounded-full bg-surface-container-highest mx-auto -mt-1 mb-1 shrink-0 md:hidden"></div><div class="flex items-center justify-between"><div class="flex items-center gap-space-xs"><div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-primary"><span class="material-symbols-outlined text-[20px]">notifications_active</span></div><div><div class="flex items-center gap-2"><h3 class="font-title-lg text-title-lg text-on-surface font-bold">通知履歴・アクティビティ</h3><span class="px-2 py-0.5 rounded-full bg-primary/20 text-primary font-bold text-label-sm" id="notification-header-badge">未読 3件</span></div><p class="font-label-sm text-[11px] text-on-surface-variant">買場シグナル・配当入金・権利確定日速報</p></div></div><button aria-label="閉じる" class="w-9 h-9 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors" onclick="closeNotificationModal()" type="button"><span class="material-symbols-outlined text-[20px]">close</span></button></div><div class="flex items-center justify-between gap-2"><div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5"><button class="notification-tab-btn px-3 py-1.5 rounded-full bg-primary-container text-on-primary-container font-label-sm font-bold shadow-sm shrink-0 transition-all" data-type="all" onclick="filterNotifications(this, 'all')" type="button">すべて (5)</button><button class="notification-tab-btn px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-sm font-medium shrink-0 transition-all" data-type="dividend" onclick="filterNotifications(this, 'dividend')" type="button">権利落ち・入金 (3)</button><button class="notification-tab-btn px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-sm font-medium shrink-0 transition-all" data-type="signal" onclick="filterNotifications(this, 'signal')" type="button">買場シグナル (2)</button></div><button class="shrink-0 text-primary hover:underline font-label-sm text-[11px] font-semibold flex items-center gap-0.5" onclick="markAllNotificationsAsRead(); const b = document.getElementById('notification-unread-badge'); if(b) b.remove(); const hb = document.getElementById('notification-header-badge'); if(hb){ hb.innerText='すべて既読'; hb.className='px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-medium text-label-sm'; } document.querySelectorAll('.notification-item').forEach(el=&gt;{ el.setAttribute('data-unread','false'); el.classList.add('opacity-80','bg-surface-container'); el.classList.remove('bg-surface-container-high','border-primary/30'); const d = el.querySelector('.notif-unread-dot'); if(d){ d.classList.remove('bg-primary'); d.classList.add('bg-surface-container-highest'); } });" type="button"><span class="material-symbols-outlined text-[14px]">done_all</span><span class="">すべて既読</span></button></div><div class="px-2.5 py-1.5 rounded-lg bg-surface-container-high/80 border border-surface-container-highest/60 flex items-center justify-between font-label-sm text-[11px] text-on-surface-variant"><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span><span class="">配当金通知: <strong class="text-primary">ON</strong> / 買場アラート: <strong class="text-primary">ON</strong></span></div><span class="text-[10px] text-on-surface-variant/80">即時プッシュ</span></div><div class="flex flex-col gap-space-xs max-h-96 overflow-y-auto pr-0.5" id="notification-items-list"><article class="notification-item p-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest/90 border border-primary/30 flex flex-col gap-1.5 transition-all cursor-pointer relative overflow-hidden" data-category="signal" data-unread="true"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="notif-unread-dot w-2 h-2 rounded-full bg-primary shrink-0"></span><span class="px-2 py-0.5 rounded bg-primary-container/20 text-primary font-bold text-[10px] flex items-center gap-0.5"><span class="material-symbols-outlined text-[12px]">trending_up</span>買場シグナル</span><span class="font-mono font-bold text-xs text-on-surface bg-surface-container px-1.5 py-0.5 rounded">8316</span><span class="font-label-sm text-xs font-bold text-on-surface">三井住友FG</span></div><span class="font-label-sm text-[11px] text-on-surface-variant">10分前</span></div><p class="font-body-sm text-xs text-on-surface leading-relaxed pl-3.5">目標利回り<span class="text-primary font-bold">4.00%</span>を突破！絶好の買場水準に到達しました（現在株価 ¥3,150 / 配当利回り <strong class="text-primary">4.13%</strong>）</p></article><article class="notification-item p-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest/90 border border-primary/30 flex flex-col gap-1.5 transition-all cursor-pointer relative overflow-hidden" data-category="dividend" data-unread="true"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="notif-unread-dot w-2 h-2 rounded-full bg-primary shrink-0"></span><span class="px-2 py-0.5 rounded bg-[#38bdf8]/20 text-[#38bdf8] font-bold text-[10px] flex items-center gap-0.5"><span class="material-symbols-outlined text-[12px]">payments</span>配当金入金</span><span class="font-mono font-bold text-xs text-on-surface bg-surface-container px-1.5 py-0.5 rounded">7203</span><span class="font-label-sm text-xs font-bold text-on-surface">トヨタ自動車</span></div><span class="font-label-sm text-[11px] text-on-surface-variant">本日 09:30</span></div><p class="font-body-sm text-xs text-on-surface leading-relaxed pl-3.5">中間配当金が入金されました。受取金額: <strong class="text-primary">¥3,640</strong>（100株保有 / 新NISA成長投資枠 非課税）</p></article><article class="notification-item p-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest/90 border border-primary/30 flex flex-col gap-1.5 transition-all cursor-pointer relative overflow-hidden" data-category="dividend" data-unread="true"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="notif-unread-dot w-2 h-2 rounded-full bg-primary shrink-0"></span><span class="px-2 py-0.5 rounded bg-secondary-container/40 text-secondary font-bold text-[10px] flex items-center gap-0.5"><span class="material-symbols-outlined text-[12px]">event</span>権利落ち日</span><span class="font-mono font-bold text-xs text-secondary bg-surface-container px-1.5 py-0.5 rounded">AAPL</span><span class="font-label-sm text-xs font-bold text-on-surface">Apple Inc.</span></div><span class="font-label-sm text-[11px] text-on-surface-variant">昨日 18:00</span></div><p class="font-body-sm text-xs text-on-surface leading-relaxed pl-3.5">次回配当の権利付き最終売買日（明日）が近づいています。権利確定日: <strong class="text-on-surface">2025/02/14</strong></p></article><article class="notification-item p-3 rounded-xl bg-surface-container hover:bg-surface-container-high border border-surface-container-highest/40 flex flex-col gap-1.5 transition-all cursor-pointer relative opacity-80" data-category="signal" data-unread="false"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="notif-unread-dot w-2 h-2 rounded-full bg-surface-container-highest shrink-0"></span><span class="px-2 py-0.5 rounded bg-surface-container-highest text-on-surface-variant font-bold text-[10px] flex items-center gap-0.5"><span class="material-symbols-outlined text-[12px]">trending_up</span>買場シグナル</span><span class="font-mono font-bold text-xs text-on-surface bg-surface-container px-1.5 py-0.5 rounded">9432</span><span class="font-label-sm text-xs font-bold text-on-surface">NTT</span></div><span class="font-label-sm text-[11px] text-on-surface-variant">2日前</span></div><p class="font-body-sm text-xs text-on-surface-variant leading-relaxed pl-3.5">株価調整により配当利回りが3.37%に上昇中。目標利回り4.00%まであと¥24</p></article><article class="notification-item p-3 rounded-xl bg-surface-container hover:bg-surface-container-high border border-surface-container-highest/40 flex flex-col gap-1.5 transition-all cursor-pointer relative opacity-80" data-category="dividend" data-unread="false"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><span class="notif-unread-dot w-2 h-2 rounded-full bg-surface-container-highest shrink-0"></span><span class="px-2 py-0.5 rounded bg-surface-container-highest text-on-surface-variant font-bold text-[10px] flex items-center gap-0.5"><span class="material-symbols-outlined text-[12px]">autorenew</span>分配金再投資</span><span class="font-mono font-bold text-xs text-tertiary-fixed bg-surface-container px-1.5 py-0.5 rounded">投信</span><span class="font-label-sm text-xs font-bold text-on-surface">eMAXIS Slim 全世界株式</span></div><span class="font-label-sm text-[11px] text-on-surface-variant">3日前</span></div><p class="font-body-sm text-xs text-on-surface-variant leading-relaxed pl-3.5">四半期分配金のファンド内自動再投資が完了しました（受取なし・元本へ自動繰入）。</p></article></div><div class="flex items-center justify-between pt-1 border-t border-surface-container-highest/40"><button class="text-on-surface-variant hover:text-on-surface font-label-sm text-xs flex items-center gap-1 transition-colors" onclick="closeNotificationModal()" type="button"><span class="material-symbols-outlined text-[16px]">settings</span><span class="">通知設定を変更する</span></button><button class="px-4 py-2 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm font-semibold transition-all" onclick="closeNotificationModal()" type="button">閉じる</button></div></div></div><!-- ADD HOLDING BOTTOM SHEET MODAL -->
+<div class="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex flex-col justify-end md:justify-center items-center transition-opacity duration-300 opacity-0 hidden" id="add-holding-modal" onclick="handleAddHoldingBackdropClick(event)">
+<div class="w-full md:max-w-lg bg-surface-container-low rounded-t-2xl md:rounded-2xl p-space-md flex flex-col gap-space-sm shadow-2xl max-h-[751px] overflow-y-auto transform transition-transform duration-300 ease-out border-t md:border border-surface-container-highest/40 translate-y-full md:translate-y-0" id="add-holding-sheet-panel" onclick="event.stopPropagation()">
+<div class="w-12 h-1.5 rounded-full bg-surface-container-highest mx-auto -mt-1 mb-1 shrink-0 md:hidden"></div>
+<!-- Header -->
+<div class="flex items-center justify-between pb-1 border-b border-surface-container-highest/40">
+<div class="flex items-center gap-space-xs">
+<div class="w-8 h-8 rounded-lg bg-primary-container/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[20px]">add_circle</span>
+</div>
+<div>
+<h3 class="font-title-lg text-title-lg text-on-surface font-bold">保有銘柄の追加</h3>
+<p class="font-label-sm text-[11px] text-on-surface-variant">証券口座の手動ポートフォリオへ反映</p>
+</div>
+</div>
+<button aria-label="閉じる" class="w-9 h-9 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors" onclick="closeAddHoldingSheetModal()" type="button">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<!-- Section 1: 銘柄コード / ティッカー入力 ＆ クイックサジェスト -->
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center justify-between">
+<label class="font-label-sm text-[11px] text-on-surface-variant font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-primary text-[14px]">tag</span>
+          銘柄コード / 企業名
+        </label>
+<span class="text-[10px] text-primary font-mono" id="add-selected-info">未選択</span>
+</div>
+<div class="relative flex items-center">
+<span class="absolute left-3 material-symbols-outlined text-[18px] text-on-surface-variant pointer-events-none">search</span>
+<input class="w-full h-11 pl-10 pr-3 rounded-xl bg-surface-container-high border border-surface-container-highest/60 text-on-surface font-body-md placeholder:text-on-surface-variant/60 focus:outline-none focus:border-primary transition-colors text-[14px]" id="add-symbol-input" oninput="onSymbolInputChange(this.value)" placeholder="例: 8316, 9432, 8058, AAPL" type="text" value="8316"/>
+</div>
+<!-- Quick Candidate Chips -->
+<div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+<button class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-[11px] flex items-center gap-1 shrink-0 transition-colors border border-surface-container-highest/40" onclick="selectQuickSymbol('8316', '三井住友FG', '東証P • 銀行業', 3150, 4.13, 'japan', '6,12', '中間配当')" type="button">
+<span class="font-mono font-bold text-primary">8316</span>
+<span class="">三井住友FG</span>
+<span class="text-primary font-semibold">(4.1%)</span>
+</button>
+<button class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-[11px] flex items-center gap-1 shrink-0 transition-colors border border-surface-container-highest/40" onclick="selectQuickSymbol('9432', '日本電信電話', '東証P • 情報通信', 152, 3.42, 'japan', '6,12', '期末配当')" type="button">
+<span class="font-mono font-bold text-primary">9432</span>
+<span class="">NTT</span>
+<span class="text-primary font-semibold">(3.4%)</span>
+</button>
+<button class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-[11px] flex items-center gap-1 shrink-0 transition-colors border border-surface-container-highest/40" onclick="selectQuickSymbol('8058', '三菱商事', '東証P • 卸売業', 2840, 3.52, 'japan', '6,12', '中間配当')" type="button">
+<span class="font-mono font-bold text-primary">8058</span>
+<span class="">三菱商事</span>
+<span class="text-primary font-semibold">(3.5%)</span>
+</button>
+<button class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-[11px] flex items-center gap-1 shrink-0 transition-colors border border-surface-container-highest/40" onclick="selectQuickSymbol('MSFT', 'Microsoft', 'NASDAQ • ソフトウェア', 420, 0.76, 'us', '3,6,9,12', '四半期配当')" type="button">
+<span class="font-mono font-bold text-secondary">MSFT</span>
+<span class="">Microsoft</span>
+</button>
+</div>
+</div>
+<!-- Section 2: 口座種別 (改行なし 1行4列) -->
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-[11px] text-on-surface-variant font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-primary text-[14px]">account_box</span>
+        口座区分（税制優遇連動）
+      </label>
+<div class="grid grid-cols-4 gap-1 p-1 rounded-xl bg-surface-container-high border border-surface-container-highest/40" id="account-type-group">
+<button class="account-btn h-8 rounded-lg font-label-sm text-[11px] font-bold transition-all flex items-center justify-center truncate bg-primary-container text-on-primary-container shadow-sm" data-tax="0" data-type="nisa-growth" onclick="selectAccountType(this, 'nisa-growth', 0, '新NISA成長枠')" type="button">新NISA成長</button>
+<button class="account-btn h-8 rounded-lg font-label-sm text-[11px] font-medium text-on-surface-variant transition-all flex items-center justify-center truncate" data-tax="0" data-type="nisa-tsumitate" onclick="selectAccountType(this, 'nisa-tsumitate', 0, '新NISAつみたて')" type="button">NISAつみ立</button>
+<button class="account-btn h-8 rounded-lg font-label-sm text-[11px] font-medium text-on-surface-variant transition-all flex items-center justify-center truncate" data-tax="0.20315" data-type="tokutei" onclick="selectAccountType(this, 'tokutei', 0.20315, '特定口座 (源泉徴収あり)')" type="button">特定口座</button>
+<button class="account-btn h-8 rounded-lg font-label-sm text-[11px] font-medium text-on-surface-variant transition-all flex items-center justify-center truncate" data-tax="0.20315" data-type="ippan" onclick="selectAccountType(this, 'ippan', 0.20315, '一般口座')" type="button">一般口座</button>
+</div>
+</div>
+<!-- Section 3 & 4: 保有株数 ＆ 取得単価 (Grid 2列) -->
+<div class="grid grid-cols-2 gap-space-sm">
+<!-- 保有数量 -->
+<div class="flex flex-col gap-1">
+<label class="font-label-sm text-[11px] text-on-surface-variant font-semibold flex items-center justify-between">
+<span class="">保有数量 (株/口)</span>
+<button class="text-primary hover:underline text-[10px]" onclick="clearShares()" type="button">クリア</button>
+</label>
+<input class="w-full h-11 px-3 rounded-xl bg-surface-container-high border border-surface-container-highest/60 text-on-surface font-mono font-bold text-[15px] focus:outline-none focus:border-primary transition-colors" id="add-shares-input" min="1" oninput="recalcAddImpact()" placeholder="100" type="number" value="100"/>
+<div class="flex items-center gap-1 pt-0.5">
+<button class="flex-1 py-1 rounded bg-surface-container font-mono text-[10px] text-on-surface-variant hover:text-on-surface" onclick="adjustShares(100)" type="button">+100</button>
+<button class="flex-1 py-1 rounded bg-surface-container font-mono text-[10px] text-on-surface-variant hover:text-on-surface" onclick="adjustShares(500)" type="button">+500</button>
+<button class="flex-1 py-1 rounded bg-surface-container font-mono text-[10px] text-on-surface-variant hover:text-on-surface" onclick="adjustShares(1000)" type="button">+1k</button>
+</div>
+</div>
+<!-- 取得単価 -->
+<div class="flex flex-col gap-1">
+<div class="flex items-center justify-between">
+<label class="font-label-sm text-[11px] text-on-surface-variant font-semibold">取得平均単価</label>
+<button class="text-primary hover:underline text-[10px] flex items-center gap-0.5" onclick="setPriceToCurrent()" type="button">
+<span class="material-symbols-outlined text-[10px]">sync</span>現在値
+          </button>
+</div>
+<div class="relative flex items-center">
+<span class="absolute left-2.5 text-on-surface-variant font-mono text-[13px]" id="add-currency-prefix">¥</span>
+<input class="w-full h-11 pl-6 pr-3 rounded-xl bg-surface-container-high border border-surface-container-highest/60 text-on-surface font-mono font-bold text-[15px] focus:outline-none focus:border-primary transition-colors" id="add-price-input" min="0" oninput="recalcAddImpact()" placeholder="3,150" step="any" type="number" value="3150"/>
+</div>
+<div class="flex items-center justify-between pt-0.5 text-[10px] text-on-surface-variant">
+<span class="">現在株価:</span>
+<span class="font-mono font-bold text-on-surface" id="add-current-market-price">¥3,150</span>
+</div>
+</div>
+</div>
+<!-- Section 5: リアルタイム試算インパクト Box -->
+<div class="p-space-sm rounded-xl bg-surface-container border border-primary/30 flex flex-col gap-1.5 shadow-inner">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-[11px] text-primary font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">analytics</span>
+          登録後の資産・配当インパクト試算
+        </span>
+<span class="font-label-sm text-[10px] text-on-surface-variant font-mono" id="add-tax-badge">非課税 (NISA)</span>
+</div>
+<div class="grid grid-cols-3 gap-1 text-center pt-1 border-t border-surface-container-highest/40">
+<div class="flex flex-col items-start">
+<span class="font-label-sm text-[10px] text-on-surface-variant">投資元本 (評価額)</span>
+<span class="font-mono font-bold text-on-surface text-[13px]" id="calc-total-val">¥315,000</span>
+</div>
+<div class="flex flex-col items-center">
+<span class="font-label-sm text-[10px] text-on-surface-variant">年間予想配当</span>
+<span class="font-mono font-bold text-primary text-[13px]" id="calc-annual-div">¥13,010/年</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-label-sm text-[10px] text-on-surface-variant">税引後受取額</span>
+<span class="font-mono font-bold text-on-surface text-[13px]" id="calc-net-div">¥13,010/年</span>
+</div>
+</div>
+</div>
+<!-- Section 6: Action Buttons -->
+<div class="flex gap-space-xs pt-1">
+<button class="w-1/3 h-12 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-md text-label-md font-semibold active:scale-98 transition-all" onclick="closeAddHoldingSheetModal()" type="button">
+        キャンセル
+      </button>
+<button class="flex-1 h-12 rounded-lg bg-primary-container text-on-primary-container font-label-lg text-label-lg font-bold shadow-lg active:scale-98 transition-all flex items-center justify-center gap-1.5" onclick="submitNewHolding()" type="button">
+<span class="material-symbols-outlined text-[20px]">add_task</span>
+<span class="">この口座に登録・追加する</span>
+</button>
+</div>
+</div>
+</div>
+<script>
+  // Add Holding Modal State
+  let addModalData = {
+    symbol: '8316',
+    name: '三井住友FG',
+    sector: '東証P • 銀行業',
+    currentPrice: 3150,
+    yieldPercent: 4.13,
+    category: 'japan',
+    months: '6,12',
+    dividendType: '中間配当',
+    accountType: '新NISA成長枠',
+    taxRate: 0
+  };
+
+  function openAddHoldingSheetModal() {
+    const modal = document.getElementById('add-holding-modal');
+    const panel = document.getElementById('add-holding-sheet-panel');
+    if (!modal || !panel) return;
+
+    modal.classList.remove('hidden');
+    requestAnimationFrame(() => {
+      modal.classList.remove('opacity-0');
+      panel.classList.remove('translate-y-full');
+      panel.classList.add('translate-y-0');
+    });
+    recalcAddImpact();
+  }
+
+  function closeAddHoldingSheetModal() {
+    const modal = document.getElementById('add-holding-modal');
+    const panel = document.getElementById('add-holding-sheet-panel');
+    if (!modal || !panel) return;
+
+    modal.classList.add('opacity-0');
+    panel.classList.remove('translate-y-0');
+    panel.classList.add('translate-y-full');
+    setTimeout(() => {
+      modal.classList.add('hidden');
+    }, 300);
+  }
+
+  function handleAddHoldingBackdropClick(e) {
+    if (e.target.id === 'add-holding-modal') {
+      closeAddHoldingSheetModal();
+    }
+  }
+
+  function selectQuickSymbol(symbol, name, sector, price, yieldRate, category, months, divType) {
+    addModalData.symbol = symbol;
+    addModalData.name = name;
+    addModalData.sector = sector;
+    addModalData.currentPrice = price;
+    addModalData.yieldPercent = yieldRate;
+    addModalData.category = category;
+    addModalData.months = months;
+    addModalData.dividendType = divType;
+
+    const symInput = document.getElementById('add-symbol-input');
+    const priceInput = document.getElementById('add-price-input');
+    const curPriceLabel = document.getElementById('add-current-market-price');
+    const infoLabel = document.getElementById('add-selected-info');
+    const curPrefix = document.getElementById('add-currency-prefix');
+
+    if (symInput) symInput.value = symbol;
+    if (priceInput) priceInput.value = price;
+    if (curPrefix) curPrefix.innerText = category === 'us' ? '$' : '¥';
+    if (curPriceLabel) curPriceLabel.innerText = (category === 'us' ? '$' : '¥') + price.toLocaleString();
+    if (infoLabel) infoLabel.innerText = `${name} (利回り${yieldRate}%)`;
+
+    recalcAddImpact();
+  }
+
+  function onSymbolInputChange(val) {
+    const q = val.trim().toUpperCase();
+    if (q === '8316') {
+      selectQuickSymbol('8316', '三井住友FG', '東証P • 銀行業', 3150, 4.13, 'japan', '6,12', '中間配当');
+    } else if (q === '9432') {
+      selectQuickSymbol('9432', '日本電信電話', '東証P • 情報通信', 152, 3.42, 'japan', '6,12', '期末配当');
+    } else if (q === '8058') {
+      selectQuickSymbol('8058', '三菱商事', '東証P • 卸売業', 2840, 3.52, 'japan', '6,12', '中間配当');
+    } else if (q === 'AAPL') {
+      selectQuickSymbol('AAPL', 'Apple Inc.', 'NASDAQ • テクノロジー', 220, 0.52, 'us', '2,5,8,11', '四半期配当');
+    } else if (q === 'MSFT') {
+      selectQuickSymbol('MSFT', 'Microsoft', 'NASDAQ • ソフトウェア', 420, 0.76, 'us', '3,6,9,12', '四半期配当');
+    } else {
+      addModalData.symbol = q;
+      addModalData.name = q;
+      const infoLabel = document.getElementById('add-selected-info');
+      if (infoLabel) infoLabel.innerText = 'カスタム銘柄';
+      recalcAddImpact();
+    }
+  }
+
+  function selectAccountType(btn, type, taxRate, label) {
+    addModalData.accountType = label;
+    addModalData.taxRate = taxRate;
+
+    const btns = document.querySelectorAll('.account-btn');
+    btns.forEach(b => {
+      b.classList.remove('bg-primary-container', 'text-on-primary-container', 'font-bold', 'shadow-sm');
+      b.classList.add('text-on-surface-variant', 'font-medium');
+    });
+    btn.classList.add('bg-primary-container', 'text-on-primary-container', 'font-bold', 'shadow-sm');
+    btn.classList.remove('text-on-surface-variant', 'font-medium');
+
+    const badge = document.getElementById('add-tax-badge');
+    if (badge) {
+      badge.innerText = taxRate === 0 ? '非課税 (NISA)' : '課税 20.315%';
+    }
+    recalcAddImpact();
+  }
+
+  function adjustShares(delta) {
+    const input = document.getElementById('add-shares-input');
+    if (!input) return;
+    let current = parseInt(input.value) || 0;
+    input.value = Math.max(1, current + delta);
+    recalcAddImpact();
+  }
+
+  function clearShares() {
+    const input = document.getElementById('add-shares-input');
+    if (input) {
+      input.value = '100';
+      recalcAddImpact();
+    }
+  }
+
+  function setPriceToCurrent() {
+    const input = document.getElementById('add-price-input');
+    if (input) {
+      input.value = addModalData.currentPrice;
+      recalcAddImpact();
+    }
+  }
+
+  function recalcAddImpact() {
+    const shares = parseFloat(document.getElementById('add-shares-input')?.value || 0);
+    const price = parseFloat(document.getElementById('add-price-input')?.value || 0);
+    const isUS = addModalData.category === 'us';
+    const fxRate = isUS ? 150 : 1; // 簡易為替レート
+
+    const totalValJpy = shares * price * fxRate;
+    const annualDivJpy = Math.round(totalValJpy * (addModalData.yieldPercent / 100));
+    const netDivJpy = Math.round(annualDivJpy * (1 - addModalData.taxRate));
+
+    const totalEl = document.getElementById('calc-total-val');
+    const divEl = document.getElementById('calc-annual-div');
+    const netEl = document.getElementById('calc-net-div');
+
+    if (totalEl) totalEl.innerText = '¥' + Math.round(totalValJpy).toLocaleString();
+    if (divEl) divEl.innerText = '¥' + annualDivJpy.toLocaleString() + '/年';
+    if (netEl) netEl.innerText = '¥' + netDivJpy.toLocaleString() + '/年';
+  }
+
+  function submitNewHolding() {
+    const shares = parseInt(document.getElementById('add-shares-input')?.value || 100);
+    const price = parseFloat(document.getElementById('add-price-input')?.value || addModalData.currentPrice);
+    const isUS = addModalData.category === 'us';
+    const fxRate = isUS ? 150 : 1;
+    const totalVal = Math.round(shares * price * fxRate);
+    const annualDiv = Math.round(totalVal * (addModalData.yieldPercent / 100));
+    const halfDiv = Math.round(annualDiv / 2);
+
+    // Create & prepend new holding card to normal holdings list
+    const container = document.getElementById('holdings-list-container');
+    if (container) {
+      const card = document.createElement('article');
+      card.className = 'holding-card-transition p-space-md rounded-xl bg-surface-container-low shadow-sm flex flex-col gap-space-xs transition-transform active:scale-[0.99] relative overflow-hidden border border-primary/40';
+      card.setAttribute('data-div', String(addModalData.yieldPercent));
+      card.setAttribute('data-dividend-type', addModalData.dividendType);
+      card.setAttribute('data-gain', '0.0');
+      card.setAttribute('data-holding', addModalData.symbol.toLowerCase());
+      card.setAttribute('data-month-amount', '¥' + halfDiv.toLocaleString());
+      card.setAttribute('data-months', addModalData.months);
+      card.setAttribute('data-payout-timing', '6月下旬・12月中旬');
+      card.setAttribute('data-val', String(totalVal));
+      card.setAttribute('data-category', addModalData.category);
+
+      card.innerHTML = `
+        <div class="month-ribbon absolute top-0 right-0 bg-primary/20 border-b border-l border-primary/40 px-3 py-0.5 rounded-bl-lg font-label-sm text-[11px] font-bold text-primary flex items-center gap-1 hidden">
+          <span class="material-symbols-outlined text-[13px]">payments</span>
+          <span class="ribbon-text">入金予定</span>
+        </div>
+        <div class="flex items-start justify-between">
+          <div class="flex items-center gap-space-xs">
+            <span class="px-2 py-1 rounded bg-surface-container-highest font-display-lg-mobile text-label-sm text-on-surface font-bold">${addModalData.symbol}</span>
+            <div>
+              <h2 class="font-title-md text-title-md text-on-surface">${addModalData.name}</h2>
+              <span class="font-body-sm text-body-sm text-on-surface-variant">${addModalData.sector}</span>
+            </div>
+          </div>
+          <div class="flex flex-col items-end">
+            <span class="font-headline-md text-headline-md text-on-surface font-bold holding-val">¥${totalVal.toLocaleString()}</span>
+            <span class="font-label-sm text-label-sm text-primary font-bold">+¥0 (新規登録)</span>
+          </div>
+        </div>
+        <div class="h-[1px] bg-surface-container-highest my-1"></div>
+        <div class="grid grid-cols-3 gap-space-xs text-center font-label-sm text-label-sm">
+          <div class="flex flex-col items-start">
+            <span class="text-on-surface-variant">保有数量</span>
+            <span class="text-on-surface font-semibold mt-0.5">${shares.toLocaleString()}株 (@${isUS ? '$' : '¥'}${price.toLocaleString()})</span>
+          </div>
+          <div class="flex flex-col items-center">
+            <span class="text-on-surface-variant">配当利回り</span>
+            <span class="text-primary font-bold mt-0.5">${addModalData.yieldPercent.toFixed(2)}%</span>
+          </div>
+          <div class="flex flex-col items-end">
+            <span class="text-on-surface-variant">予想配当金</span>
+            <span class="text-on-surface font-bold mt-0.5 holding-div">¥${annualDiv.toLocaleString()}/年</span>
+          </div>
+        </div>
+        <div class="month-highlight-box mt-1 p-2 rounded-lg bg-surface-container-high/90 border border-primary/30 flex items-center justify-between hidden">
+          <div class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-primary text-[16px]">event_available</span>
+            <span class="font-label-sm text-[11px] text-on-surface-variant">入金予定時期: <span class="text-on-surface font-bold timing-label">12月中旬予定</span></span>
+          </div>
+          <div class="flex items-center gap-1 font-mono font-bold text-primary text-title-md amount-label">¥${halfDiv.toLocaleString()}</div>
+        </div>
+        <div class="default-footer flex items-center justify-between pt-1">
+          <span class="px-2 py-0.5 rounded bg-surface-container font-label-sm text-label-sm text-secondary font-medium">${addModalData.accountType}</span>
+          <span class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1">
+            <span class="material-symbols-outlined text-[14px] text-primary">event</span>次回: 12月中旬 (¥${halfDiv.toLocaleString()})
+          </span>
+        </div>
+      `;
+
+      const emptyCard = document.getElementById('month-empty-state');
+      if (emptyCard) {
+        container.insertBefore(card, emptyCard);
+      } else {
+        container.appendChild(card);
+      }
+    }
+
+    // Update Total Summary Displays
+    const totalAssetEl = document.getElementById('display-total-assets');
+    const totalDivEl = document.getElementById('display-div-amt');
+    const headerCount = document.getElementById('holdings-header-count');
+
+    if (totalAssetEl) {
+      const currentTotal = 3500000;
+      totalAssetEl.innerText = '¥' + (currentTotal + totalVal).toLocaleString();
+    }
+    if (totalDivEl) {
+      const currentDiv = 124500;
+      totalDivEl.innerText = '¥' + (currentDiv + annualDiv).toLocaleString();
+    }
+    if (headerCount) {
+      const articles = container.querySelectorAll('article');
+      headerCount.innerText = `${articles.length}件`;
+    }
+
+    // Switch to normal state and close modal
+    if (typeof switchState === 'function') {
+      switchState('normal');
+    }
+    closeAddHoldingSheetModal();
+  }
+</script><script>function openNotificationModal() { const modal = document.getElementById('notification-modal'); const panel = document.getElementById('notification-sheet-panel'); if (!modal || !panel) return; modal.classList.remove('hidden'); requestAnimationFrame(() => { modal.classList.remove('opacity-0'); panel.classList.remove('translate-y-full'); }); } function closeNotificationModal() { const modal = document.getElementById('notification-modal'); const panel = document.getElementById('notification-sheet-panel'); if (!modal || !panel) return; modal.classList.add('opacity-0'); panel.classList.add('translate-y-full'); setTimeout(() => { modal.classList.add('hidden'); }, 300); } function handleNotificationBackdropClick(e) { if (e.target.id === 'notification-modal') { closeNotificationModal(); } } function markAllNotificationsAsRead() { const badge = document.getElementById('notification-unread-badge'); if (badge) badge.remove(); const headerBadge = document.getElementById('notification-header-badge'); if (headerBadge) { headerBadge.innerText = 'すべて既読'; headerBadge.className = 'px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-medium text-label-sm'; } const items = document.querySelectorAll('.notification-item'); items.forEach(item => { item.setAttribute('data-unread', 'false'); item.classList.add('opacity-80', 'bg-surface-container'); item.classList.remove('bg-surface-container-high', 'border-primary/30'); item.classList.add('border-surface-container-highest/40'); const dot = item.querySelector('.notif-unread-dot'); if (dot) { dot.classList.remove('bg-primary'); dot.classList.add('bg-surface-container-highest'); } }); } function filterNotifications(btn, cat) { const tabBtns = document.querySelectorAll('.notification-tab-btn'); tabBtns.forEach(b => { b.classList.remove('bg-primary-container', 'text-on-primary-container', 'font-bold'); b.classList.add('bg-surface-container-high', 'text-on-surface-variant', 'font-medium'); }); btn.classList.remove('bg-surface-container-high', 'text-on-surface-variant', 'font-medium'); btn.classList.add('bg-primary-container', 'text-on-primary-container', 'font-bold'); const items = document.querySelectorAll('.notification-item'); items.forEach(item => { const itemCat = item.getAttribute('data-category'); if (cat === 'all' || itemCat === cat) { item.classList.remove('hidden'); } else { item.classList.add('hidden'); } }); } document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { const modal = document.getElementById('notification-modal'); if (modal && !modal.classList.contains('hidden')) { closeNotificationModal(); } } });</script>
+<!-- QUICK EDIT HALF-MODAL (BOTTOM SHEET) --><div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex flex-col justify-end transition-opacity duration-300 opacity-0 hidden" id="quick-edit-modal" onclick="handleQuickEditBackdrop(event)"><div class="w-full max-h-[751px] md:max-w-lg md:mx-auto bg-surface-container-low rounded-t-2xl md:rounded-2xl p-space-md flex flex-col gap-space-sm shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-out border-t md:border border-surface-container-highest/60 translate-y-full" id="quick-edit-sheet-panel" onclick="event.stopPropagation()"><!-- Drag grab bar affordance --><div class="w-12 h-1.5 rounded-full bg-surface-container-highest mx-auto -mt-1 mb-1 shrink-0 cursor-grab"></div><!-- Header with Target Stock & Close --><div class="flex items-center justify-between pb-1 border-b border-surface-container-highest/40"><div class="flex items-center gap-space-xs min-w-0"><div class="w-7 h-7 rounded-lg bg-surface-container-high border border-surface-container-highest/60 flex items-center justify-center text-on-surface-variant shrink-0"><span class="material-symbols-outlined text-[16px]">tune</span></div><div class="flex flex-col truncate"><div class="flex items-center gap-1.5"><h3 class="font-title-md text-title-md text-on-surface font-bold truncate" id="qe-modal-title">保有情報のクイック編集</h3></div><span class="font-label-sm text-[11px] text-on-surface-variant flex items-center gap-1 truncate"><span class="font-mono font-bold text-primary" id="qe-target-code">7203</span><span class="text-on-surface font-semibold" id="qe-target-name">トヨタ自動車</span><span class="text-on-surface-variant" id="qe-target-market">（東証P）</span></span></div></div><button aria-label="閉じる" class="w-9 h-9 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors shrink-0" onclick="closeQuickEditSheet()" type="button"><span class="material-symbols-outlined text-[20px]">close</span></button></div><!-- Stock Current Price & Daily Performance Strip --><div class="px-3 py-2 rounded-xl bg-surface-container flex items-center justify-between border border-surface-container-highest/40"><div class="flex items-center gap-2"><span class="font-label-sm text-[11px] text-on-surface-variant">現在値:</span><span class="font-mono font-bold text-title-md text-on-surface" id="qe-market-price">¥2,600</span></div><div class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary-container/20 text-primary font-mono text-[11px] font-bold"><span class="material-symbols-outlined text-[13px]">trending_up</span><span class="" id="qe-day-change">前日比 +1.36%</span></div></div><!-- Section 1: 保有数量の入力エリア (Steppers & Quick Chips) --><div class="flex flex-col gap-1.5"><div class="flex items-center justify-between"><label class="font-label-sm text-[12px] text-on-surface font-semibold flex items-center gap-1"><span class="material-symbols-outlined text-primary text-[16px]">inventory_2</span>保有数量 (株)</label><span class="font-mono text-[11px] text-on-surface-variant">単元: 100株</span></div><!-- Stepper Input --><div class="flex items-center gap-2"><button class="w-12 h-12 rounded-xl bg-surface-container-high hover:bg-surface-container-highest active:scale-95 text-on-surface flex items-center justify-center text-title-lg font-bold border border-surface-container-highest/60 transition-all select-none" onclick="qeAdjustShares(-10)" type="button"><span class="material-symbols-outlined text-[20px]">remove</span></button><div class="flex-1 relative flex items-center"><input class="w-full h-12 text-center rounded-xl bg-surface-container-high border border-surface-container-highest/60 text-on-surface font-mono font-bold text-[20px] focus:outline-none focus:border-primary transition-colors" id="qe-shares-input" min="1" oninput="qeRecalculate()" step="1" type="number" value="100"/><span class="absolute right-3 font-label-sm text-[12px] text-on-surface-variant pointer-events-none font-medium">株</span></div><button class="w-12 h-12 rounded-xl bg-surface-container-high hover:bg-surface-container-highest active:scale-95 text-on-surface flex items-center justify-center text-title-lg font-bold border border-surface-container-highest/60 transition-all select-none" onclick="qeAdjustShares(10)" type="button"><span class="material-symbols-outlined text-[20px]">add</span></button></div><!-- Quick Addition Chips --><div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5"><button class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest active:scale-95 text-on-surface font-mono text-[11px] font-semibold transition-all border border-surface-container-highest/40 shrink-0" onclick="qeSetShares(100)" type="button">1単元(100株)</button><button class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest active:scale-95 text-on-surface font-mono text-[11px] font-semibold transition-all border border-surface-container-highest/40 shrink-0" onclick="qeAdjustShares(10)" type="button">+10</button><button class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest active:scale-95 text-on-surface font-mono text-[11px] font-semibold transition-all border border-surface-container-highest/40 shrink-0" onclick="qeAdjustShares(100)" type="button">+100</button><button class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest active:scale-95 text-on-surface font-mono text-[11px] font-semibold transition-all border border-surface-container-highest/40 shrink-0" onclick="qeAdjustShares(500)" type="button">+500</button></div></div><!-- Section 2: 取得単価の入力エリア (Steppers & Current Price Helper) --><div class="flex flex-col gap-1.5"><div class="flex items-center justify-between"><label class="font-label-sm text-[12px] text-on-surface font-semibold flex items-center gap-1"><span class="material-symbols-outlined text-primary text-[16px]">sell</span>取得平均単価 (円)</label><button class="text-primary hover:underline text-[11px] font-medium flex items-center gap-0.5" onclick="qeApplyCurrentPrice()" type="button"><span class="material-symbols-outlined text-[13px]">sync</span>現在値(¥2,600)を適用</button></div><!-- Stepper Input for Price --><div class="flex items-center gap-2"><button class="w-12 h-12 rounded-xl bg-surface-container-high hover:bg-surface-container-highest active:scale-95 text-on-surface flex items-center justify-center text-title-lg font-bold border border-surface-container-highest/60 transition-all select-none" onclick="qeAdjustPrice(-10)" type="button"><span class="material-symbols-outlined text-[20px]">remove</span></button><div class="flex-1 relative flex items-center"><span class="absolute left-3 text-on-surface-variant font-mono font-bold text-[16px]">¥</span><input class="w-full h-12 pl-8 pr-3 text-center rounded-xl bg-surface-container-high border border-surface-container-highest/60 text-on-surface font-mono font-bold text-[20px] focus:outline-none focus:border-primary transition-colors" id="qe-price-input" min="1" oninput="qeRecalculate()" step="1" type="number" value="2450"/></div><button class="w-12 h-12 rounded-xl bg-surface-container-high hover:bg-surface-container-highest active:scale-95 text-on-surface flex items-center justify-center text-title-lg font-bold border border-surface-container-highest/60 transition-all select-none" onclick="qeAdjustPrice(10)" type="button"><span class="material-symbols-outlined text-[20px]">add</span></button></div></div><!-- Section 3: リアルタイム試算サマリーボックス（カード型） --><div class="p-space-sm rounded-xl bg-surface-container border border-primary/30 flex flex-col gap-2 shadow-inner"><div class="flex items-center justify-between"><span class="font-label-sm text-[11px] text-primary font-bold flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">analytics</span>更新後のリアルタイム試算</span><span class="px-2 py-0.2 rounded-full bg-primary/20 text-primary font-mono text-[10px] font-bold">即時再計算中</span></div><div class="grid grid-cols-3 gap-2 text-center pt-1 border-t border-surface-container-highest/40"><div class="flex flex-col items-start"><span class="font-label-sm text-[10px] text-on-surface-variant">投資元本</span><span class="font-mono font-bold text-on-surface text-[14px]" id="qe-summary-cost">¥245,000</span></div><div class="flex flex-col items-center"><span class="font-label-sm text-[10px] text-on-surface-variant">評価損益</span><span class="font-mono font-bold text-primary text-[14px]" id="qe-summary-gain">+¥15,000 (+6.1%)</span></div><div class="flex flex-col items-end"><span class="font-label-sm text-[10px] text-on-surface-variant">年間予想配当金</span><span class="font-mono font-bold text-primary text-[14px]" id="qe-summary-div">¥7,280/年</span><span class="font-mono text-[9px] text-on-surface-variant">(利回り 2.80%)</span></div></div></div><!-- Section 4: 下部アクションボタン --><div class="flex gap-space-xs pt-1"><button class="w-1/3 h-12 rounded-xl bg-surface-container-high hover:bg-surface-container-highest active:scale-98 text-on-surface font-label-md text-label-md font-semibold transition-all" onclick="closeQuickEditSheet()" type="button">キャンセル</button><button class="flex-1 h-12 rounded-xl bg-primary-container text-on-primary-container font-label-lg text-label-lg font-bold shadow-lg hover:shadow-primary-container/20 active:scale-98 transition-all flex items-center justify-center gap-1.5" onclick="saveQuickEdit()" type="button"><span class="material-symbols-outlined text-[20px]">check</span>変更を保存する</button></div></div></div><script id="quick-edit-script">let qeState = { code: '7203', name: 'トヨタ自動車', market: '東証P • 輸送用機器', currentPrice: 2600, shares: 100, costPrice: 2450, divRate: 2.80, dayChange: '+1.36%' }; function openQuickEditSheet(code, name, market, currentPrice, shares, costPrice, divRate, dayChange) { qeState = { code, name, market, currentPrice, shares, costPrice, divRate, dayChange }; document.getElementById('qe-target-code').innerText = code; document.getElementById('qe-target-name').innerText = name; document.getElementById('qe-target-market').innerText = '（' + (code === 'AAPL' ? 'NASDAQ' : '東証P') + '）'; document.getElementById('qe-market-price').innerText = (code === 'AAPL' ? '$' : '¥') + currentPrice.toLocaleString(); document.getElementById('qe-day-change').innerText = '前日比 ' + dayChange; document.getElementById('qe-shares-input').value = shares; document.getElementById('qe-price-input').value = costPrice; qeRecalculate(); const modal = document.getElementById('quick-edit-modal'); const panel = document.getElementById('quick-edit-sheet-panel'); if (modal && panel) { modal.classList.remove('hidden'); requestAnimationFrame(() => { modal.classList.remove('opacity-0'); panel.classList.remove('translate-y-full'); panel.classList.add('translate-y-0'); }); } } function closeQuickEditSheet() { const modal = document.getElementById('quick-edit-modal'); const panel = document.getElementById('quick-edit-sheet-panel'); if (!modal || !panel) return; modal.classList.add('opacity-0'); panel.classList.remove('translate-y-0'); panel.classList.add('translate-y-full'); setTimeout(() => { modal.classList.add('hidden'); }, 280); } function handleQuickEditBackdrop(e) { if (e.target.id === 'quick-edit-modal') { closeQuickEditSheet(); } } function qeAdjustShares(delta) { const input = document.getElementById('qe-shares-input'); if (!input) return; let val = parseInt(input.value) || 0; val = Math.max(1, val + delta); input.value = val; qeRecalculate(); } function qeSetShares(amt) { const input = document.getElementById('qe-shares-input'); if (input) { input.value = amt; qeRecalculate(); } } function qeAdjustPrice(delta) { const input = document.getElementById('qe-price-input'); if (!input) return; let val = parseFloat(input.value) || 0; val = Math.max(1, val + delta); input.value = val; qeRecalculate(); } function qeApplyCurrentPrice() { const input = document.getElementById('qe-price-input'); if (input) { input.value = qeState.currentPrice; qeRecalculate(); } } function qeRecalculate() { const shares = parseFloat(document.getElementById('qe-shares-input')?.value || 0); const cost = parseFloat(document.getElementById('qe-price-input')?.value || 0); const curPrice = qeState.currentPrice; const prefix = qeState.code === 'AAPL' ? '$' : '¥'; const costTotal = shares * cost; const curVal = shares * curPrice; const gain = curVal - costTotal; const gainPct = costTotal > 0 ? ((gain / costTotal) * 100).toFixed(1) : 0; const annualDiv = Math.round(curVal * (qeState.divRate / 100)); document.getElementById('qe-summary-cost').innerText = prefix + Math.round(costTotal).toLocaleString(); const gainEl = document.getElementById('qe-summary-gain'); if (gain >= 0) { gainEl.innerText = '+' + prefix + Math.round(gain).toLocaleString() + ' (+' + gainPct + '%)'; gainEl.className = 'font-mono font-bold text-primary text-[14px]'; } else { gainEl.innerText = '-' + prefix + Math.round(Math.abs(gain)).toLocaleString() + ' (' + gainPct + '%)'; gainEl.className = 'font-mono font-bold text-tertiary text-[14px]'; } document.getElementById('qe-summary-div').innerText = prefix + annualDiv.toLocaleString() + '/年'; } function saveQuickEdit() { closeQuickEditSheet(); }</script>
+</body></html>
