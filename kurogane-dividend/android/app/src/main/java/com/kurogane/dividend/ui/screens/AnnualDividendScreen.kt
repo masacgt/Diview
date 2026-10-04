@@ -38,9 +38,15 @@ import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.data.Tse33IndustryMaster
 import com.kurogane.dividend.model.PortfolioDiagnosis
+import com.kurogane.dividend.data.CloudflareMonthlyPrice
+import com.kurogane.dividend.data.CloudflareMonthlyPriceSeries
+import com.kurogane.dividend.model.Holding
+import com.kurogane.dividend.model.Category
 import com.kurogane.dividend.model.PortfolioDiagnosisGenerator
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import java.text.NumberFormat
+import java.time.YearMonth
+import java.time.ZoneId
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -361,9 +367,11 @@ fun AnnualDividendScreen(
                         totalCost = totalCost,
                         totalAnnualDiv = totalAnnualDiv,
                         currencyFormat = currencyFormat,
+                        holdings = holdings,
                         isPrivacyActive = isPrivacyActive,
                         selectedPeriod = assetTrackingPeriod,
-                        onPeriodSelected = { assetTrackingPeriod = it }
+                        onPeriodSelected = { assetTrackingPeriod = it },
+                        loadMonthlyPriceHistory = { codes, months -> viewModel.fetchMonthlyPriceHistory(codes, months) }
                     )
                 }
             }
@@ -1837,7 +1845,9 @@ private fun AssetTrackingSection(
     currencyFormat: NumberFormat,
     isPrivacyActive: Boolean,
     selectedPeriod: String,
-    onPeriodSelected: (String) -> Unit
+    onPeriodSelected: (String) -> Unit,
+    loadMonthlyPriceHistory: suspend (List<String>, List<String>) -> List<CloudflareMonthlyPriceSeries>
+    holdings: List<Holding>,
 ) {
     // 1. Dynamic states for user interactivity
     var selectedYearIndex by remember { mutableIntStateOf(4) }
@@ -2724,10 +2734,10 @@ private fun AssetTrackingSection(
         }
         } else {
             AssetTrackingTwelveMonthSection(
-                realAssets = realAssets,
-                realCost = realCost,
+                holdings = holdings,
                 isPrivacyActive = isPrivacyActive,
-                currencyFormat = currencyFormat
+                currencyFormat = currencyFormat,
+                loadMonthlyPriceHistory = loadMonthlyPriceHistory
             )
         }
     }
@@ -2735,24 +2745,71 @@ private fun AssetTrackingSection(
 
 @Composable
 private fun AssetTrackingTwelveMonthSection(
-    realAssets: Double,
-    realCost: Double,
+    holdings: List<Holding>,
     isPrivacyActive: Boolean,
-    currencyFormat: NumberFormat
+    currencyFormat: NumberFormat,
+    loadMonthlyPriceHistory: suspend (List<String>, List<String>) -> List<CloudflareMonthlyPriceSeries>
 ) {
-    val monthlyContribution = 25_000.0
-    val currentGain = realAssets - realCost
-    val monthlySnapshots = remember(realAssets, realCost) {
-        (1..12).map { month ->
-            val monthsBeforeNow = (12 - month).toDouble()
-            val cost = (realCost - monthlyContribution * monthsBeforeNow).coerceAtLeast(0.0)
-            val gain = currentGain * month / 12.0
-            val value = cost + gain
-            val gainRate = if (cost > 0.0) gain / cost * 100.0 else 0.0
-            MonthAssetSnapshot(month, cost, value, gain, gainRate)
+    val months = remember {
+        val currentMonth = YearMonth.now(ZoneId.of("Asia/Tokyo"))
+        (11 downTo 0).map { currentMonth.minusMonths(it.toLong()) }
+    }
+    val targetHoldings = remember(holdings) {
+        holdings.filter { holding ->
+            holding.category == Category.JAPAN && holding.shares > 0 &&
+                holding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T").let {
+                    it.matches(Regex("[A-Z0-9]{4}0?"))
+                }
+        }
+    }
+    val targetCodes = remember(targetHoldings) {
+        targetHoldings.map { it.code.trim().uppercase(Locale.ROOT).removeSuffix(".T").let { code -> if (code.length == 5 && code.endsWith('0')) code.dropLast(1) else code } }.distinct()
+    }
+    val monthKeys = remember(months) { months.map { it.toString() } }
+    var monthlyPriceHistory by remember(targetCodes, monthKeys) { mutableStateOf<Map<String, Map<String, CloudflareMonthlyPrice>>>(emptyMap()) }
+    var isHistoryLoading by remember(targetCodes, monthKeys) { mutableStateOf(false) }
+    var historyLoadFailed by remember(targetCodes, monthKeys) { mutableStateOf(false) }
+    LaunchedEffect(targetCodes, monthKeys) {
+        if (targetCodes.isEmpty()) return@LaunchedEffect
+        isHistoryLoading = true
+        historyLoadFailed = false
+        runCatching { loadMonthlyPriceHistory(targetCodes, monthKeys) }
+            .onSuccess { series ->
+                monthlyPriceHistory = series.associate { row -> row.code to row.prices.associateBy { it.month } }
+            }
+            .onFailure {
+                monthlyPriceHistory = emptyMap()
+                historyLoadFailed = true
+            }
+        isHistoryLoading = false
+    }
+    val currentCost = targetHoldings.sumOf { it.totalCost }
+    val monthlySnapshots = remember(targetHoldings, months, monthlyPriceHistory) {
+        months.map { month ->
+            val prices = targetHoldings.mapNotNull { holding ->
+                val code = holding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T").let {
+                    if (it.length == 5 && it.endsWith('0')) it.dropLast(1) else it
+                }
+                monthlyPriceHistory[code]?.get(month.toString())?.let { holding to it.close }
+            }
+            val value = if (targetHoldings.isNotEmpty() && prices.size == targetHoldings.size) {
+                prices.sumOf { (holding, close) -> holding.shares * close }
+            } else null
+            MonthAssetSnapshot(
+                month = month.monthValue,
+                yearMonth = month,
+                cost = currentCost,
+                value = value,
+                gain = value?.minus(currentCost)
+            )
         }
     }
     val latest = monthlySnapshots.last()
+    val validValues = monthlySnapshots.mapNotNull { it.value }
+    val axisMin = (listOf(currentCost) + validValues).minOrNull()?.times(0.85) ?: 0.0
+    val axisMax = (listOf(currentCost) + validValues).maxOrNull()?.times(1.03)?.coerceAtLeast(axisMin + 1.0) ?: 1.0
+    val axisRange = (axisMax - axisMin).coerceAtLeast(1.0)
+    val unsupportedCount = holdings.size - targetHoldings.size
     val chartGridColor = BorderColor
     val chartHighlightColor = PrimaryEmerald
     val chartAssetColor = PrimaryEmeraldContainer
@@ -2771,11 +2828,11 @@ private fun AssetTrackingTwelveMonthSection(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmeraldContainer))
                     Spacer(Modifier.width(5.dp))
-                    Text("評価額 (時価)", color = OnSurface, fontSize = AppTextSize.dense)
+                    Text("国内株評価額 (時価)", color = OnSurface, fontSize = AppTextSize.dense)
                     Spacer(Modifier.width(10.dp))
                     Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF64748B)))
                     Spacer(Modifier.width(5.dp))
-                    Text("累積投資元本 (簿価)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                    Text("取得元本 (現在保有分)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 }
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -2783,9 +2840,13 @@ private fun AssetTrackingTwelveMonthSection(
                     border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
                 ) {
                     Text(
-                        if (isPrivacyActive) "含み益 ¥••••" else "含み益 ${if (latest.gain >= 0) "+" else "−"}¥${currencyFormat.format(kotlin.math.abs(latest.gain).toLong())}",
+                        text = when {
+                            isPrivacyActive -> "含み益 ¥••••"
+                            latest.gain == null -> if (isHistoryLoading) "履歴取得中" else "履歴なし"
+                            else -> "含み益 ${if (latest.gain >= 0) "+" else "−"}¥${currencyFormat.format(kotlin.math.abs(latest.gain).toLong())}"
+                        },
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                        color = if (latest.gain >= 0) PrimaryEmerald else ErrorRed,
+                        color = if ((latest.gain ?: 0.0) >= 0) PrimaryEmerald else ErrorRed,
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
@@ -2794,7 +2855,6 @@ private fun AssetTrackingTwelveMonthSection(
 
             Spacer(Modifier.height(12.dp))
 
-            val maxValue = monthlySnapshots.maxOf { maxOf(it.cost, it.value) }.coerceAtLeast(1.0)
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2816,7 +2876,7 @@ private fun AssetTrackingTwelveMonthSection(
                 monthlySnapshots.forEachIndexed { index, item ->
                     val groupLeft = spacing + index * (groupWidth + spacing)
                     val groupTop = chartBottom - chartHeight
-                    if (item.month == 12) {
+                    if (index == monthlySnapshots.lastIndex) {
                         drawRoundRect(
                             color = chartHighlightColor.copy(alpha = 0.08f),
                             topLeft = Offset(groupLeft - 2.dp.toPx(), groupTop),
@@ -2825,8 +2885,7 @@ private fun AssetTrackingTwelveMonthSection(
                         )
                     }
 
-                    val costHeight = (chartHeight * (item.cost / maxValue).toFloat()).coerceAtLeast(1f)
-                    val valueHeight = (chartHeight * (item.value / maxValue).toFloat()).coerceAtLeast(1f)
+                    val costHeight = (chartHeight * ((item.cost - axisMin) / axisRange).toFloat()).coerceAtLeast(1f)
                     val barsWidth = barWidth * 2 + innerGap
                     val barsLeft = groupLeft + (groupWidth - barsWidth) / 2f
                     drawRoundRect(
@@ -2835,12 +2894,15 @@ private fun AssetTrackingTwelveMonthSection(
                         size = Size(barWidth, costHeight),
                         cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
                     )
-                    drawRoundRect(
-                        brush = Brush.verticalGradient(listOf(chartAssetColor, chartAssetColor.copy(alpha = 0.55f))),
-                        topLeft = Offset(barsLeft + barWidth + innerGap, chartBottom - valueHeight),
-                        size = Size(barWidth, valueHeight),
-                        cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
-                    )
+                    item.value?.let { value ->
+                        val valueHeight = (chartHeight * ((value - axisMin) / axisRange).toFloat()).coerceAtLeast(1f)
+                        drawRoundRect(
+                            brush = Brush.verticalGradient(listOf(chartAssetColor, chartAssetColor.copy(alpha = 0.55f))),
+                            topLeft = Offset(barsLeft + barWidth + innerGap, chartBottom - valueHeight),
+                            size = Size(barWidth, valueHeight),
+                            cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+                        )
+                    }
                 }
             }
 
@@ -2851,9 +2913,9 @@ private fun AssetTrackingTwelveMonthSection(
                 monthlySnapshots.forEach { item ->
                     Text(
                         text = item.month.toString(),
-                        color = if (item.month == 12) PrimaryEmerald else OnSurfaceVariant,
+                        color = if (item == latest) PrimaryEmerald else OnSurfaceVariant,
                         fontSize = AppTextSize.dense,
-                        fontWeight = if (item.month == 12) FontWeight.Bold else FontWeight.Medium,
+                        fontWeight = if (item == latest) FontWeight.Bold else FontWeight.Medium,
                         modifier = Modifier.width(14.dp),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
@@ -2866,8 +2928,8 @@ private fun AssetTrackingTwelveMonthSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("月次推移データグリッド (元本 vs 評価額)", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                Text("毎月積立中", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                Text("月次推移データ (現在の保有数で再評価)", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                Text(if (isHistoryLoading) "株価履歴取得中" else "月末株価", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(8.dp))
 
@@ -2875,9 +2937,9 @@ private fun AssetTrackingTwelveMonthSection(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                monthlySnapshots.filter { it.month % 3 == 0 }.forEach { item ->
-                    val isLatest = item.month == latest.month
-                    val gainColor = if (item.gain >= 0) PrimaryEmerald else ErrorRed
+                monthlySnapshots.filterIndexed { index, _ -> (index + 1) % 3 == 0 }.forEach { item ->
+                    val isLatest = item == latest
+                    val gainColor = if ((item.gain ?: 0.0) >= 0) PrimaryEmerald else ErrorRed
                     Column(
                         modifier = Modifier
                             .weight(1f)
@@ -2891,7 +2953,7 @@ private fun AssetTrackingTwelveMonthSection(
                             .padding(horizontal = 8.dp, vertical = 10.dp)
                     ) {
                         Text(
-                            text = if (isLatest) "${item.month}月最新" else "${item.month}月",
+                        text = if (isLatest) "${item.month}月最新" else "${item.month}月",
                             color = if (isLatest) PrimaryEmerald else OnSurface,
                             fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold,
@@ -2907,7 +2969,11 @@ private fun AssetTrackingTwelveMonthSection(
                             softWrap = false
                         )
                         Text(
-                            text = if (isPrivacyActive) "時: ••••" else "時: ${formatAssetWan(item.value)}",
+                            text = when {
+                                isPrivacyActive -> "時: ••••"
+                                item.value == null -> "時: 履歴なし"
+                                else -> "時: ${formatAssetWan(item.value)}"
+                            },
                             color = if (isLatest) PrimaryEmerald else OnSurface,
                             fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold,
@@ -2916,7 +2982,11 @@ private fun AssetTrackingTwelveMonthSection(
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = if (isPrivacyActive) "••••" else "${if (item.gain >= 0) "+" else "−"}${formatAssetWan(kotlin.math.abs(item.gain))}",
+                            text = when {
+                                isPrivacyActive -> "••••"
+                                item.gain == null -> "損益: —"
+                                else -> "${if (item.gain >= 0) "+" else "−"}${formatAssetWan(kotlin.math.abs(item.gain))}"
+                            },
                             color = gainColor,
                             fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.ExtraBold,
@@ -2926,6 +2996,18 @@ private fun AssetTrackingTwelveMonthSection(
                     }
                 }
             }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = buildString {
+                    append("現在の保有株数に各月の株価を適用した参考値です。取得株数の過去履歴は含みません。")
+                    if (unsupportedCount > 0) append(" 国内株以外 ${unsupportedCount}銘柄は対象外です。")
+                    if (historyLoadFailed) append(" 株価履歴を取得できませんでした。")
+                    else if (targetHoldings.isEmpty()) append(" 対象となる国内株がありません。")
+                    else if (!isHistoryLoading && monthlySnapshots.none { it.value != null }) append(" 月末株価がないため表示できる履歴がありません。")
+                },
+                color = OnSurfaceVariant,
+                fontSize = AppTextSize.dense
+            )
         }
     }
 }
@@ -2938,6 +3020,7 @@ private fun formatAssetWan(amount: Double): String {
 
 private data class MonthAssetSnapshot(
     val month: Int,
+    val yearMonth: YearMonth,
     val cost: Double,
     val value: Double,
     val gain: Double,

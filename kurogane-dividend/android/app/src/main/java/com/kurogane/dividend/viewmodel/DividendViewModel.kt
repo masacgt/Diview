@@ -14,6 +14,7 @@ import com.kurogane.dividend.data.CloudflareMarketRepository
 import com.kurogane.dividend.data.CloudflareSecurity
 import com.kurogane.dividend.data.CloudflareStockAnalysis
 import com.kurogane.dividend.data.CloudflareSearchHit
+import com.kurogane.dividend.data.CloudflareMonthlyPriceSeries
 import com.kurogane.dividend.data.PriceRefreshPolicy
 import com.kurogane.dividend.data.Tse33IndustryMaster
 import com.kurogane.dividend.data.CsvHoldingRow
@@ -1213,6 +1214,14 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
 
     suspend fun fetchStockAnalysis(code: String): CloudflareStockAnalysis? =
         marketRepository.getStockAnalysis(code)
+
+    suspend fun fetchMonthlyPriceHistory(codes: List<String>, months: List<String>): List<CloudflareMonthlyPriceSeries> {
+        val result = mutableListOf<CloudflareMonthlyPriceSeries>()
+        codes.distinct().chunked(20).forEach { batch ->
+            result += marketRepository.fetchMonthlyPriceHistory(batch, months)
+        }
+        return result
+    }
 
     private suspend fun refreshMarketPricesIfDue() {
         val now = System.currentTimeMillis()
