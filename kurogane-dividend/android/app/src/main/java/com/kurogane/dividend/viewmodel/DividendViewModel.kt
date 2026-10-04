@@ -18,29 +18,53 @@ import com.kurogane.dividend.data.CloudflareMonthlyPriceSeries
 import com.kurogane.dividend.data.PriceRefreshPolicy
 import com.kurogane.dividend.data.Tse33IndustryMaster
 import com.kurogane.dividend.data.CsvHoldingRow
-import com.kurogane.dividend.data.DvmBackupImporter
 import com.kurogane.dividend.data.DvmBackupPreview
 import com.kurogane.dividend.data.DvmBackupKind
 import com.kurogane.dividend.data.LocalImportStore
+import com.kurogane.dividend.data.PortfolioImporter
+import com.kurogane.dividend.data.runCatchingCancellable
+import com.kurogane.dividend.model.HoldingAllocation
+import com.kurogane.dividend.model.PortfolioMath
+import com.kurogane.dividend.model.PortfolioMath.refreshPayout
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CompletableDeferred
 import org.json.JSONObject
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.random.Random
+import com.kurogane.dividend.notifications.NotificationKind
+import com.kurogane.dividend.notifications.NotificationSettings
+import com.kurogane.dividend.notifications.NotificationStore
+import com.kurogane.dividend.notifications.NotificationScheduler
+import com.kurogane.dividend.notifications.DiviewNotifications
 
-class DividendViewModel(application: Application) : AndroidViewModel(application) {
+class DividendViewModel @JvmOverloads constructor(
+    application: Application,
+    private val refreshOnStart: Boolean = true,
+    private val marketRepository: CloudflareMarketRepository = CloudflareMarketRepository(),
+    private val notificationScheduler: (Context, NotificationSettings) -> Unit = NotificationScheduler::sync
+) : AndroidViewModel(application) {
 
     private val displayPreferences = application.getSharedPreferences("display_preferences", Context.MODE_PRIVATE)
     private val marketPreferences = application.getSharedPreferences("cloudflare_market_cache", Context.MODE_PRIVATE)
-    private val marketRepository = CloudflareMarketRepository()
     private val localImportStore = LocalImportStore(application)
+    private val notificationStore = NotificationStore(application)
+    private val notificationMutex = Mutex()
+    private val _notificationSettings = MutableStateFlow(notificationStore.settings())
+    val notificationSettings: StateFlow<NotificationSettings> = _notificationSettings.asStateFlow()
     private var hasRestoredLocalHoldings = false
+    private val saveMutex = Mutex()
+    private val saveRequests = Channel<Unit>(Channel.CONFLATED)
+    private val restoration = CompletableDeferred<Unit>()
+    private var holdingsLoadFailed = false
+    private val _saveError = MutableStateFlow<String?>(null)
+    val saveError: StateFlow<String?> = _saveError.asStateFlow()
 
     var assetScrollPosition = 0
     var annualScrollIndex = 0
@@ -50,7 +74,7 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
     var watchlistScrollIndex = 0
     var watchlistScrollOffset = 0
 
-    private val _isPrivacyActive = MutableStateFlow(false)
+    private val _isPrivacyActive = MutableStateFlow(displayPreferences.getBoolean("mask_at_startup", false))
     val isPrivacyActive: StateFlow<Boolean> = _isPrivacyActive.asStateFlow()
 
     private val _themeMode = MutableStateFlow(displayPreferences.getString("theme_mode", "dark") ?: "dark")
@@ -62,8 +86,10 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
     private val _selectedAccent = MutableStateFlow(displayPreferences.getString("selected_accent", "emerald") ?: "emerald")
     val selectedAccent: StateFlow<String> = _selectedAccent.asStateFlow()
 
-    private val _taxRateMode = MutableStateFlow("gross") // "gross" or "net"
+    private val _taxRateMode = MutableStateFlow(displayPreferences.getString("tax_rate_mode", "gross") ?: "gross")
     val taxRateMode: StateFlow<String> = _taxRateMode.asStateFlow()
+    private val _maskAtStartup = MutableStateFlow(displayPreferences.getBoolean("mask_at_startup", false))
+    val maskAtStartup: StateFlow<Boolean> = _maskAtStartup.asStateFlow()
 
     private val _selectedMonth = MutableStateFlow<Int?>(null)
     val selectedMonth: StateFlow<Int?> = _selectedMonth.asStateFlow()
@@ -331,68 +357,72 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
     val holdings: StateFlow<List<Holding>> = _holdings.asStateFlow()
 
     init {
-        localImportStore.loadHoldings()?.let { restored ->
-            hasRestoredLocalHoldings = true
-            _holdings.value = restored
-        }
-    }
-
-    /** Imports parsed CSV rows directly into the local portfolio; CSV data is never sent to a server. */
-    fun importCsvRows(rows: List<CsvHoldingRow>, fields: Set<String>) {
-        if (rows.isEmpty()) return
-        _holdings.update { current ->
-            var next = current
-            rows.forEach { row ->
-                val existingIndex = next.indexOfFirst { it.code.equals(row.code, true) || (row.isFund && it.name.equals(row.name, true)) }
-                val old = next.getOrNull(existingIndex)
-                val currency = if (row.code.matches(Regex("[A-Z]+"))) "$" else "¥"
-                val price = if ("currentPrice" in fields) row.currentPrice?.takeIf { it > 0 } ?: old?.price ?: 0.0 else old?.price ?: 0.0
-                val shares = if ("shares" in fields) row.shares?.toInt() ?: old?.shares ?: 0 else old?.shares ?: row.shares?.toInt() ?: 0
-                val cost = if ("averageCost" in fields) row.averageCost?.takeIf { it > 0 } ?: old?.acqPrice ?: 0.0 else old?.acqPrice ?: row.averageCost ?: 0.0
-                val category = if (row.isFund) Category.FUND else if (currency == "$") Category.US else Category.JAPAN
-                val sector = old?.sector ?: if (row.isFund) "投資信託" else runCatching {
-                    Tse33IndustryMaster.industries(getApplication())[row.code.take(4)]?.let { "東証 • $it" }
-                }.getOrNull() ?: "業種未登録 • 日本株"
-                val imported = (old ?: Holding(
-                    id = "import-${row.code}", code = row.code, name = row.name, sector = sector, market = if (category == Category.US) "米国株" else "東証",
-                    category = category, price = price, currency = currency, shares = shares, acqPrice = cost, dps = 0.0, yieldRate = 0.0, yoc = 0.0,
-                    nextPayoutTiming = "未登録", nextPayoutAmount = "¥0", dividendMonths = emptyList(), dividendType = "", accountType = "特定口座", dailyChange = "—", isPositive = true
-                )).copy(name = row.name.ifBlank { old?.name.orEmpty() }, price = price, shares = shares, acqPrice = cost,
-                    accountType = if ("account" in fields) row.account?.takeIf { it.isNotBlank() } ?: old?.accountType ?: "特定口座" else old?.accountType ?: "特定口座",
-                    yieldRate = if (price > 0) (old?.dps ?: 0.0) / price * 100 else old?.yieldRate ?: 0.0)
-                next = if (existingIndex >= 0) next.toMutableList().also { it[existingIndex] = imported } else next + imported
+        hasRestoredLocalHoldings = localImportStore.hasHoldings()
+        viewModelScope.launch {
+            val (heldResult, watchedResult) = withContext(Dispatchers.IO) {
+                runCatching { localImportStore.loadHoldings() } to runCatching { localImportStore.loadWatchlist() }
             }
-            localImportStore.saveHoldings(next)
-            next
-        }
-    }
-
-    /** Stores legacy DVM payloads with an Android Keystore key and imports its stock rows locally. */
-    fun importDvmBackups(backups: List<DvmBackupPreview>) {
-        backups.forEach { preview -> localImportStore.saveBackup(preview.kind, preview.payload) }
-        val stocks = backups.filter { it.kind == DvmBackupKind.STOCKS }.flatMap { it.stocks }
-        if (stocks.isNotEmpty()) {
-            _holdings.update { current ->
-                var next = current
-                stocks.forEach { stock ->
-                    val index = next.indexOfFirst { it.code.equals(stock.code, true) }
-                    val old = next.getOrNull(index)
-                    val currency = if (stock.code.matches(Regex("[A-Z]+"))) "$" else "¥"
-                    val shares = stock.shares.toInt()
-                    val price = stock.currentPrice.takeIf { it > 0 } ?: old?.price ?: 0.0
-                    val cost = stock.averageCost.takeIf { it > 0 } ?: old?.acqPrice ?: 0.0
-                    val imported = (old ?: Holding(
-                        id = "dvm-${stock.code}", code = stock.code, name = stock.name, sector = "業種未登録", market = stock.account,
-                        category = if (currency == "$") Category.US else Category.JAPAN, price = price, currency = currency, shares = shares, acqPrice = cost,
-                        dps = 0.0, yieldRate = 0.0, yoc = 0.0, nextPayoutTiming = "未登録", nextPayoutAmount = "¥0", dividendMonths = emptyList(),
-                        dividendType = "", accountType = stock.account, dailyChange = "—", isPositive = true
-                    )).copy(name = stock.name, price = price, shares = shares, acqPrice = cost, accountType = stock.account)
-                    next = if (index >= 0) next.toMutableList().also { it[index] = imported } else next + imported
+            heldResult.onSuccess { restored -> if (restored != null) _holdings.value = restored }.onFailure {
+                holdingsLoadFailed = true
+                _holdings.value = emptyList()
+                _saveError.value = "保存データを読み込めませんでした。バックアップから復元してください。"
+            }
+            watchedResult.onSuccess { restored -> if (restored != null) _watchlist.value = restored }.onFailure {
+                _watchlist.value = emptyList()
+                _saveError.value = "監視銘柄の保存データを読み込めませんでした。"
+            }
+            restoration.complete(Unit)
+            for (ignored in saveRequests) {
+                runCatchingCancellable { persistCurrentHoldings() }.onFailure {
+                    _saveError.value = "保有情報を保存できませんでした。もう一度保存してください。"
                 }
-                localImportStore.saveHoldings(next)
-                next
             }
         }
+    }
+
+    suspend fun awaitRestoration() { restoration.await() }
+
+    private fun updatePortfolio(next: List<Holding>) {
+        if (next == _holdings.value) return
+        hasRestoredLocalHoldings = true
+        _holdings.value = next
+        saveRequests.trySend(Unit)
+    }
+
+    private suspend fun persistCurrentHoldings() = saveMutex.withLock {
+        val snapshot = _holdings.value
+        val watched = _watchlist.value
+        withContext(Dispatchers.IO) {
+            if (!holdingsLoadFailed) localImportStore.saveHoldings(snapshot)
+            localImportStore.saveWatchlist(watched)
+        }
+        _saveError.value = null
+    }
+
+    fun clearSaveError() { _saveError.value = null }
+
+    /** CSV and legacy backup data remain on this device. */
+    suspend fun importCsvRows(rows: List<CsvHoldingRow>, fields: Set<String>) {
+        restoration.await()
+        val industries = withContext(Dispatchers.IO) {
+            runCatching { Tse33IndustryMaster.industries(getApplication()) }.getOrDefault(emptyMap())
+        }
+        val next = PortfolioImporter.importRows(_holdings.value, rows, fields, industries)
+        holdingsLoadFailed = false
+        updatePortfolio(next)
+        persistCurrentHoldings()
+    }
+
+    suspend fun importDvmBackups(backups: List<DvmBackupPreview>) {
+        restoration.await()
+        val stocks = backups.filter { it.kind == DvmBackupKind.STOCKS }.flatMap { it.stocks }
+        val next = PortfolioImporter.importStocks(_holdings.value, stocks)
+        withContext(Dispatchers.IO) {
+            backups.forEach { preview -> localImportStore.saveBackup(preview.kind, preview.payload) }
+        }
+        holdingsLoadFailed = false
+        updatePortfolio(next)
+        persistCurrentHoldings()
     }
 
     private val _watchlist = MutableStateFlow(
@@ -1087,17 +1117,23 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
     val watchlist: StateFlow<List<WatchlistStock>> = _watchlist.asStateFlow()
 
     init {
-        applyCachedPrices()
         viewModelScope.launch {
-            seedPopularHoldingsFromCloudflare()
-            refreshMarketPricesIfDue()
+            restoration.await()
+            applyCachedPrices()
+            if (refreshOnStart) {
+                runCatching { notificationScheduler(getApplication(), _notificationSettings.value) }.onFailure {
+                    _saveError.value = "通知の定期確認を設定できませんでした。通知設定を確認してください。"
+                }
+                seedPopularHoldingsFromCloudflare()
+                refreshMarketPricesIfDue()
+            }
         }
     }
 
     private suspend fun seedPopularHoldingsFromCloudflare() {
-        if (displayPreferences.getBoolean("popular_r2_holdings_seeded_v1", false)) return
+        if (hasRestoredLocalHoldings || displayPreferences.getBoolean("popular_r2_holdings_seeded_v1", false)) return
 
-        runCatching {
+        runCatchingCancellable {
             val industries = runCatching { Tse33IndustryMaster.industries(getApplication()) }.getOrDefault(emptyMap())
             val resolved = mutableListOf<Holding>()
             val resolvedCodes = mutableSetOf<String>()
@@ -1105,26 +1141,17 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
             var totalCount = Int.MAX_VALUE
             val currencyFormat = java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN)
             while (resolved.size < POPULAR_HOLDINGS_COUNT && offset < totalCount) {
-                val endOffset = (offset + 20).coerceAtMost(totalCount)
-                val pages = coroutineScope {
-                    (offset until endOffset).map { stockOffset ->
-                        async {
-                            marketRepository.fetchPopularStocks(
-                                offset = stockOffset,
-                                date = POPULAR_HOLDINGS_ACQUISITION_DATE,
-                                limit = 1
-                            )
-                        }
-                    }.awaitAll()
-                }
-                totalCount = pages.firstOrNull()?.totalCount ?: 0
+                val page = marketRepository.fetchPopularStocks(offset, POPULAR_HOLDINGS_ACQUISITION_DATE, 20)
+                val pages = listOf(page)
+                val endOffset = offset + 20
+                totalCount = page.totalCount
                 pages.flatMap { it.items }.forEach { stock ->
-                    val normalizedCode = stock.code.uppercase()
+                    val normalizedCode = stock.code.uppercase(java.util.Locale.ROOT)
                     if (!resolvedCodes.add(normalizedCode)) return@forEach
                     val dps = stock.annualDividendPerShare.takeIf { it > 0.0 }
                         ?: ((stock.dividendYield ?: 0.0) * stock.currentPrice / 100.0)
                     val industry = stock.sector?.takeIf(String::isNotBlank)
-                        ?: industries[stock.code.take(4).uppercase()]
+                        ?: industries[stock.code.take(4).uppercase(java.util.Locale.ROOT)]
                     resolved += Holding(
                         id = "r2-${stock.code}",
                         code = stock.code,
@@ -1158,21 +1185,18 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
                 return
             }
 
+            if (hasRestoredLocalHoldings) return
             val currentHoldings = _holdings.value
-            val baselineHoldings = if (hasRestoredLocalHoldings) {
-                currentHoldings
-            } else {
-                currentHoldings.filterNot { it.id.startsWith("h-") }
-            }
-            val popularByCode = popular.associateBy { it.code.uppercase() }
+            val baselineHoldings = currentHoldings.filterNot { it.id.startsWith("h-") }
+            val popularByCode = popular.associateBy { it.code.uppercase(java.util.Locale.ROOT) }
             val updatedHoldings = baselineHoldings.map { holding ->
-                popularByCode[holding.code.uppercase()] ?: holding
+                popularByCode[holding.code.uppercase(java.util.Locale.ROOT)] ?: holding
             }
-            val updatedCodes = updatedHoldings.mapTo(mutableSetOf()) { it.code.uppercase() }
-            val additions = popular.filterNot { it.code.uppercase() in updatedCodes }
+            val updatedCodes = updatedHoldings.mapTo(mutableSetOf()) { it.code.uppercase(java.util.Locale.ROOT) }
+            val additions = popular.filterNot { it.code.uppercase(java.util.Locale.ROOT) in updatedCodes }
             val nextHoldings = updatedHoldings + additions
-            _holdings.value = nextHoldings
-            localImportStore.saveHoldings(nextHoldings)
+            updatePortfolio(nextHoldings)
+            persistCurrentHoldings()
             displayPreferences.edit().putBoolean("popular_r2_holdings_seeded_v1", true).apply()
         }.onFailure { error ->
             android.util.Log.w("CloudflareMarket", "R2人気銘柄の初回保有登録に失敗しました", error)
@@ -1182,11 +1206,11 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
     suspend fun searchCloudflareSecurities(query: String): List<CloudflareSearchHit> {
         val hits = marketRepository.searchSecurities(query)
         val cachedPrices = readCachedPrices()
-        val industries = runCatching { Tse33IndustryMaster.industries(getApplication()) }.getOrDefault(emptyMap())
+        val industries = withContext(Dispatchers.IO) { runCatching { Tse33IndustryMaster.industries(getApplication()) }.getOrDefault(emptyMap()) }
         return hits.map { hit ->
             hit.copy(
-                cachedPrice = cachedPrices[hit.code.uppercase()],
-                industry = industries[hit.code.take(4).uppercase()]
+                cachedPrice = cachedPrices[hit.code.uppercase(java.util.Locale.ROOT)],
+                industry = industries[hit.code.take(4).uppercase(java.util.Locale.ROOT)]
             )
         }
     }
@@ -1197,18 +1221,28 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
         averageAcquisitionPrice: Double,
         accountType: String
     ): Boolean {
-        if (shares <= 0) return false
-        val security = runCatching { marketRepository.getSecurity(code) }.getOrNull() ?: return false
-        addOrUpdateHolding(code, shares, averageAcquisitionPrice, accountType, security)
-        return true
+        restoration.await()
+        if (shares <= 0 || !PortfolioMath.validMoney(averageAcquisitionPrice)) return false
+        val security = runCatchingCancellable { marketRepository.getSecurity(code) }.getOrNull() ?: return false
+        val added = addOrUpdateHolding(code, shares, averageAcquisitionPrice, accountType, security)
+        if (added) persistCurrentHoldings()
+        return added
+    }
+
+    suspend fun registerCloudflareAllocations(code: String, allocations: List<HoldingAllocation>): Boolean {
+        restoration.await()
+        val security = resolveCloudflareSecurity(code) ?: return false
+        val added = addAllocations(code, allocations, security)
+        if (added) persistCurrentHoldings()
+        return added
     }
 
     suspend fun resolveCloudflareSecurity(code: String): CloudflareSecurity? {
-        val security = runCatching { marketRepository.getSecurity(code) }.getOrNull() ?: return null
-        val industry = runCatching {
-            Tse33IndustryMaster.industries(getApplication())[security.code.take(4).uppercase()]
-        }.getOrNull()
-        val cachedPrice = readCachedPrices()[security.code.uppercase()]
+        val security = runCatchingCancellable { marketRepository.getSecurity(code) }.getOrNull() ?: return null
+        val industry = withContext(Dispatchers.IO) { runCatching {
+            Tse33IndustryMaster.industries(getApplication())[security.code.take(4).uppercase(java.util.Locale.ROOT)]
+        }.getOrNull() }
+        val cachedPrice = readCachedPrices()[security.code.uppercase(java.util.Locale.ROOT)]
         return security.copy(marketPrice = security.marketPrice ?: cachedPrice, industry = industry)
     }
 
@@ -1229,7 +1263,7 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
         val lastFetchJstDate = marketPreferences.getString("last_price_fetch_jst_date", null)
         if (!PriceRefreshPolicy.shouldFetch(now, lastFetchAt, lastFetchJstDate)) return
 
-        runCatching { marketRepository.fetchPriceCatalog() }
+        runCatchingCancellable { marketRepository.fetchPriceCatalog() }
             .onSuccess { fetchedPrices ->
                 val mergedPrices = readCachedPrices() + fetchedPrices
                 val json = JSONObject().apply { mergedPrices.forEach { (code, price) -> put(code, price) } }
@@ -1251,7 +1285,7 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
         return buildMap {
             json.keys().forEach { code ->
                 val price = json.optDouble(code, Double.NaN)
-                if (price.isFinite() && price > 0.0) put(code.uppercase(), price)
+                if (PortfolioMath.validMoney(price) && price > 0.0) put(code.uppercase(java.util.Locale.ROOT), price)
             }
         }
     }
@@ -1261,11 +1295,11 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
     private fun applyPrices(prices: Map<String, Double>) {
         if (prices.isEmpty()) return
         _holdings.update { list -> list.map { holding ->
-            val price = prices[holding.code.uppercase()] ?: return@map holding
+            val price = prices[holding.code.uppercase(java.util.Locale.ROOT)] ?: return@map holding
             holding.copy(price = price, yieldRate = if (price > 0) holding.dps / price * 100 else holding.yieldRate)
         } }
         _watchlist.update { list -> list.map { stock ->
-            val price = prices[stock.code.uppercase()] ?: return@map stock
+            val price = prices[stock.code.uppercase(java.util.Locale.ROOT)] ?: return@map stock
             stock.copy(
                 price = price,
                 currentYield = if (price > 0) stock.dps / price * 100 else stock.currentYield,
@@ -1302,18 +1336,21 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun updateTargetYield(code: String, delta: Double) {
+        if (!restoration.isCompleted) return
         _watchlist.update { list ->
             list.map { stock ->
                 if (stock.code == code) {
-                    val newTarget = (stock.targetYield + delta).coerceAtLeast(0.1)
-                    val newPrice = (stock.dps / (newTarget / 100))
-                    stock.copy(targetYield = String.format("%.2f", newTarget).toDouble(), targetPrice = newPrice)
+                    if (!delta.isFinite()) return@map stock
+                    val newTarget = PortfolioMath.adjustedTarget(stock.targetYield, delta)
+                    stock.copy(targetYield = newTarget, targetPrice = stock.dps / (newTarget / 100))
                 } else stock
             }
         }
+        saveRequests.trySend(Unit)
     }
 
     fun toggleWatchlistStock(code: String) {
+        if (!restoration.isCompleted) return
         _watchlist.update { list ->
             list.map { stock ->
                 if (stock.code == code) {
@@ -1321,170 +1358,73 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
                 } else stock
             }
         }
+        saveRequests.trySend(Unit)
     }
 
-    fun updateHolding(code: String, shares: Int, acqPrice: Double, currentPrice: Double? = null) {
-        _holdings.update { list ->
-            list.map {
-                if (it.code == code) {
-                    val effectivePrice = currentPrice?.takeIf { price -> price > 0.0 } ?: it.price
-                    val currencyFactor = if (it.currency == "$" ) 154.0 else 1.0
-                    val totalCost = shares * acqPrice * currencyFactor
-                    val totalValue = shares * effectivePrice * currencyFactor
-                    val gain = totalValue - totalCost
-                    val gainPct = if (totalCost > 0.0) gain / totalCost * 100.0 else 0.0
-                    val annualDividend = shares * it.dps * currencyFactor
-                    val payoutCount = it.dividendMonths.size.takeIf { count -> count > 0 } ?: 2
-                    val payoutAmount = (annualDividend / payoutCount).toLong()
-                    val updatedYield = if (effectivePrice > 0.0) it.dps / effectivePrice * 100.0 else it.yieldRate
-                    val updatedYoc = if (acqPrice > 0.0) it.dps / acqPrice * 100.0 else updatedYield
-                    val currencySymbol = if (it.currency == "$" ) "$" else "¥"
-                    it.copy(
-                        shares = shares,
-                        acqPrice = acqPrice,
-                        price = effectivePrice,
-                        yieldRate = String.format(java.util.Locale.US, "%.2f", updatedYield).toDouble(),
-                        yoc = String.format(java.util.Locale.US, "%.2f", updatedYoc).toDouble(),
-                        nextPayoutAmount = "$currencySymbol${java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN).format(payoutAmount)}",
-                        nextPayoutTiming = "次回: ${it.dividendMonths.firstOrNull() ?: 6}月中旬 ($currencySymbol${java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN).format(payoutAmount)})",
-                        dailyChange = if (gain >= 0.0) "+$currencySymbol${java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN).format(gain.toLong())} (+${String.format(java.util.Locale.US, "%.1f", gainPct)}%)" else "-$currencySymbol${java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN).format(kotlin.math.abs(gain).toLong())} (${String.format(java.util.Locale.US, "%.1f", gainPct)}%)",
-                        isPositive = gain >= 0.0
-                    )
-                } else it
-            }
+    fun toggleWatchlistMembership(holding: Holding) {
+        if (!restoration.isCompleted) return
+        _watchlist.update { list ->
+            if (list.any { it.code.equals(holding.code, true) }) list.filterNot { it.code.equals(holding.code, true) }
+            else list + WatchlistStock(holding.code, holding.name, holding.market, holding.sector,
+                if (holding.category == Category.US) "us" else "jp", holding.price, holding.currency, holding.dps,
+                holding.liveYield, holding.liveYield.coerceAtLeast(0.1), holding.price, holding.dailyChange, holding.isPositive,
+                holding.dividendMonths, holding.nextPayoutTiming, "", false)
         }
+        saveRequests.trySend(Unit)
+    }
+
+    fun updateHolding(code: String, shares: Int, acqPrice: Double, currentPrice: Double? = null): Boolean {
+        if (!restoration.isCompleted || holdingsLoadFailed) return false
+        if (shares < 0 || !PortfolioMath.validMoney(acqPrice) ||
+            (currentPrice != null && !PortfolioMath.validMoney(currentPrice))) return false
+        if (_holdings.value.none { it.code.equals(code, true) }) return false
+        updatePortfolio(_holdings.value.map { holding ->
+            if (!holding.code.equals(code, true)) holding else {
+                val free = if (holding.shares > 0) (shares.toDouble() * holding.effectiveTaxFreeShares / holding.shares).toInt() else 0
+                holding.copy(shares = shares, acqPrice = acqPrice, price = currentPrice ?: holding.price,
+                    taxFreeShares = free).refreshPayout()
+            }
+        })
+        return true
     }
 
     fun addHolding(code: String, shares: Int, acqPrice: Double) {
-        // Quick fallback helper
-        _watchlist.value.find { it.code == code }?.let { stock ->
-            val isAlreadyHeld = _holdings.value.any { it.code == code }
-            if (!isAlreadyHeld) {
-                val newHolding = Holding(
-                    id = "h-${stock.code}",
-                    code = stock.code,
-                    name = stock.name,
-                    sector = "東証P • ${stock.sector.split("·").first().trim()}",
-                    market = stock.market,
-                    category = if (stock.category == "us") Category.US else Category.JAPAN,
-                    price = stock.price,
-                    currency = stock.currency,
-                    shares = shares,
-                    acqPrice = acqPrice,
-                    dps = stock.dps,
-                    yieldRate = stock.currentYield,
-                    yoc = (stock.dps / acqPrice) * 100,
-                    nextPayoutTiming = "次回: ${stock.payoutTiming} (¥${((shares * stock.dps)/2).toInt()})",
-                    nextPayoutAmount = "¥${((shares * stock.dps)/2).toInt()}",
-                    dividendMonths = stock.payoutMonths,
-                    dividendType = "一般配当",
-                    accountType = "特定口座",
-                    dailyChange = "+¥0 (0.0%)",
-                    isPositive = true
-                )
-                _holdings.update { it + newHolding }
-            }
-        }
+        if (_holdings.value.none { it.code.equals(code, true) })
+            addOrUpdateHolding(code, shares, acqPrice, "特定口座")
     }
 
-    fun addOrUpdateHolding(
-        code: String,
-        shares: Int,
-        acqPrice: Double,
-        accountType: String,
-        cloudflareSecurity: CloudflareSecurity? = null
-    ) {
-        val isAlreadyHeld = _holdings.value.any { it.code == code }
-        if (isAlreadyHeld) {
-            val cachedPrice = readCachedPrices()[code.uppercase()]
-            val industry = cloudflareSecurity?.let {
-                runCatching { Tse33IndustryMaster.industries(getApplication())[it.code.take(4).uppercase()] }.getOrNull()
-            }
-            _holdings.update { list ->
-                list.map {
-                    if (it.code == code) {
-                        val newShares = it.shares + shares
-                        val newAcqPrice = if (newShares > 0) {
-                            ((it.shares * it.acqPrice) + (shares * acqPrice)) / newShares
-                        } else acqPrice
-                        val dps = cloudflareSecurity?.annualDividendPerShare ?: it.dps
-                        val marketPrice = cachedPrice ?: it.price
-                        val halfDiv = (newShares * dps) / 2
-                        it.copy(
-                            name = cloudflareSecurity?.name ?: it.name,
-                            sector = industry?.let { name -> "東証P • $name" } ?: it.sector,
-                            shares = newShares,
-                            acqPrice = newAcqPrice,
-                            price = marketPrice,
-                            dps = dps,
-                            yieldRate = if (marketPrice > 0) dps / marketPrice * 100 else it.yieldRate,
-                            nextPayoutAmount = "¥${halfDiv.toInt()}",
-                            accountType = accountType
-                        )
-                    } else it
-                }
-            }
-        } else {
-            val stockPreset = _watchlist.value.find { it.code == code }
-            val name = cloudflareSecurity?.name ?: stockPreset?.name ?: when(code) {
-                "8316" -> "三井住友FG"
-                "7203" -> "トヨタ自動車"
-                "9432" -> "日本電信電話"
-                "8058" -> "三菱商事"
-                "AAPL" -> "Apple Inc."
-                "MSFT" -> "Microsoft Corp."
-                else -> "新規銘柄"
-            }
-            val dps = cloudflareSecurity?.annualDividendPerShare ?: stockPreset?.dps ?: when(code) {
-                "8316" -> 130.0
-                "7203" -> 72.8
-                "9432" -> 5.2
-                "8058" -> 100.0
-                "AAPL" -> 1.0
-                "MSFT" -> 3.0
-                else -> 10.0
-            }
-            val price = readCachedPrices()[code.uppercase()] ?: stockPreset?.price ?: if (cloudflareSecurity != null) 0.0 else when(code) {
-                "8316" -> 3150.0
-                "7203" -> 2600.0
-                "9432" -> 154.2
-                "8058" -> 3240.0
-                "AAPL" -> 220.0
-                "MSFT" -> 440.0
-                else -> 100.0
-            }
-            val industry = cloudflareSecurity?.let {
-                runCatching { Tse33IndustryMaster.industries(getApplication())[it.code.take(4).uppercase()] }.getOrNull()
-            }
-            val sector = industry?.let { "東証P • $it" } ?: stockPreset?.sector ?: "業種未登録 · 日本株"
-            val currency = stockPreset?.currency ?: if (code.matches(Regex("[A-Z]+"))) "$" else "¥"
-            val category = if (currency == "$") Category.US else Category.JAPAN
+    fun addOrUpdateHolding(code: String, shares: Int, acqPrice: Double, accountType: String,
+                           cloudflareSecurity: CloudflareSecurity? = null): Boolean =
+        addAllocations(code, listOf(HoldingAllocation(shares, acqPrice, accountType)), cloudflareSecurity)
 
-            val newHolding = Holding(
-                id = "h-${code}-${System.currentTimeMillis()}",
-                code = code,
-                name = name,
-                sector = sector,
-                market = if (currency == "$") "NASDAQ" else "東証PRM",
-                category = category,
-                price = price,
-                currency = currency,
-                shares = shares,
-                acqPrice = acqPrice,
-                dps = dps,
-                yieldRate = (dps / price) * 100,
-                yoc = (dps / acqPrice) * 100,
-                nextPayoutTiming = "次回: 12月中旬",
-                nextPayoutAmount = "¥${((shares * dps) / 2).toInt()}",
-                dividendMonths = listOf(6, 12),
-                dividendType = "一般配当",
-                accountType = accountType,
-                dailyChange = "+¥0 (0.0%)",
-                isPositive = true
-            )
-            _holdings.update { it + newHolding }
-        }
+    private fun addAllocations(code: String, allocations: List<HoldingAllocation>, security: CloudflareSecurity?): Boolean {
+        if (!restoration.isCompleted || holdingsLoadFailed) return false
+        val normalized = PortfolioMath.normalizeCode(code)
+        if (!PortfolioMath.validCode(normalized) || allocations.isEmpty() || allocations.none { it.shares > 0 } ||
+            allocations.any { it.shares < 0 || !PortfolioMath.validMoney(it.acquisitionPrice) || it.accountType.isBlank() }) return false
+        val old = _holdings.value.firstOrNull { it.code.equals(normalized, true) }
+        val preset = _watchlist.value.firstOrNull { it.code.equals(normalized, true) }
+        if (old == null && preset == null && security == null) return false
+        val dps = security?.annualDividendPerShare ?: old?.dps ?: preset?.dps ?: 0.0
+        val price = readCachedPrices()[normalized] ?: security?.marketPrice ?: old?.price ?: preset?.price ?: 0.0
+        if (!PortfolioMath.validMoney(dps) || !PortfolioMath.validMoney(price)) return false
+        val currency = old?.currency ?: preset?.currency ?: if (normalized.matches(Regex("[A-Z]+"))) "$" else "¥"
+        val template = old ?: Holding(
+            id = "holding-$normalized", code = normalized, name = security?.name ?: preset?.name.orEmpty(),
+            sector = security?.industry?.let { "東証 • $it" } ?: preset?.sector ?: "業種未登録",
+            market = preset?.market ?: if (currency == "$") "米国株" else "東証", category = if (currency == "$") Category.US else Category.JAPAN,
+            price = price, currency = currency, shares = 0, acqPrice = 0.0, dps = dps, yieldRate = 0.0, yoc = 0.0,
+            nextPayoutTiming = "配当月未取得", nextPayoutAmount = "—", dividendMonths = preset?.payoutMonths ?: emptyList(),
+            dividendType = "", accountType = "", dailyChange = "—", isPositive = true
+        )
+        val merged = runCatching {
+            PortfolioMath.mergeAllocations(template.copy(price = price, dps = dps, name = security?.name ?: template.name), allocations)
+        }.getOrNull() ?: return false
+        updatePortfolio(if (old == null) _holdings.value + merged else _holdings.value.map { if (it.id == old.id) merged else it })
+        return true
     }
+
+    fun addHoldingAllocations(code: String, allocations: List<HoldingAllocation>): Boolean = addAllocations(code, allocations, null)
 
     fun setThemeMode(mode: String) {
         _themeMode.value = mode
@@ -1502,7 +1442,59 @@ class DividendViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setTaxRateMode(mode: String) {
+        if (mode !in setOf("gross", "net")) return
         _taxRateMode.value = mode
+        displayPreferences.edit().putString("tax_rate_mode", mode).apply()
+    }
+
+    fun setMaskAtStartup(mask: Boolean) {
+        _maskAtStartup.value = mask
+        displayPreferences.edit().putBoolean("mask_at_startup", mask).apply()
+    }
+
+    fun setNotificationEnabled(kind: NotificationKind, enabled: Boolean) {
+        viewModelScope.launch {
+            notificationMutex.withLock {
+                runCatchingCancellable {
+                    restoration.await()
+                    // Worker must see the latest stock alert flags before it can run.
+                    if (enabled) persistCurrentHoldings()
+                    val settings = withContext(Dispatchers.IO) { notificationStore.setEnabled(kind, enabled) }
+                    _notificationSettings.value = settings
+                    notificationScheduler(getApplication(), settings)
+                    if (!enabled) DiviewNotifications(getApplication()).cancel(kind)
+                }.onFailure { _saveError.value = "通知設定を保存できませんでした。もう一度お試しください。" }
+            }
+        }
+    }
+
+    suspend fun resetLocalData() {
+        restoration.await()
+        notificationMutex.withLock {
+        saveMutex.withLock {
+            withContext(Dispatchers.IO) {
+                _notificationSettings.value = notificationStore.clear()
+                notificationScheduler(getApplication(), _notificationSettings.value)
+                DiviewNotifications(getApplication()).clear()
+                localImportStore.clear()
+                localImportStore.saveHoldings(emptyList())
+                localImportStore.saveWatchlist(emptyList())
+                check(marketPreferences.edit().clear().commit()) { "価格キャッシュを初期化できませんでした" }
+                check(displayPreferences.edit().clear().putBoolean("popular_r2_holdings_seeded_v1", true).commit()) { "設定を初期化できませんでした" }
+            }
+            _holdings.value = emptyList()
+            _watchlist.value = emptyList()
+            hasRestoredLocalHoldings = true
+            holdingsLoadFailed = false
+            _themeMode.value = "dark"
+            _selectedAccent.value = "emerald"
+            _isOledBlack.value = false
+            _isPrivacyActive.value = false
+            _maskAtStartup.value = false
+            _taxRateMode.value = "gross"
+            _saveError.value = null
+        }
+        }
     }
 
     private companion object {

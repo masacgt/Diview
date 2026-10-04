@@ -1,6 +1,10 @@
 package com.kurogane.dividend
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.os.Bundle
+import android.content.Intent
+import com.kurogane.dividend.notifications.DiviewNotifications
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -60,19 +64,35 @@ import com.kurogane.dividend.viewmodel.DividendViewModel
 class MainActivity : ComponentActivity() {
 
     private val viewModel: DividendViewModel by viewModels()
+    private val notificationDestination = MutableStateFlow<String?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        notificationDestination.value = DiviewNotifications.destination(intent)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DiviewNotifications(this).createChannels()
+        if (savedInstanceState == null) notificationDestination.value = DiviewNotifications.destination(intent)
         setContent {
-            val themeMode by viewModel.themeMode.collectAsState()
-            val isOledBlack by viewModel.isOledBlack.collectAsState()
-            val selectedAccent by viewModel.selectedAccent.collectAsState()
+            val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+            val isOledBlack by viewModel.isOledBlack.collectAsStateWithLifecycle()
+            val selectedAccent by viewModel.selectedAccent.collectAsStateWithLifecycle()
             KuroganeDividendTheme(
                 themeMode = themeMode,
                 isOledBlack = isOledBlack,
                 selectedAccent = selectedAccent
             ) {
                 val navController = rememberNavController()
+                val destination by notificationDestination.collectAsStateWithLifecycle()
+                LaunchedEffect(destination) {
+                    destination?.let { route ->
+                        navController.navigate(route) { launchSingleTop = true }
+                        notificationDestination.value = null
+                    }
+                }
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
@@ -85,10 +105,16 @@ class MainActivity : ComponentActivity() {
                 var showNotificationsDialog by remember { mutableStateOf(false) }
                 var showAddHoldingSheet by remember { mutableStateOf(false) }
                 var prefilledAddHoldingCode by remember { mutableStateOf("") }
+                val saveError by viewModel.saveError.collectAsStateWithLifecycle()
+                val snackbarHostState = remember { SnackbarHostState() }
+                LaunchedEffect(saveError) {
+                    saveError?.let { snackbarHostState.showSnackbar(it); viewModel.clearSaveError() }
+                }
 
                 val dynamicBg = BackgroundDark
 
                 Scaffold(
+                    snackbarHost = { SnackbarHost(snackbarHostState) },
                     modifier = Modifier.fillMaxSize(),
                     containerColor = dynamicBg,
                     topBar = {
@@ -229,7 +255,7 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 // Settings Button
-                                IconButton(onClick = { navController.navigate("settings") }) {
+                                IconButton(onClick = { navController.navigate("settings") { launchSingleTop = true } }) {
                                     Icon(
                                         Icons.Default.Settings,
                                         contentDescription = "Settings",
@@ -339,7 +365,7 @@ class MainActivity : ComponentActivity() {
                             composable("asset") {
                                 AssetManagementScreen(
                                     viewModel = viewModel,
-                                    onNavigateToDetail = { code -> navController.navigate("detail/$code") },
+                                    onNavigateToDetail = { code -> navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true } },
                                     onOpenAddHolding = { code ->
                                         prefilledAddHoldingCode = code
                                         showAddHoldingSheet = true
@@ -349,7 +375,7 @@ class MainActivity : ComponentActivity() {
                             composable("annual") {
                                 AnnualDividendScreen(
                                     viewModel = viewModel,
-                                    onNavigateToDetail = { code -> navController.navigate("detail/$code") }
+                                    onNavigateToDetail = { code -> navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true } }
                                 )
                             }
                             composable("roadmap") {
@@ -358,7 +384,7 @@ class MainActivity : ComponentActivity() {
                             composable("watchlist") {
                                 WatchlistScreen(
                                     viewModel = viewModel,
-                                    onNavigateToDetail = { code -> navController.navigate("detail/$code") },
+                                    onNavigateToDetail = { code -> navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true } },
                                     onOpenAddHolding = { code ->
                                         prefilledAddHoldingCode = code
                                         showAddHoldingSheet = true
@@ -369,9 +395,9 @@ class MainActivity : ComponentActivity() {
                                 SettingsScreen(
                                     viewModel = viewModel,
                                     onBack = { navController.popBackStack() },
-                                    onNavigateToFeedback = { navController.navigate("contact_feedback") },
-                                    onNavigateToTerms = { navController.navigate("terms_privacy") },
-                                    onNavigateToCsv = { navController.navigate("csv_import") }
+                                    onNavigateToFeedback = { navController.navigate("contact_feedback") { launchSingleTop = true } },
+                                    onNavigateToTerms = { navController.navigate("terms_privacy") { launchSingleTop = true } },
+                                    onNavigateToCsv = { navController.navigate("csv_import") { launchSingleTop = true } }
                                 )
                             }
                             composable("csv_import") {
@@ -415,7 +441,7 @@ class MainActivity : ComponentActivity() {
                             onSearch = { query -> viewModel.searchCloudflareSecurities(query) },
                             onSelectStock = { code ->
                                 showSearchSheet = false
-                                navController.navigate("detail/$code")
+                                navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true }
                             }
                         )
 
@@ -425,13 +451,8 @@ class MainActivity : ComponentActivity() {
                             prefilledCode = prefilledAddHoldingCode,
                             onDismiss = { showAddHoldingSheet = false },
                             onResolveSecurity = { code -> viewModel.resolveCloudflareSecurity(code) },
-                            onRegisterCollective = { code, totalShares, weightedAcqPrice, primaryAccount ->
-                                val registered = viewModel.registerCloudflareHolding(
-                                    code,
-                                    totalShares,
-                                    weightedAcqPrice,
-                                    primaryAccount
-                                )
+                            onRegisterCollective = { code, allocations ->
+                                val registered = viewModel.registerCloudflareAllocations(code, allocations)
                                 if (registered) showAddHoldingSheet = false
                                 registered
                             }
@@ -439,6 +460,11 @@ class MainActivity : ComponentActivity() {
 
                         // Notification Dialog
                         if (showNotificationsDialog) {
+                            val watched by viewModel.watchlist.collectAsStateWithLifecycle()
+                            val owned by viewModel.holdings.collectAsStateWithLifecycle()
+                            val taxMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
+                            val ready = watched.filter { it.alertEnabled && it.isReady }
+                            val monthlyIncome = owned.sumOf { it.getEffectiveAnnualDividend(taxMode) } / 12.0
                             AlertDialog(
                                 onDismissRequest = { showNotificationsDialog = false },
                                 confirmButton = {
@@ -459,10 +485,10 @@ class MainActivity : ComponentActivity() {
                                 text = {
                                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                         Text("🔔 利回りシグナル検知", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
-                                        Text("日本たばこ産業 (JT) の株価が目標買場利回り (4.80%) に接近しました。現在の実効利回りは 4.73% です。", color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
+                                        Text(if (ready.isEmpty()) "通知を有効にした銘柄で、目標利回りに到達したものはありません。" else ready.joinToString("\n") { "${it.name}：現在利回り ${String.format(java.util.Locale.JAPAN, "%.2f", it.currentYield)}% / 目標 ${String.format(java.util.Locale.JAPAN, "%.2f", it.targetYield)}%" }, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
                                         HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
                                         Text("🎉 ロードマップ進捗アップデート", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
-                                        Text("STEP 5 「水道光熱費の全額自給 (月3万円)」を達成しました！次のクエスト「食費・日用品の全額自給 (月5万円)」に挑戦中です。", color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
+                                        Text("現在の想定配当は月換算で ¥${java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN).format(monthlyIncome.toLong())} です。ロードマップで目標との差額を確認できます。", color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
                                     }
                                 },
                                 containerColor = SurfaceContainer,

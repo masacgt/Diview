@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import com.kurogane.dividend.model.PortfolioMath
 
 enum class DvmBackupKind(val fileName: String, val label: String) {
     STOCKS("BackUpStockInfoAndroid.dvm", "銘柄一覧"),
@@ -14,11 +15,12 @@ enum class DvmBackupKind(val fileName: String, val label: String) {
     YIELD_ALERTS("BackUpYieldAlertAndroid.dvm", "目標利回りアラート");
 
     companion object {
-        fun fromName(name: String): DvmBackupKind? = entries.firstOrNull { name.substringBeforeLast('.').equals(it.fileName.substringBeforeLast('.'), true) }
+        fun fromName(name: String): DvmBackupKind? = entries.firstOrNull { name.equals(it.fileName, true) }
     }
 }
 
-data class DvmStock(val code: String, val name: String, val shares: Double, val averageCost: Double, val currentPrice: Double, val account: String)
+data class DvmStock(val code: String, val name: String, val shares: Double, val averageCost: Double, val currentPrice: Double, val account: String,
+                    val taxFreeShares: Double? = null)
 data class DvmBackupPreview(val kind: DvmBackupKind, val itemCount: Int, val stocks: List<DvmStock>, val payload: ByteArray)
 
 object DvmBackupImporter {
@@ -27,6 +29,7 @@ object DvmBackupImporter {
     private val legacyKey = byteArrayOf(68,118,77,103,83,121,110,99,65,69,83,50,53,54,71,67,77,75,101,121,50,48,50,54,79,116,116,105,76,97,98,33)
 
     fun decrypt(file: ByteArray): ByteArray {
+        require(file.size <= 50 * 1024 * 1024) { "DVMバックアップが大きすぎます" }
         require(file.size >= magic.size + 12 + 16 && magic.indices.all { file[it] == magic[it] }) { "DVMバックアップの形式が正しくありません" }
         val nonce = file.copyOfRange(magic.size, magic.size + 12)
         val cipherText = file.copyOfRange(magic.size + 12, file.size)
@@ -50,7 +53,8 @@ object DvmBackupImporter {
                     DvmBackupKind.CUSTOM_STOCKS -> listOf("customStocks", "data")
                     DvmBackupKind.YIELD_ALERTS -> listOf("yieldAlerts", "alerts", "data")
                 }
-                keys.firstNotNullOfOrNull { key -> root.optJSONArray(key) } ?: JSONArray()
+                keys.firstNotNullOfOrNull { key -> root.optJSONArray(key) }
+                    ?: throw IllegalArgumentException("バックアップに対象データがありません")
             }
             else -> throw IllegalArgumentException("バックアップの中身を読み取れません")
         }
@@ -62,23 +66,32 @@ object DvmBackupImporter {
                 "numOfStocksHeldIdeco" to "acquisitionUnitPriceIdeco"
             )
             val positions = holdingFields.map { (quantityKey, costKey) ->
-                item.optDouble(quantityKey, 0.0).coerceAtLeast(0.0) to item.optString(costKey).toNumber()
+                val quantity = item.optDouble(quantityKey, 0.0)
+                require(PortfolioMath.wholeShares(quantity) != null) { "バックアップの保有数量が正しくありません" }
+                quantity to item.optString(costKey).toNumber()
             }.filter { it.first > 0.0 }
             val shares = positions.sumOf { it.first }
+            require(PortfolioMath.wholeShares(shares) != null) { "保有数量が上限を超えています" }
             val averageCost = if (shares > 0) positions.sumOf { (quantity, cost) -> quantity * cost } / shares else item.optString("acquisitionUnitPrice").toNumber()
             DvmStock(
-                code = item.optString("corporateCode").trim(), name = item.optString("corporateName").trim(), shares = shares,
+                code = PortfolioMath.normalizeCode(item.optString("corporateCode")), name = item.optString("corporateName").trim(), shares = shares,
                 averageCost = averageCost, currentPrice = item.optString("priceOfStock").toNumber(),
                 account = when {
                     item.optInt("isUSD", 0) == 1 -> "米国株"
                     positions.size > 1 -> "複数口座"
                     positions.isNotEmpty() && holdingFields[holdingFields.indexOfFirst { (key, _) -> item.optDouble(key, 0.0) > 0 }].first.contains("Nisa") -> "NISA"
                     else -> "特定口座"
-                }
-            ).takeIf { it.code.isNotBlank() && it.name.isNotBlank() }
+                },
+                taxFreeShares = holdingFields.filter { it.first.contains("Nisa") }.sumOf { item.optDouble(it.first, 0.0) }
+            ).takeIf { PortfolioMath.validCode(it.code) && it.name.isNotBlank() }
         } else emptyList()
         return DvmBackupPreview(kind, items.length(), stocks, plain)
     }
 
-    private fun String.toNumber() = replace(",", "").replace("¥", "").replace("$", "").toDoubleOrNull() ?: 0.0
+    private fun String.toNumber(): Double {
+        if (isBlank() || this == "null") return 0.0
+        val number = replace(",", "").replace("¥", "").replace("$", "").trim().toDoubleOrNull()
+        require(number != null && PortfolioMath.validMoney(number)) { "バックアップの単価が正しくありません" }
+        return number
+    }
 }

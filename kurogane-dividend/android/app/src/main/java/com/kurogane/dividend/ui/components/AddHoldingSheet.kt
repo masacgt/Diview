@@ -22,6 +22,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.data.CloudflareSecurity
+import com.kurogane.dividend.data.runCatchingCancellable
+import com.kurogane.dividend.model.HoldingAllocation
+import com.kurogane.dividend.model.PortfolioMath
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -42,7 +45,7 @@ fun AddHoldingSheet(
     prefilledCode: String,
     onDismiss: () -> Unit,
     onResolveSecurity: suspend (code: String) -> CloudflareSecurity?,
-    onRegisterCollective: suspend (code: String, shares: Int, acqPrice: Double, accountType: String) -> Boolean
+    onRegisterCollective: suspend (code: String, allocations: List<HoldingAllocation>) -> Boolean
 ) {
     if (!visible) return
 
@@ -113,7 +116,7 @@ fun AddHoldingSheet(
             // Already resolved this exact code from the remote master.
         } else if (normalizedCode.matches(Regex("[A-Z0-9]{4}"))) {
             kotlinx.coroutines.delay(350)
-            val security = runCatching { onResolveSecurity(normalizedCode) }.getOrNull()
+            val security = runCatchingCancellable { onResolveSecurity(normalizedCode) }.getOrNull()
             if (normalizedCode == stockCodeInput.trim().uppercase() && security != null) {
                 resolvedSecurity = security
                 val knownPreset = presets.firstOrNull { it.code.equals(normalizedCode, ignoreCase = true) }
@@ -140,29 +143,34 @@ fun AddHoldingSheet(
 
     // Calculations
     val nShares = nisaShares.toIntOrNull() ?: 0
-    val nPrice = nisaPrice.toDoubleOrNull() ?: selectedStock.price
+    val nPrice = nisaPrice.toDoubleOrNull()?.takeIf(PortfolioMath::validMoney) ?: 0.0
     val nisaDividend = nShares * selectedStock.dps * fxRate
     val nisaCost = nShares * nPrice * fxRate
 
     val tShares = tsumitateShares.toIntOrNull() ?: 0
-    val tPrice = tsumitatePrice.toDoubleOrNull() ?: selectedStock.price
+    val tPrice = tsumitatePrice.toDoubleOrNull()?.takeIf(PortfolioMath::validMoney) ?: 0.0
     val tsumitateDividend = tShares * selectedStock.dps * fxRate
     val tsumitateCost = tShares * tPrice * fxRate
 
     val tkShares = tokuteiShares.toIntOrNull() ?: 0
-    val tkPrice = tokuteiPrice.toDoubleOrNull() ?: selectedStock.price
+    val tkPrice = tokuteiPrice.toDoubleOrNull()?.takeIf(PortfolioMath::validMoney) ?: 0.0
     val tokuteiGrossDiv = tkShares * selectedStock.dps * fxRate
     val tokuteiDividend = tokuteiGrossDiv * 0.79685
     val tokuteiCost = tkShares * tkPrice * fxRate
 
     val gShares = generalShares.toIntOrNull() ?: 0
-    val gPrice = generalPrice.toDoubleOrNull() ?: selectedStock.price
+    val gPrice = generalPrice.toDoubleOrNull()?.takeIf(PortfolioMath::validMoney) ?: 0.0
     val generalGrossDiv = gShares * selectedStock.dps * fxRate
     val generalDividend = generalGrossDiv * 0.79685
     val generalCost = gShares * gPrice * fxRate
 
     // Summary Box metrics
-    val totalShares = nShares + tShares + tkShares + gShares
+    val totalSharesLong = listOf(nShares, tShares, tkShares, gShares).sumOf { it.toLong() }
+    val totalShares = totalSharesLong.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+    val inputValid = totalSharesLong in 1..Int.MAX_VALUE.toLong() &&
+        listOf(nisaShares, tsumitateShares, tokuteiShares, generalShares).all { (it.toIntOrNull() ?: -1) >= 0 } &&
+        listOf(nShares to nisaPrice, tShares to tsumitatePrice, tkShares to tokuteiPrice, gShares to generalPrice)
+            .all { (quantity, value) -> quantity == 0 || value.toDoubleOrNull()?.let(PortfolioMath::validMoney) == true }
     val totalCost = nisaCost + tsumitateCost + tokuteiCost + generalCost
     val weightedAvgAcqPrice = if (totalShares > 0) totalCost / totalShares / fxRate else selectedStock.price
     val totalNetDividend = nisaDividend + tsumitateDividend + tokuteiDividend + generalDividend
@@ -645,27 +653,26 @@ fun AddHoldingSheet(
 
                 Button(
                     onClick = {
-                        if (totalShares > 0 && !isRegistering) {
+                        if (inputValid && !isRegistering) {
                             registerError = false
+                            isRegistering = true
                             registrationScope.launch {
-                                isRegistering = true
-                                // Resolve the security in Cloudflare D1 before adding it to the portfolio.
-                                val primaryAccount = when {
-                                    nShares > 0 -> "新NISA成長枠"
-                                    tShares > 0 -> "新NISAつみたて投資枠"
-                                    tkShares > 0 -> "特定口座"
-                                    else -> "一般口座"
-                                }
-                                val registered = runCatching {
-                                    onRegisterCollective(stockCodeInput.trim().uppercase(), totalShares, weightedAvgAcqPrice, primaryAccount)
-                                }.getOrDefault(false)
-                                registerError = !registered
-                                isRegistering = false
+                                try {
+                                    val registered = runCatchingCancellable {
+                                        onRegisterCollective(stockCodeInput.trim().uppercase(), listOf(
+                                            HoldingAllocation(nShares, nPrice, "新NISA成長枠"),
+                                            HoldingAllocation(tShares, tPrice, "新NISAつみたて投資枠"),
+                                            HoldingAllocation(tkShares, tkPrice, "特定口座"),
+                                            HoldingAllocation(gShares, gPrice, "一般口座")
+                                        ))
+                                    }.getOrDefault(false)
+                                    registerError = !registered
+                                } finally { isRegistering = false }
                             }
                         }
                     },
                     modifier = Modifier.weight(0.6f).height(48.dp),
-                    enabled = !isRegistering,
+                    enabled = inputValid && !isRegistering,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = PrimaryEmeraldContainer,
                         contentColor = OnPrimaryContainer

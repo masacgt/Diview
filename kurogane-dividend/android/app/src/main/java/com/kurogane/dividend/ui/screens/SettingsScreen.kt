@@ -1,5 +1,6 @@
 package com.kurogane.dividend.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -29,6 +30,16 @@ import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import kotlin.math.roundToInt
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.kurogane.dividend.data.PortfolioExporter
+import com.kurogane.dividend.data.runCatchingCancellable
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.kurogane.dividend.notifications.NotificationKind
+import com.kurogane.dividend.notifications.DiviewNotifications
+import com.kurogane.dividend.ui.components.rememberNotificationAccess
 
 private val SettingsCard: Color @Composable get() = SurfaceContainerLow
 private val SettingsInset: Color @Composable get() = BackgroundDark
@@ -44,21 +55,59 @@ fun SettingsScreen(
     onNavigateToTerms: () -> Unit = {},
     onNavigateToCsv: () -> Unit = {}
 ) {
-    val themeMode by viewModel.themeMode.collectAsState()
-    val isOledBlack by viewModel.isOledBlack.collectAsState()
-    val selectedAccent by viewModel.selectedAccent.collectAsState()
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val isOledBlack by viewModel.isOledBlack.collectAsStateWithLifecycle()
+    val selectedAccent by viewModel.selectedAccent.collectAsStateWithLifecycle()
     var dataTab by rememberSaveable { mutableStateOf("import") }
     var calcBasis by rememberSaveable { mutableStateOf("eval") }
-    var taxDeduction by rememberSaveable { mutableStateOf(true) }
+    val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
+    val taxDeduction = taxRateMode == "net"
     var usTaxDeduction by rememberSaveable { mutableStateOf(true) }
     var targetYield by rememberSaveable { mutableStateOf("4.0") }
     var threshold by rememberSaveable { mutableIntStateOf(5) }
-    var notifyExDiv by rememberSaveable { mutableStateOf(true) }
-    var notifyBuySignal by rememberSaveable { mutableStateOf(true) }
-    var biometrics by rememberSaveable { mutableStateOf(true) }
-    var maskAtStartup by rememberSaveable { mutableStateOf(false) }
+    val maskAtStartup by viewModel.maskAtStartup.collectAsStateWithLifecycle()
     var confirmReset by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
+    val notificationAccess = rememberNotificationAccess { action ->
+        when (action) {
+            "price" -> viewModel.setNotificationEnabled(NotificationKind.PRICE, true)
+            "dividend" -> viewModel.setNotificationEnabled(NotificationKind.DIVIDEND, true)
+            "test" -> Toast.makeText(context, if (DiviewNotifications(context).test()) "テスト通知を送信しました" else "通知を表示できませんでした。端末の通知設定を確認してください。", Toast.LENGTH_LONG).show()
+        }
+    }
+    val exportScope = rememberCoroutineScope()
+    var isExporting by remember { mutableStateOf(false) }
+    val csvExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri != null) {
+            isExporting = true
+            val stocks = viewModel.holdings.value
+            exportScope.launch {
+                try {
+                    val result = runCatchingCancellable { withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(PortfolioExporter.csv(stocks).toByteArray(Charsets.UTF_8)) }
+                            ?: error("保存先を開けませんでした")
+                    } }
+                    Toast.makeText(context, if (result.isSuccess) "CSVを保存しました" else "CSVを保存できませんでした", Toast.LENGTH_LONG).show()
+                } finally { isExporting = false }
+            }
+        }
+    }
+    val jsonExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            isExporting = true
+            val stocks = viewModel.holdings.value
+            exportScope.launch {
+                try {
+                    val result = runCatchingCancellable { withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(PortfolioExporter.json(stocks).toByteArray(Charsets.UTF_8)) }
+                            ?: error("保存先を開けませんでした")
+                    } }
+                    Toast.makeText(context, if (result.isSuccess) "JSONを保存しました" else "JSONを保存できませんでした", Toast.LENGTH_LONG).show()
+                } finally { isExporting = false }
+            }
+        }
+    }
     val accents = listOf(
         "emerald" to Color(0xFF10B981), "cyan" to Color(0xFF06B6D4),
         "blue" to Color(0xFF3B82F6), "amber" to AccentAmber,
@@ -111,8 +160,8 @@ fun SettingsScreen(
                     } else {
                         Label("登録中の保有株・配当情報・取得単価データを保存します。", 9, SettingsMuted)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ActionButton("▦  CSV形式で保存", Modifier.weight(1f)) { Toast.makeText(context, "全保有株CSVを書き出しました", Toast.LENGTH_SHORT).show() }
-                            ActionButton("{ }  JSONバックアップ", Modifier.weight(1f)) { Toast.makeText(context, "JSONバックアップを作成しました", Toast.LENGTH_SHORT).show() }
+                            ActionButton("▦  CSV形式で保存", Modifier.weight(1f)) { if (!isExporting) csvExporter.launch("Diview-portfolio.csv") }
+                            ActionButton("{ }  JSONバックアップ", Modifier.weight(1f)) { if (!isExporting) jsonExporter.launch("Diview-portfolio.json") }
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
@@ -162,9 +211,9 @@ fun SettingsScreen(
                         BasisChoice("取得額基準", "買付単価 (YOC)", calcBasis == "cost", Modifier.weight(1f)) { calcBasis = "cost" }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle("税金計算設定", "税引後表示 (国内税 20.315% を控除)", taxDeduction, { taxDeduction = it })
+                    SettingToggle("税金計算設定", "税引後表示 (国内税 20.315% を控除)", taxDeduction, { viewModel.setTaxRateMode(if (it) "net" else "gross") })
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle("米国株 現地源泉徴収控除 (10%)", "外国税額控除前の手取り概算に反映", usTaxDeduction, { usTaxDeduction = it }, tag = "新NISA連動")
+                    SettingToggle("米国株 現地源泉徴収控除 (10%)", "現地税の計算は準備中です", false, {}, tag = "準備中", enabled = false)
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label("目標利回り (ロードマップ試算)", 9, OnSurface, true); Label("シミュレーション基準   $targetYield%", 8, SettingsMint) }
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -183,13 +232,23 @@ fun SettingsScreen(
         item {
             SettingsSection("通知・リマインダー設定", Icons.Default.Notifications) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingToggle("配当金の権利落ち日・入金通知", "権利付最終日および振込予定日をプッシュ通知", notifyExDiv, { notifyExDiv = it }, tag = "NEW")
+                    SettingToggle("配当月のリマインダー", "登録した受取月を月1回お知らせ（入金確認ではありません）", notificationSettings.dividendEnabled, {
+                        if (it) notificationAccess.request("dividend") else viewModel.setNotificationEnabled(NotificationKind.DIVIDEND, false)
+                    })
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle("買場シグナル・株価アラート", "利回り4.5%突破時や年初来安値更新時", notifyBuySignal, { notifyBuySignal = it })
+                    SettingToggle("買場シグナル・株価アラート", "通知ONの監視銘柄が目標利回りに到達したときに通知", notificationSettings.priceEnabled, {
+                        if (it) notificationAccess.request("price") else viewModel.setNotificationEnabled(NotificationKind.PRICE, false)
+                    })
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column { Label("通知時間帯の指定", 9, OnSurface, true); Label("市場寄り前・引け後まとめ", 7, SettingsMuted) }
-                        Label("朝 08:30 / 夕 17:30", 8, SettingsMint)
+                        Column { Label("通知時間帯", 9, OnSurface, true); Label("日本時間・端末の状態により遅れることがあります", 7, SettingsMuted) }
+                        Label("朝 08:30 / 夕 17:30 頃", 8, SettingsMint)
+                    }
+                    Label("配当月は朝のみ確認します。通知が届くには、アプリ設定と端末の通知許可が必要です。", 7, SettingsMuted)
+                    Label("端末の許可：配当 ${if (notificationAccess.dividendAllowed) "ON" else "OFF"} / 株価 ${if (notificationAccess.priceAllowed) "ON" else "OFF"}", 8, SettingsMuted)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ActionButton("テスト通知", Modifier.weight(1f)) { notificationAccess.request("test") }
+                        ActionButton("端末の通知設定", Modifier.weight(1f)) { notificationAccess.openSettings() }
                     }
                 }
             }
@@ -198,9 +257,9 @@ fun SettingsScreen(
         item {
             SettingsSection("セキュリティ＆プライバシー", Icons.Default.Shield) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingToggle("生体認証 (Face ID / 指紋認証)", "アプリ起動時のロック解除", biometrics, { biometrics = it }, tag = "推奨")
+                    SettingToggle("生体認証 (Face ID / 指紋認証)", "生体認証は準備中です", false, {}, tag = "準備中", enabled = false)
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle("起動時の金額伏字マスク", "電車内など外出時の画面閲覧用", maskAtStartup, { maskAtStartup = it }, tag = "覗き見防止")
+                    SettingToggle("起動時の金額伏字マスク", "電車内など外出時の画面閲覧用", maskAtStartup, { viewModel.setMaskAtStartup(it) }, tag = "覗き見防止")
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column { Label("ローカルデータ完全消去", 9, ErrorRed, true); Label("端末内の保有・設定データをすべて削除", 7, SettingsMuted) }
@@ -219,7 +278,7 @@ fun SettingsScreen(
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     SupportRow("アプリをレビューで応援", {})
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), horizontalArrangement = Arrangement.SpaceBetween) { Label("バージョン", 8, SettingsMuted); Label("v1.2.0 (Build 248)", 8, OnSurface, true) }
+                    Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), horizontalArrangement = Arrangement.SpaceBetween) { Label("バージョン", 8, SettingsMuted); Label("v${com.kurogane.dividend.BuildConfig.VERSION_NAME} (Build ${com.kurogane.dividend.BuildConfig.VERSION_CODE})", 8, OnSurface, true) }
                 }
             }
         }
@@ -236,7 +295,13 @@ fun SettingsScreen(
         onDismissRequest = { confirmReset = false },
         title = { Text("データを初期化", color = OnSurface) },
         text = { Text("端末内の保有・設定データを初期化しますか？", color = SettingsMuted) },
-        confirmButton = { TextButton(onClick = { confirmReset = false; Toast.makeText(context, "データを初期化しました", Toast.LENGTH_SHORT).show() }) { Text("初期化", color = ErrorRed) } },
+        confirmButton = { TextButton(onClick = {
+            confirmReset = false
+            exportScope.launch {
+                val result = runCatchingCancellable { viewModel.resetLocalData() }
+                Toast.makeText(context, if (result.isSuccess) "データを初期化しました" else "初期化できませんでした", Toast.LENGTH_LONG).show()
+            }
+        }) { Text("初期化", color = ErrorRed) } },
         dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("キャンセル", color = SettingsMuted) } },
         containerColor = SettingsCard
     )
@@ -266,8 +331,8 @@ private fun Segment(text: String, selected: Boolean, modifier: Modifier = Modifi
 }
 
 @Composable
-private fun SettingToggle(title: String, detail: String, checked: Boolean, onChanged: (Boolean) -> Unit, tag: String? = null) {
-    Row(Modifier.fillMaxWidth().clickable { onChanged(!checked) }, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+private fun SettingToggle(title: String, detail: String, checked: Boolean, onChanged: (Boolean) -> Unit, tag: String? = null, enabled: Boolean = true) {
+    Row(Modifier.fillMaxWidth().clickable(enabled = enabled) { onChanged(!checked) }, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Label(title, 8, OnSurface, true)

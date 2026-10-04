@@ -20,21 +20,25 @@ data class Holding(
     val dividendType: String,
     val accountType: String,
     val dailyChange: String,
-    val isPositive: Boolean
+    val isPositive: Boolean,
+    val taxFreeShares: Int? = null
 ) {
-    val totalValuation: Double get() = shares * price * (if (currency == "$") 154.0 else 1.0)
-    val totalCost: Double get() = shares * acqPrice * (if (currency == "$") 154.0 else 1.0)
+    val priceUnit: Double get() = if (category == Category.FUND) 10_000.0 else 1.0
+    val effectiveTaxFreeShares: Int get() =
+        (taxFreeShares ?: if (PortfolioMath.isTaxFree(accountType)) shares else 0).coerceIn(0, shares.coerceAtLeast(0))
+    val totalValuation: Double get() = shares * price / priceUnit * (if (currency == "$") 154.0 else 1.0)
+    val totalCost: Double get() = shares * acqPrice / priceUnit * (if (currency == "$") 154.0 else 1.0)
     val gainLoss: Double get() = totalValuation - totalCost
     val gainLossPercent: Double get() = if (totalCost > 0) (gainLoss / totalCost) * 100 else 0.0
-    val annualDividend: Double get() = shares * dps * (if (currency == "$") 154.0 else 1.0)
-    val liveYield: Double get() = if (price > 0) (dps / price) * 100 else 0.0
-    val liveYoc: Double get() = if (acqPrice > 0) (dps / acqPrice) * 100 else liveYield
+    val annualDividend: Double get() = shares * dps / priceUnit * (if (currency == "$") 154.0 else 1.0)
+    val liveYield: Double get() = PortfolioMath.yieldPercent(dps, price)
+    val liveYoc: Double get() = PortfolioMath.yieldPercent(dps, acqPrice)
 
     fun getEffectiveAnnualDividend(taxRateMode: String): Double {
         val gross = annualDividend
         return if (taxRateMode == "net") {
-            val isTaxFree = accountType.contains("NISA") || accountType.contains("非課税")
-            if (isTaxFree) gross else gross * 0.79685
+            val freeRatio = if (shares > 0) effectiveTaxFreeShares.toDouble() / shares else 0.0
+            gross * (freeRatio + (1.0 - freeRatio) * 0.79685)
         } else {
             gross
         }
@@ -132,8 +136,9 @@ data class WatchlistStock(
     val badge: String? = null,
     val defaultShares: Int = 100
 ) {
-    val isReady: Boolean get() = currentYield >= targetYield
-    val achievementRate: Int get() = ((currentYield / targetYield) * 100).toInt().coerceIn(0, 100)
+    val isReady: Boolean get() = targetYield.isFinite() && targetYield > 0.0 && currentYield.isFinite() && currentYield >= targetYield
+    val achievementRate: Int get() = if (targetYield.isFinite() && targetYield > 0.0 && currentYield.isFinite())
+        ((currentYield / targetYield) * 100).toInt().coerceIn(0, 100) else 0
 }
 
 data class RoadmapStep(

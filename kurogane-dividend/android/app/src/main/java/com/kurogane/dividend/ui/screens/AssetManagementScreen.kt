@@ -1,5 +1,6 @@
 package com.kurogane.dividend.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -53,11 +54,11 @@ fun AssetManagementScreen(
     onNavigateToDetail: (String) -> Unit = {},
     onOpenAddHolding: (String) -> Unit = {}
 ) {
-    val holdings by viewModel.holdings.collectAsState()
-    val isPrivacyActive by viewModel.isPrivacyActive.collectAsState()
-    val selectedMonth by viewModel.selectedMonth.collectAsState()
-    val selectedCategory by viewModel.selectedCategory.collectAsState()
-    val taxRateMode by viewModel.taxRateMode.collectAsState()
+    val holdings by viewModel.holdings.collectAsStateWithLifecycle()
+    val isPrivacyActive by viewModel.isPrivacyActive.collectAsStateWithLifecycle()
+    val selectedMonth by viewModel.selectedMonth.collectAsStateWithLifecycle()
+    val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
+    val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
 
     // State simulator: "normal", "offline", "loading", "zero", "empty"
     var stateSim by remember { mutableStateOf("normal") }
@@ -206,8 +207,8 @@ fun AssetManagementScreen(
         containerColor = SpaceNavy
     ) { innerPadding ->
         val scrollState = rememberScrollState(initial = viewModel.assetScrollPosition)
-        LaunchedEffect(scrollState.value) {
-            viewModel.assetScrollPosition = scrollState.value
+        LaunchedEffect(scrollState) {
+            snapshotFlow { scrollState.value }.collect { viewModel.assetScrollPosition = it }
         }
 
         Column(
@@ -1254,15 +1255,16 @@ fun AssetManagementScreen(
     // ================= HOLDING QUICK EDIT BOTTOM SHEET =================
     quickEditHolding?.let { holding ->
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        val shares = quickEditShares.toIntOrNull()?.coerceAtLeast(1) ?: 1
-        val averagePrice = quickEditAcqPrice.toDoubleOrNull()?.coerceAtLeast(0.01) ?: 0.01
+        val shares = quickEditShares.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        val editValid = quickEditShares.toIntOrNull()?.let { it >= 0 } == true && quickEditAcqPrice.toDoubleOrNull()?.let(com.kurogane.dividend.model.PortfolioMath::validMoney) == true
+        val averagePrice = quickEditAcqPrice.toDoubleOrNull()?.takeIf(com.kurogane.dividend.model.PortfolioMath::validMoney) ?: 0.0
         val currencyFactor = if (holding.currency == "$" ) 154.0 else 1.0
-        val cost = shares * averagePrice * currencyFactor
+        val cost = shares * averagePrice / holding.priceUnit * currencyFactor
         val currentPrice = quickEditMarketPrice.takeIf { it > 0.0 } ?: holding.price
-        val valuation = shares * currentPrice * currencyFactor
+        val valuation = shares * currentPrice / holding.priceUnit * currencyFactor
         val gain = valuation - cost
         val gainPct = if (cost > 0.0) gain / cost * 100.0 else 0.0
-        val projectedDividend = shares * holding.dps * currencyFactor
+        val projectedDividend = shares * holding.dps / holding.priceUnit * currencyFactor
         val modalCurrency = if (holding.currency == "$") "$" else "¥"
 
         ModalBottomSheet(
@@ -1373,10 +1375,10 @@ fun AssetManagementScreen(
                             suffix = { Text("株", color = SoftGray) },
                             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NeonGreenLight, unfocusedBorderColor = BorderBlue, focusedContainerColor = BackgroundDark, unfocusedContainerColor = BackgroundDark)
                         )
-                        QuickEditStepButton("＋") { quickEditShares = (shares + 10).toString() }
+                        QuickEditStepButton("＋") { quickEditShares = com.kurogane.dividend.model.PortfolioMath.addShares(shares, 10).toString() }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        listOf("1単元 (100株)" to { quickEditShares = "100" }, "+10" to { quickEditShares = (shares + 10).toString() }, "+100" to { quickEditShares = (shares + 100).toString() }, "+500" to { quickEditShares = (shares + 500).toString() }).forEach { (label, action) ->
+                        listOf("1単元 (100株)" to { quickEditShares = "100" }, "+10" to { quickEditShares = com.kurogane.dividend.model.PortfolioMath.addShares(shares, 10).toString() }, "+100" to { quickEditShares = com.kurogane.dividend.model.PortfolioMath.addShares(shares, 100).toString() }, "+500" to { quickEditShares = com.kurogane.dividend.model.PortfolioMath.addShares(shares, 500).toString() }).forEach { (label, action) ->
                             Surface(Modifier.clickable(onClick = action), shape = RoundedCornerShape(10.dp), color = CardDarkLighter, border = BorderStroke(1.dp, BorderBlue)) {
                                 Text(label, Modifier.padding(horizontal = 10.dp, vertical = 9.dp), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                             }
@@ -1444,9 +1446,9 @@ fun AssetManagementScreen(
                     ) { Text("キャンセル", fontWeight = FontWeight.Bold) }
                     Button(
                         onClick = {
-                            viewModel.updateHolding(holding.code, shares, averagePrice, currentPrice)
-                            quickEditHolding = null
+                            if (viewModel.updateHolding(holding.code, shares, averagePrice, currentPrice)) quickEditHolding = null
                         },
+                        enabled = editValid,
                         modifier = Modifier.weight(1.5f).height(52.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = NeonGreen)

@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.data.CloudflareSearchHit
 import kotlinx.coroutines.delay
+import androidx.activity.compose.BackHandler
+import com.kurogane.dividend.data.runCatchingCancellable
 
 data class CandidateStock(
     val code: String,
@@ -42,6 +44,7 @@ fun SearchSheet(
     onSearch: suspend (String) -> List<CloudflareSearchHit> = { emptyList() }
 ) {
     if (!visible) return
+    BackHandler(onBack = onDismiss)
 
     val candidates = remember {
         listOf(
@@ -61,6 +64,8 @@ fun SearchSheet(
     var isSearching by remember { mutableStateOf(false) }
 
     LaunchedEffect(searchQuery, visible) {
+        remoteCandidates = null
+        isSearching = false
         val query = searchQuery.trim()
         if (!visible || query.isEmpty()) {
             remoteCandidates = null
@@ -68,7 +73,7 @@ fun SearchSheet(
         } else if (query.length >= 2 || query.any(Char::isDigit)) {
             delay(350)
             isSearching = true
-            val result = runCatching { onSearch(query) }
+            val result = runCatchingCancellable { onSearch(query) }
             remoteCandidates = result.getOrNull()?.map { hit ->
                 val local = candidates.firstOrNull { it.code.equals(hit.code, ignoreCase = true) }
                 val price = hit.cachedPrice?.let { "¥${java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN).format(it.toLong())}" }
@@ -88,7 +93,7 @@ fun SearchSheet(
             }
             isSearching = false
         } else {
-            remoteCandidates = emptyList()
+            remoteCandidates = null
         }
     }
 

@@ -1,5 +1,6 @@
 package com.kurogane.dividend.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,39 +37,38 @@ fun StockDetailScreen(
     viewModel: DividendViewModel,
     onBack: () -> Unit = {}
 ) {
-    val holdings by viewModel.holdings.collectAsState()
-    val watchlist by viewModel.watchlist.collectAsState()
-    val taxRateMode by viewModel.taxRateMode.collectAsState()
+    val holdings by viewModel.holdings.collectAsStateWithLifecycle()
+    val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
+    val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
     
-    val currentHolding = holdings.find { it.code == stockCode } ?: holdings.firstOrNull() ?: com.kurogane.dividend.model.Holding(
-        id = "h-7203",
-        code = "7203",
-        name = "トヨタ自動車",
-        sector = "東証P • 輸送用機器",
-        market = "東証PRM",
-        category = com.kurogane.dividend.model.Category.JAPAN,
-        price = 2600.0,
-        currency = "¥",
-        shares = 100,
-        acqPrice = 2450.0,
-        dps = 72.8,
-        yieldRate = 2.80,
-        yoc = 2.97,
-        nextPayoutTiming = "次回: 12月中旬 (¥3,640)",
-        nextPayoutAmount = "¥3,640",
-        dividendMonths = listOf(6, 12),
-        accountType = "新NISA成長枠",
-        dailyChange = "+¥35 (+1.36%)",
-        dividendType = "中間配当",
-        isPositive = true
-    )
+    var resolvedSecurity by remember(stockCode) { mutableStateOf<com.kurogane.dividend.data.CloudflareSecurity?>(null) }
+    var lookupFinished by remember(stockCode) { mutableStateOf(false) }
+    LaunchedEffect(stockCode) {
+        resolvedSecurity = com.kurogane.dividend.data.runCatchingCancellable { viewModel.resolveCloudflareSecurity(stockCode) }.getOrNull()
+        lookupFinished = true
+    }
+    val currentHolding = com.kurogane.dividend.model.StockDetailResolver.resolve(stockCode, holdings, watchlist, resolvedSecurity)
+    if (currentHolding == null) {
+        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            if (!lookupFinished) CircularProgressIndicator() else {
+                Text("銘柄情報を取得できませんでした", color = OnSurface)
+                TextButton(onClick = onBack) { Text("戻る") }
+            }
+        }
+        return
+    }
 
     val isBookmarked = watchlist.any { it.code == currentHolding.code }
 
     // Selected status tab: default to "risk" to highlight the user requested detailed mock
     var selectedStatusTab by remember { mutableStateOf("risk") }
     var simAddedShares by remember { mutableIntStateOf(100) }
-    var isAlertOn by remember { mutableStateOf(true) }
+    val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
+    val notificationAccess = com.kurogane.dividend.ui.components.rememberNotificationAccess {
+        viewModel.setNotificationEnabled(com.kurogane.dividend.notifications.NotificationKind.DIVIDEND, true)
+    }
+    val isAlertOn = notificationSettings.dividendEnabled
 
     val baseShares = currentHolding.shares
     val currentPrice = currentHolding.price
@@ -78,42 +78,33 @@ fun StockDetailScreen(
     LaunchedEffect(currentHolding.code) {
         backendAnalysisValues = viewModel.fetchStockAnalysis(currentHolding.code)?.values
     }
-    val localAnalysisValues = mapOf(
-        "per" to if (profile.eps > 0 && currentPrice > 0) currentPrice / profile.eps else null,
-        "pbr" to if (profile.bps > 0 && currentPrice > 0) currentPrice / profile.bps else null,
-        "payout_ratio" to profile.payoutRatio,
-        "equity_ratio" to profile.equityRatio,
-        "operating_margin" to profile.operatingMargin,
-        "fcf_margin" to profile.fcfMargin,
-        "dividend_growth_years" to profile.consecutiveYears.toDouble()
-    )
-    val analysisNarrative = StockAnalysisNarrativeGenerator.generate(
-        localAnalysisValues.mapValues { (key, value) -> backendAnalysisValues?.get(key) ?: value }
-    )
+    val analysisNarrative = remember(currentHolding, backendAnalysisValues) { StockAnalysisNarrativeGenerator.generate(
+        backendAnalysisValues ?: emptyMap()
+    ) }
     val liveYield = if (currentPrice > 0) (dps / currentPrice) * 100.0 else 0.0
     val liveYoc = if (currentHolding.acqPrice > 0) (dps / currentHolding.acqPrice) * 100.0 else liveYield
 
-    val totalSimShares = baseShares + simAddedShares
-    val additionalCost = simAddedShares * currentPrice
-    val addedAnnualDiv = (simAddedShares * dps).toLong()
-    val newTotalAnnualDiv = (totalSimShares * dps).toLong()
+    val totalSimShares = baseShares.toLong() + simAddedShares
+    val additionalCost = simAddedShares * currentPrice / currentHolding.priceUnit
+    val addedAnnualDiv = (simAddedShares * dps / currentHolding.priceUnit).toLong()
+    val newTotalAnnualDiv = (totalSimShares * dps / currentHolding.priceUnit).toLong()
     val newMonthlyDiv = newTotalAnnualDiv / 12
     val multiplier = if (baseShares > 0) String.format("%.1f", totalSimShares.toFloat() / baseShares) else "1.0"
 
-    val totalValuation = currentHolding.shares * currentHolding.price
-    val totalCost = currentHolding.shares * currentHolding.acqPrice
+    val totalValuation = currentHolding.shares * currentHolding.price / currentHolding.priceUnit
+    val totalCost = currentHolding.shares * currentHolding.acqPrice / currentHolding.priceUnit
     val gainLoss = totalValuation - totalCost
     val gainLossPct = if (totalCost > 0) String.format("%.2f", (gainLoss / totalCost) * 100) else "0.00"
 
-    val cutImpact = (baseShares * dps / 2).toLong()
+    val cutImpact = (baseShares * dps / currentHolding.priceUnit / 2).toLong()
 
     val totalPortfolioDiv = holdings.sumOf { it.getEffectiveAnnualDividend(taxRateMode).toLong() }
     val currentStockAnnualDiv = currentHolding.getEffectiveAnnualDividend(taxRateMode).toLong()
     val divDependency = if (totalPortfolioDiv > 0) (currentStockAnnualDiv.toDouble() / totalPortfolioDiv.toDouble()) * 100.0 else 0.0
     val divDependencyStr = String.format("%.1f", divDependency)
 
-    val totalPortfolioVal = holdings.sumOf { (it.shares * it.price * (if (it.currency == "$") 154.0 else 1.0)).toLong() }
-    val sectorVal = holdings.filter { it.sector == currentHolding.sector }.sumOf { (it.shares * it.price * (if (it.currency == "$") 154.0 else 1.0)).toLong() }
+    val totalPortfolioVal = holdings.sumOf { it.totalValuation.toLong() }
+    val sectorVal = holdings.filter { it.sector == currentHolding.sector }.sumOf { it.totalValuation.toLong() }
     val sectorDependency = if (totalPortfolioVal > 0) (sectorVal.toDouble() / totalPortfolioVal.toDouble()) * 100.0 else 0.0
     val sectorDependencyStr = String.format("%.1f", sectorDependency)
     val cleanSectorName = currentHolding.sector.replace(Regex("^.*[•·]\\s*"), "")
@@ -134,6 +125,10 @@ fun StockDetailScreen(
                 .padding(horizontal = 14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            item {
+                Text("財務カードと過去の配当推移には参考値が含まれます。診断文章は取得できたAPI指標を用い、未取得の項目は欠損として表示します。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+            }
+
             // 1. Hero Stock Header Card
             item {
                 Card(
@@ -204,7 +199,7 @@ fun StockDetailScreen(
                             }
 
                             IconButton(
-                                onClick = { viewModel.toggleWatchlistStock(currentHolding.code) },
+                                onClick = { viewModel.toggleWatchlistMembership(currentHolding) },
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(if (isBookmarked) PrimaryEmerald.copy(alpha = 0.2f) else SurfaceContainer)
@@ -416,7 +411,7 @@ fun StockDetailScreen(
                                 Text("-10", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                             Button(
-                                onClick = { simAddedShares += 10 },
+                                onClick = { simAddedShares = com.kurogane.dividend.model.PortfolioMath.addShares(simAddedShares, 10) },
                                 colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainer),
                                 shape = RoundedCornerShape(10.dp),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
@@ -425,7 +420,7 @@ fun StockDetailScreen(
                                 Text("+10", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                             Button(
-                                onClick = { simAddedShares += 100 },
+                                onClick = { simAddedShares = com.kurogane.dividend.model.PortfolioMath.addShares(simAddedShares, 100) },
                                 colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainer),
                                 shape = RoundedCornerShape(10.dp),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
@@ -1680,10 +1675,10 @@ fun StockDetailScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("次回権利落ち・直近イベント", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body)
+                                Text("配当月・通知設定", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body)
                             }
                             Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.15f)) {
-                                Text("通知設定中", modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(if (isAlertOn && notificationAccess.dividendAllowed) "通知ON" else "通知OFF", modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -1701,17 +1696,15 @@ fun StockDetailScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column {
-                                    Text("9月末 中間配当", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    Text("権利付き最終日まで", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                                    Text("登録された配当受取月", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    Text("入金日は証券口座で確認", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                                 }
                                 Surface(shape = RoundedCornerShape(8.dp), color = PrimaryEmerald.copy(alpha = 0.15f)) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("あと ", color = PrimaryEmerald, fontSize = AppTextSize.dense)
-                                        Text("18", color = PrimaryEmerald, fontSize = AppTextSize.headline, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
-                                        Text(" 日", color = PrimaryEmerald, fontSize = AppTextSize.dense)
+                                        Text(currentHolding.dividendMonths.filter { it in 1..12 }.distinct().sorted().joinToString("・") { "${it}月" }.ifEmpty { "未登録" }, color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -1727,11 +1720,14 @@ fun StockDetailScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.AlarmOn, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("権利落ち・決算前通知", color = OnSurface, fontSize = AppTextSize.dense)
+                                Text("配当月リマインダー（保有銘柄共通）", color = OnSurface, fontSize = AppTextSize.dense)
                             }
                             Switch(
                                 checked = isAlertOn,
-                                onCheckedChange = { isAlertOn = it },
+                                onCheckedChange = {
+                                    if (it) notificationAccess.request("dividend")
+                                    else viewModel.setNotificationEnabled(com.kurogane.dividend.notifications.NotificationKind.DIVIDEND, false)
+                                },
                                 colors = SwitchDefaults.colors(checkedThumbColor = OnSurface, checkedTrackColor = PrimaryEmerald)
                             )
                         }

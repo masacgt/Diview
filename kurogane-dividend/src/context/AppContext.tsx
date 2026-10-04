@@ -84,10 +84,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Cloudflare R2 Daily Price Sync Engine (Executed once a day on startup)
   useEffect(() => {
     const fetchPricesFromR2 = async () => {
-      const r2Url = import.meta.env.VITE_CLOUDFLARE_R2_URL || 'https://r2.yourdomain.com/stock_prices_daily.json';
-      const accessKey = import.meta.env.VITE_CLOUDFLARE_ACCESS_KEY || 'cf_access_key_dummy_9f2a8c7b4e6d3f1a0e8d7c6b5a4';
+      const r2Url = import.meta.env.VITE_CLOUDFLARE_R2_URL;
+      if (!r2Url) return;
       
       try {
+        if (new URL(r2Url).protocol !== 'https:') throw new Error('Price feed must use HTTPS');
         // Prevent redundant daily fetches by caching the last-fetched date in LocalStorage
         const cachedDate = localStorage.getItem('kurogane_r2_last_fetch');
         const todayStr = new Date().toISOString().split('T')[0];
@@ -105,8 +106,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const response = await fetch(r2Url, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${accessKey}`,
-            'X-Cloudflare-Access-Key': accessKey,
             'Accept': 'application/json'
           }
         });
