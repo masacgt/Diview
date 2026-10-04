@@ -1791,7 +1791,7 @@ private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("銘柄総合分析の詳細判定", color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
-                    Text("7指標を各5帯域・3位置で評価", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                    Text("7指標を各5帯域・9位置で評価", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 }
                 if (analysisNarrative.score != null) {
                     Text(
@@ -1809,7 +1809,7 @@ private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative
                 lineHeight = 16.sp
             )
             Text(
-                "全7指標の文章パターン: 15^7 = ${String.format(Locale.JAPAN, "%,d", StockAnalysisNarrative.TOTAL_COMBINATIONS)}通り。今回の入力で選択可能な組合せ: ${String.format(Locale.JAPAN, "%,d", analysisNarrative.possibleCombinations)}通り。",
+                "全7指標の文章パターン: 45^7 = ${String.format(Locale.JAPAN, "%,d", StockAnalysisNarrative.TOTAL_COMBINATIONS)}通り。今回の入力で選択可能な組合せ: ${String.format(Locale.JAPAN, "%,d", analysisNarrative.possibleCombinations)}通り。",
                 color = PrimaryEmerald,
                 fontSize = AppTextSize.dense,
                 lineHeight = 15.sp

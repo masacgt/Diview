@@ -33,22 +33,23 @@ class StockAnalysisNarrativeGeneratorTest {
 
         assertEquals(7, result.findings.size)
         assertEquals(StockAnalysisNarrative.TOTAL_COMBINATIONS, result.possibleCombinations)
-        assertEquals(15L * 15L * 15L * 15L * 15L * 15L * 15L, result.possibleCombinations)
+        assertEquals(45L * 45L * 45L * 45L * 45L * 45L * 45L, result.possibleCombinations)
         assertTrue(result.complete)
         assertNotNull(result.combinationIndex)
     }
 
     @Test
-    fun eachMetricHasFifteenDistinctBandAndPositionCodes() {
+    fun eachMetricHasFortyFiveDistinctBandAndFinePositionCodes() {
         ranges.forEach { (key, metricRanges) ->
             val codes = metricRanges.flatMap { (low, high) ->
-                listOf(0.1, 0.5, 0.9).map { fraction ->
+                (0 until 9).map { positionIndex ->
+                    val fraction = (positionIndex + 0.5) / 9.0
                     val values = baseline.toMutableMap()
                     values[key] = low + (high - low) * fraction
                     StockAnalysisNarrativeGenerator.generate(values).combinationIndex
                 }
             }
-            assertEquals("$key must have 5 x 3 distinct selections", 15, codes.toSet().size)
+            assertEquals("$key must have 5 x 9 distinct selections", 45, codes.toSet().size)
         }
     }
 
@@ -59,7 +60,7 @@ class StockAnalysisNarrativeGeneratorTest {
 
         assertEquals(6, result.findings.size)
         assertEquals(listOf("FCF余力"), result.missingLabels)
-        assertEquals(15L * 15L * 15L * 15L * 15L * 15L, result.possibleCombinations)
+        assertEquals(45L * 45L * 45L * 45L * 45L * 45L, result.possibleCombinations)
         assertNull(result.combinationIndex)
     }
 }

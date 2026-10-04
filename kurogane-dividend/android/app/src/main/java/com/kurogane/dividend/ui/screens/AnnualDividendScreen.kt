@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.data.Tse33IndustryMaster
+import com.kurogane.dividend.model.PortfolioDiagnosis
+import com.kurogane.dividend.model.PortfolioDiagnosisGenerator
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import java.text.NumberFormat
 import java.util.Locale
@@ -1223,54 +1225,21 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
             }
         }
 
-        // D. AI Portfolio Health Diagnosis Card (Added for premium diagnostics matching image)
+        // D. AI Portfolio Health Diagnosis Card
         Spacer(modifier = Modifier.height(16.dp))
 
-        val totalCount = holdings.size
-        val catSet = holdings.map { it.category }.toSet()
-        val sectorSet = holdings.map { it.sector }.toSet()
-        val score = if (totalCount == 0) 35 else {
-            var s = 50
-            s += minOf(25, totalCount * 6)
-            s += minOf(15, sectorSet.size * 5)
-            s += minOf(10, catSet.size * 5)
-            minOf(100, s)
-        }
-
-        val grade = when {
-            score >= 90 -> "S"
-            score >= 80 -> "A"
-            score >= 70 -> "B"
-            score >= 60 -> "C"
-            else -> "D"
-        }
-        val power = when (grade) {
-            "S" -> "極めて高 (盤石)"
-            "A" -> "高 (安定成長レンジ)"
-            "B" -> "中 (成長発展期)"
-            "C" -> "中 (要経過観察)"
-            else -> "判定不可 (登録なし)"
-        }
-        val risk = when (grade) {
-            "S" -> "極めて低 (0.2%)"
-            "A" -> "極めて低 (0.8%)"
-            "B" -> "中 (2.5%)"
-            "C" -> "やや高 (8.4%)"
-            else -> "判定不可 (0.0%)"
-        }
+        val portfolioDiagnosis = remember(holdings) { PortfolioDiagnosisGenerator.generate(holdings) }
+        val score = portfolioDiagnosis.score
+        val grade = portfolioDiagnosis.grade
+        val power = portfolioDiagnosis.dividendGrowthLabel
+        val risk = portfolioDiagnosis.dividendRiskLabel
         val cardColor = when (grade) {
             "S" -> PrimaryEmeraldContainer
             "A" -> PrimaryEmerald
             "B" -> SkyBlue
             "C" -> AccentAmber
-            else -> ErrorRed
-        }
-        val comment = when (grade) {
-            "S" -> "日米・オルカンの理想的な地域分散が実現されています。複数セクターへの高度な分散に加え、主要銘柄の増配実績も強固。YOC（簿価利回り）も極めて高水準で、インカムの防衛力・成長力ともに申し分ない最高峰の「超堅牢ポートフォリオ」です。継続的な積立と配当自動再投資を行うことで、複利の爆発力を最大化できます。"
-            "A" -> "主力銘柄の連続増配実績が強固で、YOC（簿価利回り）は高水準を維持している「優良分散ポートフォリオ」です。通貨および地域（日本株・米国株・オルカン）の分散バランスも極めて良好で、将来的なインカムの安定的・累積的成長が期待できます。さらに別セクターの王道高配当株を少数加えることで、完璧な防衛壁へと進化します。"
-            "B" -> "インカムフローは一定量稼げていますが、セクターや地域（日米）に多少の偏りが見られる「発展途上ポートフォリオ」です。特定のセクターや銘柄に依存すると、減配局面でのダメージを直接受けやすくなります。次回の買増しタイミングで、別業種（非資源系、ディフェンシブ通信・ヘルスケアなど）の王道銘柄や米国ETFなどを加えるとさらに強固になります。"
-            "C" -> "保有銘柄数が少なく、個別銘柄の業績や減配リスクに対する比重が高い「集中投資型」です。特定の1〜2社が不祥事や業績不振で減配すると、年間不労所得が大きく減少してしまいます。複数の異なるセクターや、全世界株式・高配当分散ETFなどを少額からポートフォリオに組み入れることで、インカムのボラティリティを下げ、長期安定性を高めましょう。"
-            else -> "現在ポートフォリオに保有銘柄が登録されていません。ポートフォリオを追加するか、Watchlistの目標買場を活用して、最初のインカム基盤を構築しましょう。1株からでも優良連続増配株を購入することで、不労所得が生まれる喜びと複利の第一歩を実感できます。"
+            "D" -> ErrorRed
+            else -> OnSurfaceVariant
         }
 
         Card(
@@ -1318,7 +1287,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                         border = BorderStroke(1.dp, cardColor.copy(alpha = 0.3f))
                     ) {
                         Text(
-                            text = "健全度: $grade ($score/100)",
+                            text = if (score == null) "健全度: 判定不可" else "健全度: $grade ($score/100)",
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                             color = cardColor,
                             fontSize = AppTextSize.dense,
@@ -1330,13 +1299,32 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = comment,
+                    text = portfolioDiagnosis.narrative,
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = OnSurfaceVariant,
                         fontSize = AppTextSize.dense,
                         lineHeight = 16.sp
                     )
                 )
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = if (portfolioDiagnosis.possibleCombinations == PortfolioDiagnosis.TOTAL_COMBINATIONS) {
+                        "文章パターン: ${NumberFormat.getNumberInstance(Locale.JAPAN).format(portfolioDiagnosis.possibleCombinations)}通り"
+                    } else {
+                        "評価対象の文章パターン: ${NumberFormat.getNumberInstance(Locale.JAPAN).format(portfolioDiagnosis.possibleCombinations)}通り（最大 ${NumberFormat.getNumberInstance(Locale.JAPAN).format(PortfolioDiagnosis.TOTAL_COMBINATIONS)}通り）"
+                    },
+                    color = cardColor,
+                    fontSize = AppTextSize.dense,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (portfolioDiagnosis.missingLabels.isNotEmpty()) {
+                    Text(
+                        text = "未評価: ${portfolioDiagnosis.missingLabels.joinToString("、")}",
+                        color = AccentAmber,
+                        fontSize = AppTextSize.dense
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -1353,7 +1341,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             .padding(10.dp)
                     ) {
                         Text(
-                            "増配継続力",
+                            "増配・非減配の実績",
                             color = OnSurfaceVariant,
                             fontSize = AppTextSize.dense
                         )
