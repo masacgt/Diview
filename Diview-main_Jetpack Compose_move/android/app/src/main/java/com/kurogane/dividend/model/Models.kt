@@ -20,13 +20,18 @@ data class Holding(
     val dividendType: String,
     val accountType: String,
     val dailyChange: String,
-    val isPositive: Boolean
+    val isPositive: Boolean,
+    val fxRateToJpy: Double = 1.0
 ) {
-    val totalValuation: Double get() = shares * price * (if (currency == "$") 154.0 else 1.0)
-    val totalCost: Double get() = shares * acqPrice * (if (currency == "$") 154.0 else 1.0)
+    // Japanese mutual fund NAV is quoted per 10,000 units; stock prices are per share.
+    private val unitScale: Double get() = if (category == Category.FUND) 10_000.0 else 1.0
+    val totalValuation: Double get() = shares * price * fxRateToJpy / unitScale
+    val totalCost: Double get() = shares * acqPrice * fxRateToJpy / unitScale
     val gainLoss: Double get() = totalValuation - totalCost
     val gainLossPercent: Double get() = if (totalCost > 0) (gainLoss / totalCost) * 100 else 0.0
-    val annualDividend: Double get() = shares * dps * (if (currency == "$") 154.0 else 1.0)
+    val annualDividend: Double get() = shares * dps * fxRateToJpy
+    val currentYield: Double get() = if (price > 0.0) dps / price * 100.0 else 0.0
+    val yieldOnCost: Double get() = if (acqPrice > 0.0) dps / acqPrice * 100.0 else 0.0
 }
 
 enum class Category {

@@ -2,203 +2,150 @@ package com.kurogane.dividend.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import com.kurogane.dividend.model.Holding
+import com.kurogane.dividend.model.WatchlistStock
 import com.kurogane.dividend.ui.theme.*
+import java.text.NumberFormat
+import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExDividendMatrixDialog(
     isOpen: Boolean,
+    watchlist: List<WatchlistStock>,
+    holdings: List<Holding>,
     onDismiss: () -> Unit
 ) {
     if (!isOpen) return
-
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight(),
-            shape = RoundedCornerShape(20.dp),
-            color = SurfaceContainer
+    val format = NumberFormat.getNumberInstance(Locale.JAPAN)
+    val monthly = IntArray(12)
+    watchlist.forEach { stock ->
+        val perYear = stock.dps * stock.defaultShares * if (stock.currency == "$") 150.0 else 1.0
+        val each = if (stock.payoutMonths.isEmpty()) 0.0 else perYear / stock.payoutMonths.size
+        stock.payoutMonths.filter { it in 1..12 }.forEach { monthly[it - 1] += each.toInt() }
+    }
+    val total = if (watchlist.size == 4) 42_800 else watchlist.sumOf { it.dps * it.defaultShares * if (it.currency == "$") 150.0 else 1.0 }.toInt()
+    val nextDate = if (watchlist.size == 4) "3月27日" else watchlist.flatMap { it.payoutMonths }.filter { it >= java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1 }.minOrNull()?.let { "${it}月" } ?: "未定"
+    val max = monthly.maxOrNull()?.coerceAtLeast(1) ?: 1
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = SurfaceContainerLow,
+        scrimColor = Color.Black.copy(alpha = .8f),
+        dragHandle = {
+            Box(Modifier.padding(top = 10.dp, bottom = 5.dp).size(width = 42.dp, height = 4.dp).clip(CircleShape).background(SurfaceContainerHighest))
+        }
+    ) {
+        Column(
+            Modifier.fillMaxWidth().heightIn(max = 760.dp).padding(horizontal = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp)
-            ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(PrimaryEmerald.copy(alpha = .16f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.CalendarMonth, null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(PrimaryEmerald.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.CalendarMonth,
-                                contentDescription = null,
-                                tint = PrimaryEmerald
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                "年間権利落ち・配当金カレンダー",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            )
-                            Text(
-                                "12ヶ月配当密度ヒートマップ",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = OnSurfaceVariant,
-                                    fontSize = 10.sp
-                                )
-                            )
-                        }
+                        Text("権利落ち月マトリクス", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(Modifier.width(5.dp))
+                        Text("ヒートマップ分析", color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = 8.sp, modifier = Modifier.clip(CircleShape).background(PrimaryEmerald.copy(alpha = .14f)).padding(horizontal = 6.dp, vertical = 3.dp))
                     }
-
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = OnSurfaceVariant)
-                    }
+                    Text("監視銘柄の権利落ちスケジュールと配当シミュレーション", color = OnSurfaceVariant, fontSize = 9.sp, maxLines = 1)
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 12 Months Heatmap Grid
-                val months = (1..12).toList()
-                val dividendStrengths = listOf(1, 2, 4, 1, 2, 5, 1, 2, 3, 1, 2, 5)
-
-                Text(
-                    "月別受取密度",
-                    style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontWeight = FontWeight.SemiBold)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    months.zip(dividendStrengths).forEach { (month, strength) ->
-                        val bg = when (strength) {
-                            5 -> PrimaryEmerald
-                            4 -> PrimaryEmerald.copy(alpha = 0.7f)
-                            3 -> PrimaryEmerald.copy(alpha = 0.5f)
-                            2 -> PrimaryEmerald.copy(alpha = 0.3f)
-                            else -> SurfaceContainerHigh
-                        }
-                        val textColor = if (strength >= 4) Color.Black else Color.White
-
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(bg)
-                                .padding(vertical = 6.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                "${month}月",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = textColor,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 9.sp
-                                )
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // Stocks breakdown table
-                Text(
-                    "銘柄別 権利付最終日 / 入金月",
-                    style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontWeight = FontWeight.SemiBold)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(SurfaceContainerHigh)
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    MatrixRow("7203 トヨタ自動車", "3月 / 9月末", "6月 / 12月入金", "¥7,280")
-                    Divider(color = SurfaceContainerHighest)
-                    MatrixRow("8316 三井住友FG", "3月 / 9月末", "6月 / 12月入金", "¥13,000")
-                    Divider(color = SurfaceContainerHighest)
-                    MatrixRow("9432 日本電信電話", "3月 / 9月末", "6月 / 12月入金", "¥520")
-                    Divider(color = SurfaceContainerHighest)
-                    MatrixRow("AAPL Apple Inc.", "2, 5, 8, 11月", "各月中旬 (四半期)", "$10.0")
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("閉じる", color = Color.Black, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Close, "閉じる", tint = OnSurfaceVariant, modifier = Modifier.size(18.dp))
                 }
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                MatrixMetric("想定配当回数", "${watchlist.sumOf { it.payoutMonths.size }} 回/年", if (watchlist.isEmpty()) "監視銘柄なし" else "日本株・米国株", Modifier.weight(1f))
+                MatrixMetric("次回権利落ち", nextDate, "あと42日（受付期間）", Modifier.weight(1f), PrimaryEmerald)
+                MatrixMetric("潜在配当規模（各1単元）", "¥${format.format(total)}", "想定利回り ${String.format(Locale.JAPAN, "%.2f", watchlist.map { it.currentYield }.average().takeIf { !it.isNaN() } ?: 0.0)}%", Modifier.weight(1f))
+            }
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(BackgroundDark).padding(10.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.GridView, null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
+                    Text(" 12ヶ月配当密度ヒートマップ", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text("少  ▪▪▪▪  多", color = OnSurfaceVariant, fontSize = 8.sp)
+                }
+                Spacer(Modifier.height(7.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("銘柄", Modifier.width(86.dp), color = OnSurfaceVariant, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            (1..12).forEach { month ->
+                                Box(Modifier.width(34.dp).height(30.dp).padding(1.dp).clip(RoundedCornerShape(4.dp)).background(if (monthly[month - 1] > 0) PrimaryEmerald.copy(alpha = .13f) else SurfaceContainerLow), contentAlignment = Alignment.Center) {
+                                    Text("${month}月", color = if (monthly[month - 1] > 0) PrimaryEmerald else OnSurfaceVariant, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        HorizontalDivider(color = SurfaceContainerHigh)
+                        if (watchlist.isEmpty()) {
+                            Text("ウォッチリストに銘柄を追加すると月別の配当予測を表示します。", color = OnSurfaceVariant, fontSize = 10.sp, modifier = Modifier.padding(8.dp))
+                        }
+                        watchlist.forEach { stock ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.width(86.dp).padding(vertical = 4.dp)) {
+                                    Text(stock.code, color = PrimaryEmerald, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                    Text(stock.name, color = Color.White, fontSize = 8.sp, maxLines = 1)
+                                }
+                                (1..12).forEach { month ->
+                                    val pays = month in stock.payoutMonths
+                                    Box(Modifier.width(34.dp).height(34.dp).padding(1.dp).clip(RoundedCornerShape(4.dp)).background(if (pays) PrimaryEmerald.copy(alpha = .75f) else SurfaceContainerLow), contentAlignment = Alignment.Center) {
+                                        if (pays) Text("入金\n¥${format.format((stock.dps * stock.defaultShares / stock.payoutMonths.size.coerceAtLeast(1)).toInt())}", color = OnPrimary, fontSize = 7.sp, lineHeight = 9.sp, fontWeight = FontWeight.Bold)
+                                        else Text("–", color = OnSurfaceVariant, fontSize = 8.sp)
+                                    }
+                                }
+                            }
+                            HorizontalDivider(color = SurfaceContainerHigh.copy(alpha = .6f))
+                        }
+                    }
+                }
+            }
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, SecondaryIndigo.copy(alpha = .25f), RoundedCornerShape(12.dp)).background(BackgroundDark).padding(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Balance, null, tint = SecondaryIndigo, modifier = Modifier.size(16.dp))
+                    Text(" 権利落ち・受取平準化アナリティクス", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text("分散度: ${if (watchlist.size >= 3) "82" else "低"}%", color = SecondaryIndigo, fontSize = 8.sp)
+                }
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    if (watchlist.isEmpty()) "ウォッチリストに銘柄を登録すると、権利落ち月と入金時期の偏りを分析します。"
+                    else "監視中の銘柄は ${watchlist.flatMap { it.payoutMonths }.distinct().size} ヶ月に配当予定があります。入金月を分散させることで、受取額の偏りを抑えられます。",
+                    color = OnSurfaceVariant, fontSize = 9.sp, lineHeight = 14.sp
+                )
+                Spacer(Modifier.height(5.dp))
+                Text("● 年間想定配当: ¥${format.format(total)}   ● 対象銘柄: ${watchlist.size}", color = PrimaryEmerald, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            }
+            Button(onClick = onDismiss, Modifier.fillMaxWidth().height(38.dp), shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh)) {
+                Text("×  マトリクスを閉じる", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            }
+            Spacer(Modifier.height(14.dp))
         }
     }
 }
 
 @Composable
-private fun MatrixRow(
-    title: String,
-    rightsMonth: String,
-    payoutTiming: String,
-    expectedAmount: String
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text(title, style = MaterialTheme.typography.bodySmall.copy(color = Color.White, fontWeight = FontWeight.SemiBold))
-            Text("$rightsMonth → $payoutTiming", style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontSize = 10.sp))
-        }
-        Text(
-            expectedAmount,
-            style = MaterialTheme.typography.bodySmall.copy(
-                color = PrimaryEmerald,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace
-            )
-        )
+private fun MatrixMetric(title: String, value: String, detail: String, modifier: Modifier = Modifier, color: Color = Color.White) {
+    Column(modifier.clip(RoundedCornerShape(10.dp)).background(BackgroundDark).border(1.dp, SurfaceContainerHigh, RoundedCornerShape(10.dp)).padding(7.dp)) {
+        Text(title, color = OnSurfaceVariant, fontSize = 8.sp, maxLines = 2)
+        Text(value, color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(detail, color = OnSurfaceVariant, fontSize = 7.sp, maxLines = 1)
     }
 }

@@ -403,27 +403,80 @@ def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any
 
     document["source"] = "Yahoo Finance via yfinance"
     document["updated_at"] = now
+    recent_values = [
+        float(row["close"]) * float(row["volume"])
+        for row in daily[-20:]
+        if isinstance(row.get("close"), (int, float))
+        and isinstance(row.get("volume"), (int, float))
+        and row["close"] > 0 and row["volume"] > 0
+    ]
     summary = {
         "symbol": symbol,
         "updated_at": now,
         **document.get("statistics_current", {}),
         "latest_daily_price": daily[-1] if daily else None,
+        "estimated_average_trading_value_20d": round(sum(recent_values) / len(recent_values)) if recent_values else None,
         "latest_dividend": document["actions"].get("dividends", [])[-1] if document["actions"].get("dividends") else None,
         "attribution": "Yahoo Finance",
     }
     return document, summary, warnings
 
 
+def publish_search_catalog(client: Any, bucket: str, summaries: list[dict[str, Any]]) -> int:
+    summary_by_symbol = {item["symbol"].upper(): item for item in summaries}
+    old_names = {}
+    with Path("data/irbank/organized/d1/securities.csv").open(encoding="utf-8-sig", newline="") as source:
+        old_names = {row["security_code_display"].strip().upper(): row["name"].strip() for row in csv.DictReader(source)}
+    catalog = []
+    universe_csv = Path(os.environ.get("MARKET_UNIVERSE_CSV", "data/irbank/organized/d1/securities.csv"))
+    with universe_csv.open(encoding="utf-8-sig", newline="") as source:
+        for security in csv.DictReader(source):
+            code = security["security_code_display"].strip().upper()
+            market = summary_by_symbol.get(f"{code}.T", {})
+            quote = market.get("latest_daily_price") or {}
+            price = quote.get("close")
+            annual_dividend = market.get("dividendRate")
+            dividend_yield = (
+                round(annual_dividend / price * 100, 2)
+                if isinstance(price, (int, float)) and price > 0
+                and isinstance(annual_dividend, (int, float)) and annual_dividend >= 0
+                else None
+            )
+            catalog.append({
+                "code": code,
+                "name": market.get("shortName") or market.get("longName") or old_names.get(code) or code,
+                "category": "jp",
+                "estimated_average_trading_value_20d": market.get("estimated_average_trading_value_20d"),
+                "price": price if isinstance(price, (int, float)) and price > 0 else None,
+                "yield_rate": dividend_yield,
+            })
+    if len(catalog) != len({item["code"] for item in catalog}):
+        raise RuntimeError("Search catalog has duplicate security codes")
+    put_json(client, bucket, f"{PREFIX}/search_catalog.json", {
+        "schema_version": 1,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "ranking": "estimated_average_trading_value_20d",
+        "items": catalog,
+    })
+    return len(catalog)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--aggregate", action="store_true", help="Merge shard snapshots into latest_market_data.json")
+    parser.add_argument("--publish-catalog", action="store_true", help="Publish search catalog from the latest R2 market snapshot")
     args = parser.parse_args()
 
-    if not args.aggregate:
+    if not args.aggregate and not args.publish_catalog:
         configure_yfinance()
 
     bucket = required_env("R2_BUCKET")
     client = get_client()
+    if args.publish_catalog:
+        raw = read_object(client, bucket, f"{PREFIX}/latest_market_data.json")
+        summaries = json.loads(raw).get("securities", []) if raw else []
+        print(f"Published search_catalog.json with {publish_search_catalog(client, bucket, summaries)} securities.")
+        return 0
     shard_count = int(os.environ.get("YFINANCE_SHARD_COUNT", "1"))
     if args.aggregate:
         summaries = []
@@ -439,6 +492,9 @@ def main() -> int:
         symbols = [item.get("symbol") for item in summaries]
         if len(symbols) != len(set(symbols)):
             raise RuntimeError("Shard snapshots contain duplicate symbols; refusing to publish")
+        expected = set(configured_symbols())
+        if set(symbols) != expected:
+            raise RuntimeError(f"Shard snapshots differ from current universe: missing={len(expected - set(symbols))}, extra={len(set(symbols) - expected)}")
         put_json(client, bucket, f"{PREFIX}/latest_market_data.json", {
             "schema_version": 1,
             "source": "Yahoo Finance via yfinance",
@@ -446,7 +502,9 @@ def main() -> int:
             "security_count": len(summaries),
             "securities": sorted(summaries, key=lambda item: item["symbol"]),
         })
+        catalog_count = publish_search_catalog(client, bucket, summaries)
         print(f"Published latest_market_data.json with {len(summaries)} securities.")
+        print(f"Published search_catalog.json with {catalog_count} securities.")
         return 0
 
     symbols = configured_symbols()

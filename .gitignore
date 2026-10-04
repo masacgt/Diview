@@ -50,6 +50,7 @@ app.*.map.json
 # Local Wrangler/XDG state
 /.xdg/
 /.wrangler-env/
+/data/irbank/cloudflare/admin-secret.local.txt
 
 # Local build/runtime toolchains and caches
 /.gradle-home/

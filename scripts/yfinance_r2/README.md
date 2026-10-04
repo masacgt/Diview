@@ -1,6 +1,6 @@
 # Yahoo Finance data collection to Cloudflare R2
 
-This scheduled GitHub Actions workflow reads the project's existing 3,960-row security master (`data/irbank/organized/d1/securities.csv`), converts each 4- or 5-character code to a Yahoo `.T` symbol, and stores the returned data per symbol in the private `diview-market-data` R2 bucket.
+This scheduled GitHub Actions workflow fetches the current listed-issue master from J-Quants API v2 (`/equities/master`) once per run, converts its five-character codes to Yahoo `.T` symbols, and stores the returned data per symbol in the private `diview-market-data` R2 bucket. All 24 fetch shards and the aggregate job use the same downloaded universe artifact. The repository's IRBANK security master is only used for known display names in the search catalog; new codes use Yahoo's name when available.
 
 ## Collected data
 
@@ -16,7 +16,9 @@ Each symbol is stored at `market/yfinance/securities/{symbol}.json`. The summary
 
 ## GitHub configuration
 
-Repository secrets required: `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`. They must be S3-compatible credentials with Object Read & Write access scoped to the `diview-market-data` bucket. The account ID is configured in the workflow.
+Repository secrets required: `JQUANTS_API_KEY`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`. Create `JQUANTS_API_KEY` in the J-Quants dashboard. The R2 keys must be S3-compatible credentials with Object Read & Write access scoped to the `diview-market-data` bucket. The account ID is configured in the workflow. Check that the J-Quants plan's data freshness and usage terms fit the application.
+
+The universe job fails if J-Quants is unavailable, returns an invalid/partial response, or supplies fewer than 1,000 issues. The workflow does not silently fall back to the old CSV. New issues enter the next successful run; removed issues are omitted from the latest summary and search catalog. Previously stored per-symbol R2 history is retained. A Yahoo 404 by itself does not remove an issue from the J-Quants universe. Because J-Quants does not guarantee Yahoo coverage for every code, listed issues can appear in the catalog without a current price.
 
 Before starting the data jobs, the workflow checks the Tokyo Stock Exchange session for the current Japan date using `exchange_calendars` (`XTKS`). Weekends and JPX holidays skip collection and summary publication. The scheduled check runs at 03:30 JST on weekdays, and manual starts use the same check. The next trading day's incremental update catches up with the latest available data.
 

@@ -1,7 +1,20 @@
 name = "diview-irbank"
 compatibility_date = "2026-10-03"
+main = "src/index.js"
+
+[triggers]
+crons = ["17 * * * *"]
 
 [[d1_databases]]
 binding = "DB"
 database_name = "diview-irbank"
 database_id = "e5046cbb-dd81-4f7c-aa25-1e7a2616d8d7"
+
+[[r2_buckets]]
+binding = "MARKET_DATA"
+bucket_name = "diview-market-data"
+
+# Set the production namespace id before remote seed/deploy.
+[[kv_namespaces]]
+binding = "APP_DEFINITIONS"
+id = "5d84fbb50ce947ec8927dbc96c2e504a"
