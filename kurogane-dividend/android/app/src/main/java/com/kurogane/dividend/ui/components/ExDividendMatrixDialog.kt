@@ -68,7 +68,7 @@ fun ExDividendMatrixDialog(
                                 "年間権利落ち・配当金カレンダー",
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = OnSurface
                                 )
                             )
                             Text(
@@ -113,7 +113,7 @@ fun ExDividendMatrixDialog(
                             2 -> PrimaryEmerald.copy(alpha = 0.3f)
                             else -> SurfaceContainerHigh
                         }
-                        val textColor = if (strength >= 4) Color.Black else Color.White
+                        val textColor = if (strength >= 4) Color.Black else OnSurface
 
                         Column(
                             modifier = Modifier
@@ -189,7 +189,7 @@ private fun MatrixRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
-            Text(title, style = MaterialTheme.typography.bodySmall.copy(color = Color.White, fontWeight = FontWeight.SemiBold))
+            Text(title, style = MaterialTheme.typography.bodySmall.copy(color = OnSurface, fontWeight = FontWeight.SemiBold))
             Text("$rightsMonth → $payoutTiming", style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontSize = 10.sp))
         }
         Text(

@@ -13,7 +13,7 @@ import random
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable
@@ -261,27 +261,53 @@ def read_object(client: Any, bucket: str, key: str) -> bytes | None:
         raise
 
 
+def json_payload(value: Any) -> bytes:
+    return json.dumps(json_safe(value), ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
+
+
 def put_json(client: Any, bucket: str, key: str, value: Any) -> None:
-    payload = json.dumps(json_safe(value), ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    payload = json_payload(value)
     client.put_object(Bucket=bucket, Key=key, Body=payload, ContentType="application/json; charset=utf-8")
 
 
-def load_existing(client: Any, bucket: str, symbol: str) -> dict[str, Any]:
+def put_json_if_changed(client: Any, bucket: str, key: str, value: Any, original: bytes | None) -> bool:
+    payload = json_payload(value)
+    if original == payload:
+        return False
+    client.put_object(Bucket=bucket, Key=key, Body=payload, ContentType="application/json; charset=utf-8")
+    return True
+
+
+def load_existing(client: Any, bucket: str, symbol: str, *, with_raw: bool = False) -> Any:
     safe = symbol.replace("^", "_").replace("=", "_").replace("/", "_")
     raw = read_object(client, bucket, f"{PREFIX}/securities/{safe}.json")
     if raw is None:
-        return {"schema_version": 2, "symbol": symbol, "price_history": {}, "actions": {}, "financials": {}, "valuation_history": {}}
-    data = json.loads(raw)
-    if "price_history" not in data:
-        # Migrate the v1 daily-close-only object written by the initial updater.
-        old_prices = data.get("prices", [])
-        data["price_history"] = {"1d": old_prices}
-    data.setdefault("schema_version", 2)
-    data.setdefault("price_history", {})
-    data.setdefault("actions", {})
-    data.setdefault("financials", {})
-    data.setdefault("valuation_history", {})
-    return data
+        data = {"schema_version": 2, "symbol": symbol, "price_history": {}, "actions": {}, "financials": {}, "valuation_history": {}}
+    else:
+        data = json.loads(raw)
+        if "price_history" not in data:
+            # Migrate the v1 daily-close-only object written by the initial updater.
+            old_prices = data.get("prices", [])
+            data["price_history"] = {"1d": old_prices}
+        data.setdefault("schema_version", 2)
+        data.setdefault("price_history", {})
+        data.setdefault("actions", {})
+        data.setdefault("financials", {})
+        data.setdefault("valuation_history", {})
+    return (data, raw) if with_raw else data
+
+
+def fundamentals_refresh_due(document: dict[str, Any], now: datetime, refresh_days: int) -> bool:
+    value = document.get("fundamentals_checked_at")
+    if not value:
+        return True
+    try:
+        checked = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if checked.tzinfo is None:
+        checked = checked.replace(tzinfo=UTC)
+    return checked <= now - timedelta(days=max(1, refresh_days))
 
 
 def history_rows(ticker: Any, interval: str, period: str) -> list[dict[str, Any]]:
@@ -311,11 +337,18 @@ def history_rows(ticker: Any, interval: str, period: str) -> list[dict[str, Any]
     return rows
 
 
-def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any], dict[str, Any], list[str], bool]:
     warnings: list[str] = []
-    document = load_existing(client, bucket, symbol)
+    document, original_raw = load_existing(client, bucket, symbol, with_raw=True)
+    previous_updated_at = document.get("updated_at")
+    before = dict(document)
+    before.pop("updated_at", None)
+    before.pop("fundamentals_checked_at", None)
+    before_payload = json_payload(before)
     now = datetime.now(UTC).isoformat()
     initial_period = os.environ.get("YFINANCE_INITIAL_PERIOD", "max")
+    refresh_days = int(os.environ.get("YFINANCE_FUNDAMENTALS_REFRESH_DAYS", "7"))
+    refresh_fundamentals = fundamentals_refresh_due(document, datetime.now(UTC), refresh_days)
 
     upgrade_state = [False]
     for interval, incremental_period in (("1d", "5d"), ("1wk", "1mo"), ("1mo", "3mo")):
@@ -354,55 +387,61 @@ def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any
     elif info == {}:
         warnings.append(f"profile: Yahoo returned no company information for {symbol}")
 
-    for frequency in ("monthly", "quarterly", "yearly"):
-        periods = call_yfinance(f"valuation[{frequency}]", lambda f=frequency: yf.Ticker(symbol).get_valuation_measures(freq=f, periods=None), warnings, upgrade_state)
-        if periods is not None:
-            fresh = frame_periods(periods)
-            old = document["valuation_history"].get(frequency, [])
-            # The valuation table includes a Current column in addition to dated observations.
-            current = None
-            if "Current" in getattr(periods, "columns", []):
-                current = {str(metric): json_safe(periods.loc[metric, "Current"]) for metric in periods.index}
-            document["valuation_history"][frequency] = merge_dated(old, fresh, "period_end")
-            if current:
-                document.setdefault("valuation_current", {})[frequency] = current
-            if not fresh and not current:
-                warnings.append(f"valuation[{frequency}]: Yahoo returned no valuation history for {symbol}")
+    if refresh_fundamentals:
+        for frequency in ("monthly", "quarterly", "yearly"):
+            periods = call_yfinance(f"valuation[{frequency}]", lambda f=frequency: yf.Ticker(symbol).get_valuation_measures(freq=f, periods=None), warnings, upgrade_state)
+            if periods is not None:
+                fresh = frame_periods(periods)
+                old = document["valuation_history"].get(frequency, [])
+                # The valuation table includes a Current column in addition to dated observations.
+                current = None
+                if "Current" in getattr(periods, "columns", []):
+                    current = {str(metric): json_safe(periods.loc[metric, "Current"]) for metric in periods.index}
+                document["valuation_history"][frequency] = merge_dated(old, fresh, "period_end")
+                if current:
+                    document.setdefault("valuation_current", {})[frequency] = current
+                if not fresh and not current:
+                    warnings.append(f"valuation[{frequency}]: Yahoo returned no valuation history for {symbol}")
 
-    statement_methods = ("income_statement", "balance_sheet", "cash_flow")
-    for statement in statement_methods:
-        for frequency in ("yearly", "quarterly", "trailing"):
-            frame = call_yfinance(
-                f"financials.{statement}.{frequency}",
-                lambda name=statement, f=frequency: getattr(yf.Ticker(symbol), {
-                    "income_statement": "get_income_stmt", "balance_sheet": "get_balance_sheet", "cash_flow": "get_cash_flow"
-                }[name])(freq=f),
-                warnings,
-                upgrade_state,
+        statement_methods = ("income_statement", "balance_sheet", "cash_flow")
+        for statement in statement_methods:
+            for frequency in ("yearly", "quarterly", "trailing"):
+                frame = call_yfinance(
+                    f"financials.{statement}.{frequency}",
+                    lambda name=statement, f=frequency: getattr(yf.Ticker(symbol), {
+                        "income_statement": "get_income_stmt", "balance_sheet": "get_balance_sheet", "cash_flow": "get_cash_flow"
+                    }[name])(freq=f),
+                    warnings,
+                    upgrade_state,
+                )
+                if frame is not None:
+                    fresh = frame_periods(frame)
+                    old = document["financials"].setdefault(statement, {}).get(frequency, [])
+                    document["financials"][statement][frequency] = merge_dated(old, fresh, "period_end")
+                    if not fresh:
+                        warnings.append(f"financials.{statement}.{frequency}: Yahoo returned no rows for {symbol}")
+
+        earnings = call_yfinance("earnings_history", lambda: yf.Ticker(symbol).get_earnings_history(), warnings, upgrade_state)
+        if earnings is not None:
+            document["earnings_history"] = merge_dated(
+                document.get("earnings_history", []), frame_records(earnings), "date"
             )
-            if frame is not None:
-                fresh = frame_periods(frame)
-                old = document["financials"].setdefault(statement, {}).get(frequency, [])
-                document["financials"][statement][frequency] = merge_dated(old, fresh, "period_end")
-                if not fresh:
-                    warnings.append(f"financials.{statement}.{frequency}: Yahoo returned no rows for {symbol}")
-
-    earnings = call_yfinance("earnings_history", lambda: yf.Ticker(symbol).get_earnings_history(), warnings, upgrade_state)
-    if earnings is not None:
-        document["earnings_history"] = merge_dated(
-            document.get("earnings_history", []), frame_records(earnings), "date"
-        )
-    shares = call_yfinance("share_count_history", lambda: yf.Ticker(symbol).get_shares_full(), warnings, upgrade_state)
-    if shares is not None:
-        # shares_full returns a Series indexed by date.
-        try:
-            share_rows = [{"date": json_safe(idx), "shares": json_safe(val)} for idx, val in shares.items()]
-            document["share_count_history"] = merge_dated(document.get("share_count_history", []), share_rows, "date")
-        except Exception as exc:
-            warnings.append(f"share_count_history serialization: {type(exc).__name__}: {exc}")
+        shares = call_yfinance("share_count_history", lambda: yf.Ticker(symbol).get_shares_full(), warnings, upgrade_state)
+        if shares is not None:
+            # shares_full returns a Series indexed by date.
+            try:
+                share_rows = [{"date": json_safe(idx), "shares": json_safe(val)} for idx, val in shares.items()]
+                document["share_count_history"] = merge_dated(document.get("share_count_history", []), share_rows, "date")
+            except Exception as exc:
+                warnings.append(f"share_count_history serialization: {type(exc).__name__}: {exc}")
+        document["fundamentals_checked_at"] = now
 
     document["source"] = "Yahoo Finance via yfinance"
-    document["updated_at"] = now
+    after = dict(document)
+    after.pop("updated_at", None)
+    after.pop("fundamentals_checked_at", None)
+    content_changed = before_payload != json_payload(after)
+    document["updated_at"] = now if content_changed or not previous_updated_at else previous_updated_at
     recent_values = [
         float(row["close"]) * float(row["volume"])
         for row in daily[-20:]
@@ -412,14 +451,15 @@ def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any
     ]
     summary = {
         "symbol": symbol,
-        "updated_at": now,
+        "updated_at": document["updated_at"],
         **document.get("statistics_current", {}),
         "latest_daily_price": daily[-1] if daily else None,
         "estimated_average_trading_value_20d": round(sum(recent_values) / len(recent_values)) if recent_values else None,
         "latest_dividend": document["actions"].get("dividends", [])[-1] if document["actions"].get("dividends") else None,
         "attribution": "Yahoo Finance",
     }
-    return document, summary, warnings
+    object_changed = original_raw != json_payload(document)
+    return document, summary, warnings, object_changed
 
 
 def publish_search_catalog(client: Any, bucket: str, summaries: list[dict[str, Any]]) -> int:
@@ -452,12 +492,17 @@ def publish_search_catalog(client: Any, bucket: str, summaries: list[dict[str, A
             })
     if len(catalog) != len({item["code"] for item in catalog}):
         raise RuntimeError("Search catalog has duplicate security codes")
-    put_json(client, bucket, f"{PREFIX}/search_catalog.json", {
+    key = f"{PREFIX}/search_catalog.json"
+    previous_raw = read_object(client, bucket, key)
+    previous = json.loads(previous_raw) if previous_raw else {}
+    value = {
         "schema_version": 1,
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": previous.get("generated_at") if previous.get("items") == catalog and previous.get("ranking") == "estimated_average_trading_value_20d" else datetime.now(UTC).isoformat(),
         "ranking": "estimated_average_trading_value_20d",
         "items": catalog,
-    })
+    }
+    changed = put_json_if_changed(client, bucket, key, value, previous_raw)
+    print(f"search_catalog.json {'updated' if changed else 'unchanged'}")
     return len(catalog)
 
 
@@ -495,16 +540,22 @@ def main() -> int:
         expected = set(configured_symbols())
         if set(symbols) != expected:
             raise RuntimeError(f"Shard snapshots differ from current universe: missing={len(expected - set(symbols))}, extra={len(set(symbols) - expected)}")
-        put_json(client, bucket, f"{PREFIX}/latest_market_data.json", {
+        key = f"{PREFIX}/latest_market_data.json"
+        previous_raw = read_object(client, bucket, key)
+        previous = json.loads(previous_raw) if previous_raw else {}
+        sorted_summaries = sorted(summaries, key=lambda item: item["symbol"])
+        unchanged = previous.get("securities") == sorted_summaries and previous.get("security_count") == len(summaries)
+        snapshot = {
             "schema_version": 1,
             "source": "Yahoo Finance via yfinance",
-            "generated_at": datetime.now(UTC).isoformat(),
+            "generated_at": previous.get("generated_at") if unchanged else datetime.now(UTC).isoformat(),
             "security_count": len(summaries),
-            "securities": sorted(summaries, key=lambda item: item["symbol"]),
-        })
+            "securities": sorted_summaries,
+        }
+        snapshot_changed = put_json_if_changed(client, bucket, key, snapshot, previous_raw)
         catalog_count = publish_search_catalog(client, bucket, summaries)
-        print(f"Published latest_market_data.json with {len(summaries)} securities.")
-        print(f"Published search_catalog.json with {catalog_count} securities.")
+        print(f"latest_market_data.json {'updated' if snapshot_changed else 'unchanged'} ({len(summaries)} securities).")
+        print(f"search_catalog.json contains {catalog_count} securities.")
         return 0
 
     symbols = configured_symbols()
@@ -516,12 +567,18 @@ def main() -> int:
     summaries: list[dict[str, Any]] = []
     failed: list[str] = []
     warning_count = 0
+    updated_count = 0
+    unchanged_count = 0
 
     for position, symbol in enumerate(selected, start=1):
         try:
-            document, summary, warnings = collect_symbol(client, bucket, symbol)
+            document, summary, warnings, object_changed = collect_symbol(client, bucket, symbol)
             safe = symbol.replace("^", "_").replace("=", "_").replace("/", "_")
-            put_json(client, bucket, f"{PREFIX}/securities/{safe}.json", document)
+            if object_changed:
+                put_json(client, bucket, f"{PREFIX}/securities/{safe}.json", document)
+                updated_count += 1
+            else:
+                unchanged_count += 1
             summaries.append(summary)
             if warnings:
                 warning_count += len(warnings)
@@ -543,7 +600,7 @@ def main() -> int:
         "securities": summaries,
         "failed_count": len(failed),
     })
-    print(f"Shard {shard_index + 1}/{shard_count} saved: {len(summaries)}/{len(selected)} securities; optional-data warnings={warning_count}; errors={len(failed)}")
+    print(f"Shard {shard_index + 1}/{shard_count} complete: {len(summaries)}/{len(selected)} securities; R2 updated={updated_count}, unchanged={unchanged_count}; optional-data warnings={warning_count}; errors={len(failed)}")
     return 1 if failed else 0
 
 

@@ -30,11 +30,11 @@ import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import kotlin.math.roundToInt
 
-private val SettingsCard = Color(0xFF131B2E)
-private val SettingsInset = Color(0xFF0B1326)
-private val SettingsBorder = Color(0xFF263247)
-private val SettingsMint = Color(0xFF4EDEA3)
-private val SettingsMuted = Color(0xFFBBCABF)
+private val SettingsCard: Color @Composable get() = SurfaceContainerLow
+private val SettingsInset: Color @Composable get() = BackgroundDark
+private val SettingsBorder: Color @Composable get() = BorderColor
+private val SettingsMint: Color @Composable get() = PrimaryEmerald
+private val SettingsMuted: Color @Composable get() = OnSurfaceVariant
 
 @Composable
 fun SettingsScreen(
@@ -83,7 +83,7 @@ fun SettingsScreen(
                             Label("◉ 自動フォーマット判定", 8, SettingsMint)
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            listOf("SBI証券", "楽天証券", "マネックス", "moomoo").forEach { broker ->
+                            listOf("SBI証券", "楽天証券", "マネックス", "松井証券").forEach { broker ->
                                 Column(Modifier.weight(1f).clip(RoundedCornerShape(6.dp)).background(SettingsInset).border(1.dp, SettingsBorder, RoundedCornerShape(6.dp)).padding(vertical = 5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Label(broker, 8, SettingsMint, true)
                                     Label("CSV読込", 7, SettingsMuted)
@@ -98,7 +98,7 @@ fun SettingsScreen(
                         ) {
                             Icon(Icons.Default.CloudUpload, null, tint = SettingsMint, modifier = Modifier.size(21.dp))
                             Spacer(Modifier.height(3.dp))
-                            Label("CSVファイルを選択またはドロップ", 9, Color.White, true)
+                            Label("CSVファイルを選択またはドロップ", 9, OnSurface, true)
                             Label(".csv形式 (UTF-8・Shift-JIS自動判定 / 最大10MB)", 7, SettingsMuted)
                             Spacer(Modifier.height(4.dp))
                             Label("▱  ウィザードへ", 8, SettingsMint, true)
@@ -125,7 +125,7 @@ fun SettingsScreen(
             SettingsSection("外観・テーマ設定", Icons.Default.Palette) {
                 Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Label("カラーテーマ", 9, Color.White, true)
+                        Label("カラーテーマ", 9, OnSurface, true)
                         Label(if (themeMode == "dark") "ダーク適用中" else if (themeMode == "light") "ライト" else "システム連動", 8, SettingsMint)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -135,13 +135,13 @@ fun SettingsScreen(
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Label("アクセントカラー", 9, Color.White, true)
+                        Label("アクセントカラー", 9, OnSurface, true)
                         Label(selectedAccent.replaceFirstChar { it.uppercase() }, 8, SettingsMint)
                     }
                     Row(Modifier.fillMaxWidth().padding(horizontal = 5.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         accents.forEach { (name, color) ->
-                            Box(Modifier.size(27.dp).clip(CircleShape).background(color).then(if (selectedAccent == name) Modifier.border(2.dp, Color.White, CircleShape) else Modifier).clickable { viewModel.setSelectedAccent(name) }, contentAlignment = Alignment.Center) {
-                                if (selectedAccent == name) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(17.dp))
+                            Box(Modifier.size(27.dp).clip(CircleShape).background(color).then(if (selectedAccent == name) Modifier.border(2.dp, OnSurface, CircleShape) else Modifier).clickable { viewModel.setSelectedAccent(name) }, contentAlignment = Alignment.Center) {
+                                if (selectedAccent == name) Icon(Icons.Default.Check, null, tint = OnSurface, modifier = Modifier.size(17.dp))
                             }
                         }
                     }
@@ -155,7 +155,7 @@ fun SettingsScreen(
             SettingsSection("表示・計算カスタマイズ", Icons.Default.Tune) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Label("配当利回りの計算基準", 9, Color.White, true); Label("利回り計算ロジック", 7, SettingsMuted)
+                        Label("配当利回りの計算基準", 9, OnSurface, true); Label("利回り計算ロジック", 7, SettingsMuted)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         BasisChoice("評価額基準", "現在値ベース", calcBasis == "eval", Modifier.weight(1f)) { calcBasis = "eval" }
@@ -166,14 +166,14 @@ fun SettingsScreen(
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     SettingToggle("米国株 現地源泉徴収控除 (10%)", "外国税額控除前の手取り概算に反映", usTaxDeduction, { usTaxDeduction = it }, tag = "新NISA連動")
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label("目標利回り (ロードマップ試算)", 9, Color.White, true); Label("シミュレーション基準   $targetYield%", 8, SettingsMint) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label("目標利回り (ロードマップ試算)", 9, OnSurface, true); Label("シミュレーション基準   $targetYield%", 8, SettingsMint) }
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         listOf("3.5" to "3.5% (堅実)", "4.0" to "4.0% (標準)", "4.5" to "4.5% (積極)").forEach { (value, label) ->
                             Segment(label, targetYield == value, Modifier.weight(1f)) { targetYield = value }
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label("構成比「その他」集約閾値", 9, Color.White, true); Label("$threshold%", 8, SettingsMint) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label("構成比「その他」集約閾値", 9, OnSurface, true); Label("$threshold%", 8, SettingsMint) }
                     ThresholdSlider(threshold) { threshold = it }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label("3% (詳細)", 7, SettingsMuted); Label("5% (推奨)", 7, SettingsMint); Label("10% (簡易)", 7, SettingsMuted) }
                 }
@@ -188,7 +188,7 @@ fun SettingsScreen(
                     SettingToggle("買場シグナル・株価アラート", "利回り4.5%突破時や年初来安値更新時", notifyBuySignal, { notifyBuySignal = it })
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column { Label("通知時間帯の指定", 9, Color.White, true); Label("市場寄り前・引け後まとめ", 7, SettingsMuted) }
+                        Column { Label("通知時間帯の指定", 9, OnSurface, true); Label("市場寄り前・引け後まとめ", 7, SettingsMuted) }
                         Label("朝 08:30 / 夕 17:30", 8, SettingsMint)
                     }
                 }
@@ -219,7 +219,7 @@ fun SettingsScreen(
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     SupportRow("アプリをレビューで応援", {})
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), horizontalArrangement = Arrangement.SpaceBetween) { Label("バージョン", 8, SettingsMuted); Label("v1.2.0 (Build 248)", 8, Color.White, true) }
+                    Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), horizontalArrangement = Arrangement.SpaceBetween) { Label("バージョン", 8, SettingsMuted); Label("v1.2.0 (Build 248)", 8, OnSurface, true) }
                 }
             }
         }
@@ -234,7 +234,7 @@ fun SettingsScreen(
 
     if (confirmReset) AlertDialog(
         onDismissRequest = { confirmReset = false },
-        title = { Text("データを初期化", color = Color.White) },
+        title = { Text("データを初期化", color = OnSurface) },
         text = { Text("端末内の保有・設定データを初期化しますか？", color = SettingsMuted) },
         confirmButton = { TextButton(onClick = { confirmReset = false; Toast.makeText(context, "データを初期化しました", Toast.LENGTH_SHORT).show() }) { Text("初期化", color = Color(0xFFFF8A80)) } },
         dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("キャンセル", color = SettingsMuted) } },
@@ -247,7 +247,7 @@ private fun SettingsSection(title: String, icon: androidx.compose.ui.graphics.ve
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.padding(start = 3.dp)) {
             Icon(icon, null, tint = SettingsMint, modifier = Modifier.size(14.dp))
-            Text(title, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Text(title, color = OnSurface, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         }
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(SettingsCard).border(.7.dp, SettingsBorder, RoundedCornerShape(10.dp)).padding(10.dp), content = content)
     }
@@ -255,13 +255,13 @@ private fun SettingsSection(title: String, icon: androidx.compose.ui.graphics.ve
 
 @Composable
 private fun Label(text: String, size: Int, color: Color, bold: Boolean = false) {
-    Text(text, color = color, fontSize = size.sp, lineHeight = (size + 3).sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
+    Text(text, color = color, fontSize = (size + 3).sp, lineHeight = (size + 6).sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
 }
 
 @Composable
 private fun Segment(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(modifier.clip(RoundedCornerShape(6.dp)).then(if (selected) Modifier.background(SettingsMint.copy(alpha = .16f)).border(.8.dp, SettingsMint, RoundedCornerShape(6.dp)) else Modifier).clickable(onClick = onClick).padding(horizontal = 3.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
-        Text(text, color = if (selected) SettingsMint else SettingsMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold, lineHeight = 10.sp)
+        Text(text, color = if (selected) SettingsMint else SettingsMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, lineHeight = 14.sp)
     }
 }
 
@@ -270,23 +270,23 @@ private fun SettingToggle(title: String, detail: String, checked: Boolean, onCha
     Row(Modifier.fillMaxWidth().clickable { onChanged(!checked) }, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Label(title, 8, Color.White, true)
+                Label(title, 8, OnSurface, true)
                 if (tag != null) Box(Modifier.clip(RoundedCornerShape(3.dp)).background(SettingsMint.copy(alpha = .13f)).padding(horizontal = 4.dp, vertical = 1.dp)) { Label(tag, 6, SettingsMint, true) }
             }
             Label(detail, 7, SettingsMuted)
         }
         Spacer(Modifier.width(8.dp))
-        Box(Modifier.width(31.dp).height(17.dp).clip(CircleShape).background(if (checked) Color(0xFF10B981) else Color(0xFF30394A)).padding(2.dp), contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart) {
-            Box(Modifier.size(13.dp).clip(CircleShape).background(Color.White))
+        Box(Modifier.width(31.dp).height(17.dp).clip(CircleShape).background(if (checked) PrimaryEmeraldContainer else SurfaceContainerHighest).padding(2.dp), contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart) {
+            Box(Modifier.size(13.dp).clip(CircleShape).background(OnSurface))
         }
     }
 }
 
 @Composable
 private fun BasisChoice(title: String, subtitle: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Column(modifier.clip(RoundedCornerShape(7.dp)).background(if (selected) Color(0xFF172B35) else SettingsInset).border(1.dp, if (selected) SettingsMint else SettingsBorder, RoundedCornerShape(7.dp)).clickable(onClick = onClick).padding(7.dp)) {
+    Column(modifier.clip(RoundedCornerShape(7.dp)).background(if (selected) SettingsMint.copy(alpha = 0.14f) else SettingsInset).border(1.dp, if (selected) SettingsMint else SettingsBorder, RoundedCornerShape(7.dp)).clickable(onClick = onClick).padding(7.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Label(title, 8, if (selected) Color.White else SettingsMuted, true)
+            Label(title, 8, if (selected) OnSurface else SettingsMuted, true)
             Icon(if (selected) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked, null, tint = if (selected) SettingsMint else SettingsMuted, modifier = Modifier.size(12.dp))
         }
         Label(subtitle, 7, SettingsMuted)
@@ -295,19 +295,21 @@ private fun BasisChoice(title: String, subtitle: String, selected: Boolean, modi
 
 @Composable
 private fun ActionButton(label: String, modifier: Modifier, onClick: () -> Unit) {
-    Box(modifier.height(34.dp).clip(RoundedCornerShape(7.dp)).background(SettingsInset).border(1.dp, SettingsBorder, RoundedCornerShape(7.dp)).clickable(onClick = onClick), contentAlignment = Alignment.Center) { Label(label, 8, Color.White, true) }
+    Box(modifier.height(34.dp).clip(RoundedCornerShape(7.dp)).background(SettingsInset).border(1.dp, SettingsBorder, RoundedCornerShape(7.dp)).clickable(onClick = onClick), contentAlignment = Alignment.Center) { Label(label, 8, OnSurface, true) }
 }
 
 @Composable
 private fun SupportRow(label: String, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 9.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Label(label, 8, Color.White, true)
+        Label(label, 8, OnSurface, true)
         Icon(Icons.Default.ChevronRight, null, tint = SettingsMuted, modifier = Modifier.size(14.dp))
     }
 }
 
 @Composable
 private fun ThresholdSlider(value: Int, onValueChange: (Int) -> Unit) {
+    val trackColor = SurfaceContainerHighest
+    val accentColor = PrimaryEmeraldContainer
     Canvas(Modifier.fillMaxWidth().height(22.dp).pointerInput(Unit) {
         detectTapGestures { onValueChange((3 + (it.x / size.width * 7).roundToInt()).coerceIn(3, 10)) }
     }.pointerInput(Unit) {
@@ -315,8 +317,8 @@ private fun ThresholdSlider(value: Int, onValueChange: (Int) -> Unit) {
     }) {
         val y = size.height / 2f
         val x = (value - 3) / 7f * size.width
-        drawLine(Color(0xFF273247), Offset(0f, y), Offset(size.width, y), 4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-        drawLine(Color(0xFF10B981), Offset(0f, y), Offset(x, y), 4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-        drawCircle(Color(0xFF10B981), 6.dp.toPx(), Offset(x, y))
+        drawLine(trackColor, Offset(0f, y), Offset(size.width, y), 4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        drawLine(accentColor, Offset(0f, y), Offset(x, y), 4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        drawCircle(accentColor, 6.dp.toPx(), Offset(x, y))
     }
 }

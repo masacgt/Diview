@@ -16,6 +16,12 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField(
+            "String",
+            "DIVIEW_D1_API_BASE_URL",
+            "\"${providers.gradleProperty("diviewD1ApiBaseUrl").orElse("https://diview-irbank.omasa.workers.dev").get().trimEnd('/')}\""
+        )
     }
 
     buildTypes {
@@ -36,6 +42,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -51,4 +58,5 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.3")
+    testImplementation("junit:junit:4.13.2")
 }

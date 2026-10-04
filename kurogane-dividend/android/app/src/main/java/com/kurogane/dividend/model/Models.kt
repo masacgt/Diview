@@ -59,6 +59,7 @@ data class StockFinancialProfile(
     val doePolicy: String = "3.2% (DOE)",
     val doePolicySub: String = "安定還元・DOE基準",
     val operatingMargin: Double = 11.4,
+    val fcfMargin: Double? = null,
     val fcfStatus: String = "黒字維持（配当余力 十分）",
     val modelType: String = "王道大型バリュー（トヨタ基準型）",
     val healthScore: Int = 92,

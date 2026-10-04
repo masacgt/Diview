@@ -77,6 +77,7 @@ jobs:
         env:
           MARKET_UNIVERSE_CSV: jquants-universe.csv
           YFINANCE_INITIAL_PERIOD: max
+          YFINANCE_FUNDAMENTALS_REFRESH_DAYS: "7"
           YFINANCE_MIN_VERSION: 0.2.66
           YFINANCE_AUTO_UPGRADE: "1"
           YFINANCE_LIBRARY_RETRIES: "1"
