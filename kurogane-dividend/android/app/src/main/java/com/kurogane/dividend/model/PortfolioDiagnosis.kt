@@ -254,7 +254,8 @@ object PortfolioDiagnosisGenerator {
             )
         }
 
-        val missingLabels = rules.map { it.label }.filterNot { label -> findings.any { it.label == label } }
+        val evaluatedKeys = findings.mapTo(mutableSetOf()) { it.key }
+        val missingLabels = rules.filterNot { it.key in evaluatedKeys }.map { it.label }
         val score = if (findings.isEmpty()) null else {
             val scoreByKey = findings.associate { it.key to it.score }
             val activeWeight = rules.filter { it.key in scoreByKey }.sumOf { it.weight }

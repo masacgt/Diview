@@ -21,6 +21,12 @@ import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.ui.platform.LocalContext
+import com.kurogane.dividend.data.LocalImportStore
+import com.kurogane.dividend.data.runCatchingCancellable
+import org.json.JSONObject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,6 +42,19 @@ fun ContactFeedbackScreen(
     var isSubmitting by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val draftStore = remember { LocalImportStore(context.applicationContext) }
+    var draftMessage by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        runCatchingCancellable { withContext(Dispatchers.IO) { draftStore.loadFeedbackDraft() } }.onSuccess { draft ->
+            if (draft != null) {
+                senderName = draft.optString("name")
+                senderEmail = draft.optString("email")
+                messageText = draft.optString("message")
+                selectedCategory = draft.optString("category", "feature")
+            }
+        }
+    }
     val scrollState = rememberScrollState()
 
     val faqs = remember {
@@ -143,7 +162,7 @@ fun ContactFeedbackScreen(
                         Text("Diview サポートデスク", color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            "配当管理や操作についてご不明な点、改善のご要望をお気軽にお寄せください。通常24時間以内に返信いたします。",
+                            "送信機能は準備中です。入力内容は端末内に下書きとして保存できます。",
                             color = SoftGray,
                             fontSize = AppTextSize.dense,
                             lineHeight = 16.sp
@@ -385,18 +404,24 @@ fun ContactFeedbackScreen(
                     Spacer(modifier = Modifier.height(2.dp))
 
                     // Submit Button with loading simulation
-                    val canSubmit = !isSubmitting && messageText.trim().isNotEmpty()
+                    val canSubmit = !isSubmitting && messageText.trim().isNotEmpty() && messageText.length <= 20_000 &&
+                        senderName.length <= 200 && senderEmail.length <= 254 &&
+                        (senderEmail.isBlank() || android.util.Patterns.EMAIL_ADDRESS.matcher(senderEmail.trim()).matches())
                     Button(
                         onClick = {
                             if (messageText.trim().isNotEmpty()) {
                                 isSubmitting = true
+                                val draft = JSONObject().apply {
+                                    put("category", selectedCategory); put("name", senderName.trim())
+                                    put("email", senderEmail.trim()); put("message", messageText.trim())
+                                    if (attachDiagnostics) put("androidSdk", android.os.Build.VERSION.SDK_INT)
+                                }
                                 coroutineScope.launch {
-                                    delay(1000)
-                                    isSubmitting = false
-                                    messageText = ""
-                                    senderName = ""
-                                    senderEmail = ""
-                                    onBack() // Back out on successful transmission!
+                                    try {
+                                        runCatchingCancellable { withContext(Dispatchers.IO) { draftStore.saveFeedbackDraft(draft) } }
+                                            .onSuccess { draftMessage = "下書きを端末内に保存しました。送信は行っていません。" }
+                                            .onFailure { draftMessage = "下書きを保存できませんでした。" }
+                                    } finally { isSubmitting = false }
                                 }
                             }
                         },
@@ -417,10 +442,11 @@ fun ContactFeedbackScreen(
                         } else {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Icon(Icons.Default.Send, contentDescription = null, tint = if (canSubmit) OnPrimaryContainer else OnSurfaceVariant, modifier = Modifier.size(14.dp))
-                                Text("送信する", color = if (canSubmit) OnPrimaryContainer else OnSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
+                                Text("下書きを保存", color = if (canSubmit) OnPrimaryContainer else OnSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
                             }
                         }
                     }
+                    draftMessage?.let { Text(it, color = OnSurfaceVariant, fontSize = AppTextSize.caption) }
                 }
             }
         }

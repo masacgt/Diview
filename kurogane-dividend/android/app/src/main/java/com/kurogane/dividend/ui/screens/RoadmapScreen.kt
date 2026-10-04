@@ -1,5 +1,6 @@
 package com.kurogane.dividend.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -50,14 +51,17 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
         initialFirstVisibleItemIndex = viewModel.roadmapScrollIndex,
         initialFirstVisibleItemScrollOffset = viewModel.roadmapScrollOffset
     )
-    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
-        viewModel.roadmapScrollIndex = listState.firstVisibleItemIndex
-        viewModel.roadmapScrollOffset = listState.firstVisibleItemScrollOffset
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                viewModel.roadmapScrollIndex = index
+                viewModel.roadmapScrollOffset = offset
+            }
     }
 
     // 1. Collect live native holdings state
-    val holdings by viewModel.holdings.collectAsState()
-    val taxRateMode by viewModel.taxRateMode.collectAsState()
+    val holdings by viewModel.holdings.collectAsStateWithLifecycle()
+    val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
 
     // Calculate real-time annual expected dividend and monthly income
@@ -1194,31 +1198,18 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                 // Save Action Button inside BottomSheet
                 Button(
                     onClick = {
-                        // real save registration call for each account in our matrix
-                        val growthQty = sharesNisaGrowth.toIntOrNull() ?: 0
-                        val growthPx = priceNisaGrowth.toDoubleOrNull() ?: activeStockPrice
-                        if (growthQty > 0) {
-                            viewModel.addOrUpdateHolding(activeTicker, growthQty, growthPx, "NISA_GROWTH")
+                        val entries = listOf(
+                            Triple(sharesNisaGrowth, priceNisaGrowth, "新NISA成長枠"),
+                            Triple(sharesNisaTsumitate, priceNisaTsumitate, "新NISAつみたて投資枠"),
+                            Triple(sharesTokutei, priceTokutei, "特定口座"),
+                            Triple(sharesIppan, priceIppan, "一般口座")
+                        )
+                        val allocations = entries.mapNotNull { (quantity, price, account) ->
+                            val shares = quantity.toIntOrNull() ?: return@mapNotNull null
+                            val cost = price.toDoubleOrNull() ?: return@mapNotNull null
+                            com.kurogane.dividend.model.HoldingAllocation(shares, cost, account)
                         }
-
-                        val tsumQty = sharesNisaTsumitate.toIntOrNull() ?: 0
-                        val tsumPx = priceNisaTsumitate.toDoubleOrNull() ?: activeStockPrice
-                        if (tsumQty > 0) {
-                            viewModel.addOrUpdateHolding(activeTicker, tsumQty, tsumPx, "NISA_TSUMITATE")
-                        }
-
-                        val tokQty = sharesTokutei.toIntOrNull() ?: 0
-                        val tokPx = priceTokutei.toDoubleOrNull() ?: activeStockPrice
-                        if (tokQty > 0) {
-                            viewModel.addOrUpdateHolding(activeTicker, tokQty, tokPx, "TAXABLE_WITHHELD")
-                        }
-
-                        val ippQty = sharesIppan.toIntOrNull() ?: 0
-                        val ippPx = priceIppan.toDoubleOrNull() ?: activeStockPrice
-                        if (ippQty > 0) {
-                            viewModel.addOrUpdateHolding(activeTicker, ippQty, ippPx, "TAXABLE_GENERAL")
-                        }
-
+                        if (allocations.size != entries.size || !viewModel.addHoldingAllocations(activeTicker, allocations)) return@Button
                         showBottomSheet = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),

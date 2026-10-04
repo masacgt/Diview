@@ -5,6 +5,43 @@ import org.junit.Test
 import java.nio.charset.Charset
 
 class BrokerCsvImporterTest {
+    @Test fun rejectsUnclosedQuotes() {
+        assertThrows(IllegalArgumentException::class.java) { CsvTokenizer.parse("code,name\n7203,\"unterminated") }
+    }
+
+    @Test fun monexUtf8WithoutBomIsNotMisreadAsShiftJis() {
+        val csv = "銘柄コード,銘柄名,保有数量,取得単価\n7203,トヨタ自動車,100,2450"
+        val parsed = BrokerCsvImporter.parse(csv.toByteArray(Charsets.UTF_8), CsvBroker.MONEX)
+        assertEquals(CsvEncoding.UTF8, parsed.encoding)
+        assertEquals("トヨタ自動車", parsed.rows.single().name)
+    }
+
+    @Test fun invalidNumericRowsAreReportedAndNotImported() {
+        listOf("NaN", "Infinity", "-1", "1.5", "2147483648").forEach { quantity ->
+            val csv = "銘柄コード,銘柄名,保有数量,取得単価\n7203,トヨタ,$quantity,2450"
+            val parsed = BrokerCsvImporter.parse(csv.toByteArray(), CsvBroker.SBI)
+            assertTrue(parsed.rows.isEmpty())
+            assertTrue(parsed.errors.isNotEmpty())
+        }
+    }
+
+    @Test fun fullWidthNumbersAndStockSuffixesAreSupported() {
+        val csv = "銘柄コード,銘柄名,保有数量,取得単価\n７２０３,トヨタ,１００株式,２４５０円"
+        val parsed = BrokerCsvImporter.parse(csv.toByteArray(), CsvBroker.SBI).rows.single()
+        assertEquals("7203", parsed.code)
+        assertEquals(100.0, parsed.shares!!, 0.0)
+        assertEquals(2450.0, parsed.averageCost!!, 0.0)
+    }
+
+    @Test fun emptyNormalizedNamesAndOppositeHedgeVariantsDoNotMatch() {
+        assertNull(FundNameMatcher.match("ファンド", listOf("投資信託")))
+        assertNull(FundNameMatcher.match("全世界株式（為替ヘッジあり）", listOf("全世界株式（為替ヘッジなし）")))
+    }
+
+    @Test fun emptyCsvAndMissingHeadersProduceReadableErrors() {
+        assertTrue(BrokerCsvImporter.parse(byteArrayOf(), CsvBroker.SBI).errors.isNotEmpty())
+        assertTrue(BrokerCsvImporter.parse("foo,bar\na,b".toByteArray(), CsvBroker.SBI).errors.isNotEmpty())
+    }
     @Test fun parsesQuotedCommasAndEscapedQuotes() {
         val csv = "銘柄コード,銘柄名,保有数量,平均取得価額,現在値,口座区分\n7203,\"トヨタ,自動車\",100,2450,2600,特定\n8316,\"三井住友\"\"FG\",20,3000,3150,NISA"
         val parsed = BrokerCsvImporter.parse(csv.toByteArray(Charsets.UTF_8), CsvBroker.SBI)

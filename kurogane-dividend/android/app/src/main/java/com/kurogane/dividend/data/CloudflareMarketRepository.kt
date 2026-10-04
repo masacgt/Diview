@@ -3,10 +3,15 @@ package com.kurogane.dividend.data
 import com.kurogane.dividend.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CoroutineDispatcher
+import com.kurogane.dividend.model.PortfolioMath
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.net.URI
+import java.io.IOException
+import java.time.LocalDate
 
 data class CloudflareSearchHit(
     val code: String,
@@ -58,37 +63,46 @@ data class CloudflareMonthlyPriceSeries(
 
 /** Public, read-only access to the app's Cloudflare D1/R2 data. No credentials belong in the APK. */
 class CloudflareMarketRepository(
-    private val baseUrl: String = BuildConfig.DIVIEW_D1_API_BASE_URL
+    private val baseUrl: String = BuildConfig.DIVIEW_D1_API_BASE_URL,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection }
 ) {
-    suspend fun searchSecurities(query: String): List<CloudflareSearchHit> = withContext(Dispatchers.IO) {
+    suspend fun searchSecurities(query: String): List<CloudflareSearchHit> = withContext(ioDispatcher) {
+        if (query.isBlank()) return@withContext emptyList()
+        require(query.length <= 256) { "検索文字列が長すぎます" }
         val encoded = URLEncoder.encode(query.trim(), Charsets.UTF_8.name())
         val root = getJson("/api/v1/security-search?q=$encoded")
         val rows = root.optJSONArray("items") ?: return@withContext emptyList()
         (0 until rows.length()).mapNotNull { index ->
             val row = rows.optJSONObject(index) ?: return@mapNotNull null
-            val code = row.optString("code").trim()
+            val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT)
             val name = row.optString("name").trim()
-            if (code.isEmpty() || name.isEmpty()) null else CloudflareSearchHit(code, name)
+            if (!isSecurityCode(code) || name.isEmpty()) null else CloudflareSearchHit(code, name)
         }
     }
 
-    suspend fun getSecurity(code: String): CloudflareSecurity? = withContext(Dispatchers.IO) {
-        val safeCode = URLEncoder.encode(code.trim(), Charsets.UTF_8.name())
-        val root = runCatching { getJson("/api/v1/securities/$safeCode?include_market=false") }.getOrNull()
-            ?: return@withContext null
+    suspend fun getSecurity(code: String): CloudflareSecurity? = withContext(ioDispatcher) {
+        val normalized = PortfolioMath.normalizeCode(code)
+        require(isSecurityCode(normalized)) { "銘柄コードが正しくありません" }
+        val safeCode = URLEncoder.encode(normalized, Charsets.UTF_8.name())
+        val root = try { getJson("/api/v1/securities/$safeCode?include_market=false") }
+            catch (error: MarketHttpException) { if (error.status == 404) return@withContext null else throw error }
         val dividend = root.optJSONObject("dividend")
         CloudflareSecurity(
-            code = root.optString("code", code).ifBlank { code },
+            code = root.optString("code", normalized).ifBlank { normalized }.also {
+                require(it.equals(normalized, true)) { "応答の銘柄コードが一致しません" }
+            },
             name = root.optString("name").takeIf(String::isNotBlank) ?: return@withContext null,
-            annualDividendPerShare = dividend?.numberOrNull("annual_dps_adjusted")
-                ?: dividend?.numberOrNull("annual_dps"),
-            marketPrice = root.optJSONObject("market_price")?.numberOrNull("close")
+            annualDividendPerShare = (dividend?.numberOrNull("annual_dps_adjusted")
+                ?: dividend?.numberOrNull("annual_dps"))?.takeIf(PortfolioMath::validMoney),
+            marketPrice = root.optJSONObject("market_price")?.numberOrNull("close")?.takeIf { PortfolioMath.validMoney(it) && it > 0 }
         )
     }
 
-    suspend fun getStockAnalysis(code: String): CloudflareStockAnalysis? = withContext(Dispatchers.IO) {
+    suspend fun getStockAnalysis(code: String): CloudflareStockAnalysis? = withContext(ioDispatcher) {
+        require(isSecurityCode(PortfolioMath.normalizeCode(code))) { "銘柄コードが正しくありません" }
         val safeCode = URLEncoder.encode(code.trim(), Charsets.UTF_8.name())
-        val root = runCatching { getJson("/api/v1/analysis/$safeCode") }.getOrNull()
+        val root = runCatchingCancellable { getJson("/api/v1/analysis/$safeCode") }.getOrNull()
             ?: return@withContext null
         val sourceValues = root.optJSONObject("values") ?: return@withContext null
         val keys = listOf(
@@ -101,7 +115,7 @@ class CloudflareMarketRepository(
     }
 
     /** Fetches the public catalog only when the caller's JST/12-hour gate permits a price refresh. */
-    suspend fun fetchPriceCatalog(): Map<String, Double> = withContext(Dispatchers.IO) {
+    suspend fun fetchPriceCatalog(): Map<String, Double> = withContext(ioDispatcher) {
         val root = getJson("/api/v1/search-catalog")
         val rows = root.optJSONArray("items") ?: error("Cloudflareの銘柄カタログにitemsがありません")
         buildMap {
@@ -109,14 +123,15 @@ class CloudflareMarketRepository(
                 val row = rows.optJSONObject(index) ?: continue
                 val code = row.optString("code").trim().uppercase()
                 val price = row.numberOrNull("price")
-                if (code.isNotEmpty() && price != null && price > 0.0) put(code, price)
+                if (isSecurityCode(code) && price != null && PortfolioMath.validMoney(price) && price > 0.0) put(code, price)
             }
         }
     }
 
     /** Returns a page of R2-ranked stocks with current and five-year reference prices from the database. */
-    suspend fun fetchPopularStocks(offset: Int, date: String, limit: Int = 1): CloudflarePopularStocksPage = withContext(Dispatchers.IO) {
+    suspend fun fetchPopularStocks(offset: Int, date: String, limit: Int = 1): CloudflarePopularStocksPage = withContext(ioDispatcher) {
         require(date.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) { "日付はyyyy-MM-dd形式で指定してください" }
+        LocalDate.parse(date)
         val safeOffset = offset.coerceAtLeast(0)
         val safeLimit = limit.coerceIn(1, 20)
         val encodedDate = URLEncoder.encode(date, Charsets.UTF_8.name())
@@ -129,7 +144,7 @@ class CloudflareMarketRepository(
             val currentPrice = row.numberOrNull("current_price") ?: return@mapNotNull null
             val acquisitionPrice = row.numberOrNull("acquisition_price") ?: return@mapNotNull null
             val tradingValue = row.numberOrNull("estimated_average_trading_value_20d") ?: return@mapNotNull null
-            if (code.isBlank() || name.isBlank() || currentPrice <= 0.0 || acquisitionPrice <= 0.0 || tradingValue <= 0.0) return@mapNotNull null
+            if (!isSecurityCode(code) || name.isBlank() || !PortfolioMath.validMoney(currentPrice) || !PortfolioMath.validMoney(acquisitionPrice) || currentPrice <= 0.0 || acquisitionPrice <= 0.0 || tradingValue <= 0.0) return@mapNotNull null
             CloudflarePopularStock(
                 code = code,
                 name = name,
@@ -137,8 +152,8 @@ class CloudflareMarketRepository(
                 currentPrice = currentPrice,
                 acquisitionPrice = acquisitionPrice,
                 acquisitionDate = row.optString("acquisition_date").ifBlank { date },
-                annualDividendPerShare = row.numberOrNull("annual_dividend_per_share") ?: 0.0,
-                dividendYield = row.numberOrNull("yield_rate"),
+                annualDividendPerShare = row.numberOrNull("annual_dividend_per_share")?.takeIf(PortfolioMath::validMoney) ?: 0.0,
+                dividendYield = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 },
                 tradingValue20d = tradingValue
             )
         }
@@ -183,17 +198,18 @@ class CloudflareMarketRepository(
     }
 
     private fun getJson(path: String): JSONObject {
-        require(baseUrl.startsWith("https://")) { "Cloudflare API URLはHTTPSで設定してください" }
-        val connection = URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection
+        val base = URI(baseUrl)
+        require(base.scheme == "https" && !base.host.isNullOrBlank() && base.userInfo == null && base.query == null && base.fragment == null) { "Cloudflare API URLは認証情報を含まないHTTPSで設定してください" }
+        val connection = connectionFactory(URL(baseUrl.trimEnd('/') + path))
         try {
             connection.requestMethod = "GET"
+            connection.instanceFollowRedirects = false
             connection.connectTimeout = 8_000
             connection.readTimeout = 12_000
             connection.setRequestProperty("Accept", "application/json")
             val status = connection.responseCode
-            val body = (if (status in 200..299) connection.inputStream else connection.errorStream)
-                ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            check(status in 200..299) { "Cloudflare API HTTP $status: ${body.take(240)}" }
+            if (status !in 200..299) throw MarketHttpException(status)
+            val body = connection.inputStream.use { it.readBoundedBytes(8 * 1024 * 1024).toString(Charsets.UTF_8) }
             return JSONObject(body)
         } finally {
             connection.disconnect()
@@ -202,7 +218,11 @@ class CloudflareMarketRepository(
 
     private fun JSONObject.numberOrNull(key: String): Double? =
         if (isNull(key) || !has(key)) null else optDouble(key).takeIf { it.isFinite() }
+
+    private fun isSecurityCode(code: String) = code.matches(Regex("[A-Z0-9.\\-]{1,16}"))
 }
+
+class MarketHttpException(val status: Int) : IOException("Cloudflare API HTTP $status")
 
 /** The price feed is eligible only once on each Japan-local date, and never more often than 12 hours. */
 object PriceRefreshPolicy {

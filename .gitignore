@@ -85,6 +85,9 @@ app.*.map.json
 **/.gradle/
 **/.kotlin/
 **/local.properties
+*.jks
+*.keystore
+**/keystore.properties
 
 
 # Large generated IRBank export (local source remains authoritative)

@@ -1,5 +1,6 @@
 package com.kurogane.dividend.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
@@ -37,14 +38,16 @@ import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import java.text.NumberFormat
 import java.util.Locale
+import com.kurogane.dividend.ui.components.rememberNotificationAccess
+import com.kurogane.dividend.notifications.NotificationKind
 
 private fun sortWatchlist(
     stocks: List<WatchlistStock>,
     criteria: String,
     direction: String
 ): List<WatchlistStock> = stocks.sortedWith { a, b ->
-    val yieldA = (a.dps / a.price) * 100
-    val yieldB = (b.dps / b.price) * 100
+    val yieldA = com.kurogane.dividend.model.PortfolioMath.yieldPercent(a.dps, a.price)
+    val yieldB = com.kurogane.dividend.model.PortfolioMath.yieldPercent(b.dps, b.price)
     val rateA = yieldA / a.targetYield
     val rateB = yieldB / b.targetYield
 
@@ -65,22 +68,30 @@ fun WatchlistScreen(
     onNavigateToDetail: (String) -> Unit = {},
     onOpenAddHolding: (String) -> Unit = {}
 ) {
-    val holdings by viewModel.holdings.collectAsState()
-    val watchlist by viewModel.watchlist.collectAsState()
+    val holdings by viewModel.holdings.collectAsStateWithLifecycle()
+    val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
+    val notificationAccess = rememberNotificationAccess { action ->
+        val code = action.substringAfter(':', "")
+        if (viewModel.watchlist.value.any { it.code == code && !it.alertEnabled }) viewModel.toggleWatchlistStock(code)
+        viewModel.setNotificationEnabled(NotificationKind.PRICE, true)
+    }
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
 
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = viewModel.watchlistScrollIndex,
         initialFirstVisibleItemScrollOffset = viewModel.watchlistScrollOffset
     )
-    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
-        viewModel.watchlistScrollIndex = listState.firstVisibleItemIndex
-        viewModel.watchlistScrollOffset = listState.firstVisibleItemScrollOffset
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                viewModel.watchlistScrollIndex = index
+                viewModel.watchlistScrollOffset = offset
+            }
     }
 
     // Dynamic Watchlist Calculations
     val averageYield = if (watchlist.isNotEmpty()) {
-        watchlist.map { (it.dps / it.price) * 100 }.average()
+        watchlist.map { com.kurogane.dividend.model.PortfolioMath.yieldPercent(it.dps, it.price) }.average()
     } else 0.0
 
     val potentialDiv = watchlist.sumOf { stock ->
@@ -120,7 +131,7 @@ fun WatchlistScreen(
 
     // Process filters
     val filteredList = watchlist.filter { stock ->
-        val currentYield = (stock.dps / stock.price) * 100
+        val currentYield = com.kurogane.dividend.model.PortfolioMath.yieldPercent(stock.dps, stock.price)
         val isReady = currentYield >= stock.targetYield
         val queryMatch = searchQuery.isEmpty() ||
                 stock.code.contains(searchQuery, ignoreCase = true) ||
@@ -161,7 +172,7 @@ fun WatchlistScreen(
         }
     }
 
-    val readyCount = watchlist.filter { (it.dps / it.price) * 100 >= it.targetYield }.size
+    val readyCount = watchlist.filter { com.kurogane.dividend.model.PortfolioMath.yieldPercent(it.dps, it.price) >= it.targetYield }.size
 
     Scaffold(
         containerColor = BackgroundDark
@@ -415,7 +426,7 @@ fun WatchlistScreen(
 
             // Stock Cards
             items(items = sortedList, key = { it.code }) { stock ->
-                val currentYield = (stock.dps / stock.price) * 100
+                val currentYield = com.kurogane.dividend.model.PortfolioMath.yieldPercent(stock.dps, stock.price)
                 val isReached = currentYield >= stock.targetYield
                 val isClose = !isReached && (currentYield >= (stock.targetYield - 0.25))
                 val yieldAchievement = (currentYield / stock.targetYield * 100.0).coerceIn(0.0, 100.0)
@@ -683,7 +694,10 @@ fun WatchlistScreen(
                             }
 
                             IconButton(
-                                onClick = { viewModel.toggleWatchlistStock(stock.code) },
+                                onClick = {
+                                    if (stock.alertEnabled) viewModel.toggleWatchlistStock(stock.code)
+                                    else notificationAccess.request("price:${stock.code}")
+                                },
                                 modifier = Modifier
                                     .size(42.dp)
                                     .clip(RoundedCornerShape(8.dp))
