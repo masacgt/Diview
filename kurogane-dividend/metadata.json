@@ -1,0 +1,6 @@
+{
+  "name": "Diview - 資産管理・高配当ポートフォリオ",
+  "description": "高配当株投資・年間配当管理・資産推移・FIREロードマップQuest・Watchlistを備えた個人投資家向け高機能ポートフォリオ管理アプリ。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

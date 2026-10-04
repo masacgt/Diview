@@ -50,6 +50,8 @@ app.*.map.json
 # Local Wrangler/XDG state
 /.xdg/
 /.wrangler-env/
+/.wrangler/
+**/.wrangler/
 /data/irbank/cloudflare/admin-secret.local.txt
 
 # Local build/runtime toolchains and caches
@@ -58,6 +60,11 @@ app.*.map.json
 /jdk17/
 /gradle-*-bin.zip
 /jdk*.zip
+/tools/offline-installers/
+
+# Generated files retained inside the archived root Flutter scaffold
+/archive/legacy-flutter-scaffold/.dart_tool/
+/archive/legacy-flutter-scaffold/build/
 
 # Local environment files
 .env
@@ -66,6 +73,11 @@ app.*.map.json
 
 # JVM crash / heap dumps
 *.hprof
+
+# Android and Gradle local state
+**/.gradle/
+**/.kotlin/
+**/local.properties
 
 
 # Large generated IRBank export (local source remains authoritative)
