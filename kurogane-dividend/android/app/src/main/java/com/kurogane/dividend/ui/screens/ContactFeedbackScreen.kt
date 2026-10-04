@@ -73,7 +73,7 @@ fun ContactFeedbackScreen(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("ご意見・不具合報告", color = OnSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Text("ご意見・不具合報告", color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold)
                     }
                 },
                 navigationIcon = {
@@ -130,7 +130,7 @@ fun ContactFeedbackScreen(
                                     .background(PrimaryEmeraldContainer.copy(alpha = 0.2f))
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
-                                Text("Official Support", color = PrimaryEmerald, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text("Official Support", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                             Box(
                                 modifier = Modifier
@@ -140,12 +140,12 @@ fun ContactFeedbackScreen(
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("Diview サポートデスク", color = OnSurface, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("Diview サポートデスク", color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             "配当管理や操作についてご不明な点、改善のご要望をお気軽にお寄せください。通常24時間以内に返信いたします。",
                             color = SoftGray,
-                            fontSize = 11.sp,
+                            fontSize = AppTextSize.dense,
                             lineHeight = 16.sp
                         )
                     }
@@ -161,9 +161,9 @@ fun ContactFeedbackScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(Icons.Default.HelpOutline, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
-                        Text("よくあるご質問 (FAQ)", color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("よくあるご質問 (FAQ)", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                     }
-                    Text("タップして展開", color = SoftGray, fontSize = 10.sp)
+                    Text("タップして展開", color = SoftGray, fontSize = AppTextSize.dense)
                 }
 
                 faqs.forEachIndexed { idx, faq ->
@@ -194,9 +194,9 @@ fun ContactFeedbackScreen(
                                             .background(PrimaryEmeraldContainer.copy(alpha = 0.15f)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text("Q", color = PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                                        Text("Q", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Black)
                                     }
-                                    Text(faq.q, color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text(faq.q, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                 }
                                 Icon(
                                     imageVector = if (open) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -216,7 +216,7 @@ fun ContactFeedbackScreen(
                                     Text(
                                         faq.a,
                                         color = SoftGray,
-                                        fontSize = 11.sp,
+                                        fontSize = AppTextSize.dense,
                                         lineHeight = 16.sp
                                     )
                                 }
@@ -236,12 +236,12 @@ fun ContactFeedbackScreen(
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Icon(Icons.Default.RateReview, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
-                        Text("お問い合わせ・ご意見", color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("お問い合わせ・ご意見", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                     }
 
                     // Category Selector
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("カテゴリ *", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Text("カテゴリ *", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.SemiBold)
                         val categories = listOf(
                             CategoryButton("feature", "機能の改善要望", Icons.Default.Lightbulb),
                             CategoryButton("bug", "不具合の報告", Icons.Default.BugReport),
@@ -263,8 +263,8 @@ fun ContactFeedbackScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Icon(cat.icon, contentDescription = null, tint = if (active) Color.Black else SoftGray, modifier = Modifier.size(14.dp))
-                                        Text(cat.label, color = if (active) Color.Black else SoftGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Icon(cat.icon, contentDescription = null, tint = if (active) OnPrimary else SoftGray, modifier = Modifier.size(14.dp))
+                                        Text(cat.label, color = if (active) OnPrimary else SoftGray, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -284,8 +284,8 @@ fun ContactFeedbackScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Icon(cat.icon, contentDescription = null, tint = if (active) Color.Black else SoftGray, modifier = Modifier.size(14.dp))
-                                        Text(cat.label, color = if (active) Color.Black else SoftGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Icon(cat.icon, contentDescription = null, tint = if (active) OnPrimary else SoftGray, modifier = Modifier.size(14.dp))
+                                        Text(cat.label, color = if (active) OnPrimary else SoftGray, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -295,13 +295,13 @@ fun ContactFeedbackScreen(
                     // Sender Name Input
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("お名前 / ニックネーム", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                            Text("任意", color = SoftGray, fontSize = 9.sp)
+                            Text("お名前 / ニックネーム", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.SemiBold)
+                            Text("任意", color = SoftGray, fontSize = AppTextSize.dense)
                         }
                         OutlinedTextField(
                             value = senderName,
                             onValueChange = { senderName = it },
-                            placeholder = { Text("配当雪だるま", color = SoftGray, fontSize = 11.sp) },
+                            placeholder = { Text("配当雪だるま", color = SoftGray, fontSize = AppTextSize.dense) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
@@ -319,13 +319,13 @@ fun ContactFeedbackScreen(
                     // Return Email Input
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("返信用メールアドレス", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                            Text("返信が必要な場合", color = SoftGray, fontSize = 9.sp)
+                            Text("返信用メールアドレス", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.SemiBold)
+                            Text("返信が必要な場合", color = SoftGray, fontSize = AppTextSize.dense)
                         }
                         OutlinedTextField(
                             value = senderEmail,
                             onValueChange = { senderEmail = it },
-                            placeholder = { Text("your-email@example.com", color = SoftGray, fontSize = 11.sp) },
+                            placeholder = { Text("your-email@example.com", color = SoftGray, fontSize = AppTextSize.dense) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
@@ -342,11 +342,11 @@ fun ContactFeedbackScreen(
 
                     // Message Text Multi-Line Input
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("お問い合わせ内容 *", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Text("お問い合わせ内容 *", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.SemiBold)
                         OutlinedTextField(
                             value = messageText,
                             onValueChange = { messageText = it },
-                            placeholder = { Text("不具合内容や改善案などをご自由にご記入ください。", color = SoftGray, fontSize = 11.sp) },
+                            placeholder = { Text("不具合内容や改善案などをご自由にご記入ください。", color = SoftGray, fontSize = AppTextSize.dense) },
                             minLines = 4,
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
@@ -372,8 +372,8 @@ fun ContactFeedbackScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("診断レポートを添付", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text("アプリのクラッシュログ、OSバージョン情報を含める", color = SoftGray, fontSize = 9.sp)
+                            Text("診断レポートを添付", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text("アプリのクラッシュログ、OSバージョン情報を含める", color = SoftGray, fontSize = AppTextSize.dense)
                         }
                         Switch(
                             checked = attachDiagnostics,
@@ -385,6 +385,7 @@ fun ContactFeedbackScreen(
                     Spacer(modifier = Modifier.height(2.dp))
 
                     // Submit Button with loading simulation
+                    val canSubmit = !isSubmitting && messageText.trim().isNotEmpty()
                     Button(
                         onClick = {
                             if (messageText.trim().isNotEmpty()) {
@@ -399,22 +400,24 @@ fun ContactFeedbackScreen(
                                 }
                             }
                         },
-                        enabled = !isSubmitting && messageText.trim().isNotEmpty(),
+                        enabled = canSubmit,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(44.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = PrimaryEmeraldContainer,
-                            disabledContainerColor = SurfaceContainerHighest
+                            contentColor = OnPrimaryContainer,
+                            disabledContainerColor = SurfaceContainerHighest,
+                            disabledContentColor = OnSurfaceVariant
                         ),
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         if (isSubmitting) {
-                            CircularProgressIndicator(color = OnPrimary, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(color = OnSurfaceVariant, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         } else {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Icon(Icons.Default.Send, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(14.dp))
-                                Text("送信する", color = OnPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Icon(Icons.Default.Send, contentDescription = null, tint = if (canSubmit) OnPrimaryContainer else OnSurfaceVariant, modifier = Modifier.size(14.dp))
+                                Text("送信する", color = if (canSubmit) OnPrimaryContainer else OnSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
                             }
                         }
                     }

@@ -137,13 +137,13 @@ fun AnnualDividendScreen(
                                         fontWeight = FontWeight.Black,
                                         color = OnSurface,
                                         fontFamily = FontFamily.Monospace,
-                                        fontSize = 32.sp
+                                        fontSize = AppTextSize.hero
                                     ),
                                     maxLines = 1,
                                     softWrap = false
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("/ 年", color = OnSurfaceVariant, fontSize = 12.sp, modifier = Modifier.padding(bottom = 4.dp))
+                                Text("/ 年", color = OnSurfaceVariant, fontSize = AppTextSize.caption, modifier = Modifier.padding(bottom = 4.dp))
                             }
 
                             Spacer(modifier = Modifier.height(14.dp))
@@ -164,11 +164,11 @@ fun AnnualDividendScreen(
                                 )
                                 Spacer(modifier = Modifier.width(9.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("税引前配当額", color = OnSurfaceVariant, fontSize = 9.sp, fontWeight = FontWeight.Medium)
+                                    Text("税引前配当額", color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Medium)
                                     Text(
                                         if (isPrivacyActive) "¥•••••• / 年" else "¥${currencyFormat.format(grossAnnualDividend.toLong())} / 年",
                                         color = OnSurface,
-                                        fontSize = 12.sp,
+                                        fontSize = AppTextSize.caption,
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = FontFamily.Monospace,
                                         maxLines = 1,
@@ -177,11 +177,11 @@ fun AnnualDividendScreen(
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column(horizontalAlignment = Alignment.End) {
-                                    Text("月換算", color = OnSurfaceVariant, fontSize = 9.sp, fontWeight = FontWeight.Medium)
+                                    Text("月換算", color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Medium)
                                     Text(
                                         if (isPrivacyActive) "約 ¥••••" else "約 ¥${currencyFormat.format((grossAnnualDividend / 12).toLong())}",
                                         color = PrimaryEmerald,
-                                        fontSize = 12.sp,
+                                        fontSize = AppTextSize.caption,
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = FontFamily.Monospace,
                                         maxLines = 1,
@@ -202,7 +202,7 @@ fun AnnualDividendScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Default.Percent, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("利回りデュアル比較", color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("利回りデュアル比較", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                                 }
 
                                 Spacer(modifier = Modifier.height(10.dp))
@@ -227,12 +227,12 @@ fun AnnualDividendScreen(
                                                 )
                                                 .padding(horizontal = 10.dp, vertical = 10.dp)
                                         ) {
-                                            Text(label, color = OnSurfaceVariant, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+                                            Text(label, color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                                             Spacer(modifier = Modifier.height(7.dp))
                                             Text(
                                                 if (isPrivacyActive) "•••%" else String.format(Locale.JAPAN, "%.2f%%", yieldValue),
-                                                color = if (index == 0) Color(0xFFC0C1FF) else PrimaryEmerald,
-                                                fontSize = 21.sp,
+                                                color = if (index == 0) SecondaryIndigo else PrimaryEmerald,
+                                                fontSize = AppTextSize.metric,
                                                 fontWeight = FontWeight.Black,
                                                 fontFamily = FontFamily.Monospace,
                                                 maxLines = 1,
@@ -242,7 +242,7 @@ fun AnnualDividendScreen(
                                             Text(
                                                 if (isPrivacyActive) "基準額 ¥••••" else "基準額 ¥${currencyFormat.format(basisValue.toLong())}",
                                                 color = OnSurfaceVariant,
-                                                fontSize = 8.sp,
+                                                fontSize = AppTextSize.dense,
                                                 maxLines = 1,
                                                 softWrap = false
                                             )
@@ -250,7 +250,7 @@ fun AnnualDividendScreen(
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text("利回りは税引前配当額を基準に算出", color = OnSurfaceVariant, fontSize = 8.sp)
+                                Text("利回りは税引前配当額を基準に算出", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                             }
                         }
                     }
@@ -283,7 +283,7 @@ fun AnnualDividendScreen(
                                     "分析",
                                     fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
                                     color = if (selectedTab == 0) PrimaryEmerald else OnSurfaceVariant,
-                                    fontSize = 11.sp
+                                    fontSize = AppTextSize.dense
                                 )
                             }
                         }
@@ -304,7 +304,7 @@ fun AnnualDividendScreen(
                                     "配当推移",
                                     fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
                                     color = if (selectedTab == 1) PrimaryEmerald else OnSurfaceVariant,
-                                    fontSize = 11.sp
+                                    fontSize = AppTextSize.dense
                                 )
                             }
                         }
@@ -325,7 +325,7 @@ fun AnnualDividendScreen(
                                     "資産推移",
                                     fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal,
                                     color = if (selectedTab == 2) PrimaryEmerald else OnSurfaceVariant,
-                                    fontSize = 11.sp
+                                    fontSize = AppTextSize.dense
                                 )
                             }
                         }
@@ -466,14 +466,14 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
     // Color definitions
     val sliceColors = listOf(
         PrimaryEmeraldContainer, // Emerald
-        Color(0xFF38BDF8), // Sky Blue
-        Color(0xFFC0C1FF), // Indigo
-        Color(0xFFFFB3AD), // Rose
-        Color(0xFFFBBF24), // Amber
+        SkyBlue, // Sky Blue
+        SecondaryIndigo, // Indigo
+        ErrorRed, // Rose
+        AccentAmber, // Amber
         Color(0xFFA78BFA), // Purple
         Color(0xFF22D3EE), // Cyan
-        Color(0xFFF43F5E), // Pink
-        Color(0xFF94A3B8)  // Gray
+        ErrorRed, // Pink
+        OnSurfaceVariant  // Gray
     )
 
     // Build Donut Slice Objects
@@ -616,9 +616,9 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             Text(
                                 "構成比率",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = if (chartMode == "holding") Color(0xFF003824) else OnSurfaceVariant,
+                                    color = if (chartMode == "holding") OnPrimary else OnSurfaceVariant,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp
+                                    fontSize = AppTextSize.dense
                                 )
                             )
                         }
@@ -632,9 +632,9 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             Text(
                                 "配当比率",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = if (chartMode == "dividend") Color(0xFF003824) else OnSurfaceVariant,
+                                    color = if (chartMode == "dividend") OnPrimary else OnSurfaceVariant,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp
+                                    fontSize = AppTextSize.dense
                                 )
                             )
                         }
@@ -694,7 +694,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 activeSlice?.name ?: if (chartMode == "holding") "資産総額" else "年間配当合計",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
-                                    fontSize = 11.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 ),
                                 maxLines = 1,
@@ -708,7 +708,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                     fontWeight = FontWeight.ExtraBold,
                                     color = OnSurface,
                                     fontFamily = FontFamily.Monospace,
-                                    fontSize = 20.sp
+                                    fontSize = AppTextSize.screenTitle
                                 )
                             )
                             Spacer(modifier = Modifier.height(2.dp))
@@ -725,7 +725,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         color = activeSlice?.color ?: PrimaryEmerald,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 10.sp
+                                        fontSize = AppTextSize.dense
                                     )
                                 )
                             }
@@ -882,7 +882,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 "${sec.name} ${sec.percentageVal}",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
-                                    fontSize = 11.sp
+                                    fontSize = AppTextSize.dense
                                 )
                             )
                         }
@@ -924,7 +924,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp),
                         colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
-                        border = BorderStroke(1.dp, Color(0xFFFFB3AD).copy(alpha = 0.2f))
+                        border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.2f))
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
@@ -939,7 +939,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                              Text(
                                  text = String.format("%.1f%%", cyclicalPct),
                                  style = MaterialTheme.typography.bodyMedium.copy(
-                                     color = Color(0xFFFFB3AD),
+                                     color = ErrorRed,
                                      fontWeight = FontWeight.Black,
                                      fontFamily = FontFamily.Monospace
                                  )
@@ -948,7 +948,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                  "卸売・輸送用機器等",
                                  style = MaterialTheme.typography.labelSmall.copy(
                                      color = OnSurfaceVariant,
-                                     fontSize = 8.5.sp
+                                     fontSize = AppTextSize.dense
                                  ),
                                  maxLines = 1
                              )
@@ -960,7 +960,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp),
                         colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
-                        border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.2f))
+                        border = BorderStroke(1.dp, SkyBlue.copy(alpha = 0.2f))
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
@@ -975,7 +975,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             Text(
                                 text = String.format("%.1f%%", mixedPct),
                                 style = MaterialTheme.typography.bodyMedium.copy(
-                                    color = Color(0xFF38BDF8),
+                                    color = SkyBlue,
                                     fontWeight = FontWeight.Black,
                                     fontFamily = FontFamily.Monospace
                                 )
@@ -984,7 +984,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 "水産・化学・保険業等",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
-                                    fontSize = 8.5.sp
+                                    fontSize = AppTextSize.dense
                                 ),
                                 maxLines = 1
                             )
@@ -1020,7 +1020,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 "食料・医薬品等",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
-                                    fontSize = 8.5.sp
+                                    fontSize = AppTextSize.dense
                                 ),
                                 maxLines = 1
                             )
@@ -1058,7 +1058,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 .padding(horizontal = 7.dp, vertical = 5.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(title, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = if (sectorValueMode == mode) Color(0xFF003824) else OnSurfaceVariant)
+                            Text(title, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = if (sectorValueMode == mode) OnPrimary else OnSurfaceVariant)
                         }
                     }
                 }
@@ -1109,7 +1109,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             color = sec.color,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 9.sp
+                                            fontSize = AppTextSize.dense
                                         )
                                     )
                                 }
@@ -1121,7 +1121,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                         color = sec.color,
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = FontFamily.Monospace,
-                                        fontSize = 10.sp
+                                        fontSize = AppTextSize.dense
                                     )
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -1173,7 +1173,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                                     style = MaterialTheme.typography.labelSmall.copy(
                                                         color = OnSurface,
                                                         fontWeight = FontWeight.Bold,
-                                                        fontSize = 10.sp
+                                                        fontSize = AppTextSize.dense
                                                     )
                                                 )
                                             }
@@ -1191,7 +1191,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                                     "保有 ${h.shares}株 • 利回り ${String.format("%.2f%%", currentYield)}",
                                                     style = MaterialTheme.typography.labelSmall.copy(
                                                         color = OnSurfaceVariant,
-                                                        fontSize = 10.sp
+                                                        fontSize = AppTextSize.dense
                                                     )
                                                 )
                                             }
@@ -1209,7 +1209,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                                 "構成比 " + String.format(Locale.JAPAN, "%.1f%%", amountShare),
                                                 style = MaterialTheme.typography.labelSmall.copy(
                                                     color = sec.color,
-                                                    fontSize = 9.sp,
+                                                    fontSize = AppTextSize.dense,
                                                     fontWeight = FontWeight.Medium
                                                 )
                                             )
@@ -1261,9 +1261,9 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
         val cardColor = when (grade) {
             "S" -> PrimaryEmeraldContainer
             "A" -> PrimaryEmerald
-            "B" -> Color(0xFF38BDF8)
-            "C" -> Color(0xFFFBBF24)
-            else -> Color(0xFFF43F5E)
+            "B" -> SkyBlue
+            "C" -> AccentAmber
+            else -> ErrorRed
         }
         val comment = when (grade) {
             "S" -> "日米・オルカンの理想的な地域分散が実現されています。複数セクターへの高度な分散に加え、主要銘柄の増配実績も強固。YOC（簿価利回り）も極めて高水準で、インカムの防衛力・成長力ともに申し分ない最高峰の「超堅牢ポートフォリオ」です。継続的な積立と配当自動再投資を行うことで、複利の爆発力を最大化できます。"
@@ -1299,14 +1299,14 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     color = OnSurface,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
+                                    fontSize = AppTextSize.body
                                 )
                             )
                             Text(
                                 "分散スコア & リスク評価",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
-                                    fontSize = 10.sp
+                                    fontSize = AppTextSize.dense
                                 )
                             )
                         }
@@ -1321,7 +1321,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             text = "健全度: $grade ($score/100)",
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                             color = cardColor,
-                            fontSize = 11.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -1333,7 +1333,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     text = comment,
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = OnSurfaceVariant,
-                        fontSize = 11.sp,
+                        fontSize = AppTextSize.dense,
                         lineHeight = 16.sp
                     )
                 )
@@ -1355,13 +1355,13 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                         Text(
                             "増配継続力",
                             color = OnSurfaceVariant,
-                            fontSize = 9.sp
+                            fontSize = AppTextSize.dense
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             power,
                             color = cardColor,
-                            fontSize = 11.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -1376,13 +1376,13 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                         Text(
                             "減配リスク",
                             color = OnSurfaceVariant,
-                            fontSize = 9.sp
+                            fontSize = AppTextSize.dense
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             risk,
                             color = cardColor,
-                            fontSize = 11.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -1436,7 +1436,7 @@ private fun CompoundingSimulationSection(
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
-                                    fontSize = 13.sp
+                                    fontSize = AppTextSize.body
                                 )
                             )
                         }
@@ -1444,7 +1444,7 @@ private fun CompoundingSimulationSection(
                             "2021年〜2025年(予想) 増配と再投資による累積カーブ",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = OnSurfaceVariant,
-                                fontSize = 10.sp
+                                fontSize = AppTextSize.dense
                             )
                         )
                     }
@@ -1458,7 +1458,7 @@ private fun CompoundingSimulationSection(
                             text = "5期連続増配達成",
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                             color = PrimaryEmerald,
-                            fontSize = 9.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -1480,15 +1480,15 @@ private fun CompoundingSimulationSection(
                             .padding(8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("5年平均増配率", color = OnSurfaceVariant, fontSize = 9.sp)
+                        Text("5年平均増配率", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Text(
                             text = String.format("+%.1f%%", cagr),
                             color = PrimaryEmerald,
-                            fontSize = 14.sp,
+                            fontSize = AppTextSize.body,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
-                        Text("年平均CAGR", color = OnSurfaceVariant, fontSize = 8.sp)
+                        Text("年平均CAGR", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
 
                     Column(
@@ -1500,15 +1500,15 @@ private fun CompoundingSimulationSection(
                             .padding(8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("累計受取総額", color = OnSurfaceVariant, fontSize = 9.sp)
+                        Text("累計受取総額", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Text(
                             text = if (isPrivacyActive) "¥••••" else "¥${currencyFormat.format(cumulativeIncome.toInt())}",
                             color = OnSurface,
-                            fontSize = 14.sp,
+                            fontSize = AppTextSize.body,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
-                        Text("通算インカム", color = OnSurfaceVariant, fontSize = 8.sp)
+                        Text("通算インカム", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
 
                     Column(
@@ -1520,15 +1520,15 @@ private fun CompoundingSimulationSection(
                             .padding(8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("簿価利回り (YOC)", color = OnSurfaceVariant, fontSize = 9.sp)
+                        Text("簿価利回り (YOC)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Text(
                             text = String.format("%.2f%%", currentYoc),
-                            color = Color(0xFF38BDF8),
-                            fontSize = 14.sp,
+                            color = SkyBlue,
+                            fontSize = AppTextSize.body,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
-                        Text("取得元本比", color = OnSurfaceVariant, fontSize = 8.sp)
+                        Text("取得元本比", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
                 }
             }
@@ -1549,11 +1549,11 @@ private fun CompoundingSimulationSection(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmeraldContainer))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("年次配当額 (受取)", color = OnSurface, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("年次配当額 (受取)", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF38BDF8)))
+                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(SkyBlue))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("複利成長曲線 (CAGR)", color = OnSurfaceVariant, fontSize = 10.sp)
+                        Text("複利成長曲線 (CAGR)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
 
                     Surface(
@@ -1564,7 +1564,7 @@ private fun CompoundingSimulationSection(
                             text = "+9.0% 増配 (2025予想)",
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             color = PrimaryEmeraldContainer,
-                            fontSize = 9.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -1579,6 +1579,7 @@ private fun CompoundingSimulationSection(
                 val chartGridColor = BorderColor
                 val chartBarColor = PrimaryEmeraldContainer
                 val chartPointColor = OnSurface
+                val chartSkyBlue = SkyBlue
 
                 Canvas(
                     modifier = Modifier
@@ -1622,7 +1623,7 @@ private fun CompoundingSimulationSection(
                     // Draw CAGR sky-blue connecting line curve
                     for (i in 0 until points.size - 1) {
                         drawLine(
-                            color = Color(0xFF38BDF8),
+                            color = chartSkyBlue,
                             start = points[i],
                             end = points[i + 1],
                             strokeWidth = 2.dp.toPx()
@@ -1637,7 +1638,7 @@ private fun CompoundingSimulationSection(
                             center = pt
                         )
                         drawCircle(
-                            color = Color(0xFF38BDF8).copy(alpha = 0.35f),
+                            color = chartSkyBlue.copy(alpha = 0.35f),
                             radius = 7.dp.toPx(),
                             center = pt
                         )
@@ -1653,7 +1654,7 @@ private fun CompoundingSimulationSection(
                         Text(
                             text = y,
                             color = OnSurfaceVariant,
-                            fontSize = 10.sp,
+                            fontSize = AppTextSize.dense,
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.labelSmall.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         )
@@ -1678,13 +1679,13 @@ private fun CompoundingSimulationSection(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmeraldContainer))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("2025年 予想", color = OnSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("2025年 予想", color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = if (isPrivacyActive) "¥•••• / 年" else "¥${currencyFormat.format(year2025.toInt())} / 年",
                                 color = OnSurface,
-                                fontSize = 16.sp,
+                                fontSize = AppTextSize.section,
                                 fontWeight = FontWeight.Black,
                                 fontFamily = FontFamily.Monospace
                             )
@@ -1694,12 +1695,12 @@ private fun CompoundingSimulationSection(
                             Text(
                                 text = if (isPrivacyActive) "月換算: 約¥••••/月" else "月換算: 約¥${currencyFormat.format((year2025 / 12).toInt())}/月",
                                 color = OnSurfaceVariant,
-                                fontSize = 10.sp
+                                fontSize = AppTextSize.dense
                             )
                             Text(
                                 text = if (isPrivacyActive) "+••••" else "+¥${currencyFormat.format((year2025 - year2024).toInt())} (+12.4%)",
                                 color = PrimaryEmeraldContainer,
-                                fontSize = 11.sp,
+                                fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace
                             )
@@ -1729,7 +1730,7 @@ private fun CompoundingSimulationSection(
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = OnSurface,
-                            fontSize = 12.sp
+                            fontSize = AppTextSize.caption
                         )
                     )
                 }
@@ -1756,8 +1757,8 @@ private fun CompoundingSimulationSection(
                         }
                         val badgeColor = when (idx) {
                             0 -> PrimaryEmeraldContainer
-                            4 -> Color(0xFF38BDF8)
-                            else -> Color(0xFF94A3B8)
+                            4 -> SkyBlue
+                            else -> OnSurfaceVariant
                         }
                         val calculatedYoc = if (totalCost > 0) (valAmt / totalCost) * 100 else (4.08 - idx * 0.4)
 
@@ -1784,7 +1785,7 @@ private fun CompoundingSimulationSection(
                                         Text(
                                             yearStr.take(3),
                                             color = OnSurface,
-                                            fontSize = 11.sp,
+                                            fontSize = AppTextSize.dense,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
@@ -1793,7 +1794,7 @@ private fun CompoundingSimulationSection(
 
                                     Column {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(yearStr, color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Text(yearStr, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Surface(
                                                 shape = RoundedCornerShape(4.dp),
@@ -1803,7 +1804,7 @@ private fun CompoundingSimulationSection(
                                                     text = badgeText,
                                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                                     color = badgeColor,
-                                                    fontSize = 8.sp,
+                                                    fontSize = AppTextSize.dense,
                                                     fontWeight = FontWeight.Bold
                                                 )
                                             }
@@ -1811,7 +1812,7 @@ private fun CompoundingSimulationSection(
                                         Text(
                                             text = if (isPrivacyActive) "月換算 約¥•••• / YOC •••%" else "月換算 約¥${currencyFormat.format((valAmt/12).toInt())} • YOC ${String.format("%.2f%%", calculatedYoc)}",
                                             color = OnSurfaceVariant,
-                                            fontSize = 9.sp
+                                            fontSize = AppTextSize.dense
                                         )
                                     }
                                 }
@@ -1820,14 +1821,14 @@ private fun CompoundingSimulationSection(
                                     Text(
                                         text = if (isPrivacyActive) "¥••••" else "¥${currencyFormat.format(valAmt.toInt())}",
                                         color = OnSurface,
-                                        fontSize = 12.sp,
+                                        fontSize = AppTextSize.caption,
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = FontFamily.Monospace
                                     )
                                     Text(
                                         text = if (idx == 4) pctStr else "$pctStr 前年比",
                                         color = if (idx == 4) OnSurfaceVariant else PrimaryEmeraldContainer,
-                                        fontSize = 9.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -1933,7 +1934,7 @@ private fun AssetTrackingSection(
                 }
                 Text(
                     if (selectedPeriod == "5y") "2021年〜2025年(現在)・年次成長トラッキング" else "1月〜12月・元本と評価額の月次推移",
-                    style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontSize = 10.sp)
+                    style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 )
             }
 
@@ -1953,8 +1954,8 @@ private fun AssetTrackingSection(
                 ) {
                     Text(
                         "5年",
-                        color = if (selectedPeriod == "5y") Color(0xFF031C13) else OnSurfaceVariant,
-                        fontSize = 10.sp,
+                        color = if (selectedPeriod == "5y") OnPrimary else OnSurfaceVariant,
+                        fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                     )
@@ -1967,8 +1968,8 @@ private fun AssetTrackingSection(
                 ) {
                     Text(
                         "12ヶ月",
-                        color = if (selectedPeriod == "12m") Color(0xFF031C13) else OnSurfaceVariant,
-                        fontSize = 10.sp,
+                        color = if (selectedPeriod == "12m") OnPrimary else OnSurfaceVariant,
+                        fontSize = AppTextSize.dense,
                         fontWeight = if (selectedPeriod == "12m") FontWeight.ExtraBold else FontWeight.Normal,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                     )
@@ -1996,7 +1997,7 @@ private fun AssetTrackingSection(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.AccountBalance, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("資産評価額", color = OnSurfaceVariant, fontSize = 10.sp)
+                            Text("資産評価額", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
                         Surface(
                             shape = RoundedCornerShape(4.dp),
@@ -2005,7 +2006,7 @@ private fun AssetTrackingSection(
                             Text(
                                 String.format("+%.1f%%", gainsPct[4]),
                                 color = PrimaryEmerald,
-                                fontSize = 8.sp,
+                                fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                             )
@@ -2015,7 +2016,7 @@ private fun AssetTrackingSection(
                     Text(
                         text = if (isPrivacyActive) "¥••••••••" else "¥${currencyFormat.format(realAssets.toInt())}",
                         color = OnSurface,
-                        fontSize = 16.sp,
+                        fontSize = AppTextSize.section,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )
@@ -2023,7 +2024,7 @@ private fun AssetTrackingSection(
                     Text(
                         "投資元本: ¥${currencyFormat.format(realCost.toInt())}",
                         color = OnSurfaceVariant,
-                        fontSize = 9.sp
+                        fontSize = AppTextSize.dense
                     )
                 }
             }
@@ -2043,16 +2044,16 @@ private fun AssetTrackingSection(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.TrendingUp, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("通算含み益", color = OnSurfaceVariant, fontSize = 10.sp)
+                            Text("通算含み益", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFF38BDF8).copy(alpha = 0.15f)
+                            color = SkyBlue.copy(alpha = 0.15f)
                         ) {
                             Text(
                                 "簿価利回り",
-                                color = Color(0xFF38BDF8),
-                                fontSize = 8.sp,
+                                color = SkyBlue,
+                                fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                             )
@@ -2062,7 +2063,7 @@ private fun AssetTrackingSection(
                     Text(
                         text = if (isPrivacyActive) "+¥••••••" else "+¥${currencyFormat.format(gains[4].toInt())}",
                         color = PrimaryEmerald,
-                        fontSize = 16.sp,
+                        fontSize = AppTextSize.section,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )
@@ -2070,7 +2071,7 @@ private fun AssetTrackingSection(
                     Text(
                         "Yield on Cost: " + String.format("%.2f%%", (totalAnnualDiv / realCost) * 100),
                         color = OnSurfaceVariant,
-                        fontSize = 9.sp
+                        fontSize = AppTextSize.dense
                     )
                 }
             }
@@ -2092,11 +2093,11 @@ private fun AssetTrackingSection(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmeraldContainer))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("評価額 (時価)", color = OnSurface, fontSize = 9.sp)
+                        Text("評価額 (時価)", color = OnSurface, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.width(10.dp))
                         Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF64748B)))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("累積投資元本 (簿価)", color = OnSurfaceVariant, fontSize = 9.sp)
+                        Text("累積投資元本 (簿価)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
 
                     Surface(
@@ -2108,7 +2109,7 @@ private fun AssetTrackingSection(
                             text = if (isPrivacyActive) "含み益: ¥••••" else "含み益: +¥${currencyFormat.format(gains[4].toInt())} (+${String.format("%.1f%%", gainsPct[4])})",
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             color = PrimaryEmerald,
-                            fontSize = 8.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -2198,7 +2199,7 @@ private fun AssetTrackingSection(
                         Text(
                             text = year,
                             color = if (selectedYearIndex == idx) PrimaryEmerald else OnSurfaceVariant,
-                            fontSize = 10.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = if (selectedYearIndex == idx) FontWeight.Bold else FontWeight.Normal,
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.labelSmall.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center)
@@ -2212,7 +2213,7 @@ private fun AssetTrackingSection(
                 Text(
                     "年次推移データグリッド (元本 vs 時価対比)",
                     color = OnSurface,
-                    fontSize = 11.sp,
+                    fontSize = AppTextSize.dense,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 2.dp)
                 )
@@ -2241,24 +2242,24 @@ private fun AssetTrackingSection(
                                 modifier = Modifier.padding(6.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(yr, color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text(yr, color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     "元: " + String.format("%.0f万", costs[idx] / 10000.0),
                                     color = OnSurfaceVariant,
-                                    fontSize = 7.5.sp
+                                    fontSize = AppTextSize.dense
                                 )
                                 Text(
                                     "時: " + String.format("%.0f万", assets[idx] / 10000.0),
                                     color = OnSurface,
-                                    fontSize = 7.5.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = String.format("%s%.0f万", if (gains[idx] >= 0) "+" else "", gains[idx] / 10000.0),
-                                    color = if (gains[idx] >= 0) PrimaryEmeraldContainer else Color(0xFFF43F5E),
-                                    fontSize = 7.5.sp,
+                                    color = if (gains[idx] >= 0) PrimaryEmeraldContainer else ErrorRed,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Black
                                 )
                             }
@@ -2282,12 +2283,12 @@ private fun AssetTrackingSection(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("$selYearStr 詳細", color = OnSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("$selYearStr 詳細", color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = if (isPrivacyActive) "評価額: ¥••••••••" else "評価額: ¥${currencyFormat.format(assets[selectedYearIndex].toInt())}",
                                 color = OnSurface,
-                                fontSize = 14.sp,
+                                fontSize = AppTextSize.body,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace
                             )
@@ -2297,12 +2298,12 @@ private fun AssetTrackingSection(
                             Text(
                                 text = "投資元本: ¥${currencyFormat.format(costs[selectedYearIndex].toInt())}",
                                 color = OnSurfaceVariant,
-                                fontSize = 10.sp
+                                fontSize = AppTextSize.dense
                             )
                             Text(
                                 text = if (isPrivacyActive) "含み損益: ••••" else String.format("含み損益 %s¥%s (%.1f%%)", if (gains[selectedYearIndex] >= 0) "+" else "", currencyFormat.format(gains[selectedYearIndex].toInt()), gainsPct[selectedYearIndex]),
-                                color = if (gains[selectedYearIndex] >= 0) PrimaryEmeraldContainer else Color(0xFFF43F5E),
-                                fontSize = 10.sp,
+                                color = if (gains[selectedYearIndex] >= 0) PrimaryEmeraldContainer else ErrorRed,
+                                fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace
                             )
@@ -2338,14 +2339,14 @@ private fun AssetTrackingSection(
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
-                                    fontSize = 12.sp
+                                    fontSize = AppTextSize.caption
                                 )
                             )
                             Text(
                                 "毎月の積立額と配当再投資による複利試算",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
-                                    fontSize = 9.sp
+                                    fontSize = AppTextSize.dense
                                 )
                             )
                         }
@@ -2360,7 +2361,7 @@ private fun AssetTrackingSection(
                             text = "複利シミュレーション",
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                             color = PrimaryEmerald,
-                            fontSize = 8.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -2377,13 +2378,13 @@ private fun AssetTrackingSection(
                     Text(
                         "毎月の新規積立額:",
                         color = OnSurfaceVariant,
-                        fontSize = 11.sp,
+                        fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         "¥" + currencyFormat.format(monthlySavings.toInt()),
                         color = OnSurface,
-                        fontSize = 12.sp,
+                        fontSize = AppTextSize.caption,
                         fontWeight = FontWeight.Black,
                         fontFamily = FontFamily.Monospace
                     )
@@ -2410,8 +2411,8 @@ private fun AssetTrackingSection(
                             ) {
                                 Text(
                                     label,
-                                    color = if (isSel) Color.Black else OnSurface,
-                                    fontSize = 10.sp,
+                                    color = if (isSel) OnPrimary else OnSurface,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -2430,13 +2431,13 @@ private fun AssetTrackingSection(
                     Text(
                         "想定配当利回り:",
                         color = OnSurfaceVariant,
-                        fontSize = 11.sp,
+                        fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         String.format("%.0f%%", yieldRate * 100),
                         color = OnSurface,
-                        fontSize = 12.sp,
+                        fontSize = AppTextSize.caption,
                         fontWeight = FontWeight.Black,
                         fontFamily = FontFamily.Monospace
                     )
@@ -2463,8 +2464,8 @@ private fun AssetTrackingSection(
                             ) {
                                 Text(
                                     label,
-                                    color = if (isSel) Color.Black else OnSurface,
-                                    fontSize = 10.sp,
+                                    color = if (isSel) OnPrimary else OnSurface,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -2487,8 +2488,8 @@ private fun AssetTrackingSection(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("配当金を自動で再投資する (複利効果)", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text("税引後(20.315%控除)の配当金を元本に自動組み入れ", color = OnSurfaceVariant, fontSize = 9.sp)
+                            Text("配当金を自動で再投資する (複利効果)", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text("税引後(20.315%控除)の配当金を元本に自動組み入れ", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
                         Switch(
                             checked = isReinvestSelected,
@@ -2507,7 +2508,7 @@ private fun AssetTrackingSection(
                 Text(
                     "複利成長シミュレーション結果",
                     color = OnSurfaceVariant,
-                    fontSize = 11.sp,
+                    fontSize = AppTextSize.dense,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -2538,32 +2539,32 @@ private fun AssetTrackingSection(
                                 Text(
                                     "${yr}年後 (" + (2025 + yr) + ")",
                                     color = if (is30Year) PrimaryEmerald else OnSurfaceVariant,
-                                    fontSize = 9.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = if (isPrivacyActive) "••••" else String.format("¥%.0f万", valAmt / 10000.0),
                                     color = OnSurface,
-                                    fontSize = 13.sp,
+                                    fontSize = AppTextSize.body,
                                     fontWeight = FontWeight.Black,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
                                     text = if (isPrivacyActive) "元本: ••••" else String.format("元本: ¥%.0f万", costAmt / 10000.0),
                                     color = OnSurfaceVariant,
-                                    fontSize = 8.sp
+                                    fontSize = AppTextSize.dense
                                 )
 
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Divider(color = BorderColor)
                                 Spacer(modifier = Modifier.height(6.dp))
 
-                                Text("月配当(目安)", color = OnSurfaceVariant, fontSize = 7.5.sp)
+                                Text("月配当(目安)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 Text(
                                     text = if (isPrivacyActive) "¥••••/月" else "¥${currencyFormat.format(monthDiv.toInt())}/月",
-                                    color = if (is30Year) PrimaryEmeraldContainer else Color(0xFF38BDF8),
-                                    fontSize = 9.5.sp,
+                                    color = if (is30Year) PrimaryEmeraldContainer else SkyBlue,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace
                                 )
@@ -2600,7 +2601,7 @@ private fun AssetTrackingSection(
                                 if (isReinvestSelected) "し続けた" else "せず貯蓄"
                             ),
                             color = PrimaryEmerald,
-                            fontSize = 9.5.sp,
+                            fontSize = AppTextSize.dense,
                             lineHeight = 14.sp
                         )
                     }
@@ -2634,7 +2635,7 @@ private fun AssetTrackingSection(
                         )
                     )
                 }
-                Text("2021〜2025", color = OnSurfaceVariant, fontSize = 10.sp)
+                Text("2021〜2025", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2666,7 +2667,7 @@ private fun AssetTrackingSection(
                                     Text(
                                         "'" + title.take(4).drop(2),
                                         color = OnSurface,
-                                        fontSize = 11.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -2675,7 +2676,7 @@ private fun AssetTrackingSection(
 
                                 Column {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(title, color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text(title, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                         Spacer(modifier = Modifier.width(6.dp))
                                         if (index == 4) {
                                             Surface(
@@ -2686,20 +2687,20 @@ private fun AssetTrackingSection(
                                                     "含み益最大",
                                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                                     color = PrimaryEmeraldContainer,
-                                                    fontSize = 8.sp,
+                                                    fontSize = AppTextSize.dense,
                                                     fontWeight = FontWeight.Bold
                                                 )
                                             }
                                         } else if (index > 0) {
                                             Surface(
                                                 shape = RoundedCornerShape(4.dp),
-                                                color = Color(0xFF94A3B8).copy(alpha = 0.15f)
+                                                color = OnSurfaceVariant.copy(alpha = 0.15f)
                                             ) {
                                                 Text(
                                                     "確定",
                                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                                    color = Color(0xFF94A3B8),
-                                                    fontSize = 8.sp,
+                                                    color = OnSurfaceVariant,
+                                                    fontSize = AppTextSize.dense,
                                                     fontWeight = FontWeight.Bold
                                                 )
                                             }
@@ -2708,7 +2709,7 @@ private fun AssetTrackingSection(
                                     Text(
                                         text = if (isPrivacyActive) "元本 ¥•••• • 評価額 ¥••••" else "元本 ¥${currencyFormat.format(costs[index].toInt())} • 評価額 ¥${currencyFormat.format(assets[index].toInt())}",
                                         color = OnSurfaceVariant,
-                                        fontSize = 9.sp
+                                        fontSize = AppTextSize.dense
                                     )
                                 }
                             }
@@ -2716,15 +2717,15 @@ private fun AssetTrackingSection(
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
                                     text = if (isPrivacyActive) "••••" else String.format("%s¥%s", prefix, currencyFormat.format(gains[index].toInt())),
-                                    color = if (isGain) PrimaryEmeraldContainer else Color(0xFFF43F5E),
-                                    fontSize = 11.sp,
+                                    color = if (isGain) PrimaryEmeraldContainer else ErrorRed,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
                                     text = if (index == 0) "基準年" else String.format("%s%.1f%% 利益", prefix, gainsPct[index]),
-                                    color = if (index == 0) OnSurfaceVariant else if (isGain) PrimaryEmeraldContainer else Color(0xFFF43F5E),
-                                    fontSize = 9.sp,
+                                    color = if (index == 0) OnSurfaceVariant else if (isGain) PrimaryEmeraldContainer else ErrorRed,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -2782,11 +2783,11 @@ private fun AssetTrackingTwelveMonthSection(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmeraldContainer))
                     Spacer(Modifier.width(5.dp))
-                    Text("評価額 (時価)", color = OnSurface, fontSize = 9.sp)
+                    Text("評価額 (時価)", color = OnSurface, fontSize = AppTextSize.dense)
                     Spacer(Modifier.width(10.dp))
                     Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF64748B)))
                     Spacer(Modifier.width(5.dp))
-                    Text("累積投資元本 (簿価)", color = OnSurfaceVariant, fontSize = 9.sp)
+                    Text("累積投資元本 (簿価)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 }
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -2796,8 +2797,8 @@ private fun AssetTrackingTwelveMonthSection(
                     Text(
                         if (isPrivacyActive) "含み益 ¥••••" else "含み益 ${if (latest.gain >= 0) "+" else "−"}¥${currencyFormat.format(kotlin.math.abs(latest.gain).toLong())}",
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                        color = if (latest.gain >= 0) PrimaryEmerald else Color(0xFFF43F5E),
-                        fontSize = 8.sp,
+                        color = if (latest.gain >= 0) PrimaryEmerald else ErrorRed,
+                        fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -2863,7 +2864,7 @@ private fun AssetTrackingTwelveMonthSection(
                     Text(
                         text = item.month.toString(),
                         color = if (item.month == 12) PrimaryEmerald else OnSurfaceVariant,
-                        fontSize = 9.sp,
+                        fontSize = AppTextSize.dense,
                         fontWeight = if (item.month == 12) FontWeight.Bold else FontWeight.Medium,
                         modifier = Modifier.width(14.dp),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -2877,8 +2878,8 @@ private fun AssetTrackingTwelveMonthSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("月次推移データグリッド (元本 vs 評価額)", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Text("毎月積立中", color = PrimaryEmerald, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                Text("月次推移データグリッド (元本 vs 評価額)", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                Text("毎月積立中", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(8.dp))
 
@@ -2888,7 +2889,7 @@ private fun AssetTrackingTwelveMonthSection(
             ) {
                 monthlySnapshots.filter { it.month % 3 == 0 }.forEach { item ->
                     val isLatest = item.month == latest.month
-                    val gainColor = if (item.gain >= 0) PrimaryEmerald else Color(0xFFF43F5E)
+                    val gainColor = if (item.gain >= 0) PrimaryEmerald else ErrorRed
                     Column(
                         modifier = Modifier
                             .weight(1f)
@@ -2904,7 +2905,7 @@ private fun AssetTrackingTwelveMonthSection(
                         Text(
                             text = if (isLatest) "${item.month}月最新" else "${item.month}月",
                             color = if (isLatest) PrimaryEmerald else OnSurface,
-                            fontSize = 10.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             softWrap = false
@@ -2913,14 +2914,14 @@ private fun AssetTrackingTwelveMonthSection(
                         Text(
                             text = if (isPrivacyActive) "元: ••••" else "元: ${formatAssetWan(item.cost)}",
                             color = OnSurfaceVariant,
-                            fontSize = 8.sp,
+                            fontSize = AppTextSize.dense,
                             maxLines = 1,
                             softWrap = false
                         )
                         Text(
                             text = if (isPrivacyActive) "時: ••••" else "時: ${formatAssetWan(item.value)}",
                             color = if (isLatest) PrimaryEmerald else OnSurface,
-                            fontSize = 8.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             softWrap = false
@@ -2929,7 +2930,7 @@ private fun AssetTrackingTwelveMonthSection(
                         Text(
                             text = if (isPrivacyActive) "••••" else "${if (item.gain >= 0) "+" else "−"}${formatAssetWan(kotlin.math.abs(item.gain))}",
                             color = gainColor,
-                            fontSize = 9.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.ExtraBold,
                             maxLines = 1,
                             softWrap = false

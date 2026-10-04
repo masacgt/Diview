@@ -52,6 +52,7 @@ import com.kurogane.dividend.ui.theme.PrimaryEmerald
 import com.kurogane.dividend.ui.theme.OnPrimary
 import com.kurogane.dividend.ui.theme.PrimaryEmeraldContainer
 import com.kurogane.dividend.ui.theme.SurfaceContainer
+import com.kurogane.dividend.ui.theme.AppTextSize
 import com.kurogane.dividend.ui.components.SearchSheet
 import com.kurogane.dividend.ui.components.AddHoldingSheet
 import com.kurogane.dividend.viewmodel.DividendViewModel
@@ -135,13 +136,13 @@ class MainActivity : ComponentActivity() {
                                     Column {
                                         Text(
                                             text = title,
-                                            fontSize = 15.sp,
+                                            fontSize = AppTextSize.section,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = OnSurface
                                         )
                                         Text(
                                             text = subtitle,
-                                            fontSize = 9.sp,
+                                            fontSize = AppTextSize.dense,
                                             fontWeight = FontWeight.Bold,
                                             color = OnSurfaceVariant,
                                             letterSpacing = 0.5.sp
@@ -174,8 +175,8 @@ class MainActivity : ComponentActivity() {
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column {
-                                        Text("設定・データ管理", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = OnSurface)
-                                        Text("SETTINGS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, letterSpacing = 0.5.sp)
+                                        Text("設定・データ管理", fontSize = AppTextSize.section, fontWeight = FontWeight.ExtraBold, color = OnSurface)
+                                        Text("SETTINGS", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, letterSpacing = 0.5.sp)
                                     }
                                 }
                             } else {
@@ -196,7 +197,7 @@ class MainActivity : ComponentActivity() {
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
                                         text = title,
-                                        fontSize = 16.sp,
+                                        fontSize = AppTextSize.section,
                                         fontWeight = FontWeight.Bold,
                                         color = OnSurface
                                     )
@@ -306,7 +307,7 @@ class MainActivity : ComponentActivity() {
                                             Spacer(modifier = Modifier.height(2.dp))
                                             Text(
                                                 text = label,
-                                                fontSize = 10.sp,
+                                                fontSize = AppTextSize.dense,
                                                 color = if (selected) PrimaryEmerald else OnSurfaceVariant,
                                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                                             )
@@ -452,16 +453,16 @@ class MainActivity : ComponentActivity() {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.Notifications, contentDescription = null, tint = PrimaryEmerald)
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("お知らせ・通知", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                        Text("お知らせ・通知", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section)
                                     }
                                 },
                                 text = {
                                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        Text("🔔 利回りシグナル検知", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                        Text("日本たばこ産業 (JT) の株価が目標買場利回り (4.80%) に接近しました。現在の実効利回りは 4.73% です。", color = OnSurfaceVariant, fontSize = 11.sp, lineHeight = 15.sp)
+                                        Text("🔔 利回りシグナル検知", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
+                                        Text("日本たばこ産業 (JT) の株価が目標買場利回り (4.80%) に接近しました。現在の実効利回りは 4.73% です。", color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
                                         HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
-                                        Text("🎉 ロードマップ進捗アップデート", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                        Text("STEP 5 「水道光熱費の全額自給 (月3万円)」を達成しました！次のクエスト「食費・日用品の全額自給 (月5万円)」に挑戦中です。", color = OnSurfaceVariant, fontSize = 11.sp, lineHeight = 15.sp)
+                                        Text("🎉 ロードマップ進捗アップデート", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
+                                        Text("STEP 5 「水道光熱費の全額自給 (月3万円)」を達成しました！次のクエスト「食費・日用品の全額自給 (月5万円)」に挑戦中です。", color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
                                     }
                                 },
                                 containerColor = SurfaceContainer,

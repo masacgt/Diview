@@ -75,7 +75,7 @@ fun ExDividendMatrixDialog(
                                 "12ヶ月配当密度ヒートマップ",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
-                                    fontSize = 10.sp
+                                    fontSize = AppTextSize.dense
                                 )
                             )
                         }
@@ -113,7 +113,7 @@ fun ExDividendMatrixDialog(
                             2 -> PrimaryEmerald.copy(alpha = 0.3f)
                             else -> SurfaceContainerHigh
                         }
-                        val textColor = if (strength >= 4) Color.Black else OnSurface
+                        val textColor = if (strength >= 4) OnPrimary else OnSurface
 
                         Column(
                             modifier = Modifier
@@ -128,7 +128,7 @@ fun ExDividendMatrixDialog(
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = textColor,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 9.sp
+                                    fontSize = AppTextSize.dense
                                 )
                             )
                         }
@@ -169,7 +169,7 @@ fun ExDividendMatrixDialog(
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("閉じる", color = Color.Black, fontWeight = FontWeight.Bold)
+                    Text("閉じる", color = OnPrimary, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -190,7 +190,7 @@ private fun MatrixRow(
     ) {
         Column {
             Text(title, style = MaterialTheme.typography.bodySmall.copy(color = OnSurface, fontWeight = FontWeight.SemiBold))
-            Text("$rightsMonth → $payoutTiming", style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontSize = 10.sp))
+            Text("$rightsMonth → $payoutTiming", style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontSize = AppTextSize.dense))
         }
         Text(
             expectedAmount,

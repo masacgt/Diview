@@ -181,12 +181,12 @@ fun SearchSheet(
                                 "銘柄検索・絞り込み",
                                 color = OnSurface,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
+                                fontSize = AppTextSize.body
                             )
                             Text(
                                 "保有銘柄の絞り込みまたは詳細分析を開く",
                                 color = OnSurfaceVariant,
-                                fontSize = 10.sp
+                                fontSize = AppTextSize.dense
                             )
                         }
                     }
@@ -217,8 +217,8 @@ fun SearchSheet(
                     placeholder = {
                         Text(
                             "銘柄名・コード・ティッカー (例: 7203, トヨタ, AAPL)",
-                            color = OnSurfaceVariant.copy(alpha = 0.5f),
-                            fontSize = 11.sp
+                            color = OnSurfaceVariant,
+                            fontSize = AppTextSize.dense
                         )
                     },
                     leadingIcon = {
@@ -279,9 +279,9 @@ fun SearchSheet(
                         ) {
                             Text(
                                 text = catLabel,
-                                color = if (active) OnPrimary else OnSurfaceVariant,
+                                color = if (active) OnPrimaryContainer else OnSurfaceVariant,
                                 fontWeight = if (active) FontWeight.Bold else FontWeight.SemiBold,
-                                fontSize = 11.sp
+                                fontSize = AppTextSize.dense
                             )
                         }
                     }
@@ -302,7 +302,7 @@ fun SearchSheet(
                         Text(
                             "注目の高配当・主力銘柄",
                             color = OnSurfaceVariant,
-                            fontSize = 10.sp,
+                            fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -328,7 +328,7 @@ fun SearchSheet(
                                 Text(
                                     tag,
                                     color = PrimaryEmerald,
-                                    fontSize = 11.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
@@ -345,13 +345,13 @@ fun SearchSheet(
                     Text(
                         if (isSearching) "Cloudflare銘柄マスターを検索中…" else "候補銘柄 (${filteredCandidates.size}件)",
                         color = OnSurface,
-                        fontSize = 12.sp,
+                        fontSize = AppTextSize.caption,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         "タップで銘柄詳細を表示",
                         color = PrimaryEmerald,
-                        fontSize = 11.sp,
+                        fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -386,7 +386,7 @@ fun SearchSheet(
                                     stock.code,
                                     color = OnSurface,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontFamily = FontFamily.Monospace
                                 )
                             }
@@ -399,12 +399,12 @@ fun SearchSheet(
                                     stock.name,
                                     color = OnSurface,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
+                                    fontSize = AppTextSize.body
                                 )
                                 Text(
                                     stock.desc,
                                     color = OnSurfaceVariant,
-                                    fontSize = 10.sp
+                                    fontSize = AppTextSize.dense
                                 )
                             }
 
@@ -414,14 +414,14 @@ fun SearchSheet(
                                     stock.price,
                                     color = OnSurface,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
+                                    fontSize = AppTextSize.body,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
                                     if (stock.yieldRate == "再投資型") "再投資型" else "利回り ${stock.yieldRate}",
                                     color = if (stock.yieldRate == "再投資型") OnSurfaceVariant else PrimaryEmerald,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
+                                    fontSize = AppTextSize.dense
                                 )
                             }
                         }
@@ -441,7 +441,7 @@ fun SearchSheet(
                         "閉じる",
                         color = OnSurface,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
+                        fontSize = AppTextSize.body
                     )
                 }
             }

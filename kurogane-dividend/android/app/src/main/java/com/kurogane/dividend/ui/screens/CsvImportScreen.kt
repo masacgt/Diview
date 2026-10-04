@@ -93,7 +93,7 @@ fun CsvImportScreen(
             item {
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurfaceContainer).padding(4.dp)) {
                     listOf("csv" to "証券CSV", "dvm" to "DVMバックアップ").forEach { (id, label) ->
-                        Text(label, Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(if (mode == id) PrimaryEmerald else Color.Transparent).clickable { mode = id; error = null }.padding(11.dp), color = if (mode == id) Color.Black else OnSurfaceVariant, fontWeight = FontWeight.Bold)
+                        Text(label, Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(if (mode == id) PrimaryEmerald else Color.Transparent).clickable { mode = id; error = null }.padding(11.dp), color = if (mode == id) OnPrimary else OnSurfaceVariant, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -102,7 +102,7 @@ fun CsvImportScreen(
                     Text("証券会社", color = OnSurface, fontWeight = FontWeight.Bold)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         CsvBroker.entries.forEach { item ->
-                            Text(item.label, Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(if (broker == item) SurfaceContainerHighest else SurfaceContainer).clickable { broker = item; csvResult = null }.padding(vertical = 11.dp, horizontal = 4.dp), color = if (broker == item) PrimaryEmerald else OnSurface, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(item.label, Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(if (broker == item) SurfaceContainerHighest else SurfaceContainer).clickable { broker = item; csvResult = null }.padding(vertical = 11.dp, horizontal = 4.dp), color = if (broker == item) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -119,7 +119,7 @@ fun CsvImportScreen(
                                 Text(label, color = OnSurface)
                             }
                         }
-                        if (result.errors.isNotEmpty()) Text(result.errors.joinToString(), color = Color(0xFFFF8080))
+                        if (result.errors.isNotEmpty()) Text(result.errors.joinToString(), color = ErrorRed)
                     }
                     itemsIndexed(result.rows) { index, row ->
                         val checked = index in selectedRowIndexes
@@ -128,7 +128,7 @@ fun CsvImportScreen(
                                 Checkbox(checked = checked, onCheckedChange = { value -> if (value && index !in selectedRowIndexes) selectedRowIndexes.add(index) else if (!value) selectedRowIndexes.remove(index) })
                                 Column(Modifier.weight(1f)) {
                                     Text("${if (row.isFund) "投資信託" else row.code}  ${row.name}", color = OnSurface, fontWeight = FontWeight.Bold)
-                                    Text("数量 ${row.shares ?: 0} ・ 取得単価 ¥${row.averageCost ?: 0.0}" + (row.account?.let { " ・ $it" } ?: ""), color = OnSurfaceVariant, fontSize = 11.sp)
+                                    Text("数量 ${row.shares ?: 0} ・ 取得単価 ¥${row.averageCost ?: 0.0}" + (row.account?.let { " ・ $it" } ?: ""), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                                 if (row.matchedName != null) Icon(Icons.Default.CheckCircle, null, tint = PrimaryEmerald)
                             }
@@ -137,8 +137,8 @@ fun CsvImportScreen(
                     if (result.unmatchedFunds.isNotEmpty()) item {
                         Card(colors = CardDefaults.cardColors(containerColor = SurfaceContainer), shape = RoundedCornerShape(12.dp)) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("照合できなかった投資信託 (${result.unmatchedFunds.size})", color = Color(0xFFFFB4AB), fontWeight = FontWeight.Bold)
-                                result.unmatchedFunds.forEach { Text("・${it.sourceName}", color = OnSurfaceVariant, fontSize = 12.sp) }
+                                Text("照合できなかった投資信託 (${result.unmatchedFunds.size})", color = ErrorRed, fontWeight = FontWeight.Bold)
+                                result.unmatchedFunds.forEach { Text("・${it.sourceName}", color = OnSurfaceVariant, fontSize = AppTextSize.caption) }
                             }
                         }
                     }
@@ -146,7 +146,7 @@ fun CsvImportScreen(
                         Button(onClick = {
                             val chosen = result.rows.filterIndexed { index, _ -> index in selectedRowIndexes }
                             if (chosen.isEmpty()) error = "取り込む銘柄を選択してください" else { onImportCsv(chosen, selectedFields.toSet()); complete = true }
-                        }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)) { Text(if (complete) "取込済み" else "選択した銘柄を取り込む", color = Color.Black, fontWeight = FontWeight.Bold) }
+                        }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)) { Text(if (complete) "取込済み" else "選択した銘柄を取り込む", color = OnPrimary, fontWeight = FontWeight.Bold) }
                     }
                 }
             } else {
@@ -156,19 +156,19 @@ fun CsvImportScreen(
                     Card(colors = CardDefaults.cardColors(containerColor = SurfaceContainer), shape = RoundedCornerShape(12.dp)) {
                         Column(Modifier.padding(14.dp)) {
                             Text("${backup.kind.label}　${backup.itemCount}件", color = OnSurface, fontWeight = FontWeight.Bold)
-                            Text(dvmFileNames[backup.kind.name].orEmpty(), color = OnSurfaceVariant, fontSize = 11.sp)
+                            Text(dvmFileNames[backup.kind.name].orEmpty(), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                             if (backup.kind == DvmBackupKind.STOCKS) backup.stocks.take(30).forEach { stock ->
-                                Text("${stock.code}  ${stock.name}  ${stock.shares.toInt()}株", color = OnSurfaceVariant, fontSize = 11.sp)
+                                Text("${stock.code}  ${stock.name}  ${stock.shares.toInt()}株", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                             }
                         }
                     }
                 }
                 if (dvmFiles.isNotEmpty()) item {
-                    Button(onClick = { onImportDvm(dvmFiles); complete = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)) { Text(if (complete) "端末内に保存しました" else "確認したバックアップを保存", color = Color.Black, fontWeight = FontWeight.Bold) }
+                    Button(onClick = { onImportDvm(dvmFiles); complete = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)) { Text(if (complete) "端末内に保存しました" else "確認したバックアップを保存", color = OnPrimary, fontWeight = FontWeight.Bold) }
                 }
             }
-            error?.let { item { Text(it, color = Color(0xFFFF8080), fontSize = 12.sp) } }
-            item { Text("ファイルの解析・銘柄照合・保存は端末内で行われ、Cloudflareへ送信されません。", color = OnSurfaceVariant, fontSize = 10.sp) }
+            error?.let { item { Text(it, color = ErrorRed, fontSize = AppTextSize.caption) } }
+            item { Text("ファイルの解析・銘柄照合・保存は端末内で行われ、Cloudflareへ送信されません。", color = OnSurfaceVariant, fontSize = AppTextSize.dense) }
         }
     }
 }
@@ -178,7 +178,7 @@ private fun ImportCard(onClick: () -> Unit, title: String, subtitle: String, ico
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = SurfaceContainer), shape = RoundedCornerShape(14.dp)) {
         Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Icon(icon, null, tint = PrimaryEmerald, modifier = Modifier.size(32.dp))
-            Column { Text(title, color = OnSurface, fontWeight = FontWeight.Bold); Text(subtitle, color = OnSurfaceVariant, fontSize = 10.sp) }
+            Column { Text(title, color = OnSurface, fontWeight = FontWeight.Bold); Text(subtitle, color = OnSurfaceVariant, fontSize = AppTextSize.dense) }
         }
     }
 }

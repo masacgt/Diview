@@ -171,8 +171,8 @@ fun WatchlistScreen(
                                             .background(PrimaryEmerald)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("買場到達 ${readyCount}銘柄", color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                    Text(" / ${watchlist.size}銘柄監視中", color = OnSurfaceVariant, fontSize = 11.sp)
+                                    Text("買場到達 ${readyCount}銘柄", color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
+                                    Text(" / ${watchlist.size}銘柄監視中", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
 
@@ -183,7 +183,7 @@ fun WatchlistScreen(
                                     .background(BackgroundDark)
                                     .padding(horizontal = 8.dp, vertical = 2.dp)
                             ) {
-                                Text("買場アラート", fontSize = 10.sp, color = OnSurfaceVariant)
+                                Text("買場アラート", fontSize = AppTextSize.dense, color = OnSurfaceVariant)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Switch(
                                     checked = true,
@@ -208,12 +208,12 @@ fun WatchlistScreen(
                                     .padding(10.dp)
                             ) {
                                 Column {
-                                    Text("平均現在利回り", color = OnSurfaceVariant, fontSize = 10.sp)
+                                    Text("平均現在利回り", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(String.format("%.2f", averageYield), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontFamily = FontFamily.Monospace)
-                                        Text("%", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
+                                        Text(String.format("%.2f", averageYield), fontSize = AppTextSize.metric, fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontFamily = FontFamily.Monospace)
+                                        Text("%", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
                                     }
-                                    Text("東証平均 +1.8%", color = PrimaryEmerald, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    Text("東証平均 +1.8%", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                 }
                             }
 
@@ -225,13 +225,13 @@ fun WatchlistScreen(
                                     .padding(10.dp)
                             ) {
                                 Column {
-                                    Text("配当ポテンシャル", color = OnSurfaceVariant, fontSize = 10.sp)
+                                    Text("配当ポテンシャル", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("¥", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = OnSurface)
-                                        Text(currencyFormat.format(potentialDiv.toLong()), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = OnSurface, fontFamily = FontFamily.Monospace)
-                                        Text("/年", fontSize = 9.sp, color = OnSurfaceVariant)
+                                        Text("¥", fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, color = OnSurface)
+                                        Text(currencyFormat.format(potentialDiv.toLong()), fontSize = AppTextSize.metric, fontWeight = FontWeight.Bold, color = OnSurface, fontFamily = FontFamily.Monospace)
+                                        Text("/年", fontSize = AppTextSize.dense, color = OnSurfaceVariant)
                                     }
-                                    Text("各1単元保有試算 (${heldCount}銘柄保有済)", color = OnSurfaceVariant, fontSize = 9.sp)
+                                    Text("各1単元保有試算 (${heldCount}銘柄保有済)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
                         }
@@ -266,8 +266,8 @@ fun WatchlistScreen(
                             ) {
                                 Text(
                                     label,
-                                    color = if (isSelected) Color.Black else SoftGray,
-                                    fontSize = 11.sp,
+                                    color = if (isSelected) OnPrimary else SoftGray,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -306,7 +306,7 @@ fun WatchlistScreen(
                             Text(
                                 "$currentLabel ($currentDirLabel)",
                                 color = SoftGray,
-                                fontSize = 11.sp,
+                                fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.width(2.dp))
@@ -338,7 +338,7 @@ fun WatchlistScreen(
                             Text(
                                 "銘柄追加",
                                 color = PrimaryEmerald,
-                                fontSize = 11.sp,
+                                fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -351,7 +351,7 @@ fun WatchlistScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("監視銘柄コード・銘柄名・セクターで検索", color = SoftGray, fontSize = 11.sp) },
+                    placeholder = { Text("監視銘柄コード・銘柄名・セクターで検索", color = SoftGray, fontSize = AppTextSize.dense) },
                     singleLine = true,
                     leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = null, tint = SoftGray, modifier = Modifier.size(16.dp))
@@ -404,7 +404,7 @@ fun WatchlistScreen(
                 val badgeColor = if (isReached) {
                     PrimaryEmerald
                 } else if (isClose) {
-                    Color(0xFFF59E0B) // Amber
+                    AccentAmber // Amber
                 } else if (currentYield >= 4.0) {
                     Color(0xFF8B5CF6) // Purple
                 } else {
@@ -437,7 +437,7 @@ fun WatchlistScreen(
                                 Text(
                                     dynamicBadge,
                                     color = badgeColor,
-                                    fontSize = 9.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -458,7 +458,7 @@ fun WatchlistScreen(
                                     Text(
                                         stock.code,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        fontSize = 10.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isReached) OnPrimary else OnSurface,
                                         fontFamily = FontFamily.Monospace
@@ -470,7 +470,7 @@ fun WatchlistScreen(
                                     modifier = Modifier.weight(1f),
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
-                                    fontSize = 14.sp,
+                                    fontSize = AppTextSize.body,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -481,15 +481,15 @@ fun WatchlistScreen(
                                     "${stock.currency}${stock.price.toInt()}",
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
-                                    fontSize = 15.sp,
+                                    fontSize = AppTextSize.section,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     stock.dailyChange,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (stock.isPositive) PrimaryEmerald else Color(0xFFFCA5A5),
-                                    fontSize = 10.sp,
+                                    color = if (stock.isPositive) PrimaryEmerald else ErrorRed,
+                                    fontSize = AppTextSize.dense,
                                     maxLines = 1
                                 )
                             }
@@ -513,13 +513,13 @@ fun WatchlistScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        Text("現在利回り", color = OnSurfaceVariant, fontSize = 10.sp, maxLines = 1)
+                                        Text("現在利回り", color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = 1)
                                         Spacer(modifier = Modifier.width(5.dp))
                                         Text(
                                             "${stock.currentYield}%",
                                             fontWeight = FontWeight.Bold,
                                             color = if (stock.isReady) PrimaryEmerald else OnSurface,
-                                            fontSize = 14.sp,
+                                            fontSize = AppTextSize.body,
                                             fontFamily = FontFamily.Monospace
                                         )
                                         Icon(
@@ -537,7 +537,7 @@ fun WatchlistScreen(
                                             .background(SurfaceContainer)
                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
-                                        Text("目標:", color = OnSurfaceVariant, fontSize = 9.sp, maxLines = 1)
+                                        Text("目標:", color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = 1)
                                         Spacer(modifier = Modifier.width(4.dp))
                                         IconButton(
                                             onClick = { viewModel.updateTargetYield(stock.code, -0.05) },
@@ -549,7 +549,7 @@ fun WatchlistScreen(
                                             "${stock.targetYield}%",
                                             color = PrimaryEmerald,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp,
+                                            fontSize = AppTextSize.caption,
                                             fontFamily = FontFamily.Monospace,
                                             modifier = Modifier.padding(horizontal = 4.dp)
                                         )
@@ -572,13 +572,13 @@ fun WatchlistScreen(
                                     Text(
                                         "${String.format(Locale.JAPAN, "%.1f", yieldAchievement)}% 達成",
                                         color = OnSurface,
-                                        fontSize = 11.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
                                         if (isReached) "目標達成" else "目標まで あと ${String.format(Locale.JAPAN, "%.2f", stock.targetYield - currentYield)}%",
                                         color = OnSurfaceVariant,
-                                        fontSize = 10.sp,
+                                        fontSize = AppTextSize.dense,
                                         maxLines = 1
                                     )
                                 }
@@ -604,7 +604,7 @@ fun WatchlistScreen(
                                         Text(
                                             "買場目安: ${stock.currency}${stock.targetPrice.toInt()} ($targetPriceGapText)",
                                             color = OnSurfaceVariant,
-                                            fontSize = 9.sp,
+                                            fontSize = AppTextSize.dense,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
@@ -618,7 +618,7 @@ fun WatchlistScreen(
                                             "1株配当 ${stock.currency}${stock.dps}",
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                                             color = PrimaryEmerald,
-                                            fontSize = 9.sp,
+                                            fontSize = AppTextSize.dense,
                                             fontWeight = FontWeight.Bold,
                                             maxLines = 1
                                         )
@@ -639,12 +639,12 @@ fun WatchlistScreen(
                                 onClick = { onOpenAddHolding(stock.code) },
                                 modifier = Modifier.weight(1f).height(38.dp),
                                 shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald, contentColor = Color.Black),
+                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald, contentColor = OnPrimary),
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                             ) {
-                                Icon(Icons.Default.AddCircle, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.Black)
+                                Icon(Icons.Default.AddCircle, contentDescription = null, modifier = Modifier.size(14.dp), tint = OnPrimary)
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("保有株に登録", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                Text("保有株に登録", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnPrimary)
                             }
 
                             IconButton(
@@ -674,7 +674,7 @@ fun WatchlistScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainer, contentColor = OnSurface),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                             ) {
-                                Text("詳細", fontSize = 11.sp, color = OnSurface)
+                                Text("詳細", fontSize = AppTextSize.dense, color = OnSurface)
                                 Spacer(modifier = Modifier.width(2.dp))
                                 Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(14.dp), tint = OnSurface)
                             }
@@ -708,7 +708,7 @@ fun WatchlistScreen(
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
-                                    fontSize = 13.sp
+                                    fontSize = AppTextSize.body
                                 )
                             )
                         }
@@ -719,7 +719,7 @@ fun WatchlistScreen(
                             text = "各1単元（日本株100株 / 米国株1株）を現在の目標買場で揃えた場合、初期投資概算 ¥${currencyFormat.format(totalTargetInvestment.toLong())} で年間 +¥${currencyFormat.format(potentialDiv.toLong())}（平均利回り ${String.format("%.2f", targetAverageYield)}%）の不労所得基盤が完成します。",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = OnSurfaceVariant,
-                                fontSize = 11.sp,
+                                fontSize = AppTextSize.dense,
                                 lineHeight = 16.sp
                             )
                         )
@@ -742,7 +742,7 @@ fun WatchlistScreen(
                             ) {
                                 Icon(Icons.Default.CalendarToday, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(13.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("権利落ち月マトリクス", color = OnSurface, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                                Text("権利落ち月マトリクス", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
 
                             Button(
@@ -755,9 +755,9 @@ fun WatchlistScreen(
                                     .height(38.dp),
                                 contentPadding = PaddingValues(0.dp)
                             ) {
-                                Icon(Icons.Default.BarChart, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(13.dp))
+                                Icon(Icons.Default.BarChart, contentDescription = null, tint = SkyBlue, modifier = Modifier.size(13.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("受取月別グラフ試算", color = OnSurface, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                                Text("受取月別グラフ試算", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -777,12 +777,12 @@ fun WatchlistScreen(
                         .fillMaxWidth()
                         .height(48.dp)
                 ) {
-                    Icon(Icons.Default.PlaylistAdd, contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.PlaylistAdd, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         "新しい銘柄をウォッチリストに追加",
-                        color = Color.Black,
-                        fontSize = 12.5.sp,
+                        color = OnPrimary,
+                        fontSize = AppTextSize.caption,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -823,7 +823,7 @@ fun WatchlistScreen(
                         Text(
                             "監視銘柄の並び替え条件",
                             color = OnSurface,
-                            fontSize = 14.sp,
+                            fontSize = AppTextSize.body,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -845,7 +845,7 @@ fun WatchlistScreen(
                     Text(
                         "順序",
                         color = SoftGray,
-                        fontSize = 11.sp,
+                        fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
                     Row(
@@ -874,14 +874,14 @@ fun WatchlistScreen(
                                     Icon(
                                         if (dir == "desc") Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
                                         contentDescription = null,
-                                        tint = if (isSelected) Color.Black else SoftGray,
+                                        tint = if (isSelected) OnPrimary else SoftGray,
                                         modifier = Modifier.size(12.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
                                         label,
-                                        color = if (isSelected) Color.Black else SoftGray,
-                                        fontSize = 11.sp,
+                                        color = if (isSelected) OnPrimary else SoftGray,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -895,7 +895,7 @@ fun WatchlistScreen(
                     Text(
                         "ソート項目",
                         color = SoftGray,
-                        fontSize = 11.sp,
+                        fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
                     val criteriaOptions = listOf(
@@ -933,7 +933,7 @@ fun WatchlistScreen(
                                 Text(
                                     label,
                                     color = if (isSelected) OnSurface else SoftGray,
-                                    fontSize = 11.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -965,7 +965,7 @@ fun WatchlistScreen(
                             "キャンセル",
                             color = OnSurface,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
+                            fontSize = AppTextSize.caption
                         )
                     }
                     Button(
@@ -976,9 +976,9 @@ fun WatchlistScreen(
                     ) {
                         Text(
                             "適用する",
-                            color = Color.Black,
+                            color = OnPrimary,
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 12.sp
+                            fontSize = AppTextSize.caption
                         )
                     }
                 }
@@ -1021,7 +1021,7 @@ fun WatchlistScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("権利落ち月マトリクス", color = OnSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text("権利落ち月マトリクス", color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
@@ -1031,7 +1031,7 @@ fun WatchlistScreen(
                                         "ヒートマップ分析",
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                         color = PrimaryEmerald,
-                                        fontSize = 8.sp,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -1039,7 +1039,7 @@ fun WatchlistScreen(
                             Text(
                                 "監視4銘柄の想定権利落ちスケジュールと配当シミュレーション",
                                 color = OnSurfaceVariant,
-                                fontSize = 9.5.sp
+                                fontSize = AppTextSize.dense
                             )
                         }
                     }
@@ -1072,13 +1072,13 @@ fun WatchlistScreen(
                             .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
                             .padding(10.dp)
                     ) {
-                        Text("想定配当回数", color = OnSurfaceVariant, fontSize = 8.5.sp)
+                        Text("想定配当回数", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("10", color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                            Text("回/年", color = OnSurface, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text("10", color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            Text("回/年", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
-                        Text("日6回 + 米4回 (想定)", color = PrimaryEmerald, fontSize = 8.sp)
+                        Text("日6回 + 米4回 (想定)", color = PrimaryEmerald, fontSize = AppTextSize.dense)
                     }
 
                     // Card 2
@@ -1090,10 +1090,10 @@ fun WatchlistScreen(
                             .border(1.dp, PrimaryEmerald.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
                             .padding(10.dp)
                     ) {
-                        Text("次回権利落ち", color = OnSurfaceVariant, fontSize = 8.5.sp)
+                        Text("次回権利落ち", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text("3月27日", color = PrimaryEmerald, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                        Text("あと42日 (買付検討期)", color = OnSurfaceVariant, fontSize = 8.sp)
+                        Text("3月27日", color = PrimaryEmerald, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold)
+                        Text("あと42日 (買付検討期)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
 
                     // Card 3
@@ -1105,10 +1105,10 @@ fun WatchlistScreen(
                             .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
                             .padding(10.dp)
                     ) {
-                        Text("潜在配当規模 (各1単元)", color = OnSurfaceVariant, fontSize = 8.5.sp)
+                        Text("潜在配当規模 (各1単元)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text("¥42,800", color = OnSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                        Text("想定利回り 3.84%", color = OnSurfaceVariant, fontSize = 8.sp)
+                        Text("¥42,800", color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        Text("想定利回り 3.84%", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
                 }
 
@@ -1121,7 +1121,7 @@ fun WatchlistScreen(
                     Text(
                         "12ヶ月配当密度ヒートマップマトリクス",
                         color = OnSurface,
-                        fontSize = 11.sp,
+                        fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
 
@@ -1130,11 +1130,11 @@ fun WatchlistScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        Text("少", color = OnSurfaceVariant, fontSize = 8.sp)
+                        Text("少", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Box(modifier = Modifier.size(6.dp).background(BorderColor))
                         Box(modifier = Modifier.size(6.dp).background(Color(0x3310B981)))
                         Box(modifier = Modifier.size(6.dp).background(PrimaryEmeraldContainer))
-                        Text("多", color = OnSurfaceVariant, fontSize = 8.sp)
+                        Text("多", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
                 }
 
@@ -1149,13 +1149,13 @@ fun WatchlistScreen(
                         Row(
                             modifier = Modifier.background(SurfaceContainerHigh).padding(vertical = 6.dp)
                         ) {
-                            Text("銘柄", modifier = Modifier.width(80.dp).padding(start = 8.dp), color = OnSurfaceVariant, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text("銘柄", modifier = Modifier.width(80.dp).padding(start = 8.dp), color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             (1..12).forEach { m ->
                                 Text(
                                     text = "${m}月" + if (m == 3 || m == 9) "\n(権利落)" else if (m == 6 || m == 12) "\n(入金)" else "",
                                     modifier = Modifier.width(52.dp),
                                     color = if (m == 3 || m == 9 || m == 6 || m == 12) PrimaryEmerald else OnSurfaceVariant,
-                                    fontSize = 8.5.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center
                                 )
@@ -1215,7 +1215,7 @@ fun WatchlistScreen(
                             modifier = Modifier.background(SurfaceContainerHigh.copy(alpha = 0.5f)).padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("想定受取計\n(買付時)", modifier = Modifier.width(80.dp).padding(start = 8.dp), color = OnSurface, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text("想定受取計\n(買付時)", modifier = Modifier.width(80.dp).padding(start = 8.dp), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             (1..12).forEach { m ->
                                 val sumText = when (m) {
                                     2, 5, 8, 11 -> "¥385"
@@ -1226,7 +1226,7 @@ fun WatchlistScreen(
                                     text = sumText,
                                     modifier = Modifier.width(52.dp),
                                     color = if (sumText != "-") OnSurface else OnSurfaceVariant,
-                                    fontSize = 9.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center
                                 )
@@ -1254,18 +1254,18 @@ fun WatchlistScreen(
                                 Text(
                                     "権利落ち・受取平準化アナリティクス",
                                     color = OnSurface,
-                                    fontSize = 11.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
-                                color = Color(0xFFC084FC).copy(alpha = 0.15f)
+                                color = SecondaryIndigo.copy(alpha = 0.15f)
                             ) {
                                 Text(
                                     "偏重度: 82%",
-                                    color = Color(0xFFC084FC),
-                                    fontSize = 8.sp,
+                                    color = SecondaryIndigo,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
@@ -1278,7 +1278,7 @@ fun WatchlistScreen(
                             text = "監視中の日本株3銘柄は 3月・9月末に権利落ちが集中しており、実際に購入した場合の配当受取は 6月・12月に偏ります。米国株（AAPL）をポートフォリオに組み入れることで 2/5/8/11月のインカム空白月を補完できます。",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = OnSurfaceVariant,
-                                fontSize = 10.sp,
+                                fontSize = AppTextSize.dense,
                                 lineHeight = 14.sp
                             )
                         )
@@ -1291,8 +1291,8 @@ fun WatchlistScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("● 日株 6/12月想定計: ¥25,480", color = PrimaryEmerald, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
-                            Text("● 米株 想定年間計: ¥1,540", color = Color(0xFFC084FC), fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
+                            Text("● 日株 6/12月想定計: ¥25,480", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text("● 米株 想定年間計: ¥1,540", color = SecondaryIndigo, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -1308,7 +1308,7 @@ fun WatchlistScreen(
                 ) {
                     Icon(Icons.Default.Close, contentDescription = null, tint = OnSurface, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("マトリクスを閉じる", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("マトリクスを閉じる", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -1349,17 +1349,17 @@ fun WatchlistScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("受取月別グラフ試算", color = OnSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text("受取月別グラフ試算", color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
-                                    color = Color(0xFF38BDF8).copy(alpha = 0.15f)
+                                    color = SkyBlue.copy(alpha = 0.15f)
                                 ) {
                                     Text(
                                         "平準化シミュレーション",
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        color = Color(0xFF38BDF8),
-                                        fontSize = 8.sp,
+                                        color = SkyBlue,
+                                        fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -1367,7 +1367,7 @@ fun WatchlistScreen(
                             Text(
                                 "監視4銘柄の入金タイミング・キャッシュフロー偏重分析",
                                 color = OnSurfaceVariant,
-                                fontSize = 9.5.sp
+                                fontSize = AppTextSize.dense
                             )
                         }
                     }
@@ -1400,9 +1400,9 @@ fun WatchlistScreen(
                             .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
                             .padding(10.dp)
                     ) {
-                        Text("年間受取予定", color = OnSurfaceVariant, fontSize = 8.5.sp)
+                        Text("年間受取予定", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text("¥42,800/年", color = PrimaryEmerald, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        Text("¥42,800/年", color = PrimaryEmerald, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                     }
 
                     // Card 2
@@ -1414,9 +1414,9 @@ fun WatchlistScreen(
                             .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
                             .padding(10.dp)
                     ) {
-                        Text("月平均手取り", color = OnSurfaceVariant, fontSize = 8.5.sp)
+                        Text("月平均手取り", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text("¥3,567/月", color = OnSurface, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        Text("¥3,567/月", color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                     }
 
                     // Card 3
@@ -1428,9 +1428,9 @@ fun WatchlistScreen(
                             .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
                             .padding(10.dp)
                     ) {
-                        Text("⚠️ インカム空白", color = OnSurfaceVariant, fontSize = 8.5.sp)
+                        Text("⚠️ インカム空白", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text("4 ヶ月 (無収入)", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("4 ヶ月 (無収入)", color = ErrorRed, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -1450,16 +1450,16 @@ fun WatchlistScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.PieChart, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("四半期キャッシュフロー対比", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("四半期キャッシュフロー対比", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
-                                color = Color(0xFFC084FC).copy(alpha = 0.15f)
+                                color = SecondaryIndigo.copy(alpha = 0.15f)
                             ) {
                                 Text(
                                     "Q2・Q4偏重 85.0%",
-                                    color = Color(0xFFC084FC),
-                                    fontSize = 8.5.sp,
+                                    color = SecondaryIndigo,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
@@ -1476,9 +1476,9 @@ fun WatchlistScreen(
                                 .clip(CircleShape)
                                 .background(BorderColor)
                         ) {
-                            Box(modifier = Modifier.fillMaxHeight().weight(0.075f).background(Color(0xFFC084FC))) // Q1
+                            Box(modifier = Modifier.fillMaxHeight().weight(0.075f).background(SecondaryIndigo)) // Q1
                             Box(modifier = Modifier.fillMaxHeight().weight(0.425f).background(PrimaryEmerald)) // Q2
-                            Box(modifier = Modifier.fillMaxHeight().weight(0.075f).background(Color(0xFFC084FC))) // Q3
+                            Box(modifier = Modifier.fillMaxHeight().weight(0.075f).background(SecondaryIndigo)) // Q3
                             Box(modifier = Modifier.fillMaxHeight().weight(0.425f).background(PrimaryEmerald)) // Q4
                         }
 
@@ -1497,9 +1497,9 @@ fun WatchlistScreen(
                                     .padding(8.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text("Q1 (1-3月)", color = OnSurfaceVariant, fontSize = 8.5.sp)
-                                Text("¥3,200", color = OnSurface, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
-                                Text("7.5%", color = OnSurfaceVariant, fontSize = 8.sp)
+                                Text("Q1 (1-3月)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                Text("¥3,200", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text("7.5%", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                             }
 
                             // Q2 Box - Highlighted Emerald
@@ -1512,9 +1512,9 @@ fun WatchlistScreen(
                                     .padding(8.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text("Q2 (4-6月) 🟢", color = PrimaryEmerald, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
-                                Text("¥18,200", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text("42.5%", color = PrimaryEmerald, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+                                Text("Q2 (4-6月) 🟢", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text("¥18,200", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text("42.5%", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
 
                             // Q3 Box
@@ -1526,9 +1526,9 @@ fun WatchlistScreen(
                                     .padding(8.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text("Q3 (7-9月)", color = OnSurfaceVariant, fontSize = 8.5.sp)
-                                Text("¥3,200", color = OnSurface, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
-                                Text("7.5%", color = OnSurfaceVariant, fontSize = 8.sp)
+                                Text("Q3 (7-9月)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                Text("¥3,200", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text("7.5%", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                             }
 
                             // Q4 Box - Highlighted Emerald
@@ -1541,9 +1541,9 @@ fun WatchlistScreen(
                                     .padding(8.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text("Q4 (10-12月) 🟢", color = PrimaryEmerald, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
-                                Text("¥18,200", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text("42.5%", color = PrimaryEmerald, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+                                Text("Q4 (10-12月) 🟢", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text("¥18,200", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text("42.5%", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -1565,7 +1565,7 @@ fun WatchlistScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.GridOn, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("12ヶ月 受取配当カレンダー棒グラフ", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("12ヶ月 受取配当カレンダー棒グラフ", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
 
                             Row(
@@ -1573,11 +1573,11 @@ fun WatchlistScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmeraldContainer))
-                                Text("日株集中", color = OnSurfaceVariant, fontSize = 8.sp)
-                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFFC084FC)))
-                                Text("米株", color = OnSurfaceVariant, fontSize = 8.sp)
+                                Text("日株集中", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(SecondaryIndigo))
+                                Text("米株", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF475569)))
-                                Text("空白", color = OnSurfaceVariant, fontSize = 8.sp)
+                                Text("空白", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                             }
                         }
 
@@ -1586,6 +1586,7 @@ fun WatchlistScreen(
                         // Canvas Graph Custom drawing exactly as shown in Image 3
                         val calendarEmptyMonthColor = BorderColor
                         val calendarDividendColor = PrimaryEmeraldContainer
+                        val calendarUsColor = SecondaryIndigo
                         Canvas(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1599,8 +1600,8 @@ fun WatchlistScreen(
                             for (m in 1..12) {
                                 val monthLeft = spacing + (m - 1) * (barWidth + spacing)
                                 val (barVal, color) = when (m) {
-                                    2, 5, 8, 11 -> Pair(0.8f, Color(0xFFC084FC))
-                                    3, 9 -> Pair(2.4f, Color(0xFFC084FC))
+                                    2, 5, 8, 11 -> Pair(0.8f, calendarUsColor)
+                                    3, 9 -> Pair(2.4f, calendarUsColor)
                                     6, 12 -> Pair(17.4f, calendarDividendColor)
                                     else -> Pair(0f, Color.Transparent)
                                 }
@@ -1642,8 +1643,8 @@ fun WatchlistScreen(
                                     modifier = Modifier.weight(1f),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Text("$m", color = OnSurface, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    Text(label, color = if (label.startsWith("日")) PrimaryEmerald else OnSurfaceVariant, fontSize = 8.sp, fontWeight = FontWeight.Medium)
+                                    Text("$m", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                    Text(label, color = if (label.startsWith("日")) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Medium)
                                 }
                             }
                         }
@@ -1656,8 +1657,8 @@ fun WatchlistScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("日本株(3/9月期)は 6月・12月 入金", color = OnSurfaceVariant, fontSize = 9.sp)
-                            Text("⚠️ 空白月: 1, 4, 7, 10月", color = ErrorRed, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text("日本株(3/9月期)は 6月・12月 入金", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Text("⚠️ 空白月: 1, 4, 7, 10月", color = ErrorRed, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -1681,7 +1682,7 @@ fun WatchlistScreen(
                                 Text(
                                     "インカム空白月解消アドバイス",
                                     color = OnSurface,
-                                    fontSize = 11.sp,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -1691,8 +1692,8 @@ fun WatchlistScreen(
                             ) {
                                 Text(
                                     "平準化おすすめ",
-                                    color = Color(0xFFF59E0B),
-                                    fontSize = 8.sp,
+                                    color = AccentAmber,
+                                    fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
@@ -1705,7 +1706,7 @@ fun WatchlistScreen(
                             text = "1月・4月・7月・10月決算の高配当銘柄（積水ハウス等）やREITを追加すると、日本株特有の入金タイムラグを補完し、毎月途切れない配当キャッシュフローが完成します。",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = OnSurfaceVariant,
-                                fontSize = 10.sp,
+                                fontSize = AppTextSize.dense,
                                 lineHeight = 14.sp
                             )
                         )
@@ -1733,20 +1734,20 @@ fun WatchlistScreen(
                                             "1928",
                                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
                                             color = OnSurface,
-                                            fontSize = 9.sp,
+                                            fontSize = AppTextSize.dense,
                                             fontWeight = FontWeight.Bold,
                                             fontFamily = FontFamily.Monospace
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column {
-                                        Text("積水ハウス", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        Text("1月・7月決算（4月・10月受取）", color = OnSurfaceVariant, fontSize = 8.5.sp)
+                                        Text("積水ハウス", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                        Text("1月・7月決算（4月・10月受取）", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     }
                                 }
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("4.12%", color = PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
+                                    Text("4.12%", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
                                     Button(
                                         onClick = {
                                             viewModel.addHolding("1928", 100, 2200.0)
@@ -1757,9 +1758,9 @@ fun WatchlistScreen(
                                         modifier = Modifier.height(28.dp),
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                                     ) {
-                                        Icon(Icons.Default.PlaylistAdd, contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
+                                        Icon(Icons.Default.PlaylistAdd, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(12.dp))
                                         Spacer(modifier = Modifier.width(3.dp))
-                                        Text("空白月解消に追加", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        Text("空白月解消に追加", color = OnPrimary, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -1778,9 +1779,9 @@ fun WatchlistScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Tune, contentDescription = null, tint = OnSurfaceVariant, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("銘柄別 受取月寄与度", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("銘柄別 受取月寄与度", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("監視4銘柄", color = OnSurfaceVariant, fontSize = 9.sp)
+                            Text("監視4銘柄", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
 
                         Spacer(modifier = Modifier.height(6.dp))
@@ -1795,28 +1796,28 @@ fun WatchlistScreen(
                                     shape = RoundedCornerShape(4.dp),
                                     color = SurfaceContainerHighest
                                 ) {
-                                    Text("8316", modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp), color = OnSurface, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    Text("8316", modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                 }
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("三井住友FG", color = OnSurface, fontSize = 11.sp)
+                                Text("三井住友FG", color = OnSurface, fontSize = AppTextSize.dense)
                             }
 
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Text("¥13,000 / 年", color = OnSurfaceVariant, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                                Text("¥13,000 / 年", color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontFamily = FontFamily.Monospace)
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
                                     color = PrimaryEmerald.copy(alpha = 0.15f)
                                 ) {
-                                    Text("6月 50%", color = PrimaryEmerald, fontSize = 8.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
+                                    Text("6月 50%", color = PrimaryEmerald, fontSize = AppTextSize.dense, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
                                 }
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
                                     color = PrimaryEmerald.copy(alpha = 0.15f)
                                 ) {
-                                    Text("12月 50%", color = PrimaryEmerald, fontSize = 8.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
+                                    Text("12月 50%", color = PrimaryEmerald, fontSize = AppTextSize.dense, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
                                 }
                             }
                         }
@@ -1853,11 +1854,11 @@ private fun HeatmapRow(
                     code,
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                     color = OnSurfaceVariant,
-                    fontSize = 7.5.sp,
+                    fontSize = AppTextSize.dense,
                     fontFamily = FontFamily.Monospace
                 )
             }
-            Text(name, color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text(name, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
         }
 
         (1..12).forEach { m ->
@@ -1875,13 +1876,13 @@ private fun HeatmapRow(
                     Text(
                         text = cellData.first,
                         color = OnSurface,
-                        fontSize = 8.sp,
+                        fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold,
                         lineHeight = 11.sp,
                         textAlign = TextAlign.Center
                     )
                 } else {
-                    Text("-", color = OnSurfaceVariant, fontSize = 10.sp)
+                    Text("-", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 }
             }
         }
