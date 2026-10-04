@@ -45,6 +45,17 @@ data class CloudflarePopularStocksPage(
     val totalCount: Int
 )
 
+data class CloudflareMonthlyPrice(
+    val month: String,
+    val date: String,
+    val close: Double
+)
+
+data class CloudflareMonthlyPriceSeries(
+    val code: String,
+    val prices: List<CloudflareMonthlyPrice>
+)
+
 /** Public, read-only access to the app's Cloudflare D1/R2 data. No credentials belong in the APK. */
 class CloudflareMarketRepository(
     private val baseUrl: String = BuildConfig.DIVIEW_D1_API_BASE_URL
@@ -136,6 +147,39 @@ class CloudflareMarketRepository(
             nextOffset = root.optInt("next_offset", safeOffset + safeLimit),
             totalCount = root.optInt("total_count", safeOffset + safeLimit)
         )
+    }
+
+    /** Returns month-end closes from R2 for up to 20 listed Japanese securities. */
+    suspend fun fetchMonthlyPriceHistory(codes: List<String>, months: List<String>): List<CloudflareMonthlyPriceSeries> = withContext(Dispatchers.IO) {
+        val normalizedCodes = codes.map { it.trim().uppercase(java.util.Locale.ROOT).removeSuffix(".T") }.distinct()
+        require(normalizedCodes.isNotEmpty() && normalizedCodes.size <= 20 && normalizedCodes.all { it.matches(Regex("[A-Z0-9]{4}")) }) {
+            "銘柄コードは日本株20銘柄以内で指定してください"
+        }
+        val monthKeys = months.distinct()
+        require(monthKeys.isNotEmpty() && monthKeys.size <= 12 && monthKeys.all { it.matches(Regex("\\d{4}-(0[1-9]|1[0-2])")) }) {
+            "対象月は12か月以内のyyyy-MM形式で指定してください"
+        }
+        val encodedCodes = URLEncoder.encode(normalizedCodes.joinToString(","), Charsets.UTF_8.name())
+        val encodedMonths = URLEncoder.encode(monthKeys.joinToString(","), Charsets.UTF_8.name())
+        val root = getJson("/api/v1/monthly-price-history?codes=$encodedCodes&months=$encodedMonths")
+        val rows = root.optJSONArray("items") ?: return@withContext emptyList()
+        (0 until rows.length()).mapNotNull { index ->
+            val row = rows.optJSONObject(index) ?: return@mapNotNull null
+            val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT).removeSuffix(".T")
+            if (code !in normalizedCodes) return@mapNotNull null
+            val prices = row.optJSONArray("prices") ?: return@mapNotNull null
+            val monthlyPrices = (0 until prices.length()).mapNotNull { priceIndex ->
+                val point = prices.optJSONObject(priceIndex) ?: return@mapNotNull null
+                val month = point.optString("month")
+                val date = point.optString("date")
+                val close = point.numberOrNull("close") ?: return@mapNotNull null
+                if (month !in monthKeys || !date.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) || close <= 0.0 || !close.isFinite()) {
+                    return@mapNotNull null
+                }
+                CloudflareMonthlyPrice(month, date, close)
+            }
+            CloudflareMonthlyPriceSeries(code, monthlyPrices)
+        }
     }
 
     private fun getJson(path: String): JSONObject {

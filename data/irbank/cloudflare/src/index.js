@@ -809,6 +809,64 @@ export default {
       return response;
     }
 
+    if (url.pathname === '/api/v1/monthly-price-history') {
+      if (!env.MARKET_DATA) return json({ error: 'market_data_unavailable' }, 503);
+      const codes = [...new Set(String(url.searchParams.get('codes') || '')
+        .split(',')
+        .map(value => irbankR2Code(value.trim()))
+        .filter(Boolean))];
+      const months = [...new Set(String(url.searchParams.get('months') || '')
+        .split(',')
+        .map(value => value.trim())
+        .filter(value => /^\d{4}-(0[1-9]|1[0-2])$/.test(value)))];
+      if (codes.length === 0 || codes.length > 20 || months.length === 0 || months.length > 12) {
+        return json({ error: 'invalid_request' }, 400);
+      }
+
+      const todayParts = Object.fromEntries(new Intl.DateTimeFormat('en', {
+        timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit'
+      }).formatToParts(new Date()).map(part => [part.type, part.value]));
+      const today = `${todayParts.year}-${todayParts.month}-${todayParts.day}`;
+      const currentMonth = today.slice(0, 7);
+      const cutoffs = months.map(month => {
+        if (month >= currentMonth) return [month, today];
+        const nextMonth = new Date(`${month}-01T00:00:00.000Z`);
+        nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+        nextMonth.setUTCDate(0);
+        return [month, nextMonth.toISOString().slice(0, 10)];
+      });
+      const items = (await Promise.all(codes.map(async code => {
+        const object = await env.MARKET_DATA.get(`market/yfinance/securities/${code}.T.json`);
+        if (!object) return null;
+        const document = JSON.parse(await object.text());
+        const prices = document.price_history?.['1d'];
+        if (!Array.isArray(prices)) return null;
+        const splits = (document.actions?.stock_splits || [])
+          .map(item => ({ date: String(item?.date || ''), ratio: finiteNumber(item?.ratio) }))
+          .filter(item => item.date && item.ratio > 0);
+        const monthlyPrices = cutoffs.map(([month, cutoff]) => {
+          const point = prices.reduce((best, item) => {
+            const date = String(item?.date || '');
+            const close = finiteNumber(item?.close);
+            return date && date <= cutoff && close > 0 && (!best || date > best.date)
+              ? { date, close }
+              : best;
+          }, null);
+          if (!point) return null;
+          const splitFactor = splits
+            .filter(item => item.date > point.date && item.date <= today)
+            .reduce((factor, item) => factor * item.ratio, 1);
+          const close = point.close / splitFactor;
+          if (!(close > 0) || !Number.isFinite(close)) return null;
+          return { month, date: point.date, close };
+        }).filter(Boolean);
+        return { code, prices: monthlyPrices };
+      }))).filter(Boolean);
+      const response = json({ items, requested_months: months });
+      response.headers.set('cache-control', 'public, max-age=300');
+      return response;
+    }
+
     if (url.pathname === '/api/v1/search-catalog') {
       const object = await env.MARKET_DATA?.get('market/yfinance/search_catalog.json');
       if (!object) return json({ error: 'search_catalog_unavailable' }, 503);
