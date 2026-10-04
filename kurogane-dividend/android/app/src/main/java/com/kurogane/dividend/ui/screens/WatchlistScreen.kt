@@ -38,6 +38,26 @@ import com.kurogane.dividend.viewmodel.DividendViewModel
 import java.text.NumberFormat
 import java.util.Locale
 
+private fun sortWatchlist(
+    stocks: List<WatchlistStock>,
+    criteria: String,
+    direction: String
+): List<WatchlistStock> = stocks.sortedWith { a, b ->
+    val yieldA = (a.dps / a.price) * 100
+    val yieldB = (b.dps / b.price) * 100
+    val rateA = yieldA / a.targetYield
+    val rateB = yieldB / b.targetYield
+
+    val comparison = when (criteria) {
+        "ach" -> rateA.compareTo(rateB)
+        "yield" -> yieldA.compareTo(yieldB)
+        "price" -> a.price.compareTo(b.price)
+        else -> a.code.compareTo(b.code)
+    }
+
+    if (direction == "desc") -comparison else comparison
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WatchlistScreen(
@@ -86,6 +106,9 @@ fun WatchlistScreen(
     var showSortBottomSheet by remember { mutableStateOf(false) }
     var sortCriteria by remember { mutableStateOf("ach") } // "ach", "yield", "price", "code"
     var sortDirection by remember { mutableStateOf("desc") } // "asc", "desc"
+    var draftSortCriteria by remember { mutableStateOf("ach") }
+    var draftSortDirection by remember { mutableStateOf("desc") }
+    var appliedOrderCodes by remember { mutableStateOf<List<String>?>(null) }
     var searchQuery by remember { mutableStateOf("") }
 
     // Bottom Sheet States for ex-dividend matrix and payout calendar
@@ -113,21 +136,29 @@ fun WatchlistScreen(
         catMatch && queryMatch
     }
 
-    // Process sorts
-    val sortedList = filteredList.sortedWith { a, b ->
-        val yieldA = (a.dps / a.price) * 100
-        val yieldB = (b.dps / b.price) * 100
-        val rateA = yieldA / a.targetYield
-        val rateB = yieldB / b.targetYield
-
-        val comparison = when (sortCriteria) {
-            "ach" -> rateA.compareTo(rateB)
-            "yield" -> yieldA.compareTo(yieldB)
-            "price" -> a.price.compareTo(b.price)
-            else -> a.code.compareTo(b.code)
+    // Capture the default order once, then preserve it while stock values change.
+    LaunchedEffect(watchlist.map { it.code }) {
+        val existingOrder = appliedOrderCodes
+        appliedOrderCodes = if (existingOrder == null) {
+            if (watchlist.isEmpty()) null
+            else sortWatchlist(watchlist, sortCriteria, sortDirection).map { it.code }
+        } else {
+            val currentCodes = watchlist.mapTo(mutableSetOf()) { it.code }
+            existingOrder.filter { it in currentCodes } +
+                watchlist.map { it.code }.filterNot { it in existingOrder }
         }
+    }
 
-        if (sortDirection == "desc") -comparison else comparison
+    val appliedCodes = appliedOrderCodes
+    val visibleByCode = filteredList.associateBy { it.code }
+    val sortedList = if (appliedCodes == null) {
+        sortWatchlist(filteredList, sortCriteria, sortDirection)
+    } else {
+        buildList {
+            appliedCodes.forEach { code -> visibleByCode[code]?.let { add(it) } }
+            val placedCodes = appliedCodes.toHashSet()
+            filteredList.forEach { stock -> if (stock.code !in placedCodes) add(stock) }
+        }
     }
 
     val readyCount = watchlist.filter { (it.dps / it.price) * 100 >= it.targetYield }.size
@@ -292,7 +323,11 @@ fun WatchlistScreen(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(SurfaceContainerLow)
-                                .clickable { showSortBottomSheet = true }
+                                .clickable {
+                                    draftSortCriteria = sortCriteria
+                                    draftSortDirection = sortDirection
+                                    showSortBottomSheet = true
+                                }
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -379,7 +414,7 @@ fun WatchlistScreen(
             }
 
             // Stock Cards
-            items(sortedList) { stock ->
+            items(items = sortedList, key = { it.code }) { stock ->
                 val currentYield = (stock.dps / stock.price) * 100
                 val isReached = currentYield >= stock.targetYield
                 val isClose = !isReached && (currentYield >= (stock.targetYield - 0.25))
@@ -840,6 +875,12 @@ fun WatchlistScreen(
                     }
                 }
 
+                Text(
+                    "目標値を変更した後、最新の達成率順にするには「適用する」を押してください。",
+                    color = SoftGray,
+                    fontSize = AppTextSize.dense
+                )
+
                 // Direction Switcher
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
@@ -860,13 +901,13 @@ fun WatchlistScreen(
                             Pair("asc", "昇順 (小さい順)")
                         )
                         directions.forEach { (dir, label) ->
-                            val isSelected = sortDirection == dir
+                            val isSelected = draftSortDirection == dir
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(if (isSelected) PrimaryEmerald else Color.Transparent)
-                                    .clickable { sortDirection = dir }
+                                    .clickable { draftSortDirection = dir }
                                     .padding(vertical = 8.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -906,7 +947,7 @@ fun WatchlistScreen(
                     )
                     
                     criteriaOptions.forEach { (crit, label, icon) ->
-                        val isSelected = sortCriteria == crit
+                        val isSelected = draftSortCriteria == crit
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -917,7 +958,7 @@ fun WatchlistScreen(
                                     color = if (isSelected) PrimaryEmerald.copy(alpha = 0.5f) else Color.Transparent,
                                     shape = RoundedCornerShape(12.dp)
                                 )
-                                .clickable { sortCriteria = crit }
+                                .clickable { draftSortCriteria = crit }
                                 .padding(12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
@@ -969,7 +1010,19 @@ fun WatchlistScreen(
                         )
                     }
                     Button(
-                        onClick = { showSortBottomSheet = false },
+                        onClick = {
+                            val newlySortedCodes = sortWatchlist(
+                                filteredList,
+                                draftSortCriteria,
+                                draftSortDirection
+                            ).map { it.code }
+                            val visibleCodes = newlySortedCodes.toHashSet()
+                            val previousOrder = appliedOrderCodes ?: watchlist.map { it.code }
+                            appliedOrderCodes = newlySortedCodes + previousOrder.filterNot { it in visibleCodes }
+                            sortCriteria = draftSortCriteria
+                            sortDirection = draftSortDirection
+                            showSortBottomSheet = false
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f).height(44.dp)
