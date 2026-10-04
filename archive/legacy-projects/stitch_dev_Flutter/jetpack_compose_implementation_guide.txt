@@ -1,0 +1,729 @@
+# 資産管理画面 Jetpack Compose 実装仕様書 & コード
+
+選択された「資産管理（案B：ボトムシート・ハーフモーダル入力版）」のUIコンポーネント構造、デザイントークン、状態管理を忠実に再現したAndroid Jetpack Composeコード一式です。
+
+---
+
+## 1. デザイントークン & テーマ設定 (Theme / Color)
+
+```kotlin
+package com.kurogane.dividend.ui.theme
+
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.ui.graphics.Color
+
+// Kurogane Dividend ブランドカラーパレット
+val ObsidianNavy = Color(0xFF0B1326)
+val SurfaceContainerLow = Color(0xFF131B2E)
+val SurfaceContainer = Color(0xFF171F33)
+val SurfaceContainerHigh = Color(0xFF222A3D)
+val SurfaceContainerHighest = Color(0xFF2D3449)
+
+val PrimaryEmerald = Color(0xFF4EDEA3)
+val PrimaryContainer = Color(0xFF10B981)
+val OnPrimary = Color(0xFF003824)
+val SecondaryBlue = Color(0xFFC0C1FF)
+val TextPrimary = Color(0xFFDAE2FD)
+val TextSecondary = Color(0xFFBBCAAF)
+val TextTertiary = Color(0xFF86948A)
+
+val KuroganeDarkColorScheme = darkColorScheme(
+    primary = PrimaryEmerald,
+    primaryContainer = PrimaryContainer,
+    onPrimary = OnPrimary,
+    background = ObsidianNavy,
+    surface = ObsidianNavy,
+    surfaceVariant = SurfaceContainer,
+    onSurface = TextPrimary,
+    onSurfaceVariant = TextSecondary,
+    secondary = SecondaryBlue
+)
+```
+
+---
+
+## 2. データモデル (Models)
+
+```kotlin
+package com.kurogane.dividend.model
+
+data class StockHolding(
+    val code: String,
+    val name: String,
+    val market: String,
+    val shares: Int,
+    val currentPrice: Double,
+    val costPrice: Double,
+    val dividendYield: Double,
+    val annualDividend: Double,
+    val accountType: String,
+    val nextPayoutDate: String,
+    val nextPayoutAmount: String,
+    val isUsStock: Boolean = false
+) {
+    val totalValuation: Double get() = shares * currentPrice
+    val profitLoss: Double get() = shares * (currentPrice - costPrice)
+    val profitLossPercent: Double get() = if (costPrice > 0) ((currentPrice - costPrice) / costPrice) * 100 else 0.0
+}
+
+data class MonthlyDividend(
+    val month: Int,
+    val amount: Long,
+    val isPeakMonth: Boolean = false
+)
+```
+
+---
+
+## 3. メイン画面実装 (AssetManagementScreen.kt)
+
+```kotlin
+package com.kurogane.dividend.ui.screen
+
+import androidx.compose.animation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.kurogane.dividend.model.StockHolding
+import com.kurogane.dividend.ui.theme.*
+import java.text.NumberFormat
+import java.util.Locale
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AssetManagementScreen(
+    onNavigateToAnalysis: () -> Unit = {},
+    onNavigateToRoadmap: () -> Unit = {},
+    onNavigateToWatchlist: () -> Unit = {}
+) {
+    var selectedFilter by remember { mutableStateOf("ALL") }
+    var editingStock by remember { mutableStateOf<StockHolding?>(null) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // サンプルデータ
+    val sampleHoldings = remember {
+        listOf(
+            StockHolding(
+                code = "7203",
+                name = "トヨタ自動車",
+                market = "東証P • 輸送用機器",
+                shares = 100,
+                currentPrice = 2600.0,
+                costPrice = 2450.0,
+                dividendYield = 2.80,
+                annualDividend = 7280.0,
+                accountType = "新NISA成長枠",
+                nextPayoutDate = "12月中旬",
+                nextPayoutAmount = "¥3,640"
+            ),
+            StockHolding(
+                code = "AAPL",
+                name = "Apple Inc.",
+                market = "NASDAQ • テクノロジー",
+                shares = 10,
+                currentPrice = 220.0,
+                costPrice = 198.0,
+                dividendYield = 0.52,
+                annualDividend = 1700.0,
+                accountType = "特定口座 (四半期)",
+                nextPayoutDate = "2月中旬",
+                nextPayoutAmount = "$2.50",
+                isUsStock = true
+            ),
+            StockHolding(
+                code = "投信",
+                name = "eMAXIS Slim 全世界株式",
+                market = "オルカン • 三菱UFJアセット",
+                shares = 50000,
+                currentPrice = 2.40,
+                costPrice = 2.446,
+                dividendYield = 0.0,
+                annualDividend = 0.0,
+                accountType = "新NISAつみたて投資枠",
+                nextPayoutDate = "無分配で複利最大化",
+                nextPayoutAmount = "-"
+            )
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            text = "資産管理",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "ASSET MANAGEMENT",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextTertiary,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {}) {
+                        Icon(Icons.Default.Search, contentDescription = "Search", tint = TextSecondary)
+                    }
+                    IconButton(onClick = {}) {
+                        Box {
+                            Icon(Icons.Default.Notifications, contentDescription = "Alerts", tint = TextSecondary)
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .align(Alignment.TopEnd)
+                                    .background(PrimaryEmerald, CircleShape)
+                            )
+                        }
+                    }
+                    IconButton(onClick = {}) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = TextSecondary)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ObsidianNavy)
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { /* 新規銘柄追加 */ },
+                containerColor = PrimaryContainer,
+                contentColor = OnPrimary,
+                shape = CircleShape,
+                modifier = Modifier.padding(bottom = 60.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add Asset", modifier = Modifier.size(28.dp))
+            }
+        },
+        bottomBar = {
+            NavigationBar(
+                containerColor = SurfaceContainerLow,
+                tonalElevation = 8.dp
+            ) {
+                NavigationBarItem(
+                    selected = true,
+                    onClick = { },
+                    icon = { Icon(Icons.Default.AccountBalanceWallet, contentDescription = null) },
+                    label = { Text("資産管理", fontSize = 10.sp) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = PrimaryEmerald,
+                        selectedTextColor = PrimaryEmerald,
+                        indicatorColor = SurfaceContainer
+                    )
+                )
+                NavigationBarItem(
+                    selected = false,
+                    onClick = onNavigateToAnalysis,
+                    icon = { Icon(Icons.Default.PieChart, contentDescription = null) },
+                    label = { Text("分析", fontSize = 10.sp) }
+                )
+                NavigationBarItem(
+                    selected = false,
+                    onClick = onNavigateToRoadmap,
+                    icon = { Icon(Icons.Default.Flag, contentDescription = null) },
+                    label = { Text("ロードマップ", fontSize = 10.sp) }
+                )
+                NavigationBarItem(
+                    selected = false,
+                    onClick = onNavigateToWatchlist,
+                    icon = { Icon(Icons.Default.Bookmark, contentDescription = null) },
+                    label = { Text("Watchlist", fontSize = 10.sp) }
+                )
+            }
+        },
+        containerColor = ObsidianNavy
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item { Spacer(modifier = Modifier.height(4.dp)) }
+
+            // 1. 総資産 & 配当KPIヒーローカード
+            item {
+                TotalAssetSummaryCard(
+                    totalAssets = 3500000L,
+                    totalCost = 3050000L,
+                    unrealizedGain = 450000L,
+                    gainPercent = 14.7,
+                    annualDividend = 124500L,
+                    afterTaxDividend = 99195L,
+                    yieldPercent = 3.56
+                )
+            }
+
+            // 2. 月別配当推移グラフ（ミニバー）
+            item {
+                MonthlyDividendBarSection(totalAnnualDividend = 124500L)
+            }
+
+            // 3. 年間配当目標プログレスバー
+            item {
+                DividendGoalCard(
+                    currentAmount = 124500L,
+                    targetAmount = 300000L,
+                    progressPercent = 41.5f
+                )
+            }
+
+            // 4. 保有銘柄一覧 ヘッダー & フィルタータブ
+            item {
+                HoldingsHeaderAndFilter(
+                    count = sampleHoldings.size,
+                    selectedFilter = selectedFilter,
+                    onFilterSelected = { selectedFilter = it }
+                )
+            }
+
+            // 5. 保有銘柄カードリスト
+            items(sampleHoldings) { holding ->
+                StockHoldingCard(
+                    holding = holding,
+                    onEditClick = { editingStock = holding }
+                )
+            }
+
+            // 6. 直近の受取予定カード
+            item {
+                NextPayoutCard(
+                    dateText = "12月中旬 トヨタ自動車",
+                    amountText = "¥3,640",
+                    detailText = "中間配当 (100株)"
+                )
+            }
+
+            item { Spacer(modifier = Modifier.height(72.dp)) }
+        }
+
+        // クイック編集ボトムシート
+        editingStock?.let { stock ->
+            ModalBottomSheet(
+                onDismissRequest = { editingStock = null },
+                sheetState = sheetState,
+                containerColor = SurfaceContainerLow,
+                dragHandle = {
+                    Box(
+                        modifier = Modifier
+                            .padding(vertical = 8.dp)
+                            .width(48.dp)
+                            .height(4.dp)
+                            .background(SurfaceContainerHighest, RoundedCornerShape(2.dp))
+                    )
+                }
+            ) {
+                QuickEditBottomSheetContent(
+                    stock = stock,
+                    onDismiss = { editingStock = null },
+                    onSave = { updatedShares, updatedPrice ->
+                        // 更新処理
+                        editingStock = null
+                    }
+                )
+            }
+        }
+    }
+}
+```
+
+---
+
+## 4. サブコンポーネント実装 (Components)
+
+```kotlin
+package com.kurogane.dividend.ui.screen
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropUp
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.kurogane.dividend.model.StockHolding
+import com.kurogane.dividend.ui.theme.*
+
+// 1. 総資産サマリーカード
+@Composable
+fun TotalAssetSummaryCard(
+    totalAssets: Long,
+    totalCost: Long,
+    unrealizedGain: Long,
+    gainPercent: Double,
+    annualDividend: Long,
+    afterTaxDividend: Long,
+    yieldPercent: Double
+) {
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("総資産評価額", fontSize = 12.sp, color = TextSecondary)
+                Row(
+                    modifier = Modifier
+                        .background(PrimaryContainer.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.ArrowDropUp, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
+                    Text("+¥${"%,d".format(unrealizedGain)} (+${gainPercent}%)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
+                }
+            }
+
+            Text(
+                text = "¥${"%,d".format(totalAssets)}",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+
+            Text("投資元本: ¥${"%,d".format(totalCost)}", fontSize = 11.sp, color = TextTertiary)
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(SurfaceContainer, RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Text("年間予想受取配当", fontSize = 11.sp, color = TextSecondary)
+                    Text("¥${"%,d".format(annualDividend)}", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
+                    Text("税引後: 約¥${"%,d".format(afterTaxDividend)}", fontSize = 10.sp, color = TextTertiary)
+                }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(SurfaceContainer, RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Text("平均配当利回り", fontSize = 11.sp, color = TextSecondary)
+                    Text("${yieldPercent}%", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("好配当水準", fontSize = 10.sp, color = PrimaryEmerald)
+                }
+            }
+        }
+    }
+}
+
+// 2. 12ヶ月ミニバーチャート
+@Composable
+fun MonthlyDividendBarSection(totalAnnualDividend: Long) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
+                    Text("月別推移グラフ 2024", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                }
+                Text("年間合計: ¥${"%,d".format(totalAnnualDividend)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 12ヶ月バープロット
+            val heights = listOf(0.1f, 0.15f, 0.4f, 0.1f, 0.15f, 0.95f, 0.1f, 0.12f, 0.35f, 0.1f, 0.15f, 1.0f)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                heights.forEachIndexed { index, fraction ->
+                    val isPeak = index == 5 || index == 11
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            modifier = Modifier
+                                .width(16.dp)
+                                .height((60 * fraction).dp)
+                                .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                .background(if (isPeak) PrimaryEmerald else SurfaceContainerHighest)
+                        )
+                        Text("${index + 1}", fontSize = 9.sp, color = if (isPeak) PrimaryEmerald else TextTertiary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 3. 配当目標カード
+@Composable
+fun DividendGoalCard(currentAmount: Long, targetAmount: Long, progressPercent: Float) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("年間配当目標: ¥${"%,d".format(targetAmount)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text("${progressPercent}%", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            LinearProgressIndicator(
+                progress = { progressPercent / 100f },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+                color = PrimaryEmerald,
+                trackColor = SurfaceContainerHighest
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("現在: ¥${"%,d".format(currentAmount)}", fontSize = 10.sp, color = TextTertiary)
+                Text("あと ¥${"%,d".format(targetAmount - currentAmount)} で月2.5万円達成", fontSize = 10.sp, color = TextSecondary)
+            }
+        }
+    }
+}
+
+// 4. 保有銘柄カード (クイック編集ボタン付き)
+@Composable
+fun StockHoldingCard(
+    holding: StockHolding,
+    onEditClick: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .background(SurfaceContainerHighest, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(holding.code, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    }
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(holding.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            // 落ち着いたクイック編集アイコン
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = "Edit",
+                                tint = TextTertiary,
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .clickable { onEditClick() }
+                            )
+                        }
+                        Text(holding.market, fontSize = 10.sp, color = TextTertiary)
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = (if (holding.isUsStock) "$" else "¥") + "%,.0f".format(holding.totalValuation),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "+¥${"%,.0f".format(holding.profitLoss)} (+${"%.1f".format(holding.profitLossPercent)}%)",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryEmerald
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 保有ステータス行
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(SurfaceContainer, RoundedCornerShape(8.dp))
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("保有数量", fontSize = 9.sp, color = TextTertiary)
+                    Text("${holding.shares}株", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("配当利回り", fontSize = 9.sp, color = TextTertiary)
+                    Text("${holding.dividendYield}%", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("予想配当金", fontSize = 9.sp, color = TextTertiary)
+                    Text("¥${"%,.0f".format(holding.annualDividend)}/年", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(holding.accountType, fontSize = 10.sp, color = SecondaryBlue)
+                Text("次回: ${holding.nextPayoutDate} (${holding.nextPayoutAmount})", fontSize = 10.sp, color = TextTertiary)
+            }
+        }
+    }
+}
+
+// 5. クイック編集ボトムシート内容
+@Composable
+fun QuickEditBottomSheetContent(
+    stock: StockHolding,
+    onDismiss: () -> Unit,
+    onSave: (Int, Double) -> Unit
+) {
+    var shares by remember { mutableStateOf(stock.shares) }
+    var costPrice by remember { mutableStateOf(stock.costPrice) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .navigationBarsPadding(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text("保有情報のクイック編集", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text("${stock.code} ${stock.name}", fontSize = 12.sp, color = PrimaryEmerald)
+            }
+            TextButton(onClick = onDismiss) {
+                Text("閉じる", color = TextSecondary)
+            }
+        }
+
+        // 数量ステッパー
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("保有数量 (株)", fontSize = 12.sp, color = TextSecondary)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilledIconButton(
+                    onClick = { if (shares > 10) shares -= 10 },
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = SurfaceContainerHigh)
+                ) {
+                    Icon(Icons.Default.Remove, contentDescription = null, tint = TextPrimary)
+                }
+                Text("$shares 株", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                FilledIconButton(
+                    onClick = { shares += 10 },
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = SurfaceContainerHigh)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, tint = TextPrimary)
+                }
+            }
+        }
+
+        // 取得単価ステッパー
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("取得単価 (円)", fontSize = 12.sp, color = TextSecondary)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilledIconButton(
+                    onClick = { if (costPrice > 10) costPrice -= 10 },
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = SurfaceContainerHigh)
+                ) {
+                    Icon(Icons.Default.Remove, contentDescription = null, tint = TextPrimary)
+                }
+                Text("¥${"%,.0f".format(costPrice)}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                FilledIconButton(
+                    onClick = { costPrice += 10 },
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = SurfaceContainerHigh)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, tint = TextPrimary)
+                }
+            }
+        }
+
+        Button(
+            onClick = { onSave(shares, costPrice) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = PrimaryContainer),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text("変更を保存する", fontWeight = FontWeight.Bold, color = OnPrimary)
+        }
+    }
+}
+```

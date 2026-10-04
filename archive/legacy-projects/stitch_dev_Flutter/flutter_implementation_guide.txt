@@ -1,0 +1,1072 @@
+# 資産管理画面 Flutter (Dart) 実装仕様書 & フルソースコード
+
+選択された「資産管理（案B：ボトムシート・ハーフモーダル入力版）」のUIデザイン、ダークモード配色（Obsidian Navy & Emerald Accent）、月別推移ミニチャート、保有銘柄カード、クイック編集モーダルシートを忠実に再現したFlutterコード一式です。
+
+---
+
+## 1. ディレクトリ構造推奨
+
+```text
+lib/
+├── main.dart
+├── theme/
+│   └── app_theme.dart
+├── models/
+│   └── stock_holding.dart
+└── screens/
+    ├── asset_management_screen.dart
+    └── widgets/
+        ├── total_asset_summary_card.dart
+        ├── monthly_dividend_bar_chart.dart
+        ├── dividend_goal_card.dart
+        ├── stock_holding_card.dart
+        └── quick_edit_bottom_sheet.dart
+```
+
+---
+
+## 2. デザイントークン & カラーテーマ (`theme/app_theme.dart`)
+
+```dart
+import 'package:flutter/material.dart';
+
+class AppColors {
+  // Kurogane Obsidian Dark Theme Palette
+  static const Color obsidianNavy = Color(0xFF0B1326);
+  static const Color surfaceContainerLowest = Color(0xFF060E20);
+  static const Color surfaceContainerLow = Color(0xFF131B2E);
+  static const Color surfaceContainer = Color(0xFF171F33);
+  static const Color surfaceContainerHigh = Color(0xFF222A3D);
+  static const Color surfaceContainerHighest = Color(0xFF2D3449);
+
+  // Brand Accents
+  static const Color primaryEmerald = Color(0xFF4EDEA3);
+  static const Color primaryContainer = Color(0xFF10B981);
+  static const Color onPrimary = Color(0xFF003824);
+  static const Color secondaryBlue = Color(0xFFC0C1FF);
+  
+  // Text Colors
+  static const Color textPrimary = Color(0xFFDAE2FD);
+  static const Color textSecondary = Color(0xFFBBCAAF);
+  static const Color textTertiary = Color(0xFF86948A);
+  static const Color errorRed = Color(0xFFFFB4AB);
+}
+
+class AppTheme {
+  static ThemeData get darkTheme {
+    return ThemeData(
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: AppColors.obsidianNavy,
+      primaryColor: AppColors.primaryEmerald,
+      colorScheme: const ColorScheme.dark(
+        primary: AppColors.primaryEmerald,
+        primaryContainer: AppColors.primaryContainer,
+        onPrimary: AppColors.onPrimary,
+        surface: AppColors.surfaceContainerLow,
+        onSurface: AppColors.textPrimary,
+        secondary: AppColors.secondaryBlue,
+      ),
+      fontFamily: 'Manrope',
+      appBarTheme: const AppBarTheme(
+        backgroundColor: AppColors.obsidianNavy,
+        elevation: 0,
+        centerTitle: false,
+      ),
+    );
+  }
+}
+```
+
+---
+
+## 3. データモデル (`models/stock_holding.dart`)
+
+```dart
+class StockHolding {
+  final String code;
+  final String name;
+  final String market;
+  int shares;
+  final double currentPrice;
+  double costPrice;
+  final double dividendYield;
+  final double annualDividend;
+  final String accountType;
+  final String nextPayoutDate;
+  final String nextPayoutAmount;
+  final bool isUsStock;
+
+  StockHolding({
+    required this.code,
+    required this.name,
+    required this.market,
+    required this.shares,
+    required this.currentPrice,
+    required this.costPrice,
+    required this.dividendYield,
+    required this.annualDividend,
+    required this.accountType,
+    required this.nextPayoutDate,
+    required this.nextPayoutAmount,
+    this.isUsStock = false,
+  });
+
+  double get totalValuation => shares * currentPrice;
+  double get profitLoss => shares * (currentPrice - costPrice);
+  double get profitLossPercent =>
+      costPrice > 0 ? ((currentPrice - costPrice) / costPrice) * 100 : 0.0;
+}
+```
+
+---
+
+## 4. メイン画面実装 (`screens/asset_management_screen.dart`)
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../models/stock_holding.dart';
+import '../theme/app_theme.dart';
+import 'widgets/total_asset_summary_card.dart';
+import 'widgets/monthly_dividend_bar_chart.dart';
+import 'widgets/dividend_goal_card.dart';
+import 'widgets/stock_holding_card.dart';
+import 'widgets/quick_edit_bottom_sheet.dart';
+
+class AssetManagementScreen extends StatefulWidget {
+  const AssetManagementScreen({super.key});
+
+  @override
+  State<AssetManagementScreen> createState() => _AssetManagementScreenState();
+}
+
+class _AssetManagementScreenState extends State<AssetManagementScreen> {
+  int _currentBottomNavIndex = 0;
+  String _selectedFilter = 'ALL';
+
+  final List<StockHolding> _holdings = [
+    StockHolding(
+      code: '7203',
+      name: 'トヨタ自動車',
+      market: '東証P • 輸送用機器',
+      shares: 100,
+      currentPrice: 2600.0,
+      costPrice: 2450.0,
+      dividendYield: 2.80,
+      annualDividend: 7280.0,
+      accountType: '新NISA成長枠',
+      nextPayoutDate: '12月中旬',
+      nextPayoutAmount: '¥3,640',
+    ),
+    StockHolding(
+      code: 'AAPL',
+      name: 'Apple Inc.',
+      market: 'NASDAQ • テクノロジー',
+      shares: 10,
+      currentPrice: 220.0,
+      costPrice: 198.0,
+      dividendYield: 0.52,
+      annualDividend: 1700.0,
+      accountType: '特定口座 (四半期)',
+      nextPayoutDate: '2月中旬',
+      nextPayoutAmount: '\$2.50',
+      isUsStock: true,
+    ),
+    StockHolding(
+      code: '投信',
+      name: 'eMAXIS Slim 全世界株式',
+      market: 'オルカン • 三菱UFJアセット',
+      shares: 50000,
+      currentPrice: 2.40,
+      costPrice: 2.446,
+      dividendYield: 0.0,
+      annualDividend: 0.0,
+      accountType: '新NISAつみたて投資枠',
+      nextPayoutDate: '無分配で複利最大化',
+      nextPayoutAmount: '-',
+    ),
+  ];
+
+  void _openQuickEditModal(StockHolding stock) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceContainerLow,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return QuickEditBottomSheet(
+          stock: stock,
+          onSave: (newShares, newCost) {
+            setState(() {
+              stock.shares = newShares;
+              stock.costPrice = newCost;
+            });
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('${stock.name}の保有情報を更新しました'),
+                backgroundColor: AppColors.surfaceContainerHigh,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.obsidianNavy,
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              '資産管理',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Text(
+              'ASSET MANAGEMENT',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textTertiary,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search, color: AppColors.textSecondary),
+            onPressed: () {},
+          ),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_none, color: AppColors.textSecondary),
+                onPressed: () {},
+              ),
+              Positioned(
+                top: 12,
+                right: 12,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primaryEmerald,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, color: AppColors.textSecondary),
+            onPressed: () {},
+          ),
+        ],
+      ),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: FloatingActionButton(
+          backgroundColor: AppColors.primaryContainer,
+          foregroundColor: AppColors.onPrimary,
+          shape: const CircleBorder(),
+          elevation: 6,
+          onPressed: () {},
+          child: const Icon(Icons.add, size: 28),
+        ),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentBottomNavIndex,
+        backgroundColor: AppColors.surfaceContainerLow,
+        indicatorColor: AppColors.surfaceContainer,
+        elevation: 10,
+        onDestinationSelected: (index) {
+          setState(() {
+            _currentBottomNavIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            selectedIcon: Icon(Icons.account_balance_wallet, color: AppColors.primaryEmerald),
+            label: '資産管理',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.pie_chart_outline),
+            selectedIcon: Icon(Icons.pie_chart, color: AppColors.primaryEmerald),
+            label: '分析',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.flag_outlined),
+            selectedIcon: Icon(Icons.flag, color: AppColors.primaryEmerald),
+            label: 'ロードマップ',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bookmark_border),
+            selectedIcon: Icon(Icons.bookmark, color: AppColors.primaryEmerald),
+            label: 'Watchlist',
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        children: [
+          // 1. 総資産 & 配当KPIサマリー
+          const TotalAssetSummaryCard(
+            totalAssets: 3500000,
+            totalCost: 3050000,
+            unrealizedGain: 450000,
+            gainPercent: 14.7,
+            annualDividend: 124500,
+            afterTaxDividend: 99195,
+            yieldPercent: 3.56,
+          ),
+          const SizedBox(height: 16),
+
+          // 2. 月別配当推移グラフ（12ヶ月ミニバー）
+          const MonthlyDividendBarChart(totalAnnual: 124500),
+          const SizedBox(height: 16),
+
+          // 3. 年間配当目標プログレス
+          const DividendGoalCard(
+            targetAmount: 300000,
+            currentAmount: 124500,
+            progressPercent: 41.5,
+          ),
+          const SizedBox(height: 20),
+
+          // 4. 保有銘柄リスト ヘッダー
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    '保有銘柄一覧',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${_holdings.length}件',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryEmerald,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: const [
+                    Icon(Icons.swap_vert, size: 16, color: AppColors.textSecondary),
+                    SizedBox(width: 4),
+                    Text(
+                      '評価額 (降順)',
+                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // 5. 銘柄カード一覧
+          ..._holdings.map((stock) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: StockHoldingCard(
+                  stock: stock,
+                  onEditTap: () => _openQuickEditModal(stock),
+                ),
+              )),
+
+          // 6. 直近の配当受取予定フッター
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryContainer.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.event_note, color: AppColors.primaryEmerald),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        '直近の配当受取予定',
+                        style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                      ),
+                      Text(
+                        '12月中旬 トヨタ自動車',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: const [
+                    Text(
+                      '¥3,640',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryEmerald,
+                        fontFamily: 'SpaceGrotesk',
+                      ),
+                    ),
+                    Text(
+                      '中間配当 (100株)',
+                      style: TextStyle(fontSize: 10, color: AppColors.textTertiary),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 80),
+        ],
+      ),
+    );
+  }
+}
+```
+
+---
+
+## 5. ウィジェット部品実装 (`widgets/*.dart`)
+
+### A. 総資産サマリーカード (`widgets/total_asset_summary_card.dart`)
+```dart
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../theme/app_theme.dart';
+
+class TotalAssetSummaryCard extends StatelessWidget {
+  final int totalAssets;
+  final int totalCost;
+  final int unrealizedGain;
+  final double gainPercent;
+  final int annualDividend;
+  final int afterTaxDividend;
+  final double yieldPercent;
+
+  const TotalAssetSummaryCard({
+    super.key,
+    required this.totalAssets,
+    required this.totalCost,
+    required this.unrealizedGain,
+    required this.gainPercent,
+    required this.annualDividend,
+    required this.afterTaxDividend,
+    required this.yieldPercent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = NumberFormat('#,###');
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                '総資産評価額',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryContainer.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.arrow_drop_up, color: AppColors.primaryEmerald, size: 18),
+                    Text(
+                      '+¥${currency.format(unrealizedGain)} (+${gainPercent.toStringAsFixed(1)}%)',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryEmerald,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '¥${currency.format(totalAssets)}',
+            style: const TextStyle(
+              fontSize: 34,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+              fontFamily: 'SpaceGrotesk',
+              letterSpacing: -0.5,
+            ),
+          ),
+          Text(
+            '投資元本: ¥${currency.format(totalCost)}',
+            style: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('年間予想受取配当', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                      const SizedBox(height: 2),
+                      Text(
+                        '¥${currency.format(annualDividend)}',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primaryEmerald,
+                        ),
+                      ),
+                      Text(
+                        '税引後: 約¥${currency.format(afterTaxDividend)}',
+                        style: const TextStyle(fontSize: 10, color: AppColors.textTertiary),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('平均配当利回り', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${yieldPercent.toStringAsFixed(2)}%',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const Text('好配当水準', style: TextStyle(fontSize: 10, color: AppColors.primaryEmerald)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+### B. 12ヶ月ミニバーチャート (`widgets/monthly_dividend_bar_chart.dart`)
+```dart
+import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
+
+class MonthlyDividendBarChart extends StatelessWidget {
+  final int totalAnnual;
+  const MonthlyDividendBarChart({super.key, required this.totalAnnual});
+
+  @override
+  Widget build(BuildContext context) {
+    final heights = [0.12, 0.18, 0.42, 0.10, 0.15, 0.95, 0.11, 0.14, 0.38, 0.10, 0.16, 1.0];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text(
+                '月別推移グラフ 2024',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+              Text(
+                '年間合計: ¥124,500',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primaryEmerald),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 68,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: List.generate(12, (index) {
+                final isPeak = index == 5 || index == 11;
+                final fraction = heights[index];
+
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Container(
+                      width: 16,
+                      height: 50 * fraction,
+                      decoration: BoxDecoration(
+                        color: isPeak ? AppColors.primaryEmerald : AppColors.surfaceContainerHighest,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${index + 1}',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: isPeak ? AppColors.primaryEmerald : AppColors.textTertiary,
+                        fontWeight: isPeak ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+### C. 目標プログレスカード (`widgets/dividend_goal_card.dart`)
+```dart
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../theme/app_theme.dart';
+
+class DividendGoalCard extends StatelessWidget {
+  final int targetAmount;
+  final int currentAmount;
+  final double progressPercent;
+
+  const DividendGoalCard({
+    super.key,
+    required this.targetAmount,
+    required this.currentAmount,
+    required this.progressPercent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = NumberFormat('#,###');
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '年間配当目標: ¥${currency.format(targetAmount)}',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+              Text(
+                '${progressPercent.toStringAsFixed(1)}%',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primaryEmerald),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progressPercent / 100,
+              backgroundColor: AppColors.surfaceContainerHighest,
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryEmerald),
+              minHeight: 6,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '現在: ¥${currency.format(currentAmount)}',
+                style: const TextStyle(fontSize: 10, color: AppColors.textTertiary),
+              ),
+              Text(
+                'あと ¥${currency.format(targetAmount - currentAmount)} で月2.5万円達成',
+                style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+### D. 保有銘柄カード (`widgets/stock_holding_card.dart`)
+```dart
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../models/stock_holding.dart';
+import '../../theme/app_theme.dart';
+
+class StockHoldingCard extends StatelessWidget {
+  final StockHolding stock;
+  final VoidCallback onEditTap;
+
+  const StockHoldingCard({
+    super.key,
+    required this.stock,
+    required this.onEditTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = NumberFormat('#,###');
+    final isProfit = stock.profitLoss >= 0;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      stock.code,
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            stock.name,
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                          ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: onEditTap,
+                            child: const Icon(Icons.edit_outlined, size: 14, color: AppColors.textTertiary),
+                          ),
+                        ],
+                      ),
+                      Text(stock.market, style: const TextStyle(fontSize: 10, color: AppColors.textTertiary)),
+                    ],
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    (stock.isUsStock ? '\$' : '¥') + currency.format(stock.totalValuation),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  ),
+                  Text(
+                    '${isProfit ? "+" : ""}¥${currency.format(stock.profitLoss)} (${isProfit ? "+" : ""}${stock.profitLossPercent.toStringAsFixed(1)}%)',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: isProfit ? AppColors.primaryEmerald : AppColors.errorRed,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('保有数量', style: TextStyle(fontSize: 9, color: AppColors.textTertiary)),
+                    Text('${stock.shares}株', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                  ],
+                ),
+                Column(
+                  children: [
+                    const Text('配当利回り', style: TextStyle(fontSize: 9, color: AppColors.textTertiary)),
+                    Text('${stock.dividendYield}%', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primaryEmerald)),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Text('予想配当金', style: TextStyle(fontSize: 9, color: AppColors.textTertiary)),
+                    Text('¥${currency.format(stock.annualDividend)}/年', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(stock.accountType, style: const TextStyle(fontSize: 10, color: AppColors.secondaryBlue)),
+              Text('次回: ${stock.nextPayoutDate} (${stock.nextPayoutAmount})', style: const TextStyle(fontSize: 10, color: AppColors.textTertiary)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+### E. クイック編集ボトムシート (`widgets/quick_edit_bottom_sheet.dart`)
+```dart
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../models/stock_holding.dart';
+import '../../theme/app_theme.dart';
+
+class QuickEditBottomSheet extends StatefulWidget {
+  final StockHolding stock;
+  final void Function(int shares, double costPrice) onSave;
+
+  const QuickEditBottomSheet({
+    super.key,
+    required this.stock,
+    required this.onSave,
+  });
+
+  @override
+  State<QuickEditBottomSheet> createState() => _QuickEditBottomSheetState();
+}
+
+class _QuickEditBottomSheetState extends State<QuickEditBottomSheet> {
+  late int _shares;
+  late double _costPrice;
+  final currency = NumberFormat('#,###');
+
+  @override
+  void initState() {
+    super.initState();
+    _shares = widget.stock.shares;
+    _costPrice = widget.stock.costPrice;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 12,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 48,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '保有情報のクイック編集',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  ),
+                  Text(
+                    '${widget.stock.code} ${widget.stock.name}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.primaryEmerald),
+                  ),
+                ],
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('閉じる', style: TextStyle(color: AppColors.textSecondary)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // 数量ステッパー
+          const Text('保有数量 (株)', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton.filled(
+                style: IconButton.styleFrom(backgroundColor: AppColors.surfaceContainerHigh),
+                icon: const Icon(Icons.remove, color: AppColors.textPrimary),
+                onPressed: () {
+                  if (_shares > 10) setState(() => _shares -= 10);
+                },
+              ),
+              Text(
+                '$_shares 株',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+              IconButton.filled(
+                style: IconButton.styleFrom(backgroundColor: AppColors.surfaceContainerHigh),
+                icon: const Icon(Icons.add, color: AppColors.textPrimary),
+                onPressed: () {
+                  setState(() => _shares += 10);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // 取得単価ステッパー
+          const Text('取得単価 (円)', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton.filled(
+                style: IconButton.styleFrom(backgroundColor: AppColors.surfaceContainerHigh),
+                icon: const Icon(Icons.remove, color: AppColors.textPrimary),
+                onPressed: () {
+                  if (_costPrice > 10) setState(() => _costPrice -= 10);
+                },
+              ),
+              Text(
+                '¥${currency.format(_costPrice)}',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+              IconButton.filled(
+                style: IconButton.styleFrom(backgroundColor: AppColors.surfaceContainerHigh),
+                icon: const Icon(Icons.add, color: AppColors.textPrimary),
+                onPressed: () {
+                  setState(() => _costPrice += 10);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // 保存ボタン
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryContainer,
+                foregroundColor: AppColors.onPrimary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () => widget.onSave(_shares, _costPrice),
+              child: const Text('変更を保存する', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+```

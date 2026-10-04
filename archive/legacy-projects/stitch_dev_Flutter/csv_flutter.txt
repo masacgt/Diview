@@ -1,0 +1,1114 @@
+# CSVインポート画面 Flutter (Dart) 実装仕様書 & フルソースコード
+
+選択された「CSVインポート（アニメーション＆マイクロインタラクション完全版）」のUIデザイン、3ステップウィザード（STEP 1: ファイル選択、STEP 2: 解析中、STEP 3: プレビュー・完了）、各証券会社フォーマット選択（SBI証券、楽天証券、マネックス証券、松井証券、汎用）、CSV出力ガイドのアコーディオン展開、端末内ローカル処理保証バッジを忠実に再現したFlutterコード一式です。
+
+---
+
+## 1. ディレクトリ構造推奨
+
+```text
+lib/
+├── main.dart
+├── theme/
+│   └── app_theme.dart
+├── models/
+│   ├── broker_format.dart
+│   └── csv_import_state.dart
+└── screens/
+    ├── csv_import_screen.dart
+    └── widgets/
+        ├── wizard_step_progress_bar.dart
+        ├── broker_selector_grid.dart
+        ├── file_drop_target_card.dart
+        ├── broker_guide_accordion.dart
+        └── local_security_badge.dart
+```
+
+---
+
+## 2. デザイントークン & カラーテーマ (`theme/app_theme.dart`)
+
+```dart
+import 'package:flutter/material.dart';
+
+class AppColors {
+  // Kurogane Dark Navy Palette
+  static const Color obsidianNavy = Color(0xFF0B1326);
+  static const Color surfaceContainerLowest = Color(0xFF060E20);
+  static const Color surfaceContainerLow = Color(0xFF131B2E);
+  static const Color surfaceContainer = Color(0xFF171F33);
+  static const Color surfaceContainerHigh = Color(0xFF222A3D);
+  static const Color surfaceContainerHighest = Color(0xFF2D3449);
+
+  // Accents & Status
+  static const Color primaryEmerald = Color(0xFF4EDEA3);
+  static const Color primaryContainer = Color(0xFF10B981);
+  static const Color onPrimary = Color(0xFF003824);
+  static const Color onPrimaryContainer = Color(0xFF00422B);
+  static const Color secondaryBlue = Color(0xFFC0C1FF);
+  static const Color skyBlue = Color(0xFF38BDF8);
+
+  // Text
+  static const Color textPrimary = Color(0xFFDAE2FD);
+  static const Color textSecondary = Color(0xFFBBCAAF);
+  static const Color textTertiary = Color(0xFF86948A);
+  static const Color errorRed = Color(0xFFFFB4AB);
+}
+
+class AppTheme {
+  static ThemeData get darkTheme {
+    return ThemeData(
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: AppColors.obsidianNavy,
+      primaryColor: AppColors.primaryEmerald,
+      colorScheme: const ColorScheme.dark(
+        primary: AppColors.primaryEmerald,
+        primaryContainer: AppColors.primaryContainer,
+        onPrimary: AppColors.onPrimary,
+        surface: AppColors.surfaceContainerLow,
+        onSurface: AppColors.textPrimary,
+        secondary: AppColors.secondaryBlue,
+      ),
+      fontFamily: 'Manrope',
+      appBarTheme: const AppBarTheme(
+        backgroundColor: AppColors.obsidianNavy,
+        elevation: 0,
+        centerTitle: false,
+      ),
+    );
+  }
+}
+```
+
+---
+
+## 3. モデル定義 (`models/broker_format.dart`)
+
+```dart
+import 'package:flutter/material.dart';
+
+enum BrokerType {
+  sbi,
+  rakuten,
+  monex,
+  matsui,
+  custom,
+}
+
+class BrokerOption {
+  final BrokerType type;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool isRecommended;
+
+  const BrokerOption({
+    required this.type,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    this.isRecommended = false,
+  });
+}
+
+class BrokerGuideItem {
+  final BrokerType type;
+  final String name;
+  final String description;
+  final List<String> steps;
+
+  const BrokerGuideItem({
+    required this.type,
+    required this.name,
+    required this.description,
+    required this.steps,
+  });
+}
+```
+
+---
+
+## 4. メイン画面実装 (`screens/csv_import_screen.dart`)
+
+```dart
+import 'package:flutter/material.dart';
+import '../models/broker_format.dart';
+import '../theme/app_theme.dart';
+import 'widgets/wizard_step_progress_bar.dart';
+import 'widgets/broker_selector_grid.dart';
+import 'widgets/file_drop_target_card.dart';
+import 'widgets/broker_guide_accordion.dart';
+import 'widgets/local_security_badge.dart';
+
+class CsvImportScreen extends StatefulWidget {
+  const CsvImportScreen({super.key});
+
+  @override
+  State<CsvImportScreen> createState() => _CsvImportScreenState();
+}
+
+class _CsvImportScreenState extends State<CsvImportScreen> {
+  int _currentStep = 1; // 1: ファイル選択, 2: 解析中, 3: プレビュー・完了
+  BrokerType _selectedBroker = BrokerType.monex;
+  String _selectedFileName = 'monex_portfolio_202412.csv';
+  String _fileSize = '24.8 KB';
+  int _rowCount = 38;
+  bool _isAnalyzing = false;
+
+  final List<BrokerOption> _brokers = const [
+    BrokerOption(
+      type: BrokerType.sbi,
+      title: 'SBI証券',
+      subtitle: '自動判定 推奨',
+      icon: Icons.account_balance,
+      isRecommended: true,
+    ),
+    BrokerOption(
+      type: BrokerType.rakuten,
+      title: '楽天証券',
+      subtitle: '全資産CSV対応',
+      icon: Icons.show_chart,
+    ),
+    BrokerOption(
+      type: BrokerType.monex,
+      title: 'マネックス',
+      subtitle: '残高明細CSV',
+      icon: Icons.sync,
+    ),
+    BrokerOption(
+      type: BrokerType.matsui,
+      title: '松井証券',
+      subtitle: '現物残高CSV',
+      icon: Icons.domain,
+    ),
+    BrokerOption(
+      type: BrokerType.custom,
+      title: 'その他 (汎用)',
+      subtitle: 'カスタムCSV / 各種フォーマット',
+      icon: Icons.tune,
+    ),
+  ];
+
+  void _startAnalysis() {
+    setState(() {
+      _isAnalyzing = true;
+      _currentStep = 2;
+    });
+
+    // シミュレーション: 1.5秒後に解析完了ダイアログまたは次ステップへ遷移
+    Future.delayed(const Duration(milliseconds: 1600), () {
+      if (!mounted) return;
+      setState(() {
+        _isAnalyzing = false;
+        _currentStep = 3;
+      });
+
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surfaceContainerLow,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: const [
+              Icon(Icons.check_circle, color: AppColors.primaryEmerald),
+              SizedBox(width: 8),
+              Text('解析が完了しました', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            ],
+          ),
+          content: Text(
+            '$_rowCount 件の保有銘柄データを正常に検出しました。\n（国内株式 35銘柄、米国株 3銘柄）\nポートフォリオを更新しますか？',
+            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('キャンセル', style: TextStyle(color: AppColors.textTertiary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryContainer,
+                foregroundColor: AppColors.onPrimary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.pop(context); // 資産管理画面へ戻る
+              },
+              child: const Text('データを取り込む', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.obsidianNavy,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'CSVインポート',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search, color: AppColors.textSecondary),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.notifications_none, color: AppColors.textSecondary),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, color: AppColors.textSecondary),
+            onPressed: () {},
+          ),
+        ],
+      ),
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 12,
+          bottom: MediaQuery.of(context).padding.bottom + 12,
+        ),
+        decoration: const BoxDecoration(
+          color: AppColors.obsidianNavy,
+          border: Border(
+            top: BorderSide(color: Color(0x1AFFFFFF), width: 1),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 1,
+              child: SizedBox(
+                height: 48,
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: AppColors.surfaceContainerHigh,
+                    side: BorderSide.none,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _selectedFileName = '';
+                    });
+                  },
+                  child: const Text(
+                    'クリア',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryEmerald,
+                    foregroundColor: AppColors.onPrimary,
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: _selectedFileName.isEmpty || _isAnalyzing ? null : _startAnalysis,
+                  icon: _isAnalyzing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onPrimary),
+                        )
+                      : const Icon(Icons.arrow_forward, size: 20),
+                  label: Text(
+                    _isAnalyzing ? '解析中...' : 'ファイルを解析する',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        children: [
+          // 1. インタラクティブ・サンドボックスバナー
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: AppColors.primaryEmerald,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'INTERACTIVE WIZARD',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryEmerald,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ],
+                ),
+                const Text(
+                  'Shift-JIS / UTF-8 自動認識',
+                  style: TextStyle(fontSize: 10, color: AppColors.textTertiary),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // 2. ウィザード進捗プログレスヘッダー
+          WizardStepProgressBar(currentStep: _currentStep),
+          const SizedBox(height: 20),
+
+          // 3. 対象証券会社の選択セクション
+          const Text(
+            '対象証券会社',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          BrokerSelectorGrid(
+            brokers: _brokers,
+            selectedBroker: _selectedBroker,
+            onSelect: (broker) {
+              setState(() {
+                _selectedBroker = broker;
+              });
+            },
+          ),
+          const SizedBox(height: 18),
+
+          // 4. ファイルドロップ・選択カード
+          FileDropTargetCard(
+            fileName: _selectedFileName,
+            fileSize: _fileSize,
+            rowCount: _rowCount,
+            onFilePicked: (name, size, rows) {
+              setState(() {
+                _selectedFileName = name;
+                _fileSize = size;
+                _rowCount = rows;
+              });
+            },
+          ),
+          const SizedBox(height: 18),
+
+          // 5. 各証券会社のCSV出力方法ガイド（アコーディオン）
+          BrokerGuideAccordion(selectedBroker: _selectedBroker),
+          const SizedBox(height: 20),
+
+          // 6. 端末内ローカル処理保証セキュリティカード
+          const LocalSecurityBadge(),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+}
+```
+
+---
+
+## 5. ウィジェット部品実装 (`widgets/*.dart`)
+
+### A. 3ステップウィザード進捗バー (`widgets/wizard_step_progress_bar.dart`)
+```dart
+import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
+
+class WizardStepProgressBar extends StatelessWidget {
+  final int currentStep;
+
+  const WizardStepProgressBar({super.key, required this.currentStep});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.primaryEmerald.withOpacity(0.4)),
+                  ),
+                  child: Text(
+                    'STEP $currentStep / 3',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryEmerald,
+                      fontFamily: 'SpaceGrotesk',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  currentStep == 1
+                      ? 'CSVファイルの選択'
+                      : (currentStep == 2 ? 'ファイル解析中...' : 'データの確認と反映'),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: currentStep >= 2 ? AppColors.primaryEmerald : AppColors.textTertiary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    currentStep == 1 ? '待機中' : (currentStep == 2 ? '処理中' : '準備完了'),
+                    style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: List.generate(3, (index) {
+            final isCompleted = index + 1 <= currentStep;
+            return Expanded(
+              child: Container(
+                margin: EdgeInsets.only(right: index == 2 ? 0 : 6),
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isCompleted ? AppColors.primaryEmerald : AppColors.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+  }
+}
+```
+
+### B. 証券会社選択グリッド (`widgets/broker_selector_grid.dart`)
+```dart
+import 'package:flutter/material.dart';
+import '../../models/broker_format.dart';
+import '../../theme/app_theme.dart';
+
+class BrokerSelectorGrid extends StatelessWidget {
+  final List<BrokerOption> brokers;
+  final BrokerType selectedBroker;
+  final ValueChanged<BrokerType> onSelect;
+
+  const BrokerSelectorGrid({
+    super.key,
+    required this.brokers,
+    required this.selectedBroker,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // 上段 2列 (SBI & 楽天)
+        Row(
+          children: [
+            Expanded(child: _buildBrokerTile(brokers[0])),
+            const SizedBox(width: 10),
+            Expanded(child: _buildBrokerTile(brokers[1])),
+          ],
+        ),
+        const SizedBox(height: 10),
+        // 中段 2列 (マネックス & 松井)
+        Row(
+          children: [
+            Expanded(child: _buildBrokerTile(brokers[2])),
+            const SizedBox(width: 10),
+            Expanded(child: _buildBrokerTile(brokers[3])),
+          ],
+        ),
+        const SizedBox(height: 10),
+        // 下段 1列 (汎用)
+        _buildBrokerTile(brokers[4], isFullWidth: true),
+      ],
+    );
+  }
+
+  Widget _buildBrokerTile(BrokerOption broker, {bool isFullWidth = false}) {
+    final isSelected = selectedBroker == broker.type;
+
+    return InkWell(
+      onTap: () => onSelect(broker.type),
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.surfaceContainerHigh : AppColors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppColors.primaryEmerald : AppColors.surfaceContainerHighest.withOpacity(0.6),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  broker.icon,
+                  size: 20,
+                  color: isSelected ? AppColors.primaryEmerald : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      broker.title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
+                      ),
+                    ),
+                    Text(
+                      broker.subtitle,
+                      style: const TextStyle(fontSize: 10, color: AppColors.textTertiary),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? AppColors.primaryEmerald : AppColors.textTertiary,
+                  width: 1.5,
+                ),
+                color: isSelected ? AppColors.primaryEmerald.withOpacity(0.2) : Colors.transparent,
+              ),
+              child: isSelected
+                  ? Center(
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primaryEmerald,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+### C. ファイルドロップ＆選択カード (`widgets/file_drop_target_card.dart`)
+```dart
+import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
+
+class FileDropTargetCard extends StatelessWidget {
+  final String fileName;
+  final String fileSize;
+  final int rowCount;
+  final void Function(String name, String size, int rows) onFilePicked;
+
+  const FileDropTargetCard({
+    super.key,
+    required this.fileName,
+    required this.fileSize,
+    required this.rowCount,
+    required this.onFilePicked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasFile = fileName.isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hasFile ? AppColors.primaryEmerald.withOpacity(0.3) : AppColors.surfaceContainerHighest,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (hasFile) ...[
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryContainer.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.description, color: AppColors.primaryEmerald, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        fileName,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                          fontFamily: 'SpaceGrotesk',
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Text(fileSize, style: const TextStyle(fontSize: 10, color: AppColors.textTertiary)),
+                          const Text(' • ', style: TextStyle(fontSize: 10, color: AppColors.textTertiary)),
+                          Text('$rowCount 行', style: const TextStyle(fontSize: 10, color: AppColors.textTertiary)),
+                          const Text(' • ', style: TextStyle(fontSize: 10, color: AppColors.textTertiary)),
+                          const Text('Shift-JIS 自動検知', style: TextStyle(fontSize: 10, color: AppColors.primaryEmerald)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: AppColors.textTertiary, size: 20),
+                  onPressed: () => onFilePicked('', '', 0),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.verified, color: AppColors.primaryEmerald, size: 16),
+                  const SizedBox(width: 6),
+                  const Expanded(
+                    child: Text(
+                      'フォーマット構文照合完了（国内株式・新NISA成長枠を含む）',
+                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      onFilePicked('rakuten_holdings_202412.csv', '31.2 KB', 45);
+                    },
+                    child: const Text(
+                      '別のファイル',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primaryEmerald),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            InkWell(
+              onTap: () {
+                onFilePicked('monex_portfolio_202412.csv', '24.8 KB', 38);
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 28),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainer,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.surfaceContainerHighest,
+                    style: BorderStyle.solid,
+                  ),
+                ),
+                child: Column(
+                  children: const [
+                    Icon(Icons.cloud_upload_outlined, size: 36, color: AppColors.primaryEmerald),
+                    SizedBox(height: 8),
+                    Text(
+                      'CSVファイルを選択 または タップして参照',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      '.csv形式 / UTF-8・Shift-JIS自動識別（最大 10MB）',
+                      style: TextStyle(fontSize: 10, color: AppColors.textTertiary),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+```
+
+### D. 各証券会社CSV出力ガイド (`widgets/broker_guide_accordion.dart`)
+```dart
+import 'package:flutter/material.dart';
+import '../../models/broker_format.dart';
+import '../../theme/app_theme.dart';
+
+class BrokerGuideAccordion extends StatefulWidget {
+  final BrokerType selectedBroker;
+
+  const BrokerGuideAccordion({super.key, required this.selectedBroker});
+
+  @override
+  State<BrokerGuideAccordion> createState() => _BrokerGuideAccordionState();
+}
+
+class _BrokerGuideAccordionState extends State<BrokerGuideAccordion> {
+  bool _isExpanded = true;
+  late BrokerType _activeTab;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeTab = widget.selectedBroker;
+  }
+
+  @override
+  void didUpdateWidget(covariant BrokerGuideAccordion oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedBroker != widget.selectedBroker) {
+      _activeTab = widget.selectedBroker;
+    }
+  }
+
+  final Map<BrokerType, BrokerGuideItem> _guides = const {
+    BrokerType.sbi: BrokerGuideItem(
+      type: BrokerType.sbi,
+      name: 'SBI証券',
+      description: 'SBI証券の「口座管理 > 保有証券」画面から出力されたCSVに対応しています。',
+      steps: [
+        'SBI証券にログイン後、「口座管理」タブをクリックします。',
+        '「保有証券一覧」の下部にある「CSVダウンロード」をクリックします。',
+        '保存したCSVを本アプリで読み込んでください。',
+      ],
+    ),
+    BrokerType.rakuten: BrokerGuideItem(
+      type: BrokerType.rakuten,
+      name: '楽天証券',
+      description: '楽天証券の「保有商品一覧」から出力された全資産CSVに対応しています。',
+      steps: [
+        '楽天証券にログイン後、「マイメニュー > 保有商品一覧」を開きます。',
+        'ページ右上にある「CSVで保存」ボタンをクリックします。',
+        '保存したCSVをそのまま本アプリで読み込んでください。',
+      ],
+    ),
+    BrokerType.monex: BrokerGuideItem(
+      type: BrokerType.monex,
+      name: 'マネックス証券',
+      description: 'マネックス証券の「保有残高・口座管理」画面から出力された保有株CSVに対応しています。',
+      steps: [
+        'ログイン後、「保有残高・口座管理」をクリックします。',
+        '画面下部にある「CSVダウンロード」をクリックします。',
+        'ダウンロードしたCSVを本アプリで読み込んでください。',
+      ],
+    ),
+    BrokerType.matsui: BrokerGuideItem(
+      type: BrokerType.matsui,
+      name: '松井証券',
+      description: '松井証券の「資産状況 > 現物残高一覧」のCSVに対応しています。',
+      steps: [
+        '松井証券ネットストックにログイン後、「資産状況」を開きます。',
+        '「現物残高一覧」画面下部の「CSV出力」をクリックします。',
+        '保存したファイルを本アプリで読み込んでください。',
+      ],
+    ),
+    BrokerType.custom: BrokerGuideItem(
+      type: BrokerType.custom,
+      name: 'その他 (汎用)',
+      description: '「銘柄コード, 保有株数, 取得単価」の3列が含まれる汎用CSVに対応しています。',
+      steps: [
+        '表計算ソフト（Excel / スプレッドシート）でファイルを作成します。',
+        '1行目に「code, shares, price」などのヘッダーを付与します。',
+        '.csv形式で保存し、本アプリへインポートしてください。',
+      ],
+    ),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final currentGuide = _guides[_activeTab] ?? _guides[BrokerType.monex]!;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          // アコーディオンヘッダー
+          InkWell(
+            onTap: () => setState(() => _isExpanded = !_isExpanded),
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: const [
+                      Icon(Icons.help_outline, color: AppColors.primaryEmerald, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        '各証券会社のCSV出力方法ガイド',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Icon(
+                    _isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    color: AppColors.textSecondary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          if (_isExpanded) ...[
+            const Divider(height: 1, color: Color(0x1AFFFFFF)),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ガイド内証券会社タブ
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _guides.keys.map((type) {
+                        final isTabSelected = _activeTab == type;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: ChoiceChip(
+                            label: Text(
+                              _guides[type]!.name,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: isTabSelected ? FontWeight.bold : FontWeight.normal,
+                                color: isTabSelected ? AppColors.onPrimary : AppColors.textSecondary,
+                              ),
+                            ),
+                            selected: isTabSelected,
+                            selectedColor: AppColors.primaryEmerald,
+                            backgroundColor: AppColors.surfaceContainerHigh,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            side: BorderSide.none,
+                            onSelected: (val) {
+                              if (val) setState(() => _activeTab = type);
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 説明バナー
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainer,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.lightbulb_outline, color: AppColors.primaryEmerald, size: 16),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            currentGuide.description,
+                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 手順リスト
+                  ...currentGuide.steps.asMap().entries.map((entry) {
+                    final index = entry.key + 1;
+                    final stepText = entry.value;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$index. ',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primaryEmerald,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              stepText,
+                              style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, height: 1.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+```
+
+### E. 端末内ローカル処理保証バッジ (`widgets/local_security_badge.dart`)
+```dart
+import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
+
+class LocalSecurityBadge extends StatelessWidget {
+  const LocalSecurityBadge({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primaryEmerald.withOpacity(0.2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.primaryContainer.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.lock_outline, color: AppColors.primaryEmerald, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  '端末内ローカル処理保証',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  '個人情報や保有資産データは外部サーバーへ送信されず、端末内（SQLite暗号化DB）のみでセキュアに解析されます。',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
