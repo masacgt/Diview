@@ -164,6 +164,20 @@ CREATE TABLE IF NOT EXISTS api_request_log (
   request_count INTEGER NOT NULL DEFAULT 0,
   window_started_at TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_api_request_log_window ON api_request_log(window_started_at);
 
 CREATE INDEX IF NOT EXISTS idx_notification_events_client_pending
   ON notification_events(json_extract(payload_json, '$.client_id'), delivered_at, occurred_at DESC);
+
+CREATE TABLE IF NOT EXISTS notification_deliveries (
+  event_id INTEGER NOT NULL REFERENCES notification_events(id) ON DELETE CASCADE,
+  device_token TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  delivered_at TEXT,
+  terminal_at TEXT,
+  last_error TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (event_id, device_token)
+);
+CREATE INDEX IF NOT EXISTS idx_notification_deliveries_pending
+  ON notification_deliveries(event_id, delivered_at, terminal_at);

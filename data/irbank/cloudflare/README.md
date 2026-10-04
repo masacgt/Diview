@@ -63,12 +63,12 @@ React の検索画面はこの一覧を1日端末にキャッシュし、銘柄�
 
 ## バックエンド運用（分析・通知）
 
-匿名クライアント登録は `POST /api/v1/clients/register` です。返却される `client_id` と `client_secret` は端末内に保存し、Watchlist条件・通知履歴・Push端末登録では `X-Client-Id` / `X-Client-Secret` ヘッダーを送ります。保有数量、取得単価、保有金額などのポートフォリオ情報はバックエンドへ送信しません。
+匿名クライアント登録は `POST /api/v1/clients/register` です。返却される `client_id` と `client_secret` は端末内に保存し、Watchlist条件・通知履歴・Push端末登録では `X-Client-Id` / `X-Client-Secret` ヘッダーを送ります。`GET /api/v1/watchlist-targets` はそのクライアントの監視条件だけを返します。保有数量、取得単価、保有金額などのポートフォリオ情報はバックエンドへ送信しません。
 
 ポートフォリオ診断の閾値・重みは KV の `portfolio-analysis-definitions:v1` で配信します。`scripts/seed-kv.ps1` で他の定義とまとめて登録します。`wrangler.toml` には `APP_DEFINITIONS` KV binding を本番 namespace ID とともに設定してください。
 
 Cron は市場スナップショットまたは分析定義が変わった場合に全銘柄を再評価し、それ以外の時間は通知対象のWatchlist銘柄だけを確認します。市場データが3日超古い場合は買場通知を抑止します。分析履歴は30日までは詳細を保持し、30日超は日次1件、365日超は月次1件へ圧縮します。
 
-`GET /api/v1/health` ではR2市場データの有無と経過日数、分析定義版、直近Cron結果を確認できます。Cron実行結果は `scheduled_run_log` に記録されます。
+公開読み取りAPIはIP単位、クライアントAPIは匿名クライアント単位でKV設定の回数制限を適用します。制限応答には `Retry-After` が付きます。JSON APIは既定で `private, no-store` とし、ブラウザの事前要求（CORS OPTIONS）にも応答します。`GET /api/v1/health` ではR2市場データの有無と経過日数、分析定義版、直近Cron結果を確認できます。Cron実行結果は `scheduled_run_log` に記録されます。
 
-FCM送信処理は `FCM_PROJECT_ID` と `FCM_ACCESS_TOKEN` が設定された場合だけ動作します。未設定時は通知イベントを保持し、Android端末内のWorkManager通知を引き続き利用します。FCMの認証情報はソースや `wrangler.toml` に直書きせず、Cloudflareのsecretとして設定してください。
+FCM送信は `FCM_PROJECT_ID` と `FCM_SERVICE_ACCOUNT_JSON` が設定された場合に動作します。WorkerはGoogle OAuthの短期アクセストークンをサービスアカウント鍵で取得します。端末ごとの送達・再試行状態をD1へ記録し、無効になったFCM端末トークンを停止します。未設定時は通知イベントを保持し、Android端末内のWorkManager通知を引き続き利用します。サービスアカウントJSONはソースや `wrangler.toml` に直書きせず、Cloudflareのsecretとして設定してください。
