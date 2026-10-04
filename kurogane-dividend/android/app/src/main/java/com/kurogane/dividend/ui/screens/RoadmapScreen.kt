@@ -164,57 +164,6 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                 .padding(horizontal = 14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Header: Roadmap Quest title with Icons matching Image 1
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp, bottom = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                               .background(SurfaceContainerHigh),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Flag,
-                                contentDescription = null,
-                                tint = PrimaryEmerald,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                "Roadmap Quest",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Black,
-                                    color = OnSurface
-                                )
-                            )
-                            Text(
-                                "不労所得 RPG・ステージ攻略",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense
-                                )
-                            )
-                        }
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Icon(Icons.Default.Search, contentDescription = null, tint = OnSurfaceVariant, modifier = Modifier.size(20.dp))
-                        Icon(Icons.Default.Notifications, contentDescription = null, tint = OnSurfaceVariant, modifier = Modifier.size(20.dp))
-                        Icon(Icons.Default.Settings, contentDescription = null, tint = OnSurfaceVariant, modifier = Modifier.size(20.dp))
-                    }
-                }
-            }
-
             // Quest Hero Card Dashboard
             item {
                 Card(
