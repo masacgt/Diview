@@ -47,7 +47,7 @@ export const ContactFeedbackScreen: React.FC = () => {
               </span>
               <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse" />
             </div>
-            <h3 className="font-bold text-sm text-white mt-1">Kurogane サポートデスク</h3>
+            <h3 className="font-bold text-sm text-white mt-1">Diview サポートデスク</h3>
             <p className="text-xs text-[#bbcabf] mt-0.5 leading-relaxed">
               配当管理や操作についてご不明な点、改善のご要望をお気軽にお寄せください。通常24時間以内に返信いたします。
             </p>

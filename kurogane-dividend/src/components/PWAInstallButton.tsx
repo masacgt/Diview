@@ -47,7 +47,7 @@ export const PWAInstallButton: React.FC = () => {
                 <br />
                 2. 表示されたメニューを下にスクロールし、「<strong>ホーム画面に追加</strong>」を選択します。<br />
                 <br />
-                3. 右上の「<strong>追加</strong>」をタップすると、ホーム画面にこのアプリ（Kurogane）が本物のアプリのようにインストールされます。
+                3. 右上の「<strong>追加</strong>」をタップすると、ホーム画面にこのアプリ（Diview）が本物のアプリのようにインストールされます。
               </p>
               <button
                 onClick={() => setShowIOSGuide(false)}
