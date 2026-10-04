@@ -24,7 +24,7 @@ object Tse33IndustryMaster {
     }
 
     fun normalizeCode(rawCode: String): String? {
-        val code = rawCode.trim().substringBefore('.').filter(Char::isDigit)
-        return code.takeIf { it.length in 1..4 }?.padStart(4, '0')
+        val code = rawCode.trim().substringBefore('.').uppercase()
+        return code.takeIf { it.matches(Regex("[A-Z0-9]{4}")) }
     }
 }
