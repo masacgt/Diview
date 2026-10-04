@@ -47,9 +47,9 @@ def parse_workbook(payload: bytes) -> list[tuple[str, str, str, str]]:
         industry_code = cells.get("E", "").strip()
         industry_name = cells.get("F", "").strip()
         name = cells.get("C", "").strip()
-        if not re.fullmatch(r"\d{4}", code) or not industry_code.isdigit() or industry_name in ("", "-"):
+        if not re.fullmatch(r"[A-Z0-9]{4}", code.upper()) or not industry_code.isdigit() or industry_name in ("", "-"):
             continue
-        code = code.zfill(4)
+        code = code.upper()
         if code in seen:
             raise ValueError(f"Duplicate TSE security code: {code}")
         seen.add(code)

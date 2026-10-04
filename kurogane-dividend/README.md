@@ -15,7 +15,7 @@ The APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`. Build
 
 ## TSE 33-industry master
 
-The annual dividend screen looks up a Japanese holding's industry by its four-digit securities code in `android/app/src/main/assets/tse33_industry_master.tsv`. The bundled snapshot and its source are documented in that assets folder. Refresh it with:
+The annual dividend screen looks up a Japanese holding's industry by its four-character securities code in `android/app/src/main/assets/tse33_industry_master.tsv`, including newer alphanumeric codes. The bundled snapshot and its source are documented in that assets folder. Refresh it with:
 
 ```powershell
 python scripts/sync_tse33_industry_master.py
