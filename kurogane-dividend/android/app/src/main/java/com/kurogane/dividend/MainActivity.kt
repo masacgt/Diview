@@ -291,7 +291,9 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .fillMaxHeight()
-                                                .clickable { navController.navigate(route) },
+                                                .clickable {
+                                                    if (!selected) navController.navigate(route)
+                                                },
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                             verticalArrangement = Arrangement.Center
                                         ) {
