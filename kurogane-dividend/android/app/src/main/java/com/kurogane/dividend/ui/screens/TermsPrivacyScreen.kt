@@ -42,12 +42,12 @@ fun TermsPrivacyScreen(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("規約とプライバシー", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Text("規約とプライバシー", color = OnSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = OnSurface)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = SpaceNavy)
@@ -68,7 +68,7 @@ fun TermsPrivacyScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
-                border = BorderStroke(1.dp, Color(0xFF1E293B))
+                border = BorderStroke(1.dp, BorderColor)
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
@@ -89,8 +89,8 @@ fun TermsPrivacyScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFF10B981).copy(alpha = 0.15f))
-                                .border(0.5.dp, Color(0xFF10B981).copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                                .background(PrimaryEmeraldContainer.copy(alpha = 0.15f))
+                                .border(0.5.dp, PrimaryEmeraldContainer.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -106,7 +106,7 @@ fun TermsPrivacyScreen(
                         Card(
                             modifier = Modifier.weight(1f),
                             colors = CardDefaults.cardColors(containerColor = BackgroundDark),
-                            border = BorderStroke(0.5.dp, Color(0xFF1E293B))
+                            border = BorderStroke(0.5.dp, BorderColor)
                         ) {
                             Row(
                                 modifier = Modifier.padding(8.dp),
@@ -115,7 +115,7 @@ fun TermsPrivacyScreen(
                             ) {
                                 Icon(Icons.Default.Lock, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
                                 Column {
-                                    Text("端末内AES-256暗号化", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    Text("端末内AES-256暗号化", color = OnSurface, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                     Text("クラウド送信 0 Byte", color = SoftGray, fontSize = 8.sp)
                                 }
                             }
@@ -125,7 +125,7 @@ fun TermsPrivacyScreen(
                         Card(
                             modifier = Modifier.weight(1f),
                             colors = CardDefaults.cardColors(containerColor = BackgroundDark),
-                            border = BorderStroke(0.5.dp, Color(0xFF1E293B))
+                            border = BorderStroke(0.5.dp, BorderColor)
                         ) {
                             Row(
                                 modifier = Modifier.padding(8.dp),
@@ -134,7 +134,7 @@ fun TermsPrivacyScreen(
                             ) {
                                 Icon(Icons.Default.Security, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
                                 Column {
-                                    Text("第三者提供・売買ゼロ", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    Text("第三者提供・売買ゼロ", color = OnSurface, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                     Text("認証情報は非保持", color = SoftGray, fontSize = 8.sp)
                                 }
                             }
@@ -149,7 +149,7 @@ fun TermsPrivacyScreen(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(BackgroundDark)
-                    .border(BorderStroke(1.dp, Color(0xFF1E293B)), RoundedCornerShape(12.dp))
+                    .border(BorderStroke(1.dp, BorderColor), RoundedCornerShape(12.dp))
                     .padding(3.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -214,7 +214,7 @@ fun TermsPrivacyScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
-                        border = BorderStroke(1.dp, Color(0xFF1E293B))
+                        border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(
@@ -222,11 +222,11 @@ fun TermsPrivacyScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Kurogane利用規約", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("Kurogane利用規約", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(4.dp))
-                                        .background(Color(0xFF10B981).copy(alpha = 0.15f))
+                                        .background(PrimaryEmeraldContainer.copy(alpha = 0.15f))
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text("2025年改訂版", color = PrimaryEmerald, fontSize = 8.sp, fontWeight = FontWeight.Bold)
@@ -246,7 +246,7 @@ fun TermsPrivacyScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
-                        border = BorderStroke(1.dp, Color(0xFF1E293B))
+                        border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column {
                             Row(
@@ -257,7 +257,7 @@ fun TermsPrivacyScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("第1条（総則・本サービスの目的）", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("第1条（総則・本サービスの目的）", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 Icon(
                                     imageVector = if (openArt1) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                     contentDescription = null,
@@ -337,10 +337,10 @@ fun TermsPrivacyScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
-                        border = BorderStroke(1.dp, Color(0xFF1E293B))
+                        border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("第3条（知的財産権および禁止事項）", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("第3条（知的財産権および禁止事項）", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Text(
                                 "本アプリ内のUIデザイン、グラフィック、アルゴリズムの著作権は当社に帰属します。リバースエンジニアリング、不正クローリング、複製行為は固く禁止いたします。",
                                 color = SoftGray,
@@ -358,7 +358,7 @@ fun TermsPrivacyScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
-                        border = BorderStroke(1.dp, Color(0xFF1E293B))
+                        border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -366,14 +366,14 @@ fun TermsPrivacyScreen(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF10B981).copy(alpha = 0.15f)),
+                                        .background(PrimaryEmeraldContainer.copy(alpha = 0.15f)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(Icons.Default.Security, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
                                 }
                                 Column {
                                     Text("Zero Knowledge Architecture", color = PrimaryEmerald, fontSize = 9.sp, fontWeight = FontWeight.Black)
-                                    Text("金融データ端末内完結宣言", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                    Text("金融データ端末内完結宣言", color = OnSurface, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
 
@@ -389,12 +389,12 @@ fun TermsPrivacyScreen(
                                 Card(
                                     modifier = Modifier.weight(1f),
                                     colors = CardDefaults.cardColors(containerColor = BackgroundDark),
-                                    border = BorderStroke(0.5.dp, Color(0xFF1E293B))
+                                    border = BorderStroke(0.5.dp, BorderColor)
                                 ) {
                                     Column(modifier = Modifier.padding(10.dp)) {
                                         Text("外部送信", color = PrimaryEmerald, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                         Spacer(modifier = Modifier.height(2.dp))
-                                        Text("0 Bytes", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
+                                        Text("0 Bytes", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
                                         Text("保有株・金額の送出なし", color = SoftGray, fontSize = 8.sp)
                                     }
                                 }
@@ -402,12 +402,12 @@ fun TermsPrivacyScreen(
                                 Card(
                                     modifier = Modifier.weight(1f),
                                     colors = CardDefaults.cardColors(containerColor = BackgroundDark),
-                                    border = BorderStroke(0.5.dp, Color(0xFF1E293B))
+                                    border = BorderStroke(0.5.dp, BorderColor)
                                 ) {
                                     Column(modifier = Modifier.padding(10.dp)) {
                                         Text("保護規格", color = PrimaryEmerald, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                         Spacer(modifier = Modifier.height(2.dp))
-                                        Text("AES-256", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
+                                        Text("AES-256", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
                                         Text("SQLite端末暗号化", color = SoftGray, fontSize = 8.sp)
                                     }
                                 }
@@ -420,10 +420,10 @@ fun TermsPrivacyScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
-                        border = BorderStroke(1.dp, Color(0xFF1E293B))
+                        border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("1. 情報の収集について", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("1. 情報の収集について", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Text(
                                 "本アプリは、外部サービスのアナリティクス機能（クラッシュ追跡等）を最小限に抑え、ユーザーが手入力した資産額などの金融重要データを一切収集しません。",
                                 color = SoftGray,
@@ -437,10 +437,10 @@ fun TermsPrivacyScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
-                        border = BorderStroke(1.dp, Color(0xFF1E293B))
+                        border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("2. データの端末内ストレージ保管", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("2. データの端末内ストレージ保管", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Text(
                                 "ユーザーのポートフォリオ情報は、Androidシステムのセキュリティサンドボックスモデルに基づき、暗号化が施された領域（EncryptedSharedPreferences、Room Database）に保存されます。他アプリからの不正アクセスを強力に防ぎます。",
                                 color = SoftGray,

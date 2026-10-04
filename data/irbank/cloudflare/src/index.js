@@ -1,3 +1,5 @@
+const ANALYSIS_CONCURRENCY = 8;
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -96,6 +98,7 @@ function publicRateLimitRoute(pathname) {
   if (pathname.startsWith('/api/v1/analysis-history/')) return 'analysis-history';
   if (pathname.startsWith('/api/v1/analysis/')) return 'analysis';
   if (pathname.startsWith('/api/v1/securities/')) return 'security';
+  if (pathname === '/api/v1/security-search') return 'security-search';
   if (pathname === '/api/v1/search-catalog') return 'search-catalog';
   if (pathname.startsWith('/api/v1/')) return pathname.slice('/api/v1/'.length);
   return null;
@@ -214,14 +217,30 @@ async function appDefinitionDocument(env, key) {
   return row ? JSON.parse(row.value_json) : null;
 }
 
-async function latestMarketForSecurity(env, displayCode) {
-  if (!env.MARKET_DATA) return null;
+async function loadMarketIndex(env) {
+  if (!env.MARKET_DATA) return new Map();
   const object = await env.MARKET_DATA.get('market/yfinance/latest_market_data.json');
-  if (!object) return null;
+  if (!object) return new Map();
   const snapshot = JSON.parse(await object.text());
+  return new Map((snapshot.securities || [])
+    .filter(row => row?.symbol)
+    .map(row => [String(row.symbol).toUpperCase(), { row, snapshot }]));
+}
+
+async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
+  if (!env.MARKET_DATA) return null;
   const symbol = `${displayCode}.T`.toUpperCase();
-  const row = (snapshot.securities || []).find(item => String(item.symbol || '').toUpperCase() === symbol);
+  let indexed = marketIndex?.get(symbol);
+  if (!marketIndex) {
+    const object = await env.MARKET_DATA.get('market/yfinance/latest_market_data.json');
+    if (!object) return null;
+    const snapshot = JSON.parse(await object.text());
+    const row = (snapshot.securities || []).find(item => String(item.symbol || '').toUpperCase() === symbol);
+    if (row) indexed = { row, snapshot };
+  }
+  const row = indexed?.row;
   if (!row) return null;
+  const snapshot = indexed.snapshot;
   const quote = row.latest_daily_price || {};
   return { summary: row, price: {
     symbol: row.symbol,
@@ -239,19 +258,21 @@ async function latestMarketForSecurity(env, displayCode) {
   }};
 }
 
-async function loadSecurityAnalysisInput(env, security) {
-  const dividend = await env.DB.prepare(
-    `SELECT fiscal_year, annual_dps, annual_dps_adjusted, record_date, final_rights_date, date_status, data_json
-     FROM dividend_events WHERE security_code = ? ORDER BY fiscal_year DESC LIMIT 1`
-  ).bind(security.security_code).first();
-  const financial = await env.DB.prepare(
-    `SELECT fiscal_year, accounting_standard, is_consolidated, data_json
-     FROM financial_periods WHERE security_code = ? AND period_type = 'annual' ORDER BY fiscal_year DESC LIMIT 1`
-  ).bind(security.security_code).first();
+async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
+  const [dividend, financial, marketData] = await Promise.all([
+    env.DB.prepare(
+      `SELECT fiscal_year, annual_dps, annual_dps_adjusted, record_date, final_rights_date, date_status, data_json
+       FROM dividend_events WHERE security_code = ? ORDER BY fiscal_year DESC LIMIT 1`
+    ).bind(security.security_code).first(),
+    env.DB.prepare(
+      `SELECT fiscal_year, accounting_standard, is_consolidated, data_json
+       FROM financial_periods WHERE security_code = ? AND period_type = 'annual' ORDER BY fiscal_year DESC LIMIT 1`
+    ).bind(security.security_code).first(),
+    latestMarketForSecurity(env, security.security_code_display, marketIndex),
+  ]);
   const metrics = JSON.parse(security.metrics_json || '[]');
   const dividendData = dividend ? JSON.parse(dividend.data_json || '{}') : null;
   const financialData = financial ? JSON.parse(financial.data_json || '{}') : null;
-  const marketData = await latestMarketForSecurity(env, security.security_code_display);
   const summary = marketData?.summary || null;
   const price = finiteNumber(marketData?.price?.close);
   const annualDps = finiteNumber(dividend?.annual_dps_adjusted ?? dividend?.annual_dps);
@@ -271,11 +292,13 @@ async function loadSecurityAnalysisInput(env, security) {
 async function buildAnalysisSnapshot(env, security, targetYield = null, preloaded = null) {
   const stockDefs = preloaded?.stockDefs || await appDefinitionDocument(env, 'stock-analysis-definitions:v1') || {};
   const watchDefs = preloaded?.watchDefs || await appDefinitionDocument(env, 'watchlist-analysis-definitions:v1') || {};
-  await Promise.all([
-    auditDefinition(env, 'stock-analysis-definitions:v1', stockDefs),
-    auditDefinition(env, 'watchlist-analysis-definitions:v1', watchDefs),
-  ]);
-  const input = await loadSecurityAnalysisInput(env, security);
+  if (!preloaded?.skipDefinitionAudit) {
+    await Promise.all([
+      auditDefinition(env, 'stock-analysis-definitions:v1', stockDefs),
+      auditDefinition(env, 'watchlist-analysis-definitions:v1', watchDefs),
+    ]);
+  }
+  const input = preloaded?.input || await loadSecurityAnalysisInput(env, security, preloaded?.marketIndex);
   const analysis = evaluateStockAnalysis(input.values, stockDefs);
   const flags = anomalyFlags(input.values);
   const target = finiteNumber(targetYield);
@@ -309,11 +332,26 @@ async function buildAnalysisSnapshot(env, security, targetYield = null, preloade
 
 async function persistSnapshot(env, security, snapshot) {
   const previous = await env.DB.prepare(
-    'SELECT overall_grade, buy_zone_status FROM stock_analysis_state WHERE security_code = ?'
+    'SELECT overall_grade, buy_zone_status, analysis_json FROM stock_analysis_state WHERE security_code = ?'
   ).bind(security.security_code).first();
   const payload = JSON.stringify(snapshot);
-  await env.DB.batch([
-    env.DB.prepare(
+  let historyChanged = true;
+  if (previous?.analysis_json) {
+    try {
+      const oldSnapshot = JSON.parse(previous.analysis_json);
+      const newSnapshot = JSON.parse(payload);
+      delete oldSnapshot.observed_at;
+      delete newSnapshot.observed_at;
+      if (oldSnapshot.freshness) delete oldSnapshot.freshness.market_generated_at;
+      if (newSnapshot.freshness) delete newSnapshot.freshness.market_generated_at;
+      historyChanged = JSON.stringify(oldSnapshot) !== JSON.stringify(newSnapshot);
+    } catch {
+      // Preserve history if an older or malformed snapshot cannot be compared safely.
+    }
+  }
+  const statements = [];
+  if (historyChanged) {
+    statements.push(env.DB.prepare(
       `INSERT INTO stock_analysis_history(
         security_code, observed_at, market_date, definition_version, overall_score, overall_grade,
         buy_zone_status, buy_zone_ratio, anomaly_flags_json, metrics_json, analysis_json
@@ -330,8 +368,9 @@ async function persistSnapshot(env, security, snapshot) {
       JSON.stringify(snapshot.anomalies),
       JSON.stringify(snapshot.values),
       payload,
-    ),
-    env.DB.prepare(
+    ));
+  }
+  statements.push(env.DB.prepare(
       `INSERT INTO stock_analysis_state(
         security_code, last_observed_at, market_date, definition_version, overall_score, overall_grade,
         buy_zone_status, buy_zone_ratio, anomaly_flags_json, analysis_json
@@ -357,8 +396,8 @@ async function persistSnapshot(env, security, snapshot) {
       snapshot.buy_zone_ratio,
       JSON.stringify(snapshot.anomalies),
       payload,
-    ),
-  ]);
+  ));
+  await env.DB.batch(statements);
   const events = [];
   if (previous?.overall_grade && previous.overall_grade !== snapshot.analysis.overall_grade) {
     events.push({ type: 'GRADE_CHANGED', from: previous.overall_grade, to: snapshot.analysis.overall_grade });
@@ -487,45 +526,91 @@ async function deliverPendingNotifications(env) {
 }
 
 async function runScheduledAnalysis(env) {
+  const runStartedMs = Date.now();
   const startedAt = isoNow();
   const log = await env.DB.prepare(`INSERT INTO scheduled_run_log(run_type, started_at, status) VALUES ('analysis', ?, 'running')`).bind(startedAt).run();
   const runId = log.meta?.last_row_id;
   let processed = 0;
   let failed = 0;
+  const failureSamples = [];
   try {
     const stockDefs = await appDefinitionDocument(env, 'stock-analysis-definitions:v1') || {};
     const watchDefs = await appDefinitionDocument(env, 'watchlist-analysis-definitions:v1') || {};
     const config = await backendConfig(env);
     await Promise.all([auditDefinition(env, 'stock-analysis-definitions:v1', stockDefs), auditDefinition(env, 'watchlist-analysis-definitions:v1', watchDefs)]);
-    const watched = await env.DB.prepare(`SELECT DISTINCT s.security_code, s.security_code_display, s.name, s.metrics_json FROM securities s JOIN watchlist_targets w ON w.security_code = s.security_code WHERE w.alert_enabled = 1 ORDER BY s.security_code`).all();
+    const activeTargets = await env.DB.prepare(`SELECT s.security_code, s.security_code_display, s.name, s.metrics_json, w.client_id, w.target_yield
+      FROM securities s JOIN watchlist_targets w ON w.security_code = s.security_code
+      WHERE w.alert_enabled = 1 ORDER BY s.security_code, w.client_id`).all();
+    const targetsBySecurity = new Map();
+    const watchedBySecurity = new Map();
+    for (const row of activeTargets.results || []) {
+      watchedBySecurity.set(row.security_code, {
+        security_code: row.security_code,
+        security_code_display: row.security_code_display,
+        name: row.name,
+        metrics_json: row.metrics_json,
+      });
+      const targets = targetsBySecurity.get(row.security_code) || [];
+      targets.push({ client_id: row.client_id, target_yield: row.target_yield, alert_enabled: 1 });
+      targetsBySecurity.set(row.security_code, targets);
+    }
     const latestState = await env.DB.prepare(`SELECT value_json FROM backend_state WHERE state_key = 'analysis_source'`).first();
     const marketObject = await env.MARKET_DATA?.head('market/yfinance/latest_market_data.json');
     const sourceTag = JSON.stringify({ etag: marketObject?.httpEtag || null, stock_version: stockDefs.version || 1, watch_version: watchDefs.version || 1 });
     const sourceChanged = latestState?.value_json !== sourceTag;
-    const securities = sourceChanged ? await env.DB.prepare('SELECT security_code, security_code_display, name, metrics_json FROM securities ORDER BY security_code').all() : watched;
-    for (const security of securities.results || []) {
-      try {
-        const targetRows = await env.DB.prepare(`SELECT client_id, target_yield, alert_enabled FROM watchlist_targets WHERE security_code = ? AND alert_enabled = 1`).bind(security.security_code).all();
-        const base = await buildAnalysisSnapshot(env, security, null, { stockDefs, watchDefs, config });
-        if (sourceChanged) await persistSnapshot(env, security, base);
-        if (!base.freshness.market_stale) {
-          for (const targetRow of targetRows.results || []) {
-            const targeted = await buildAnalysisSnapshot(env, security, Number(targetRow.target_yield), { stockDefs, watchDefs, config });
-            const previous = await env.DB.prepare(`SELECT to_status FROM notification_events WHERE security_code = ? AND event_type = ? AND json_extract(payload_json, '$.client_id') = ? ORDER BY occurred_at DESC LIMIT 1`).bind(security.security_code, 'WATCHLIST_BUY_ZONE_CHANGED', targetRow.client_id).first();
-            const currentStatus = targeted.buy_zone?.status ?? null;
-            if (currentStatus && previous?.to_status !== currentStatus) await env.DB.prepare(`INSERT INTO notification_events(security_code, event_type, from_status, to_status, occurred_at, payload_json) VALUES (?, ?, ?, ?, ?, ?)`).bind(security.security_code, 'WATCHLIST_BUY_ZONE_CHANGED', previous?.to_status ?? null, currentStatus, targeted.observed_at, JSON.stringify({ ...targeted, client_id: targetRow.client_id })).run();
+    const securities = sourceChanged
+      ? (await env.DB.prepare('SELECT security_code, security_code_display, name, metrics_json FROM securities ORDER BY security_code').all()).results || []
+      : [...watchedBySecurity.values()];
+    const marketIndex = securities.length ? await loadMarketIndex(env) : new Map();
+    const analysisStartedMs = Date.now();
+    for (let offset = 0; offset < securities.length; offset += ANALYSIS_CONCURRENCY) {
+      const group = securities.slice(offset, offset + ANALYSIS_CONCURRENCY);
+      await Promise.all(group.map(async security => {
+        try {
+          const targetRows = targetsBySecurity.get(security.security_code) || [];
+          const input = await loadSecurityAnalysisInput(env, security, marketIndex);
+          const preloaded = { stockDefs, watchDefs, config, input, skipDefinitionAudit: true };
+          const base = await buildAnalysisSnapshot(env, security, null, preloaded);
+          if (sourceChanged) await persistSnapshot(env, security, base);
+          if (!base.freshness.market_stale) {
+            for (const targetRow of targetRows) {
+              const targeted = await buildAnalysisSnapshot(env, security, Number(targetRow.target_yield), preloaded);
+              const previous = await env.DB.prepare(`SELECT to_status FROM notification_events WHERE security_code = ? AND event_type = ? AND json_extract(payload_json, '$.client_id') = ? ORDER BY occurred_at DESC LIMIT 1`).bind(security.security_code, 'WATCHLIST_BUY_ZONE_CHANGED', targetRow.client_id).first();
+              const currentStatus = targeted.buy_zone?.status ?? null;
+              if (currentStatus && previous?.to_status !== currentStatus) await env.DB.prepare(`INSERT INTO notification_events(security_code, event_type, from_status, to_status, occurred_at, payload_json) VALUES (?, ?, ?, ?, ?, ?)`).bind(security.security_code, 'WATCHLIST_BUY_ZONE_CHANGED', previous?.to_status ?? null, currentStatus, targeted.observed_at, JSON.stringify({ ...targeted, client_id: targetRow.client_id })).run();
+            }
+          }
+          processed += 1;
+        } catch (error) {
+          failed += 1;
+          if (failureSamples.length < 20) {
+            failureSamples.push({
+              security_code: security.security_code_display,
+              error: String(error?.name || 'Error').slice(0, 80),
+            });
           }
         }
-        processed += 1;
-      } catch { failed += 1; }
+      }));
     }
-    if (sourceChanged) await env.DB.prepare(`INSERT INTO backend_state(state_key, value_json, updated_at) VALUES ('analysis_source', ?, ?) ON CONFLICT(state_key) DO UPDATE SET value_json=excluded.value_json, updated_at=excluded.updated_at`).bind(sourceTag, isoNow()).run();
+    const analysisDurationMs = Date.now() - analysisStartedMs;
+    const sourceTagAdvanced = sourceChanged && failed === 0;
+    if (sourceTagAdvanced) await env.DB.prepare(`INSERT INTO backend_state(state_key, value_json, updated_at) VALUES ('analysis_source', ?, ?) ON CONFLICT(state_key) DO UPDATE SET value_json=excluded.value_json, updated_at=excluded.updated_at`).bind(sourceTag, isoNow()).run();
+    const cleanupStartedMs = Date.now();
     await compactAnalysisHistory(env);
+    const cleanupDurationMs = Date.now() - cleanupStartedMs;
+    const notificationsStartedMs = Date.now();
     const delivery = await deliverPendingNotifications(env);
-    if (runId) await env.DB.prepare(`UPDATE scheduled_run_log SET finished_at=?, status=?, processed=?, failed=?, metadata_json=? WHERE id=?`).bind(isoNow(), failed ? 'partial' : 'success', processed, failed, JSON.stringify({ source_changed: sourceChanged, delivery }), runId).run();
-    return { processed, failed, source_changed: sourceChanged, delivery, observed_at: isoNow() };
+    const notificationsDurationMs = Date.now() - notificationsStartedMs;
+    const durations = {
+      analysis_ms: analysisDurationMs,
+      cleanup_ms: cleanupDurationMs,
+      notifications_ms: notificationsDurationMs,
+      total_ms: Date.now() - runStartedMs,
+    };
+    if (runId) await env.DB.prepare(`UPDATE scheduled_run_log SET finished_at=?, status=?, processed=?, failed=?, metadata_json=? WHERE id=?`).bind(isoNow(), failed ? 'partial' : 'success', processed, failed, JSON.stringify({ source_changed: sourceChanged, source_tag_advanced: sourceTagAdvanced, failure_samples: failureSamples, delivery, durations_ms: durations }), runId).run();
+    return { processed, failed, source_changed: sourceChanged, source_tag_advanced: sourceTagAdvanced, failure_samples: failureSamples, delivery, durations_ms: durations, observed_at: isoNow() };
   } catch (error) {
-    if (runId) await env.DB.prepare(`UPDATE scheduled_run_log SET finished_at=?, status='failed', processed=?, failed=?, metadata_json=? WHERE id=?`).bind(isoNow(), processed, failed + 1, JSON.stringify({ error: String(error?.message || error) }), runId).run();
+    if (runId) await env.DB.prepare(`UPDATE scheduled_run_log SET finished_at=?, status='failed', processed=?, failed=?, metadata_json=? WHERE id=?`).bind(isoNow(), processed, failed + 1, JSON.stringify({ error: String(error?.message || error), durations_ms: { total_ms: Date.now() - runStartedMs } }), runId).run();
     throw error;
   }
 }
@@ -661,17 +746,98 @@ export default {
 
     if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
 
+    if (url.pathname === '/api/v1/popular-holdings') {
+      if (!env.MARKET_DATA) return json({ error: 'market_data_unavailable' }, 503);
+      const requestedDate = String(url.searchParams.get('date') || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) return json({ error: 'invalid_request' }, 400);
+      const offset = Math.max(0, Math.min(100000, Number.parseInt(url.searchParams.get('offset') || '0', 10) || 0));
+      const limit = Math.max(1, Math.min(20, Number.parseInt(url.searchParams.get('limit') || '20', 10) || 20));
+      const catalogObject = await env.MARKET_DATA.get('market/yfinance/search_catalog.json');
+      if (!catalogObject) return json({ error: 'search_catalog_unavailable' }, 503);
+      const catalog = JSON.parse(await catalogObject.text());
+      const candidates = (catalog.items || [])
+        .filter(row => irbankR2Code(String(row?.code || ''))
+          && finiteNumber(row?.price) > 0
+          && finiteNumber(row?.estimated_average_trading_value_20d) > 0)
+        .sort((a, b) => finiteNumber(b.estimated_average_trading_value_20d) - finiteNumber(a.estimated_average_trading_value_20d)
+          || String(a.code).localeCompare(String(b.code)));
+      const batch = candidates.slice(offset, offset + limit);
+      const items = (await Promise.all(batch.map(async row => {
+        const code = irbankR2Code(String(row.code));
+        if (!code) return null;
+        const object = await env.MARKET_DATA.get(`market/yfinance/securities/${code}.T.json`);
+        if (!object) return null;
+        const document = JSON.parse(await object.text());
+        const prices = document.price_history?.['1d'];
+        if (!Array.isArray(prices)) return null;
+        const point = prices.reduce((best, item) => {
+          const date = String(item?.date || '');
+          const close = finiteNumber(item?.close);
+          return date && date <= requestedDate && close > 0 && (!best || date > best.date)
+            ? { date, close }
+            : best;
+        }, null);
+        if (!point) return null;
+        const currentPrice = finiteNumber(row.price);
+        if (!(currentPrice > 0)) return null;
+        const statistics = document.statistics_current || {};
+        const dps = finiteNumber(statistics.dividendRate);
+        const yieldRate = dps !== null && dps >= 0
+          ? (dps / currentPrice) * 100
+          : finiteNumber(row.yield_rate);
+        const industry = String(statistics.industry || statistics.sector || '').trim();
+        return {
+          code,
+          name: String(row.name || code),
+          sector: industry || null,
+          current_price: currentPrice,
+          acquisition_price: point.close,
+          acquisition_date: point.date,
+          annual_dividend_per_share: dps !== null && dps >= 0 ? dps : null,
+          yield_rate: yieldRate,
+          estimated_average_trading_value_20d: finiteNumber(row.estimated_average_trading_value_20d),
+        };
+      }))).filter(Boolean);
+      const response = json({
+        items,
+        next_offset: offset + batch.length,
+        total_count: candidates.length,
+        acquisition_date: requestedDate,
+        ranking: 'estimated_average_trading_value_20d',
+      });
+      response.headers.set('cache-control', 'public, max-age=300');
+      return response;
+    }
+
     if (url.pathname === '/api/v1/search-catalog') {
       const object = await env.MARKET_DATA?.get('market/yfinance/search_catalog.json');
       if (!object) return json({ error: 'search_catalog_unavailable' }, 503);
       return new Response(object.body, {
         headers: {
           'content-type': 'application/json; charset=utf-8',
-          'cache-control': 'public, max-age=86400',
+          'cache-control': 'public, max-age=300',
           'access-control-allow-origin': '*',
           'etag': object.httpEtag,
         }
       });
+    }
+
+    if (url.pathname === '/api/v1/security-search') {
+      const query = String(url.searchParams.get('q') || '').trim().slice(0, 100);
+      if (!query) return json({ items: [] });
+      const like = `%${query}%`;
+      const prefix = `${query}%`;
+      const exact = query.toUpperCase();
+      const result = await env.DB.prepare(
+        `SELECT security_code_display AS code, name
+         FROM securities
+         WHERE security_code_display LIKE ? OR name LIKE ?
+         ORDER BY CASE WHEN upper(security_code_display) = ? THEN 0
+                       WHEN upper(security_code_display) LIKE ? THEN 1 ELSE 2 END,
+                  name COLLATE NOCASE
+         LIMIT 30`
+      ).bind(like, like, exact, prefix.toUpperCase()).all();
+      return json({ items: result.results || [] });
     }
 
     if (url.pathname === '/api/v1/irbank/manifest') {
@@ -795,7 +961,9 @@ export default {
       const metrics = JSON.parse(security.metrics_json || '[]');
       const dividendData = dividend ? JSON.parse(dividend.data_json || '{}') : null;
       const financialData = financial ? JSON.parse(financial.data_json || '{}') : null;
-      const marketData = await latestMarketForSecurity(env, security.security_code_display);
+      const marketData = url.searchParams.get('include_market') === 'false'
+        ? null
+        : await latestMarketForSecurity(env, security.security_code_display);
       const marketPrice = marketData?.price ?? null;
       const marketSummary = marketData?.summary;
       return json({

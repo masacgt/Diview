@@ -45,6 +45,8 @@ import com.kurogane.dividend.ui.screens.TermsPrivacyScreen
 import com.kurogane.dividend.ui.screens.CsvImportScreen
 import com.kurogane.dividend.ui.theme.BackgroundDark
 import com.kurogane.dividend.ui.theme.KuroganeDividendTheme
+import com.kurogane.dividend.ui.theme.BorderColor
+import com.kurogane.dividend.ui.theme.OnSurface
 import com.kurogane.dividend.ui.theme.OnSurfaceVariant
 import com.kurogane.dividend.ui.theme.PrimaryEmerald
 import com.kurogane.dividend.ui.theme.OnPrimary
@@ -61,19 +63,21 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            KuroganeDividendTheme {
+            val themeMode by viewModel.themeMode.collectAsState()
+            val isOledBlack by viewModel.isOledBlack.collectAsState()
+            val selectedAccent by viewModel.selectedAccent.collectAsState()
+            KuroganeDividendTheme(
+                themeMode = themeMode,
+                isOledBlack = isOledBlack,
+                selectedAccent = selectedAccent
+            ) {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
                 SideEffect {
                     val insetsController = WindowInsetsControllerCompat(window, window.decorView)
-                    if (currentRoute == "settings") {
-                        insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                        insetsController.hide(WindowInsetsCompat.Type.systemBars())
-                    } else {
-                        insetsController.show(WindowInsetsCompat.Type.systemBars())
-                    }
+                    insetsController.show(WindowInsetsCompat.Type.systemBars())
                 }
 
                 var showSearchSheet by remember { mutableStateOf(false) }
@@ -81,9 +85,7 @@ class MainActivity : ComponentActivity() {
                 var showAddHoldingSheet by remember { mutableStateOf(false) }
                 var prefilledAddHoldingCode by remember { mutableStateOf("") }
 
-                val isOledBlack by viewModel.isOledBlack.collectAsState()
-                val currentThemeMode by viewModel.themeMode.collectAsState()
-                val dynamicBg = if (isOledBlack && currentThemeMode != "light") Color.Black else BackgroundDark
+                val dynamicBg = BackgroundDark
 
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
@@ -94,9 +96,9 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier
                                 .statusBarsPadding()
                                 .fillMaxWidth()
-                                .height(if (currentRoute == "settings") 44.dp else 56.dp)
+                                .height(56.dp)
                                 .background(dynamicBg)
-                                .border(BorderStroke(0.5.dp, Color(0xFF1E293B)))
+                                .border(BorderStroke(0.5.dp, BorderColor))
                                 .padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -118,7 +120,7 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier
                                             .size(36.dp)
                                             .clip(RoundedCornerShape(10.dp))
-                                            .background(Color(0xFF171F33))
+                                            .background(SurfaceContainer)
                                             .border(1.dp, Color(0x3310B981), RoundedCornerShape(10.dp)),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -135,7 +137,7 @@ class MainActivity : ComponentActivity() {
                                             text = title,
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.ExtraBold,
-                                            color = Color.White
+                                            color = OnSurface
                                         )
                                         Text(
                                             text = subtitle,
@@ -147,13 +149,35 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             } else if (currentRoute == "settings") {
-                                IconButton(onClick = { navController.popBackStack() }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White, modifier = Modifier.size(18.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    IconButton(onClick = { navController.popBackStack() }, modifier = Modifier.size(36.dp)) {
+                                        Icon(Icons.Default.ArrowBack, contentDescription = "戻る", tint = OnSurface, modifier = Modifier.size(18.dp))
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(SurfaceContainer)
+                                            .border(1.dp, Color(0x3310B981), RoundedCornerShape(10.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Settings,
+                                            contentDescription = null,
+                                            tint = PrimaryEmerald,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text("設定・データ管理", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = OnSurface)
+                                        Text("SETTINGS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, letterSpacing = 0.5.sp)
+                                    }
                                 }
-                                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                    Text("設定・データ管理", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                }
-                                Spacer(Modifier.width(36.dp))
                             } else {
                                 // Left side back button title layout
                                 val title = when {
@@ -167,14 +191,14 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     IconButton(onClick = { navController.popBackStack() }) {
-                                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = OnSurface)
                                     }
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
                                         text = title,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = OnSurface
                                     )
                                 }
                             }
@@ -230,7 +254,7 @@ class MainActivity : ComponentActivity() {
                                     .fillMaxWidth()
                                     .height(64.dp)
                                     .background(BackgroundDark)
-                                    .border(BorderStroke(0.5.dp, Color(0xFF1E293B)))
+                                    .border(BorderStroke(0.5.dp, BorderColor))
                             ) {
                                 val tabWidth = maxWidth / 4
                                 val indicatorOffset by animateDpAsState(
@@ -239,15 +263,17 @@ class MainActivity : ComponentActivity() {
                                     label = "activeIndicator"
                                 )
 
-                                // Sliding active indicator pill at the top of bottom bar
-                                Box(
-                                    modifier = Modifier
-                                        .offset(x = indicatorOffset, y = 0.dp)
-                                        .width(32.dp)
-                                        .height(3.dp)
-                                        .clip(RoundedCornerShape(1.5.dp))
-                                        .background(PrimaryEmerald)
-                                )
+                                if (currentRoute != "settings") {
+                                    // Sliding active indicator pill at the top of bottom bar
+                                    Box(
+                                        modifier = Modifier
+                                            .offset(x = indicatorOffset, y = 0.dp)
+                                            .width(32.dp)
+                                            .height(3.dp)
+                                            .clip(RoundedCornerShape(1.5.dp))
+                                            .background(PrimaryEmerald)
+                                    )
+                                }
 
                                 Row(
                                     modifier = Modifier.fillMaxSize(),
@@ -260,7 +286,7 @@ class MainActivity : ComponentActivity() {
                                         Triple("watchlist", "Watchlist", Icons.Default.Bookmark)
                                     )
                                     tabs.forEach { (route, label, icon) ->
-                                        val selected = currentRoute == route || (currentRoute == "settings" && route == "asset")
+                                        val selected = currentRoute == route
                                         Column(
                                             modifier = Modifier
                                                 .weight(1f)
@@ -346,7 +372,17 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             composable("csv_import") {
-                                CsvImportScreen(onBack = { navController.popBackStack() })
+                                CsvImportScreen(
+                                    onBack = { navController.popBackStack() },
+                                    onImportCsv = { rows, fields ->
+                                        viewModel.importCsvRows(rows, fields)
+                                        navController.popBackStack()
+                                    },
+                                    onImportDvm = { backups ->
+                                        viewModel.importDvmBackups(backups)
+                                        navController.popBackStack()
+                                    }
+                                )
                             }
                             composable("contact_feedback") {
                                 ContactFeedbackScreen(
@@ -373,6 +409,7 @@ class MainActivity : ComponentActivity() {
                         SearchSheet(
                             visible = showSearchSheet,
                             onDismiss = { showSearchSheet = false },
+                            onSearch = { query -> viewModel.searchCloudflareSecurities(query) },
                             onSelectStock = { code ->
                                 showSearchSheet = false
                                 navController.navigate("detail/$code")
@@ -384,9 +421,16 @@ class MainActivity : ComponentActivity() {
                             visible = showAddHoldingSheet,
                             prefilledCode = prefilledAddHoldingCode,
                             onDismiss = { showAddHoldingSheet = false },
+                            onResolveSecurity = { code -> viewModel.resolveCloudflareSecurity(code) },
                             onRegisterCollective = { code, totalShares, weightedAcqPrice, primaryAccount ->
-                                viewModel.addOrUpdateHolding(code, totalShares, weightedAcqPrice, primaryAccount)
-                                showAddHoldingSheet = false
+                                val registered = viewModel.registerCloudflareHolding(
+                                    code,
+                                    totalShares,
+                                    weightedAcqPrice,
+                                    primaryAccount
+                                )
+                                if (registered) showAddHoldingSheet = false
+                                registered
                             }
                         )
 
@@ -406,21 +450,21 @@ class MainActivity : ComponentActivity() {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.Notifications, contentDescription = null, tint = PrimaryEmerald)
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("お知らせ・通知", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                        Text("お知らせ・通知", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                     }
                                 },
                                 text = {
                                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        Text("🔔 利回りシグナル検知", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Text("🔔 利回りシグナル検知", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                         Text("日本たばこ産業 (JT) の株価が目標買場利回り (4.80%) に接近しました。現在の実効利回りは 4.73% です。", color = OnSurfaceVariant, fontSize = 11.sp, lineHeight = 15.sp)
-                                        HorizontalDivider(color = Color(0xFF1E293B), thickness = 0.5.dp)
-                                        Text("🎉 ロードマップ進捗アップデート", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
+                                        Text("🎉 ロードマップ進捗アップデート", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                         Text("STEP 5 「水道光熱費の全額自給 (月3万円)」を達成しました！次のクエスト「食費・日用品の全額自給 (月5万円)」に挑戦中です。", color = OnSurfaceVariant, fontSize = 11.sp, lineHeight = 15.sp)
                                     }
                                 },
                                 containerColor = SurfaceContainer,
                                 shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.border(1.dp, Color(0xFF1E293B), RoundedCornerShape(16.dp))
+                                modifier = Modifier.border(1.dp, BorderColor, RoundedCornerShape(16.dp))
                             )
                         }
                     }

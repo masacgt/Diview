@@ -30,7 +30,9 @@ powershell -ExecutionPolicy Bypass -File .\import-d1.ps1
 
 ## Android検証
 
-Android debugビルドはD1検証モードが既定で有効です。起動ごとにWorker APIを再取得し、ローカルのダミー株価・配当値をデータ取得失敗時の代替値にしません。Worker URLはGradleプロパティ `diviewD1ApiBaseUrl` で上書きできます。releaseビルドではこの動作は無効です。
+AndroidアプリはWorker APIを使って銘柄を検索・照合します。`/api/v1/security-search?q=...` はD1の銘柄マスターを検索し、`/api/v1/securities/{銘柄コード}?include_market=false` は登録前の銘柄情報を返します。Worker URLはGradleプロパティ `diviewD1ApiBaseUrl` で上書きできます。既定値は `https://diview-irbank.omasa.workers.dev` です。
+
+株価一覧は `/api/v1/search-catalog` から取得し、Android端末のSharedPreferencesへ保存します。取得は日本時間の日付を使って1日1回までとし、日付が変わっていても前回取得から12時間未満なら見送ります。取得時刻と当日取得済みの日付は、取得成功時にのみ更新します。株価スナップショットが未公開の場合、銘柄検索は可能ですが価格は更新されません。
 
 D1 APIは `/api/v1/securities/{銘柄コード}`、定義APIは `/api/v1/diagnosis-definitions`、`/api/v1/valuation-scenarios`、`/api/v1/stock-analysis-definitions`、`/api/v1/watchlist-analysis-definitions` です。現在のR2スナップショットが未配置の場合、株価・PER・PBRは未収録として返されます。
 
@@ -54,6 +56,18 @@ python scripts/irbank_r2/upload_r2.py --upload
 
 R2キーは `market/irbank/v1/` 配下です。Worker APIは `/api/v1/irbank/catalog`、`/api/v1/irbank/manifest`、`/api/v1/irbank/securities/{銘柄コード}` を提供します。日次価格は `/prices`、週次信用取引は `/weekly-margin` を付けて個別取得できます。数字4桁コード、英字入り4桁コード、末尾0付き5桁コードを受け付けます。
 
+### 一時データをローカルWorkerから読む
+
+`wrangler.dev.toml` はローカル開発専用設定です。`MARKET_DATA` は本番と同じ `diview-market-data` へのリモートバインディング、D1とKVはローカルシミュレーションを使います。これにより開発Workerと本番Workerが同じR2データを読みます。通常の `wrangler.toml` と本番Workerの設定は変えず、デプロイ操作も行いません。
+
+ローカルD1スキーマを準備して開発Workerを起動します。スキーマ作成は再実行できます。
+
+```powershell
+.\dev-local.ps1
+```
+
+起動後、`http://localhost:8787/api/v1/irbank/manifest`、`/api/v1/irbank/catalog`、`/api/v1/irbank/securities/1301` でデータを確認できます。リモートR2バインディングにはCloudflareへログインしたWrangler認証が必要です。
+
 ## 全銘柄サジェスト
 
 `/api/v1/search-catalog` は R2 の `market/yfinance/search_catalog.json` を返します。検索用一覧は銘柄マスター全件から作り、株価データがある銘柄には直近20営業日の終値×出来高から計算した平均推定売買代金・株価・配当利回りを付けます。日次の yfinance 集計で更新されます。初回だけ先に公開する場合は、R2 の認証情報を設定して `python scripts/yfinance_r2/fetch_and_upload.py --publish-catalog` をリポジトリのルートから実行します。市場スナップショットが未配置でも銘柄名とコードは全件公開されますが、人気順の値は市場データ公開後に入ります。
@@ -68,6 +82,8 @@ React の検索画面はこの一覧を1日端末にキャッシュし、銘柄�
 ポートフォリオ診断の閾値・重みは KV の `portfolio-analysis-definitions:v1` で配信します。`scripts/seed-kv.ps1` で他の定義とまとめて登録します。`wrangler.toml` には `APP_DEFINITIONS` KV binding を本番 namespace ID とともに設定してください。
 
 Cron は市場スナップショットまたは分析定義が変わった場合に全銘柄を再評価し、それ以外の時間は通知対象のWatchlist銘柄だけを確認します。市場データが3日超古い場合は買場通知を抑止します。分析履歴は30日までは詳細を保持し、30日超は日次1件、365日超は月次1件へ圧縮します。
+
+定期分析では市場スナップショット・銘柄別の分析入力・Watchlist条件を実行内で再利用し、銘柄処理を最大8件ずつ並列化します。実行ログの `metadata_json.durations_ms` に分析・履歴整理・通知処理の所要時間を記録し、実データの負荷を見ながら次の調整を行います。
 
 公開読み取りAPIはIP単位、クライアントAPIは匿名クライアント単位でKV設定の回数制限を適用します。制限応答には `Retry-After` が付きます。JSON APIは既定で `private, no-store` とし、ブラウザの事前要求（CORS OPTIONS）にも応答します。`GET /api/v1/health` ではR2市場データの有無と経過日数、分析定義版、直近Cron結果を確認できます。Cron実行結果は `scheduled_run_log` に記録されます。
 

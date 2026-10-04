@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
+import com.kurogane.dividend.data.CloudflareSearchHit
+import kotlinx.coroutines.delay
 
 data class CandidateStock(
     val code: String,
@@ -36,7 +38,8 @@ data class CandidateStock(
 fun SearchSheet(
     visible: Boolean,
     onDismiss: () -> Unit,
-    onSelectStock: (String) -> Unit
+    onSelectStock: (String) -> Unit,
+    onSearch: suspend (String) -> List<CloudflareSearchHit> = { emptyList() }
 ) {
     if (!visible) return
 
@@ -54,17 +57,54 @@ fun SearchSheet(
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("all") } // "all", "jp", "us", "fund", "high-div"
+    var remoteCandidates by remember { mutableStateOf<List<CandidateStock>?>(null) }
+    var isSearching by remember { mutableStateOf(false) }
 
-    val filteredCandidates = remember(searchQuery, selectedCategory) {
-        candidates.filter { item ->
+    LaunchedEffect(searchQuery, visible) {
+        val query = searchQuery.trim()
+        if (!visible || query.isEmpty()) {
+            remoteCandidates = null
+            isSearching = false
+        } else if (query.length >= 2 || query.any(Char::isDigit)) {
+            delay(350)
+            isSearching = true
+            val result = runCatching { onSearch(query) }
+            remoteCandidates = result.getOrNull()?.map { hit ->
+                val local = candidates.firstOrNull { it.code.equals(hit.code, ignoreCase = true) }
+                val price = hit.cachedPrice?.let { "¥${java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN).format(it.toLong())}" }
+                local?.copy(
+                    name = hit.name,
+                    desc = hit.industry?.let { "東証 • $it" } ?: local.desc,
+                    price = price ?: local.price
+                ) ?: CandidateStock(
+                    code = hit.code,
+                    name = hit.name,
+                    desc = hit.industry?.let { "東証 • $it" } ?: "日本株 • Cloudflare銘柄マスター",
+                    price = price ?: "株価未取得",
+                    yieldRate = "--",
+                    cat = "jp",
+                    isHigh = false
+                )
+            }
+            isSearching = false
+        } else {
+            remoteCandidates = emptyList()
+        }
+    }
+
+    val filteredCandidates = remember(searchQuery, selectedCategory, remoteCandidates) {
+        val source = remoteCandidates ?: candidates.filter { item ->
             val q = searchQuery.trim().lowercase()
             val matchesQuery = q.isEmpty() || item.code.lowercase().contains(q) || item.name.lowercase().contains(q)
+            matchesQuery
+        }
+        source.filter { item ->
             val matchesCat = when (selectedCategory) {
                 "all" -> true
                 "high-div" -> item.isHigh
                 else -> item.cat == selectedCategory
             }
-            matchesQuery && matchesCat
+            matchesCat
         }
     }
 
@@ -87,7 +127,7 @@ fun SearchSheet(
                 .fillMaxHeight(0.85f)
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                 .background(SurfaceContainerLow)
-                .border(BorderStroke(1.dp, Color(0xFF1E293B)), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .border(BorderStroke(1.dp, BorderColor), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                 .clickable(
                     onClick = {},
                     interactionSource = remember { MutableInteractionSource() },
@@ -106,7 +146,7 @@ fun SearchSheet(
                         .width(48.dp)
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(Color(0xFF334155))
+                        .background(SurfaceContainerHighest)
                 )
 
                 // Header
@@ -126,7 +166,7 @@ fun SearchSheet(
                                 .size(32.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(SurfaceContainer)
-                                .border(1.dp, Color(0xFF334155), RoundedCornerShape(8.dp)),
+                                .border(1.dp, SurfaceContainerHighest, RoundedCornerShape(8.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -139,7 +179,7 @@ fun SearchSheet(
                         Column {
                             Text(
                                 "銘柄検索・絞り込み",
-                                color = Color.White,
+                                color = OnSurface,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
                             )
@@ -168,7 +208,7 @@ fun SearchSheet(
                     }
                 }
 
-                HorizontalDivider(color = Color(0xFF1E293B), thickness = 0.5.dp)
+                HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
 
                 // Search Input Box
                 OutlinedTextField(
@@ -207,9 +247,9 @@ fun SearchSheet(
                         focusedContainerColor = BackgroundDark,
                         unfocusedContainerColor = BackgroundDark,
                         focusedBorderColor = PrimaryEmerald,
-                        unfocusedBorderColor = Color(0xFF334155),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        unfocusedBorderColor = SurfaceContainerHighest,
+                        focusedTextColor = OnSurface,
+                        unfocusedTextColor = OnSurface
                     ),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -303,8 +343,8 @@ fun SearchSheet(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "候補銘柄 (${filteredCandidates.size}件)",
-                        color = Color.White,
+                        if (isSearching) "Cloudflare銘柄マスターを検索中…" else "候補銘柄 (${filteredCandidates.size}件)",
+                        color = OnSurface,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -329,7 +369,7 @@ fun SearchSheet(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(SurfaceContainer)
-                                .border(BorderStroke(0.5.dp, Color(0xFF1E293B)), RoundedCornerShape(12.dp))
+                                .border(BorderStroke(0.5.dp, BorderColor), RoundedCornerShape(12.dp))
                                 .clickable { onSelectStock(stock.code) }
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -344,7 +384,7 @@ fun SearchSheet(
                             ) {
                                 Text(
                                     stock.code,
-                                    color = Color.White,
+                                    color = OnSurface,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 11.sp,
                                     fontFamily = FontFamily.Monospace
@@ -357,7 +397,7 @@ fun SearchSheet(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     stock.name,
-                                    color = Color.White,
+                                    color = OnSurface,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
                                 )
@@ -372,7 +412,7 @@ fun SearchSheet(
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
                                     stock.price,
-                                    color = Color.White,
+                                    color = OnSurface,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,
                                     fontFamily = FontFamily.Monospace
@@ -399,7 +439,7 @@ fun SearchSheet(
                 ) {
                     Text(
                         "閉じる",
-                        color = Color.White,
+                        color = OnSurface,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp
                     )

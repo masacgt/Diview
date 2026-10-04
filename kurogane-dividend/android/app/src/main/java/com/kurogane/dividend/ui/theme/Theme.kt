@@ -1,42 +1,105 @@
 package com.kurogane.dividend.ui.theme
 
 import android.app.Activity
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val DarkColorScheme = darkColorScheme(
-    primary = PrimaryEmerald,
-    onPrimary = OnPrimary,
-    primaryContainer = PrimaryEmeraldContainer,
-    background = BackgroundDark,
-    surface = SurfaceContainer,
-    onSurface = OnSurface,
-    surfaceVariant = SurfaceContainerHigh,
-    onSurfaceVariant = OnSurfaceVariant,
-    secondary = SecondaryIndigo
-)
-
 @Composable
 fun KuroganeDividendTheme(
+    themeMode: String = "dark",
+    isOledBlack: Boolean = false,
+    selectedAccent: String = "emerald",
     content: @Composable () -> Unit
 ) {
-    val colorScheme = DarkColorScheme
+    val systemDark = isSystemInDarkTheme()
+    val darkTheme = when (themeMode) {
+        "light" -> false
+        "system" -> systemDark
+        else -> true
+    }
+    val palette = remember(darkTheme, isOledBlack, selectedAccent) {
+        createPalette(darkTheme, isOledBlack, selectedAccent)
+    }
+    val colorScheme = if (darkTheme) {
+        darkColorScheme(
+            primary = palette.primary,
+            onPrimary = palette.onPrimary,
+            primaryContainer = palette.primaryContainer,
+            background = palette.background,
+            surface = palette.surface,
+            onSurface = palette.onSurface,
+            surfaceVariant = palette.surfaceHigh,
+            onSurfaceVariant = palette.onSurfaceVariant,
+            secondary = palette.secondary,
+            error = palette.error
+        )
+    } else {
+        lightColorScheme(
+            primary = palette.primary,
+            onPrimary = palette.onPrimary,
+            primaryContainer = palette.primaryContainer,
+            background = palette.background,
+            surface = palette.surface,
+            onSurface = palette.onSurface,
+            surfaceVariant = palette.surfaceHigh,
+            onSurfaceVariant = palette.onSurfaceVariant,
+            secondary = palette.secondary,
+            error = palette.error
+        )
+    }
+
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = BackgroundDark.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+            window.statusBarColor = palette.background.toArgb()
+            window.navigationBarColor = palette.background.toArgb()
+            val insetsController = WindowCompat.getInsetsController(window, view)
+            insetsController.isAppearanceLightStatusBars = !darkTheme
+            insetsController.isAppearanceLightNavigationBars = !darkTheme
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        content = content
-      )
+    CompositionLocalProvider(LocalAppPalette provides palette) {
+        MaterialTheme(colorScheme = colorScheme, content = content)
+    }
 }
+
+private fun createPalette(dark: Boolean, oled: Boolean, accent: String): AppColorPalette {
+    val accentSet = when (accent) {
+        "cyan" -> AccentSet(Color(0xFF67E8F9), Color(0xFF0891B2), Color(0xFF005364), Color(0xFF0E7490))
+        "blue" -> AccentSet(Color(0xFF60A5FA), Color(0xFF2563EB), Color(0xFF06295F), Color(0xFF1D4ED8))
+        "amber" -> AccentSet(Color(0xFFFCD34D), Color(0xFFD97706), Color(0xFF4A2A00), Color(0xFFB45309))
+        "purple" -> AccentSet(Color(0xFFC4B5FD), Color(0xFF7C3AED), Color(0xFF2B1456), Color(0xFF6D28D9))
+        else -> AccentSet(Color(0xFF4EDEA3), Color(0xFF10B981), Color(0xFF003824), Color(0xFF047857))
+    }
+    val base = if (dark) DarkAppPalette else LightAppPalette
+    return base.copy(
+        background = if (dark && oled) Color.Black else base.background,
+        surfaceLowest = if (dark && oled) Color.Black else base.surfaceLowest,
+        surfaceLow = if (dark && oled) Color(0xFF05080F) else base.surfaceLow,
+        surface = if (dark && oled) Color(0xFF090D16) else base.surface,
+        surfaceHigh = if (dark && oled) Color(0xFF101722) else base.surfaceHigh,
+        surfaceHighest = if (dark && oled) Color(0xFF1A2431) else base.surfaceHighest,
+        primary = if (dark) accentSet.darkPrimary else accentSet.lightPrimary,
+        primaryContainer = if (dark) accentSet.darkContainer else accentSet.lightPrimary,
+        onPrimary = if (dark) accentSet.darkOnPrimary else Color.White
+    )
+}
+
+private data class AccentSet(
+    val darkPrimary: Color,
+    val darkContainer: Color,
+    val darkOnPrimary: Color,
+    val lightPrimary: Color
+)

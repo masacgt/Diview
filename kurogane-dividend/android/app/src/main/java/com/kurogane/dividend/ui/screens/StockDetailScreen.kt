@@ -23,6 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
+import com.kurogane.dividend.model.StockAnalysisNarrative
+import com.kurogane.dividend.model.StockAnalysisNarrativeGenerator
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import java.text.NumberFormat
 import java.util.Locale
@@ -72,6 +74,22 @@ fun StockDetailScreen(
     val currentPrice = currentHolding.price
     val dps = currentHolding.dps
     val profile = com.kurogane.dividend.model.getStockProfile(currentHolding.code)
+    var backendAnalysisValues by remember(currentHolding.code) { mutableStateOf<Map<String, Double?>?>(null) }
+    LaunchedEffect(currentHolding.code) {
+        backendAnalysisValues = viewModel.fetchStockAnalysis(currentHolding.code)?.values
+    }
+    val localAnalysisValues = mapOf(
+        "per" to if (profile.eps > 0 && currentPrice > 0) currentPrice / profile.eps else null,
+        "pbr" to if (profile.bps > 0 && currentPrice > 0) currentPrice / profile.bps else null,
+        "payout_ratio" to profile.payoutRatio,
+        "equity_ratio" to profile.equityRatio,
+        "operating_margin" to profile.operatingMargin,
+        "fcf_margin" to profile.fcfMargin,
+        "dividend_growth_years" to profile.consecutiveYears.toDouble()
+    )
+    val analysisNarrative = StockAnalysisNarrativeGenerator.generate(
+        localAnalysisValues.mapValues { (key, value) -> backendAnalysisValues?.get(key) ?: value }
+    )
     val liveYield = if (currentPrice > 0) (dps / currentPrice) * 100.0 else 0.0
     val liveYoc = if (currentHolding.acqPrice > 0) (dps / currentHolding.acqPrice) * 100.0 else liveYield
 
@@ -102,7 +120,7 @@ fun StockDetailScreen(
     val sectorRiskText = if (sectorDependency > 30.0) "高集中" else if (sectorDependency > 20.0) "やや集中" else "適正分散"
 
     val isHighRisk = divDependency > 10.0
-    val riskBadgeText = if (divDependency > 25.0) "● 高リスク（上限目安10%）" else if (divDependency > 10.0) "● やや高め（上限目安10%）" else "● 適正範囲（10%以下）"
+    val riskBadgeText = if (divDependency > 25.0) "高リスク・要分散" else if (divDependency > 10.0) "やや高め" else "適正範囲"
 
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
 
@@ -122,7 +140,7 @@ fun StockDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-                    border = BorderStroke(1.dp, Color(0xFF1E293B))
+                    border = BorderStroke(1.dp, BorderColor)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
@@ -136,7 +154,7 @@ fun StockDetailScreen(
                                         currentHolding.name,
                                         style = MaterialTheme.typography.titleLarge.copy(
                                             fontWeight = FontWeight.Bold,
-                                            color = Color.White
+                                            color = OnSurface
                                         )
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
@@ -159,7 +177,7 @@ fun StockDetailScreen(
                                     Surface(
                                         shape = RoundedCornerShape(4.dp),
                                         color = BackgroundDark,
-                                        border = BorderStroke(1.dp, Color(0xFF1E293B))
+                                        border = BorderStroke(1.dp, BorderColor)
                                     ) {
                                         Text(
                                             currentHolding.market,
@@ -192,7 +210,7 @@ fun StockDetailScreen(
                                     .background(if (isBookmarked) PrimaryEmerald.copy(alpha = 0.2f) else SurfaceContainer)
                                     .border(
                                         1.dp,
-                                        if (isBookmarked) PrimaryEmerald else Color(0xFF1E293B),
+                                        if (isBookmarked) PrimaryEmerald else BorderColor,
                                         RoundedCornerShape(12.dp)
                                     )
                             ) {
@@ -224,7 +242,7 @@ fun StockDetailScreen(
                                     "${currentHolding.currency}${currencyFormat.format(currentHolding.price.toLong())}",
                                     fontSize = 28.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = Color.White,
+                                    color = OnSurface,
                                     fontFamily = FontFamily.Monospace
                                 )
                             }
@@ -257,7 +275,7 @@ fun StockDetailScreen(
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text("1株配当 (DPS)", color = OnSurfaceVariant, fontSize = 9.sp)
-                                    Text("¥${currentHolding.dps}", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                                    Text("¥${currentHolding.dps}", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                                     Text("年額", color = OnSurfaceVariant, fontSize = 8.sp)
                                 }
                             }
@@ -305,7 +323,7 @@ fun StockDetailScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Calculate, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("買い増しシミュレーター", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+                                Text("買い増しシミュレーター", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 14.sp)
                             }
                             Surface(
                                 shape = CircleShape,
@@ -337,7 +355,7 @@ fun StockDetailScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("買い増しインパクト比較", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text("買い増しインパクト比較", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     Surface(shape = CircleShape, color = PrimaryEmerald) {
                                         Text("配当 ${multiplier}倍 UP", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = Color(0xFF003824), fontSize = 10.sp, fontWeight = FontWeight.Black)
                                     }
@@ -350,7 +368,7 @@ fun StockDetailScreen(
                                     Surface(shape = RoundedCornerShape(10.dp), color = BackgroundDark, modifier = Modifier.weight(1f)) {
                                         Column(modifier = Modifier.padding(8.dp)) {
                                             Text("現在保有 (${baseShares}株)", color = OnSurfaceVariant, fontSize = 9.sp)
-                                            Text("¥${currencyFormat.format((baseShares * dps).toLong())}/年", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                                            Text("¥${currencyFormat.format((baseShares * dps).toLong())}/年", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
                                             Text("月 ¥${currencyFormat.format((baseShares * dps / 12).toLong())} / 月", color = OnSurfaceVariant, fontSize = 9.sp)
                                         }
                                     }
@@ -376,7 +394,7 @@ fun StockDetailScreen(
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
                                 color = BackgroundDark,
-                                border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                                border = BorderStroke(1.dp, BorderColor),
                                 modifier = Modifier.weight(1.5f)
                             ) {
                                 Row(
@@ -384,7 +402,7 @@ fun StockDetailScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("${simAddedShares}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                                    Text("${simAddedShares}", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
                                     Text("株", color = OnSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
@@ -395,7 +413,7 @@ fun StockDetailScreen(
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text("-10", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("-10", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                             Button(
                                 onClick = { simAddedShares += 10 },
@@ -404,7 +422,7 @@ fun StockDetailScreen(
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text("+10", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("+10", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                             Button(
                                 onClick = { simAddedShares += 100 },
@@ -413,7 +431,7 @@ fun StockDetailScreen(
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                 modifier = Modifier.weight(1.2f)
                             ) {
-                                Text("+100", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("+100", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                             IconButton(
                                 onClick = { simAddedShares = 100 },
@@ -442,7 +460,7 @@ fun StockDetailScreen(
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
                                     color = if (isSelected) PrimaryEmerald else SurfaceContainer,
-                                    border = BorderStroke(0.5.dp, if (isSelected) PrimaryEmerald else Color(0xFF1E293B)),
+                                    border = BorderStroke(0.5.dp, if (isSelected) PrimaryEmerald else BorderColor),
                                     modifier = Modifier
                                         .weight(1f)
                                         .clickable { simAddedShares = count }
@@ -450,7 +468,7 @@ fun StockDetailScreen(
                                     Text(
                                         label,
                                         modifier = Modifier.padding(vertical = 6.dp),
-                                        color = if (isSelected) Color(0xFF003824) else Color.White,
+                                        color = if (isSelected) Color(0xFF003824) else OnSurface,
                                         fontSize = 11.sp,
                                         fontWeight = if (isSelected) FontWeight.Black else FontWeight.Medium,
                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -468,7 +486,7 @@ fun StockDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-                    border = BorderStroke(1.dp, Color(0xFF1E293B))
+                    border = BorderStroke(1.dp, BorderColor)
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Row(
@@ -479,7 +497,7 @@ fun StockDetailScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.BarChart, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("1株配当金の推移 (4期)", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+                                Text("1株配当金の推移 (4期)", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 14.sp)
                             }
                             Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.15f)) {
                                 Text("連続増配", modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -492,7 +510,7 @@ fun StockDetailScreen(
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = BackgroundDark,
-                            border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                            border = BorderStroke(1.dp, BorderColor),
                             modifier = Modifier.fillMaxWidth().height(120.dp)
                         ) {
                             Row(
@@ -529,7 +547,7 @@ fun StockDetailScreen(
                                                 .height((60 * ratio).dp)
                                                 .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                                                 .background(
-                                                    if (isProjected) Brush.verticalGradient(listOf(Color(0xFF4EDEA3), Color(0xFF10B981)))
+                                                    if (isProjected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
                                                     else Brush.verticalGradient(listOf(Color(0xFF818CF8), Color(0xFF4F46E5)))
                                                 )
                                         )
@@ -551,7 +569,7 @@ fun StockDetailScreen(
                             val fourYrGrowth = if (p3 > 0) String.format("%.1f", ((p0 - p3).toDouble() / p3) * 100) else "0.0"
 
                             Text("4期増配率: +${fourYrGrowth}%", color = PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            Text("配当性向: 約${profile.payoutRatio}%", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("配当性向: 約${profile.payoutRatio}%", color = OnSurface, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -563,7 +581,7 @@ fun StockDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-                    border = BorderStroke(1.dp, Color(0xFF1E293B))
+                    border = BorderStroke(1.dp, BorderColor)
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Row(
@@ -574,7 +592,7 @@ fun StockDetailScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Insights, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("銘柄総合分析ステータス", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+                                Text("銘柄総合分析ステータス", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 14.sp)
                             }
                             Text("タップで切替", color = OnSurfaceVariant, fontSize = 10.sp)
                         }
@@ -592,7 +610,7 @@ fun StockDetailScreen(
                                 color = if (selectedStatusTab == "health") SurfaceContainer else BackgroundDark,
                                 border = BorderStroke(
                                     if (selectedStatusTab == "health") 1.5.dp else 1.dp,
-                                    if (selectedStatusTab == "health") PrimaryEmerald else Color(0xFF1E293B)
+                                    if (selectedStatusTab == "health") PrimaryEmerald else BorderColor
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
@@ -615,7 +633,7 @@ fun StockDetailScreen(
                                 color = if (selectedStatusTab == "value") SurfaceContainer else BackgroundDark,
                                 border = BorderStroke(
                                     if (selectedStatusTab == "value") 1.5.dp else 1.dp,
-                                    if (selectedStatusTab == "value") PrimaryEmerald else Color(0xFF1E293B)
+                                    if (selectedStatusTab == "value") PrimaryEmerald else BorderColor
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
@@ -645,7 +663,7 @@ fun StockDetailScreen(
                                 color = if (selectedStatusTab == "growth") SurfaceContainer else BackgroundDark,
                                 border = BorderStroke(
                                     if (selectedStatusTab == "growth") 1.5.dp else 1.dp,
-                                    if (selectedStatusTab == "growth") SecondaryIndigo else Color(0xFF1E293B)
+                                    if (selectedStatusTab == "growth") SecondaryIndigo else BorderColor
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
@@ -657,7 +675,7 @@ fun StockDetailScreen(
                                         Icon(Icons.Default.MilitaryTech, contentDescription = null, tint = SecondaryIndigo, modifier = Modifier.size(14.dp))
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(if (profile.consecutiveYears > 0) "${profile.consecutiveYears}期連続 +${profile.growthRate}%" else "安定配当 +${profile.growthRate}%", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text(if (profile.consecutiveYears > 0) "${profile.consecutiveYears}期連続 +${profile.growthRate}%" else "安定配当 +${profile.growthRate}%", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                     Text("非減配${profile.noCutYears}年", color = PrimaryEmerald, fontSize = 10.sp)
                                 }
                             }
@@ -668,7 +686,7 @@ fun StockDetailScreen(
                                 color = if (selectedStatusTab == "risk") SurfaceContainer else BackgroundDark,
                                 border = BorderStroke(
                                     if (selectedStatusTab == "risk") 2.dp else 1.dp,
-                                    if (selectedStatusTab == "risk") AccentAmber else Color(0xFF1E293B)
+                                    if (selectedStatusTab == "risk") AccentAmber else BorderColor
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
@@ -691,7 +709,7 @@ fun StockDetailScreen(
                         if (selectedStatusTab == "risk") {
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            // Header row with Icon and Badge matching image (6).png
+                            // Header follows the buy-signal detail card format.
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -706,47 +724,55 @@ fun StockDetailScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        "集中リスク",
+                                        "集中リスク詳細分析",
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White,
-                                        fontSize = 14.sp
+                                        color = OnSurface,
+                                        fontSize = 15.sp
                                     )
                                 }
                                 Surface(
-                                    shape = CircleShape,
+                                    shape = RoundedCornerShape(16.dp),
                                     color = AccentAmber.copy(alpha = 0.12f),
-                                    border = BorderStroke(0.5.dp, AccentAmber.copy(alpha = 0.35f))
+                                    border = BorderStroke(1.dp, AccentAmber.copy(alpha = 0.4f))
                                 ) {
-                                    Text(
-                                        riskBadgeText,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                        color = AccentAmber,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Box(Modifier.size(6.dp).clip(CircleShape).background(AccentAmber))
+                                        Text(riskBadgeText, color = AccentAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
 
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            // Main Detail Card (Exact image (6).png reproduction)
+                            // Main panel uses the same dark outer card and inset metric cards as buy-signal analysis.
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
                                 color = BackgroundDark,
-                                border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                                border = BorderStroke(1.dp, BorderColor),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(14.dp)) {
-                                    // Portfolio Dependency Top
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = SurfaceContainer,
+                                        border = BorderStroke(1.dp, BorderColor),
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
+                                        Column(Modifier.padding(12.dp)) {
+                                            // Portfolio dependency card, parallel to the yield-range card.
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
                                                 "ポートフォリオ配当依存度",
-                                                color = Color.White,
+                                                color = OnSurface,
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -773,7 +799,7 @@ fun StockDetailScreen(
                                         )
                                     }
 
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                            Spacer(modifier = Modifier.height(8.dp))
 
                                     // Gradient Progress Bar
                                     Box(
@@ -781,7 +807,7 @@ fun StockDetailScreen(
                                             .fillMaxWidth()
                                             .height(8.dp)
                                             .clip(RoundedCornerShape(4.dp))
-                                            .background(Color(0xFF1E293B))
+                                            .background(BorderColor)
                                     ) {
                                         Box(
                                             modifier = Modifier
@@ -790,20 +816,23 @@ fun StockDetailScreen(
                                                 .clip(RoundedCornerShape(4.dp))
                                                 .background(
                                                     Brush.horizontalGradient(
-                                                        listOf(Color(0xFF10B981), Color(0xFFFBBF24), Color(0xFFF59E0B))
+                                                        listOf(PrimaryEmeraldContainer, Color(0xFFFBBF24), Color(0xFFF59E0B))
                                                     )
                                                 )
                                         )
                                     }
 
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
                                         Text("0% (低依存)", color = OnSurfaceVariant, fontSize = 9.sp)
                                         Text("推奨目安 10%未満", color = OnSurfaceVariant, fontSize = 9.sp)
                                         Text("${currentHolding.name}比率 ${divDependencyStr}%", color = OnSurfaceVariant, fontSize = 9.sp)
+                                    }
+
+                                        }
                                     }
 
                                     Spacer(modifier = Modifier.height(12.dp))
@@ -816,13 +845,13 @@ fun StockDetailScreen(
                                         Surface(
                                             shape = RoundedCornerShape(10.dp),
                                             color = SurfaceContainer,
-                                            border = BorderStroke(0.5.dp, Color(0xFF1E293B)),
+                                            border = BorderStroke(0.5.dp, BorderColor),
                                             modifier = Modifier.weight(1f)
                                         ) {
                                             Column(modifier = Modifier.padding(10.dp)) {
                                                 Text("セクター集中度", color = OnSurfaceVariant, fontSize = 10.sp)
                                                 Spacer(modifier = Modifier.height(2.dp))
-                                                Text("${sectorDependencyStr}%", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp, fontFamily = FontFamily.Monospace)
+                                                Text("${sectorDependencyStr}%", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp, fontFamily = FontFamily.Monospace)
                                                 Spacer(modifier = Modifier.height(2.dp))
                                                 Text("${cleanSectorName}・${sectorRiskText}", color = AccentAmber, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                             }
@@ -831,7 +860,7 @@ fun StockDetailScreen(
                                         Surface(
                                             shape = RoundedCornerShape(10.dp),
                                             color = SurfaceContainer,
-                                            border = BorderStroke(0.5.dp, Color(0xFF1E293B)),
+                                            border = BorderStroke(0.5.dp, BorderColor),
                                             modifier = Modifier.weight(1f)
                                         ) {
                                             Column(modifier = Modifier.padding(10.dp)) {
@@ -850,7 +879,7 @@ fun StockDetailScreen(
                                     Surface(
                                         shape = RoundedCornerShape(10.dp),
                                         color = SurfaceContainer,
-                                        border = BorderStroke(0.5.dp, Color(0xFF1E293B)),
+                                        border = BorderStroke(0.5.dp, BorderColor),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Row(
@@ -861,7 +890,7 @@ fun StockDetailScreen(
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Icon(Icons.Default.Tune, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(16.dp))
                                                 Spacer(modifier = Modifier.width(6.dp))
-                                                Text("リバランス推奨", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                Text("リバランス推奨", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                             }
                                             Surface(
                                                 shape = RoundedCornerShape(4.dp),
@@ -903,7 +932,7 @@ fun StockDetailScreen(
                                                     "診断コメント： 配当依存度が約${divDependencyStr}%と目安（10%以下）を上回っています。今後の追加投資では他セクターを優先し、依存度を薄めるリバランスが推奨されます。"
                                                 else
                                                     "診断コメント： 配当依存度は約${divDependencyStr}%と目安（10%以下）の適正健全範囲内に収まっており、バランスの取れたポートフォリオです。",
-                                                color = Color.White.copy(alpha = 0.9f),
+                                                color = OnSurface.copy(alpha = 0.9f),
                                                 fontSize = 11.sp,
                                                 lineHeight = 16.sp
                                             )
@@ -936,14 +965,14 @@ fun StockDetailScreen(
                                         )
                                         Text(
                                             "買場シグナル詳細分析",
-                                            color = Color.White,
+                                            color = OnSurface,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 15.sp
                                         )
                                     }
                                     Surface(
                                         shape = RoundedCornerShape(16.dp),
-                                        color = Color(0xFF0D2822),
+                                        color = PrimaryEmerald.copy(alpha = 0.12f),
                                         border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.4f))
                                     ) {
                                         Row(
@@ -971,7 +1000,7 @@ fun StockDetailScreen(
                                 Surface(
                                     shape = RoundedCornerShape(16.dp),
                                     color = BackgroundDark,
-                                    border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                                    border = BorderStroke(1.dp, BorderColor),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(
@@ -982,7 +1011,7 @@ fun StockDetailScreen(
                                         Surface(
                                             shape = RoundedCornerShape(12.dp),
                                             color = SurfaceContainer,
-                                            border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                                            border = BorderStroke(1.dp, BorderColor),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Column(modifier = Modifier.padding(12.dp)) {
@@ -995,10 +1024,10 @@ fun StockDetailScreen(
                                                         verticalAlignment = Alignment.CenterVertically,
                                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                                     ) {
-                                                        Text("配当利回りレンジ判定", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                                        Text("配当利回りレンジ判定", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                                         Surface(
                                                             shape = RoundedCornerShape(4.dp),
-                                                            color = Color(0xFF0D2822),
+                                                            color = PrimaryEmerald.copy(alpha = 0.12f),
                                                             border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
                                                         ) {
                                                             Text(
@@ -1028,7 +1057,7 @@ fun StockDetailScreen(
                                                         .fillMaxWidth()
                                                         .height(8.dp)
                                                         .clip(RoundedCornerShape(4.dp))
-                                                        .background(Color(0xFF1E293B))
+                                                        .background(BorderColor)
                                                 ) {
                                                     Box(
                                                         modifier = Modifier
@@ -1063,7 +1092,7 @@ fun StockDetailScreen(
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
-                                                border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                                                border = BorderStroke(1.dp, BorderColor),
                                                 modifier = Modifier.weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
@@ -1076,7 +1105,7 @@ fun StockDetailScreen(
                                                         Icon(Icons.Default.Tune, contentDescription = null, tint = OnSurfaceVariant, modifier = Modifier.size(13.dp))
                                                     }
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(profile.getPer(currentHolding.price), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, fontFamily = FontFamily.Monospace)
+                                                    Text(profile.getPer(currentHolding.price), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp, fontFamily = FontFamily.Monospace)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(profile.perEvaluation, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = 10.sp)
                                                 }
@@ -1086,7 +1115,7 @@ fun StockDetailScreen(
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
-                                                border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                                                border = BorderStroke(1.dp, BorderColor),
                                                 modifier = Modifier.weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
@@ -1099,7 +1128,7 @@ fun StockDetailScreen(
                                                         Icon(Icons.Default.Tune, contentDescription = null, tint = OnSurfaceVariant, modifier = Modifier.size(13.dp))
                                                     }
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(profile.getPbr(currentHolding.price), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, fontFamily = FontFamily.Monospace)
+                                                    Text(profile.getPbr(currentHolding.price), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp, fontFamily = FontFamily.Monospace)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(profile.pbrEvaluation, color = OnSurfaceVariant, fontSize = 10.sp)
                                                 }
@@ -1110,7 +1139,7 @@ fun StockDetailScreen(
                                         Surface(
                                             shape = RoundedCornerShape(12.dp),
                                             color = SurfaceContainer,
-                                            border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                                            border = BorderStroke(1.dp, BorderColor),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Row(
@@ -1123,11 +1152,11 @@ fun StockDetailScreen(
                                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                                 ) {
                                                     Icon(Icons.Default.TrackChanges, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
-                                                    Text("買場シグナル総合スコア", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                    Text("買場シグナル総合スコア", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                                 }
                                                 Surface(
                                                     shape = RoundedCornerShape(12.dp),
-                                                    color = Color(0xFF0D2822),
+                                                    color = PrimaryEmerald.copy(alpha = 0.12f),
                                                     border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.35f))
                                                 ) {
                                                     Text(
@@ -1144,7 +1173,7 @@ fun StockDetailScreen(
                                         // 4. 総合自動診断 Box
                                         Surface(
                                             shape = RoundedCornerShape(12.dp),
-                                            color = Color(0xFF0D2822),
+                                            color = PrimaryEmerald.copy(alpha = 0.12f),
                                             border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f)),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
@@ -1159,7 +1188,7 @@ fun StockDetailScreen(
                                                 Spacer(modifier = Modifier.height(4.dp))
                                                 Surface(
                                                     shape = RoundedCornerShape(4.dp),
-                                                    color = Color(0xFF13382C),
+                                                    color = PrimaryEmerald.copy(alpha = 0.14f),
                                                     border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
                                                 ) {
                                                     Text(
@@ -1173,7 +1202,7 @@ fun StockDetailScreen(
                                                 Spacer(modifier = Modifier.height(6.dp))
                                                 Text(
                                                     "絶好の押し目買場判定： ${profile.buySignalComment}",
-                                                    color = Color.White.copy(alpha = 0.95f),
+                                                    color = OnSurface.copy(alpha = 0.95f),
                                                     fontSize = 11.sp,
                                                     lineHeight = 16.sp
                                                 )
@@ -1206,14 +1235,14 @@ fun StockDetailScreen(
                                         )
                                         Text(
                                             "健全性詳細分析",
-                                            color = Color.White,
+                                            color = OnSurface,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 15.sp
                                         )
                                     }
                                     Surface(
                                         shape = RoundedCornerShape(16.dp),
-                                        color = Color(0xFF0D2822),
+                                        color = PrimaryEmerald.copy(alpha = 0.12f),
                                         border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.4f))
                                     ) {
                                         Row(
@@ -1246,7 +1275,7 @@ fun StockDetailScreen(
                                 Surface(
                                     shape = RoundedCornerShape(16.dp),
                                     color = BackgroundDark,
-                                    border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                                    border = BorderStroke(1.dp, BorderColor),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(
@@ -1257,7 +1286,7 @@ fun StockDetailScreen(
                                         Surface(
                                             shape = RoundedCornerShape(12.dp),
                                             color = SurfaceContainer,
-                                            border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                                            border = BorderStroke(1.dp, BorderColor),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Column(modifier = Modifier.padding(12.dp)) {
@@ -1270,10 +1299,10 @@ fun StockDetailScreen(
                                                         verticalAlignment = Alignment.CenterVertically,
                                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                                     ) {
-                                                        Text("配当性向 (当期見込)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                                        Text("配当性向 (当期見込)", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                                         Surface(
                                                             shape = RoundedCornerShape(4.dp),
-                                                            color = Color(0xFF0D2822),
+                                                            color = PrimaryEmerald.copy(alpha = 0.12f),
                                                             border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
                                                         ) {
                                                             Text(
@@ -1301,7 +1330,7 @@ fun StockDetailScreen(
                                                         .fillMaxWidth()
                                                         .height(8.dp)
                                                         .clip(RoundedCornerShape(4.dp))
-                                                        .background(Color(0xFF1E293B))
+                                                        .background(BorderColor)
                                                 ) {
                                                     Box(
                                                         modifier = Modifier
@@ -1310,7 +1339,7 @@ fun StockDetailScreen(
                                                             .clip(RoundedCornerShape(4.dp))
                                                             .background(
                                                                 Brush.horizontalGradient(
-                                                                    listOf(PrimaryEmerald, Color(0xFF4EDEA3))
+                                                                    listOf(PrimaryEmerald, PrimaryEmerald)
                                                                 )
                                                             )
                                                     )
@@ -1336,13 +1365,13 @@ fun StockDetailScreen(
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
-                                                border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                                                border = BorderStroke(1.dp, BorderColor),
                                                 modifier = Modifier.weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     Text("自己資本比率", color = OnSurfaceVariant, fontSize = 10.sp)
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text("${profile.equityRatio}%", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, fontFamily = FontFamily.Monospace)
+                                                    Text("${profile.equityRatio}%", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp, fontFamily = FontFamily.Monospace)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(profile.equityRatioSub, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = 10.sp)
                                                 }
@@ -1352,13 +1381,13 @@ fun StockDetailScreen(
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
-                                                border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                                                border = BorderStroke(1.dp, BorderColor),
                                                 modifier = Modifier.weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     Text("株主還元方針 (DOE/累進)", color = OnSurfaceVariant, fontSize = 10.sp)
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(profile.doePolicy, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, fontFamily = FontFamily.Monospace)
+                                                    Text(profile.doePolicy, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp, fontFamily = FontFamily.Monospace)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(profile.doePolicySub, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = 10.sp)
                                                 }
@@ -1373,13 +1402,13 @@ fun StockDetailScreen(
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
-                                                border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                                                border = BorderStroke(1.dp, BorderColor),
                                                 modifier = Modifier.weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     Text("ネットD/Eレシオ", color = OnSurfaceVariant, fontSize = 10.sp)
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(profile.netDeRatio, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp, fontFamily = FontFamily.Monospace)
+                                                    Text(profile.netDeRatio, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp, fontFamily = FontFamily.Monospace)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text("財務余力・借入健全性", color = OnSurfaceVariant, fontSize = 10.sp)
                                                 }
@@ -1389,13 +1418,13 @@ fun StockDetailScreen(
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
-                                                border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                                                border = BorderStroke(1.dp, BorderColor),
                                                 modifier = Modifier.weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     Text("営業利益率", color = OnSurfaceVariant, fontSize = 10.sp)
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text("${profile.operatingMargin}%", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, fontFamily = FontFamily.Monospace)
+                                                    Text("${profile.operatingMargin}%", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp, fontFamily = FontFamily.Monospace)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text("稼ぐ力・本業収益性", color = OnSurfaceVariant, fontSize = 10.sp)
                                                 }
@@ -1406,7 +1435,7 @@ fun StockDetailScreen(
                                         Surface(
                                             shape = RoundedCornerShape(12.dp),
                                             color = SurfaceContainer,
-                                            border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                                            border = BorderStroke(1.dp, BorderColor),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Row(
@@ -1419,11 +1448,11 @@ fun StockDetailScreen(
                                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                                 ) {
                                                     Icon(Icons.Default.WaterDrop, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
-                                                    Text("フリーキャッシュフロー余力", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                    Text("フリーキャッシュフロー余力", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                                 }
                                                 Surface(
                                                     shape = RoundedCornerShape(12.dp),
-                                                    color = Color(0xFF0D2822),
+                                                    color = PrimaryEmerald.copy(alpha = 0.12f),
                                                     border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.35f))
                                                 ) {
                                                     Row(
@@ -1441,7 +1470,7 @@ fun StockDetailScreen(
                                         // 4. 総合自動診断 Box
                                         Surface(
                                             shape = RoundedCornerShape(12.dp),
-                                            color = Color(0xFF0D2822),
+                                            color = PrimaryEmerald.copy(alpha = 0.12f),
                                             border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f)),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
@@ -1475,7 +1504,7 @@ fun StockDetailScreen(
                                                 Spacer(modifier = Modifier.height(6.dp))
                                                 Text(
                                                     "総合自動診断：${profile.healthDiagnosisComment}",
-                                                    color = Color.White.copy(alpha = 0.95f),
+                                                    color = OnSurface.copy(alpha = 0.95f),
                                                     fontSize = 11.sp,
                                                     lineHeight = 16.sp
                                                 )
@@ -1486,19 +1515,150 @@ fun StockDetailScreen(
                             }
                         } else if (selectedStatusTab == "growth") {
                             Spacer(modifier = Modifier.height(10.dp))
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = BackgroundDark,
-                                border = BorderStroke(1.dp, SecondaryIndigo.copy(alpha = 0.3f)),
-                                modifier = Modifier.fillMaxWidth()
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Text("増配耐性: ${if (profile.consecutiveYears > 0) "${profile.consecutiveYears}期連続増配" else "累進・安定配当"}・${profile.noCutYears}年非減配", color = SecondaryIndigo, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("過去25年間で減配ゼロを誇る株主還元重視方針。長期保有することでインカムゲインが雪だるま式に増加していくコア資産です。", color = OnSurfaceVariant, fontSize = 11.sp, lineHeight = 16.sp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(Icons.Default.MilitaryTech, null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
+                                        Text("増配耐性詳細分析", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = PrimaryEmerald.copy(alpha = 0.12f),
+                                        border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.4f))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Box(Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmerald))
+                                            Text(
+                                                if (profile.consecutiveYears > 0) "${profile.consecutiveYears}期連続増配" else "安定配当",
+                                                color = PrimaryEmerald,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = BackgroundDark,
+                                    border = BorderStroke(1.dp, BorderColor),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = SurfaceContainer,
+                                                border = BorderStroke(1.dp, BorderColor),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Column(Modifier.padding(12.dp)) {
+                                                    Text("連続増配実績", color = OnSurfaceVariant, fontSize = 10.sp)
+                                                    Spacer(Modifier.height(4.dp))
+                                                    Text("${profile.consecutiveYears}期", color = PrimaryEmerald, fontWeight = FontWeight.ExtraBold, fontSize = 21.sp, fontFamily = FontFamily.Monospace)
+                                                    Text("年平均増配率 +${profile.growthRate}%", color = PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = SurfaceContainer,
+                                                border = BorderStroke(1.dp, BorderColor),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Column(Modifier.padding(12.dp)) {
+                                                    Text("非減配年数", color = OnSurfaceVariant, fontSize = 10.sp)
+                                                    Spacer(Modifier.height(4.dp))
+                                                    Text("${profile.noCutYears}年", color = OnSurface, fontWeight = FontWeight.ExtraBold, fontSize = 21.sp, fontFamily = FontFamily.Monospace)
+                                                    Text("減配せず配当を維持", color = OnSurfaceVariant, fontSize = 10.sp)
+                                                }
+                                            }
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = SurfaceContainer,
+                                            border = BorderStroke(1.dp, BorderColor),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                    Icon(Icons.Default.TrendingUp, null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
+                                                    Text("増配耐性の評価", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                }
+                                                Surface(
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    color = PrimaryEmerald.copy(alpha = 0.12f),
+                                                    border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.35f))
+                                                ) {
+                                                    Text(
+                                                        if (profile.consecutiveYears > 0) "${profile.consecutiveYears}期連続" else "安定配当",
+                                                        color = PrimaryEmerald,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = PrimaryEmerald.copy(alpha = 0.12f),
+                                            border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(Modifier.padding(12.dp)) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    Icon(Icons.Default.AutoAwesome, null, tint = PrimaryEmerald, modifier = Modifier.size(15.dp))
+                                                    Text(
+                                                        if (profile.consecutiveYears > 0) "${profile.consecutiveYears}期連続増配の実績" else "安定配当の実績",
+                                                        color = PrimaryEmerald,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 11.sp
+                                                    )
+                                                }
+                                                Spacer(Modifier.height(6.dp))
+                                                Text(
+                                                    "${profile.noCutYears}年間減配がなく、年平均増配率は+${profile.growthRate}%です。過去の配当実績をもとに、増配の継続性と減配への耐性を確認できます。",
+                                                    color = OnSurface.copy(alpha = 0.95f),
+                                                    fontSize = 11.sp,
+                                                    lineHeight = 16.sp
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        StockAnalysisNarrativeCard(analysisNarrative)
                     }
                 }
             }
@@ -1509,7 +1669,7 @@ fun StockDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-                    border = BorderStroke(1.dp, Color(0xFF1E293B))
+                    border = BorderStroke(1.dp, BorderColor)
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Row(
@@ -1520,7 +1680,7 @@ fun StockDetailScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("次回権利落ち・直近イベント", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+                                Text("次回権利落ち・直近イベント", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 14.sp)
                             }
                             Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.15f)) {
                                 Text("通知設定中", modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -1532,7 +1692,7 @@ fun StockDetailScreen(
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = BackgroundDark,
-                            border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                            border = BorderStroke(1.dp, BorderColor),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -1542,7 +1702,7 @@ fun StockDetailScreen(
                             ) {
                                 Column {
                                     Text("9月末 中間配当", color = OnSurfaceVariant, fontSize = 10.sp)
-                                    Text("権利付き最終日まで", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("権利付き最終日まで", color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                                 Surface(shape = RoundedCornerShape(8.dp), color = PrimaryEmerald.copy(alpha = 0.15f)) {
                                     Row(
@@ -1567,12 +1727,12 @@ fun StockDetailScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.AlarmOn, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("権利落ち・決算前通知", color = Color.White, fontSize = 11.sp)
+                                Text("権利落ち・決算前通知", color = OnSurface, fontSize = 11.sp)
                             }
                             Switch(
                                 checked = isAlertOn,
                                 onCheckedChange = { isAlertOn = it },
-                                colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = PrimaryEmerald)
+                                colors = SwitchDefaults.colors(checkedThumbColor = OnSurface, checkedTrackColor = PrimaryEmerald)
                             )
                         }
                     }
@@ -1591,9 +1751,9 @@ fun StockDetailScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp), tint = OnSurface)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("保有情報を編集", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("保有情報を編集", color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                     Button(
                         onClick = {},
@@ -1611,6 +1771,88 @@ fun StockDetailScreen(
             item {
                 Spacer(modifier = Modifier.height(60.dp))
             }
+        }
+    }
+}
+
+@Composable
+private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = BackgroundDark,
+        border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("銘柄総合分析の詳細判定", color = OnSurface, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("7指標を各5帯域・3位置で評価", color = OnSurfaceVariant, fontSize = 10.sp)
+                }
+                if (analysisNarrative.score != null) {
+                    Text(
+                        "${analysisNarrative.grade} ${analysisNarrative.score}点",
+                        color = PrimaryEmerald,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+            Text(
+                "総合判定: ${analysisNarrative.title}。評価できた${analysisNarrative.findings.size}指標を重み付けして算出しています。",
+                color = OnSurface,
+                fontSize = 11.sp,
+                lineHeight = 16.sp
+            )
+            Text(
+                "全7指標の文章パターン: 15^7 = ${String.format(Locale.JAPAN, "%,d", StockAnalysisNarrative.TOTAL_COMBINATIONS)}通り。今回の入力で選択可能な組合せ: ${String.format(Locale.JAPAN, "%,d", analysisNarrative.possibleCombinations)}通り。",
+                color = PrimaryEmerald,
+                fontSize = 10.sp,
+                lineHeight = 15.sp
+            )
+            Text(
+                "Cloudflareの診断値を優先し、未取得の指標は端末内プロフィールの参考値を使います。FCF値がない場合は未評価です。",
+                color = OnSurfaceVariant,
+                fontSize = 9.sp,
+                lineHeight = 14.sp
+            )
+            if (analysisNarrative.complete && analysisNarrative.combinationIndex != null) {
+                Text(
+                    "判定パターン ${analysisNarrative.combinationIndex + 1} / ${StockAnalysisNarrative.TOTAL_COMBINATIONS}",
+                    color = OnSurfaceVariant,
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            } else {
+                Text(
+                    "未取得の指標: ${analysisNarrative.missingLabels.joinToString("、")}。データがない項目は評価に含めません。",
+                    color = AccentAmber,
+                    fontSize = 10.sp,
+                    lineHeight = 15.sp
+                )
+            }
+            HorizontalDivider(color = BorderColor)
+            analysisNarrative.findings.forEach { finding ->
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        "${finding.label}  ${finding.formattedValue}・${finding.bandLabel}（${finding.position.label}）",
+                        color = if (finding.score >= 65) PrimaryEmerald else AccentAmber,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(finding.text, color = OnSurfaceVariant, fontSize = 10.sp, lineHeight = 15.sp)
+                }
+            }
+            Text(
+                "評価は取得できた指標に基づく参考情報です。業種特性、最新開示、株価変動も合わせて確認してください。",
+                color = OnSurfaceVariant,
+                fontSize = 9.sp,
+                lineHeight = 14.sp
+            )
         }
     }
 }

@@ -73,12 +73,12 @@ fun ContactFeedbackScreen(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("ご意見・不具合報告", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Text("ご意見・不具合報告", color = OnSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = OnSurface)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = SpaceNavy)
@@ -99,7 +99,7 @@ fun ContactFeedbackScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
-                border = BorderStroke(1.dp, Color(0xFF1E293B))
+                border = BorderStroke(1.dp, BorderColor)
             ) {
                 Row(
                     modifier = Modifier.padding(14.dp),
@@ -110,8 +110,8 @@ fun ContactFeedbackScreen(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF10B981).copy(alpha = 0.15f))
-                            .border(1.dp, Color(0xFF10B981).copy(alpha = 0.3f), RoundedCornerShape(10.dp)),
+                            .background(PrimaryEmeraldContainer.copy(alpha = 0.15f))
+                            .border(1.dp, PrimaryEmeraldContainer.copy(alpha = 0.3f), RoundedCornerShape(10.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -127,7 +127,7 @@ fun ContactFeedbackScreen(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(4.dp))
-                                    .background(Color(0xFF10B981).copy(alpha = 0.2f))
+                                    .background(PrimaryEmeraldContainer.copy(alpha = 0.2f))
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text("Official Support", color = PrimaryEmerald, fontSize = 9.sp, fontWeight = FontWeight.Bold)
@@ -140,7 +140,7 @@ fun ContactFeedbackScreen(
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("Diview サポートデスク", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("Diview サポートデスク", color = OnSurface, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             "配当管理や操作についてご不明な点、改善のご要望をお気軽にお寄せください。通常24時間以内に返信いたします。",
@@ -161,7 +161,7 @@ fun ContactFeedbackScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(Icons.Default.HelpOutline, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
-                        Text("よくあるご質問 (FAQ)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("よくあるご質問 (FAQ)", color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                     Text("タップして展開", color = SoftGray, fontSize = 10.sp)
                 }
@@ -174,7 +174,7 @@ fun ContactFeedbackScreen(
                             .clickable { openFaqIndex = if (open) null else idx },
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
-                        border = BorderStroke(1.dp, Color(0xFF1E293B))
+                        border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column {
                             Row(
@@ -191,12 +191,12 @@ fun ContactFeedbackScreen(
                                         modifier = Modifier
                                             .size(20.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFF10B981).copy(alpha = 0.15f)),
+                                            .background(PrimaryEmeraldContainer.copy(alpha = 0.15f)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text("Q", color = PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Black)
                                     }
-                                    Text(faq.q, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text(faq.q, color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                                 Icon(
                                     imageVector = if (open) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -231,17 +231,17 @@ fun ContactFeedbackScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
-                border = BorderStroke(1.dp, Color(0xFF1E293B))
+                border = BorderStroke(1.dp, BorderColor)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Icon(Icons.Default.RateReview, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
-                        Text("お問い合わせ・ご意見", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("お問い合わせ・ご意見", color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
 
                     // Category Selector
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("カテゴリ *", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Text("カテゴリ *", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         val categories = listOf(
                             CategoryButton("feature", "機能の改善要望", Icons.Default.Lightbulb),
                             CategoryButton("bug", "不具合の報告", Icons.Default.BugReport),
@@ -258,7 +258,7 @@ fun ContactFeedbackScreen(
                                         .height(38.dp)
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(if (active) PrimaryEmerald else BackgroundDark)
-                                        .border(BorderStroke(1.dp, if (active) Color.Transparent else Color(0xFF1E293B)), RoundedCornerShape(8.dp))
+                                        .border(BorderStroke(1.dp, if (active) Color.Transparent else BorderColor), RoundedCornerShape(8.dp))
                                         .clickable { selectedCategory = cat.id },
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -279,7 +279,7 @@ fun ContactFeedbackScreen(
                                         .height(38.dp)
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(if (active) PrimaryEmerald else BackgroundDark)
-                                        .border(BorderStroke(1.dp, if (active) Color.Transparent else Color(0xFF1E293B)), RoundedCornerShape(8.dp))
+                                        .border(BorderStroke(1.dp, if (active) Color.Transparent else BorderColor), RoundedCornerShape(8.dp))
                                         .clickable { selectedCategory = cat.id },
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -295,7 +295,7 @@ fun ContactFeedbackScreen(
                     // Sender Name Input
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("お名前 / ニックネーム", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Text("お名前 / ニックネーム", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                             Text("任意", color = SoftGray, fontSize = 9.sp)
                         }
                         OutlinedTextField(
@@ -308,9 +308,9 @@ fun ContactFeedbackScreen(
                                 focusedContainerColor = BackgroundDark,
                                 unfocusedContainerColor = BackgroundDark,
                                 focusedBorderColor = PrimaryEmerald,
-                                unfocusedBorderColor = Color(0xFF1E293B),
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White
+                                unfocusedBorderColor = BorderColor,
+                                focusedTextColor = OnSurface,
+                                unfocusedTextColor = OnSurface
                             ),
                             shape = RoundedCornerShape(10.dp)
                         )
@@ -319,7 +319,7 @@ fun ContactFeedbackScreen(
                     // Return Email Input
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("返信用メールアドレス", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Text("返信用メールアドレス", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                             Text("返信が必要な場合", color = SoftGray, fontSize = 9.sp)
                         }
                         OutlinedTextField(
@@ -332,9 +332,9 @@ fun ContactFeedbackScreen(
                                 focusedContainerColor = BackgroundDark,
                                 unfocusedContainerColor = BackgroundDark,
                                 focusedBorderColor = PrimaryEmerald,
-                                unfocusedBorderColor = Color(0xFF1E293B),
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White
+                                unfocusedBorderColor = BorderColor,
+                                focusedTextColor = OnSurface,
+                                unfocusedTextColor = OnSurface
                             ),
                             shape = RoundedCornerShape(10.dp)
                         )
@@ -342,7 +342,7 @@ fun ContactFeedbackScreen(
 
                     // Message Text Multi-Line Input
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("お問い合わせ内容 *", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Text("お問い合わせ内容 *", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         OutlinedTextField(
                             value = messageText,
                             onValueChange = { messageText = it },
@@ -353,9 +353,9 @@ fun ContactFeedbackScreen(
                                 focusedContainerColor = BackgroundDark,
                                 unfocusedContainerColor = BackgroundDark,
                                 focusedBorderColor = PrimaryEmerald,
-                                unfocusedBorderColor = Color(0xFF1E293B),
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White
+                                unfocusedBorderColor = BorderColor,
+                                focusedTextColor = OnSurface,
+                                unfocusedTextColor = OnSurface
                             ),
                             shape = RoundedCornerShape(12.dp)
                         )
@@ -372,7 +372,7 @@ fun ContactFeedbackScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("診断レポートを添付", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("診断レポートを添付", color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Text("アプリのクラッシュログ、OSバージョン情報を含める", color = SoftGray, fontSize = 9.sp)
                         }
                         Switch(
@@ -405,7 +405,7 @@ fun ContactFeedbackScreen(
                             .height(44.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = PrimaryEmeraldContainer,
-                            disabledContainerColor = Color(0xFF334155)
+                            disabledContainerColor = SurfaceContainerHighest
                         ),
                         shape = RoundedCornerShape(10.dp)
                     ) {

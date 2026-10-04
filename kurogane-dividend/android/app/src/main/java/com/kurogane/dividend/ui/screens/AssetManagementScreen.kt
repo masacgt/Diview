@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -37,13 +38,13 @@ import java.text.NumberFormat
 import java.util.Locale
 
 // Local High-Fidelity Color Theme matching React Web App CSS
-val SpaceNavy = Color(0xFF0B1326)
-val CardDark = Color(0xFF131B2E)
-val CardDarkLighter = Color(0xFF171F33)
-val NeonGreen = Color(0xFF10B981)
-val NeonGreenLight = Color(0xFF4EDEA3)
-val SoftGray = Color(0xFFBBCABF)
-val BorderBlue = Color(0xFF1E293B)
+val SpaceNavy: Color @Composable get() = BackgroundDark
+val CardDark: Color @Composable get() = SurfaceContainerLow
+val CardDarkLighter: Color @Composable get() = SurfaceContainer
+val NeonGreen: Color @Composable get() = PrimaryEmeraldContainer
+val NeonGreenLight: Color @Composable get() = PrimaryEmerald
+val SoftGray: Color @Composable get() = OnSurfaceVariant
+val BorderBlue: Color @Composable get() = BorderColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,6 +74,10 @@ fun AssetManagementScreen(
     var shareCount by remember { mutableStateOf("") }
     var acqPrice by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
+    var quickEditHolding by remember { mutableStateOf<Holding?>(null) }
+    var quickEditShares by remember { mutableStateOf("") }
+    var quickEditAcqPrice by remember { mutableStateOf("") }
+    var quickEditMarketPrice by remember { mutableDoubleStateOf(0.0) }
 
     val javaCurrencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
 
@@ -91,26 +96,17 @@ fun AssetManagementScreen(
     }
     val monthlyIncomeForRoadmap = remember(totalAnnualExpectedDividendForRoadmap) { totalAnnualExpectedDividendForRoadmap / 12 }
 
-    val milestoneSteps = remember {
+    val roadmapMonthlyTargets = remember {
         listOf(
-            Pair(3000, 36000),     // STEP 1
-            Pair(5000, 60000),     // STEP 2
-            Pair(10000, 120000),   // STEP 3
-            Pair(20000, 240000),   // STEP 4
-            Pair(30000, 360000),   // STEP 5
-            Pair(50000, 600000),   // STEP 6
-            Pair(100000, 1200000), // STEP 7
-            Pair(200000, 2400000), // STEP 8
-            Pair(300000, 3600000), // STEP 9
-            Pair(500000, 6000000)  // STEP 10
+            1_000, 2_000, 3_000, 4_000, 5_000, 6_000, 8_000, 10_000, 15_000, 20_000,
+            25_000, 30_000, 35_000, 40_000, 45_000, 50_000, 60_000, 70_000, 80_000, 100_000,
+            120_000, 150_000, 180_000, 200_000, 250_000, 300_000, 350_000, 400_000, 500_000, 600_000
         )
     }
-
-    val activeStepPair = remember(monthlyIncomeForRoadmap, milestoneSteps) {
-        milestoneSteps.find { monthlyIncomeForRoadmap < it.first } ?: milestoneSteps.last()
+    val currentMonthlyTarget = remember(monthlyIncomeForRoadmap, roadmapMonthlyTargets) {
+        roadmapMonthlyTargets.firstOrNull { monthlyIncomeForRoadmap < it } ?: roadmapMonthlyTargets.last()
     }
-    val currentMonthlyTarget = activeStepPair.first
-    val currentAnnualTarget = activeStepPair.second
+    val currentAnnualTarget = currentMonthlyTarget * 12
 
     // Dynamic monthly dividend totals optimized with remember
     val dynamicMonthlyDividends = remember(holdings, taxRateMode) {
@@ -226,7 +222,7 @@ fun AssetManagementScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF11192C)),
+                colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
                 border = BorderStroke(1.dp, BorderBlue)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
@@ -318,7 +314,7 @@ fun AssetManagementScreen(
                     Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.SearchOff, contentDescription = null, tint = SoftGray, modifier = Modifier.size(40.dp))
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("該当する銘柄が見つかりません", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+                        Text("該当する銘柄が見つかりません", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 14.sp)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("検索条件 \"NVDA\" に一致する保有銘柄はありません。", color = SoftGray, fontSize = 11.sp, textAlign = TextAlign.Center)
                         Spacer(modifier = Modifier.height(14.dp))
@@ -344,7 +340,7 @@ fun AssetManagementScreen(
                     Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.Inbox, contentDescription = null, tint = SoftGray, modifier = Modifier.size(40.dp))
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("まだ保有銘柄が登録されていません", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+                        Text("まだ保有銘柄が登録されていません", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 14.sp)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("証券口座連携は不要です。右下の「＋」ボタンから1分ですぐに保有株式を登録できます。", color = SoftGray, fontSize = 11.sp, textAlign = TextAlign.Center)
                         Spacer(modifier = Modifier.height(14.dp))
@@ -407,7 +403,7 @@ fun AssetManagementScreen(
                         text = if (isPrivacyActive) "¥ •,•••,•••,•••" else "¥${javaCurrencyFormat.format(totalAssetsVal.toLong())}",
                         fontSize = 32.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color.White,
+                        color = OnSurface,
                         fontFamily = FontFamily.SansSerif,
                         letterSpacing = (-0.5).sp
                     )
@@ -433,7 +429,7 @@ fun AssetManagementScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0xFF0C1322))
+                                .background(SurfaceContainer)
                                 .border(0.5.dp, BorderBlue, RoundedCornerShape(14.dp))
                                 .padding(12.dp)
                         ) {
@@ -460,7 +456,7 @@ fun AssetManagementScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0xFF0C1322))
+                                .background(SurfaceContainer)
                                 .border(0.5.dp, BorderBlue, RoundedCornerShape(14.dp))
                                 .padding(12.dp)
                         ) {
@@ -472,7 +468,7 @@ fun AssetManagementScreen(
                                         text = if (isPrivacyActive) "•••" else String.format("%.2f", avgYield),
                                         fontSize = 18.sp,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = Color.White
+                                        color = OnSurface
                                     )
                                     Spacer(modifier = Modifier.width(2.dp))
                                     Text("%", fontSize = 10.sp, color = SoftGray, modifier = Modifier.padding(bottom = 2.dp))
@@ -508,9 +504,9 @@ fun AssetManagementScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.DateRange, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("月別推移グラフ", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                            Text("月別推移グラフ", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = OnSurface)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(Color(0xFF1C253B)).padding(horizontal = 4.dp, vertical = 2.dp)) {
+                            Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(SurfaceContainerHigh).padding(horizontal = 4.dp, vertical = 2.dp)) {
                                 Text("2024", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = SoftGray)
                             }
                         }
@@ -526,7 +522,7 @@ fun AssetManagementScreen(
 
                     // 1-12 Interactive Monthly Bars. Keep each month label inside its own fixed-width slot.
                     Row(
-                        modifier = Modifier.fillMaxWidth().height(145.dp).padding(end = 52.dp),
+                        modifier = Modifier.fillMaxWidth().height(145.dp),
                         horizontalArrangement = Arrangement.spacedBy(1.dp),
                         verticalAlignment = Alignment.Bottom
                     ) {
@@ -564,12 +560,12 @@ fun AssetManagementScreen(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .width(24.2.dp) // 1.1x the previous 22dp bar width
+                                            .fillMaxWidth()
                                             .height(barHeight)
                                             .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                                             .background(
                                                 if (isSelected) {
-                                                    Brush.verticalGradient(listOf(Color(0xFF4EDEA3), Color(0xFF10B981)))
+                                                    Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
                                                 } else if (isSpecialMonth) {
                                                     Brush.verticalGradient(listOf(NeonGreenLight, NeonGreen))
                                                 } else {
@@ -577,7 +573,7 @@ fun AssetManagementScreen(
                                                 }
                                             )
                                             .then(
-                                                if (isSelected) Modifier.border(1.5.dp, Color.White, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)) else Modifier
+                                                if (isSelected) Modifier.border(1.5.dp, OnSurface, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)) else Modifier
                                             )
                                     )
                                 }
@@ -657,7 +653,7 @@ fun AssetManagementScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Flag, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("年間配当目標: ¥${javaCurrencyFormat.format(currentAnnualTarget)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text("年間配当目標: ¥${javaCurrencyFormat.format(currentAnnualTarget)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = OnSurface)
                         }
                         Text(String.format("%.1f%%", progressPct), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = NeonGreen)
                     }
@@ -667,7 +663,7 @@ fun AssetManagementScreen(
                         progress = { (progressPct / 100f).toFloat().coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
                         color = NeonGreen,
-                        trackColor = Color(0xFF1E293B)
+                        trackColor = BorderColor
                     )
                     
                     Spacer(modifier = Modifier.height(8.dp))
@@ -712,10 +708,10 @@ fun AssetManagementScreen(
                         text = if (selectedMonth != null) "${selectedMonth}月の配当入金ポートフォリオ" else "保有銘柄一覧",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = OnSurface
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Surface(shape = CircleShape, color = Color(0xFF172033)) {
+                    Surface(shape = CircleShape, color = SurfaceContainerHigh) {
                         Text(
                             "${displayedHoldings.size}件",
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -748,7 +744,7 @@ fun AssetManagementScreen(
                         ) {
                             Icon(Icons.Default.SwapVert, contentDescription = null, tint = NeonGreenLight, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(getSortLabel(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            Text(getSortLabel(), color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -779,8 +775,8 @@ fun AssetManagementScreen(
                     unfocusedBorderColor = BorderBlue,
                     focusedContainerColor = CardDark,
                     unfocusedContainerColor = CardDark,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
+                    focusedTextColor = OnSurface,
+                    unfocusedTextColor = OnSurface
                 )
             )
 
@@ -825,7 +821,7 @@ fun AssetManagementScreen(
                     Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.EventBusy, contentDescription = null, tint = SoftGray, modifier = Modifier.size(32.dp))
                         Spacer(modifier = Modifier.height(6.dp))
-                        Text("該当する保有銘柄はありません", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("該当する保有銘柄はありません", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         Text(
                             if (selectedMonth != null) "${selectedMonth}月に入金が予定されている銘柄はありません。" else "指定の条件に一致する銘柄がありません。",
                             color = SoftGray,
@@ -865,18 +861,18 @@ fun AssetManagementScreen(
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
                                         color = when (holding.category) {
-                                            Category.US -> Color(0xFF1E1B4B)
-                                            Category.FUND -> Color(0xFF4C0519)
-                                            else -> Color(0xFF1E293B)
+                                            Category.US -> SecondaryIndigo.copy(alpha = 0.14f)
+                                            Category.FUND -> ErrorRed.copy(alpha = 0.14f)
+                                            else -> BorderColor
                                         }
                                     ) {
                                         Text(
                                             holding.code,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                             color = when (holding.category) {
-                                                Category.US -> Color(0xFFA5B4FC)
-                                                Category.FUND -> Color(0xFFFDA4AF)
-                                                else -> Color.White
+                                                Category.US -> SecondaryIndigo
+                                                Category.FUND -> ErrorRed
+                                                else -> OnSurface
                                             },
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
@@ -884,9 +880,20 @@ fun AssetManagementScreen(
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Column {
-                                        Text(holding.name, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(holding.name, fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 13.sp, maxLines = 1)
                                         Text(holding.sector, color = SoftGray, fontSize = 9.sp)
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            quickEditHolding = holding
+                                            quickEditShares = holding.shares.toString()
+                                            quickEditAcqPrice = holding.acqPrice.toString().removeSuffix(".0")
+                                            quickEditMarketPrice = holding.price
+                                        },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = "${holding.name}を編集", tint = SoftGray, modifier = Modifier.size(15.dp))
                                     }
                                 }
 
@@ -894,7 +901,7 @@ fun AssetManagementScreen(
                                     Text(
                                         "¥${javaCurrencyFormat.format(curVal.toLong())}",
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White,
+                                        color = OnSurface,
                                         fontSize = 14.sp,
                                         fontFamily = FontFamily.Monospace
                                     )
@@ -922,7 +929,7 @@ fun AssetManagementScreen(
                                     Text("保有数量", color = SoftGray, fontSize = 9.sp)
                                     Text(
                                         "${holding.shares}株 (${holding.currency}${holding.price.toInt()})",
-                                        color = Color.White,
+                                        color = OnSurface,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         fontFamily = FontFamily.Monospace
@@ -942,7 +949,7 @@ fun AssetManagementScreen(
                                     Text("予想配当金", color = SoftGray, fontSize = 9.sp)
                                     Text(
                                         if (annualDiv > 0) "¥${javaCurrencyFormat.format(annualDiv.toLong())}/年" else "再投資型",
-                                        color = Color.White,
+                                        color = OnSurface,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = FontFamily.Monospace
@@ -981,7 +988,7 @@ fun AssetManagementScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF1E293B)) {
+                                Surface(shape = RoundedCornerShape(4.dp), color = BorderColor) {
                                     Text(holding.accountType, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = Color(0xFFA5B4FC), fontSize = 9.sp, fontWeight = FontWeight.Medium)
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1042,7 +1049,7 @@ fun AssetManagementScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text("直近の配当受取予定", color = SoftGray, fontSize = 9.sp)
-                            Text(if (nextStock != null) "${nextMonth}月中旬 ${nextStock!!.name}" else "保有銘柄なし", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+                            Text(if (nextStock != null) "${nextMonth}月中旬 ${nextStock!!.name}" else "保有銘柄なし", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = 12.sp)
                         }
                     }
                     Column(horizontalAlignment = Alignment.End) {
@@ -1075,7 +1082,7 @@ fun AssetManagementScreen(
                 }
             },
             title = {
-                Text("並べ替え条件の変更", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("並べ替え条件の変更", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1097,7 +1104,7 @@ fun AssetManagementScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(label, color = if (sortCriteria == key) NeonGreenLight else Color.White, fontSize = 13.sp, fontWeight = if (sortCriteria == key) FontWeight.Bold else FontWeight.Normal)
+                            Text(label, color = if (sortCriteria == key) NeonGreenLight else OnSurface, fontSize = 13.sp, fontWeight = if (sortCriteria == key) FontWeight.Bold else FontWeight.Normal)
                             if (sortCriteria == key) {
                                 Icon(Icons.Default.Check, contentDescription = null, tint = NeonGreenLight, modifier = Modifier.size(16.dp))
                             }
@@ -1111,7 +1118,7 @@ fun AssetManagementScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = if (sortDirection == "desc") NeonGreen else CardDarkLighter),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("降順 (大→小)", color = if (sortDirection == "desc") Color.Black else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("降順 (大→小)", color = if (sortDirection == "desc") Color.Black else OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                         Button(
                             onClick = { sortDirection = "asc" },
@@ -1119,7 +1126,7 @@ fun AssetManagementScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = if (sortDirection == "asc") NeonGreen else CardDarkLighter),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("昇順 (小→大)", color = if (sortDirection == "asc") Color.Black else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("昇順 (小→大)", color = if (sortDirection == "asc") Color.Black else OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -1162,7 +1169,7 @@ fun AssetManagementScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.AddCircle, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(22.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("銘柄の新規登録・修正", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("銘柄の新規登録・修正", color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
                 }
             },
             text = {
@@ -1186,8 +1193,8 @@ fun AssetManagementScreen(
                             unfocusedBorderColor = BorderBlue,
                             focusedLabelColor = NeonGreen,
                             unfocusedLabelColor = SoftGray,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
+                            focusedTextColor = OnSurface,
+                            unfocusedTextColor = OnSurface
                         )
                     )
                     OutlinedTextField(
@@ -1209,8 +1216,8 @@ fun AssetManagementScreen(
                             unfocusedBorderColor = BorderBlue,
                             focusedLabelColor = NeonGreen,
                             unfocusedLabelColor = SoftGray,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
+                            focusedTextColor = OnSurface,
+                            unfocusedTextColor = OnSurface
                         )
                     )
                     OutlinedTextField(
@@ -1232,8 +1239,8 @@ fun AssetManagementScreen(
                             unfocusedBorderColor = BorderBlue,
                             focusedLabelColor = NeonGreen,
                             unfocusedLabelColor = SoftGray,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
+                            focusedTextColor = OnSurface,
+                            unfocusedTextColor = OnSurface
                         )
                     )
                 }
@@ -1242,5 +1249,236 @@ fun AssetManagementScreen(
             shape = RoundedCornerShape(20.dp),
             modifier = Modifier.border(1.dp, BorderBlue, RoundedCornerShape(20.dp))
         )
+    }
+
+    // ================= HOLDING QUICK EDIT BOTTOM SHEET =================
+    quickEditHolding?.let { holding ->
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val shares = quickEditShares.toIntOrNull()?.coerceAtLeast(1) ?: 1
+        val averagePrice = quickEditAcqPrice.toDoubleOrNull()?.coerceAtLeast(0.01) ?: 0.01
+        val currencyFactor = if (holding.currency == "$" ) 154.0 else 1.0
+        val cost = shares * averagePrice * currencyFactor
+        val currentPrice = quickEditMarketPrice.takeIf { it > 0.0 } ?: holding.price
+        val valuation = shares * currentPrice * currencyFactor
+        val gain = valuation - cost
+        val gainPct = if (cost > 0.0) gain / cost * 100.0 else 0.0
+        val projectedDividend = shares * holding.dps * currencyFactor
+        val modalCurrency = if (holding.currency == "$") "$" else "¥"
+
+        ModalBottomSheet(
+            onDismissRequest = { quickEditHolding = null },
+            sheetState = sheetState,
+            containerColor = CardDark,
+            contentColor = OnSurface,
+            scrimColor = Color.Black.copy(alpha = 0.72f),
+            dragHandle = null,
+            shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.86f)
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 12.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    Modifier.align(Alignment.CenterHorizontally).width(44.dp).height(5.dp)
+                        .clip(CircleShape).background(BorderBlue)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier.size(42.dp).clip(RoundedCornerShape(12.dp))
+                            .background(CardDarkLighter).border(1.dp, BorderBlue, RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Tune, null, tint = NeonGreenLight, modifier = Modifier.size(22.dp))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("保有情報のクイック編集", color = OnSurface, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                        Text("${holding.code}  ${holding.name}  (${holding.market})", color = SoftGray, fontSize = 12.sp, maxLines = 1)
+                    }
+                    IconButton(onClick = { quickEditHolding = null }) {
+                        Icon(Icons.Default.Close, contentDescription = "閉じる", tint = SoftGray)
+                    }
+                }
+
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(BackgroundDark)
+                        .border(1.dp, BorderBlue, RoundedCornerShape(16.dp)).padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("現在値", color = SoftGray, fontSize = 11.sp)
+                        Text("$modalCurrency${javaCurrencyFormat.format(currentPrice)}", color = OnSurface, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, fontFamily = FontFamily.Monospace)
+                    }
+                    Surface(shape = CircleShape, color = NeonGreen.copy(alpha = 0.18f)) {
+                        Text(
+                            "↗ 前日比 ${holding.dailyChange}",
+                            Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                            color = if (holding.isPositive) NeonGreenLight else Color(0xFFFFB4AB),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(BackgroundDark).padding(horizontal = 9.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Text("株価試算", color = SoftGray, fontSize = 10.sp, modifier = Modifier.weight(1f))
+                    listOf(-50.0, -10.0, 10.0, 50.0).forEach { delta ->
+                        val label = if (delta > 0) "+${delta.toInt()}" else delta.toInt().toString()
+                        Surface(
+                            modifier = Modifier.clickable { quickEditMarketPrice = (currentPrice + delta).coerceAtLeast(1.0) },
+                            shape = RoundedCornerShape(7.dp),
+                            color = CardDarkLighter
+                        ) {
+                            Text(label, Modifier.padding(horizontal = 7.dp, vertical = 6.dp), color = OnSurface, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    TextButton(onClick = { quickEditMarketPrice = holding.price }, contentPadding = PaddingValues(horizontal = 3.dp, vertical = 0.dp)) {
+                        Text("戻す", color = NeonGreenLight, fontSize = 10.sp)
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Inventory2, null, tint = NeonGreenLight, modifier = Modifier.size(19.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("保有数量 (株)", color = OnSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Text("単元: 100株", color = SoftGray, fontSize = 12.sp)
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        QuickEditStepButton("−", enabled = shares > 1) { quickEditShares = (shares - 10).coerceAtLeast(1).toString() }
+                        OutlinedTextField(
+                            value = quickEditShares,
+                            onValueChange = { quickEditShares = it.filter(Char::isDigit).ifEmpty { "1" } },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.titleLarge.copy(color = OnSurface, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            suffix = { Text("株", color = SoftGray) },
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NeonGreenLight, unfocusedBorderColor = BorderBlue, focusedContainerColor = BackgroundDark, unfocusedContainerColor = BackgroundDark)
+                        )
+                        QuickEditStepButton("＋") { quickEditShares = (shares + 10).toString() }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        listOf("1単元 (100株)" to { quickEditShares = "100" }, "+10" to { quickEditShares = (shares + 10).toString() }, "+100" to { quickEditShares = (shares + 100).toString() }, "+500" to { quickEditShares = (shares + 500).toString() }).forEach { (label, action) ->
+                            Surface(Modifier.clickable(onClick = action), shape = RoundedCornerShape(10.dp), color = CardDarkLighter, border = BorderStroke(1.dp, BorderBlue)) {
+                                Text(label, Modifier.padding(horizontal = 10.dp, vertical = 9.dp), color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            }
+                        }
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Sell, null, tint = NeonGreenLight, modifier = Modifier.size(19.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("取得平均単価 ($modalCurrency)", color = OnSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        }
+                        TextButton(onClick = { quickEditAcqPrice = currentPrice.toString().removeSuffix(".0") }) {
+                            Text("現在値を適用", color = NeonGreenLight, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        QuickEditStepButton("−", enabled = averagePrice > 1) { quickEditAcqPrice = (averagePrice - 10).coerceAtLeast(1.0).toString().removeSuffix(".0") }
+                        OutlinedTextField(
+                            value = quickEditAcqPrice,
+                            onValueChange = { quickEditAcqPrice = it.filter { ch -> ch.isDigit() || ch == '.' }.ifEmpty { "1" } },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.titleLarge.copy(color = OnSurface, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            prefix = { Text(modalCurrency, color = SoftGray) },
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NeonGreenLight, unfocusedBorderColor = BorderBlue, focusedContainerColor = BackgroundDark, unfocusedContainerColor = BackgroundDark)
+                        )
+                        QuickEditStepButton("＋") { quickEditAcqPrice = (averagePrice + 10).toString().removeSuffix(".0") }
+                    }
+                }
+
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(BackgroundDark)
+                        .border(1.dp, NeonGreenLight.copy(alpha = 0.45f), RoundedCornerShape(16.dp)).padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Analytics, null, tint = NeonGreenLight, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("更新後のリアルタイム試算", color = NeonGreenLight, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Surface(shape = CircleShape, color = NeonGreen.copy(alpha = 0.18f)) {
+                            Text("即時再計算中", Modifier.padding(horizontal = 9.dp, vertical = 5.dp), color = NeonGreenLight, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Divider(color = BorderBlue)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        QuickEditSummary("投資元本", "$modalCurrency${javaCurrencyFormat.format(cost.toLong())}", OnSurface, Modifier.weight(1f))
+                        QuickEditSummary("評価損益", "${if (gain >= 0) "+" else "−"}$modalCurrency${javaCurrencyFormat.format(kotlin.math.abs(gain).toLong())}\n(${String.format(Locale.JAPAN, "%+.1f%%", gainPct)})", if (gain >= 0) NeonGreenLight else Color(0xFFFFB4AB), Modifier.weight(1f), Alignment.CenterHorizontally)
+                        QuickEditSummary("年間予想配当金", "$modalCurrency${javaCurrencyFormat.format(projectedDividend.toLong())}/年", NeonGreenLight, Modifier.weight(1f), Alignment.End)
+                    }
+                }
+
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { quickEditHolding = null },
+                        modifier = Modifier.weight(0.8f).height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(containerColor = CardDarkLighter, contentColor = OnSurface),
+                        border = BorderStroke(1.dp, BorderBlue)
+                    ) { Text("キャンセル", fontWeight = FontWeight.Bold) }
+                    Button(
+                        onClick = {
+                            viewModel.updateHolding(holding.code, shares, averagePrice, currentPrice)
+                            quickEditHolding = null
+                        },
+                        modifier = Modifier.weight(1.5f).height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonGreen)
+                    ) {
+                        Icon(Icons.Default.Check, null, tint = Color(0xFF003824))
+                        Spacer(Modifier.width(8.dp))
+                        Text("変更を保存する", color = Color(0xFF003824), fontWeight = FontWeight.ExtraBold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickEditStepButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.size(50.dp).clickable(enabled = enabled, onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = CardDarkLighter,
+        border = BorderStroke(1.dp, BorderBlue)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(label, color = if (enabled) OnSurface else SoftGray.copy(alpha = 0.4f), fontSize = 25.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun QuickEditSummary(label: String, value: String, valueColor: Color, modifier: Modifier, alignment: Alignment.Horizontal = Alignment.Start) {
+    Column(modifier, horizontalAlignment = alignment, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, color = SoftGray, fontSize = 10.sp, maxLines = 1)
+        Text(value, color = valueColor, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = 2)
     }
 }
