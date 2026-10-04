@@ -18,7 +18,7 @@ export const TermsPrivacyScreen: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-[#4edea3] animate-pulse" />
-            <span className="text-xs text-[#4edea3] font-bold">Kurogane Security Core</span>
+            <span className="text-xs text-[#4edea3] font-bold">Diview Security Core</span>
           </div>
           <span className="text-[10px] text-[#4edea3] bg-[#10b981]/15 border border-[#4edea3]/30 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
             <span className="material-symbols-outlined text-[13px]">verified</span>
@@ -73,11 +73,11 @@ export const TermsPrivacyScreen: React.FC = () => {
         <div className="space-y-3 text-xs">
           <div className="p-3.5 rounded-2xl bg-[#131b2e] border border-slate-800 space-y-1">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-sm text-white">Kurogane利用規約</h3>
+              <h3 className="font-bold text-sm text-white">Diview利用規約</h3>
               <span className="text-[10px] text-[#4edea3] bg-[#10b981]/15 px-2 py-0.5 rounded-full font-bold">2025年改訂版</span>
             </div>
             <p className="text-[#bbcabf] text-[11px] leading-relaxed">
-              本規約は、合同会社Kurogane Labsが提供するポートフォリオ分析アプリ「Kurogane Dividend」の利用条件を定めるものです。
+              本規約は、Diview運営委員会が提供するポートフォリオ分析アプリ「Diview」の利用条件を定めるものです。
             </p>
           </div>
 
@@ -143,7 +143,7 @@ export const TermsPrivacyScreen: React.FC = () => {
               </div>
             </div>
             <p className="text-[11px] text-[#bbcabf] leading-relaxed">
-              Kurogane Dividendは「あなたの蓄財状況を誰にも見せない」ことを思想として設計されています。入力された全株式データ・投資金額・配当キャッシュフローは、クラウドサーバーへ一切送信されず、端末内でのみ演算処理されます。
+              Diviewは「あなたの蓄財状況を誰にも見せない」ことを思想として設計されています。入力された全株式データ・投資金額・配当キャッシュフローは、クラウドサーバーへ一切送信されず、端末内でのみ演算処理されます。
             </p>
 
             <div className="grid grid-cols-2 gap-2 pt-1">

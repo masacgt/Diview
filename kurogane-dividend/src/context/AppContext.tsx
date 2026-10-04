@@ -298,7 +298,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Trigger real native Android OS notification if running inside WebView APK!
     if (typeof window !== 'undefined' && (window as any).KuroganeAndroid) {
       try {
-        (window as any).KuroganeAndroid.showSystemNotification("Kurogane Dividend", message);
+        (window as any).KuroganeAndroid.showSystemNotification("Diview", message);
       } catch (e) {
         console.error('Android bridge error:', e);
       }

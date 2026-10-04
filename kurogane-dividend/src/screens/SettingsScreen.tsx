@@ -552,7 +552,7 @@ export const SettingsScreen: React.FC = () => {
           <span className="material-symbols-outlined text-[14px] text-[#4edea3]">lock</span>
           <span>金融データは端末内暗号化保存されています</span>
         </div>
-        <p className="font-mono text-slate-500">© 2025 Kurogane Dividend System</p>
+        <p className="font-mono text-slate-500">© 2025 Diview</p>
       </footer>
     </div>
   );

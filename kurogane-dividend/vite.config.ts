@@ -14,8 +14,8 @@ export default defineConfig(() => {
         includeAssets: ['apple-touch-icon.png', 'icon.svg'],
         manifest: {
           id: '/',
-          name: 'Kurogane Dividend',
-          short_name: 'Kurogane',
+          name: 'Diview',
+          short_name: 'Diview',
           description: '高配当株投資・年間配当管理・資産推移・FIREロードマップQuestを備えたポートフォリオ管理アプリ。',
           theme_color: '#0b1326',
           background_color: '#0b1326',
