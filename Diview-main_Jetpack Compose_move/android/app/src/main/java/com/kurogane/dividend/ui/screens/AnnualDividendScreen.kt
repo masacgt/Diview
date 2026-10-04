@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.viewmodel.DividendViewModel
+import com.kurogane.dividend.model.YearlyAssetSnapshot
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -38,24 +39,40 @@ import java.util.Locale
 @Composable
 fun AnnualDividendScreen(
     viewModel: DividendViewModel,
-    onNavigateToDetail: (String) -> Unit = {}
+    onNavigateToDetail: (String) -> Unit = {},
+    showTopBar: Boolean = true
 ) {
     val holdings by viewModel.holdings.collectAsState()
     val isPrivacyActive by viewModel.isPrivacyActive.collectAsState()
+    val diagnosisBands by viewModel.diagnosisBands.collectAsState()
+    val sharedSecurities by viewModel.sharedSecurities.collectAsState()
+    val portfolioDefinitions by viewModel.portfolioAnalysisDefinitions.collectAsState()
 
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: 分析, 1: 配当推移, 2: 資産推移
+    // The reference screen opens on dividend growth; analysis and asset tracking remain selectable.
+    var selectedTab by remember { mutableIntStateOf(1) } // 0: 分析, 1: 配当推移, 2: 資産推移
     var evalBasis by remember { mutableStateOf("eval") } // "eval" or "cost"
 
-    val totalAssets = holdings.sumOf { it.totalValuation }
-    val totalCost = holdings.sumOf { it.totalCost }
-    val totalAnnualDiv = holdings.sumOf { it.annualDividend }
-    val yieldOnCost = if (totalCost > 0) (totalAnnualDiv / totalCost) * 100 else 0.0
-    val yieldOnValuation = if (totalAssets > 0) (totalAnnualDiv / totalAssets) * 100 else 0.0
+    // The React analytics tabs use a fixed 2025 illustration dataset.
+    val totalAssets = 3_500_000.0
+    val totalCost = 3_050_000.0
+    val totalAnnualDiv = if (evalBasis == "eval") 124_500.0 else 118_200.0
+    val yieldOnCost = 4.18
+    val yieldOnValuation = 3.56
+    val demoAssetHistory = remember {
+        listOf(
+            YearlyAssetSnapshot("2021", 800_000, 850_000),
+            YearlyAssetSnapshot("2022", 1_450_000, 1_580_000),
+            YearlyAssetSnapshot("2023", 2_100_000, 2_420_000),
+            YearlyAssetSnapshot("2024", 2_750_000, 3_180_000),
+            YearlyAssetSnapshot("2025", 3_050_000, 3_500_000)
+        )
+    }
 
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
 
     Scaffold(
         topBar = {
+            if (showTopBar) {
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -95,6 +112,7 @@ fun AnnualDividendScreen(
                     containerColor = BackgroundDark
                 )
             )
+            }
         },
         containerColor = BackgroundDark
     ) { innerPadding ->
@@ -105,6 +123,11 @@ fun AnnualDividendScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (holdings.any { it.category == com.kurogane.dividend.model.Category.US && it.fxRateToJpy <= 0.0 }) {
+                item {
+                    Text("為替レート未取得の米国資産は、円換算の配当・資産集計に含めていません。", color = OnSurfaceVariant, fontSize = 10.sp)
+                }
+            }
             // Hero Card: Annual Expected Dividend
             item {
                 Card(
@@ -268,7 +291,7 @@ fun AnnualDividendScreen(
                         onClick = { selectedTab = 0 },
                         text = {
                             Text(
-                                "分析 (内訳)",
+                                "分析",
                                 fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
                                 color = if (selectedTab == 0) PrimaryEmerald else OnSurfaceVariant
                             )
@@ -279,7 +302,7 @@ fun AnnualDividendScreen(
                         onClick = { selectedTab = 1 },
                         text = {
                             Text(
-                                "配当推移 (複利)",
+                                "配当推移",
                                 fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
                                 color = if (selectedTab == 1) PrimaryEmerald else OnSurfaceVariant
                             )
@@ -304,7 +327,9 @@ fun AnnualDividendScreen(
                 item {
                     CompositionAnalysisSection(
                         holdings = holdings,
-                        diagnosisBands = viewModel.diagnosisBands
+                        diagnosisBands = diagnosisBands,
+                        sharedSecurities = sharedSecurities,
+                        portfolioDefinitions = portfolioDefinitions
                     )
                 }
             }
@@ -312,7 +337,7 @@ fun AnnualDividendScreen(
             // Tab 1: Dividend Compounding Simulation
             if (selectedTab == 1) {
                 item {
-                    CompoundingSimulationSection()
+                    DividendHistorySection()
                 }
             }
 
@@ -324,7 +349,7 @@ fun AnnualDividendScreen(
                         totalCost = totalCost,
                         currencyFormat = currencyFormat,
                         isPrivacyActive = isPrivacyActive,
-                        history = viewModel.yearlyAssetHistory
+                        history = demoAssetHistory
                     )
                 }
             }
@@ -339,9 +364,12 @@ fun AnnualDividendScreen(
 @Composable
 private fun CompositionAnalysisSection(
     holdings: List<com.kurogane.dividend.model.Holding>,
-    diagnosisBands: List<com.kurogane.dividend.model.PortfolioDiagnosisBand>
+    diagnosisBands: List<com.kurogane.dividend.model.PortfolioDiagnosisBand>,
+    sharedSecurities: Map<String, com.kurogane.dividend.data.SharedSecurityData>,
+    portfolioDefinitions: com.kurogane.dividend.data.PortfolioAnalysisDefinitions?
 ) {
     var isVisible by remember { mutableStateOf(false) }
+    var expandedSector by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         isVisible = true
     }
@@ -351,6 +379,23 @@ private fun CompositionAnalysisSection(
         animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
         label = "donutAnimation"
     )
+
+    val sectorColors = listOf(
+        Color(0xFF10B981),
+        Color(0xFF06B6D4),
+        Color(0xFF8B5CF6),
+        Color(0xFFF59E0B),
+        Color(0xFF3B82F6),
+        Color(0xFFEC4899)
+    )
+    val totalDividend = 124_500.0
+    val sectorBreakdown = listOf(
+        "トヨタ自動車" to 47_310.0,
+        "Apple Inc." to 34_860.0,
+        "eMAXIS Slim 全世界" to 22_410.0,
+        "NTT (9432)" to 19_920.0
+    )
+    val leadingSector = sectorBreakdown.firstOrNull()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -380,59 +425,36 @@ private fun CompositionAnalysisSection(
                     val radius = (size.minDimension - strokeWidth) / 2
                     val centerOffset = Offset(size.width / 2, size.height / 2)
 
-                    // Sector arcs animated with progress
-                    drawArc(
-                        color = Color(0xFF10B981), // Emerald - 輸送機器
-                        startAngle = -90f,
-                        sweepAngle = 140f * animatedProgress,
-                        useCenter = false,
-                        topLeft = Offset(centerOffset.x - radius, centerOffset.y - radius),
-                        size = Size(radius * 2, radius * 2),
-                        style = Stroke(strokeWidth, cap = StrokeCap.Round)
-                    )
-                    drawArc(
-                        color = Color(0xFF06B6D4), // Cyan - テクノロジー
-                        startAngle = 55f,
-                        sweepAngle = 100f * animatedProgress,
-                        useCenter = false,
-                        topLeft = Offset(centerOffset.x - radius, centerOffset.y - radius),
-                        size = Size(radius * 2, radius * 2),
-                        style = Stroke(strokeWidth, cap = StrokeCap.Round)
-                    )
-                    drawArc(
-                        color = Color(0xFF8B5CF6), // Purple - 銀行
-                        startAngle = 160f,
-                        sweepAngle = 70f * animatedProgress,
-                        useCenter = false,
-                        topLeft = Offset(centerOffset.x - radius, centerOffset.y - radius),
-                        size = Size(radius * 2, radius * 2),
-                        style = Stroke(strokeWidth, cap = StrokeCap.Round)
-                    )
-                    drawArc(
-                        color = Color(0xFFF59E0B), // Amber - その他
-                        startAngle = 235f,
-                        sweepAngle = 30f * animatedProgress,
-                        useCenter = false,
-                        topLeft = Offset(centerOffset.x - radius, centerOffset.y - radius),
-                        size = Size(radius * 2, radius * 2),
-                        style = Stroke(strokeWidth, cap = StrokeCap.Round)
-                    )
+                    var startAngle = -90f
+                    sectorBreakdown.forEachIndexed { index, (_, amount) ->
+                        val sweep = if (totalDividend > 0.0) (amount / totalDividend * 360.0).toFloat() else 0f
+                        drawArc(
+                            color = sectorColors[index % sectorColors.size],
+                            startAngle = startAngle,
+                            sweepAngle = sweep * animatedProgress,
+                            useCenter = false,
+                            topLeft = Offset(centerOffset.x - radius, centerOffset.y - radius),
+                            size = Size(radius * 2, radius * 2),
+                            style = Stroke(strokeWidth, cap = StrokeCap.Round)
+                        )
+                        startAngle += sweep
+                    }
                 }
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        "筆頭セクター",
+                        "年間配当合計",
                         style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontSize = 10.sp)
                     )
                     Text(
-                        "輸送用機器",
+                        "¥124,500",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                     )
                     Text(
-                        "38.9%",
+                        "4銘柄分散中",
                         style = MaterialTheme.typography.labelMedium.copy(
                             color = PrimaryEmerald,
                             fontWeight = FontWeight.Bold
@@ -444,27 +466,138 @@ private fun CompositionAnalysisSection(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Breakdown List
-            SectorRow(name = "輸送用機器 (トヨタなど)", amount = "¥145,600", ratio = "38.9%", color = Color(0xFF10B981))
-            Spacer(modifier = Modifier.height(8.dp))
-            SectorRow(name = "テクノロジー (米国株)", amount = "¥112,000", ratio = "29.9%", color = Color(0xFF06B6D4))
-            Spacer(modifier = Modifier.height(8.dp))
-            SectorRow(name = "銀行業 (三井住友など)", amount = "¥78,000", ratio = "20.8%", color = Color(0xFF8B5CF6))
-            Spacer(modifier = Modifier.height(8.dp))
-            SectorRow(name = "通信・情報", amount = "¥38,900", ratio = "10.4%", color = Color(0xFFF59E0B))
+            sectorBreakdown.forEachIndexed { index, (sector, amount) ->
+                val ratio = if (totalDividend > 0.0) amount / totalDividend * 100.0 else 0.0
+                SectorRow(
+                    name = sector,
+                    amount = "¥${NumberFormat.getNumberInstance(Locale.JAPAN).format(amount.toLong())}",
+                    ratio = String.format(Locale.JAPAN, "%.1f%%", ratio),
+                    color = sectorColors[index % sectorColors.size]
+                )
+                if (index < sectorBreakdown.lastIndex) Spacer(modifier = Modifier.height(8.dp))
+            }
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            val score = run {
-                val countScore = (holdings.size * 8).coerceAtMost(24)
-                val positiveScore = (holdings.count { it.gainLoss >= 0 } * 8).coerceAtMost(24)
-                val dividendScore = (holdings.count { it.annualDividend > 0 } * 10).coerceAtMost(30)
-                val diversificationScore = (holdings.map { it.category }.distinct().size * 7).coerceAtMost(22)
-                (countScore + positiveScore + dividendScore + diversificationScore).coerceIn(0, 100)
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainer)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("セクター別比率", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("3業種分散", color = PrimaryEmerald, fontSize = 10.sp)
+                    }
+                    Row(Modifier.fillMaxWidth().height(9.dp).clip(CircleShape)) {
+                        Box(Modifier.weight(.452f).fillMaxHeight().background(PrimaryEmerald))
+                        Box(Modifier.weight(.328f).fillMaxHeight().background(Color(0xFF38BDF8)))
+                        Box(Modifier.weight(.220f).fillMaxHeight().background(Color(0xFF818CF8)))
+                    }
+                    Text("● 輸送用機器 45.2%     ● 情報・通信 32.8%     ● 全世界・米国 22.0%", color = OnSurfaceVariant, fontSize = 9.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("輸送用機器" to "¥56,274" to "45.2%", "情報・通信" to "¥40,836" to "32.8%", "全世界・米国" to "¥27,390" to "22.0%").forEach { entry ->
+                            Column(Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(BackgroundDark).padding(7.dp)) {
+                                Text(entry.first.first, color = OnSurfaceVariant, fontSize = 8.sp, maxLines = 1)
+                                Text(entry.first.second, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(entry.second, color = PrimaryEmerald, fontSize = 8.sp)
+                            }
+                        }
+                    }
+                }
             }
-            val diagnosis = diagnosisBands.firstOrNull { score in it.minScore..it.maxScore }
-                ?: diagnosisBands.last()
 
-            Card(
+            Text("セクター・銘柄構成詳細", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 3.dp))
+            listOf(
+                Triple("輸送用機器", "45.2%", "¥56,274 / 年") to "7203  トヨタ自動車 • 保有100株 • 利回り2.8%",
+                Triple("情報・通信 / テック", "32.8%", "¥40,836 / 年") to "AAPL  Apple Inc. • 米国株・連続増配",
+                Triple("投資信託 / 全世界株式", "22.0%", "再投資型") to "eMAXIS Slim 全世界株式 • 無分配で複利運用"
+            ).forEach { (sector, detail) ->
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurfaceContainer).clickable { expandedSector = if (expandedSector == sector.first) "" else sector.first }.padding(12.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column { Text("${sector.first}  ${sector.second}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold); Text(sector.third, color = PrimaryEmerald, fontSize = 10.sp) }
+                        Icon(if (expandedSector == sector.first) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = OnSurfaceVariant)
+                    }
+                    if (expandedSector == sector.first) { HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color(0xFF273249)); Text(detail, color = OnSurfaceVariant, fontSize = 10.sp) }
+                }
+            }
+
+            if (holdings.isEmpty()) {
+                Text("保有資産を登録すると、ポートフォリオ診断を表示します。", color = OnSurfaceVariant, fontSize = 11.sp)
+            } else if (diagnosisBands.isEmpty()) {
+                Text("診断定義を取得できません。通信が回復すると表示されます。", color = OnSurfaceVariant, fontSize = 11.sp)
+            } else {
+                val uniqueHoldings = holdings.distinctBy { it.code }
+                val dividendBySecurity = holdings.groupBy { it.code }.mapValues { (_, lots) -> lots.sumOf { it.annualDividend } }
+                val dividendConcentration = if (totalDividend > 0.0) {
+                    dividendBySecurity.values.maxOrNull()?.div(totalDividend)?.times(100.0)
+                } else null
+                val knownIncreaseYears = holdings.mapNotNull { sharedSecurities[it.code]?.consecutiveDividendIncreaseYears }
+                val averageIncreaseYears = knownIncreaseYears.takeIf { it.isNotEmpty() }?.average()
+                val sectorCount = uniqueHoldings.map { it.sector.trim() }.filter { it.isNotBlank() && it != "未分類" }.distinct().size
+                val knownPayoutRatios = uniqueHoldings.mapNotNull { sharedSecurities[it.code]?.payoutRatio }
+                val healthyPayoutRatioShare = knownPayoutRatios.takeIf { it.isNotEmpty() }?.let { values ->
+                    val maxHealthy = portfolioDefinitions?.healthyPayoutRatioMax ?: 70.0
+                    values.count { it in 0.0..maxHealthy }.toDouble() / values.size * 100.0
+                }
+                val knownFcfMargins = uniqueHoldings.mapNotNull { sharedSecurities[it.code]?.fcfMargin }
+                val positiveFcfShare = knownFcfMargins.takeIf { it.isNotEmpty() }?.let { values ->
+                    values.count { it >= 0.0 }.toDouble() / values.size * 100.0
+                }
+                val defs = portfolioDefinitions
+                fun scoreFor(value: Double?, bands: List<com.kurogane.dividend.data.ScoreBand>, missing: Int): Int {
+                    if (value == null) return missing
+                    return bands.firstOrNull { band ->
+                        (band.min == null || value >= band.min) && (band.max == null || value <= band.max)
+                    }?.score ?: missing
+                }
+                val concentrationScore = scoreFor(dividendConcentration, defs?.concentrationBands.orEmpty(), defs?.missingConcentrationScore ?: 40)
+                val sectorScore = scoreFor(sectorCount.toDouble(), defs?.sectorBands.orEmpty(), 20)
+                val holdingsScore = scoreFor(uniqueHoldings.size.toDouble(), defs?.holdingBands.orEmpty(), 20)
+                val dividendGrowthScore = scoreFor(averageIncreaseYears, defs?.dividendGrowthBands.orEmpty(), defs?.missingDividendGrowthScore ?: 50)
+                val payoutScore = scoreFor(healthyPayoutRatioShare, defs?.healthyShareBands.orEmpty(), defs?.missingHealthyShareScore ?: 50)
+                val fcfScore = scoreFor(positiveFcfShare, defs?.healthyShareBands.orEmpty(), defs?.missingHealthyShareScore ?: 50)
+                val weights = defs?.weights.orEmpty()
+                val weightTotal = weights.values.sum().takeIf { it > 0 } ?: 100
+                val score = (
+                    concentrationScore * (weights["concentration"] ?: 25) +
+                    sectorScore * (weights["sector"] ?: 20) +
+                    holdingsScore * (weights["holdings"] ?: 10) +
+                    dividendGrowthScore * (weights["dividend_growth"] ?: 15) +
+                    payoutScore * (weights["payout"] ?: 15) +
+                    fcfScore * (weights["fcf"] ?: 15)
+                ) / weightTotal
+                val diagnosis = diagnosisBands.firstOrNull { score in it.minScore..it.maxScore } ?: diagnosisBands.last()
+                val stabilityWeights = defs?.stabilityWeights.orEmpty()
+                val stabilityTotal = stabilityWeights.values.sum().takeIf { it > 0 } ?: 100
+                val stabilityScore = (
+                    sectorScore * (stabilityWeights["sector"] ?: 35) +
+                    concentrationScore * (stabilityWeights["concentration"] ?: 35) +
+                    fcfScore * (stabilityWeights["fcf"] ?: 30)
+                ) / stabilityTotal
+                val riskWeights = defs?.dividendRiskWeights.orEmpty()
+                val riskTotal = riskWeights.values.sum().takeIf { it > 0 } ?: 100
+                val dividendRiskScore = 100 - (
+                    payoutScore * (riskWeights["payout"] ?: 40) +
+                    fcfScore * (riskWeights["fcf"] ?: 35) +
+                    dividendGrowthScore * (riskWeights["dividend_growth"] ?: 25)
+                ) / riskTotal
+                val stabilityLabel = defs?.stabilityLabels?.firstOrNull { band ->
+                    (band.min == null || stabilityScore >= band.min) && (band.max == null || stabilityScore <= band.max)
+                }?.label ?: when {
+                    stabilityScore >= 85 -> "非常に高い"
+                    stabilityScore >= 70 -> "高い"
+                    stabilityScore >= 55 -> "標準"
+                    stabilityScore >= 40 -> "低め"
+                    else -> "低い"
+                }
+                val dividendRiskLabel = defs?.dividendRiskLabels?.firstOrNull { band ->
+                    (band.min == null || dividendRiskScore >= band.min) && (band.max == null || dividendRiskScore <= band.max)
+                }?.label ?: when {
+                    dividendRiskScore <= 15 -> "低い"
+                    dividendRiskScore <= 30 -> "やや低い"
+                    dividendRiskScore <= 45 -> "標準"
+                    dividendRiskScore <= 60 -> "やや高い"
+                    else -> "高い"
+                }
+
+                Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = BackgroundDark)
@@ -481,8 +614,9 @@ private fun CompositionAnalysisSection(
                             Column {
                                 Text("AIポートフォリオ診断", color = Color.White, fontWeight = FontWeight.Bold)
                                 Text("分散スコア＆リスク評価", color = OnSurfaceVariant, fontSize = 10.sp)
-                            }
-                        }
+                }
+            }
+        }
                         Surface(shape = RoundedCornerShape(12.dp), color = PrimaryEmerald.copy(alpha = .18f)) {
                             Text(
                                 "健全度: " + diagnosis.grade + " (" + score + "/100)",
@@ -499,14 +633,44 @@ private fun CompositionAnalysisSection(
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Surface(Modifier.weight(1f), shape = RoundedCornerShape(10.dp), color = SurfaceContainerHigh) {
                             Column(Modifier.padding(10.dp)) {
-                                Text("増配継続力", color = OnSurfaceVariant, fontSize = 10.sp)
-                                Text(if (score >= 80) "高 (安定期)" else "中", color = PrimaryEmerald, fontWeight = FontWeight.Bold)
+                                Text("安定度", color = OnSurfaceVariant, fontSize = 10.sp)
+                                Text("$stabilityLabel ($stabilityScore/100)", color = PrimaryEmerald, fontWeight = FontWeight.Bold)
                             }
                         }
                         Surface(Modifier.weight(1f), shape = RoundedCornerShape(10.dp), color = SurfaceContainerHigh) {
                             Column(Modifier.padding(10.dp)) {
                                 Text("減配リスク", color = OnSurfaceVariant, fontSize = 10.sp)
-                                Text(if (score >= 80) "極めて低" else "要確認", color = PrimaryEmerald, fontWeight = FontWeight.Bold)
+                                Text("$dividendRiskLabel ($dividendRiskScore/100)", color = if (dividendRiskScore >= 50) ErrorRed else PrimaryEmerald, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Surface(Modifier.weight(1f), shape = RoundedCornerShape(10.dp), color = SurfaceContainerHigh) {
+                            Column(Modifier.padding(10.dp)) {
+                                Text("連続増配年数（取得分）", color = OnSurfaceVariant, fontSize = 10.sp)
+                                Text(averageIncreaseYears?.let { String.format(Locale.JAPAN, "平均 %.1f年", it) } ?: "データ未取得", color = PrimaryEmerald, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Surface(Modifier.weight(1f), shape = RoundedCornerShape(10.dp), color = SurfaceContainerHigh) {
+                            Column(Modifier.padding(10.dp)) {
+                                Text("最大銘柄の配当集中度", color = OnSurfaceVariant, fontSize = 10.sp)
+                                Text(dividendConcentration?.let { String.format(Locale.JAPAN, "%.1f%%", it) } ?: "配当なし", color = PrimaryEmerald, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Surface(Modifier.weight(1f), shape = RoundedCornerShape(10.dp), color = SurfaceContainerHigh) {
+                            Column(Modifier.padding(10.dp)) {
+                                Text("配当性向70%以下", color = OnSurfaceVariant, fontSize = 10.sp)
+                                Text(healthyPayoutRatioShare?.let { String.format(Locale.JAPAN, "%.0f%%", it) } ?: "データ未取得", color = PrimaryEmerald, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Surface(Modifier.weight(1f), shape = RoundedCornerShape(10.dp), color = SurfaceContainerHigh) {
+                            Column(Modifier.padding(10.dp)) {
+                                Text("FCF黒字銘柄", color = OnSurfaceVariant, fontSize = 10.sp)
+                                Text(positiveFcfShare?.let { String.format(Locale.JAPAN, "%.0f%%", it) } ?: "データ未取得", color = PrimaryEmerald, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -558,101 +722,116 @@ private fun SectorRow(name: String, amount: String, ratio: String, color: Color)
 }
 
 @Composable
-private fun CompoundingSimulationSection() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                "配当再投資による複利推移シミュレーション",
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            )
-            Text(
-                "年間配当を全額再投資 + 年30万円追加投資 (年利4.0%想定)",
-                style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant)
-            )
+private fun DividendHistorySection() {
+    val years = listOf(2021, 2022, 2023, 2024, 2025)
+    val amounts = listOf(48_000, 66_000, 87_000, 110_800, 124_500)
+    val growth = listOf("基準年", "+37.5%", "+31.8%", "+27.4%", "+12.4%")
+    var selectedYear by remember { mutableIntStateOf(2025) }
+    val selectedIndex = years.indexOf(selectedYear).coerceAtLeast(0)
+    val number = NumberFormat.getNumberInstance(Locale.JAPAN)
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // 5-Year Bar comparison
-            val years = listOf("2024", "2025", "2026", "2027", "2028")
-            val amounts = listOf(37, 46, 58, 73, 91) // 万円
-
-            var barAnimActive by remember { mutableStateOf(false) }
-            LaunchedEffect(Unit) { barAnimActive = true }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(140.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                years.zip(amounts).forEach { (year, amt) ->
-                    val targetHeight = (amt * 1.3).dp
-                    val animatedHeight by animateDpAsState(
-                        targetValue = if (barAnimActive) targetHeight else 0.dp,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-                        label = "barHeight_$year"
-                    )
-
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            "${amt}万",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = PrimaryEmerald,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Box(
-                            modifier = Modifier
-                                .width(28.dp)
-                                .height(animatedHeight)
-                                .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(PrimaryEmerald, PrimaryEmerald.copy(alpha = 0.4f))
-                                    )
-                                )
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            year,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = OnSurfaceVariant,
-                                fontSize = 11.sp
-                            )
-                        )
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainer)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(PrimaryEmerald))
+                    Spacer(Modifier.width(8.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("配当受取額の複利成長推移", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("2021年〜2025年 (予想)", color = OnSurfaceVariant, fontSize = 11.sp)
+                    }
+                    Text("5期連続増配達成", color = PrimaryEmerald, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                }
+                Text("増配と再投資による累積カーブ", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("5年平均増配率" to "+21.4%", "累計受取総額" to "¥401,500", "簿価利回り (YOC)" to "4.08%").forEach { (label, value) ->
+                        Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(BackgroundDark).padding(9.dp)) {
+                            Text(label, color = OnSurfaceVariant, fontSize = 8.sp, maxLines = 1)
+                            Text(value, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                        }
                     }
                 }
             }
+        }
 
-            Spacer(modifier = Modifier.height(16.dp))
+        Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainer)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(PrimaryEmerald))
+                        Spacer(Modifier.width(8.dp))
+                        Text("年次配当額（受取）", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Text("＋12.4% 増配 (2025予想)", color = PrimaryEmerald, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    years.forEachIndexed { index, year ->
+                        Column(Modifier.weight(1f).clip(RoundedCornerShape(7.dp)).background(if (index == selectedIndex) PrimaryEmerald.copy(alpha = .12f) else BackgroundDark).border(if (index == selectedIndex) 1.dp else .5.dp, if (index == selectedIndex) PrimaryEmerald.copy(alpha = .6f) else SurfaceContainerHigh, RoundedCornerShape(7.dp)).clickable { selectedYear = year }.padding(vertical = 6.dp, horizontal = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(if (year == 2025) "2025予想" else "${year}年", color = OnSurfaceVariant, fontSize = 7.sp, maxLines = 1)
+                            Text("¥${number.format(amounts[index])}", color = if (index == selectedIndex) PrimaryEmerald else Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text(growth[index], color = PrimaryEmerald, fontSize = 7.sp)
+                        }
+                    }
+                }
+                val maxAmount = amounts.maxOrNull()!!.toFloat()
+                Box(Modifier.fillMaxWidth().height(154.dp)) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        val spacing = size.width / years.size
+                        val points = amounts.mapIndexed { index, value ->
+                            Offset(spacing * (index + .5f), size.height * .83f - size.height * .67f * value / maxAmount)
+                        }
+                        for (line in 1..3) {
+                            val y = size.height * line / 4f
+                            drawLine(Color.White.copy(alpha = .07f), Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+                        }
+                        amounts.forEachIndexed { index, value ->
+                            val x = spacing * (index + .5f)
+                            val barHeight = size.height * .67f * value / maxAmount
+                            drawRoundRect(PrimaryEmerald.copy(alpha = if (index == selectedIndex) 1f else .78f), Offset(x - spacing * .18f, size.height * .83f - barHeight), Size(spacing * .36f, barHeight), androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()))
+                        }
+                        for (i in 0 until points.lastIndex) drawLine(Color(0xFF38BDF8), points[i], points[i + 1], 2.dp.toPx(), cap = StrokeCap.Round)
+                        points.forEachIndexed { index, point -> drawCircle(if (index == selectedIndex) Color.White else Color(0xFF38BDF8), if (index == selectedIndex) 4.dp.toPx() else 3.dp.toPx(), point, style = Stroke(2.dp.toPx())) }
+                    }
+                    Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        years.forEachIndexed { index, year -> Text(if (year == 2025) "2025予" else "${year}", color = if (index == selectedIndex) PrimaryEmerald else OnSurfaceVariant, fontSize = 8.sp, modifier = Modifier.clickable { selectedYear = year }) }
+                    }
+                }
+                Surface(color = BackgroundDark, shape = RoundedCornerShape(10.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column {
+                            Text("● ${selectedYear}年 ${if (selectedYear == 2025) "予想見込" else "実績"}", color = OnSurfaceVariant, fontSize = 9.sp)
+                            Text("¥${number.format(amounts[selectedIndex])} / 年", color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("月換算 約¥${number.format(amounts[selectedIndex] / 12)} / 月", color = OnSurfaceVariant, fontSize = 9.sp)
+                            Text("${if (selectedIndex > 0) "+¥${number.format(amounts[selectedIndex] - amounts[selectedIndex - 1])}" else "基準年"}   ${growth[selectedIndex]}", color = PrimaryEmerald, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(PrimaryEmerald.copy(alpha = 0.1f))
-                    .border(1.dp, PrimaryEmerald.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-                    .padding(12.dp)
-            ) {
-                Text(
-                    "💡 5年後には年間配当が約2.4倍 (¥910,000/年・月平均7.5万円) に到達する見込みです。雪だるま式に加速します。",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = PrimaryEmerald,
-                        lineHeight = 16.sp
-                    )
-                )
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("▦  年別インカム詳細・月割シミュレーション", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text("5年間増配記録", color = OnSurfaceVariant, fontSize = 9.sp)
+        }
+        years.indices.reversed().forEach { index ->
+            val year = years[index]
+            Surface(Modifier.fillMaxWidth().clickable { selectedYear = year }, shape = RoundedCornerShape(14.dp), color = SurfaceContainer, border = if (year == selectedYear) BorderStroke(1.dp, PrimaryEmerald.copy(alpha = .5f)) else null) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(if (year == 2025) PrimaryEmerald.copy(alpha = .15f) else SurfaceContainerHigh), contentAlignment = Alignment.Center) { Text("’${year.toString().takeLast(2)}", color = if (year == 2025) PrimaryEmerald else OnSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text("${year}年 ${if (year == 2025) "予想" else "実績"}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(if (year == 2025) "過去最高配当" else "確定", color = PrimaryEmerald, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Text("月換算 約¥${number.format(amounts[index] / 12)} / 月 • ${if (year == 2025) "YOC 4.08%" else "配当受取"}", color = OnSurfaceVariant, fontSize = 9.sp)
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("¥${number.format(amounts[index])}", color = if (year == 2025) PrimaryEmerald else Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(if (index > 0) "${growth[index]} 前年比" else "基準年", color = PrimaryEmerald, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
     }
@@ -889,18 +1068,22 @@ private fun AssetTrackingSection(
                     .clip(CircleShape)
                     .background(SurfaceContainerHigh)
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(principalRatio)
-                        .background(Color(0xFF6B7280))
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(1f - principalRatio)
-                        .background(PrimaryEmerald)
-                )
+                if (principalRatio > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(principalRatio)
+                            .background(Color(0xFF6B7280))
+                    )
+                }
+                if (principalRatio < 1f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(1f - principalRatio)
+                            .background(PrimaryEmerald)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))

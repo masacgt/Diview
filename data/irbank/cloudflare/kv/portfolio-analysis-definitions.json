@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "healthy_payout_ratio_max": 70.0,
+  "scores": {
+    "concentration": [
+      {"max": 15.0, "score": 100},
+      {"max": 25.0, "score": 85},
+      {"max": 35.0, "score": 65},
+      {"max": 50.0, "score": 45},
+      {"score": 20}
+    ],
+    "sector_count": [
+      {"min": 8, "score": 100}, {"min": 6, "score": 85}, {"min": 4, "score": 70},
+      {"min": 3, "score": 55}, {"min": 2, "score": 40}, {"min": 0, "score": 20}
+    ],
+    "holding_count": [
+      {"min": 15, "score": 100}, {"min": 10, "score": 85}, {"min": 7, "score": 70},
+      {"min": 5, "score": 55}, {"min": 3, "score": 40}, {"min": 0, "score": 20}
+    ],
+    "dividend_growth_years": [
+      {"min": 10.0, "score": 100}, {"min": 5.0, "score": 85}, {"min": 3.0, "score": 70},
+      {"min": 1.0, "score": 55}, {"min": 0.0, "score": 40}
+    ],
+    "healthy_share": [
+      {"min": 80.0, "score": 100}, {"min": 65.0, "score": 85}, {"min": 50.0, "score": 70},
+      {"min": 35.0, "score": 50}, {"min": 0.0, "score": 30}
+    ]
+  },
+  "missing_scores": {"concentration": 40, "dividend_growth_years": 50, "healthy_share": 50},
+  "weights": {"concentration": 25, "sector": 20, "holdings": 10, "dividend_growth": 15, "payout": 15, "fcf": 15},
+  "stability_weights": {"sector": 35, "concentration": 35, "fcf": 30},
+  "dividend_risk_weights": {"payout": 40, "fcf": 35, "dividend_growth": 25},
+  "stability_labels": [
+    {"min": 85, "label": "非常に高い"}, {"min": 70, "label": "高い"}, {"min": 55, "label": "標準"},
+    {"min": 40, "label": "低め"}, {"min": 0, "label": "低い"}
+  ],
+  "dividend_risk_labels": [
+    {"max": 15, "label": "低い"}, {"max": 30, "label": "やや低い"}, {"max": 45, "label": "標準"},
+    {"max": 60, "label": "やや高い"}, {"max": 100, "label": "高い"}
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "market_stale_days": 3,
+  "rate_limit_window_seconds": 60,
+  "rate_limit_register": 10,
+  "rate_limit_authenticated": 120,
+  "rate_limit_public": 300
+}
