@@ -112,7 +112,7 @@ fun AnnualDividendScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                     border = BorderStroke(1.dp, BorderColor)
                 ) {
                     Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
@@ -585,7 +585,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
+            colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -846,7 +846,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
+            colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -954,7 +954,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     Card(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                         border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.2f))
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
@@ -990,7 +990,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     Card(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                         border = BorderStroke(1.dp, SkyBlue.copy(alpha = 0.2f))
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
@@ -1026,7 +1026,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     Card(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                         border = BorderStroke(1.dp, PrimaryEmeraldContainer.copy(alpha = 0.2f))
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
@@ -1104,7 +1104,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
@@ -1274,7 +1274,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+            colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
             border = BorderStroke(1.dp, BorderBlue)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -1478,7 +1478,7 @@ private fun CompoundingSimulationSection(
         if (updateFailed) Text("一部の履歴を更新できませんでした。取得済みの値を表示しています。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Card(Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainer)) {
+            Card(Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1494,7 +1494,7 @@ private fun CompoundingSimulationSection(
                     Text("${firstPoint?.year?.let { "${it}期" } ?: "開始期未取得"} → ${latestPoint?.year?.let { "${it}期" } ?: "最新期未取得"}・年額差", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 }
             }
-            Card(Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainer)) {
+            Card(Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.ShowChart, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
@@ -1508,7 +1508,7 @@ private fun CompoundingSimulationSection(
             }
         }
 
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainer)) {
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1748,7 +1748,7 @@ private fun AssetTrackingSection(
             Card(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
+                colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(
@@ -1795,7 +1795,7 @@ private fun AssetTrackingSection(
             Card(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
+                colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(
@@ -1844,7 +1844,7 @@ private fun AssetTrackingSection(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
+            colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
                 Row(
@@ -2079,7 +2079,7 @@ private fun AssetTrackingSection(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
+            colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
                 Row(
@@ -2580,7 +2580,7 @@ private fun AssetTrackingTwelveMonthSection(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
         border = BorderStroke(1.dp, BorderColor)
     ) {
         Column(Modifier.fillMaxWidth().padding(14.dp)) {

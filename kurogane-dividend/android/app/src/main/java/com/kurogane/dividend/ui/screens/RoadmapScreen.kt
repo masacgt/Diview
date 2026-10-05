@@ -189,7 +189,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                     border = BorderStroke(1.dp, BorderColor)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -1039,7 +1039,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                     border = BorderStroke(1.dp, BorderBlue)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {

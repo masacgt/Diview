@@ -737,7 +737,7 @@ fun WatchlistScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                     border = BorderStroke(1.dp, BorderBlue)
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
@@ -1306,7 +1306,7 @@ fun WatchlistScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                     border = BorderStroke(1.dp, BorderBlue)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -1505,7 +1505,7 @@ fun WatchlistScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                     border = BorderStroke(1.dp, BorderColor)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -1620,7 +1620,7 @@ fun WatchlistScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                     border = BorderStroke(1.dp, BorderColor)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -1734,7 +1734,7 @@ fun WatchlistScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                     border = BorderStroke(1.dp, BorderBlue)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -1839,7 +1839,7 @@ fun WatchlistScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                     border = BorderStroke(1.dp, BorderColor)
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {

@@ -67,7 +67,7 @@ fun TermsPrivacyScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                 border = BorderStroke(1.dp, BorderColor)
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -213,7 +213,7 @@ fun TermsPrivacyScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                         border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -245,7 +245,7 @@ fun TermsPrivacyScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                         border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column {
@@ -287,7 +287,7 @@ fun TermsPrivacyScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                         border = BorderStroke(1.dp, Color(0xFF991B1B).copy(alpha = 0.3f))
                     ) {
                         Column {
@@ -336,7 +336,7 @@ fun TermsPrivacyScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                         border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -357,7 +357,7 @@ fun TermsPrivacyScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                         border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -419,7 +419,7 @@ fun TermsPrivacyScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                         border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -436,7 +436,7 @@ fun TermsPrivacyScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                         border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

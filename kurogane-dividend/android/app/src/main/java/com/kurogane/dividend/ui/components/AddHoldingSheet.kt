@@ -444,7 +444,7 @@ fun AddHoldingSheet(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                         border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -589,7 +589,7 @@ fun AddHoldingSheet(
                         // Box 1
                         Card(
                             modifier = Modifier.weight(1f),
-                            colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
+                            colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text("合計保有株数", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
@@ -600,7 +600,7 @@ fun AddHoldingSheet(
                         // Box 2
                         Card(
                             modifier = Modifier.weight(1f),
-                            colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
+                            colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text("加重平均取得単価", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
@@ -614,7 +614,7 @@ fun AddHoldingSheet(
                         // Box 3
                         Card(
                             modifier = Modifier.weight(1f).border(BorderStroke(0.5.dp, PrimaryEmeraldContainer.copy(alpha = 0.3f)), RoundedCornerShape(12.dp)),
-                            colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
+                            colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text("年間配当 (手取り総額)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
@@ -625,7 +625,7 @@ fun AddHoldingSheet(
                         // Box 4
                         Card(
                             modifier = Modifier.weight(1f),
-                            colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
+                            colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text("NISA節税メリット", color = OnSurfaceVariant, fontSize = AppTextSize.dense)

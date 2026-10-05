@@ -934,7 +934,7 @@ fun AssetManagementScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CardDarkLighter),
+                colors = CardDefaults.cardColors(containerColor = CardDark),
                 border = BorderStroke(1.dp, BorderBlue)
             ) {
                 Row(
