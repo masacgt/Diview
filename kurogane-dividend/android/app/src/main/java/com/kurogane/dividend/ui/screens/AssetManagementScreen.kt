@@ -111,9 +111,14 @@ fun AssetManagementScreen(
     // Dynamic monthly dividend totals optimized with remember
     val dynamicMonthlyDividends = remember(holdings, taxRateMode) {
         (1..12).map { month ->
-            val monthTotal = holdings.filter { it.dividendMonths.contains(month) }.sumOf {
-                val countInYear = if (it.dividendMonths.isNotEmpty()) it.dividendMonths.size else 1
-                it.getEffectiveAnnualDividend(taxRateMode) / countInYear
+            val monthTotal = holdings.sumOf { holding ->
+                val annualDividend = holding.getEffectiveAnnualDividend(taxRateMode)
+                val dividendMonths = holding.dividendMonths
+                when {
+                    dividendMonths.isEmpty() -> annualDividend / 12.0
+                    month in dividendMonths -> annualDividend / dividendMonths.size
+                    else -> 0.0
+                }
             }
             val label = if (monthTotal >= 10000) {
                 String.format("%.1f万", monthTotal / 10000.0)
@@ -413,7 +418,7 @@ fun AssetManagementScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Black,
-                                    color = if (isSelected) NeonGreenLight else if (isSpecialMonth) NeonGreenLight else SkyBlue,
+                                    color = if (isSelected) NeonGreenLight else SkyBlue,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     softWrap = false
@@ -452,7 +457,7 @@ fun AssetManagementScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     fontSize = AppTextSize.dense,
                                     fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                                    color = if (isSelected || isSpecialMonth) NeonGreenLight else SoftGray,
+                                    color = if (isSelected) NeonGreenLight else SoftGray,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     softWrap = false
