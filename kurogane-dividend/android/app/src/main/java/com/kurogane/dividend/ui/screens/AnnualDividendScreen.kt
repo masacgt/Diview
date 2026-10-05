@@ -1534,7 +1534,7 @@ private fun CompoundingSimulationSection(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(7.dp).clip(CircleShape).background(PrimaryEmerald))
                         Spacer(Modifier.width(5.dp))
-                        Text("年間配当額（現在株数換算）", color = OnSurface, fontSize = AppTextSize.dense)
+                        Text("年間配当額（現在株数換算・取得済み分）", color = OnSurface, fontSize = AppTextSize.dense)
                     }
                     Surface(shape = RoundedCornerShape(12.dp), color = PrimaryEmerald.copy(alpha = .12f), border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = .3f))) {
                         Text("開始期比 ${signedPercent(increaseRate)}", modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
@@ -1576,6 +1576,7 @@ private fun CompoundingSimulationSection(
                         Card(Modifier.weight(1f).clickable { selectedYearIndex = index }, shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = if (isSelected) SurfaceContainerHigh else BackgroundDark), border = BorderStroke(1.dp, if (isSelected) PrimaryEmerald else Color.Transparent)) {
                             Column(Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text("${point.year}", color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text("${point.covered}/${point.expected}銘柄", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                                 Text("年額", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                                 Text(if (point.amount == null) "未取得" else if (isPrivacyActive) "••••" else "¥${format.format(point.amount.toLong())}", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                                 Text("前年差", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
@@ -1591,12 +1592,12 @@ private fun CompoundingSimulationSection(
                             Text("年間配当額 ${money(selectedYear.amount)}", color = OnSurface, fontWeight = FontWeight.Bold)
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text("収録 ${selectedYear.covered}/${selectedYear.expected}銘柄", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Text("取得済み ${selectedYear.covered}/${selectedYear.expected}銘柄", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                             Text("月換算 ${money(selectedYear.amount?.div(12))}", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
-                Text("不足する銘柄や年度をゼロとして合算しません。税引後では現在の口座区分を適用します。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                Text("表示額は取得できた銘柄分の小計です。履歴がない銘柄は除外し、実績0円の記録は0円として含めます。税引後では現在の口座区分を適用します。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                 TextButton(onClick = { if (!loading) scope.launch { load() } }, enabled = !loading) { Text("履歴を更新") }
             }
         }

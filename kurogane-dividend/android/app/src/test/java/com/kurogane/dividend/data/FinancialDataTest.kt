@@ -54,7 +54,20 @@ class FinancialDataTest {
         assertNull(years.first().amount)
         assertEquals(2695.275, years.last().amount!!, .0001)
         val incomplete = DividendHistory.calculate(listOf(h, h.copy(code = "2914")), mapOf("7203" to data), 2025..2025, "gross").single()
-        assertNull(incomplete.amount)
+        assertEquals(3000.0, incomplete.amount!!, 0.0)
         assertEquals(1, incomplete.covered)
+        assertEquals(2, incomplete.expected)
+    }
+    @Test fun zeroDividendRecordCountsAsCoveredAndMissingHoldingsAreExcluded() {
+        val zeroDocument = document()
+        zeroDocument.getJSONObject("dividends").getJSONArray("records").put(
+            JSONObject().put("fiscal_year", 2022).put("annual_dps_adjusted", 0)
+        )
+        val zeroData = FinancialData.parse(zeroDocument, "7203")
+        val h = Holding("id", "7203", "トヨタ", "輸送用機器", "東証", Category.JAPAN, 1000.0, shares = 100, acqPrice = 1000.0, dps = 30.0, yieldRate = 3.0, yoc = 3.0, nextPayoutTiming = "", nextPayoutAmount = "", dividendMonths = emptyList(), dividendType = "", accountType = "特定", dailyChange = "", isPositive = true)
+        val zeroYear = DividendHistory.calculate(listOf(h, h.copy(code = "2914")), mapOf("7203" to zeroData), 2022..2022, "gross").single()
+        assertEquals(0.0, zeroYear.amount!!, 0.0)
+        assertEquals(1, zeroYear.covered)
+        assertEquals(2, zeroYear.expected)
     }
 }
