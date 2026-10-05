@@ -1332,11 +1332,49 @@ class DividendViewModel @JvmOverloads constructor(
         marketRepository.getStockAnalysis(code)
 
     suspend fun fetchMonthlyPriceHistory(codes: List<String>, months: List<String>): List<CloudflareMonthlyPriceSeries> {
-        val result = mutableListOf<CloudflareMonthlyPriceSeries>()
-        codes.distinct().chunked(20).forEach { batch ->
-            result += marketRepository.fetchMonthlyPriceHistory(batch, months)
+        val normalizedCodes = codes.distinct()
+        val cachedByCode = normalizedCodes.associateWith { code -> readCachedMonthlyPrices(code) }.toMutableMap()
+        val missingMonths = normalizedCodes.associateWith { code -> months.distinct().filterNot { cachedByCode[code].orEmpty().containsKey(it) } }
+        val codesToFetch = normalizedCodes.filter { missingMonths[it].orEmpty().isNotEmpty() }
+        if (codesToFetch.isNotEmpty()) {
+            runCatchingCancellable {
+                codesToFetch.chunked(20).flatMap { batch ->
+                    marketRepository.fetchMonthlyPriceHistory(batch, months.distinct().filter { month ->
+                        batch.any { code -> month in missingMonths[code].orEmpty() }
+                    })
+                }
+            }.onSuccess { fetched ->
+                fetched.forEach { series ->
+                    val merged = cachedByCode[series.code].orEmpty().toMutableMap()
+                    series.prices.forEach { price -> merged[price.month] = price }
+                    cachedByCode[series.code] = merged
+                    saveCachedMonthlyPrices(series.code, merged)
+                }
+            }.onFailure { if (cachedByCode.values.all { it.isEmpty() }) throw it }
         }
-        return result
+        return normalizedCodes.mapNotNull { code ->
+            cachedByCode[code].orEmpty().values.filter { it.month in months }.takeIf { it.isNotEmpty() }
+                ?.let { prices -> CloudflareMonthlyPriceSeries(code, prices.sortedBy { it.month }) }
+        }
+    }
+
+    private fun readCachedMonthlyPrices(code: String): Map<String, com.kurogane.dividend.data.CloudflareMonthlyPrice> = runCatching {
+        val rows = JSONArray(marketPreferences.getString("monthly_prices_$code", "[]") ?: "[]")
+        (0 until rows.length()).mapNotNull { index ->
+            val row = rows.optJSONObject(index) ?: return@mapNotNull null
+            val month = row.optString("month")
+            val date = row.optString("date")
+            val close = row.optDouble("close", Double.NaN)
+            if (month.matches(Regex("\\d{4}-(0[1-9]|1[0-2])")) && date.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) && close.isFinite() && close > 0.0)
+                com.kurogane.dividend.data.CloudflareMonthlyPrice(month, date, close) else null
+        }.associateBy { it.month }
+    }.getOrDefault(emptyMap())
+
+    private fun saveCachedMonthlyPrices(code: String, prices: Map<String, com.kurogane.dividend.data.CloudflareMonthlyPrice>) {
+        val rows = JSONArray().apply {
+            prices.values.sortedBy { it.month }.forEach { put(JSONObject().put("month", it.month).put("date", it.date).put("close", it.close)) }
+        }
+        marketPreferences.edit().putString("monthly_prices_$code", rows.toString()).apply()
     }
 
     private suspend fun refreshMarketPricesIfDue() {
