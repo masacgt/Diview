@@ -605,10 +605,10 @@ def main() -> int:
             safe = symbol.replace("^", "_").replace("=", "_").replace("/", "_")
             if object_changed:
                 put_json(client, bucket, f"{PREFIX}/securities/{safe}.json", document)
-            publish_yfinance_dividends(client, bucket, symbol, document)
                 updated_count += 1
             else:
                 unchanged_count += 1
+            publish_yfinance_dividends(client, bucket, symbol, document)
             summaries.append(summary)
             if warnings:
                 warning_count += len(warnings)
