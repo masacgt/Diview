@@ -16,6 +16,8 @@ Current profile and quote statistics are checked each market day. Valuation meas
 
 Each symbol is stored at `market/yfinance/securities/{symbol}.json`. Dividend events are also written as compact objects at `market/yfinance/dividends/{symbol}.json` so the cross-provider publisher need not download full price and financial histories. The summary at `market/yfinance/latest_market_data.json` contains current statistics and latest price/dividend per symbol. After all shards complete, the workflow publishes source-attributed per-security records at `market/securities/v1/{code}.json`. The bucket is private; this workflow does not publish a public URL.
 
+To publish the combined dividend view from data already in R2 without running a full market refresh, manually run this workflow with `mode=publish-dividends`. That mode migrates IRBANK dividend rows from existing overview objects, fills IRBANK gaps from stored Yahoo dividend actions when available, and writes the per-security bundles.
+
 ## GitHub configuration
 
 Repository secrets required: `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`. The R2 keys must be S3-compatible credentials with Object Read & Write access scoped to the `diview-market-data` bucket. The account ID is configured in the workflow. The listed-security universe is the version of the IRBANK master committed in the repository; refresh that snapshot before running when new listings or delistings need to be reflected.
