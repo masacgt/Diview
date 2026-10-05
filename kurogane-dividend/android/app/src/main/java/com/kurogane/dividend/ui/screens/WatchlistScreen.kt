@@ -281,6 +281,87 @@ fun WatchlistScreen(
                 }
             }
 
+            // Batch Simulation of Watchlist Stocks Card (Image 1)
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
+                    border = BorderStroke(1.dp, BorderBlue)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(PrimaryEmerald.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Calculate, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "監視銘柄の一括シミュレーション",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = OnSurface,
+                                    fontSize = AppTextSize.body
+                                )
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = "各1単元（日本株100株 / 米国株1株）を現在の目標買場で揃えた場合、初期投資概算 ¥${currencyFormat.format(totalTargetInvestment.toLong())} で年間 +¥${currencyFormat.format(potentialDiv.toLong())}（平均利回り ${String.format("%.2f", targetAverageYield)}%）の不労所得基盤が完成します。",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense,
+                                lineHeight = 16.sp
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { showMatrixBottomSheet = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = BackgroundDark),
+                                border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.4f)),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Icon(Icons.Default.CalendarToday, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(13.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("権利落ち月マトリクス", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            }
+
+                            Button(
+                                onClick = { showGraphBottomSheet = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = BackgroundDark),
+                                border = BorderStroke(1.dp, BorderColor),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Icon(Icons.Default.BarChart, contentDescription = null, tint = SkyBlue, modifier = Modifier.size(13.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("受取月別グラフ試算", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
             // Filters & Sorting Panel (Matching Web layout exactly)
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -726,87 +807,6 @@ fun WatchlistScreen(
                                 Text("詳細", fontSize = AppTextSize.dense, color = OnSurface)
                                 Spacer(modifier = Modifier.width(2.dp))
                                 Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(14.dp), tint = OnSurface)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Batch Simulation of Watchlist Stocks Card (Image 1)
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-                    border = BorderStroke(1.dp, BorderBlue)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(30.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(PrimaryEmerald.copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.Calculate, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                "監視銘柄の一括シミュレーション",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = OnSurface,
-                                    fontSize = AppTextSize.body
-                                )
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Text(
-                            text = "各1単元（日本株100株 / 米国株1株）を現在の目標買場で揃えた場合、初期投資概算 ¥${currencyFormat.format(totalTargetInvestment.toLong())} で年間 +¥${currencyFormat.format(potentialDiv.toLong())}（平均利回り ${String.format("%.2f", targetAverageYield)}%）の不労所得基盤が完成します。",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = OnSurfaceVariant,
-                                fontSize = AppTextSize.dense,
-                                lineHeight = 16.sp
-                            )
-                        )
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Button(
-                                onClick = { showMatrixBottomSheet = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = BackgroundDark),
-                                border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.4f)),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(38.dp),
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Icon(Icons.Default.CalendarToday, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(13.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("権利落ち月マトリクス", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            }
-
-                            Button(
-                                onClick = { showGraphBottomSheet = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = BackgroundDark),
-                                border = BorderStroke(1.dp, BorderColor),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(38.dp),
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Icon(Icons.Default.BarChart, contentDescription = null, tint = SkyBlue, modifier = Modifier.size(13.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("受取月別グラフ試算", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
