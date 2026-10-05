@@ -80,6 +80,7 @@ class DividendViewModel @JvmOverloads constructor(
     var annualScrollOffset = 0
     var roadmapScrollIndex = 0
     var roadmapScrollOffset = 0
+    var roadmapStageFilter = 1
     var watchlistScrollIndex = 0
     var watchlistScrollOffset = 0
 
