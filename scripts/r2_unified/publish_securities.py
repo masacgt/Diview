@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
@@ -17,6 +18,7 @@ IRBANK_ROOT = "market/irbank/v1/"
 IRBANK_DIVIDENDS = IRBANK_ROOT + "securities/"
 YFINANCE_DIVIDENDS = "market/yfinance/dividends/"
 OUTPUT_PREFIX = "market/securities/v1/"
+WORKERS = max(1, min(32, int(os.environ.get("R2_PUBLISH_WORKERS", "16"))))
 
 
 def client_from_env() -> Any:
@@ -76,10 +78,14 @@ def publish(client: Any) -> tuple[int, int, int, int, int, int, int, int]:
                 "r2_key": f"{IRBANK_DIVIDENDS}{code}/overview.json",
                 "attribution": "IRBANK Connect",
             }
-    for code, source in irbank.items():
+    compact_keys = set(list_keys(client, IRBANK_DIVIDENDS))
+
+    def load_irbank_dividends(item: tuple[str, dict[str, Any]]) -> tuple[str, dict[str, Any]]:
+        code, source = item
         key = f"{IRBANK_DIVIDENDS}{code}/dividends.json"
-        compact = read_optional_json(client, key)
-        if compact is None:
+        if key in compact_keys:
+            compact = read_json(client, key)
+        else:
             # One-time migration from the existing overview bundle; later runs read only compact dividend objects.
             overview = read_json(client, source["r2_key"])
             compact = {
@@ -97,31 +103,42 @@ def publish(client: Any) -> tuple[int, int, int, int, int, int, int, int]:
         source.update({"dividend_r2_key": key, "updated_at": compact.get("updated_at"),
                        "attribution": compact.get("attribution") or compact.get("source") or "IRBANK Connect",
                        "records": compact.get("records", [])})
+        return code, source
+
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        irbank = dict(pool.map(load_irbank_dividends, irbank.items()))
 
     yahoo: dict[str, dict[str, Any]] = {}
-    for key in list_keys(client, YFINANCE_DIVIDENDS):
+    def load_yahoo_compact(key: str) -> tuple[str, dict[str, Any]] | None:
         code = code_from_yahoo_key(key)
         if not code:
-            continue
+            return None
         if code in irbank and irbank[code].get("records"):
-            continue
+            return None
         compact = read_json(client, key)
-        yahoo[code] = {
+        return code, {
             "r2_key": key,
             "updated_at": compact.get("updated_at"),
             "attribution": compact.get("source", "Yahoo Finance via yfinance"),
             "records": compact.get("records", []),
         }
 
+    yahoo_keys = list_keys(client, YFINANCE_DIVIDENDS)
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        yahoo = dict(pair for pair in pool.map(load_yahoo_compact, yahoo_keys) if pair is not None)
+
     # Reuse already stored Yahoo history for IRBANK gaps; only download the larger object for missing dividend histories.
-    for code, irbank_source in irbank.items():
-        if irbank_source.get("records") or code in yahoo:
-            continue
+    legacy_keys = set(list_keys(client, "market/yfinance/securities/"))
+    gap_codes = [code for code, source in irbank.items() if not source.get("records") and code not in yahoo]
+
+    def migrate_yahoo_history(code: str) -> tuple[str, dict[str, Any]] | None:
         symbol = f"{code}.T"
         source_key = f"market/yfinance/securities/{symbol}.json"
-        previous = read_optional_json(client, source_key)
+        if source_key not in legacy_keys:
+            return None
+        previous = read_json(client, source_key)
         if not previous:
-            continue
+            return None
         records = (previous.get("actions") or {}).get("dividends", [])
         compact_key = f"{YFINANCE_DIVIDENDS}{symbol}.json"
         compact = {
@@ -136,17 +153,21 @@ def publish(client: Any) -> tuple[int, int, int, int, int, int, int, int]:
             Body=json.dumps(compact, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
             ContentType="application/json; charset=utf-8", CacheControl="public, max-age=300",
         )
-        yahoo[code] = {
+        return code, {
             "r2_key": compact_key,
             "updated_at": compact.get("updated_at"),
             "attribution": compact["source"],
             "records": records,
         }
 
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        yahoo.update(pair for pair in pool.map(migrate_yahoo_history, gap_codes) if pair is not None)
+
     timestamp = datetime.now(timezone.utc).isoformat()
     codes = sorted(irbank.keys() | yahoo.keys())
-    written = 0
-    for code in codes:
+    existing_output_keys = set(list_keys(client, OUTPUT_PREFIX))
+
+    def publish_one(code: str) -> bool:
         sources: dict[str, Any] = {}
         dividend_history: dict[str, Any] = {}
         if code in irbank:
@@ -165,20 +186,26 @@ def publish(client: Any) -> tuple[int, int, int, int, int, int, int, int]:
             "dividend_history_by_source": dividend_history,
         }
         key = f"{OUTPUT_PREFIX}{code}.json"
-        previous_raw = read_optional_json(client, key)
-        if previous_raw:
-            previous = previous_raw
+        if key in existing_output_keys:
+            previous = read_json(client, key)
             if {k: v for k, v in previous.items() if k != "updated_at"} == {
                 k: v for k, v in output.items() if k != "updated_at"
             }:
-                continue
+                return False
             output["updated_at"] = timestamp
         payload = json.dumps(output, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         client.put_object(
             Bucket=BUCKET, Key=key, Body=payload,
             ContentType="application/json; charset=utf-8", CacheControl="public, max-age=300",
         )
-        written += 1
+        return True
+
+    written = 0
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        for index, changed in enumerate(pool.map(publish_one, codes), start=1):
+            written += int(changed)
+            if index % 200 == 0 or index == len(codes):
+                print(f"Published {index}/{len(codes)} security bundles", flush=True)
     irbank_records = sum(len(source.get("records", [])) for source in irbank.values())
     yahoo_records = sum(len(source.get("records", [])) for source in yahoo.values())
     irbank_with_records = sum(bool(source.get("records")) for source in irbank.values())
