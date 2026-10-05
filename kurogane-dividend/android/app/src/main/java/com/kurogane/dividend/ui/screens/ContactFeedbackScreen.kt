@@ -140,7 +140,7 @@ fun ContactFeedbackScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                 border = BorderStroke(1.dp, BorderColor)
             ) {
                 Row(
@@ -215,7 +215,7 @@ fun ContactFeedbackScreen(
                             .fillMaxWidth()
                             .clickable { openFaqIndex = if (open) null else idx },
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                         border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column {
@@ -272,7 +272,7 @@ fun ContactFeedbackScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                 border = BorderStroke(1.dp, BorderColor)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
