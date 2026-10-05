@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import json
+import math
 import os
+import random
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
@@ -67,7 +70,7 @@ def code_from_yahoo_key(key: str) -> str | None:
     return code if re.fullmatch(r"[A-Z0-9]{4,5}", code) else None
 
 
-def publish(client: Any) -> tuple[int, int, int, int, int, int, int, int]:
+def publish(client: Any, *, fetch_yahoo_gaps: bool = False) -> tuple[int, int, int, int, int, int, int, int, int]:
     catalog = read_json(client, IRBANK_ROOT + "catalog.json")
     securities = catalog.get("securities", [])
     irbank: dict[str, dict[str, Any]] = {}
@@ -129,7 +132,8 @@ def publish(client: Any) -> tuple[int, int, int, int, int, int, int, int]:
 
     # Reuse already stored Yahoo history for IRBANK gaps; only download the larger object for missing dividend histories.
     legacy_keys = set(list_keys(client, "market/yfinance/securities/"))
-    gap_codes = [code for code, source in irbank.items() if not source.get("records") and code not in yahoo]
+    gap_codes = [code for code, source in irbank.items()
+                 if not source.get("records") and not yahoo.get(code, {}).get("records")]
 
     def migrate_yahoo_history(code: str) -> tuple[str, dict[str, Any]] | None:
         symbol = f"{code}.T"
@@ -162,6 +166,53 @@ def publish(client: Any) -> tuple[int, int, int, int, int, int, int, int]:
 
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         yahoo.update(pair for pair in pool.map(migrate_yahoo_history, gap_codes) if pair is not None)
+
+    live_fetched = 0
+    remaining_gaps = [code for code in gap_codes if not yahoo.get(code, {}).get("records")]
+    if fetch_yahoo_gaps and remaining_gaps:
+        import yfinance as yf
+
+        def fetch_live_gap(code: str) -> tuple[str, dict[str, Any]]:
+            symbol = f"{code}.T"
+            records: list[dict[str, Any]] | None = None
+            for attempt in range(4):
+                try:
+                    series = yf.Ticker(symbol).dividends
+                    records = []
+                    if series is not None:
+                        for date_value, amount_value in series.items():
+                            amount = float(amount_value)
+                            if not math.isfinite(amount) or amount <= 0:
+                                continue
+                            date = date_value.date().isoformat() if hasattr(date_value, "date") else str(date_value)[:10]
+                            records.append({"date": date, "amount": amount})
+                    break
+                except Exception:
+                    if attempt == 3:
+                        raise
+                    time.sleep((2 ** attempt) + random.random())
+            compact_key = f"{YFINANCE_DIVIDENDS}{symbol}.json"
+            value = {
+                "schema_version": 1,
+                "source": "Yahoo Finance via yfinance",
+                "symbol": symbol,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "records": records or [],
+            }
+            client.put_object(
+                Bucket=BUCKET, Key=compact_key,
+                Body=json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+                ContentType="application/json; charset=utf-8", CacheControl="public, max-age=300",
+            )
+            return code, {"r2_key": compact_key, "updated_at": value["updated_at"],
+                          "attribution": value["source"], "records": value["records"]}
+
+        with ThreadPoolExecutor(max_workers=min(4, WORKERS)) as pool:
+            for index, pair in enumerate(pool.map(fetch_live_gap, remaining_gaps), start=1):
+                yahoo[pair[0]] = pair[1]
+                live_fetched += 1
+                if index % 50 == 0 or index == len(remaining_gaps):
+                    print(f"Fetched missing Yahoo dividend histories {index}/{len(remaining_gaps)}", flush=True)
 
     timestamp = datetime.now(timezone.utc).isoformat()
     codes = sorted(irbank.keys() | yahoo.keys())
@@ -212,17 +263,25 @@ def publish(client: Any) -> tuple[int, int, int, int, int, int, int, int]:
     yahoo_with_records = sum(bool(source.get("records")) for source in yahoo.values())
     uncovered = sum(not irbank.get(code, {}).get("records") and not yahoo.get(code, {}).get("records") for code in codes)
     return (len(codes), written, len(irbank.keys() & yahoo.keys()), irbank_with_records,
-            yahoo_with_records, uncovered, irbank_records, yahoo_records)
+            yahoo_with_records, uncovered, irbank_records, yahoo_records, live_fetched)
 
 
 def main() -> int:
-    count, written, overlap, irbank_count, yahoo_count, uncovered, irbank_events, yahoo_events = publish(client_from_env())
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--fetch-yahoo-gaps", action="store_true",
+                        help="Query Yahoo only for listed securities still missing dividend events after cached-data migration")
+    args = parser.parse_args()
+    count, written, overlap, irbank_count, yahoo_count, uncovered, irbank_events, yahoo_events, live_fetched = publish(
+        client_from_env(), fetch_yahoo_gaps=args.fetch_yahoo_gaps
+    )
     print(json.dumps({"bucket": BUCKET, "prefix": OUTPUT_PREFIX, "security_count": count,
                       "written": written, "irbank_yfinance_overlap": overlap,
                       "irbank_securities_with_dividends": irbank_count,
                       "irbank_dividend_records": irbank_events,
                       "yfinance_securities_with_dividends": yahoo_count,
                       "yfinance_dividend_records": yahoo_events,
+                      "yfinance_missing_symbols_fetched_live": live_fetched,
                       "securities_without_dividend_records": uncovered}, ensure_ascii=False))
     return 0
 
