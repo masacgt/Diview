@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,7 +36,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -273,79 +277,38 @@ fun AnnualDividendScreen(
                     }
                 }
 
-            // 3-way Tab Selector
+            // 3-way pill tab selector
             item {
-                TabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = SurfaceContainerHigh,
-                    contentColor = PrimaryEmerald,
-                    indicator = { tabPositions ->
-                        // Standard tab indicator
-                    },
-                    modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(SurfaceContainerHigh)
+                        .padding(4.dp)
+                        .selectableGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Tab(
+                    AnnualDividendTab(
+                        label = "分析",
+                        icon = Icons.Default.DataUsage,
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.DataUsage,
-                                    contentDescription = null,
-                                    tint = if (selectedTab == 0) PrimaryEmerald else OnSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    "分析",
-                                    fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedTab == 0) PrimaryEmerald else OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense
-                                )
-                            }
-                        }
+                        modifier = Modifier.weight(1f)
                     )
-                    Tab(
+                    AnnualDividendTab(
+                        label = "配当推移",
+                        icon = Icons.Default.TrendingUp,
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.TrendingUp,
-                                    contentDescription = null,
-                                    tint = if (selectedTab == 1) PrimaryEmerald else OnSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    "配当推移",
-                                    fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedTab == 1) PrimaryEmerald else OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense
-                                )
-                            }
-                        }
+                        modifier = Modifier.weight(1f)
                     )
-                    Tab(
+                    AnnualDividendTab(
+                        label = "資産推移",
+                        icon = Icons.Default.AccountBalance,
                         selected = selectedTab == 2,
                         onClick = { selectedTab = 2 },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.AccountBalance,
-                                    contentDescription = null,
-                                    tint = if (selectedTab == 2) PrimaryEmerald else OnSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    "資産推移",
-                                    fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedTab == 2) PrimaryEmerald else OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense
-                                )
-                            }
-                        }
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
@@ -392,6 +355,41 @@ fun AnnualDividendScreen(
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun AnnualDividendTab(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val tabShape = RoundedCornerShape(10.dp)
+    Row(
+        modifier = modifier
+            .clip(tabShape)
+            .background(if (selected) PrimaryEmerald else Color.Transparent)
+            .selectable(selected = selected, onClick = onClick, role = Role.Tab)
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 4.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (selected) OnPrimary else OnSurface,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(5.dp))
+        Text(
+            text = label,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) OnPrimary else OnSurface,
+            fontSize = AppTextSize.dense
+        )
     }
 }
 
