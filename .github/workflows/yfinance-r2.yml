@@ -1,4 +1,4 @@
-name: Update Japanese listed shares from yfinance to R2
+name: Update Japanese listed-share dividends and market data to R2
 
 on:
   schedule:
@@ -40,14 +40,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Fetch listed issues from J-Quants
-        run: python scripts/yfinance_r2/fetch_jquants_universe.py --output jquants-universe.csv
-        env:
-          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+      - name: Export IRBANK listed-security master
+        run: python scripts/irbank_r2/write_yfinance_universe.py --output irbank-universe.csv
       - uses: actions/upload-artifact@v4
         with:
-          name: jquants-universe
-          path: jquants-universe.csv
+          name: irbank-universe
+          path: irbank-universe.csv
           if-no-files-found: error
 
   fetch:
@@ -64,7 +62,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: jquants-universe
+          name: irbank-universe
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -75,7 +73,7 @@ jobs:
       - name: Fetch full history and upload to R2
         run: python scripts/yfinance_r2/fetch_and_upload.py
         env:
-          MARKET_UNIVERSE_CSV: jquants-universe.csv
+          MARKET_UNIVERSE_CSV: irbank-universe.csv
           YFINANCE_INITIAL_PERIOD: max
           YFINANCE_FUNDAMENTALS_REFRESH_DAYS: "7"
           YFINANCE_MIN_VERSION: 0.2.66
@@ -102,7 +100,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: jquants-universe
+          name: irbank-universe
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -113,13 +111,21 @@ jobs:
       - name: Publish latest summary
         run: python scripts/yfinance_r2/fetch_and_upload.py --aggregate
         env:
-          MARKET_UNIVERSE_CSV: jquants-universe.csv
+          MARKET_UNIVERSE_CSV: irbank-universe.csv
           YFINANCE_SHARD_COUNT: "24"
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: diview-market-data
           R2_PREFIX: market/yfinance
+
+      - name: Publish unified per-security bundles
+        run: python scripts/r2_unified/publish_securities.py
+        env:
+          CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: diview-market-data
 
       - name: Trigger backend analysis
         if: success()

@@ -128,6 +128,7 @@ def main() -> int:
             "shareholders": None,
             "sources": {},
         }
+        dividend_bundle: dict[str, Any] | None = None
         for family, docs in category_docs.items():
             document = docs.get(edinet)
             if not document:
@@ -143,6 +144,13 @@ def main() -> int:
                 }
             elif family == "dividends":
                 company[family] = {"records": document.get("records", [])}
+                dividend_bundle = {
+                    "schema_version": 1,
+                    "source": "IRBANK Connect",
+                    "security_code": code,
+                    "records": document.get("records", []),
+                    "attribution": attribution(document),
+                }
             elif family == "valuation":
                 company[family] = {
                     "history": document.get("history", []),
@@ -169,6 +177,14 @@ def main() -> int:
             "sha256": overview_hash,
             "family": "overview",
         })
+        if dividend_bundle is not None:
+            dividend_size, dividend_hash = write_json(output / key_dir / "dividends.json", dividend_bundle)
+            object_meta.append({
+                "key": (key_dir / "dividends.json").as_posix(),
+                "bytes": dividend_size,
+                "sha256": dividend_hash,
+                "family": "dividends",
+            })
         index.append({"code": code, "edinet_code": edinet, "key": (key_dir / "overview.json").as_posix()})
         catalog.append({
             "code": code,
@@ -221,6 +237,7 @@ def main() -> int:
             "catalog": "market/irbank/v1/catalog.json",
             "index": "market/irbank/v1/index.json",
             "overview": "market/irbank/v1/securities/{4_digit_code}/overview.json",
+            "dividends": "market/irbank/v1/securities/{4_digit_code}/dividends.json",
             "daily_prices": "market/irbank/v1/securities/{4_digit_code}/daily_prices.json",
             "weekly_margin": "market/irbank/v1/securities/{4_digit_code}/weekly_margin.json",
         },

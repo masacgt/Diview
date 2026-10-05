@@ -48,7 +48,18 @@ Set-Location "C:\Codex\Diview"
 - `market/irbank/v1/index.json`: code-to-object index.
 - `market/irbank/v1/manifest.json`: dataset version, counts, included families, byte sizes, and hashes.
 - `market/irbank/v1/securities/{code}/overview.json`: one-request company/financial/dividend/valuation/segment/shareholder bundle.
+- `market/irbank/v1/securities/{code}/dividends.json`: compact dividend-only records for source aggregation.
 - `market/irbank/v1/securities/{code}/daily_prices.json`: optional full daily history.
 - `market/irbank/v1/securities/{code}/weekly_margin.json`: optional weekly margin history.
+
+## Unified per-security view
+
+IRBANK and Yahoo source snapshots remain available at their existing keys. To also publish a combined, source-attributed object per Japanese security, run this after uploading either source dataset:
+
+```powershell
+python scripts/r2_unified/publish_securities.py
+```
+
+The output is `market/securities/v1/{code}.json`. It records each provider's source key and update/attribution metadata, and exposes dividend rows grouped under `dividend_history_by_source`. Large price and financial histories stay at their existing source keys, avoiding a second copy of those files. The merger does not deduplicate or reinterpret rows with different date/forecast semantics. Rerun after an IRBANK upload; the scheduled yfinance workflow republishes the combined objects after its daily update. The workflow uses IRBANK's committed security master and does not call J-Quants API.
 
 The Worker exposes `/api/v1/irbank/catalog`, `/api/v1/irbank/manifest`, `/api/v1/irbank/securities/{code}`, and the optional `/prices` and `/weekly-margin` families. Four-character numeric and alphabetic codes are accepted; five-character codes with a trailing `0` are normalized.

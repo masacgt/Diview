@@ -1,6 +1,6 @@
 # Yahoo Finance data collection to Cloudflare R2
 
-This scheduled GitHub Actions workflow fetches the current listed-issue master from J-Quants API v2 (`/equities/master`) once per run, converts its five-character codes to Yahoo `.T` symbols, and stores the returned data per symbol in the private `diview-market-data` R2 bucket. All 24 fetch shards and the aggregate job use the same downloaded universe artifact. The repository's IRBANK security master is only used for known display names in the search catalog; new codes use Yahoo's name when available.
+This scheduled GitHub Actions workflow uses the saved IRBANK Connect listed-security master (`data/irbank/organized/d1/securities.csv`) as its universe. It converts codes to Yahoo `.T` symbols to collect price and financial data. All 24 fetch shards and the aggregate job use the same exported universe artifact. The IRBANK security master supplies display names; Yahoo sector and industry labels are not stored or used. This workflow does not call J-Quants API.
 
 ## Collected data
 
@@ -14,13 +14,13 @@ Yahoo does not provide unlimited history for every data family. Price/actions ca
 
 Current profile and quote statistics are checked each market day. Valuation measures, statements, earnings, and share-count history are refreshed every 7 days by default (`YFINANCE_FUNDAMENTALS_REFRESH_DAYS`), since yfinance exposes these as history queries rather than reliable “since last date” endpoints. Existing per-security JSON is written only when its content changes. The aggregate and search catalog also retain their previous `generated_at` timestamp and are not rewritten when their contents are unchanged, so unchanged market data does not trigger downstream full-universe analysis just because the scheduled job ran.
 
-Each symbol is stored at `market/yfinance/securities/{symbol}.json`. The summary at `market/yfinance/latest_market_data.json` contains current statistics and latest price/dividend per symbol. The bucket is private; this workflow does not publish a public URL.
+Each symbol is stored at `market/yfinance/securities/{symbol}.json`. Dividend events are also written as compact objects at `market/yfinance/dividends/{symbol}.json` so the cross-provider publisher need not download full price and financial histories. The summary at `market/yfinance/latest_market_data.json` contains current statistics and latest price/dividend per symbol. After all shards complete, the workflow publishes source-attributed per-security records at `market/securities/v1/{code}.json`. The bucket is private; this workflow does not publish a public URL.
 
 ## GitHub configuration
 
-Repository secrets required: `JQUANTS_API_KEY`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`. Create `JQUANTS_API_KEY` in the J-Quants dashboard. The R2 keys must be S3-compatible credentials with Object Read & Write access scoped to the `diview-market-data` bucket. The account ID is configured in the workflow. Check that the J-Quants plan's data freshness and usage terms fit the application.
+Repository secrets required: `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`. The R2 keys must be S3-compatible credentials with Object Read & Write access scoped to the `diview-market-data` bucket. The account ID is configured in the workflow. The listed-security universe is the version of the IRBANK master committed in the repository; refresh that snapshot before running when new listings or delistings need to be reflected.
 
-The universe job fails if J-Quants is unavailable, returns an invalid/partial response, or supplies fewer than 1,000 issues. The workflow does not silently fall back to the old CSV. New issues enter the next successful run; removed issues are omitted from the latest summary and search catalog. Previously stored per-symbol R2 history is retained. A Yahoo 404 by itself does not remove an issue from the J-Quants universe. Because J-Quants does not guarantee Yahoo coverage for every code, listed issues can appear in the catalog without a current price.
+The universe job fails if the IRBANK master is missing, malformed, or contains fewer than 1,000 unique issue codes. New issues enter after the committed IRBANK master is refreshed; removed issues are omitted from the latest summary and search catalog. Previously stored per-symbol R2 history is retained. A Yahoo 404 by itself does not remove an issue from the IRBANK universe, so listed issues can appear in the catalog without Yahoo price coverage.
 
 Before starting the data jobs, the workflow checks the Tokyo Stock Exchange session for the current Japan date using `exchange_calendars` (`XTKS`). Weekends and JPX holidays skip collection and summary publication. The scheduled check runs at 03:30 JST on weekdays, and manual starts use the same check. The next trading day's incremental update catches up with the latest available data.
 
