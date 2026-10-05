@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
@@ -69,6 +70,7 @@ fun AnnualDividendScreen(
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
     val isPrivacyActive by viewModel.isPrivacyActive.collectAsStateWithLifecycle()
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
+    val selectedMonth by viewModel.selectedMonth.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableIntStateOf(2) } // 0: 配当推移, 1: 資産推移, 2: 分析
     var assetTrackingPeriod by rememberSaveable { mutableStateOf("5y") }
@@ -314,6 +316,16 @@ fun AnnualDividendScreen(
                         isPrivacyActive = isPrivacyActive
                     )
                 }
+                item {
+                    MonthlyDividendEstimateCard(
+                        viewModel = viewModel,
+                        holdings = holdings,
+                        taxRateMode = taxRateMode,
+                        totalAnnualDividend = totalAnnualDiv,
+                        selectedMonth = selectedMonth,
+                        isPrivacyActive = isPrivacyActive
+                    )
+                }
             }
 
             // Tab 1: Asset Tracking
@@ -372,6 +384,170 @@ private fun AnnualDividendTab(
             color = if (selected) OnPrimary else OnSurface,
             fontSize = AppTextSize.dense
         )
+    }
+}
+
+@Composable
+private fun MonthlyDividendEstimateCard(
+    viewModel: DividendViewModel,
+    holdings: List<Holding>,
+    taxRateMode: String,
+    totalAnnualDividend: Double,
+    selectedMonth: Int?,
+    isPrivacyActive: Boolean
+) {
+    val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
+    val monthlyDividends = remember(holdings, taxRateMode) {
+        (1..12).map { month ->
+            val amount = holdings.sumOf { holding ->
+                val annualDividend = holding.getEffectiveAnnualDividend(taxRateMode)
+                val dividendMonths = holding.dividendMonths
+                when {
+                    dividendMonths.isEmpty() -> annualDividend / 12.0
+                    month in dividendMonths -> annualDividend / dividendMonths.size
+                    else -> 0.0
+                }
+            }
+            val label = when {
+                amount >= 10_000 -> String.format(Locale.JAPAN, "%.1f万", amount / 10_000.0)
+                amount > 0 -> String.format(Locale.JAPAN, "%.1f千", amount / 1_000.0)
+                else -> "0"
+            }
+            Triple(month, amount, label)
+        }
+    }
+    val maxMonthlyAmount = remember(monthlyDividends) {
+        monthlyDividends.maxOfOrNull { it.second }?.coerceAtLeast(1.0) ?: 1.0
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = CardDark),
+        border = BorderStroke(1.dp, BorderBlue)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.DateRange, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("月別の受取配当見込み額", fontSize = AppTextSize.body, fontWeight = FontWeight.ExtraBold, color = OnSurface)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(SurfaceContainerHigh).padding(horizontal = 4.dp, vertical = 2.dp)) {
+                        Text(YearMonth.now(ZoneId.of("Asia/Tokyo")).year.toString(), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
+                    }
+                }
+                Text(
+                    text = if (isPrivacyActive) "年間合計: ¥ ••••••" else "年間合計: ¥${currencyFormat.format(totalAnnualDividend.toLong())}",
+                    fontSize = AppTextSize.caption,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = NeonGreenLight
+                )
+            }
+
+            Text("配当月に年間配当見込み額を配分した目安です。配当月未取得：${holdings.count { it.dps > 0 && it.dividendMonths.isEmpty() }}銘柄。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth().height(145.dp),
+                horizontalArrangement = Arrangement.spacedBy(1.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                monthlyDividends.forEach { (month, amount, label) ->
+                    val isSelected = selectedMonth == month
+                    val isSpecialMonth = month == 6 || month == 12
+                    val heightFraction = (amount / maxMonthlyAmount).toFloat().coerceIn(0.0f, 1.0f)
+
+                    Column(
+                        modifier = Modifier.weight(1f).height(145.dp).clickable { viewModel.selectMonth(month) },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Bottom
+                    ) {
+                        Text(
+                            text = label,
+                            modifier = Modifier.fillMaxWidth(),
+                            fontSize = AppTextSize.dense,
+                            fontWeight = FontWeight.Black,
+                            color = if (isSelected) NeonGreenLight else SkyBlue,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        val barMaxHeight = 85.dp
+                        Box(modifier = Modifier.fillMaxWidth().height(barMaxHeight), contentAlignment = Alignment.BottomCenter) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(barMaxHeight * heightFraction)
+                                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                    .background(
+                                        if (isSelected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
+                                        else if (isSpecialMonth) Brush.verticalGradient(listOf(NeonGreenLight, NeonGreen))
+                                        else Brush.verticalGradient(listOf(SkyBlue, Color(0xFF0077B6)))
+                                    )
+                                    .then(if (isSelected) Modifier.border(1.5.dp, OnSurface, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)) else Modifier)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = "$month",
+                            modifier = Modifier.fillMaxWidth(),
+                            fontSize = AppTextSize.dense,
+                            fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                            color = if (isSelected) NeonGreenLight else SoftGray,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider(color = BorderBlue, thickness = 0.5.dp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(NeonGreenLight))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("日本株", fontSize = AppTextSize.dense, color = SoftGray)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(SkyBlue))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("米国株", fontSize = AppTextSize.dense, color = SoftGray)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF818CF8)))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("投信", fontSize = AppTextSize.dense, color = SoftGray)
+                    }
+                }
+                Surface(
+                    shape = CircleShape,
+                    color = NeonGreen.copy(alpha = 0.15f),
+                    border = BorderStroke(0.5.dp, NeonGreen.copy(alpha = 0.3f))
+                ) {
+                    Text(
+                        text = if (selectedMonth != null) "${selectedMonth}月タップ中" else "月平均: 約¥${currencyFormat.format((totalAnnualDividend / 12).toLong())}",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        color = NeonGreenLight,
+                        fontSize = AppTextSize.dense,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
     }
 }
 
