@@ -173,6 +173,13 @@ fun AnnualDividendScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("/ 年", color = OnSurfaceVariant, fontSize = AppTextSize.caption, modifier = Modifier.padding(bottom = 4.dp))
                         }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (isPrivacyActive) "税引き後配当額: ¥ •••••••" else "税引き後配当額: ¥${currencyFormat.format(netAnnualDividend.toLong())}",
+                            fontSize = AppTextSize.caption,
+                            fontWeight = FontWeight.Medium,
+                            color = OnSurfaceVariant
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
                         HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
                         Spacer(modifier = Modifier.height(16.dp))
