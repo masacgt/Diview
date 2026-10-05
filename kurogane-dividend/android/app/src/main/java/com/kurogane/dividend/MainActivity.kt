@@ -197,7 +197,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 // Left side main tab title layout
                                 val (title, subtitle, icon) = when (currentRoute) {
                                     "asset" -> Triple("資産管理", "ASSET MANAGEMENT", Icons.Default.AccountBalanceWallet)
-                                    "annual" -> Triple("年間配当", "ANNUAL DIVIDEND", Icons.Default.PieChart)
+                                    "annual" -> Triple("分析", "ANNUAL DIVIDEND", Icons.Default.PieChart)
                                     "roadmap" -> Triple("Roadmap Quest", "不労所得 RPG", Icons.Default.Flag)
                                     "watchlist" -> Triple("Watchlist", "WATCHLIST", Icons.Default.Bookmark)
                                     else -> Triple("資産管理", "ASSET MANAGEMENT", Icons.Default.AccountBalanceWallet)
@@ -373,7 +373,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 ) {
                                     val tabs = listOf(
                                         Triple("asset", "資産管理", Icons.Default.AccountBalanceWallet),
-                                        Triple("annual", "年間配当", Icons.Default.PieChart),
+                                        Triple("annual", "分析", Icons.Default.PieChart),
                                         Triple("roadmap", "ロードマップ", Icons.Default.Flag),
                                         Triple("watchlist", "Watchlist", Icons.Default.Bookmark)
                                     )
