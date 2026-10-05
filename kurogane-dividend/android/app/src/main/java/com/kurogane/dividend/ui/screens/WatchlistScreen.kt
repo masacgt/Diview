@@ -243,6 +243,16 @@ fun WatchlistScreen(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text("初期投資概算（各1単元）", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("¥", fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, color = OnSurface)
+                                Text(currencyFormat.format(currentUnitInvestment.toLong()), fontSize = AppTextSize.metric, fontWeight = FontWeight.Bold, color = OnSurface, fontFamily = FontFamily.Monospace)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -255,12 +265,6 @@ fun WatchlistScreen(
                                 .padding(10.dp)
                             ) {
                                 Column {
-                                    Text("初期投資概算（各1単元）", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("¥", fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, color = OnSurface)
-                                        Text(currencyFormat.format(currentUnitInvestment.toLong()), fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, color = OnSurface, fontFamily = FontFamily.Monospace)
-                                    }
-                                    Spacer(modifier = Modifier.height(6.dp))
                                     Text("平均現在利回り", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(String.format("%.2f", averageYield), fontSize = AppTextSize.metric, fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontFamily = FontFamily.Monospace)
