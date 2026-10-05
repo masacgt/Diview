@@ -70,7 +70,7 @@ fun AnnualDividendScreen(
     val isPrivacyActive by viewModel.isPrivacyActive.collectAsStateWithLifecycle()
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
 
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: 分析, 1: 配当推移, 2: 資産推移
+    var selectedTab by remember { mutableIntStateOf(2) } // 0: 配当推移, 1: 資産推移, 2: 分析
     var assetTrackingPeriod by rememberSaveable { mutableStateOf("5y") }
     var evalBasis by remember { mutableStateOf("eval") } // "eval" or "cost"
 
@@ -272,22 +272,22 @@ fun AnnualDividendScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     AnnualDividendTab(
-                        label = "分析",
-                        icon = Icons.Default.DataUsage,
+                        label = "配当推移",
+                        icon = Icons.Default.TrendingUp,
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
                         modifier = Modifier.weight(1f)
                     )
                     AnnualDividendTab(
-                        label = "配当推移",
-                        icon = Icons.Default.TrendingUp,
+                        label = "資産推移",
+                        icon = Icons.Default.AccountBalance,
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
                         modifier = Modifier.weight(1f)
                     )
                     AnnualDividendTab(
-                        label = "資産推移",
-                        icon = Icons.Default.AccountBalance,
+                        label = "分析",
+                        icon = Icons.Default.DataUsage,
                         selected = selectedTab == 2,
                         onClick = { selectedTab = 2 },
                         modifier = Modifier.weight(1f)
@@ -295,15 +295,15 @@ fun AnnualDividendScreen(
                 }
             }
 
-            // Tab 0: Sector & Composition Analysis
-            if (selectedTab == 0) {
+            // Tab 2: Sector & Composition Analysis
+            if (selectedTab == 2) {
                 item {
                     CompositionAnalysisSection(holdings = holdings, taxRateMode = taxRateMode, totalAssets = totalAssets, totalAnnualDiv = totalAnnualDiv)
                 }
             }
 
-            // Tab 1: Dividend Compounding Simulation
-            if (selectedTab == 1) {
+            // Tab 0: Dividend Compounding Simulation
+            if (selectedTab == 0) {
                 item {
                     CompoundingSimulationSection(
                         viewModel = viewModel,
@@ -316,8 +316,8 @@ fun AnnualDividendScreen(
                 }
             }
 
-            // Tab 2: Asset Tracking
-            if (selectedTab == 2) {
+            // Tab 1: Asset Tracking
+            if (selectedTab == 1) {
                 item {
                     AssetTrackingSection(
                         holdings = holdings,
