@@ -109,6 +109,7 @@ fun StockDetailScreen(
     val liveYoc = if (currentHolding.acqPrice > 0) (dps / currentHolding.acqPrice) * 100.0 else liveYield
 
     val totalSimShares = baseShares.toLong() + simAddedShares
+    val simPurchaseAmount = simAddedShares * currentHolding.price / currentHolding.priceUnit
     val newTotalAnnualDiv = currentHolding.getEffectiveDividendForShares(totalSimShares, taxRateMode).toLong()
     val newMonthlyDiv = newTotalAnnualDiv / 12
     val multiplier = if (baseShares > 0) String.format("%.1f", totalSimShares.toFloat() / baseShares) else "1.0"
@@ -482,6 +483,35 @@ fun StockDetailScreen(
                                             Text("¥${currencyFormat.format(newTotalAnnualDiv)}/年", fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.body, fontFamily = FontFamily.Monospace)
                                             Text("月 約¥${currencyFormat.format(newMonthlyDiv)} / 月", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                         }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = BackgroundDark,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("追加購入に必要な金額", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                Column(horizontalAlignment = Alignment.End) {
+                                    val nativeAmount = if (currentHolding.currency == "$") {
+                                        String.format(Locale.US, "$%,.2f", simPurchaseAmount)
+                                    } else {
+                                        "¥${currencyFormat.format(simPurchaseAmount.toLong())}"
+                                    }
+                                    Text(nativeAmount, color = PrimaryEmerald, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                    if (currentHolding.currency == "$") {
+                                        val yenAmount = exchangeRate?.usdJpy?.takeIf { it.isFinite() && it > 0.0 }
+                                            ?.let { "約¥${currencyFormat.format((simPurchaseAmount * it).toLong())}" }
+                                        Text(yenAmount ?: "為替未取得", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     }
                                 }
                             }
