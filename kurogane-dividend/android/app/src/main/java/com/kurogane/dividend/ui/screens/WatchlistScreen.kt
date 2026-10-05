@@ -94,6 +94,11 @@ fun WatchlistScreen(
         watchlist.map { com.kurogane.dividend.model.PortfolioMath.yieldPercent(it.dps, it.price) }.average()
     } else 0.0
 
+    val currentUnitInvestment = watchlist.sumOf { stock ->
+        val unitShares = if (stock.category == "us") 1 else 100
+        stock.price * unitShares * stock.currencyFactor
+    }
+
     val potentialDiv = watchlist.sumOf { stock ->
         val shares = stock.defaultShares
         val rate = stock.currencyFactor
@@ -247,9 +252,15 @@ fun WatchlistScreen(
                                     .weight(1f)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(BackgroundDark.copy(alpha = 0.7f))
-                                    .padding(10.dp)
+                                .padding(10.dp)
                             ) {
                                 Column {
+                                    Text("初期投資概算（各1単元）", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("¥", fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, color = OnSurface)
+                                        Text(currencyFormat.format(currentUnitInvestment.toLong()), fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, color = OnSurface, fontFamily = FontFamily.Monospace)
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     Text("平均現在利回り", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(String.format("%.2f", averageYield), fontSize = AppTextSize.metric, fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontFamily = FontFamily.Monospace)
