@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
@@ -243,15 +244,16 @@ fun WatchlistScreen(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
+                                    .fillMaxHeight()
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(BackgroundDark.copy(alpha = 0.7f))
-                                .padding(10.dp)
+                                    .padding(10.dp)
                             ) {
                                 Column {
                                     Text("平均現在利回り", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
@@ -266,6 +268,7 @@ fun WatchlistScreen(
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
+                                    .fillMaxHeight()
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(BackgroundDark.copy(alpha = 0.7f))
                                     .padding(10.dp)
