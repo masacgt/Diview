@@ -122,7 +122,7 @@ fun AnnualDividendScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                "税引後手取り見込み額",
+                                "税引前配当額",
                                 fontSize = AppTextSize.caption,
                                 fontWeight = FontWeight.Bold,
                                 color = OnSurfaceVariant
@@ -134,14 +134,14 @@ fun AnnualDividendScreen(
                                     .border(0.5.dp, PrimaryEmerald.copy(alpha = 0.24f), CircleShape)
                                     .padding(horizontal = 9.dp, vertical = 4.dp)
                             ) {
-                                Text("税引後", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
+                                Text("税引前", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
                             }
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(verticalAlignment = Alignment.Bottom) {
                             Text(
-                                text = if (isPrivacyActive) "¥••••••••" else "¥${currencyFormat.format(netAnnualDividend.toLong())}",
+                                text = if (isPrivacyActive) "¥••••••••" else "¥${currencyFormat.format(grossAnnualDividend.toLong())}",
                                 modifier = Modifier.weight(1f, fill = false),
                                 style = MaterialTheme.typography.headlineLarge.copy(
                                     fontWeight = FontWeight.ExtraBold,
@@ -158,7 +158,7 @@ fun AnnualDividendScreen(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = if (isPrivacyActive) "税引前配当額: ¥ •••••••" else "税引前配当額: ¥${currencyFormat.format(grossAnnualDividend.toLong())}",
+                            text = if (isPrivacyActive) "税引後手取り見込み額: ¥ •••••••" else "税引後手取り見込み額: ¥${currencyFormat.format(netAnnualDividend.toLong())}",
                             fontSize = AppTextSize.caption,
                             fontWeight = FontWeight.Medium,
                             color = OnSurfaceVariant
@@ -181,10 +181,10 @@ fun AnnualDividendScreen(
                                     .border(0.5.dp, BorderColor, RoundedCornerShape(14.dp))
                                     .padding(12.dp)
                             ) {
-                                Text("月換算（手取り）", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = 1, softWrap = false)
+                                Text("月換算（税引前）", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = 1, softWrap = false)
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = if (isPrivacyActive) "¥•••••" else "¥${currencyFormat.format((netAnnualDividend / 12).roundToLong())}",
+                                    text = if (isPrivacyActive) "¥•••••" else "¥${currencyFormat.format((grossAnnualDividend / 12).roundToLong())}",
                                     fontSize = AppTextSize.headline,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = PrimaryEmerald,
@@ -193,7 +193,7 @@ fun AnnualDividendScreen(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = if (isPrivacyActive) "税引前 約 ¥••••" else "税引前 約 ¥${currencyFormat.format((grossAnnualDividend / 12).toLong())}",
+                                    text = if (isPrivacyActive) "税引後 約 ¥••••" else "税引後 約 ¥${currencyFormat.format((netAnnualDividend / 12).roundToLong())}",
                                     fontSize = AppTextSize.dense,
                                     color = OnSurfaceVariant,
                                     maxLines = 1,
@@ -1418,9 +1418,9 @@ private fun CompoundingSimulationSection(
     var loading by remember { mutableStateOf(false) }
     var updateFailed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    suspend fun load() {
+    suspend fun load(force: Boolean = false) {
         loading = true
-        try { updateFailed = viewModel.fetchPortfolioFinancialData().any { it.isFailure } }
+        try { updateFailed = viewModel.fetchPortfolioFinancialData(force = force).any { it.isFailure } }
         finally { loading = false }
     }
     LaunchedEffect(holdings.map { it.code }) { load() }
