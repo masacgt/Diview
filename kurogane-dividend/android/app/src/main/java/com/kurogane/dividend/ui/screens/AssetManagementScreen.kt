@@ -29,6 +29,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.model.Category
@@ -877,42 +879,61 @@ fun AssetManagementScreen(
                                 verticalAlignment = Alignment.Top
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = when (holding.category) {
-                                            Category.US -> SecondaryIndigo.copy(alpha = 0.14f)
-                                            Category.FUND -> ErrorRed.copy(alpha = 0.14f)
-                                            else -> BorderColor
-                                        }
-                                    ) {
-                                        Text(
-                                            holding.code,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                            color = when (holding.category) {
-                                                Category.US -> SecondaryIndigo
-                                                Category.FUND -> ErrorRed
-                                                else -> OnSurface
-                                            },
-                                            fontSize = AppTextSize.dense,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Surface(shape = RoundedCornerShape(4.dp), color = BorderColor) {
-                                        Text(
-                                            holding.accountType,
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                                            color = SecondaryIndigo,
-                                            fontSize = 8.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            maxLines = 1
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(6.dp))
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(holding.name, fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body, maxLines = 1)
-                                        Text(holding.sector, color = SoftGray, fontSize = AppTextSize.dense)
+                                        Text(
+                                            holding.name,
+                                            fontWeight = FontWeight.Bold,
+                                            color = OnSurface,
+                                            fontSize = AppTextSize.body,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                holding.sector,
+                                                modifier = Modifier.weight(1f),
+                                                color = SoftGray,
+                                                fontSize = AppTextSize.dense,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = when (holding.category) {
+                                                    Category.US -> SecondaryIndigo.copy(alpha = 0.14f)
+                                                    Category.FUND -> ErrorRed.copy(alpha = 0.14f)
+                                                    else -> BorderColor
+                                                }
+                                            ) {
+                                                Text(
+                                                    holding.code,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                                    color = when (holding.category) {
+                                                        Category.US -> SecondaryIndigo
+                                                        Category.FUND -> ErrorRed
+                                                        else -> OnSurface
+                                                    },
+                                                    fontSize = AppTextSize.dense,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontFamily = FontFamily.Monospace,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                            if (holding.accountType.isNotBlank()) {
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Surface(shape = RoundedCornerShape(4.dp), color = BorderColor) {
+                                                    Text(
+                                                        compactAccountLabel(holding.accountType),
+                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                                        color = SecondaryIndigo,
+                                                        fontSize = 8.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        maxLines = 1
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                     IconButton(
                                         onClick = {
@@ -965,18 +986,18 @@ fun AssetManagementScreen(
                                     else -> ErrorRed
                                 }
                                 HoldingMetricTile(
-                                    label = "保有数量",
-                                    value = "${holding.shares}株",
-                                    detail = "@${holding.currency}${javaCurrencyFormat.format(holding.price.toLong())}",
-                                    modifier = Modifier.weight(1f)
-                                )
-                                HoldingMetricDivider()
-                                HoldingMetricTile(
                                     label = "配当利回り",
                                     value = "${String.format(java.util.Locale.JAPAN, "%.2f", holding.yieldRate)}%",
                                     detail = "現在株価比",
                                     modifier = Modifier.weight(1f),
                                     valueColor = NeonGreenLight
+                                )
+                                HoldingMetricDivider()
+                                HoldingMetricTile(
+                                    label = "予想配当金",
+                                    value = if (annualDiv > 0) "¥${javaCurrencyFormat.format(annualDiv.toLong())}/年" else "再投資型",
+                                    detail = payoutMonthSummary,
+                                    modifier = Modifier.weight(1f)
                                 )
                                 HoldingMetricDivider()
                                 HoldingMetricTile(
@@ -994,10 +1015,17 @@ fun AssetManagementScreen(
                                 )
                                 HoldingMetricDivider()
                                 HoldingMetricTile(
-                                    label = "予想配当金",
-                                    value = if (annualDiv > 0) "¥${javaCurrencyFormat.format(annualDiv.toLong())}" else "再投資型",
-                                    detail = payoutMonthSummary,
-                                    modifier = Modifier.weight(1f)
+                                    label = "保有数量",
+                                    value = "${holding.shares}株",
+                                    detail = "@${holding.currency}${javaCurrencyFormat.format(holding.price.toLong())}",
+                                    modifier = Modifier.weight(1f),
+                                    showEditHint = true,
+                                    onClick = {
+                                        quickEditHolding = holding
+                                        quickEditShares = holding.shares.toString()
+                                        quickEditAcqPrice = holding.acqPrice.toString().removeSuffix(".0")
+                                        quickEditMarketPrice = holding.price
+                                    }
                                 )
                             }
 
@@ -1519,13 +1547,34 @@ private fun HoldingMetricTile(
     detail: String,
     modifier: Modifier = Modifier,
     valueColor: Color = OnSurface,
-    detailColor: Color = SoftGray
+    detailColor: Color = SoftGray,
+    showEditHint: Boolean = false,
+    onClick: (() -> Unit)? = null
 ) {
+    val shape = RoundedCornerShape(8.dp)
+    val clickModifier = if (onClick != null) {
+        Modifier
+            .clip(shape)
+            .border(1.dp, NeonGreenLight.copy(alpha = 0.28f), shape)
+            .clickable(role = Role.Button, onClick = onClick)
+    } else Modifier
     Column(
-        modifier = modifier.padding(horizontal = 2.dp, vertical = 2.dp),
+        modifier = modifier
+            .then(clickModifier)
+            .padding(horizontal = if (showEditHint) 3.dp else 2.dp, vertical = if (showEditHint) 4.dp else 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(label, color = SoftGray, fontSize = 9.sp, maxLines = 1)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(label, color = SoftGray, fontSize = 9.sp, maxLines = 1)
+            if (showEditHint) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = null,
+                    tint = NeonGreenLight.copy(alpha = 0.72f),
+                    modifier = Modifier.size(10.dp)
+                )
+            }
+        }
         Text(value, color = valueColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = 1)
         Text(detail, color = detailColor, fontSize = 8.sp, maxLines = 1)
     }
@@ -1539,4 +1588,14 @@ private fun HoldingMetricDivider() {
             .height(32.dp)
             .background(BorderBlue)
     )
+}
+
+private fun compactAccountLabel(accountType: String): String = when {
+    accountType.startsWith("特定口座") -> accountType
+        .replace("特定口座", "特定")
+        .replace(" (四半期)", "・四半期")
+        .replace("(四半期)", "・四半期")
+    accountType.startsWith("新NISA成長枠") -> accountType.replace("新NISA成長枠", "新NISA")
+    accountType.startsWith("新NISAつみたて投資枠") -> accountType.replace("新NISAつみたて投資枠", "新NISA積立")
+    else -> accountType
 }
