@@ -15,7 +15,7 @@ object DividendHistory {
                 covered++
                 amount += holding.copy(dps = dividend.dps).getEffectiveAnnualDividend(taxMode)
             }
-            PortfolioDividendYear(year, amount.takeIf { covered == domestic.size && domestic.isNotEmpty() }, covered, domestic.size)
+            PortfolioDividendYear(year, amount.takeIf { covered > 0 }, covered, domestic.size)
         }
     }
 }
