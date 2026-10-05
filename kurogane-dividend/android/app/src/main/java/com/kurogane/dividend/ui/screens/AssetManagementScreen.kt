@@ -889,15 +889,6 @@ fun AssetManagementScreen(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                holding.sector,
-                                                modifier = Modifier.weight(1f),
-                                                color = SoftGray,
-                                                fontSize = AppTextSize.dense,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
                                             Surface(
                                                 shape = RoundedCornerShape(6.dp),
                                                 color = when (holding.category) {
@@ -933,18 +924,16 @@ fun AssetManagementScreen(
                                                     )
                                                 }
                                             }
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                holding.sector,
+                                                modifier = Modifier.weight(1f),
+                                                color = SoftGray,
+                                                fontSize = AppTextSize.dense,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
-                                    }
-                                    IconButton(
-                                        onClick = {
-                                            quickEditHolding = holding
-                                            quickEditShares = holding.shares.toString()
-                                            quickEditAcqPrice = holding.acqPrice.toString().removeSuffix(".0")
-                                            quickEditMarketPrice = holding.price
-                                        },
-                                        modifier = Modifier.size(28.dp)
-                                    ) {
-                                        Icon(Icons.Default.Edit, contentDescription = "${holding.name}を編集", tint = SoftGray, modifier = Modifier.size(15.dp))
                                     }
                                 }
 
