@@ -428,13 +428,14 @@ fun AssetManagementScreen(
 
                     // Sub-Grid 2 Columns
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         // Expected Dividend Card
                         Box(
                             modifier = Modifier
                                 .weight(1f)
+                                .fillMaxHeight()
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(SurfaceContainer)
                                 .border(0.5.dp, BorderBlue, RoundedCornerShape(14.dp))
@@ -462,6 +463,7 @@ fun AssetManagementScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
+                                .fillMaxHeight()
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(SurfaceContainer)
                                 .border(0.5.dp, BorderBlue, RoundedCornerShape(14.dp))
