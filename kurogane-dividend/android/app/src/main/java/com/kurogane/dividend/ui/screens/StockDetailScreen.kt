@@ -321,7 +321,95 @@ fun StockDetailScreen(
                 }
             }
 
-            // 2. 買い増しシミュレーター Card
+            // 2. 1株配当金の推移 (4期) Bar Chart Card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
+                    border = BorderStroke(1.dp, BorderColor)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.BarChart, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("1株配当金の実績（最大4期）", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body)
+                            }
+                            Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.15f)) {
+                                Text(if (profile.consecutiveYears > 0) "連続増配" else "配当実績", modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // 4 Bars Container
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = BackgroundDark,
+                            border = BorderStroke(1.dp, BorderColor),
+                            modifier = Modifier.fillMaxWidth().height(120.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                val history = financial?.dividends.orEmpty().takeLast(4)
+                                val maxDps = history.maxOfOrNull { it.dps }?.takeIf { it > 0 } ?: 1.0
+                                val prefix = currentHolding.currency
+                                val bars = history.map { point -> Triple("${point.year}期", "$prefix${point.dps.financialText()}", (point.dps / maxDps * 0.95).toFloat()) }
+                                if (bars.isEmpty()) Text("配当履歴未取得", color = OnSurfaceVariant)
+                                bars.forEach { (term, dpsVal, ratio) ->
+                                    val isProjected = term == bars.lastOrNull()?.first
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.weight(1f).fillMaxHeight()
+                                    ) {
+                                        Text(dpsVal, color = if (isProjected) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = 1)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Box(
+                                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                                            contentAlignment = Alignment.BottomCenter
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(26.dp)
+                                                    .height((60 * ratio).dp)
+                                                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                                    .background(
+                                                        if (isProjected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
+                                                        else Brush.verticalGradient(listOf(Color(0xFF818CF8), Color(0xFF4F46E5)))
+                                                    )
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(term, color = if (isProjected) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            val recent = financial?.dividends.orEmpty().takeLast(4)
+                            val growth = if (recent.size == 4 && recent.first().dps > 0 && recent.last().year - recent.first().year == 3)
+                                ((recent.last().dps / recent.first().dps) - 1) * 100 else Double.NaN
+                            Text("4期増配率: ${growth.financialText(1, "%")}", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text("配当性向: 約${profile.payoutRatio.financialText(1, "%")}", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            // 3. 買い増しシミュレーター Card
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -491,89 +579,6 @@ fun StockDetailScreen(
                                     )
                                 }
                             }
-                        }
-                    }
-                }
-            }
-
-            // 3. 1株配当金の推移 (4期) Bar Chart Card
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-                    border = BorderStroke(1.dp, BorderColor)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.BarChart, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("1株配当金の実績（最大4期）", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body)
-                            }
-                            Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.15f)) {
-                                Text(if (profile.consecutiveYears > 0) "連続増配" else "配当実績", modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // 4 Bars Container
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = BackgroundDark,
-                            border = BorderStroke(1.dp, BorderColor),
-                            modifier = Modifier.fillMaxWidth().height(120.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize().padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceEvenly,
-                                verticalAlignment = Alignment.Bottom
-                            ) {
-                                val history = financial?.dividends.orEmpty().takeLast(4)
-                                val maxDps = history.maxOfOrNull { it.dps }?.takeIf { it > 0 } ?: 1.0
-                                val prefix = currentHolding.currency
-                                val bars = history.map { point -> Triple("${point.year}期", "$prefix${point.dps.financialText()}", (point.dps / maxDps * 0.95).toFloat()) }
-                                if (bars.isEmpty()) Text("配当履歴未取得", color = OnSurfaceVariant)
-                                bars.forEach { (term, dpsVal, ratio) ->
-                                    val isProjected = term == bars.lastOrNull()?.first
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(dpsVal, color = if (isProjected) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Box(
-                                            modifier = Modifier
-                                                .width(26.dp)
-                                                .height((60 * ratio).dp)
-                                                .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                                                .background(
-                                                    if (isProjected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
-                                                    else Brush.verticalGradient(listOf(Color(0xFF818CF8), Color(0xFF4F46E5)))
-                                                )
-                                        )
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(term, color = if (isProjected) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            val recent = financial?.dividends.orEmpty().takeLast(4)
-                            val growth = if (recent.size == 4 && recent.first().dps > 0 && recent.last().year - recent.first().year == 3)
-                                ((recent.last().dps / recent.first().dps) - 1) * 100 else Double.NaN
-                            Text("4期増配率: ${growth.financialText(1, "%")}", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text("配当性向: 約${profile.payoutRatio.financialText(1, "%")}", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -1660,10 +1665,12 @@ fun StockDetailScreen(
                                 }
                             }
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        StockAnalysisNarrativeCard(analysisNarrative)
                     }
                 }
+            }
+
+            item {
+                StockAnalysisNarrativeCard(analysisNarrative)
             }
 
             // 5. 次回権利落ち・直近イベント
