@@ -65,7 +65,7 @@ def code_from_yahoo_key(key: str) -> str | None:
     return code if re.fullmatch(r"[A-Z0-9]{4,5}", code) else None
 
 
-def publish(client: Any) -> tuple[int, int, int]:
+def publish(client: Any) -> tuple[int, int, int, int, int, int, int, int]:
     catalog = read_json(client, IRBANK_ROOT + "catalog.json")
     securities = catalog.get("securities", [])
     irbank: dict[str, dict[str, Any]] = {}
@@ -103,12 +103,44 @@ def publish(client: Any) -> tuple[int, int, int]:
         code = code_from_yahoo_key(key)
         if not code:
             continue
+        if code in irbank and irbank[code].get("records"):
+            continue
         compact = read_json(client, key)
         yahoo[code] = {
             "r2_key": key,
             "updated_at": compact.get("updated_at"),
             "attribution": compact.get("source", "Yahoo Finance via yfinance"),
             "records": compact.get("records", []),
+        }
+
+    # Reuse already stored Yahoo history for IRBANK gaps; only download the larger object for missing dividend histories.
+    for code, irbank_source in irbank.items():
+        if irbank_source.get("records") or code in yahoo:
+            continue
+        symbol = f"{code}.T"
+        source_key = f"market/yfinance/securities/{symbol}.json"
+        previous = read_optional_json(client, source_key)
+        if not previous:
+            continue
+        records = (previous.get("actions") or {}).get("dividends", [])
+        compact_key = f"{YFINANCE_DIVIDENDS}{symbol}.json"
+        compact = {
+            "schema_version": 1,
+            "source": previous.get("source", "Yahoo Finance via yfinance"),
+            "symbol": symbol,
+            "updated_at": previous.get("updated_at"),
+            "records": records,
+        }
+        client.put_object(
+            Bucket=BUCKET, Key=compact_key,
+            Body=json.dumps(compact, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+            ContentType="application/json; charset=utf-8", CacheControl="public, max-age=300",
+        )
+        yahoo[code] = {
+            "r2_key": compact_key,
+            "updated_at": compact.get("updated_at"),
+            "attribution": compact["source"],
+            "records": records,
         }
 
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -133,11 +165,9 @@ def publish(client: Any) -> tuple[int, int, int]:
             "dividend_history_by_source": dividend_history,
         }
         key = f"{OUTPUT_PREFIX}{code}.json"
-        previous_raw = None
         previous_raw = read_optional_json(client, key)
         if previous_raw:
             previous = previous_raw
-            old_updated_at = previous.get("updated_at")
             if {k: v for k, v in previous.items() if k != "updated_at"} == {
                 k: v for k, v in output.items() if k != "updated_at"
             }:
@@ -149,13 +179,24 @@ def publish(client: Any) -> tuple[int, int, int]:
             ContentType="application/json; charset=utf-8", CacheControl="public, max-age=300",
         )
         written += 1
-    return len(codes), written, len(irbank.keys() & yahoo.keys())
+    irbank_records = sum(len(source.get("records", [])) for source in irbank.values())
+    yahoo_records = sum(len(source.get("records", [])) for source in yahoo.values())
+    irbank_with_records = sum(bool(source.get("records")) for source in irbank.values())
+    yahoo_with_records = sum(bool(source.get("records")) for source in yahoo.values())
+    uncovered = sum(not irbank.get(code, {}).get("records") and not yahoo.get(code, {}).get("records") for code in codes)
+    return (len(codes), written, len(irbank.keys() & yahoo.keys()), irbank_with_records,
+            yahoo_with_records, uncovered, irbank_records, yahoo_records)
 
 
 def main() -> int:
-    count, written, overlap = publish(client_from_env())
+    count, written, overlap, irbank_count, yahoo_count, uncovered, irbank_events, yahoo_events = publish(client_from_env())
     print(json.dumps({"bucket": BUCKET, "prefix": OUTPUT_PREFIX, "security_count": count,
-                      "written": written, "irbank_yfinance_overlap": overlap}, ensure_ascii=False))
+                      "written": written, "irbank_yfinance_overlap": overlap,
+                      "irbank_securities_with_dividends": irbank_count,
+                      "irbank_dividend_records": irbank_events,
+                      "yfinance_securities_with_dividends": yahoo_count,
+                      "yfinance_dividend_records": yahoo_events,
+                      "securities_without_dividend_records": uncovered}, ensure_ascii=False))
     return 0
 
 
