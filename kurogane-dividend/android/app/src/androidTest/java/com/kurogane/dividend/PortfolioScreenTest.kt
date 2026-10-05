@@ -19,6 +19,13 @@ import androidx.lifecycle.ViewModelStore
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 import com.kurogane.dividend.data.CloudflareSearchHit
+import com.kurogane.dividend.data.LocalImportStore
+import com.kurogane.dividend.ui.screens.ContactFeedbackScreen
+import androidx.compose.runtime.mutableStateOf
+import android.content.Context
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import androidx.compose.ui.geometry.Offset
 
 @RunWith(AndroidJUnit4::class)
 class PortfolioScreenTest {
@@ -59,15 +66,76 @@ class PortfolioScreenTest {
         compose.onAllNodesWithText("古い結果").assertCountEquals(0)
     }
 
+    @Test fun downwardSwipeClosesSearchWithKeyboardAndAllowsReopening() {
+        val visible = mutableStateOf(true)
+        var dismissals = 0
+        compose.setContent { KuroganeDividendTheme {
+            SearchSheet(visible.value, { dismissals++; visible.value = false }, {}, { throw IOException("offline") })
+        } }
+        compose.onNode(hasSetTextAction()).performTextInput("7203")
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("トヨタ自動車").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("銘柄検索・絞り込み").performTouchInput {
+            swipe(Offset(centerX, centerY), Offset(centerX, centerY + 700f), durationMillis = 250)
+        }
+        compose.waitUntil(10_000) { !visible.value }
+        compose.onNodeWithText("銘柄検索・絞り込み").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(1, dismissals); visible.value = true }
+        compose.onNode(hasSetTextAction()).performTextInput("8316")
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("三井住友FG").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("三井住友FG").assertIsDisplayed()
+    }
+
+    @Test fun scrollingSearchResultsDoesNotCloseTheSheet() {
+        var dismissals = 0
+        compose.setContent { KuroganeDividendTheme {
+            SearchSheet(true, { dismissals++ }, {}, {
+                (0 until 30).map { index -> CloudflareSearchHit((3000 + index).toString(), "検索結果 $index") }
+            })
+        } }
+        compose.onNodeWithText("7203 トヨタ").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("検索結果 0").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("stock_search_results").performTouchInput { swipeUp(durationMillis = 300) }
+        compose.onNodeWithText("銘柄検索・絞り込み").assertIsDisplayed()
+        compose.onNodeWithText("検索結果 0").assertIsNotDisplayed()
+        compose.runOnIdle { assertEquals(0, dismissals) }
+    }
+
     @Test fun repeatedRegistrationTapStartsOnlyOneRequest() {
         var requests = 0
         val pending = CompletableDeferred<Boolean>()
         compose.setContent { KuroganeDividendTheme {
-            AddHoldingSheet(true, "8316", {}, { null }, { _, _ -> requests++; pending.await() })
+            AddHoldingSheet(true, "8316", {}, onResolveSecurity = { null }, onRegisterCollective = { _, _ -> requests++; pending.await() })
         } }
         compose.onNodeWithText("すべての口座にまとめて登録する").performScrollTo().performClick()
         compose.onNodeWithText("銘柄情報を確認中…").assertIsDisplayed()
         compose.onNodeWithText("銘柄情報を確認中…").performClick()
         compose.runOnIdle { assertEquals(1, requests); pending.complete(false) }
+    }
+
+    @Test fun leavingFeedbackKeepsAnEncryptedDraftAndRestoresIt() {
+        val app = ReviewApplication()
+        val store = LocalImportStore(app)
+        store.clearFeedbackDraft()
+        val model = DividendViewModel(app, false, CloudflareMarketRepository("https://example.com") { throw IOException("offline") }, notificationScheduler = { _, _ -> })
+        models.put("feedback", model)
+        val visible = mutableStateOf(true)
+        compose.setContent { KuroganeDividendTheme { if (visible.value) ContactFeedbackScreen({}, model) } }
+        try {
+            compose.onAllNodes(hasSetTextAction())[2].performScrollTo().performTextInput("画面を閉じても残る日本語の下書き")
+            compose.runOnIdle { visible.value = false }
+            compose.waitForIdle()
+            assertEquals("画面を閉じても残る日本語の下書き", store.loadFeedbackDraft()!!.getString("message"))
+            assertFalse(app.getSharedPreferences("local_import_store", Context.MODE_PRIVATE).getString("feedback_draft", "")!!.contains("日本語の下書き"))
+            compose.runOnIdle { visible.value = true }
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("画面を閉じても残る日本語の下書き").fetchSemanticsNodes().isNotEmpty() }
+            compose.onAllNodes(hasSetTextAction())[2].performScrollTo().performTextReplacement("")
+            compose.runOnIdle { visible.value = false }
+            compose.waitForIdle()
+            assertNull(store.loadFeedbackDraft())
+        } finally {
+            compose.runOnIdle { visible.value = false }
+            compose.waitForIdle()
+            store.clearFeedbackDraft()
+        }
     }
 }

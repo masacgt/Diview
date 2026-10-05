@@ -33,6 +33,8 @@ class LocalImportStore(context: Context) {
     fun saveFeedbackDraft(draft: JSONObject) = save("feedback_draft", draft.toString().toByteArray(Charsets.UTF_8))
     fun loadFeedbackDraft(): JSONObject? = load("feedback_draft")?.let { JSONObject(it.toString(Charsets.UTF_8)) }
 
+    fun clearFeedbackDraft() { check(prefs.edit().remove("feedback_draft").commit()) }
+
     fun clear() { check(prefs.edit().clear().commit()) { "データを初期化できませんでした" } }
 
     fun saveWatchlist(stocks: List<WatchlistStock>) = save("watchlist", JSONArray().apply {

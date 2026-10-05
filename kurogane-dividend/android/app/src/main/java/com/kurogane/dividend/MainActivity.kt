@@ -61,10 +61,51 @@ import com.kurogane.dividend.ui.components.SearchSheet
 import com.kurogane.dividend.ui.components.AddHoldingSheet
 import com.kurogane.dividend.viewmodel.DividendViewModel
 
-class MainActivity : ComponentActivity() {
+class MainActivity : androidx.fragment.app.FragmentActivity() {
 
     private val viewModel: DividendViewModel by viewModels()
     private val notificationDestination = MutableStateFlow<String?>(null)
+    private val appLocked = MutableStateFlow(true)
+    private lateinit var authentication: com.kurogane.dividend.security.AppAuthentication
+    private val authError = MutableStateFlow<String?>(null)
+    private var autoPromptRequested = false
+    private var navigationController: androidx.navigation.NavHostController? = null
+    private var savedNavigation: Bundle? = null
+
+    override fun onStop() {
+        if (viewModel.biometricEnabled.value && !isChangingConfigurations) {
+            if (!appLocked.value) savedNavigation = navigationController?.saveState()
+            if (!authentication.inProgress) autoPromptRequested = false
+            appLocked.value = true
+        }
+        super.onStop()
+    }
+
+    private fun completeUnlock() {
+        savedNavigation?.let { navigationController?.restoreState(it) }
+        savedNavigation = null
+        appLocked.value = false
+        authError.value = null
+    }
+
+    fun authenticatePreference(enabled: Boolean) {
+        autoPromptRequested = true
+        authentication.authenticate(onSuccess = {
+            if (!viewModel.setBiometricEnabled(enabled)) android.widget.Toast.makeText(this, "認証設定を保存できませんでした", android.widget.Toast.LENGTH_LONG).show()
+            completeUnlock()
+        }, onError = {
+            authError.value = it
+            android.widget.Toast.makeText(this, it, android.widget.Toast.LENGTH_LONG).show()
+        })
+    }
+
+    private fun unlock() {
+        autoPromptRequested = true
+        authentication.authenticate(
+        onSuccess = { completeUnlock() },
+        onError = { authError.value = it }
+        )
+    }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -74,6 +115,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        authentication = com.kurogane.dividend.security.AppAuthentication(this)
+        appLocked.value = viewModel.biometricEnabled.value
         DiviewNotifications(this).createChannels()
         if (savedInstanceState == null) notificationDestination.value = DiviewNotifications.destination(intent)
         setContent {
@@ -85,7 +128,28 @@ class MainActivity : ComponentActivity() {
                 isOledBlack = isOledBlack,
                 selectedAccent = selectedAccent
             ) {
+                val biometricEnabled by viewModel.biometricEnabled.collectAsStateWithLifecycle()
+                val locked by appLocked.collectAsStateWithLifecycle()
+                val error by authError.collectAsStateWithLifecycle()
+                SideEffect {
+                    if (biometricEnabled) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                    else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                }
                 val navController = rememberNavController()
+                SideEffect { navigationController = navController }
+                if (biometricEnabled && locked) {
+                    LaunchedEffect(Unit) { if (!autoPromptRequested) unlock() }
+                    Column(Modifier.fillMaxSize().background(BackgroundDark).padding(24.dp),
+                        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Lock, null, tint = PrimaryEmerald)
+                        Text("Diviewはロックされています", color = OnSurface)
+                        error?.let { Text(it, color = OnSurfaceVariant) }
+                        Button(onClick = { unlock() }) { Text("認証して開く") }
+                        TextButton(onClick = { startActivity(Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS)) }) { Text("端末の認証設定") }
+                    }
+                    return@KuroganeDividendTheme
+                }
+
                 val destination by notificationDestination.collectAsStateWithLifecycle()
                 LaunchedEffect(destination) {
                     destination?.let { route ->
@@ -279,8 +343,9 @@ class MainActivity : ComponentActivity() {
                             BoxWithConstraints(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(64.dp)
                                     .background(BackgroundDark)
+                                    .navigationBarsPadding()
+                                    .height(64.dp)
                                     .border(BorderStroke(0.5.dp, BorderColor))
                             ) {
                                 val tabWidth = maxWidth / 4
@@ -446,7 +511,11 @@ class MainActivity : ComponentActivity() {
                         )
 
                         // Add Asset / Joint Portfolio Matrix Sheet Overlay
+                        val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
+                        val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
                         AddHoldingSheet(
+                            usdJpyRate = exchangeRate?.usdJpy,
+                            usWithholdingEnabled = usTaxDeduction,
                             visible = showAddHoldingSheet,
                             prefilledCode = prefilledAddHoldingCode,
                             onDismiss = { showAddHoldingSheet = false },

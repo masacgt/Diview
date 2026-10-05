@@ -2,7 +2,6 @@ package com.kurogane.dividend.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,12 +17,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.data.CloudflareSearchHit
 import kotlinx.coroutines.delay
-import androidx.activity.compose.BackHandler
 import com.kurogane.dividend.data.runCatchingCancellable
 
 data class CandidateStock(
@@ -36,6 +35,7 @@ data class CandidateStock(
     val isHigh: Boolean
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchSheet(
     visible: Boolean,
@@ -44,16 +44,16 @@ fun SearchSheet(
     onSearch: suspend (String) -> List<CloudflareSearchHit> = { emptyList() }
 ) {
     if (!visible) return
-    BackHandler(onBack = onDismiss)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val candidates = remember {
         listOf(
             CandidateStock("7203", "トヨタ自動車", "東証P • 輸送用機器", "¥2,600", "2.80%", "jp", false),
             CandidateStock("8316", "三井住友FG", "東証P • 銀行業", "¥3,150", "4.13%", "jp", true),
-            CandidateStock("9432", "日本電信電話 (NTT)", "東証P • 情報通信", "¥154.2", "3.37%", "jp", true),
+            CandidateStock("9432", "日本電信電話 (NTT)", "東証P • 情報・通信業", "¥154.2", "3.37%", "jp", true),
             CandidateStock("8058", "三菱商事", "東証P • 卸売業", "¥3,240", "3.52%", "jp", true),
-            CandidateStock("AAPL", "Apple Inc.", "NASDAQ • 米国株", "$220.00", "0.52%", "us", false),
-            CandidateStock("MSFT", "Microsoft Corp.", "NASDAQ • ソフトウェア", "$440.00", "0.76%", "us", false),
+            CandidateStock("AAPL", "アップル", "NASDAQ • 米国株", "$220.00", "0.52%", "us", false),
+            CandidateStock("MSFT", "マイクロソフト", "NASDAQ • ソフトウェア", "$440.00", "0.76%", "us", false),
             CandidateStock("eMAXIS", "eMAXIS Slim 全世界株式", "オルカン • 全世界株", "¥24,460", "再投資型", "fund", false)
         )
     }
@@ -113,19 +113,14 @@ fun SearchSheet(
         }
     }
 
-    // Scrim + Slide Up animated container
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.75f))
-            .clickable(
-                onClick = onDismiss,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ),
-        contentAlignment = Alignment.BottomCenter
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        containerColor = SurfaceContainerLow,
+        scrimColor = Color.Black.copy(alpha = 0.75f),
+        dragHandle = null
     ) {
-        // Prevent click propagation to scrim
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -133,11 +128,6 @@ fun SearchSheet(
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                 .background(SurfaceContainerLow)
                 .border(BorderStroke(1.dp, BorderColor), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                .clickable(
-                    onClick = {},
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                )
                 .padding(16.dp)
         ) {
             Column(
@@ -318,7 +308,7 @@ fun SearchSheet(
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        val hotTags = listOf("7203 トヨタ", "8316 三井住友FG", "9432 NTT", "8058 三菱商事", "AAPL Apple")
+                        val hotTags = listOf("7203 トヨタ", "8316 三井住友FG", "9432 NTT", "8058 三菱商事", "AAPL アップル")
                         hotTags.forEach { tag ->
                             Box(
                                 modifier = Modifier
@@ -365,7 +355,8 @@ fun SearchSheet(
                 LazyColumn(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .testTag("stock_search_results"),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(filteredCandidates) { stock ->

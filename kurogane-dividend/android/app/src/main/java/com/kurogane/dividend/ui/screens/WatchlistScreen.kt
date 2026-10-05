@@ -96,7 +96,7 @@ fun WatchlistScreen(
 
     val potentialDiv = watchlist.sumOf { stock ->
         val shares = stock.defaultShares
-        val rate = if (stock.currency == "$") 154.0 else 1.0
+        val rate = stock.currencyFactor
         stock.dps * shares * rate
     }
 
@@ -104,7 +104,7 @@ fun WatchlistScreen(
 
     val totalTargetInvestment = watchlist.sumOf { stock ->
         val shares = stock.defaultShares
-        val rate = if (stock.currency == "$") 154.0 else 1.0
+        val rate = stock.currencyFactor
         val targetPrice = if (stock.targetYield > 0.0) stock.dps / (stock.targetYield / 100.0) else stock.price
         targetPrice * shares * rate
     }
@@ -562,7 +562,7 @@ fun WatchlistScreen(
                                         Text("現在利回り", color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = 1)
                                         Spacer(modifier = Modifier.width(5.dp))
                                         Text(
-                                            "${stock.currentYield}%",
+                                            "${String.format(Locale.JAPAN, "%.2f", stock.currentYield)}%",
                                             fontWeight = FontWeight.Bold,
                                             color = if (stock.isReady) PrimaryEmerald else OnSurface,
                                             fontSize = AppTextSize.body,
@@ -592,7 +592,7 @@ fun WatchlistScreen(
                                             Icon(Icons.Default.Remove, contentDescription = "-", tint = OnSurface, modifier = Modifier.size(12.dp))
                                         }
                                         Text(
-                                            "${stock.targetYield}%",
+                                            "${String.format(Locale.JAPAN, "%.2f", stock.targetYield)}%",
                                             color = PrimaryEmerald,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = AppTextSize.caption,
@@ -1268,7 +1268,7 @@ fun WatchlistScreen(
                         // Row 4: Apple
                         HeatmapRow(
                             code = "AAPL",
-                            name = "Apple",
+                            name = "アップル",
                             cells = mapOf(
                                 2 to Pair("権/入\n$2.5", SecondaryIndigo.copy(alpha = 0.18f)),
                                 5 to Pair("権/入\n$2.5", SecondaryIndigo.copy(alpha = 0.18f)),

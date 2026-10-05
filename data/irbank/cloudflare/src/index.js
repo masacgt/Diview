@@ -1,3 +1,5 @@
+import { readFeedback, saveFeedback } from './feedback.mjs';
+
 const ANALYSIS_CONCURRENCY = 8;
 
 function json(data, status = 200) {
@@ -644,6 +646,36 @@ export default {
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: json(null).headers });
 
+    if (url.pathname === '/api/v1/feedback' && request.method === 'POST') {
+      if (!await enforceRateLimit(request, env, 'support-feedback', 5, '', config)) return rateLimitedResponse(config);
+      const input = await readFeedback(request);
+      if (!input) return json({ error: 'invalid_feedback' }, 400);
+      try {
+        await env.DB.prepare("DELETE FROM support_feedback WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-90 days')").run();
+        if (!await saveFeedback(env.DB, input)) return json({ error: 'request_id_conflict' }, 409);
+        return json({ accepted: true, receiptId: input.requestId }, 201);
+      } catch {
+        return json({ error: 'feedback_storage_unavailable' }, 503);
+      }
+    }
+
+    if (url.pathname === '/api/v1/admin/feedback') {
+      const provided = String(request.headers.get('X-Admin-Secret') || '');
+      if (!env.ADMIN_SECRET || provided !== env.ADMIN_SECRET) return json({ error: 'unauthorized' }, 401);
+      if (request.method === 'GET') {
+        await env.DB.prepare("DELETE FROM support_feedback WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-90 days')").run();
+        const result = await env.DB.prepare('SELECT receipt_id, created_at, payload_json FROM support_feedback ORDER BY created_at DESC LIMIT 100').all();
+        return json({ items: (result.results || []).map(row => ({ receiptId: row.receipt_id, createdAt: row.created_at, ...JSON.parse(row.payload_json) })) });
+      }
+      if (request.method === 'DELETE') {
+        const id = url.searchParams.get('id') || '';
+        if (!/^[a-f0-9-]{36}$/.test(id)) return json({ error: 'invalid_receipt_id' }, 400);
+        await env.DB.prepare('DELETE FROM support_feedback WHERE receipt_id = ?').bind(id).run();
+        return json({ deleted: true });
+      }
+      return json({ error: 'method_not_allowed' }, 405);
+    }
+
     const isClientScopedRead = url.pathname === '/api/v1/watchlist-targets' || url.pathname === '/api/v1/notification-events';
     const rateLimitRoute = request.method === 'GET' && !isClientScopedRead ? publicRateLimitRoute(url.pathname) : null;
     if (rateLimitRoute && !await enforceRateLimit(request, env, `public:${rateLimitRoute}`, config.rate_limit_public, '', config)) {
@@ -906,6 +938,16 @@ export default {
       return irbankR2Object(env, 'market/irbank/v1/catalog.json');
     }
 
+    const financialMatch = url.pathname.match(/^\/api\/v1\/financial-data\/([A-Z0-9]{4})$/);
+    if (financialMatch) {
+      if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+      const object = await env.MARKET_DATA.get(`market/irbank/v1/securities/${financialMatch[1]}/overview.json`);
+      if (!object) return json({ error: 'not_found' }, 404);
+      const document = await object.json();
+      return json({ security: document.security, financials: { annual: document.financials?.annual || [] },
+        dividends: document.dividends, valuation: document.valuation, sources: document.sources });
+    }
+
     const irbankMatch = url.pathname.match(/^\/api\/v1\/irbank\/securities\/([^/]+)(?:\/(prices|weekly-margin))?$/);
     if (irbankMatch) {
       const code = irbankR2Code(decodeURIComponent(irbankMatch[1]));
@@ -1057,6 +1099,7 @@ export default {
   },
 
   async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(env.DB.prepare("DELETE FROM support_feedback WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-90 days')").run());
     ctx.waitUntil(runScheduledAnalysis(env));
   }
 };

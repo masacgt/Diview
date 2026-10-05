@@ -217,7 +217,7 @@ object PortfolioDiagnosisGenerator {
                 holdings.groupBy(::marketGroup).maxByOrNull { (_, group) -> group.sumOf { it.totalValuation.coerceAtLeast(0.0) } }?.key ?: "市場区分"
             ),
             "healthy_payout_share" to percentageValue(
-                if (totalDividend > 0) dividendHoldings.filter { getStockProfile(it.code).payoutRatio <= HEALTHY_PAYOUT_RATIO_MAX }
+                if (totalDividend > 0 && dividendHoldings.all { it.financialProfile?.payoutRatio?.isFinite() == true }) dividendHoldings.filter { it.financialProfile!!.payoutRatio <= HEALTHY_PAYOUT_RATIO_MAX }
                     .sumOf { it.annualDividend } / totalDividend * 100 else null,
                 ""
             ),
@@ -325,9 +325,9 @@ object PortfolioDiagnosisGenerator {
     )
 
     private fun yearValue(dividendHoldings: List<Holding>, totalDividend: Double): MetricValue {
-        if (totalDividend <= 0.0) return MetricValue(null, "", "")
+        if (totalDividend <= 0.0 || dividendHoldings.any { it.financialProfile == null || it.financialProfile.noCutYears < 0 || it.financialProfile.consecutiveYears < 0 }) return MetricValue(null, "", "")
         val weightedYears = dividendHoldings.sumOf { holding ->
-            val profile = getStockProfile(holding.code)
+            val profile = holding.financialProfile!!
             val years = ((profile.noCutYears + profile.consecutiveYears) / 2.0).coerceAtLeast(0.0)
             holding.annualDividend * years
         } / totalDividend

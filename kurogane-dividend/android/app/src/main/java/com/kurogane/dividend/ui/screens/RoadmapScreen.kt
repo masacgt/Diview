@@ -61,6 +61,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
 
     // 1. Collect live native holdings state
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
+    val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
 
@@ -130,6 +131,21 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
         highestCompletedStep >= 10 -> 2
         else -> 1
     }
+    val activeStage = ((activeStep.step - 1) / 10) + 1
+    val activeStageFirstStep = (activeStage - 1) * 10 + 1
+    val activeStepListIndex = 3 + activeStep.step - activeStageFirstStep
+
+    LaunchedEffect(activeStep.step) {
+        selectedStageFilter = activeStage
+        openStep = activeStep.step
+    }
+
+    LaunchedEffect(activeStep.step, selectedStageFilter) {
+        if (selectedStageFilter == activeStage) {
+            listState.animateScrollToItem(activeStepListIndex)
+        }
+    }
+
     val levelOneLabel = if (highestCompletedStep >= 10) "LV.1 制覇" else "LV.1 挑戦中"
     val levelTwoLabel = when {
         highestCompletedStep >= 20 -> "LV.2 制覇"
@@ -396,7 +412,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 Icon(Icons.Default.Timeline, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "年額 +¥${currencyFormat.format(shortageAnnual)} でSTEP ${activeStep.step}クリア。配当利回り 4.0% 想定時、必要な追加投資元本は約 ¥${neededPrincipalAt4}万円 です。",
+                                    text = "年額 +¥${currencyFormat.format(shortageAnnual)} でSTEP ${activeStep.step}クリア。配当利回り 4.00% 想定時、必要な追加投資元本は約 ¥${neededPrincipalAt4}万円 です。",
                                     color = OnSurfaceVariant,
                                     fontSize = AppTextSize.dense,
                                     lineHeight = 14.sp
@@ -786,7 +802,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        listOf(3.5 to "3.5%", 4.0 to "4.0%", 4.5 to "4.5%").forEach { (yield, label) ->
+                                        listOf(3.5 to "3.50%", 4.0 to "4.00%", 4.5 to "4.50%").forEach { (yield, label) ->
                                             val capital = Math.round(shortageAnnualAmt / (yield / 100.0) / 10000.0)
                                             Box(
                                                 modifier = Modifier
@@ -885,7 +901,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
 
                 // Static DB for demonstration matching Image 2
                 val activeStockName = when (activeTicker) {
-                    "AAPL" -> "Apple Inc."
+                    "AAPL" -> "アップル"
                     "7203" -> "トヨタ自動車 (TOYOTA)"
                     "8316" -> "三井住友フィナンシャルG"
                     "9432" -> "日本電信電話 (NTT)"
@@ -980,7 +996,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                     ) {
                         listOf("AAPL", "7203", "8316", "9432").forEach { code ->
                             val label = when (code) {
-                                "AAPL" -> "AAPL Apple"
+                                "AAPL" -> "AAPL アップル"
                                 "7203" -> "7203 トヨタ"
                                 "8316" -> "8316 三井住友"
                                 "9432" -> "9432 NTT"
@@ -1155,6 +1171,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         currency = activeStockCurrency,
                         onSharesChange = { sharesNisaGrowth = it },
                         onPriceChange = { priceNisaGrowth = it },
+                        usWithholdingEnabled = usTaxDeduction,
                         dps = activeStockDPS
                     )
 
@@ -1167,6 +1184,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         currency = activeStockCurrency,
                         onSharesChange = { sharesNisaTsumitate = it },
                         onPriceChange = { priceNisaTsumitate = it },
+                        usWithholdingEnabled = usTaxDeduction,
                         dps = activeStockDPS
                     )
 
@@ -1179,6 +1197,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         currency = activeStockCurrency,
                         onSharesChange = { sharesTokutei = it },
                         onPriceChange = { priceTokutei = it },
+                        usWithholdingEnabled = usTaxDeduction,
                         dps = activeStockDPS
                     )
 
@@ -1191,6 +1210,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         currency = activeStockCurrency,
                         onSharesChange = { sharesIppan = it },
                         onPriceChange = { priceIppan = it },
+                        usWithholdingEnabled = usTaxDeduction,
                         dps = activeStockDPS
                     )
                 }
@@ -1621,6 +1641,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
 private fun AccountMatrixCard(
     title: String,
     isTaxFree: Boolean,
+    usWithholdingEnabled: Boolean = true,
     shares: String,
     price: String,
     currency: String,
@@ -1632,8 +1653,9 @@ private fun AccountMatrixCard(
     val unitPrice = price.toDoubleOrNull() ?: 0.0
     val totalCost = numShares * unitPrice
     val rawDividend = numShares * dps
-    val finalDividend = if (isTaxFree) rawDividend else rawDividend * (1.0 - 0.20315)
-    val taxAmt = rawDividend * 0.20315
+    val usTax = currency == "$" && usWithholdingEnabled
+    val finalDividend = com.kurogane.dividend.model.DividendTax.net(rawDividend, if (isTaxFree) 1.0 else 0.0, usTax)
+    val taxAmt = if (isTaxFree) rawDividend * (if (usTax) .9 else 1.0) * .20315 else rawDividend - finalDividend
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1663,7 +1685,7 @@ private fun AccountMatrixCard(
                         color = if (isTaxFree) PrimaryEmerald.copy(alpha = 0.15f) else Color(0x1F94A3B8)
                     ) {
                         Text(
-                            text = if (isTaxFree) "非課税 0%" else "課税 20.315%",
+                            text = if (isTaxFree) (if (usTax) "国内非課税・米国10%" else "非課税 0%") else (if (usTax) "米国10%・国内20.315%" else "課税20.315%"),
                             color = if (isTaxFree) PrimaryEmerald else OnSurfaceVariant,
                             fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold,

@@ -197,6 +197,13 @@ class CloudflareMarketRepository(
         }
     }
 
+    suspend fun financialDocument(code: String): JSONObject? = withContext(ioDispatcher) {
+        val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
+        if (!normalized.matches(Regex("[A-Z0-9]{4}"))) return@withContext null
+        try { getJson("/api/v1/financial-data/$normalized") }
+        catch (error: MarketHttpException) { if (error.status == 404) null else throw error }
+    }
+
     private fun getJson(path: String): JSONObject {
         val base = URI(baseUrl)
         require(base.scheme == "https" && !base.host.isNullOrBlank() && base.userInfo == null && base.query == null && base.fragment == null) { "Cloudflare API URLは認証情報を含まないHTTPSで設定してください" }
