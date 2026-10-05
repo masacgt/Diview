@@ -32,6 +32,11 @@ data class CloudflareStockAnalysis(
     val values: Map<String, Double?>
 )
 
+data class CloudflareMarketQuote(
+    val price: Double,
+    val annualDividendPerShare: Double?
+)
+
 data class CloudflarePopularStock(
     val code: String,
     val name: String,
@@ -115,7 +120,7 @@ class CloudflareMarketRepository(
     }
 
     /** Fetches the public catalog only when the caller's JST/12-hour gate permits a price refresh. */
-    suspend fun fetchPriceCatalog(): Map<String, Double> = withContext(ioDispatcher) {
+    suspend fun fetchPriceQuotes(): Map<String, CloudflareMarketQuote> = withContext(ioDispatcher) {
         val root = getJson("/api/v1/search-catalog")
         val rows = root.optJSONArray("items") ?: error("Cloudflareの銘柄カタログにitemsがありません")
         buildMap {
@@ -123,10 +128,17 @@ class CloudflareMarketRepository(
                 val row = rows.optJSONObject(index) ?: continue
                 val code = row.optString("code").trim().uppercase()
                 val price = row.numberOrNull("price")
-                if (isSecurityCode(code) && price != null && PortfolioMath.validMoney(price) && price > 0.0) put(code, price)
+                if (isSecurityCode(code) && price != null && PortfolioMath.validMoney(price) && price > 0.0) {
+                    val annualDividend = row.numberOrNull("annual_dividend_per_share")
+                        ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) }
+                        ?: row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 }?.let { price * it / 100.0 }
+                    put(code, CloudflareMarketQuote(price, annualDividend))
+                }
             }
         }
     }
+
+    suspend fun fetchPriceCatalog(): Map<String, Double> = fetchPriceQuotes().mapValues { it.value.price }
 
     /** Returns a page of R2-ranked stocks with current and five-year reference prices from the database. */
     suspend fun fetchPopularStocks(offset: Int, date: String, limit: Int = 1): CloudflarePopularStocksPage = withContext(ioDispatcher) {

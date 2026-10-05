@@ -126,11 +126,19 @@ class DividendViewModel @JvmOverloads constructor(
             else -> fallback
         }
 
-    private fun runtimeHolding(holding: Holding): Holding {
-        val dps = _financialData.value[holding.code]?.dividends?.lastOrNull()?.dps ?: holding.dps
+    private fun runtimeHolding(
+        holding: Holding,
+        cachedPrices: Map<String, Double> = readCachedPrices(),
+        cachedDividendsPerShare: Map<String, Double> = readCachedDividendsPerShare()
+    ): Holding {
+        val code = holding.code.uppercase(java.util.Locale.ROOT)
+        val price = cachedPrices[code] ?: holding.price
+        val quoteDps = cachedDividendsPerShare[code]
+        val dps = quoteDps ?: _financialData.value[holding.code]?.dividends?.lastOrNull()?.dps ?: holding.dps
         return holding.copy(
         name = japaneseName(holding.code, holding.name),
         sector = if (holding.category == Category.JAPAN) identities[Tse33IndustryMaster.normalizeCode(holding.code)]?.industry ?: "東証33業種未分類" else holding.sector,
+        price = price,
         usdJpyRate = _exchangeRate.value?.usdJpy,
         usWithholdingEnabled = _usTaxDeduction.value,
         financialProfile = _financialData.value[holding.code]?.profile,
@@ -139,14 +147,20 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     private fun refreshRuntimeValues() {
-        _holdings.update { it.map(::runtimeHolding) }
+        val cachedPrices = readCachedPrices()
+        val cachedDividendsPerShare = readCachedDividendsPerShare()
+        _holdings.update { it.map { holding -> runtimeHolding(holding, cachedPrices, cachedDividendsPerShare) } }
         _watchlist.update { list -> list.map { stock ->
-            val dps = _financialData.value[stock.code]?.dividends?.lastOrNull()?.dps ?: stock.dps
+            val code = stock.code.uppercase(java.util.Locale.ROOT)
+            val price = cachedPrices[code] ?: stock.price
+            val quoteDps = cachedDividendsPerShare[code]
+            val dps = quoteDps ?: _financialData.value[stock.code]?.dividends?.lastOrNull()?.dps ?: stock.dps
             stock.copy(
             name = japaneseName(stock.code, stock.name),
             sector = if (stock.category == "jp") identities[Tse33IndustryMaster.normalizeCode(stock.code)]?.industry ?: "東証33業種未分類" else stock.sector,
+            price = price,
             usdJpyRate = _exchangeRate.value?.usdJpy,
-            dps = dps, currentYield = PortfolioMath.yieldPercent(dps, stock.price),
+            dps = dps, currentYield = PortfolioMath.yieldPercent(dps, price),
             targetPrice = if (stock.targetYield.isFinite() && stock.targetYield > 0) dps / stock.targetYield * 100 else 0.0
         ) } }
     }
@@ -1385,17 +1399,25 @@ class DividendViewModel @JvmOverloads constructor(
         val lastFetchJstDate = marketPreferences.getString("last_price_fetch_jst_date", null)
         if (!PriceRefreshPolicy.shouldFetch(now, lastFetchAt, lastFetchJstDate)) return
 
-        runCatchingCancellable { marketRepository.fetchPriceCatalog() }
-            .onSuccess { fetchedPrices ->
+        runCatchingCancellable { marketRepository.fetchPriceQuotes() }
+            .onSuccess { fetchedQuotes ->
                 if (generation != dataGeneration.get()) return@onSuccess
+                val fetchedPrices = fetchedQuotes.mapValues { it.value.price }
+                val cachedDividendsPerShare = readCachedDividendsPerShare().toMutableMap()
+                fetchedQuotes.forEach { (code, quote) ->
+                    if (quote.annualDividendPerShare != null) cachedDividendsPerShare[code] = quote.annualDividendPerShare
+                    else cachedDividendsPerShare.remove(code)
+                }
                 val mergedPrices = readCachedPrices() + fetchedPrices
                 val json = JSONObject().apply { mergedPrices.forEach { (code, price) -> put(code, price) } }
+                val dividendJson = JSONObject().apply { cachedDividendsPerShare.forEach { (code, dps) -> put(code, dps) } }
                 marketPreferences.edit()
                     .putString("prices", json.toString())
+                    .putString("dividend_per_share", dividendJson.toString())
                     .putLong("last_price_fetch_at", now)
                     .putString("last_price_fetch_jst_date", PriceRefreshPolicy.japanDate(now))
                     .apply()
-                applyPrices(mergedPrices)
+                applyPrices(mergedPrices, cachedDividendsPerShare)
             }
             .onFailure { error ->
                 android.util.Log.w("CloudflareMarket", "価格一覧の取得に失敗しました", error)
@@ -1413,20 +1435,36 @@ class DividendViewModel @JvmOverloads constructor(
         }
     }
 
-    private fun applyCachedPrices() = applyPrices(readCachedPrices())
+    private fun readCachedDividendsPerShare(): Map<String, Double> {
+        val json = runCatching { JSONObject(marketPreferences.getString("dividend_per_share", "{}") ?: "{}") }.getOrNull()
+            ?: return emptyMap()
+        return buildMap {
+            json.keys().forEach { code ->
+                val dps = json.optDouble(code, Double.NaN)
+                if (dps.isFinite() && dps >= 0.0 && PortfolioMath.validMoney(dps)) put(code.uppercase(java.util.Locale.ROOT), dps)
+            }
+        }
+    }
 
-    private fun applyPrices(prices: Map<String, Double>) {
-        if (prices.isEmpty()) return
+    private fun applyCachedPrices() = applyPrices(readCachedPrices(), readCachedDividendsPerShare())
+
+    private fun applyPrices(prices: Map<String, Double>, dividendsPerShare: Map<String, Double>) {
+        if (prices.isEmpty() && dividendsPerShare.isEmpty()) return
         _holdings.update { list -> list.map { holding ->
-            val price = prices[holding.code.uppercase(java.util.Locale.ROOT)] ?: return@map holding
-            holding.copy(price = price, yieldRate = if (price > 0) holding.dps / price * 100 else holding.yieldRate)
+            val code = holding.code.uppercase(java.util.Locale.ROOT)
+            val price = prices[code] ?: holding.price
+            val dps = dividendsPerShare[code] ?: _financialData.value[holding.code]?.dividends?.lastOrNull()?.dps ?: holding.dps
+            holding.copy(price = price, dps = dps, yieldRate = PortfolioMath.yieldPercent(dps, price)).refreshPayout()
         } }
         _watchlist.update { list -> list.map { stock ->
-            val price = prices[stock.code.uppercase(java.util.Locale.ROOT)] ?: return@map stock
+            val code = stock.code.uppercase(java.util.Locale.ROOT)
+            val price = prices[code] ?: stock.price
+            val dps = dividendsPerShare[code] ?: _financialData.value[stock.code]?.dividends?.lastOrNull()?.dps ?: stock.dps
             stock.copy(
                 price = price,
-                currentYield = if (price > 0) stock.dps / price * 100 else stock.currentYield,
-                targetPrice = if (stock.targetYield > 0) stock.dps / (stock.targetYield / 100) else stock.targetPrice
+                dps = dps,
+                currentYield = PortfolioMath.yieldPercent(dps, price),
+                targetPrice = if (stock.targetYield > 0) dps / (stock.targetYield / 100) else stock.targetPrice
             )
         } }
     }
