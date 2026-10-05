@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.CornerRadius
@@ -47,6 +49,8 @@ import com.kurogane.dividend.model.PortfolioDiagnosis
 import com.kurogane.dividend.model.PortfolioDiagnosisGenerator
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import java.text.NumberFormat
+import kotlin.math.atan2
+import kotlin.math.sqrt
 import java.time.YearMonth
 import java.time.ZoneId
 import java.util.Locale
@@ -681,7 +685,36 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             .height(180.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Canvas(modifier = Modifier.size(160.dp)) {
+                        Canvas(
+                            modifier = Modifier
+                                .size(160.dp)
+                                .pointerInput(donutSlices, activeStockCode) {
+                                    detectTapGestures { tap ->
+                                        val centerX = size.width / 2f
+                                        val centerY = size.height / 2f
+                                        val dx = tap.x - centerX
+                                        val dy = tap.y - centerY
+                                        val distance = sqrt(dx * dx + dy * dy)
+                                        val ringCenterRadius = minOf(size.width, size.height) / 2f - 12.dp.toPx()
+                                        val hitTolerance = 16.dp.toPx()
+
+                                        if (kotlin.math.abs(distance - ringCenterRadius) <= hitTolerance) {
+                                            val degrees = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
+                                            val chartAngle = ((degrees + 90f) % 360f + 360f) % 360f
+                                            var accumulatedAngle = 0f
+                                            val tappedSlice = donutSlices.firstOrNull { slice ->
+                                                val containsAngle = chartAngle >= accumulatedAngle &&
+                                                    chartAngle < accumulatedAngle + slice.sweepAngle
+                                                accumulatedAngle += slice.sweepAngle
+                                                containsAngle
+                                            }
+                                            tappedSlice?.let { slice ->
+                                                activeStockCode = if (activeStockCode == slice.code) null else slice.code
+                                            }
+                                        }
+                                    }
+                                }
+                        ) {
                             val normalStrokeWidth = 24.dp.toPx()
                             val activeStrokeWidth = 32.dp.toPx()
                             val centerOffset = Offset(size.width / 2, size.height / 2)
