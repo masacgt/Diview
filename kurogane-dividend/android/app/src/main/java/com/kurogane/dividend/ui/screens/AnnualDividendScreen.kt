@@ -1,6 +1,7 @@
 package com.kurogane.dividend.ui.screens
 
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -356,6 +357,9 @@ fun AnnualDividendScreen(
             if (selectedTab == 1) {
                 item {
                     CompoundingSimulationSection(
+                        viewModel = viewModel,
+                        holdings = holdings,
+                        taxRateMode = taxRateMode,
                         totalAnnualDiv = totalAnnualDiv,
                         totalCost = totalCost,
                         isPrivacyActive = isPrivacyActive
@@ -1394,451 +1398,173 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
 
 @Composable
 private fun CompoundingSimulationSection(
+    viewModel: DividendViewModel,
+    holdings: List<com.kurogane.dividend.model.Holding>,
+    taxRateMode: String,
     totalAnnualDiv: Double,
     totalCost: Double,
     isPrivacyActive: Boolean
 ) {
-    val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
-
-    // Dynamic historical and projection amounts
+    val financialData by viewModel.financialData.collectAsStateWithLifecycle()
+    var loading by remember { mutableStateOf(false) }
+    var updateFailed by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    suspend fun load() {
+        loading = true
+        try { updateFailed = viewModel.fetchPortfolioFinancialData().any { it.isFailure } }
+        finally { loading = false }
+    }
+    LaunchedEffect(holdings.map { it.code }) { load() }
     val currentYear = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).year
-    val year2025 = totalAnnualDiv
-    val year2024 = if (year2025 > 0) year2025 / 1.124 else 0.0
-    val year2023 = if (year2025 > 0) year2025 * 0.70 else 0.0
-    val year2022 = if (year2025 > 0) year2025 * 0.53 else 0.0
-    val year2021 = if (year2025 > 0) year2025 * 0.385 else 0.0
-
-    val cagr = if (year2021 > 0) ((Math.pow(year2025 / year2021, 0.25) - 1) * 100) else 0.0
-    val cumulativeIncome = year2021 + year2022 + year2023 + year2024 + year2025
-    val currentYoc = if (totalCost > 0) (year2025 / totalCost) * 100 else 0.0
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        Text("過去年の値は現在の配当額から算出した参考推計です。実績データではありません。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-
-        // Card 1: Main Compound Growth KPI Header
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(PrimaryEmerald))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "配当受取額の複利成長推移",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = OnSurface,
-                                    fontSize = AppTextSize.body
-                                )
-                            )
-                        }
-                        Text(
-                            "2021年〜2025年(予想) 増配と再投資による累積カーブ",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = OnSurfaceVariant,
-                                fontSize = AppTextSize.dense
-                            )
-                        )
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = PrimaryEmerald.copy(alpha = 0.15f),
-                        border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
-                    ) {
-                        Text(
-                            text = "5期連続増配達成",
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                            color = PrimaryEmerald,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // KPI Sub-Grid (3 Columns Side-by-Side)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(BackgroundDark)
-                            .border(1.dp, BorderBlue, RoundedCornerShape(10.dp))
-                            .padding(8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("5年平均増配率", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                        Text(
-                            text = String.format("+%.1f%%", cagr),
-                            color = PrimaryEmerald,
-                            fontSize = AppTextSize.body,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text("年平均CAGR", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .weight(1.2f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(BackgroundDark)
-                            .border(1.dp, BorderBlue, RoundedCornerShape(10.dp))
-                            .padding(8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("累計受取総額", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                        Text(
-                            text = if (isPrivacyActive) "¥••••" else "¥${currencyFormat.format(cumulativeIncome.toLong())}",
-                            color = OnSurface,
-                            fontSize = AppTextSize.body,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text("通算インカム", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(BackgroundDark)
-                            .border(1.dp, BorderBlue, RoundedCornerShape(10.dp))
-                            .padding(8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("簿価利回り (YOC)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                        Text(
-                            text = String.format("%.2f%%", currentYoc),
-                            color = SkyBlue,
-                            fontSize = AppTextSize.body,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text("取得元本比", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                    }
-                }
-            }
-        }
-
-        // Card 2: Interactive Bar + Curve Chart Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmeraldContainer))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("年次配当額 (受取)", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(SkyBlue))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("複利成長曲線 (CAGR)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = PrimaryEmeraldContainer.copy(alpha = 0.15f)
-                    ) {
-                        Text(
-                            text = "+9.0% 増配 (2025予想)",
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            color = PrimaryEmeraldContainer,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Canvas Graph
-                val yearsList = (currentYear - 4..currentYear).map { "${it}推計" }
-                val amountsList = listOf(year2021, year2022, year2023, year2024, year2025)
-                val maxVal = amountsList.maxOrNull()?.coerceAtLeast(1.0) ?: 1.0
-                val chartGridColor = BorderColor
-                val chartBarColor = PrimaryEmeraldContainer
-                val chartPointColor = OnSurface
-                val chartSkyBlue = SkyBlue
-
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(130.dp)
-                ) {
-                    // Draw horizontal dashed grid lines
-                    val gridY1 = size.height * 0.2f
-                    val gridY2 = size.height * 0.5f
-                    val gridY3 = size.height * 0.8f
-                    drawLine(color = chartGridColor, start = Offset(0f, gridY1), end = Offset(size.width, gridY1))
-                    drawLine(color = chartGridColor, start = Offset(0f, gridY2), end = Offset(size.width, gridY2))
-                    drawLine(color = chartGridColor, start = Offset(0f, gridY3), end = Offset(size.width, gridY3))
-
-                    val numYears = 5
-                    val barWidth = 24.dp.toPx()
-                    val spacing = (size.width - (barWidth * numYears)) / (numYears + 1)
-                    val points = ArrayList<Offset>()
-
-                    for (i in 0 until numYears) {
-                        val yearVal = amountsList[i]
-                        val ratio = (yearVal / maxVal).toFloat()
-                        val barHeight = size.height * ratio * 0.82f
-                        val barLeft = spacing + i * (barWidth + spacing)
-                        val barTop = size.height - barHeight
-
-                        // Draw bar with vertical gradient
-                        drawRoundRect(
-                            brush = Brush.verticalGradient(
-                                listOf(chartBarColor, chartBarColor.copy(alpha = 0.3f))
-                            ),
-                            topLeft = Offset(barLeft, barTop),
-                            size = Size(barWidth, barHeight),
-                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-                        )
-
-                        // Save top center point for the curve overlay
-                        points.add(Offset(barLeft + barWidth / 2, barTop))
-                    }
-
-                    // Draw CAGR sky-blue connecting line curve
-                    for (i in 0 until points.size - 1) {
-                        drawLine(
-                            color = chartSkyBlue,
-                            start = points[i],
-                            end = points[i + 1],
-                            strokeWidth = 2.dp.toPx()
-                        )
-                    }
-
-                    // Draw glowing white/blue dots
-                    points.forEach { pt ->
-                        drawCircle(
-                            color = chartPointColor,
-                            radius = 3.5.dp.toPx(),
-                            center = pt
-                        )
-                        drawCircle(
-                            color = chartSkyBlue.copy(alpha = 0.35f),
-                            radius = 7.dp.toPx(),
-                            center = pt
-                        )
-                    }
-                }
-
-                // X-Axis Labels Below Graph
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    yearsList.forEach { y ->
-                        Text(
-                            text = y,
-                            color = OnSurfaceVariant,
-                            fontSize = AppTextSize.dense,
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.labelSmall.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Interactive 2025年 予想 block
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = BackgroundDark,
-                    border = BorderStroke(1.dp, BorderBlue),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmeraldContainer))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("${currentYear - 0}年 推計", color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = if (isPrivacyActive) "¥•••• / 年" else "¥${currencyFormat.format(year2025.toLong())} / 年",
-                                color = OnSurface,
-                                fontSize = AppTextSize.section,
-                                fontWeight = FontWeight.Black,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = if (isPrivacyActive) "月換算: 約¥••••/月" else "月換算: 約¥${currencyFormat.format((year2025 / 12).toLong())}/月",
-                                color = OnSurfaceVariant,
-                                fontSize = AppTextSize.dense
-                            )
-                            Text(
-                                text = if (isPrivacyActive) "+••••" else "+¥${currencyFormat.format((year2025 - year2024).toLong())} (+12.4%)",
-                                color = PrimaryEmeraldContainer,
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Card 3: Detailed simulation list
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceContainer)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+    val years = remember(holdings, financialData, taxRateMode, currentYear) {
+        com.kurogane.dividend.model.DividendHistory.calculate(holdings, financialData, (currentYear - 4)..currentYear, taxRateMode)
+    }
+    val format = NumberFormat.getNumberInstance(Locale.JAPAN)
+    fun money(value: Double?): String = if (value == null) "未取得" else if (isPrivacyActive) "¥••••" else "¥${format.format(value.toLong())}"
+    var selectedYearIndex by remember { mutableIntStateOf(4) }
+    val knownYears = years.filter { it.amount != null }
+    val firstPoint = knownYears.firstOrNull()
+    val latestPoint = knownYears.lastOrNull()
+    val spanYears = if (firstPoint != null && latestPoint != null) latestPoint.year - firstPoint.year else 0
+    val increaseAmount = if (firstPoint != null && latestPoint != null) latestPoint.amount!! - firstPoint.amount!! else null
+    val increaseRate = if (firstPoint != null && latestPoint != null && firstPoint.amount!! > 0.0) {
+        (latestPoint.amount!! / firstPoint.amount!! - 1.0) * 100.0
+    } else null
+    val cagr = if (firstPoint != null && latestPoint != null && firstPoint.amount!! > 0.0 && spanYears > 0) {
+        (Math.pow(latestPoint.amount!! / firstPoint.amount!!, 1.0 / spanYears) - 1.0) * 100.0
+    } else null
+    val averageAnnualIncrease = if (increaseAmount != null && spanYears > 0) increaseAmount / spanYears else null
+    val maxValue = years.mapNotNull { it.amount }.maxOrNull()?.coerceAtLeast(1.0) ?: 1.0
+    val selectedIndex = selectedYearIndex.coerceIn(years.indices)
+    val selectedYear = years[selectedIndex]
+    fun signedMoney(value: Double?): String = when {
+        value == null -> "未取得"
+        isPrivacyActive -> "••••"
+        value > 0 -> "+¥${format.format(value.toLong())}"
+        value < 0 -> "−¥${format.format(kotlin.math.abs(value).toLong())}"
+        else -> "¥0"
+    }
+    fun signedPercent(value: Double?): String = value?.let { String.format(Locale.JAPAN, "%+.2f%%", it) } ?: "未取得"
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.CalendarToday,
-                        contentDescription = null,
-                        tint = PrimaryEmerald,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        "年別インカム詳細・月割シミュレーション",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = OnSurface,
-                            fontSize = AppTextSize.caption
-                        )
-                    )
+                    Icon(Icons.Default.Timeline, null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("年間配当推移", color = OnSurface, fontWeight = FontWeight.Bold)
                 }
+                Text("${years.first().year}年〜${years.last().year}年・現在株数で換算した参考推移", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+            }
+            Surface(shape = RoundedCornerShape(8.dp), color = PrimaryEmerald.copy(alpha = .15f)) {
+                Text("5期", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+            }
+        }
+        Text("国内株の現在保有株数 × 分割調整済みの各期実績配当。実際の受取履歴ではありません。米国株・投資信託は対象外です。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+        Text("出典：金融庁EDINET / JPX TDnet（IRBANK加工）", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (updateFailed) Text("一部の履歴を更新できませんでした。取得済みの値を表示しています。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Render Table rows
-                val rowData = listOf(
-                    Triple("${currentYear - 0}年 推計", year2025, "+12.4%"),
-                    Triple("${currentYear - 1}年 推計", year2024, "+27.4%"),
-                    Triple("${currentYear - 2}年 推計", year2023, "+31.8%"),
-                    Triple("${currentYear - 3}年 推計", year2022, "+37.5%"),
-                    Triple("${currentYear - 4}年 推計", year2021, "基準年")
-                )
-
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    rowData.forEachIndexed { idx, (yearStr, valAmt, pctStr) ->
-                        val badgeText = when (idx) {
-                            0 -> "過去最高配当"
-                            1 -> "確定"
-                            2 -> "確定"
-                            3 -> "確定"
-                            else -> "基準年"
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Card(Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainer)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.TrendingUp, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("年間配当の増加額", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
-                        val badgeColor = when (idx) {
-                            0 -> PrimaryEmeraldContainer
-                            4 -> SkyBlue
-                            else -> OnSurfaceVariant
+                        Surface(shape = RoundedCornerShape(4.dp), color = PrimaryEmerald.copy(alpha = .15f)) {
+                            Text(signedPercent(increaseRate), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
                         }
-                        val calculatedYoc = if (totalCost > 0) (valAmt / totalCost) * 100 else (4.08 - idx * 0.4)
+                    }
+                    Text(signedMoney(increaseAmount), color = if ((increaseAmount ?: 0.0) >= 0.0) PrimaryEmerald else ErrorRed, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text("${firstPoint?.year?.let { "${it}期" } ?: "開始期未取得"} → ${latestPoint?.year?.let { "${it}期" } ?: "最新期未取得"}・年額差", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                }
+            }
+            Card(Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainer)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.ShowChart, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("平均成長", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                    }
+                    Text(cagr?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: "未取得", color = PrimaryEmerald, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text("年平均増配率（CAGR）", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                    Text("年平均増配額 ${signedMoney(averageAnnualIncrease)} /年", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
 
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = BackgroundDark,
-                            border = BorderStroke(1.dp, BorderBlue),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    // Year circle block
-                                    Box(
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .clip(CircleShape)
-                                            .background(SurfaceContainer),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            yearStr.take(3),
-                                            color = OnSurface,
-                                            fontSize = AppTextSize.dense,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.width(10.dp))
-
-                                    Column {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(yearStr, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Surface(
-                                                shape = RoundedCornerShape(4.dp),
-                                                color = badgeColor.copy(alpha = 0.15f)
-                                            ) {
-                                                Text(
-                                                    text = badgeText,
-                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                                    color = badgeColor,
-                                                    fontSize = AppTextSize.dense,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                        }
-                                        Text(
-                                            text = if (isPrivacyActive) "月換算 約¥•••• / YOC •••%" else "月換算 約¥${currencyFormat.format((valAmt/12).toLong())} • YOC ${String.format("%.2f%%", calculatedYoc)}",
-                                            color = OnSurfaceVariant,
-                                            fontSize = AppTextSize.dense
-                                        )
-                                    }
-                                }
-
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = if (isPrivacyActive) "¥••••" else "¥${currencyFormat.format(valAmt.toLong())}",
-                                        color = OnSurface,
-                                        fontSize = AppTextSize.caption,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                    Text(
-                                        text = if (idx == 4) pctStr else "$pctStr 前年比",
-                                        color = if (idx == 4) OnSurfaceVariant else PrimaryEmeraldContainer,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainer)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(PrimaryEmerald))
+                        Spacer(Modifier.width(5.dp))
+                        Text("年間配当額（現在株数換算）", color = OnSurface, fontSize = AppTextSize.dense)
+                    }
+                    Surface(shape = RoundedCornerShape(12.dp), color = PrimaryEmerald.copy(alpha = .12f), border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = .3f))) {
+                        Text("開始期比 ${signedPercent(increaseRate)}", modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                    }
+                }
+                val chartColor = PrimaryEmerald
+                val chartGridColor = BorderColor
+                Canvas(Modifier.fillMaxWidth().height(136.dp)) {
+                    val gridTop = size.height * .2f
+                    val gridMid = size.height * .55f
+                    val gridBottom = size.height * .9f
+                    listOf(gridTop, gridMid, gridBottom).forEach { y -> drawLine(chartGridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx()) }
+                    val count = years.size
+                    val groupWidth = 32.dp.toPx()
+                    val spacing = (size.width - count * groupWidth) / (count + 1)
+                    years.forEachIndexed { index, point ->
+                        val left = spacing + index * (groupWidth + spacing)
+                        val barHeight = point.amount?.let { (it / maxValue).toFloat().coerceIn(0f, 1f) * size.height * .78f } ?: 0f
+                        if (index == selectedIndex) {
+                            drawRoundRect(chartColor.copy(alpha = .08f), Offset(left - 5.dp.toPx(), 0f), Size(groupWidth + 10.dp.toPx(), size.height), cornerRadius = CornerRadius(6.dp.toPx()))
+                            drawRoundRect(chartColor.copy(alpha = .35f), Offset(left - 5.dp.toPx(), 0f), Size(groupWidth + 10.dp.toPx(), size.height), cornerRadius = CornerRadius(6.dp.toPx()), style = Stroke(1.dp.toPx()))
+                        }
+                        if (barHeight > 0f) {
+                            drawRoundRect(Brush.verticalGradient(listOf(chartColor, chartColor.copy(alpha = .45f)), startY = size.height - barHeight, endY = size.height), Offset(left + (groupWidth - 16.dp.toPx()) / 2f, size.height - barHeight), Size(16.dp.toPx(), barHeight), cornerRadius = CornerRadius(4.dp.toPx()))
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    years.forEachIndexed { index, point ->
+                        Text(point.year.toString(), color = if (index == selectedIndex) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = if (index == selectedIndex) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    }
+                }
+                Text("年次推移データグリッド（年間配当額と前年差）", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    years.forEachIndexed { index, point ->
+                        val previousAmount = years.getOrNull(index - 1)?.amount
+                        val yearChange = if (point.amount != null && previousAmount != null) point.amount - previousAmount else null
+                        val isSelected = index == selectedIndex
+                        Card(Modifier.weight(1f).clickable { selectedYearIndex = index }, shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = if (isSelected) SurfaceContainerHigh else BackgroundDark), border = BorderStroke(1.dp, if (isSelected) PrimaryEmerald else Color.Transparent)) {
+                            Column(Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("${point.year}", color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text("年額", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                                Text(if (point.amount == null) "未取得" else if (isPrivacyActive) "••••" else "¥${format.format(point.amount.toLong())}", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                                Text("前年差", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                                Text(signedMoney(yearChange), color = if ((yearChange ?: 0.0) >= 0.0) PrimaryEmerald else ErrorRed, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
+                Surface(shape = RoundedCornerShape(10.dp), color = BackgroundDark, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("${selectedYear.year}期・現在株数で換算", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Text("年間配当額 ${money(selectedYear.amount)}", color = OnSurface, fontWeight = FontWeight.Bold)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("収録 ${selectedYear.covered}/${selectedYear.expected}銘柄", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Text("月換算 ${money(selectedYear.amount?.div(12))}", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                Text("不足する銘柄や年度をゼロとして合算しません。税引後では現在の口座区分を適用します。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                TextButton(onClick = { if (!loading) scope.launch { load() } }, enabled = !loading) { Text("履歴を更新") }
             }
         }
     }
@@ -1879,17 +1605,31 @@ private fun AssetTrackingSection(
     val realCost = totalCost.coerceAtLeast(0.0)
     val realAssets = totalAssets.coerceAtLeast(0.0)
 
-    // Grouped 5-year calculations matching image proportions
-    val costs = listOf(realCost * 0.26, realCost * 0.47, realCost * 0.68, realCost * 0.89, realCost)
-    val assets = listOf(realAssets * 0.24, realAssets * 0.45, realAssets * 0.69, realAssets * 0.91, realAssets)
-    val gains = listOf(
-        assets[0] - costs[0],
-        assets[1] - costs[1],
-        assets[2] - costs[2],
-        assets[3] - costs[3],
-        assets[4] - costs[4]
-    )
-    val gainsPct = (0..4).map { if (costs[it] > 0) (gains[it] / costs[it]) * 100.0 else 0.0 }
+    val yearLabels = (currentYear - 4..currentYear).toList()
+    val yearMonths = yearLabels.map { if (it == currentYear) YearMonth.now(ZoneId.of("Asia/Tokyo")).toString() else "$it-12" }
+    val domesticHoldings = holdings.filter { it.category == Category.JAPAN && it.shares > 0 }
+    val codes = domesticHoldings.map { it.code }.distinct()
+    var annualPrices by remember(codes, yearMonths) { mutableStateOf<List<CloudflareMonthlyPriceSeries>>(emptyList()) }
+    var annualHistoryFailed by remember(codes, yearMonths) { mutableStateOf(false) }
+    LaunchedEffect(codes, yearMonths, selectedPeriod) {
+        if (selectedPeriod == "5y" && codes.isNotEmpty()) {
+            com.kurogane.dividend.data.runCatchingCancellable { loadMonthlyPriceHistory(codes, yearMonths) }
+                .onSuccess { annualPrices = it; annualHistoryFailed = false }
+                .onFailure { annualHistoryFailed = true }
+        }
+    }
+    val priceMap = annualPrices.associate { it.code to it.prices.associateBy { price -> price.month } }
+    val domesticCost = domesticHoldings.sumOf { it.totalCost }
+    val costs = List(5) { domesticCost }
+    val assets = yearMonths.map { month ->
+        if (domesticHoldings.isEmpty() || domesticHoldings.any { priceMap[it.code]?.get(month) == null }) Double.NaN
+        else domesticHoldings.sumOf { it.shares * priceMap.getValue(it.code).getValue(month).close }
+    }
+    val gains = assets.map { it - domesticCost }
+    val gainsPct = gains.map { if (domesticCost > 0) it / domesticCost * 100 else Double.NaN }
+    fun historicalMoney(amount: Double): String = if (amount.isFinite()) currencyFormat.format(amount.toLong()) else "未取得"
+    fun historicalPercent(amount: Double): String = if (amount.isFinite()) String.format(Locale.JAPAN, "%.1f%%", amount) else "未取得"
+    fun historicalWan(amount: Double): String = if (amount.isFinite()) String.format(Locale.JAPAN, "%.0f万", amount / 10_000) else "未取得"
 
     // Simulated values calculation using mathematically precise compound formulas
     val yearsSim = listOf(10, 20, 30)
@@ -1915,7 +1655,8 @@ private fun AssetTrackingSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("過去年の資産額は現在の保有情報から算出した参考推計です。実績データではありません。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+        Text("国内株の現在株数 × 各年末の実際の終値（今年は直近月）。取得額は現在の取得額を比較基準とします。過去の保有資産額ではありません。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+        if (annualHistoryFailed) Text("株価履歴を取得できませんでした。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
         // A. Header Title row with switch pills
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1940,7 +1681,7 @@ private fun AssetTrackingSection(
                     )
                 }
                 Text(
-                    if (selectedPeriod == "5y") "2021年〜2025年(現在)・年次成長トラッキング" else "過去12か月・月末株価による参考評価",
+                    if (selectedPeriod == "5y") "${currentYear - 4}年〜${currentYear}年・年末株価による参考評価" else "過去12か月・月末株価による参考評価",
                     style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 )
             }
@@ -2011,7 +1752,7 @@ private fun AssetTrackingSection(
                             color = PrimaryEmerald.copy(alpha = 0.15f)
                         ) {
                             Text(
-                                String.format("+%.1f%%", gainsPct[4]),
+                                historicalPercent(gainsPct[4]),
                                 color = PrimaryEmerald,
                                 fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold,
@@ -2068,7 +1809,7 @@ private fun AssetTrackingSection(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = if (isPrivacyActive) "+¥••••••" else "+¥${currencyFormat.format(gains[4].toLong())}",
+                        text = if (isPrivacyActive) "+¥••••••" else "+¥${historicalMoney(gains[4])}",
                         color = PrimaryEmerald,
                         fontSize = AppTextSize.section,
                         fontWeight = FontWeight.Bold,
@@ -2113,7 +1854,7 @@ private fun AssetTrackingSection(
                         border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
                     ) {
                         Text(
-                            text = if (isPrivacyActive) "含み益: ¥••••" else "含み益: +¥${currencyFormat.format(gains[4].toLong())} (+${String.format("%.1f%%", gainsPct[4])})",
+                            text = if (isPrivacyActive) "含み益: ¥••••" else "含み益: +¥${historicalMoney(gains[4])} (+${historicalPercent(gainsPct[4])})",
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             color = PrimaryEmerald,
                             fontSize = AppTextSize.dense,
@@ -2125,7 +1866,7 @@ private fun AssetTrackingSection(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // custom grouped double bars rendering
-                val maxVal = (costs + assets).maxOrNull()?.coerceAtLeast(1.0) ?: 1.0
+                val maxVal = (costs + assets).filter { it.isFinite() }.maxOrNull()?.coerceAtLeast(1.0) ?: 1.0
                 val assetChartGridColor = BorderColor
                 val assetChartAccent = PrimaryEmerald
                 val assetChartBarColor = PrimaryEmeraldContainer
@@ -2151,7 +1892,7 @@ private fun AssetTrackingSection(
                         val assetVal = assets[i]
 
                         val costRatio = (costVal / maxVal).toFloat()
-                        val assetRatio = (assetVal / maxVal).toFloat()
+                        val assetRatio = (assetVal / maxVal).takeIf { it.isFinite() }?.toFloat() ?: 0f
 
                         val costBarHeight = size.height * costRatio * 0.8f
                         val assetBarHeight = size.height * assetRatio * 0.8f
@@ -2202,7 +1943,7 @@ private fun AssetTrackingSection(
                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    listOf("2021", "2022", "2023", "2024", "2025現").forEachIndexed { idx, year ->
+                    yearLabels.map { it.toString() }.forEachIndexed { idx, year ->
                         Text(
                             text = year,
                             color = if (selectedYearIndex == idx) PrimaryEmerald else OnSurfaceVariant,
@@ -2230,7 +1971,7 @@ private fun AssetTrackingSection(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    listOf("2021", "2022", "2023", "2024", "2025現").forEachIndexed { idx, yr ->
+                    yearLabels.map { it.toString() }.forEachIndexed { idx, yr ->
                         val isSelected = selectedYearIndex == idx
                         Card(
                             modifier = Modifier
@@ -2257,14 +1998,14 @@ private fun AssetTrackingSection(
                                     fontSize = AppTextSize.dense
                                 )
                                 Text(
-                                    "時: " + String.format("%.0f万", assets[idx] / 10000.0),
+                                    "時: " + historicalWan(assets[idx]),
                                     color = OnSurface,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = String.format("%s%.0f万", if (gains[idx] >= 0) "+" else "", gains[idx] / 10000.0),
+                                    text = historicalWan(gains[idx]),
                                     color = if (gains[idx] >= 0) PrimaryEmeraldContainer else ErrorRed,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Black
@@ -2277,7 +2018,7 @@ private fun AssetTrackingSection(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // E. Selected Year Summary Card details block
-                val selYearStr = "${currentYear - 4 + selectedYearIndex}年 推計"
+                val selYearStr = "${currentYear - 4 + selectedYearIndex}年末株価比較"
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = BackgroundDark,
@@ -2293,7 +2034,7 @@ private fun AssetTrackingSection(
                             Text("$selYearStr 詳細", color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = if (isPrivacyActive) "評価額: ¥••••••••" else "評価額: ¥${currencyFormat.format(assets[selectedYearIndex].toLong())}",
+                                text = if (isPrivacyActive) "評価額: ¥••••••••" else "評価額: ¥${historicalMoney(assets[selectedYearIndex])}",
                                 color = OnSurface,
                                 fontSize = AppTextSize.body,
                                 fontWeight = FontWeight.Bold,
@@ -2303,12 +2044,12 @@ private fun AssetTrackingSection(
 
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = if (isPrivacyActive) "投資元本: ¥••••" else "投資元本: ¥${currencyFormat.format(costs[selectedYearIndex].toLong())}",
+                                text = if (isPrivacyActive) "投資元本: ¥••••" else "投資元本: ¥${historicalMoney(costs[selectedYearIndex])}",
                                 color = OnSurfaceVariant,
                                 fontSize = AppTextSize.dense
                             )
                             Text(
-                                text = if (isPrivacyActive) "含み損益: ••••" else String.format("含み損益 %s¥%s (%.1f%%)", if (gains[selectedYearIndex] >= 0) "+" else "", currencyFormat.format(gains[selectedYearIndex].toLong()), gainsPct[selectedYearIndex]),
+                                text = if (isPrivacyActive) "含み損益: ••••" else "損益比較 ¥${historicalMoney(gains[selectedYearIndex])} (${historicalPercent(gainsPct[selectedYearIndex])})",
                                 color = if (gains[selectedYearIndex] >= 0) PrimaryEmeraldContainer else ErrorRed,
                                 fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold,
@@ -2442,7 +2183,7 @@ private fun AssetTrackingSection(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        String.format("%.0f%%", yieldRate * 100),
+                        String.format(java.util.Locale.JAPAN, "%.2f%%", yieldRate * 100),
                         color = OnSurface,
                         fontSize = AppTextSize.caption,
                         fontWeight = FontWeight.Black,
@@ -2454,7 +2195,7 @@ private fun AssetTrackingSection(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    listOf("3%", "4%", "5%").forEachIndexed { index, label ->
+                    listOf("3.00%", "4.00%", "5.00%").forEachIndexed { index, label ->
                         val isSel = yieldOption == index
                         Card(
                             modifier = Modifier
@@ -2544,7 +2285,7 @@ private fun AssetTrackingSection(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    "${yr}年後 (" + (2025 + yr) + ")",
+                                    "${yr}年後 (" + (currentYear + yr) + ")",
                                     color = if (is30Year) PrimaryEmerald else OnSurfaceVariant,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
@@ -2601,7 +2342,7 @@ private fun AssetTrackingSection(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = String.format(
-                                "現在の資産評価額 ¥%,.0f万から、毎月 ¥%s を積立、利回り %.0f%% で運用し、さらに配当金を再投資%sした場合のシミュレーションです。複利効果により、30年間の累計不労所得・資産価値は加速度的に成長します。",
+                                "現在の資産評価額 ¥%,.0f万から、毎月 ¥%s を積立、利回り %.2f%% で運用し、さらに配当金を再投資%sした場合のシミュレーションです。複利効果により、30年間の累計不労所得・資産価値は加速度的に成長します。",
                                 realAssets / 10000.0,
                                 currencyFormat.format(monthlySavings.toLong()),
                                 yieldRate * 100,
@@ -2642,11 +2383,11 @@ private fun AssetTrackingSection(
                         )
                     )
                 }
-                Text("2021〜2025", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                Text("${currentYear - 4}〜$currentYear", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("2025年 現在", "2024年 実績", "2023年 実績", "2022年 実績", "2021年 実績").forEachIndexed { idx, title ->
+                yearLabels.reversed().map { "${it}年 株価比較" }.forEachIndexed { idx, title ->
                     val index = 4 - idx
                     val isGain = gains[index] >= 0
                     val prefix = if (isGain) "+" else ""
@@ -2714,7 +2455,7 @@ private fun AssetTrackingSection(
                                         }
                                     }
                                     Text(
-                                        text = if (isPrivacyActive) "元本 ¥•••• • 評価額 ¥••••" else "元本 ¥${currencyFormat.format(costs[index].toLong())} • 評価額 ¥${currencyFormat.format(assets[index].toLong())}",
+                                        text = if (isPrivacyActive) "元本 ¥•••• • 評価額 ¥••••" else "元本 ¥${historicalMoney(costs[index])} • 評価額 ¥${historicalMoney(assets[index])}",
                                         color = OnSurfaceVariant,
                                         fontSize = AppTextSize.dense
                                     )
@@ -2723,14 +2464,14 @@ private fun AssetTrackingSection(
 
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    text = if (isPrivacyActive) "••••" else String.format("%s¥%s", prefix, currencyFormat.format(gains[index].toLong())),
+                                    text = if (isPrivacyActive) "••••" else String.format("%s¥%s", prefix, historicalMoney(gains[index])),
                                     color = if (isGain) PrimaryEmeraldContainer else ErrorRed,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
-                                    text = if (index == 0) "基準年" else String.format("%s%.1f%% 利益", prefix, gainsPct[index]),
+                                    text = if (index == 0) "基準年" else historicalPercent(gainsPct[index]),
                                     color = if (index == 0) OnSurfaceVariant else if (isGain) PrimaryEmeraldContainer else ErrorRed,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold

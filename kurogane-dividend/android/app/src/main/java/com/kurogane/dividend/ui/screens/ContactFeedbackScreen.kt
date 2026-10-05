@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,17 +35,20 @@ fun ContactFeedbackScreen(
     onBack: () -> Unit,
     viewModel: DividendViewModel
 ) {
-    var selectedCategory by remember { mutableStateOf("feature") } // "feature", "bug", "stock", "other"
-    var senderName by remember { mutableStateOf("") }
-    var senderEmail by remember { mutableStateOf("") }
-    var messageText by remember { mutableStateOf("") }
-    var attachDiagnostics by remember { mutableStateOf(true) }
+    var selectedCategory by rememberSaveable { mutableStateOf("feature") }
+    var senderName by rememberSaveable { mutableStateOf("") }
+    var senderEmail by rememberSaveable { mutableStateOf("") }
+    var messageText by rememberSaveable { mutableStateOf("") }
+    var attachDiagnostics by rememberSaveable { mutableStateOf(true) }
     var isSubmitting by remember { mutableStateOf(false) }
+    var requestId by rememberSaveable { mutableStateOf(java.util.UUID.randomUUID().toString()) }
+    var lastPayload by rememberSaveable { mutableStateOf<String?>(null) }
 
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
-    val draftStore = remember { LocalImportStore(context.applicationContext) }
+    val draftStore = remember(viewModel) { LocalImportStore(viewModel.getApplication<android.app.Application>()) }
     var draftMessage by remember { mutableStateOf<String?>(null) }
+    var draftLoaded by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         runCatchingCancellable { withContext(Dispatchers.IO) { draftStore.loadFeedbackDraft() } }.onSuccess { draft ->
             if (draft != null) {
@@ -52,6 +56,25 @@ fun ContactFeedbackScreen(
                 senderEmail = draft.optString("email")
                 messageText = draft.optString("message")
                 selectedCategory = draft.optString("category", "feature")
+                requestId = draft.optString("requestId", java.util.UUID.randomUUID().toString())
+                lastPayload = draft.optString("contentFingerprint").takeIf { it.isNotBlank() }
+                attachDiagnostics = draft.optBoolean("attachDiagnostics", draft.has("diagnostics"))
+            }
+        }.onFailure { draftMessage = "下書きを復元できませんでした。入力内容を確認してください。" }
+        draftLoaded = true
+    }
+    val currentDraft by rememberUpdatedState(JSONObject().apply {
+        put("category", selectedCategory); put("name", senderName); put("email", senderEmail)
+        put("message", messageText); put("requestId", requestId); put("attachDiagnostics", attachDiagnostics)
+        lastPayload?.let { put("contentFingerprint", it) }
+    })
+    val canSaveDraft by rememberUpdatedState(draftLoaded)
+    DisposableEffect(draftStore) {
+        onDispose {
+            // Locking the app removes the form; keep its input encrypted for the next visit.
+            if (canSaveDraft) runCatching {
+                if (currentDraft.optString("message").isNotBlank()) draftStore.saveFeedbackDraft(currentDraft)
+                else draftStore.clearFeedbackDraft()
             }
         }
     }
@@ -162,7 +185,7 @@ fun ContactFeedbackScreen(
                         Text("Diview サポートデスク", color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            "送信機能は準備中です。入力内容は端末内に下書きとして保存できます。",
+                            "送信すると内容をDiviewサーバーに保存し、受付番号を表示します。返信先は任意です。",
                             color = SoftGray,
                             fontSize = AppTextSize.dense,
                             lineHeight = 16.sp
@@ -392,7 +415,7 @@ fun ContactFeedbackScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("診断レポートを添付", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text("アプリのクラッシュログ、OSバージョン情報を含める", color = SoftGray, fontSize = AppTextSize.dense)
+                            Text("アプリのバージョンとAndroidのバージョンのみを添付", color = SoftGray, fontSize = AppTextSize.dense)
                         }
                         Switch(
                             checked = attachDiagnostics,
@@ -403,24 +426,38 @@ fun ContactFeedbackScreen(
 
                     Spacer(modifier = Modifier.height(2.dp))
 
-                    // Submit Button with loading simulation
-                    val canSubmit = !isSubmitting && messageText.trim().isNotEmpty() && messageText.length <= 20_000 &&
+                    val canSubmit = draftLoaded && !isSubmitting && messageText.trim().isNotEmpty() && messageText.length <= 20_000 &&
                         senderName.length <= 200 && senderEmail.length <= 254 &&
                         (senderEmail.isBlank() || android.util.Patterns.EMAIL_ADDRESS.matcher(senderEmail.trim()).matches())
                     Button(
                         onClick = {
-                            if (messageText.trim().isNotEmpty()) {
+                            if (!isSubmitting && messageText.trim().isNotEmpty()) {
                                 isSubmitting = true
                                 val draft = JSONObject().apply {
                                     put("category", selectedCategory); put("name", senderName.trim())
                                     put("email", senderEmail.trim()); put("message", messageText.trim())
-                                    if (attachDiagnostics) put("androidSdk", android.os.Build.VERSION.SDK_INT)
+                                    if (attachDiagnostics) put("diagnostics", JSONObject().put("androidSdk", android.os.Build.VERSION.SDK_INT).put("appVersion", com.kurogane.dividend.BuildConfig.VERSION_NAME))
                                 }
+                                val fingerprint = draft.toString()
+                                if (lastPayload != fingerprint) requestId = java.util.UUID.randomUUID().toString()
+                                lastPayload = fingerprint
+                                draft.put("requestId", requestId)
+                                draft.put("contentFingerprint", fingerprint)
                                 coroutineScope.launch {
+                                    var draftSaved = false
                                     try {
-                                        runCatchingCancellable { withContext(Dispatchers.IO) { draftStore.saveFeedbackDraft(draft) } }
-                                            .onSuccess { draftMessage = "下書きを端末内に保存しました。送信は行っていません。" }
-                                            .onFailure { draftMessage = "下書きを保存できませんでした。" }
+                                        runCatchingCancellable {
+                                            withContext(Dispatchers.IO) { draftStore.saveFeedbackDraft(draft) }
+                                            draftSaved = true
+                                            com.kurogane.dividend.data.FeedbackRepository().submit(JSONObject(draft.toString()).apply { remove("contentFingerprint") })
+                                        }.onSuccess { receipt ->
+                                            draftMessage = "送信を受け付けました。受付番号：$receipt"
+                                            if (messageText.trim() == draft.optString("message")) messageText = ""
+                                            runCatchingCancellable { withContext(Dispatchers.IO) { draftStore.clearFeedbackDraft() } }
+                                        }.onFailure { error ->
+                                            draftMessage = "送信できませんでした。" + (if (draftSaved) "内容は端末に保存されています。" else "入力内容を確認して再試行してください。") +
+                                                ((error as? com.kurogane.dividend.data.ServiceException)?.message ?: "通信環境を確認して再試行してください。")
+                                        }
                                     } finally { isSubmitting = false }
                                 }
                             }
@@ -442,7 +479,7 @@ fun ContactFeedbackScreen(
                         } else {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Icon(Icons.Default.Send, contentDescription = null, tint = if (canSubmit) OnPrimaryContainer else OnSurfaceVariant, modifier = Modifier.size(14.dp))
-                                Text("下書きを保存", color = if (canSubmit) OnPrimaryContainer else OnSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
+                                Text("送信する", color = if (canSubmit) OnPrimaryContainer else OnSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
                             }
                         }
                     }

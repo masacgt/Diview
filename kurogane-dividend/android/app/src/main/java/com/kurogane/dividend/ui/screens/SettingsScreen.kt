@@ -2,6 +2,7 @@ package com.kurogane.dividend.ui.screens
 
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.widget.Toast
+import com.kurogane.dividend.security.fragmentActivity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -62,7 +63,10 @@ fun SettingsScreen(
     var calcBasis by rememberSaveable { mutableStateOf("eval") }
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
     val taxDeduction = taxRateMode == "net"
-    var usTaxDeduction by rememberSaveable { mutableStateOf(true) }
+    val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
+    val biometricEnabled by viewModel.biometricEnabled.collectAsStateWithLifecycle()
+    val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
+    val exchangeRateError by viewModel.exchangeRateError.collectAsStateWithLifecycle()
     var targetYield by rememberSaveable { mutableStateOf("4.0") }
     var threshold by rememberSaveable { mutableIntStateOf(5) }
     val maskAtStartup by viewModel.maskAtStartup.collectAsStateWithLifecycle()
@@ -153,8 +157,8 @@ fun SettingsScreen(
                             Label("▱  ウィザードへ", 8, SettingsMint, true)
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Label("◉ 前回インポート:          2024/10/24 18:30", 7, SettingsMuted)
-                            Label("SBI証券 48銘柄", 7, SettingsMint)
+                            Label("◉ 登録中の保有データ", 7, SettingsMuted)
+                            Label("${viewModel.holdings.collectAsStateWithLifecycle().value.size}件", 7, SettingsMint)
                         }
                         Label("ⓘ  各証券会社CSVのダウンロード手順   保存データ上書き/追加", 7, SettingsMuted)
                     } else {
@@ -213,11 +217,15 @@ fun SettingsScreen(
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     SettingToggle("税金計算設定", "税引後表示 (国内税 20.315% を控除)", taxDeduction, { viewModel.setTaxRateMode(if (it) "net" else "gross") })
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle("米国株 現地源泉徴収控除 (10%)", "現地税の計算は準備中です", false, {}, tag = "準備中", enabled = false)
+                    SettingToggle("米国株 現地源泉徴収控除 (10%)", "税引後表示に適用。NISAも現地税は控除します", usTaxDeduction, viewModel::setUsTaxDeduction)
+                    Label("国内税20.315%は課税部分のみ。外国税額控除・還付・特殊な分配金は含みません。", 7, SettingsMuted)
+                    Label(exchangeRate?.let { "為替：1 USD = ${String.format(java.util.Locale.JAPAN, "%.2f", it.usdJpy)}円（${it.date} / Frankfurter）" } ?: "為替未取得：米ドル資産は円換算合計の対象外", 8, SettingsMuted)
+                    exchangeRateError?.let { Label(it, 7, SettingsMuted) }
+                    ActionButton("為替を更新", Modifier.fillMaxWidth()) { exportScope.launch { viewModel.refreshExchangeRate() } }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label("目標利回り (ロードマップ試算)", 9, OnSurface, true); Label("シミュレーション基準   $targetYield%", 8, SettingsMint) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label("目標利回り (ロードマップ試算)", 9, OnSurface, true); Label("シミュレーション基準   ${String.format(java.util.Locale.JAPAN, "%.2f", targetYield.toDoubleOrNull() ?: 0.0)}%", 8, SettingsMint) }
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        listOf("3.5" to "3.5% (堅実)", "4.0" to "4.0% (標準)", "4.5" to "4.5% (積極)").forEach { (value, label) ->
+                        listOf("3.5" to "3.50% (堅実)", "4.0" to "4.00% (標準)", "4.5" to "4.50% (積極)").forEach { (value, label) ->
                             Segment(label, targetYield == value, Modifier.weight(1f)) { targetYield = value }
                         }
                     }
@@ -257,7 +265,11 @@ fun SettingsScreen(
         item {
             SettingsSection("セキュリティ＆プライバシー", Icons.Default.Shield) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingToggle("生体認証 (Face ID / 指紋認証)", "生体認証は準備中です", false, {}, tag = "準備中", enabled = false)
+                    SettingToggle("生体認証 (顔・指紋認証)", "起動時とバックグラウンドからの復帰時に認証", biometricEnabled, { enabled ->
+                        val activity = context.fragmentActivity()
+                        if (activity is com.kurogane.dividend.MainActivity) activity.authenticatePreference(enabled)
+                        else Toast.makeText(context, "この画面では認証を開始できません", Toast.LENGTH_LONG).show()
+                    })
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     SettingToggle("起動時の金額伏字マスク", "電車内など外出時の画面閲覧用", maskAtStartup, { viewModel.setMaskAtStartup(it) }, tag = "覗き見防止")
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)

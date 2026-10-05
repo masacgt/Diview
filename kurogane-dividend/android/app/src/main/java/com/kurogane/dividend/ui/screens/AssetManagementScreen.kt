@@ -55,6 +55,7 @@ fun AssetManagementScreen(
     onOpenAddHolding: (String) -> Unit = {}
 ) {
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
+    val financialData by viewModel.financialData.collectAsStateWithLifecycle()
     val isPrivacyActive by viewModel.isPrivacyActive.collectAsStateWithLifecycle()
     val selectedMonth by viewModel.selectedMonth.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
@@ -219,6 +220,9 @@ fun AssetManagementScreen(
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            if (holdings.any { it.currency == "$" && it.usdJpyRate == null }) {
+                Text("為替未取得：米ドル資産は円換算合計に含まれません。設定画面から為替を更新できます。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+            }
             // ================= STATE SIMULATOR BAR =================
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -435,7 +439,7 @@ fun AssetManagementScreen(
                                 .padding(12.dp)
                         ) {
                             Column {
-                                Text("年間予想受取配当", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
+                                Text("年間配当目安", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = if (isPrivacyActive) "¥ ••••• /年" else "¥${javaCurrencyFormat.format(totalAnnualDivVal.toLong())} /年",
@@ -505,10 +509,10 @@ fun AssetManagementScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.DateRange, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("月別推移グラフ", fontSize = AppTextSize.body, fontWeight = FontWeight.ExtraBold, color = OnSurface)
+                            Text("月別の受取配当見込み額", fontSize = AppTextSize.body, fontWeight = FontWeight.ExtraBold, color = OnSurface)
                             Spacer(modifier = Modifier.width(6.dp))
                             Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(SurfaceContainerHigh).padding(horizontal = 4.dp, vertical = 2.dp)) {
-                                Text("2024", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
+                                Text(java.time.LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).year.toString(), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
                             }
                         }
                         Text(
@@ -519,6 +523,7 @@ fun AssetManagementScreen(
                         )
                     }
 
+                    Text("登録された配当月へ均等配分した目安です。配当月未取得：${holdings.count { it.dps > 0 && it.dividendMonths.isEmpty() }}銘柄。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                     Spacer(modifier = Modifier.height(18.dp))
 
                     // 1-12 Interactive Monthly Bars. Keep each month label inside its own fixed-width slot.
@@ -530,7 +535,7 @@ fun AssetManagementScreen(
                         dynamicMonthlyDividends.forEach { (month, amt, label) ->
                             val isSelected = selectedMonth == month
                             val isSpecialMonth = (month == 6 || month == 12)
-                            val heightFraction = (amt / maxMonthlyAmt).toFloat().coerceIn(0.12f, 1.0f)
+                            val heightFraction = (amt / maxMonthlyAmt).toFloat().coerceIn(0.0f, 1.0f)
 
                             Column(
                                 modifier = Modifier
@@ -839,6 +844,19 @@ fun AssetManagementScreen(
                     val diff = holding.gainLoss
                     val diffPct = holding.gainLossPercent
                     val annualDiv = holding.getEffectiveAnnualDividend(taxRateMode)
+                    val latestDividendPeriod = financialData[holding.code]?.dividends
+                        ?.zipWithNext()
+                        ?.lastOrNull { (previous, current) -> current.year == previous.year + 1 }
+                    val latestDividendChange = latestDividendPeriod?.let { (previous, current) -> current.dps - previous.dps }
+                    val latestDividendGrowth = latestDividendPeriod?.let { (previous, current) ->
+                        if (previous.dps > 0.0) (current.dps - previous.dps) / previous.dps * 100.0 else null
+                    }
+                    val annualDividendChange = latestDividendChange?.let {
+                        holding.shares * it / holding.priceUnit * holding.currencyFactor
+                    }
+                    val payoutMonthSummary = holding.dividendMonths.sorted()
+                        .joinToString("・") { "${it}月" }
+                        .ifEmpty { "配当月未取得" }
 
                     Card(
                         modifier = Modifier
@@ -878,6 +896,17 @@ fun AssetManagementScreen(
                                             fontSize = AppTextSize.dense,
                                             fontWeight = FontWeight.Bold,
                                             fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Surface(shape = RoundedCornerShape(4.dp), color = BorderColor) {
+                                        Text(
+                                            holding.accountType,
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                            color = SecondaryIndigo,
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(6.dp))
@@ -921,41 +950,55 @@ fun AssetManagementScreen(
                             Divider(color = BorderBlue, thickness = 0.5.dp)
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            // 3-Column Metrics: Shares, Yield, Annual Dividend
+                            // Four compact metric tiles matching the portfolio card design.
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(CardDarkLighter)
+                                    .padding(horizontal = 4.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
-                                    Text("保有数量", color = SoftGray, fontSize = AppTextSize.dense)
-                                    Text(
-                                        "${holding.shares}株 (${holding.currency}${holding.price.toInt()})",
-                                        color = OnSurface,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontFamily = FontFamily.Monospace
-                                    )
+                                val latestChangeColor = when {
+                                    latestDividendChange == null -> SoftGray
+                                    latestDividendChange >= 0.0 -> NeonGreenLight
+                                    else -> ErrorRed
                                 }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("配当利回り", color = SoftGray, fontSize = AppTextSize.dense)
-                                    Text(
-                                        "${holding.yieldRate}%",
-                                        color = NeonGreenLight,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text("予想配当金", color = SoftGray, fontSize = AppTextSize.dense)
-                                    Text(
-                                        if (annualDiv > 0) "¥${javaCurrencyFormat.format(annualDiv.toLong())}/年" else "再投資型",
-                                        color = OnSurface,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
+                                HoldingMetricTile(
+                                    label = "保有数量",
+                                    value = "${holding.shares}株",
+                                    detail = "@${holding.currency}${javaCurrencyFormat.format(holding.price.toLong())}",
+                                    modifier = Modifier.weight(1f)
+                                )
+                                HoldingMetricDivider()
+                                HoldingMetricTile(
+                                    label = "配当利回り",
+                                    value = "${String.format(java.util.Locale.JAPAN, "%.2f", holding.yieldRate)}%",
+                                    detail = "現在株価比",
+                                    modifier = Modifier.weight(1f),
+                                    valueColor = NeonGreenLight
+                                )
+                                HoldingMetricDivider()
+                                HoldingMetricTile(
+                                    label = "直近増配",
+                                    value = latestDividendGrowth?.let {
+                                        String.format(java.util.Locale.JAPAN, "%+.1f%%", it)
+                                    } ?: "未取得",
+                                    detail = annualDividendChange?.let {
+                                        val sign = if (it > 0) "+" else if (it < 0) "−" else ""
+                                        "年額 $sign¥${javaCurrencyFormat.format(kotlin.math.abs(it).toLong())}"
+                                    } ?: "履歴なし",
+                                    modifier = Modifier.weight(1f),
+                                    valueColor = latestChangeColor,
+                                    detailColor = latestChangeColor
+                                )
+                                HoldingMetricDivider()
+                                HoldingMetricTile(
+                                    label = "予想配当金",
+                                    value = if (annualDiv > 0) "¥${javaCurrencyFormat.format(annualDiv.toLong())}" else "再投資型",
+                                    detail = payoutMonthSummary,
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
 
                             // Month Highlight Banner if selected
@@ -982,22 +1025,6 @@ fun AssetManagementScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(8.dp))
-                            // Bottom row: Account type and Next Payout Timing
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(shape = RoundedCornerShape(4.dp), color = BorderColor) {
-                                    Text(holding.accountType, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = SecondaryIndigo, fontSize = AppTextSize.dense, fontWeight = FontWeight.Medium)
-                                }
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Event, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(12.dp))
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text(holding.nextPayoutTiming, color = SoftGray, fontSize = AppTextSize.dense)
-                                }
-                            }
                         }
                     }
                 }
@@ -1021,7 +1048,7 @@ fun AssetManagementScreen(
                 }
             }
             val nextDivAmt = if (nextStock != null) {
-                val rate = if (nextStock.currency == "$") 154.0 else 1.0
+                val rate = nextStock.currencyFactor
                 val monthsCount = if (nextStock.dividendMonths.isNotEmpty()) nextStock.dividendMonths.size else 2
                 ((nextStock.shares * nextStock.dps * rate) / monthsCount).toLong()
             } else 0L
@@ -1258,7 +1285,7 @@ fun AssetManagementScreen(
         val shares = quickEditShares.toIntOrNull()?.coerceAtLeast(0) ?: 0
         val editValid = quickEditShares.toIntOrNull()?.let { it >= 0 } == true && quickEditAcqPrice.toDoubleOrNull()?.let(com.kurogane.dividend.model.PortfolioMath::validMoney) == true
         val averagePrice = quickEditAcqPrice.toDoubleOrNull()?.takeIf(com.kurogane.dividend.model.PortfolioMath::validMoney) ?: 0.0
-        val currencyFactor = if (holding.currency == "$" ) 154.0 else 1.0
+        val currencyFactor = holding.currencyFactor
         val cost = shares * averagePrice / holding.priceUnit * currencyFactor
         val currentPrice = quickEditMarketPrice.takeIf { it > 0.0 } ?: holding.price
         val valuation = shares * currentPrice / holding.priceUnit * currencyFactor
@@ -1483,4 +1510,33 @@ private fun QuickEditSummary(label: String, value: String, valueColor: Color, mo
         Text(label, color = SoftGray, fontSize = AppTextSize.dense, maxLines = 1)
         Text(value, color = valueColor, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = 2)
     }
+}
+
+@Composable
+private fun HoldingMetricTile(
+    label: String,
+    value: String,
+    detail: String,
+    modifier: Modifier = Modifier,
+    valueColor: Color = OnSurface,
+    detailColor: Color = SoftGray
+) {
+    Column(
+        modifier = modifier.padding(horizontal = 2.dp, vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(label, color = SoftGray, fontSize = 9.sp, maxLines = 1)
+        Text(value, color = valueColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = 1)
+        Text(detail, color = detailColor, fontSize = 8.sp, maxLines = 1)
+    }
+}
+
+@Composable
+private fun HoldingMetricDivider() {
+    Box(
+        Modifier
+            .width(1.dp)
+            .height(32.dp)
+            .background(BorderBlue)
+    )
 }

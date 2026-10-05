@@ -116,7 +116,7 @@ fun TermsPrivacyScreen(
                                 Icon(Icons.Default.Lock, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
                                 Column {
                                     Text("端末内AES-256暗号化", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                    Text("クラウド送信 0 Byte", color = SoftGray, fontSize = AppTextSize.dense)
+                                    Text("保有数量・金額は送信しません", color = SoftGray, fontSize = AppTextSize.dense)
                                 }
                             }
                         }
@@ -378,7 +378,7 @@ fun TermsPrivacyScreen(
                             }
 
                             Text(
-                                "Diviewは「あなたの蓄財状況を誰にも見せない」ことを思想として設計されています。入力された全株式データ・投資金額・配当キャッシュフローは、クラウドサーバーへ一切送信されず、端末内でのみ演算処理されます。",
+                                "保有数量・取得単価・金額の計算は端末内で行います。データ取得時には銘柄コード・対象年月や検索語を送信します。お問い合わせを送信した場合は、本文・任意の名前と返信先、および添付を選んだアプリ／OSバージョンをDiviewサーバーに保存します。90日を過ぎた内容は次回の受付・管理参照時にも削除します。ポートフォリオの自動添付は行いません。",
                                 color = SoftGray,
                                 fontSize = AppTextSize.caption,
                                 lineHeight = 18.sp
@@ -394,7 +394,7 @@ fun TermsPrivacyScreen(
                                     Column(modifier = Modifier.padding(10.dp)) {
                                         Text("外部送信", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                         Spacer(modifier = Modifier.height(2.dp))
-                                        Text("0 Bytes", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = FontFamily.Monospace)
+                                        Text("保有数量・金額なし", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = FontFamily.Monospace)
                                         Text("保有株・金額の送出なし", color = SoftGray, fontSize = AppTextSize.dense)
                                     }
                                 }
@@ -408,7 +408,7 @@ fun TermsPrivacyScreen(
                                         Text("保護規格", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text("AES-256", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = FontFamily.Monospace)
-                                        Text("SQLite端末暗号化", color = SoftGray, fontSize = AppTextSize.dense)
+                                        Text("端末内の保有データを暗号化", color = SoftGray, fontSize = AppTextSize.dense)
                                     }
                                 }
                             }

@@ -16,7 +16,8 @@ object StockDetailResolver {
             security?.industry ?: stock?.sector ?: "業種未登録", stock?.market ?: "東証",
             if (currency == "$") Category.US else Category.JAPAN, price, currency, 0, 0.0, dps,
             PortfolioMath.yieldPercent(dps, price), 0.0, stock?.payoutTiming ?: "配当月未取得", "—",
-            stock?.payoutMonths ?: emptyList(), "", "未保有", stock?.dailyChange ?: "—", stock?.isPositive ?: true
+            stock?.payoutMonths ?: emptyList(), "", "未保有", stock?.dailyChange ?: "—", stock?.isPositive ?: true,
+            usdJpyRate = stock?.usdJpyRate
         )
     }
 }

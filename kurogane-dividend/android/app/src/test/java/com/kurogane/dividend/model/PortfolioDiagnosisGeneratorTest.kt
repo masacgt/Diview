@@ -95,6 +95,15 @@ class PortfolioDiagnosisGeneratorTest {
         dividendType = "",
         accountType = "特定",
         dailyChange = "",
-        isPositive = true
+        isPositive = true,
+        usdJpyRate = if (category == Category.US) 160.0 else null,
+        financialProfile = StockFinancialProfile(payoutRatio = 35.0, noCutYears = 10, consecutiveYears = 5)
     )
+
+    @Test fun missingFinancialDataDoesNotUseStaticCompanyProfiles() {
+        val result = PortfolioDiagnosisGenerator.generate(sampleHoldings().map { it.copy(financialProfile = null) })
+        assertEquals(5, result.findings.size)
+        assertFalse(result.complete)
+        assertEquals(2, result.missingLabels.size)
+    }
 }

@@ -158,7 +158,7 @@ fun ExDividendMatrixDialog(
                     Divider(color = SurfaceContainerHighest)
                     MatrixRow("9432 日本電信電話", "3月 / 9月末", "6月 / 12月入金", "¥520")
                     Divider(color = SurfaceContainerHighest)
-                    MatrixRow("AAPL Apple Inc.", "2, 5, 8, 11月", "各月中旬 (四半期)", "$10.0")
+                    MatrixRow("AAPL アップル", "2, 5, 8, 11月", "各月中旬 (四半期)", "$10.0")
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

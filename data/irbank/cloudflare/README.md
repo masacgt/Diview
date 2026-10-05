@@ -2,6 +2,26 @@
 
 このディレクトリには、整理済みのIRBANKデータをCloudflare D1へ登録するスキーマとWorker APIがあります。銘柄・財務情報はD1、株価スナップショットはR2から配信します。
 
+## Android財務・問い合わせAPI
+
+`GET /api/v1/financial-data/7203` はR2の概要から年次財務・分割調整済み配当・評価指標を返します。未収録銘柄は404です。Androidは指標の欠損を固定値で補完せず、取得済みの値を端末へキャッシュします。
+
+問い合わせテーブルを初めて導入する場合は、次の移行SQLを実行します。既存テーブルとデータを削除せず、再実行できます。
+
+```powershell
+npx wrangler d1 execute diview-irbank --remote --file migrations/0001_support_feedback.sql
+```
+
+`POST /api/v1/feedback` はJSONの `requestId`（UUID v4）、`category`、`message`、任意の `name` / `email` / `diagnostics` を検証し、D1の `support_feedback` に保存します。保存を確認できた場合だけ201と `accepted: true` / `receiptId` を返します。同じ受付番号と内容の再送は1件にまとめ、別内容の衝突は409、保存失敗は503です。本文は2万文字、要求全体は100KBまで。IP単位で既定60秒に5回までです。
+
+管理者はD1管理画面で内容を参照できます。`GET /api/v1/admin/feedback` は最新100件、`DELETE /api/v1/admin/feedback?id=受付番号` は指定した1件を削除します。どちらも既存の `ADMIN_SECRET` を `X-Admin-Secret` ヘッダーへ指定してください。鍵をソースやAndroidアプリへ保存しないでください。
+
+90日超の問い合わせは受付・管理参照および既存の定期処理で削除します。Cron枠が不足するアカウントでは、コードだけを公開する `npx wrangler versions upload` と、その返却バージョンを指定する `npx wrangler versions deploy バージョンID@100% --yes` を使えます。この方式はトリガーを変更しません。新しい定期トリガーが必要な場合は別途Cron枠を確保してください。
+
+```powershell
+node --test test/*.test.mjs
+```
+
 ## Cloudflareリソース
 
 `wrangler.toml` は `diview-irbank` D1と `diview-market-data` R2を参照します。Workerを公開するには次を実行します。

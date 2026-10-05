@@ -44,6 +44,8 @@ fun AddHoldingSheet(
     visible: Boolean,
     prefilledCode: String,
     onDismiss: () -> Unit,
+    usdJpyRate: Double? = null,
+    usWithholdingEnabled: Boolean = true,
     onResolveSecurity: suspend (code: String) -> CloudflareSecurity?,
     onRegisterCollective: suspend (code: String, allocations: List<HoldingAllocation>) -> Boolean
 ) {
@@ -54,8 +56,8 @@ fun AddHoldingSheet(
             PresetStock("7203", "トヨタ自動車", "東証P • 輸送用機器", 2600.0, 2.80, 72.8, "¥"),
             PresetStock("8058", "三菱商事", "東証P • 卸売業", 3240.0, 3.52, 100.0, "¥"),
             PresetStock("8316", "三井住友FG", "東証P • 銀行業", 3150.0, 4.13, 130.0, "¥"),
-            PresetStock("9432", "日本電信電話", "東証P • 情報通信", 154.2, 3.37, 5.2, "¥"),
-            PresetStock("AAPL", "Apple Inc.", "NASDAQ • テクノロジー", 220.0, 0.52, 1.0, "$")
+            PresetStock("9432", "日本電信電話", "東証P • 情報・通信業", 154.2, 3.37, 5.2, "¥"),
+            PresetStock("AAPL", "アップル", "NASDAQ • テクノロジー", 220.0, 0.52, 1.0, "$")
         )
     }
 
@@ -139,29 +141,29 @@ fun AddHoldingSheet(
 
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
     val isUSD = selectedStock.currency == "$"
-    val fxRate = if (isUSD) 154.0 else 1.0
+    val fxRate = if (isUSD) usdJpyRate ?: 0.0 else 1.0
 
     // Calculations
     val nShares = nisaShares.toIntOrNull() ?: 0
     val nPrice = nisaPrice.toDoubleOrNull()?.takeIf(PortfolioMath::validMoney) ?: 0.0
-    val nisaDividend = nShares * selectedStock.dps * fxRate
+    val nisaDividend = com.kurogane.dividend.model.DividendTax.net(nShares * selectedStock.dps * fxRate, 1.0, isUSD && usWithholdingEnabled)
     val nisaCost = nShares * nPrice * fxRate
 
     val tShares = tsumitateShares.toIntOrNull() ?: 0
     val tPrice = tsumitatePrice.toDoubleOrNull()?.takeIf(PortfolioMath::validMoney) ?: 0.0
-    val tsumitateDividend = tShares * selectedStock.dps * fxRate
+    val tsumitateDividend = com.kurogane.dividend.model.DividendTax.net(tShares * selectedStock.dps * fxRate, 1.0, isUSD && usWithholdingEnabled)
     val tsumitateCost = tShares * tPrice * fxRate
 
     val tkShares = tokuteiShares.toIntOrNull() ?: 0
     val tkPrice = tokuteiPrice.toDoubleOrNull()?.takeIf(PortfolioMath::validMoney) ?: 0.0
     val tokuteiGrossDiv = tkShares * selectedStock.dps * fxRate
-    val tokuteiDividend = tokuteiGrossDiv * 0.79685
+    val tokuteiDividend = com.kurogane.dividend.model.DividendTax.net(tokuteiGrossDiv, 0.0, isUSD && usWithholdingEnabled)
     val tokuteiCost = tkShares * tkPrice * fxRate
 
     val gShares = generalShares.toIntOrNull() ?: 0
     val gPrice = generalPrice.toDoubleOrNull()?.takeIf(PortfolioMath::validMoney) ?: 0.0
     val generalGrossDiv = gShares * selectedStock.dps * fxRate
-    val generalDividend = generalGrossDiv * 0.79685
+    val generalDividend = com.kurogane.dividend.model.DividendTax.net(generalGrossDiv, 0.0, isUSD && usWithholdingEnabled)
     val generalCost = gShares * gPrice * fxRate
 
     // Summary Box metrics
@@ -172,7 +174,7 @@ fun AddHoldingSheet(
         listOf(nShares to nisaPrice, tShares to tsumitatePrice, tkShares to tokuteiPrice, gShares to generalPrice)
             .all { (quantity, value) -> quantity == 0 || value.toDoubleOrNull()?.let(PortfolioMath::validMoney) == true }
     val totalCost = nisaCost + tsumitateCost + tokuteiCost + generalCost
-    val weightedAvgAcqPrice = if (totalShares > 0) totalCost / totalShares / fxRate else selectedStock.price
+    val weightedAvgAcqPrice = if (totalShares > 0) (nShares * nPrice + tShares * tPrice + tkShares * tkPrice + gShares * gPrice) / totalShares else selectedStock.price
     val totalNetDividend = nisaDividend + tsumitateDividend + tokuteiDividend + generalDividend
     val nisaTaxBenefits = (nShares + tShares) * selectedStock.dps * 0.20315 * fxRate
 
@@ -282,7 +284,7 @@ fun AddHoldingSheet(
                         Text("銘柄コード / 企業名", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                     }
                     Text(
-                        "${selectedStock.name} (利回り ${selectedStock.yieldRate}%)",
+                        "${selectedStock.name} (利回り ${String.format(java.util.Locale.JAPAN, "%.2f", selectedStock.yieldRate)}%)",
                         color = PrimaryEmerald,
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.SemiBold
@@ -376,7 +378,7 @@ fun AddHoldingSheet(
                             fontSize = AppTextSize.caption,
                             fontFamily = FontFamily.Monospace
                         )
-                        Text("配当利回り ${selectedStock.yieldRate}%", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                        Text("配当利回り ${String.format(java.util.Locale.JAPAN, "%.2f", selectedStock.yieldRate)}%", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                     }
                 }
             }

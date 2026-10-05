@@ -1,6 +1,8 @@
 package com.kurogane.dividend.ui.screens
 
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kurogane.dividend.data.financialText
+import com.kurogane.dividend.data.financialYears
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -40,6 +42,9 @@ fun StockDetailScreen(
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
     val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
+    val financialData by viewModel.financialData.collectAsStateWithLifecycle()
+    val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
+    val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
     
     var resolvedSecurity by remember(stockCode) { mutableStateOf<com.kurogane.dividend.data.CloudflareSecurity?>(null) }
     var lookupFinished by remember(stockCode) { mutableStateOf(false) }
@@ -47,7 +52,12 @@ fun StockDetailScreen(
         resolvedSecurity = com.kurogane.dividend.data.runCatchingCancellable { viewModel.resolveCloudflareSecurity(stockCode) }.getOrNull()
         lookupFinished = true
     }
-    val currentHolding = com.kurogane.dividend.model.StockDetailResolver.resolve(stockCode, holdings, watchlist, resolvedSecurity)
+    val currentHolding = com.kurogane.dividend.model.StockDetailResolver.resolve(stockCode, holdings, watchlist, resolvedSecurity)?.let { holding ->
+        val dps = financialData[holding.code]?.dividends?.lastOrNull()?.dps ?: holding.dps
+        holding.copy(dps = dps, yieldRate = com.kurogane.dividend.model.PortfolioMath.yieldPercent(dps, holding.price),
+            yoc = com.kurogane.dividend.model.PortfolioMath.yieldPercent(dps, holding.acqPrice),
+            usdJpyRate = exchangeRate?.usdJpy, usWithholdingEnabled = usTaxDeduction)
+    }
     if (currentHolding == null) {
         Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally) {
@@ -73,30 +83,37 @@ fun StockDetailScreen(
     val baseShares = currentHolding.shares
     val currentPrice = currentHolding.price
     val dps = currentHolding.dps
-    val profile = com.kurogane.dividend.model.getStockProfile(currentHolding.code)
+    val financial = financialData[currentHolding.code]
+    val baseProfile = financial?.profile ?: com.kurogane.dividend.model.StockFinancialProfile()
+    var financialError by remember(currentHolding.code) { mutableStateOf(false) }
+    LaunchedEffect(currentHolding.code) {
+        financialError = com.kurogane.dividend.data.runCatchingCancellable { viewModel.fetchFinancialData(currentHolding.code, force = true) }.isFailure
+    }
     var backendAnalysisValues by remember(currentHolding.code) { mutableStateOf<Map<String, Double?>?>(null) }
     LaunchedEffect(currentHolding.code) {
         backendAnalysisValues = viewModel.fetchStockAnalysis(currentHolding.code)?.values
     }
-    val analysisNarrative = remember(currentHolding, backendAnalysisValues) { StockAnalysisNarrativeGenerator.generate(
-        backendAnalysisValues ?: emptyMap()
+    val analysisNarrative = remember(currentHolding, backendAnalysisValues, financial) { StockAnalysisNarrativeGenerator.generate(
+        (backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())
     ) }
+    val healthNarrative = remember(financial) { StockAnalysisNarrativeGenerator.generate(financial?.values.orEmpty()) }
+    val valuationNarrative = remember(backendAnalysisValues) { StockAnalysisNarrativeGenerator.generate(backendAnalysisValues.orEmpty().filterKeys { it == "per" || it == "pbr" }) }
+    val profile = baseProfile.copy(
+        healthGrade = healthNarrative.grade ?: "未判定", healthScore = healthNarrative.score ?: -1,
+        healthEvaluation = healthNarrative.title, healthDiagnosisComment = healthNarrative.findings.joinToString(" ") { it.text }.ifBlank { "財務指標未取得" },
+        valuationScore = valuationNarrative.score ?: -1,
+        buySignalTitle = valuationNarrative.title,
+        buySignalComment = valuationNarrative.findings.joinToString(" ") { it.text }.ifBlank { "株価指標未取得" }
+    )
     val liveYield = if (currentPrice > 0) (dps / currentPrice) * 100.0 else 0.0
     val liveYoc = if (currentHolding.acqPrice > 0) (dps / currentHolding.acqPrice) * 100.0 else liveYield
 
     val totalSimShares = baseShares.toLong() + simAddedShares
-    val additionalCost = simAddedShares * currentPrice / currentHolding.priceUnit
-    val addedAnnualDiv = (simAddedShares * dps / currentHolding.priceUnit).toLong()
-    val newTotalAnnualDiv = (totalSimShares * dps / currentHolding.priceUnit).toLong()
+    val newTotalAnnualDiv = currentHolding.getEffectiveDividendForShares(totalSimShares, taxRateMode).toLong()
     val newMonthlyDiv = newTotalAnnualDiv / 12
     val multiplier = if (baseShares > 0) String.format("%.1f", totalSimShares.toFloat() / baseShares) else "1.0"
 
-    val totalValuation = currentHolding.shares * currentHolding.price / currentHolding.priceUnit
-    val totalCost = currentHolding.shares * currentHolding.acqPrice / currentHolding.priceUnit
-    val gainLoss = totalValuation - totalCost
-    val gainLossPct = if (totalCost > 0) String.format("%.2f", (gainLoss / totalCost) * 100) else "0.00"
-
-    val cutImpact = (baseShares * dps / currentHolding.priceUnit / 2).toLong()
+    val cutImpact = (currentHolding.getEffectiveAnnualDividend(taxRateMode) / 2).toLong()
 
     val totalPortfolioDiv = holdings.sumOf { it.getEffectiveAnnualDividend(taxRateMode).toLong() }
     val currentStockAnnualDiv = currentHolding.getEffectiveAnnualDividend(taxRateMode).toLong()
@@ -126,9 +143,12 @@ fun StockDetailScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
-                Text("財務カードと過去の配当推移には参考値が含まれます。診断文章は取得できたAPI指標を用い、未取得の項目は欠損として表示します。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                Text("財務・配当履歴：金融庁EDINET / JPX TDnet、IRBANK加工。分割調整済み実績を使用し、未取得項目は補完しません。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
             }
 
+            item {
+                Text("決算期：${financial?.period?.ifBlank { "未取得" } ?: "未取得"}${if (financialError) "（更新失敗・保存済みデータを表示）" else ""}", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+            }
             // 1. Hero Stock Header Card
             item {
                 Card(
@@ -227,14 +247,14 @@ fun StockDetailScreen(
                         ) {
                             Column {
                                 Text(
-                                    "現在株価 リアルタイム",
+                                    "株価（最新取得値）",
                                     color = OnSurfaceVariant,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    "${currentHolding.currency}${currencyFormat.format(currentHolding.price.toLong())}",
+                                    "${currentHolding.currency}${currencyFormat.format(currentHolding.price)}",
                                     fontSize = AppTextSize.largeMetric,
                                     fontWeight = FontWeight.Black,
                                     color = OnSurface,
@@ -269,8 +289,8 @@ fun StockDetailScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
-                                    Text("1株配当 (DPS)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    Text("¥${currentHolding.dps}", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.caption, fontFamily = FontFamily.Monospace)
+                                    Text(if (currentHolding.category == com.kurogane.dividend.model.Category.FUND) "1万口分配金" else "1株配当 (DPS)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    Text("${currentHolding.currency}${currentHolding.dps}", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.caption, fontFamily = FontFamily.Monospace)
                                     Text("年額", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
@@ -281,7 +301,7 @@ fun StockDetailScreen(
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text("現在利回り", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    Text("${currentHolding.yieldRate}%", fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.caption, fontFamily = FontFamily.Monospace)
+                                    Text(String.format(Locale.JAPAN, "%.2f%%", currentHolding.liveYield), fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.caption, fontFamily = FontFamily.Monospace)
                                     Text("税引前", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
@@ -292,8 +312,8 @@ fun StockDetailScreen(
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text("取得利回り", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    Text("${currentHolding.yoc}% YOC", fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.caption, fontFamily = FontFamily.Monospace)
-                                    Text("単価¥${currentHolding.acqPrice.toInt()}", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    Text(String.format(Locale.JAPAN, "%.2f%% YOC", currentHolding.liveYoc), fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.caption, fontFamily = FontFamily.Monospace)
+                                    Text("単価${currentHolding.currency}${currentHolding.acqPrice}", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
                         }
@@ -355,6 +375,7 @@ fun StockDetailScreen(
                                         Text("配当 ${multiplier}倍 UP", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = OnPrimary, fontSize = AppTextSize.dense, fontWeight = FontWeight.Black)
                                     }
                                 }
+                                Text("${if (taxRateMode == "net") "税引後概算・現在の非課税割合で試算" else "税引前の目安"}${if (currentHolding.currency == "$") if (exchangeRate == null) "／為替未取得：円換算は未計算" else "／為替 ${exchangeRate!!.date}" else ""}", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -363,8 +384,8 @@ fun StockDetailScreen(
                                     Surface(shape = RoundedCornerShape(10.dp), color = BackgroundDark, modifier = Modifier.weight(1f)) {
                                         Column(modifier = Modifier.padding(8.dp)) {
                                             Text("現在保有 (${baseShares}株)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                            Text("¥${currencyFormat.format((baseShares * dps).toLong())}/年", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body, fontFamily = FontFamily.Monospace)
-                                            Text("月 ¥${currencyFormat.format((baseShares * dps / 12).toLong())} / 月", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                            Text("¥${currencyFormat.format(currentStockAnnualDiv)}/年", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body, fontFamily = FontFamily.Monospace)
+                                            Text("月 ¥${currencyFormat.format(currentStockAnnualDiv / 12)} / 月", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                         }
                                     }
                                     Surface(shape = RoundedCornerShape(10.dp), color = PrimaryEmerald.copy(alpha = 0.1f), border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.4f)), modifier = Modifier.weight(1f)) {
@@ -492,10 +513,10 @@ fun StockDetailScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.BarChart, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("1株配当金の推移 (4期)", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body)
+                                Text("1株配当金の実績（最大4期）", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body)
                             }
                             Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.15f)) {
-                                Text("連続増配", modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(if (profile.consecutiveYears > 0) "連続増配" else "配当実績", modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -513,23 +534,13 @@ fun StockDetailScreen(
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.Bottom
                             ) {
-                                val gRate = if (profile.growthRate > 0) profile.growthRate else 5.0
-                                val p3 = Math.max(1, (dps / Math.pow(1.0 + gRate / 100.0, 3.0)).toInt())
-                                val p2 = Math.max(1, (dps / Math.pow(1.0 + gRate / 100.0, 2.0)).toInt())
-                                val p1 = Math.max(1, (dps / Math.pow(1.0 + gRate / 100.0, 1.0)).toInt())
-                                val p0 = dps.toInt()
-                                val fourYrGrowth = if (p3 > 0) String.format("%.1f", ((p0 - p3).toDouble() / p3) * 100) else "0.0"
-                                val maxDps = Math.max(p0, 1).toFloat()
+                                val history = financial?.dividends.orEmpty().takeLast(4)
+                                val maxDps = history.maxOfOrNull { it.dps }?.takeIf { it > 0 } ?: 1.0
                                 val prefix = currentHolding.currency
-
-                                val bars = listOf(
-                                    Triple("22.3期", "$prefix$p3", (p3.toFloat() / maxDps) * 0.85f),
-                                    Triple("23.3期", "$prefix$p2", (p2.toFloat() / maxDps) * 0.85f),
-                                    Triple("24.3期", "$prefix$p1", (p1.toFloat() / maxDps) * 0.85f),
-                                    Triple("25.3予", "$prefix$p0", 0.95f)
-                                )
+                                val bars = history.map { point -> Triple("${point.year}期", "$prefix${point.dps.financialText()}", (point.dps / maxDps * 0.95).toFloat()) }
+                                if (bars.isEmpty()) Text("配当履歴未取得", color = OnSurfaceVariant)
                                 bars.forEach { (term, dpsVal, ratio) ->
-                                    val isProjected = term == "25.3予"
+                                    val isProjected = term == bars.lastOrNull()?.first
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         modifier = Modifier.weight(1f)
@@ -558,13 +569,11 @@ fun StockDetailScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            val gRate = if (profile.growthRate > 0) profile.growthRate else 5.0
-                            val p3 = Math.max(1, (dps / Math.pow(1.0 + gRate / 100.0, 3.0)).toInt())
-                            val p0 = dps.toInt()
-                            val fourYrGrowth = if (p3 > 0) String.format("%.1f", ((p0 - p3).toDouble() / p3) * 100) else "0.0"
-
-                            Text("4期増配率: +${fourYrGrowth}%", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text("配当性向: 約${profile.payoutRatio}%", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            val recent = financial?.dividends.orEmpty().takeLast(4)
+                            val growth = if (recent.size == 4 && recent.first().dps > 0 && recent.last().year - recent.first().year == 3)
+                                ((recent.last().dps / recent.first().dps) - 1) * 100 else Double.NaN
+                            Text("4期増配率: ${growth.financialText(1, "%")}", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text("配当性向: 約${profile.payoutRatio.financialText(1, "%")}", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -617,7 +626,7 @@ fun StockDetailScreen(
                                         Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text("${profile.healthGrade} ${profile.payoutRatio}%", color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
+                                    Text("${profile.healthGrade} ${profile.payoutRatio.financialText(1, "%")}", color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
                                     Text(profile.healthEvaluation, color = PrimaryEmerald, fontSize = AppTextSize.dense)
                                 }
                             }
@@ -670,8 +679,8 @@ fun StockDetailScreen(
                                         Icon(Icons.Default.MilitaryTech, contentDescription = null, tint = SecondaryIndigo, modifier = Modifier.size(14.dp))
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(if (profile.consecutiveYears > 0) "${profile.consecutiveYears}期連続 +${profile.growthRate}%" else "安定配当 +${profile.growthRate}%", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
-                                    Text("非減配${profile.noCutYears}年", color = PrimaryEmerald, fontSize = AppTextSize.dense)
+                                    Text(if (profile.consecutiveYears > 0) "${if (profile.consecutiveYears >= 0) "${profile.consecutiveYears}期" else "未取得"}連続 +${profile.growthRate.financialText(1, "%")}" else "増配率 ${profile.growthRate.financialText(1, "%")}", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
+                                    Text("非減配${profile.noCutYears.financialYears()}", color = PrimaryEmerald, fontSize = AppTextSize.dense)
                                 }
                             }
 
@@ -1045,8 +1054,7 @@ fun StockDetailScreen(
 
                                                 Spacer(modifier = Modifier.height(8.dp))
                                                 val yld = currentHolding.yieldRate
-                                                val rangeProgress = ((yld - profile.yieldRangeMin) / (profile.yieldRangeMax - profile.yieldRangeMin))
-                                                    .coerceIn(0.08, 1.0).toFloat()
+                                                val rangeProgress = ((yld - profile.yieldRangeMin) / (profile.yieldRangeMax - profile.yieldRangeMin)).takeIf { it.isFinite() }?.coerceIn(0.0, 1.0)?.toFloat() ?: 0f
                                                 Box(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
@@ -1071,9 +1079,9 @@ fun StockDetailScreen(
                                                     modifier = Modifier.fillMaxWidth(),
                                                     horizontalArrangement = Arrangement.SpaceBetween
                                                 ) {
-                                                    Text("安値圏 ${String.format(Locale.US, "%.2f", profile.yieldRangeMin)}%", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                                    Text("5年平均 ${String.format(Locale.US, "%.2f", profile.yieldRangeAvg)}%", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                                    Text("高値圏 ${String.format(Locale.US, "%.2f", profile.yieldRangeMax)}%", color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
+                                                    Text("期末最小 ${profile.yieldRangeMin.financialText(2)}%", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                                    Text("取得期平均 ${profile.yieldRangeAvg.financialText(2)}%", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                                    Text("期末最大 ${profile.yieldRangeMax.financialText(2)}%", color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
                                                 }
                                             }
                                         }
@@ -1155,7 +1163,7 @@ fun StockDetailScreen(
                                                     border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.35f))
                                                 ) {
                                                     Text(
-                                                        "↗ 割安度スコア ${profile.valuationScore} / 100（検討圏）",
+                                                        "↗ 割安度スコア ${if (profile.valuationScore >= 0) "${profile.valuationScore} / 100" else "未判定"}",
                                                         color = PrimaryEmerald,
                                                         fontSize = AppTextSize.dense,
                                                         fontWeight = FontWeight.Bold,
@@ -1196,7 +1204,7 @@ fun StockDetailScreen(
                                                 }
                                                 Spacer(modifier = Modifier.height(6.dp))
                                                 Text(
-                                                    "絶好の押し目買場判定： ${profile.buySignalComment}",
+                                                    profile.buySignalComment,
                                                     color = OnSurface.copy(alpha = 0.95f),
                                                     fontSize = AppTextSize.dense,
                                                     lineHeight = 16.sp
@@ -1310,7 +1318,7 @@ fun StockDetailScreen(
                                                         }
                                                     }
                                                     Text(
-                                                        "${profile.payoutRatio}%",
+                                                        "${profile.payoutRatio.financialText(1, "%")}",
                                                         color = PrimaryEmerald,
                                                         fontWeight = FontWeight.ExtraBold,
                                                         fontSize = AppTextSize.metric,
@@ -1319,7 +1327,7 @@ fun StockDetailScreen(
                                                 }
 
                                                 Spacer(modifier = Modifier.height(8.dp))
-                                                val progress = (profile.payoutRatio / 100.0).coerceIn(0.05, 1.0).toFloat()
+                                                val progress = (profile.payoutRatio / 100.0).takeIf { it.isFinite() }?.coerceIn(0.0, 1.0)?.toFloat() ?: 0f
                                                 Box(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
@@ -1366,7 +1374,7 @@ fun StockDetailScreen(
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     Text("自己資本比率", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text("${profile.equityRatio}%", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = FontFamily.Monospace)
+                                                    Text("${profile.equityRatio.financialText(1, "%")}", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = FontFamily.Monospace)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(profile.equityRatioSub, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
                                                 }
@@ -1419,7 +1427,7 @@ fun StockDetailScreen(
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     Text("営業利益率", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text("${profile.operatingMargin}%", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = FontFamily.Monospace)
+                                                    Text("${profile.operatingMargin.financialText(1, "%")}", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = FontFamily.Monospace)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text("稼ぐ力・本業収益性", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                 }
@@ -1488,7 +1496,7 @@ fun StockDetailScreen(
                                                         border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
                                                     ) {
                                                         Text(
-                                                            "健全性スコア: ${profile.healthScore}/100",
+                                                            "健全性スコア: ${if (profile.healthScore >= 0) "${profile.healthScore}/100" else "未判定"}",
                                                             color = PrimaryEmerald,
                                                             fontSize = AppTextSize.dense,
                                                             fontWeight = FontWeight.Bold,
@@ -1538,7 +1546,7 @@ fun StockDetailScreen(
                                         ) {
                                             Box(Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmerald))
                                             Text(
-                                                if (profile.consecutiveYears > 0) "${profile.consecutiveYears}期連続増配" else "安定配当",
+                                                if (profile.consecutiveYears > 0) "${if (profile.consecutiveYears >= 0) "${profile.consecutiveYears}期" else "未取得"}連続増配" else if (profile.consecutiveYears == 0) "連続増配なし" else "増配履歴未取得",
                                                 color = PrimaryEmerald,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = AppTextSize.dense
@@ -1570,8 +1578,8 @@ fun StockDetailScreen(
                                                 Column(Modifier.padding(12.dp)) {
                                                     Text("連続増配実績", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                     Spacer(Modifier.height(4.dp))
-                                                    Text("${profile.consecutiveYears}期", color = PrimaryEmerald, fontWeight = FontWeight.ExtraBold, fontSize = AppTextSize.metric, fontFamily = FontFamily.Monospace)
-                                                    Text("年平均増配率 +${profile.growthRate}%", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                                    Text("${if (profile.consecutiveYears >= 0) "${profile.consecutiveYears}期" else "未取得"}", color = PrimaryEmerald, fontWeight = FontWeight.ExtraBold, fontSize = AppTextSize.metric, fontFamily = FontFamily.Monospace)
+                                                    Text("年平均増配率 +${profile.growthRate.financialText(1, "%")}", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                                 }
                                             }
                                             Surface(
@@ -1583,7 +1591,7 @@ fun StockDetailScreen(
                                                 Column(Modifier.padding(12.dp)) {
                                                     Text("非減配年数", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                     Spacer(Modifier.height(4.dp))
-                                                    Text("${profile.noCutYears}年", color = OnSurface, fontWeight = FontWeight.ExtraBold, fontSize = AppTextSize.metric, fontFamily = FontFamily.Monospace)
+                                                    Text("${profile.noCutYears.financialYears()}", color = OnSurface, fontWeight = FontWeight.ExtraBold, fontSize = AppTextSize.metric, fontFamily = FontFamily.Monospace)
                                                     Text("減配せず配当を維持", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                 }
                                             }
@@ -1610,7 +1618,7 @@ fun StockDetailScreen(
                                                     border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.35f))
                                                 ) {
                                                     Text(
-                                                        if (profile.consecutiveYears > 0) "${profile.consecutiveYears}期連続" else "安定配当",
+                                                        if (profile.consecutiveYears > 0) "${if (profile.consecutiveYears >= 0) "${profile.consecutiveYears}期" else "未取得"}連続" else if (profile.consecutiveYears == 0) "連続増配なし" else "増配履歴未取得",
                                                         color = PrimaryEmerald,
                                                         fontSize = AppTextSize.dense,
                                                         fontWeight = FontWeight.Bold,
@@ -1633,7 +1641,7 @@ fun StockDetailScreen(
                                                 ) {
                                                     Icon(Icons.Default.AutoAwesome, null, tint = PrimaryEmerald, modifier = Modifier.size(15.dp))
                                                     Text(
-                                                        if (profile.consecutiveYears > 0) "${profile.consecutiveYears}期連続増配の実績" else "安定配当の実績",
+                                                        if (profile.consecutiveYears > 0) "${if (profile.consecutiveYears >= 0) "${profile.consecutiveYears}期" else "未取得"}連続増配の実績" else "配当実績を確認",
                                                         color = PrimaryEmerald,
                                                         fontWeight = FontWeight.Bold,
                                                         fontSize = AppTextSize.dense
@@ -1641,7 +1649,7 @@ fun StockDetailScreen(
                                                 }
                                                 Spacer(Modifier.height(6.dp))
                                                 Text(
-                                                    "${profile.noCutYears}年間減配がなく、年平均増配率は+${profile.growthRate}%です。過去の配当実績をもとに、増配の継続性と減配への耐性を確認できます。",
+                                                    "取得履歴での非減配期間：${profile.noCutYears.financialYears()}。直近最大5期の年平均増配率：${profile.growthRate.financialText(1, "%")}。履歴が不足する項目は未取得です。",
                                                     color = OnSurface.copy(alpha = 0.95f),
                                                     fontSize = AppTextSize.dense,
                                                     lineHeight = 16.sp
@@ -1811,7 +1819,7 @@ private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative
                 lineHeight = 15.sp
             )
             Text(
-                "Cloudflareの診断値を優先し、未取得の指標は端末内プロフィールの参考値を使います。FCF値がない場合は未評価です。",
+                "市場指標はCloudflare API、財務指標は取得した決算実績を使用します。未取得の値は未評価です。",
                 color = OnSurfaceVariant,
                 fontSize = AppTextSize.dense,
                 lineHeight = 14.sp

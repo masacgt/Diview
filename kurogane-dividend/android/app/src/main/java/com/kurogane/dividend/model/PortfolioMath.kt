@@ -19,7 +19,7 @@ object PortfolioMath {
         code.none { it.isISOControl() || it == '/' || it == '?' || it == '#' }
 
     fun isTaxFree(account: String): Boolean = account.uppercase(Locale.ROOT).contains("NISA") ||
-        account.contains("非課税")
+        account.contains("非課税") || account.equals("iDeCo", ignoreCase = true)
 
     fun yieldPercent(dividend: Double, price: Double): Double =
         if (validMoney(dividend) && validMoney(price) && price > 0.0) {
@@ -56,10 +56,12 @@ object PortfolioMath {
     fun Holding.refreshPayout(): Holding {
         val months = dividendMonths.filter { it in 1..12 }.distinct()
         val payout = shares * dps / priceUnit / months.size.coerceAtLeast(1)
+        val currentMonth = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).monthValue
+        val nextMonth = months.firstOrNull { it >= currentMonth } ?: months.firstOrNull()
         val amount = "$currency${java.text.NumberFormat.getNumberInstance(Locale.JAPAN).format(payout)}"
         return copy(
             yieldRate = liveYield, yoc = liveYoc, nextPayoutAmount = amount,
-            nextPayoutTiming = months.firstOrNull()?.let { "次回: ${it}月 ($amount)" } ?: "配当月未取得"
+            nextPayoutTiming = nextMonth?.let { "次回: ${it}月 ($amount)" } ?: "配当月未取得"
         )
     }
 }
