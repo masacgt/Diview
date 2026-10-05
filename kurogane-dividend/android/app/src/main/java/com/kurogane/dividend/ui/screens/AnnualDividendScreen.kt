@@ -274,7 +274,7 @@ fun AnnualDividendScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     AnnualDividendTab(
-                        label = "配当推移",
+                        label = "配当分析",
                         icon = Icons.Default.TrendingUp,
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
