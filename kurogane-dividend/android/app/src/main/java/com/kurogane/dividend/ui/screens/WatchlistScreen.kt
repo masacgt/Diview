@@ -107,17 +107,6 @@ fun WatchlistScreen(
 
     val heldCount = watchlist.filter { stock -> holdings.any { it.code == stock.code } }.size
 
-    val totalTargetInvestment = watchlist.sumOf { stock ->
-        val shares = stock.defaultShares
-        val rate = stock.currencyFactor
-        val targetPrice = if (stock.targetYield > 0.0) stock.dps / (stock.targetYield / 100.0) else stock.price
-        targetPrice * shares * rate
-    }
-
-    val targetAverageYield = if (totalTargetInvestment > 0.0) {
-        (potentialDiv / totalTargetInvestment) * 100.0
-    } else 0.0
-
     var filterState by remember { mutableStateOf("all") } // "all", "jp", "us", "ready"
     var showSortBottomSheet by remember { mutableStateOf(false) }
     var sortCriteria by remember { mutableStateOf("ach") } // "ach", "yield", "price", "code"
@@ -325,17 +314,6 @@ fun WatchlistScreen(
                                 )
                             )
                         }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Text(
-                            text = "各1単元（日本株100株 / 米国株1株）を現在の目標買場で揃えた場合、初期投資概算 ¥${currencyFormat.format(totalTargetInvestment.toLong())} で年間 +¥${currencyFormat.format(potentialDiv.toLong())}（平均利回り ${String.format("%.2f", targetAverageYield)}%）の不労所得基盤が完成します。",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = OnSurfaceVariant,
-                                fontSize = AppTextSize.dense,
-                                lineHeight = 16.sp
-                            )
-                        )
 
                         Spacer(modifier = Modifier.height(14.dp))
 
