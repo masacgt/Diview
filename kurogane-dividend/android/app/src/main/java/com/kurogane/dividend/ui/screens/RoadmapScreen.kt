@@ -37,7 +37,8 @@ import java.util.Locale
 @Composable
 fun RoadmapScreen(viewModel: DividendViewModel) {
     var openStep by remember { mutableStateOf<Int?>(null) }
-    var selectedStageFilter by remember { mutableIntStateOf(1) } // 0: All, 1: LV.1, 2: LV.2, 3: LV.3
+    var selectedStageFilter by remember { mutableIntStateOf(viewModel.roadmapStageFilter) } // 0: All, 1: LV.1, 2: LV.2, 3: LV.3
+    val hasSavedScrollPosition = viewModel.roadmapScrollIndex > 0 || viewModel.roadmapScrollOffset > 0
 
     // Bottom Sheet State for multi-account allocation modal
     var showBottomSheet by remember { mutableStateOf(false) }
@@ -57,6 +58,9 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                 viewModel.roadmapScrollIndex = index
                 viewModel.roadmapScrollOffset = offset
             }
+    }
+    LaunchedEffect(selectedStageFilter) {
+        viewModel.roadmapStageFilter = selectedStageFilter
     }
 
     // 1. Collect live native holdings state
@@ -132,18 +136,10 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
         else -> 1
     }
     val activeStage = ((activeStep.step - 1) / 10) + 1
-    val activeStageFirstStep = (activeStage - 1) * 10 + 1
-    val activeStepListIndex = 3 + activeStep.step - activeStageFirstStep
 
     LaunchedEffect(activeStep.step) {
-        selectedStageFilter = activeStage
+        if (!hasSavedScrollPosition) selectedStageFilter = activeStage
         openStep = activeStep.step
-    }
-
-    LaunchedEffect(activeStep.step, selectedStageFilter) {
-        if (selectedStageFilter == activeStage) {
-            listState.animateScrollToItem(activeStepListIndex)
-        }
     }
 
     val levelOneLabel = if (highestCompletedStep >= 10) "LV.1 制覇" else "LV.1 挑戦中"
