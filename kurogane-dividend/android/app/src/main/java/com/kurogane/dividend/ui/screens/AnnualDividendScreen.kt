@@ -127,14 +127,31 @@ fun AnnualDividendScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = OnSurfaceVariant
                             )
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(PrimaryEmerald.copy(alpha = 0.12f))
-                                    .border(0.5.dp, PrimaryEmerald.copy(alpha = 0.24f), CircleShape)
-                                    .padding(horizontal = 9.dp, vertical = 4.dp)
-                            ) {
-                                Text("税引前", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
+                            Column(horizontalAlignment = Alignment.End) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(PrimaryEmerald.copy(alpha = 0.12f))
+                                        .border(0.5.dp, PrimaryEmerald.copy(alpha = 0.24f), CircleShape)
+                                        .padding(horizontal = 9.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = if (isPrivacyActive) "月換算 ¥•••••" else "月換算 ¥${currencyFormat.format((grossAnnualDividend / 12).roundToLong())}",
+                                        fontSize = AppTextSize.dense,
+                                        fontWeight = FontWeight.Bold,
+                                        color = PrimaryEmerald,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = if (isPrivacyActive) "税引後 ¥•••••" else "税引後 ¥${currencyFormat.format((netAnnualDividend / 12).roundToLong())}",
+                                    fontSize = AppTextSize.dense,
+                                    color = OnSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
                         }
 
@@ -156,14 +173,6 @@ fun AnnualDividendScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("/ 年", color = OnSurfaceVariant, fontSize = AppTextSize.caption, modifier = Modifier.padding(bottom = 4.dp))
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = if (isPrivacyActive) "税引後手取り見込み額: ¥ •••••••" else "税引後手取り見込み額: ¥${currencyFormat.format(netAnnualDividend.toLong())}",
-                            fontSize = AppTextSize.caption,
-                            fontWeight = FontWeight.Medium,
-                            color = OnSurfaceVariant
-                        )
-
                         Spacer(modifier = Modifier.height(16.dp))
                         HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
                         Spacer(modifier = Modifier.height(16.dp))
@@ -181,19 +190,24 @@ fun AnnualDividendScreen(
                                     .border(0.5.dp, BorderColor, RoundedCornerShape(14.dp))
                                     .padding(12.dp)
                             ) {
-                                Text("月換算（税引前）", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = 1, softWrap = false)
+                                Text("取得額配当利回り", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = 1, softWrap = false)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(verticalAlignment = Alignment.Bottom) {
+                                    Text(
+                                        text = if (isPrivacyActive) "•••" else String.format(Locale.JAPAN, "%.2f", yieldOnCost),
+                                        fontSize = AppTextSize.headline,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = PrimaryEmerald,
+                                        fontFamily = FontFamily.Monospace,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text("%", fontSize = AppTextSize.dense, color = OnSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
+                                }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = if (isPrivacyActive) "¥•••••" else "¥${currencyFormat.format((grossAnnualDividend / 12).roundToLong())}",
-                                    fontSize = AppTextSize.headline,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = PrimaryEmerald,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = if (isPrivacyActive) "税引後 約 ¥••••" else "税引後 約 ¥${currencyFormat.format((netAnnualDividend / 12).roundToLong())}",
+                                    text = if (isPrivacyActive) "取得額 ¥••••" else "取得額 ¥${currencyFormat.format(totalCost.toLong())}",
                                     fontSize = AppTextSize.dense,
                                     color = OnSurfaceVariant,
                                     maxLines = 1,
@@ -210,7 +224,7 @@ fun AnnualDividendScreen(
                                     .border(0.5.dp, BorderColor, RoundedCornerShape(14.dp))
                                     .padding(12.dp)
                             ) {
-                                Text("評価額基準利回り", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = 1, softWrap = false)
+                                Text("評価額配当利回り", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = 1, softWrap = false)
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
@@ -225,31 +239,14 @@ fun AnnualDividendScreen(
                                     Spacer(modifier = Modifier.width(2.dp))
                                     Text("%", fontSize = AppTextSize.dense, color = OnSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
                                 }
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = if (isPrivacyActive) "取得額基準 •••%" else "取得額基準 ${String.format(Locale.JAPAN, "%.2f", yieldOnCost)}%",
+                                    text = if (isPrivacyActive) "評価額 ¥••••" else "評価額 ¥${currencyFormat.format(totalAssets.toLong())}",
                                     fontSize = AppTextSize.dense,
                                     color = OnSurfaceVariant,
                                     maxLines = 1,
                                     softWrap = false
                                 )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Column {
-                                    Text(
-                                        text = if (isPrivacyActive) "評価額 ¥••••" else "評価額 ¥${currencyFormat.format(totalAssets.toLong())}",
-                                        fontSize = AppTextSize.caption,
-                                        color = OnSurfaceVariant,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                    Text(
-                                        text = if (isPrivacyActive) "取得額 ¥••••" else "取得額 ¥${currencyFormat.format(totalCost.toLong())}",
-                                        fontSize = AppTextSize.caption,
-                                        color = OnSurfaceVariant,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                }
                             }
                         }
                     }
