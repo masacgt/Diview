@@ -724,12 +724,11 @@ fun StockDetailScreen(
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (selectedStatusTab == "risk") SurfaceContainer else BackgroundDark,
                                 border = BorderStroke(
-                                    if (selectedStatusTab == "risk") 2.dp else 1.dp,
+                                    if (selectedStatusTab == "risk") 1.5.dp else 1.dp,
                                     if (selectedStatusTab == "risk") AccentAmber else BorderColor
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .shadow(if (selectedStatusTab == "risk") 8.dp else 0.dp, RoundedCornerShape(12.dp), spotColor = AccentAmber)
                                     .clickable { selectedStatusTab = "risk" }
                             ) {
                                 Column(modifier = Modifier.padding(10.dp)) {
@@ -746,7 +745,7 @@ fun StockDetailScreen(
 
                         // DETAIL ACCORDION CONTENT MATCHING IMAGE (6).PNG
                         if (selectedStatusTab == "risk") {
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
                             // Header follows the buy-signal detail card format.
                             Row(
@@ -882,9 +881,9 @@ fun StockDetailScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Surface(
-                                            shape = RoundedCornerShape(10.dp),
+                                            shape = RoundedCornerShape(12.dp),
                                             color = SurfaceContainer,
-                                            border = BorderStroke(0.5.dp, BorderColor),
+                                            border = BorderStroke(1.dp, BorderColor),
                                             modifier = Modifier.weight(1f)
                                         ) {
                                             Column(modifier = Modifier.padding(10.dp)) {
@@ -897,9 +896,9 @@ fun StockDetailScreen(
                                         }
 
                                         Surface(
-                                            shape = RoundedCornerShape(10.dp),
+                                            shape = RoundedCornerShape(12.dp),
                                             color = SurfaceContainer,
-                                            border = BorderStroke(0.5.dp, BorderColor),
+                                            border = BorderStroke(1.dp, BorderColor),
                                             modifier = Modifier.weight(1f)
                                         ) {
                                             Column(modifier = Modifier.padding(10.dp)) {
@@ -916,9 +915,9 @@ fun StockDetailScreen(
 
                                     // Rebalance Recommendation Row
                                     Surface(
-                                        shape = RoundedCornerShape(10.dp),
+                                        shape = RoundedCornerShape(12.dp),
                                         color = SurfaceContainer,
-                                        border = BorderStroke(0.5.dp, BorderColor),
+                                        border = BorderStroke(1.dp, BorderColor),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Row(
