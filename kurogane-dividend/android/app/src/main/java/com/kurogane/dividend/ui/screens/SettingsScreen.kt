@@ -1,5 +1,8 @@
 package com.kurogane.dividend.ui.screens
 
+import com.kurogane.dividend.ui.components.AdaptiveRow
+import androidx.compose.ui.res.stringResource
+import com.kurogane.dividend.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.widget.Toast
 import com.kurogane.dividend.security.fragmentActivity
@@ -7,6 +10,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -28,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.*
 import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import kotlin.math.roundToInt
@@ -56,6 +62,7 @@ fun SettingsScreen(
     onNavigateToTerms: () -> Unit = {},
     onNavigateToCsv: () -> Unit = {}
 ) {
+    val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val isOledBlack by viewModel.isOledBlack.collectAsStateWithLifecycle()
     val selectedAccent by viewModel.selectedAccent.collectAsStateWithLifecycle()
@@ -77,11 +84,13 @@ fun SettingsScreen(
         when (action) {
             "price" -> viewModel.setNotificationEnabled(NotificationKind.PRICE, true)
             "dividend" -> viewModel.setNotificationEnabled(NotificationKind.DIVIDEND, true)
-            "test" -> Toast.makeText(context, if (DiviewNotifications(context).test()) "テスト通知を送信しました" else "通知を表示できませんでした。端末の通知設定を確認してください。", Toast.LENGTH_LONG).show()
+            "dividend_change" -> viewModel.setNotificationEnabled(NotificationKind.DIVIDEND_CHANGE, true)
+            "test" -> Toast.makeText(context, if (DiviewNotifications(context).test()) context.getString(R.string.settings_message) else context.getString(R.string.settings_message_2), Toast.LENGTH_LONG).show()
         }
     }
     val exportScope = rememberCoroutineScope()
     var isExporting by remember { mutableStateOf(false) }
+    var isUpdatingFx by remember { mutableStateOf(false) }
     val csvExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) {
             isExporting = true
@@ -90,9 +99,9 @@ fun SettingsScreen(
                 try {
                     val result = runCatchingCancellable { withContext(Dispatchers.IO) {
                         context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(PortfolioExporter.csv(stocks).toByteArray(Charsets.UTF_8)) }
-                            ?: error("保存先を開けませんでした")
+                            ?: error(resources.getString(R.string.settings_label_63))
                     } }
-                    Toast.makeText(context, if (result.isSuccess) "CSVを保存しました" else "CSVを保存できませんでした", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, if (result.isSuccess) context.getString(R.string.settings_message_3) else context.getString(R.string.settings_message_4), Toast.LENGTH_LONG).show()
                 } finally { isExporting = false }
             }
         }
@@ -105,9 +114,9 @@ fun SettingsScreen(
                 try {
                     val result = runCatchingCancellable { withContext(Dispatchers.IO) {
                         context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(PortfolioExporter.json(stocks).toByteArray(Charsets.UTF_8)) }
-                            ?: error("保存先を開けませんでした")
+                            ?: error(resources.getString(R.string.settings_label_63))
                     } }
-                    Toast.makeText(context, if (result.isSuccess) "JSONを保存しました" else "JSONを保存できませんでした", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, if (result.isSuccess) context.getString(R.string.settings_message_5) else context.getString(R.string.settings_message_6), Toast.LENGTH_LONG).show()
                 } finally { isExporting = false }
             }
         }
@@ -124,197 +133,227 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(13.dp)
     ) {
         item {
-            SettingsSection("データ管理＆バックアップ", Icons.Default.Storage) {
+            SettingsSection(stringResource(R.string.settings_text), Icons.Default.Storage) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(SettingsInset).padding(3.dp)) {
-                        Segment("▧  インポート (取込)", dataTab == "import", Modifier.weight(1f)) { dataTab = "import" }
-                        Segment("⇩  エクスポート (保存)", dataTab == "export", Modifier.weight(1f)) { dataTab = "export" }
+                        Segment(stringResource(R.string.settings_label), dataTab == "import", Modifier.weight(1f)) { dataTab = "import" }
+                        Segment(stringResource(R.string.settings_label_2), dataTab == "export", Modifier.weight(1f)) { dataTab = "export" }
                     }
                     if (dataTab == "import") {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Label("対応証券口座フォーマット", 9, SettingsMuted)
-                            Label("◉ 自動フォーマット判定", 8, SettingsMint)
+                        AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Label(stringResource(R.string.settings_label_3), 9, SettingsMuted)
+                            Label(stringResource(R.string.settings_label_4), 8, SettingsMint)
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             listOf("SBI証券", "楽天証券", "マネックス", "松井証券").forEach { broker ->
                                 Column(Modifier.weight(1f).clip(RoundedCornerShape(6.dp)).background(SettingsInset).border(1.dp, SettingsBorder, RoundedCornerShape(6.dp)).padding(vertical = 5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Label(broker, 8, SettingsMint, true)
-                                    Label("CSV読込", 7, SettingsMuted)
+                                    Label(stringResource(R.string.settings_label_5), 7, SettingsMuted)
                                 }
                             }
                         }
                         Column(
-                            Modifier.fillMaxWidth().height(88.dp).clip(RoundedCornerShape(9.dp))
+                            Modifier.fillMaxWidth().heightIn(min = 88.dp).padding(vertical = 8.dp).clip(RoundedCornerShape(9.dp))
                                 .background(SettingsInset).border(1.dp, SettingsMint.copy(alpha = .48f), RoundedCornerShape(9.dp))
                                 .clickable(onClick = onNavigateToCsv),
                             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
                         ) {
                             Icon(Icons.Default.CloudUpload, null, tint = SettingsMint, modifier = Modifier.size(21.dp))
                             Spacer(Modifier.height(3.dp))
-                            Label("CSVファイルを選択またはドロップ", 9, OnSurface, true)
-                            Label(".csv形式 (UTF-8・Shift-JIS自動判定 / 最大10MB)", 7, SettingsMuted)
+                            Label(stringResource(R.string.settings_label_6), 9, OnSurface, true)
+                            Label(stringResource(R.string.settings_label_7), 7, SettingsMuted)
                             Spacer(Modifier.height(4.dp))
-                            Label("▱  ウィザードへ", 8, SettingsMint, true)
+                            Label(stringResource(R.string.settings_label_8), 8, SettingsMint, true)
                         }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Label("◉ 登録中の保有データ", 7, SettingsMuted)
-                            Label("${viewModel.holdings.collectAsStateWithLifecycle().value.size}件", 7, SettingsMint)
+                        AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Label(stringResource(R.string.settings_label_9), 7, SettingsMuted)
+                            Label(stringResource(R.string.asset_management_text_6 , viewModel.holdings.collectAsStateWithLifecycle().value.size), 7, SettingsMint)
                         }
-                        Label("ⓘ  各証券会社CSVのダウンロード手順   保存データ上書き/追加", 7, SettingsMuted)
+                        Label(stringResource(R.string.settings_label_10), 7, SettingsMuted)
                     } else {
-                        Label("登録中の保有株・配当情報・取得単価データを保存します。", 9, SettingsMuted)
+                        Label(stringResource(R.string.settings_label_11), 9, SettingsMuted)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ActionButton("▦  CSV形式で保存", Modifier.weight(1f)) { if (!isExporting) csvExporter.launch("Diview-portfolio.csv") }
-                            ActionButton("{ }  JSONバックアップ", Modifier.weight(1f)) { if (!isExporting) jsonExporter.launch("Diview-portfolio.json") }
+                            ActionButton(stringResource(R.string.settings_label_12), Modifier.weight(1f)) { if (!isExporting) csvExporter.launch("Diview-portfolio.csv") }
+                            ActionButton(stringResource(R.string.settings_label_13), Modifier.weight(1f)) { if (!isExporting) jsonExporter.launch("Diview-portfolio.json") }
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    Label("♢  CSVファイルは端末内でのみ安全に処理され、外部サーバーにアップロードされることはありません。", 7, SettingsMuted)
+                    Label(stringResource(R.string.settings_label_14), 7, SettingsMuted)
                 }
             }
         }
 
         item {
-            SettingsSection("外観・テーマ設定", Icons.Default.Palette) {
+            SettingsSection(stringResource(R.string.settings_text_2), Icons.Default.Palette) {
                 Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Label("カラーテーマ", 9, OnSurface, true)
-                        Label(if (themeMode == "dark") "ダーク適用中" else if (themeMode == "light") "ライト" else "システム連動", 8, SettingsMint)
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Label(stringResource(R.string.settings_label_15), 9, OnSurface, true)
+                        Label(if (themeMode == "dark") resources.getString(R.string.settings_dark_active) else if (themeMode == "light") resources.getString(R.string.settings_label_59) else resources.getString(R.string.settings_label_60), 8, SettingsMint)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        listOf("dark" to "☾  ダーク", "light" to "☼  ライト", "system" to "▣  システム").forEach { (mode, name) ->
+                        listOf("dark" to stringResource(R.string.settings_label_42), "light" to stringResource(R.string.settings_label_43), "system" to stringResource(R.string.settings_label_44)).forEach { (mode, name) ->
                             Segment(name, themeMode == mode, Modifier.weight(1f)) { viewModel.setThemeMode(mode) }
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Label("アクセントカラー", 9, OnSurface, true)
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Label(stringResource(R.string.settings_label_16), 9, OnSurface, true)
                         Label(selectedAccent.replaceFirstChar { it.uppercase() }, 8, SettingsMint)
                     }
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 5.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    AdaptiveRow(Modifier.fillMaxWidth().padding(horizontal = 5.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         accents.forEach { (name, color) ->
-                            Box(Modifier.size(27.dp).clip(CircleShape).background(color).then(if (selectedAccent == name) Modifier.border(2.dp, OnSurface, CircleShape) else Modifier).clickable { viewModel.setSelectedAccent(name) }, contentAlignment = Alignment.Center) {
-                                if (selectedAccent == name) Icon(Icons.Default.Check, null, tint = OnSurface, modifier = Modifier.size(17.dp))
+                            val accentLabel = stringResource(when (name) {
+                                "cyan" -> R.string.accent_cyan
+                                "blue" -> R.string.accent_blue
+                                "amber" -> R.string.accent_amber
+                                "purple" -> R.string.accent_purple
+                                else -> R.string.accent_emerald
+                            })
+                            Box(
+                                Modifier.size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(if (selectedAccent == name) SettingsMint.copy(alpha = .14f) else SettingsCard)
+                                    .border(
+                                        if (selectedAccent == name) 2.dp else 1.dp,
+                                        if (selectedAccent == name) SettingsMint else SettingsMuted.copy(alpha = .75f),
+                                        CircleShape
+                                    )
+                                    .selectable(selectedAccent == name, role = Role.RadioButton, onClick = { viewModel.setSelectedAccent(name) })
+                                    .semantics { contentDescription = accentLabel },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(Modifier.size(25.dp).clip(CircleShape).background(color), contentAlignment = Alignment.Center) {
+                                    if (selectedAccent == name) Icon(Icons.Default.Check, null, tint = OnSurface, modifier = Modifier.size(16.dp))
+                                }
                             }
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle("有機ELダーク (完全ブラック)", "ピクセル発光を最小化し黒色消費電力を抑制", isOledBlack, { viewModel.setIsOledBlack(it) }, tag = "節電")
+                    SettingToggle(stringResource(R.string.settings_text_3), stringResource(R.string.settings_label_45), isOledBlack, { viewModel.setIsOledBlack(it) }, tag = stringResource(R.string.settings_label_46))
                 }
             }
         }
 
         item {
-            SettingsSection("表示・計算カスタマイズ", Icons.Default.Tune) {
+            SettingsSection(stringResource(R.string.settings_text_4), Icons.Default.Tune) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Label("配当利回りの計算基準", 9, OnSurface, true); Label("利回り計算ロジック", 7, SettingsMuted)
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Label(stringResource(R.string.settings_label_17), 9, OnSurface, true); Label(stringResource(R.string.settings_label_18), 7, SettingsMuted)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        BasisChoice("評価額基準", "現在値ベース", calcBasis == "eval", Modifier.weight(1f)) { calcBasis = "eval" }
-                        BasisChoice("取得額基準", "買付単価 (YOC)", calcBasis == "cost", Modifier.weight(1f)) { calcBasis = "cost" }
+                        BasisChoice(stringResource(R.string.settings_text_5), stringResource(R.string.settings_label_47), calcBasis == "eval", Modifier.weight(1f)) { calcBasis = "eval" }
+                        BasisChoice(stringResource(R.string.settings_text_6), stringResource(R.string.settings_label_48), calcBasis == "cost", Modifier.weight(1f)) { calcBasis = "cost" }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle("税金計算設定", "税引後表示 (国内税 20.315% を控除)", taxDeduction, { viewModel.setTaxRateMode(if (it) "net" else "gross") })
+                    SettingToggle(stringResource(R.string.settings_text_7), stringResource(R.string.settings_label_49), taxDeduction, { viewModel.setTaxRateMode(if (it) "net" else "gross") })
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle("米国株 現地源泉徴収控除 (10%)", "税引後表示に適用。NISAも現地税は控除します", usTaxDeduction, viewModel::setUsTaxDeduction)
-                    Label("国内税20.315%は課税部分のみ。外国税額控除・還付・特殊な分配金は含みません。", 7, SettingsMuted)
-                    Label(exchangeRate?.let { "為替：1 USD = ${String.format(java.util.Locale.JAPAN, "%.2f", it.usdJpy)}円（${it.date} / Frankfurter）" } ?: "為替未取得：米ドル資産は円換算合計の対象外", 8, SettingsMuted)
+                    SettingToggle(stringResource(R.string.settings_text_8), stringResource(R.string.settings_label_50), usTaxDeduction, viewModel::setUsTaxDeduction)
+                    Label(stringResource(R.string.settings_label_19), 7, SettingsMuted)
+                    Label(exchangeRate?.let { resources.getString(R.string.settings_label_61, (String.format(java.util.Locale.JAPAN, "%.2f", it.usdJpy)).toString(), (it.date).toString()) } ?: resources.getString(R.string.settings_label_62), 8, SettingsMuted)
                     exchangeRateError?.let { Label(it, 7, SettingsMuted) }
-                    ActionButton("為替を更新", Modifier.fillMaxWidth()) { exportScope.launch { viewModel.refreshExchangeRate() } }
+                    ActionButton(if (isUpdatingFx) stringResource(R.string.fx_loading) else stringResource(R.string.settings_label_20), Modifier.fillMaxWidth(), enabled = !isUpdatingFx) {
+                        exportScope.launch {
+                            isUpdatingFx = true
+                            try { viewModel.refreshExchangeRate() } finally { isUpdatingFx = false }
+                        }
+                    }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label("目標利回り (ロードマップ試算)", 9, OnSurface, true); Label("シミュレーション基準   ${String.format(java.util.Locale.JAPAN, "%.2f", targetYield.toDoubleOrNull() ?: 0.0)}%", 8, SettingsMint) }
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_21), 9, OnSurface, true); Label(stringResource(R.string.settings_label_22 , String.format(java.util.Locale.JAPAN, "%.2f", targetYield.toDoubleOrNull() ?: 0.0)), 8, SettingsMint) }
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        listOf("3.5" to "3.50% (堅実)", "4.0" to "4.00% (標準)", "4.5" to "4.50% (積極)").forEach { (value, label) ->
+                        listOf("3.5" to stringResource(R.string.settings_label_51), "4.0" to stringResource(R.string.settings_label_52), "4.5" to stringResource(R.string.settings_label_53)).forEach { (value, label) ->
                             Segment(label, targetYield == value, Modifier.weight(1f)) { targetYield = value }
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label("構成比「その他」集約閾値", 9, OnSurface, true); Label("$threshold%", 8, SettingsMint) }
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_23), 9, OnSurface, true); Label(stringResource(R.string.settings_1_s , threshold), 8, SettingsMint) }
                     ThresholdSlider(threshold) { threshold = it }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label("3% (詳細)", 7, SettingsMuted); Label("5% (推奨)", 7, SettingsMint); Label("10% (簡易)", 7, SettingsMuted) }
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_24), 7, SettingsMuted); Label(stringResource(R.string.settings_label_25), 7, SettingsMint); Label(stringResource(R.string.settings_label_26), 7, SettingsMuted) }
                 }
             }
         }
 
         item {
-            SettingsSection("通知・リマインダー設定", Icons.Default.Notifications) {
+            SettingsSection(stringResource(R.string.settings_text_9), Icons.Default.Notifications) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingToggle("配当月のリマインダー", "登録した受取月を月1回お知らせ（入金確認ではありません）", notificationSettings.dividendEnabled, {
+                    SettingToggle(stringResource(R.string.settings_text_10), stringResource(R.string.settings_label_54), notificationSettings.dividendEnabled, {
                         if (it) notificationAccess.request("dividend") else viewModel.setNotificationEnabled(NotificationKind.DIVIDEND, false)
                     })
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle("買場シグナル・株価アラート", "通知ONの監視銘柄が目標利回りに到達したときに通知", notificationSettings.priceEnabled, {
+                    SettingToggle(stringResource(R.string.notification_dividend_change_title), stringResource(R.string.notification_dividend_change_summary), notificationSettings.dividendChangeEnabled, {
+                        if (it) notificationAccess.request("dividend_change") else viewModel.setNotificationEnabled(NotificationKind.DIVIDEND_CHANGE, false)
+                    })
+                    HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
+                    SettingToggle(stringResource(R.string.settings_text_11), stringResource(R.string.settings_label_55), notificationSettings.priceEnabled, {
                         if (it) notificationAccess.request("price") else viewModel.setNotificationEnabled(NotificationKind.PRICE, false)
                     })
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column { Label("通知時間帯", 9, OnSurface, true); Label("日本時間・端末の状態により遅れることがあります", 7, SettingsMuted) }
-                        Label("朝 08:30 / 夕 17:30 頃", 8, SettingsMint)
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) { Label(stringResource(R.string.settings_label_27), 9, OnSurface, true); Label(stringResource(R.string.settings_label_28), 7, SettingsMuted) }
+                        Label(stringResource(R.string.settings_label_29), 8, SettingsMint)
                     }
-                    Label("配当月は朝のみ確認します。通知が届くには、アプリ設定と端末の通知許可が必要です。", 7, SettingsMuted)
-                    Label("端末の許可：配当 ${if (notificationAccess.dividendAllowed) "ON" else "OFF"} / 株価 ${if (notificationAccess.priceAllowed) "ON" else "OFF"}", 8, SettingsMuted)
+                    Label(stringResource(R.string.settings_label_30), 7, SettingsMuted)
+                    Label(stringResource(R.string.settings_label_31 , if (notificationAccess.dividendAllowed) "ON" else "OFF", if (notificationAccess.priceAllowed) "ON" else "OFF", if (notificationAccess.dividendChangeAllowed) "ON" else "OFF"), 8, SettingsMuted)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ActionButton("テスト通知", Modifier.weight(1f)) { notificationAccess.request("test") }
-                        ActionButton("端末の通知設定", Modifier.weight(1f)) { notificationAccess.openSettings() }
+                        ActionButton(stringResource(R.string.settings_label_32), Modifier.weight(1f)) { notificationAccess.request("test") }
+                        ActionButton(stringResource(R.string.settings_label_33), Modifier.weight(1f)) { notificationAccess.openSettings() }
                     }
                 }
             }
         }
 
         item {
-            SettingsSection("セキュリティ＆プライバシー", Icons.Default.Shield) {
+            SettingsSection(stringResource(R.string.settings_text_12), Icons.Default.Shield) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingToggle("生体認証 (顔・指紋認証)", "起動時とバックグラウンドからの復帰時に認証", biometricEnabled, { enabled ->
+                    SettingToggle(stringResource(R.string.settings_text_13), stringResource(R.string.settings_label_56), biometricEnabled, { enabled ->
                         val activity = context.fragmentActivity()
                         if (activity is com.kurogane.dividend.MainActivity) activity.authenticatePreference(enabled)
-                        else Toast.makeText(context, "この画面では認証を開始できません", Toast.LENGTH_LONG).show()
+                        else Toast.makeText(context, context.getString(R.string.settings_message_7), Toast.LENGTH_LONG).show()
                     })
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle("起動時の金額伏字マスク", "電車内など外出時の画面閲覧用", maskAtStartup, { viewModel.setMaskAtStartup(it) }, tag = "覗き見防止")
+                    SettingToggle(stringResource(R.string.settings_text_14), stringResource(R.string.settings_label_57), maskAtStartup, { viewModel.setMaskAtStartup(it) }, tag = stringResource(R.string.settings_label_58))
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column { Label("ローカルデータ完全消去", 9, ErrorRed, true); Label("端末内の保有・設定データをすべて削除", 7, SettingsMuted) }
-                        Box(Modifier.clip(RoundedCornerShape(5.dp)).background(Color(0xFF421D2A)).border(1.dp, Color(0xFF8D3341), RoundedCornerShape(5.dp)).clickable { confirmReset = true }.padding(horizontal = 9.dp, vertical = 5.dp)) { Label("初期化", 8, ErrorRed, true) }
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) { Label(stringResource(R.string.settings_label_34), 9, ErrorRed, true); Label(stringResource(R.string.settings_label_35), 7, SettingsMuted) }
+                        Box(Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(5.dp)).background(ErrorRed.copy(alpha = .10f)).border(1.dp, ErrorRed.copy(alpha = .45f), RoundedCornerShape(5.dp)).clickable(role = Role.Button) { confirmReset = true }.padding(horizontal = 9.dp, vertical = 5.dp)) { Label(stringResource(R.string.settings_label_36), 8, ErrorRed, true) }
                     }
                 }
             }
         }
 
         item {
-            SettingsSection("アプリ情報・サポート", Icons.Default.Info) {
+            SettingsSection(stringResource(R.string.settings_text_15), Icons.Default.Info) {
                 Column {
-                    SupportRow("お問い合わせ・フィードバック", onNavigateToFeedback)
+                    SupportRow(stringResource(R.string.settings_label_37), onNavigateToFeedback)
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SupportRow("利用規約＆プライバシーポリシー", onNavigateToTerms)
+                    SupportRow(stringResource(R.string.settings_label_38), onNavigateToTerms)
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SupportRow("アプリをレビューで応援", {})
+                    SupportRow(stringResource(R.string.settings_label_39), {})
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), horizontalArrangement = Arrangement.SpaceBetween) { Label("バージョン", 8, SettingsMuted); Label("v${com.kurogane.dividend.BuildConfig.VERSION_NAME} (Build ${com.kurogane.dividend.BuildConfig.VERSION_CODE})", 8, OnSurface, true) }
+                    AdaptiveRow(Modifier.fillMaxWidth().padding(vertical = 9.dp), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_40), 8, SettingsMuted); Label(stringResource(R.string.settings_v_1_s_build_2_s , com.kurogane.dividend.BuildConfig.VERSION_NAME, com.kurogane.dividend.BuildConfig.VERSION_CODE), 8, OnSurface, true) }
                 }
             }
         }
 
         item {
             Column(Modifier.fillMaxWidth().padding(top = 3.dp, bottom = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Label("♙  金融データは端末内暗号化保存されています", 7, SettingsMint)
-                Spacer(Modifier.height(3.dp)); Label("© 2025 Diview", 6, SettingsMuted)
+                Label(stringResource(R.string.settings_label_41), 7, SettingsMint)
+                Spacer(Modifier.height(3.dp)); Label(stringResource(R.string.settings_2025_diview), 6, SettingsMuted)
             }
         }
     }
 
     if (confirmReset) AlertDialog(
         onDismissRequest = { confirmReset = false },
-        title = { Text("データを初期化", color = OnSurface) },
-        text = { Text("端末内の保有・設定データを初期化しますか？", color = SettingsMuted) },
+        title = { Text(stringResource(R.string.settings_text_16), color = OnSurface) },
+        text = { Text(stringResource(R.string.settings_text_17), color = SettingsMuted) },
         confirmButton = { TextButton(onClick = {
             confirmReset = false
             exportScope.launch {
                 val result = runCatchingCancellable { viewModel.resetLocalData() }
-                Toast.makeText(context, if (result.isSuccess) "データを初期化しました" else "初期化できませんでした", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, if (result.isSuccess) context.getString(R.string.settings_message_8) else context.getString(R.string.settings_message_9), Toast.LENGTH_LONG).show()
             }
-        }) { Text("初期化", color = ErrorRed) } },
-        dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("キャンセル", color = SettingsMuted) } },
+        }) { Text(stringResource(R.string.settings_label_36), color = ErrorRed) } },
+        dismissButton = { TextButton(onClick = { confirmReset = false }) { Text(stringResource(R.string.cancel), color = SettingsMuted) } },
         containerColor = SettingsCard
     )
 }
@@ -337,14 +376,31 @@ private fun Label(text: String, size: Int, color: Color, bold: Boolean = false) 
 
 @Composable
 private fun Segment(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(modifier.clip(RoundedCornerShape(6.dp)).then(if (selected) Modifier.background(SettingsMint.copy(alpha = .16f)).border(.8.dp, SettingsMint, RoundedCornerShape(6.dp)) else Modifier).clickable(onClick = onClick).padding(horizontal = 3.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
-        Text(text, color = if (selected) SettingsMint else SettingsMuted, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, lineHeight = 14.sp)
+    val shape = RoundedCornerShape(8.dp)
+    Row(
+        modifier.heightIn(min = 48.dp)
+            .clip(shape)
+            .background(if (selected) SettingsMint.copy(alpha = .16f) else SettingsCard)
+            .border(1.dp, if (selected) SettingsMint else SettingsMuted.copy(alpha = .75f), shape)
+            .selectable(selected, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 5.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            if (selected) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+            contentDescription = null,
+            tint = if (selected) SettingsMint else SettingsMuted,
+            modifier = Modifier.size(15.dp)
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(text, color = if (selected) SettingsMint else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, lineHeight = 14.sp)
     }
 }
 
 @Composable
 private fun SettingToggle(title: String, detail: String, checked: Boolean, onChanged: (Boolean) -> Unit, tag: String? = null, enabled: Boolean = true) {
-    Row(Modifier.fillMaxWidth().clickable(enabled = enabled) { onChanged(!checked) }, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    AdaptiveRow(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onChanged), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Label(title, 8, OnSurface, true)
@@ -361,8 +417,8 @@ private fun SettingToggle(title: String, detail: String, checked: Boolean, onCha
 
 @Composable
 private fun BasisChoice(title: String, subtitle: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Column(modifier.clip(RoundedCornerShape(7.dp)).background(if (selected) SettingsMint.copy(alpha = 0.14f) else SettingsInset).border(1.dp, if (selected) SettingsMint else SettingsBorder, RoundedCornerShape(7.dp)).clickable(onClick = onClick).padding(7.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    Column(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(7.dp)).background(if (selected) SettingsMint.copy(alpha = 0.14f) else SettingsInset).border(1.dp, if (selected) SettingsMint else SettingsBorder, RoundedCornerShape(7.dp)).selectable(selected, role = Role.RadioButton, onClick = onClick).padding(7.dp)) {
+        AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Label(title, 8, if (selected) OnSurface else SettingsMuted, true)
             Icon(if (selected) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked, null, tint = if (selected) SettingsMint else SettingsMuted, modifier = Modifier.size(12.dp))
         }
@@ -371,13 +427,13 @@ private fun BasisChoice(title: String, subtitle: String, selected: Boolean, modi
 }
 
 @Composable
-private fun ActionButton(label: String, modifier: Modifier, onClick: () -> Unit) {
-    Box(modifier.height(34.dp).clip(RoundedCornerShape(7.dp)).background(SettingsInset).border(1.dp, SettingsBorder, RoundedCornerShape(7.dp)).clickable(onClick = onClick), contentAlignment = Alignment.Center) { Label(label, 8, OnSurface, true) }
+private fun ActionButton(label: String, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    Box(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(7.dp)).background(SettingsInset).border(1.dp, SettingsBorder, RoundedCornerShape(7.dp)).clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(6.dp), contentAlignment = Alignment.Center) { Label(label, 8, OnSurface, true) }
 }
 
 @Composable
 private fun SupportRow(label: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 9.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    AdaptiveRow(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onClick).padding(vertical = 9.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Label(label, 8, OnSurface, true)
         Icon(Icons.Default.ChevronRight, null, tint = SettingsMuted, modifier = Modifier.size(14.dp))
     }
@@ -385,12 +441,20 @@ private fun SupportRow(label: String, onClick: () -> Unit) {
 
 @Composable
 private fun ThresholdSlider(value: Int, onValueChange: (Int) -> Unit) {
+    val changeValue by rememberUpdatedState(onValueChange)
+    val label = stringResource(R.string.settings_label_23)
     val trackColor = SurfaceContainerHighest
     val accentColor = PrimaryEmeraldContainer
-    Canvas(Modifier.fillMaxWidth().height(22.dp).pointerInput(Unit) {
-        detectTapGestures { onValueChange((3 + (it.x / size.width * 7).roundToInt()).coerceIn(3, 10)) }
+    Canvas(Modifier.fillMaxWidth().height(48.dp).semantics {
+        contentDescription = label
+        progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), 3f..10f, 6)
+        setProgress { requested ->
+            if (!requested.isFinite()) false else { changeValue(requested.roundToInt().coerceIn(3, 10)); true }
+        }
     }.pointerInput(Unit) {
-        detectDragGestures { change, _ -> change.consume(); onValueChange((3 + (change.position.x / size.width * 7).roundToInt()).coerceIn(3, 10)) }
+        detectTapGestures { changeValue((3 + (it.x / size.width * 7).roundToInt()).coerceIn(3, 10)) }
+    }.pointerInput(Unit) {
+        detectDragGestures { change, _ -> change.consume(); changeValue((3 + (change.position.x / size.width * 7).roundToInt()).coerceIn(3, 10)) }
     }) {
         val y = size.height / 2f
         val x = (value - 3) / 7f * size.width

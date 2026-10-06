@@ -41,8 +41,13 @@ class NotificationDeliveryEngine(
         DiviewNotifications(context).run { createChannels(); canPost(DiviewNotifications.channel(kind)) }
     },
     private val post: (NotificationKind, String, String) -> Boolean = { kind, title, text ->
-        DiviewNotifications(context).post(if (kind == NotificationKind.PRICE) DiviewNotifications.PRICE_ID else DiviewNotifications.DIVIDEND_ID,
-            DiviewNotifications.channel(kind), title, text, if (kind == NotificationKind.PRICE) "watchlist" else "annual")
+        val id = when (kind) {
+            NotificationKind.PRICE -> DiviewNotifications.PRICE_ID
+            NotificationKind.DIVIDEND -> DiviewNotifications.DIVIDEND_ID
+            NotificationKind.DIVIDEND_CHANGE -> DiviewNotifications.DIVIDEND_CHANGE_ID
+        }
+        DiviewNotifications(context).post(id, DiviewNotifications.channel(kind), title, text,
+            if (kind == NotificationKind.PRICE) "watchlist" else "annual")
     }
 ) {
     private val store = NotificationStore(context)
@@ -71,7 +76,7 @@ class NotificationDeliveryEngine(
                         if (code in sent) state.copy(notifiedDate = date.toString()) else state
                     })
                 } }
-            } else {
+            } else if (kind == NotificationKind.DIVIDEND) {
                 val date = now().withZoneSameInstant(NotificationPolicy.japanZone).toLocalDate()
                 val month = YearMonth.from(date).toString()
                 if (store.dividendMonth() == month) return@withLock
@@ -81,6 +86,22 @@ class NotificationDeliveryEngine(
                 val text = "$names${if (holdings.size > 5) "ほか" else ""}の登録上の配当受取月です。入金日と実際の入金は証券口座で確認してください。"
                 store.ifCurrent(settings) {
                     if (canPost(kind) && post(kind, "${date.monthValue}月の配当予定：${holdings.size}銘柄", text)) store.saveDividendMonth(month)
+                }
+            } else {
+                val events = store.pendingDividendChanges().take(8)
+                if (events.isEmpty() || store.settings() != settings || !canPost(kind)) return@withLock
+                val increased = events.count { it.isIncrease }
+                val decreased = events.size - increased
+                val title = buildList {
+                    if (increased > 0) add("増配 ${increased}銘柄")
+                    if (decreased > 0) add("減配 ${decreased}銘柄")
+                }.joinToString("・") + "のお知らせ"
+                val text = events.joinToString("\n") { event ->
+                    val direction = if (event.isIncrease) "増配" else "減配"
+                    "${event.name.take(50)} (${event.code})：${event.fiscalYear}年度 $direction / 1株配当 ¥${String.format(Locale.JAPAN, "%.2f", event.previousDps)} → ¥${String.format(Locale.JAPAN, "%.2f", event.currentDps)}"
+                } + if (store.pendingDividendChanges().size > events.size) "\nほか${store.pendingDividendChanges().size - events.size}銘柄" else ""
+                store.ifCurrent(settings) {
+                    if (canPost(kind) && post(kind, title, text)) store.removeDividendChangeEvents(events)
                 }
             }
         }

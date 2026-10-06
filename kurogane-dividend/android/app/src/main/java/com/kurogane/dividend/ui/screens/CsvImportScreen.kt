@@ -1,5 +1,9 @@
 package com.kurogane.dividend.ui.screens
 
+import com.kurogane.dividend.ui.components.AdaptiveRow
+import com.kurogane.dividend.ui.components.AdaptiveTopAppBar
+import androidx.compose.ui.res.stringResource
+import com.kurogane.dividend.R
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -9,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
@@ -38,6 +43,7 @@ fun CsvImportScreen(
     onImportCsv: suspend (List<CsvHoldingRow>, Set<String>) -> Unit = { _, _ -> },
     onImportDvm: suspend (List<DvmBackupPreview>) -> Unit = {}
 ) {
+    val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var broker by remember { mutableStateOf(CsvBroker.SBI) }
@@ -62,19 +68,19 @@ fun CsvImportScreen(
             complete = false
             isReading = true
             val pickedBroker = broker
-            error = null; selectedFile = "CSVを解析中…"
+            error = null; selectedFile = context.getString(R.string.csv_import_message)
             fileReadJob = scope.launch {
                 try { runCatchingCancellable {
                     selectedFile = withContext(Dispatchers.IO) {
                         context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
                     } ?: uri.lastPathSegment ?: "CSV"
                     withContext(Dispatchers.IO) {
-                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBoundedBytes(10 * 1024 * 1024) } ?: error("ファイルを読み込めません")
+                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBoundedBytes(10 * 1024 * 1024) } ?: error(resources.getString(R.string.csv_import_label_6))
                     val catalog = LocalSecurityCatalog.names(context)
                     val funds = LocalSecurityCatalog.fundNames(context)
                     BrokerCsvImporter.parse(bytes, pickedBroker, catalog, funds)
                     }
-                }.onSuccess { parsed -> csvResult = parsed; selectedRowIndexes = parsed.rows.indices.toSet() }.onFailure { error = it.message ?: "CSVを解析できませんでした" }
+                }.onSuccess { parsed -> csvResult = parsed; selectedRowIndexes = parsed.rows.indices.toSet() }.onFailure { error = it.message ?: resources.getString(R.string.csv_import_label_8) }
                 } finally { isReading = false }
             }
         }
@@ -87,49 +93,49 @@ fun CsvImportScreen(
                 try { runCatchingCancellable {
                     val name = withContext(Dispatchers.IO) { context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null } } ?: "backup.dvm"
                     withContext(Dispatchers.IO) {
-                        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBoundedBytes(50 * 1024 * 1024) } ?: error("ファイルを読み込めません")
+                        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBoundedBytes(50 * 1024 * 1024) } ?: error(resources.getString(R.string.csv_import_label_6))
                         DvmBackupImporter.parse(name, bytes) to name
                     }
                 }.onSuccess { (preview, name) ->
                     dvmFiles = (dvmFiles.filterNot { it.kind == preview.kind } + preview)
                     dvmFileNames = dvmFileNames + (preview.kind.name to name)
                     error = null; complete = false
-                }.onFailure { error = it.message ?: "バックアップを解析できませんでした" }
+                }.onFailure { error = it.message ?: resources.getString(R.string.csv_import_label_15) }
                 } finally { isReading = false }
             }
         }
     }
 
     Scaffold(topBar = {
-        TopAppBar(title = { Text(if (mode == "csv") "証券CSVインポート" else "DVMバックアップ復元", color = OnSurface, fontWeight = FontWeight.Bold) },
-            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, null, tint = OnSurface) } },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundDark))
+        AdaptiveTopAppBar(title = { Text(if (mode == "csv") stringResource(R.string.csv_import_label) else stringResource(R.string.csv_import_label_2), color = OnSurface, fontWeight = FontWeight.Bold) },
+            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = OnSurface) } },
+            containerColor = BackgroundDark)
     }, containerColor = BackgroundDark) { insets ->
         LazyColumn(Modifier.fillMaxSize().padding(insets).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
             item {
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurfaceContainer).padding(4.dp)) {
-                    listOf("csv" to "証券CSV", "dvm" to "DVMバックアップ").forEach { (id, label) ->
+                AdaptiveRow(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurfaceContainer).padding(4.dp)) {
+                    listOf("csv" to stringResource(R.string.csv_import_label_3), "dvm" to stringResource(R.string.csv_import_label_4)).forEach { (id, label) ->
                         Text(label, Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(if (mode == id) PrimaryEmerald else Color.Transparent).clickable(enabled = !isReading && !isImporting) { mode = id; error = null }.padding(11.dp), color = if (mode == id) OnPrimary else OnSurfaceVariant, fontWeight = FontWeight.Bold)
                     }
                 }
             }
             if (mode == "csv") {
                 item {
-                    Text("証券会社", color = OnSurface, fontWeight = FontWeight.Bold)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(stringResource(R.string.csv_import_text), color = OnSurface, fontWeight = FontWeight.Bold)
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         CsvBroker.entries.forEach { item ->
                             Text(item.label, Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(if (broker == item) SurfaceContainerHighest else SurfaceContainer).clickable(enabled = !isReading && !isImporting) { broker = item; csvResult = null; selectedFile = ""; complete = false }.padding(vertical = 11.dp, horizontal = 4.dp), color = if (broker == item) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
                 item {
-                    ImportCard(onClick = { if (!isReading && !isImporting) csvPicker.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel")) }, title = if (selectedFile.isBlank()) "CSVファイルを選択" else selectedFile, subtitle = "UTF-8 / Shift-JIS / EUC-JPを端末内で判定", icon = Icons.Default.UploadFile)
+                    ImportCard(onClick = { if (!isReading && !isImporting) csvPicker.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel")) }, title = if (selectedFile.isBlank()) resources.getString(R.string.csv_select_file) else selectedFile, subtitle = resources.getString(R.string.csv_import_label_16), icon = Icons.Default.UploadFile)
                 }
                     csvResult?.let { result ->
                     item {
-                        Text("解析結果：${result.encoding.name} ・ ${result.rows.size}銘柄", color = PrimaryEmerald, fontWeight = FontWeight.Bold)
-                        Text("取り込む項目", color = OnSurface, fontWeight = FontWeight.Bold)
-                        listOf("shares" to "保有数量", "averageCost" to "取得単価", "account" to "口座区分", "currentPrice" to "現在値").forEach { (key, label) ->
+                        Text(stringResource(R.string.csv_import_text_2 , result.encoding.name, result.rows.size), color = PrimaryEmerald, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.csv_import_text_3), color = OnSurface, fontWeight = FontWeight.Bold)
+                        listOf("shares" to stringResource(R.string.csv_import_label_5), "averageCost" to stringResource(R.string.add_holding_text_15), "account" to stringResource(R.string.csv_import_label_7), "currentPrice" to stringResource(R.string.asset_management_text_23)).forEach { (key, label) ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(checked = key in selectedFields, onCheckedChange = { checked -> if (checked) selectedFields.add(key) else selectedFields.remove(key) })
                                 Text(label, color = OnSurface)
@@ -140,11 +146,11 @@ fun CsvImportScreen(
                     itemsIndexed(result.rows) { index, row ->
                         val checked = index in selectedRowIndexes
                         Card(colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow), shape = RoundedCornerShape(12.dp)) {
-                            Row(Modifier.fillMaxWidth().clickable { selectedRowIndexes = if (checked) selectedRowIndexes - index else selectedRowIndexes + index }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            AdaptiveRow(Modifier.fillMaxWidth().clickable { selectedRowIndexes = if (checked) selectedRowIndexes - index else selectedRowIndexes + index }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(checked = checked, onCheckedChange = { value -> selectedRowIndexes = if (value) selectedRowIndexes + index else selectedRowIndexes - index })
                                 Column(Modifier.weight(1f)) {
-                                    Text("${if (row.isFund) "投資信託" else row.code}  ${row.name}", color = OnSurface, fontWeight = FontWeight.Bold)
-                                    Text("数量 ${row.shares ?: 0} ・ 取得単価 ¥${row.averageCost ?: 0.0}" + (row.account?.let { " ・ $it" } ?: ""), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    Text(stringResource(R.string.csv_import_1_s_2_s , if (row.isFund) resources.getString(R.string.csv_import_label_13) else row.code, row.name), color = OnSurface, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.csv_import_text_4 , row.shares ?: 0, row.averageCost ?: 0.0) + (row.account?.let { resources.getString(R.string.csv_import_label_14, (it).toString()) } ?: ""), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                                 if (row.matchedName != null) Icon(Icons.Default.CheckCircle, null, tint = PrimaryEmerald)
                             }
@@ -153,36 +159,36 @@ fun CsvImportScreen(
                     if (result.unmatchedFunds.isNotEmpty()) item {
                         Card(colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow), shape = RoundedCornerShape(12.dp)) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("照合できなかった投資信託 (${result.unmatchedFunds.size})", color = ErrorRed, fontWeight = FontWeight.Bold)
-                                result.unmatchedFunds.forEach { Text("・${it.sourceName}", color = OnSurfaceVariant, fontSize = AppTextSize.caption) }
+                                Text(stringResource(R.string.csv_import_text_5 , result.unmatchedFunds.size), color = ErrorRed, fontWeight = FontWeight.Bold)
+                                result.unmatchedFunds.forEach { Text(stringResource(R.string.csv_import_text_6 , it.sourceName), color = OnSurfaceVariant, fontSize = AppTextSize.caption) }
                             }
                         }
                     }
                     item {
                         Button(onClick = {
                             val chosen = result.rows.filterIndexed { index, _ -> index in selectedRowIndexes }
-                            if (chosen.isEmpty()) error = "取り込む銘柄を選択してください" else {
+                            if (chosen.isEmpty()) error = context.getString(R.string.csv_import_message_2) else {
                                 val fields = selectedFields.toSet()
                                 isImporting = true
                                 scope.launch {
                                     try { runCatchingCancellable { onImportCsv(chosen, fields) }.onSuccess { complete = true }
-                                        .onFailure { error = it.message ?: "保存できませんでした" }
+                                        .onFailure { error = it.message ?: resources.getString(R.string.csv_import_label_17) }
                                     } finally { isImporting = false }
                                 }
                             }
-                        }, enabled = !isReading && !isImporting && !complete, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)) { Text(if (complete) "取込済み" else "選択した銘柄を取り込む", color = OnPrimary, fontWeight = FontWeight.Bold) }
+                        }, enabled = !isReading && !isImporting && !complete, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)) { Text(if (complete) stringResource(R.string.csv_import_label_9) else stringResource(R.string.csv_import_label_10), color = OnPrimary, fontWeight = FontWeight.Bold) }
                     }
                 }
             } else {
-                item { Text("4種類のDVMファイルを個別に選択できます。復号と確認は端末内で行います。", color = OnSurfaceVariant) }
-                item { ImportCard(onClick = { if (!isReading && !isImporting) dvmPicker.launch(arrayOf("application/octet-stream", "application/*")) }, title = "DVMファイルを選択", subtitle = "銘柄・推移・カスタム銘柄・アラート", icon = Icons.Default.FolderOpen) }
-                items(dvmFiles) { backup ->
+                item { Text(stringResource(R.string.csv_import_text_7), color = OnSurfaceVariant) }
+                item { ImportCard(onClick = { if (!isReading && !isImporting) dvmPicker.launch(arrayOf("application/octet-stream", "application/*")) }, title = resources.getString(R.string.csv_import_label_18), subtitle = resources.getString(R.string.csv_import_label_19), icon = Icons.Default.FolderOpen) }
+                items(dvmFiles, key = { it.kind.name }) { backup ->
                     Card(colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow), shape = RoundedCornerShape(12.dp)) {
                         Column(Modifier.padding(14.dp)) {
-                            Text("${backup.kind.label}　${backup.itemCount}件", color = OnSurface, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.csv_import_text_8 , backup.kind.label, backup.itemCount), color = OnSurface, fontWeight = FontWeight.Bold)
                             Text(dvmFileNames[backup.kind.name].orEmpty(), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                             if (backup.kind == DvmBackupKind.STOCKS) backup.stocks.take(30).forEach { stock ->
-                                Text("${stock.code}  ${stock.name}  ${stock.shares.toInt()}株", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                Text(stringResource(R.string.csv_import_text_9 , stock.code, stock.name, stock.shares.toInt()), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                             }
                         }
                     }
@@ -193,14 +199,14 @@ fun CsvImportScreen(
                         val backups = dvmFiles
                         scope.launch {
                             try { runCatchingCancellable { onImportDvm(backups) }.onSuccess { complete = true }
-                                .onFailure { error = it.message ?: "保存できませんでした" }
+                                .onFailure { error = it.message ?: resources.getString(R.string.csv_import_label_17) }
                             } finally { isImporting = false }
                         }
-                    }, enabled = !isReading && !isImporting && !complete, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)) { Text(if (complete) "端末内に保存しました" else "確認したバックアップを保存", color = OnPrimary, fontWeight = FontWeight.Bold) }
+                    }, enabled = !isReading && !isImporting && !complete, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)) { Text(if (complete) stringResource(R.string.csv_import_label_11) else stringResource(R.string.csv_import_label_12), color = OnPrimary, fontWeight = FontWeight.Bold) }
                 }
             }
             error?.let { item { Text(it, color = ErrorRed, fontSize = AppTextSize.caption) } }
-            item { Text("ファイルの解析・銘柄照合・保存は端末内で行われ、Cloudflareへ送信されません。", color = OnSurfaceVariant, fontSize = AppTextSize.dense) }
+            item { Text(stringResource(R.string.csv_import_text_10), color = OnSurfaceVariant, fontSize = AppTextSize.dense) }
         }
     }
 }

@@ -1,10 +1,15 @@
 package com.kurogane.dividend.ui.screens
 
+import com.kurogane.dividend.ui.components.AdaptiveRow
+import com.kurogane.dividend.ui.components.AdaptiveTopAppBar
+import androidx.compose.ui.res.stringResource
+import com.kurogane.dividend.R
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -32,7 +37,7 @@ fun TermsPrivacyScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            AdaptiveTopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
@@ -42,15 +47,15 @@ fun TermsPrivacyScreen(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("規約とプライバシー", color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.terms_privacy_text), color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold)
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = OnSurface)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = OnSurface)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = SpaceNavy)
+                containerColor = SpaceNavy
             )
         },
         containerColor = BackgroundDark
@@ -71,7 +76,7 @@ fun TermsPrivacyScreen(
                 border = BorderStroke(1.dp, BorderColor)
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
+                    AdaptiveRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
@@ -83,7 +88,7 @@ fun TermsPrivacyScreen(
                                     .clip(CircleShape)
                                     .background(PrimaryEmerald)
                             )
-                            Text("Diview Security Core", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.terms_privacy_diview_security_core), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
 
                         Box(
@@ -95,13 +100,13 @@ fun TermsPrivacyScreen(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Icon(Icons.Default.Verified, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(10.dp))
-                                Text("保護稼働中", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.terms_privacy_text_2), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
 
                     // Grid details
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AdaptiveRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         // AES-256 Box
                         Card(
                             modifier = Modifier.weight(1f),
@@ -115,8 +120,8 @@ fun TermsPrivacyScreen(
                             ) {
                                 Icon(Icons.Default.Lock, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
                                 Column {
-                                    Text("端末内AES-256暗号化", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                    Text("保有数量・金額は送信しません", color = SoftGray, fontSize = AppTextSize.dense)
+                                    Text(stringResource(R.string.terms_privacy_text_3), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.terms_privacy_text_4), color = SoftGray, fontSize = AppTextSize.dense)
                                 }
                             }
                         }
@@ -134,8 +139,8 @@ fun TermsPrivacyScreen(
                             ) {
                                 Icon(Icons.Default.Security, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
                                 Column {
-                                    Text("第三者提供・売買ゼロ", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                    Text("認証情報は非保持", color = SoftGray, fontSize = AppTextSize.dense)
+                                    Text(stringResource(R.string.terms_privacy_text_5), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.terms_privacy_text_6), color = SoftGray, fontSize = AppTextSize.dense)
                                 }
                             }
                         }
@@ -144,7 +149,7 @@ fun TermsPrivacyScreen(
             }
 
             // Segment Tab Switcher Row
-            Row(
+            AdaptiveRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
@@ -157,7 +162,7 @@ fun TermsPrivacyScreen(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(36.dp)
+                        .heightIn(min = 48.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(if (activeTab == "terms") PrimaryEmerald else Color.Transparent)
                         .clickable { activeTab = "terms" },
@@ -171,7 +176,7 @@ fun TermsPrivacyScreen(
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            "利用規約",
+                            stringResource(R.string.terms_privacy_text_7),
                             color = if (activeTab == "terms") OnPrimary else SoftGray,
                             fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
@@ -183,7 +188,7 @@ fun TermsPrivacyScreen(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(36.dp)
+                        .heightIn(min = 48.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(if (activeTab == "privacy") PrimaryEmerald else Color.Transparent)
                         .clickable { activeTab = "privacy" },
@@ -197,7 +202,7 @@ fun TermsPrivacyScreen(
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            "プライバシー",
+                            stringResource(R.string.terms_privacy_text_8),
                             color = if (activeTab == "privacy") OnPrimary else SoftGray,
                             fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold
@@ -217,23 +222,23 @@ fun TermsPrivacyScreen(
                         border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(
+                            AdaptiveRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Diview利用規約", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
+                                Text(stringResource(R.string.terms_privacy_text_9), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(4.dp))
                                         .background(PrimaryEmeraldContainer.copy(alpha = 0.15f))
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
-                                    Text("2025年改訂版", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.terms_privacy_text_10), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                 }
                             }
                             Text(
-                                "本規約は、Diview運営委員会が提供するポートフォリオ分析アプリ「Diview」の利用条件を定めるものです。",
+                                stringResource(R.string.terms_privacy_text_11),
                                 color = SoftGray,
                                 fontSize = AppTextSize.caption,
                                 lineHeight = 18.sp
@@ -249,7 +254,7 @@ fun TermsPrivacyScreen(
                         border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column {
-                            Row(
+                            AdaptiveRow(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { openArt1 = !openArt1 }
@@ -257,7 +262,7 @@ fun TermsPrivacyScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("第1条（総則・本サービスの目的）", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.terms_privacy_text_12), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                 Icon(
                                     imageVector = if (openArt1) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                     contentDescription = null,
@@ -273,7 +278,7 @@ fun TermsPrivacyScreen(
                                         .padding(12.dp)
                                 ) {
                                     Text(
-                                        "本アプリは、ユーザー自身が手動入力またはCSVインポートした保有銘柄、取得価格、保有株数に基づき、年間想定配当額、税引後キャッシュフロー、受取月カレンダーを試算・可視化する個人向けシミュレーションツールです。証券会社IDやパスワードを預からず運用されます。",
+                                        stringResource(R.string.terms_privacy_text_13),
                                         color = SoftGray,
                                         fontSize = AppTextSize.caption,
                                         lineHeight = 18.sp
@@ -291,7 +296,7 @@ fun TermsPrivacyScreen(
                         border = BorderStroke(1.dp, Color(0xFF991B1B).copy(alpha = 0.3f))
                     ) {
                         Column {
-                            Row(
+                            AdaptiveRow(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { openArt2 = !openArt2 }
@@ -299,7 +304,7 @@ fun TermsPrivacyScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("第2条（投資助言に関する免責事項）", color = ErrorRed, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.terms_privacy_text_14), color = ErrorRed, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                 Icon(
                                     imageVector = if (openArt2) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                     contentDescription = null,
@@ -316,13 +321,13 @@ fun TermsPrivacyScreen(
                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Text(
-                                        "1. 当社は、金融商品取引法に基づく金融商品取引業者（投資助言・代理業等）ではありません。本アプリ内で表示される指標は参考値であり、特定の有価証券の売買推奨を行うものではありません。",
+                                        stringResource(R.string.terms_privacy_text_15),
                                         color = SoftGray,
                                         fontSize = AppTextSize.caption,
                                         lineHeight = 18.sp
                                     )
                                     Text(
-                                        "2. 配当金は企業の財務状況や市場動向により減配・無配となる場合があります。いかなる投資判断の損失についても当社は責任を負いません。",
+                                        stringResource(R.string.terms_privacy_text_16),
                                         color = SoftGray,
                                         fontSize = AppTextSize.caption,
                                         lineHeight = 18.sp
@@ -340,9 +345,9 @@ fun TermsPrivacyScreen(
                         border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("第3条（知的財産権および禁止事項）", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.terms_privacy_text_17), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             Text(
-                                "本アプリ内のUIデザイン、グラフィック、アルゴリズムの著作権は当社に帰属します。リバースエンジニアリング、不正クローリング、複製行為は固く禁止いたします。",
+                                stringResource(R.string.terms_privacy_text_18),
                                 color = SoftGray,
                                 fontSize = AppTextSize.caption,
                                 lineHeight = 18.sp
@@ -372,30 +377,30 @@ fun TermsPrivacyScreen(
                                     Icon(Icons.Default.Security, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
                                 }
                                 Column {
-                                    Text("Zero Knowledge Architecture", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Black)
-                                    Text("金融データ端末内完結宣言", color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.terms_privacy_zero_knowledge_architecture), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Black)
+                                    Text(stringResource(R.string.terms_privacy_text_19), color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
                                 }
                             }
 
                             Text(
-                                "保有数量・取得単価・金額の計算は端末内で行います。データ取得時には銘柄コード・対象年月や検索語を送信します。お問い合わせを送信した場合は、本文・任意の名前と返信先、および添付を選んだアプリ／OSバージョンをDiviewサーバーに保存します。90日を過ぎた内容は次回の受付・管理参照時にも削除します。ポートフォリオの自動添付は行いません。",
+                                stringResource(R.string.terms_privacy_text_20),
                                 color = SoftGray,
                                 fontSize = AppTextSize.caption,
                                 lineHeight = 18.sp
                             )
 
                             // 2x2 Grid details
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            AdaptiveRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Card(
                                     modifier = Modifier.weight(1f),
                                     colors = CardDefaults.cardColors(containerColor = BackgroundDark),
                                     border = BorderStroke(0.5.dp, BorderColor)
                                 ) {
                                     Column(modifier = Modifier.padding(10.dp)) {
-                                        Text("外部送信", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                        Text(stringResource(R.string.terms_privacy_text_21), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                         Spacer(modifier = Modifier.height(2.dp))
-                                        Text("保有数量・金額なし", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = FontFamily.Monospace)
-                                        Text("保有株・金額の送出なし", color = SoftGray, fontSize = AppTextSize.dense)
+                                        Text(stringResource(R.string.terms_privacy_text_22), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = FontFamily.Monospace)
+                                        Text(stringResource(R.string.terms_privacy_text_23), color = SoftGray, fontSize = AppTextSize.dense)
                                     }
                                 }
 
@@ -405,10 +410,10 @@ fun TermsPrivacyScreen(
                                     border = BorderStroke(0.5.dp, BorderColor)
                                 ) {
                                     Column(modifier = Modifier.padding(10.dp)) {
-                                        Text("保護規格", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                        Text(stringResource(R.string.terms_privacy_text_24), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                         Spacer(modifier = Modifier.height(2.dp))
-                                        Text("AES-256", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = FontFamily.Monospace)
-                                        Text("端末内の保有データを暗号化", color = SoftGray, fontSize = AppTextSize.dense)
+                                        Text(stringResource(R.string.terms_privacy_aes_256), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = FontFamily.Monospace)
+                                        Text(stringResource(R.string.terms_privacy_text_25), color = SoftGray, fontSize = AppTextSize.dense)
                                     }
                                 }
                             }
@@ -423,9 +428,9 @@ fun TermsPrivacyScreen(
                         border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("1. 情報の収集について", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.terms_privacy_text_26), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             Text(
-                                "本アプリは、外部サービスのアナリティクス機能（クラッシュ追跡等）を最小限に抑え、ユーザーが手入力した資産額などの金融重要データを一切収集しません。",
+                                stringResource(R.string.terms_privacy_text_27),
                                 color = SoftGray,
                                 fontSize = AppTextSize.caption,
                                 lineHeight = 18.sp
@@ -440,9 +445,9 @@ fun TermsPrivacyScreen(
                         border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("2. データの端末内ストレージ保管", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.terms_privacy_text_28), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             Text(
-                                "ユーザーのポートフォリオ情報は、Androidシステムのセキュリティサンドボックスモデルに基づき、暗号化が施された領域（EncryptedSharedPreferences、Room Database）に保存されます。他アプリからの不正アクセスを強力に防ぎます。",
+                                stringResource(R.string.terms_privacy_text_29),
                                 color = SoftGray,
                                 fontSize = AppTextSize.caption,
                                 lineHeight = 18.sp

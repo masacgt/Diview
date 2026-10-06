@@ -3,7 +3,9 @@ package com.kurogane.dividend.notifications
 import android.content.Context
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
@@ -15,12 +17,25 @@ object NotificationScheduler {
     const val PRICE_MORNING = "diview.notifications.price.morning"
     const val PRICE_EVENING = "diview.notifications.price.evening"
     const val DIVIDEND_MORNING = "diview.notifications.dividend.morning"
+    const val DIVIDEND_CHANGE_MORNING = "diview.notifications.dividend-change.morning"
+    const val DIVIDEND_CHANGE_EVENING = "diview.notifications.dividend-change.evening"
+    const val DIVIDEND_CHANGE_REFRESH = "diview.notifications.dividend-change.refresh"
 
     fun sync(context: Context, settings: NotificationSettings) {
         val work = WorkManager.getInstance(context)
         schedule(work, PRICE_MORNING, NotificationKind.PRICE, true, settings.priceEnabled)
         schedule(work, PRICE_EVENING, NotificationKind.PRICE, false, settings.priceEnabled)
         schedule(work, DIVIDEND_MORNING, NotificationKind.DIVIDEND, true, settings.dividendEnabled)
+        schedule(work, DIVIDEND_CHANGE_MORNING, NotificationKind.DIVIDEND_CHANGE, true, settings.dividendChangeEnabled)
+        schedule(work, DIVIDEND_CHANGE_EVENING, NotificationKind.DIVIDEND_CHANGE, false, settings.dividendChangeEnabled)
+    }
+
+    fun enqueueDividendChangeRefresh(context: Context) {
+        val request = OneTimeWorkRequestBuilder<DividendChangeRefreshWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .addTag("diview.notifications")
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(DIVIDEND_CHANGE_REFRESH, ExistingWorkPolicy.KEEP, request)
     }
 
     private fun schedule(work: WorkManager, name: String, kind: NotificationKind, morning: Boolean, enabled: Boolean) {

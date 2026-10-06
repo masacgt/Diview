@@ -1,5 +1,6 @@
 package com.kurogane.dividend.viewmodel
 
+import com.kurogane.dividend.R
 import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
@@ -33,6 +34,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.CompletableDeferred
 import org.json.JSONObject
+import org.json.JSONArray
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,6 +66,7 @@ class DividendViewModel @JvmOverloads constructor(
 
     private val displayPreferences = application.getSharedPreferences("display_preferences", Context.MODE_PRIVATE)
     private val marketPreferences = application.getSharedPreferences("cloudflare_market_cache", Context.MODE_PRIVATE)
+    private val dividendMonthRefreshMutex = Mutex()
     private val localImportStore = LocalImportStore(application)
     private val notificationStore = NotificationStore(application)
     private val notificationMutex = Mutex()
@@ -72,10 +77,12 @@ class DividendViewModel @JvmOverloads constructor(
     private val saveRequests = Channel<Unit>(Channel.CONFLATED)
     private val restoration = CompletableDeferred<Unit>()
     private var holdingsLoadFailed = false
+    private var watchlistLoadFailed = false
     private val _saveError = MutableStateFlow<String?>(null)
     val saveError: StateFlow<String?> = _saveError.asStateFlow()
 
-    var assetScrollPosition = 0
+    var assetScrollIndex = 0
+    var assetScrollOffset = 0
     var annualScrollIndex = 0
     var annualScrollOffset = 0
     var roadmapScrollIndex = 0
@@ -142,7 +149,7 @@ class DividendViewModel @JvmOverloads constructor(
         usdJpyRate = _exchangeRate.value?.usdJpy,
         usWithholdingEnabled = _usTaxDeduction.value,
         financialProfile = _financialData.value[holding.code]?.profile,
-        dps = dps, yieldRate = PortfolioMath.yieldPercent(dps, holding.price), yoc = PortfolioMath.yieldPercent(dps, holding.acqPrice)
+        dps = dps, yieldRate = PortfolioMath.yieldPercent(dps, price), yoc = PortfolioMath.yieldPercent(dps, holding.acqPrice)
         ).refreshPayout()
     }
 
@@ -189,7 +196,7 @@ class DividendViewModel @JvmOverloads constructor(
             refreshRuntimeValues()
         }.onFailure {
             if (generation != dataGeneration.get()) return@onFailure
-            _exchangeRateError.value = if (_exchangeRate.value == null) "為替未取得：米ドル資産の円換算は合計に含まれません" else "為替を更新できませんでした。保存済みレートを使用中です"
+            _exchangeRateError.value = if (_exchangeRate.value == null) getApplication<android.app.Application>().getString(R.string.exchange_rate_error) else getApplication<android.app.Application>().getString(R.string.exchange_rate_error_2)
         }
     }
 
@@ -205,6 +212,11 @@ class DividendViewModel @JvmOverloads constructor(
             val document = financialSlots.withPermit { marketRepository.financialDocument(normalized) } ?: return null
             val parsed = withContext(Dispatchers.Default) { FinancialData.parse(document, normalized) }
             if (generation != dataGeneration.get()) return null
+            if (_notificationSettings.value.dividendChangeEnabled) {
+                notificationStore.observeDividendHistory(normalized, _holdings.value.firstOrNull { it.code.equals(normalized, true) }?.name
+                    ?: _watchlist.value.firstOrNull { it.code.equals(normalized, true) }?.name
+                    ?: normalized, parsed.dividends.map { it.year to it.dps })
+            }
             _financialData.update { it + (normalized to parsed) }
             marketPreferences.edit().putString("financial_$normalized", document.toString()).putString("financial_date_$normalized", today).apply()
             refreshRuntimeValues()
@@ -213,17 +225,108 @@ class DividendViewModel @JvmOverloads constructor(
         } finally { financialMutex.withLock { financialLoading.remove(normalized) } }
     }
 
-    suspend fun fetchPortfolioFinancialData() = coroutineScope {
+    suspend fun fetchPortfolioFinancialData(force: Boolean = false) = coroutineScope {
         _holdings.value.filter { it.category == Category.JAPAN }.map { it.code }.distinct().map { code ->
-            async { runCatchingCancellable { fetchFinancialData(code, force = true) } }
+            async { runCatchingCancellable { fetchFinancialData(code, force = force) } }
         }.awaitAll()
     }
 
-    private suspend fun refreshFinancialDataIfDue() = coroutineScope {
+    private suspend fun refreshFinancialDataIfDue(force: Boolean = false) = coroutineScope {
         (_holdings.value.filter { it.category == Category.JAPAN }.map { it.code } +
             _watchlist.value.filter { it.category == "jp" }.map { it.code }).distinct().map { code ->
-            async { runCatchingCancellable { fetchFinancialData(code) } }
+            async { runCatchingCancellable { fetchFinancialData(code, force = force) } }
         }.awaitAll()
+    }
+
+    private fun yahooSymbol(category: Category, code: String): String? {
+        val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
+        return when (category) {
+            Category.JAPAN -> "$normalized.T".takeIf { normalized.matches(Regex("[A-Z0-9]{4,5}")) }
+            Category.US -> normalized.takeIf { it.matches(Regex("[A-Z0-9.^_=-]{1,32}")) }
+            Category.FUND -> null
+        }
+    }
+
+    private fun yahooSymbol(stock: WatchlistStock): String? = when (stock.category.lowercase(java.util.Locale.ROOT)) {
+        "jp" -> yahooSymbol(Category.JAPAN, stock.code)
+        "us" -> yahooSymbol(Category.US, stock.code)
+        else -> null
+    }
+
+    private fun cachedDividendMonths(symbol: String): List<Int> = runCatching {
+        val rows = marketPreferences.getString("dividend_months_$symbol", null)
+            ?.let(::JSONArray) ?: return@runCatching emptyList()
+        (0 until rows.length()).map { rows.optInt(it, -1) }.filter { it in 1..12 }.distinct().sorted()
+    }.getOrDefault(emptyList())
+
+    private fun storeDividendMonths(symbol: String, months: List<Int>, fetchedOnJapanDate: String) {
+        val rows = JSONArray()
+        months.filter { it in 1..12 }.distinct().sorted().forEach(rows::put)
+        marketPreferences.edit()
+            .putString("dividend_months_$symbol", rows.toString())
+            .putString("dividend_months_fetched_jst_$symbol", fetchedOnJapanDate)
+            .apply()
+    }
+
+    private fun applyDividendMonths(symbol: String, months: List<Int>) {
+        _holdings.update { list ->
+            list.map { holding ->
+                if (yahooSymbol(holding.category, holding.code) == symbol)
+                    holding.copy(dividendMonths = months).refreshPayout()
+                else holding
+            }
+        }
+        _watchlist.update { list ->
+            list.map { stock ->
+                if (yahooSymbol(stock) == symbol) stock.copy(
+                    payoutMonths = months,
+                    payoutTiming = months.joinToString(" / ") { "${it}月" }.ifBlank { "配当月未取得" }
+                ) else stock
+            }
+        }
+        saveRequests.trySend(Unit)
+    }
+
+    private fun applyCachedDividendMonths() {
+        _holdings.update { list -> list.map { holding ->
+            val months = yahooSymbol(holding.category, holding.code)?.let { symbol ->
+                cachedDividendMonths(symbol)
+            } ?: emptyList()
+            holding.copy(dividendMonths = months).refreshPayout()
+        } }
+        _watchlist.update { list -> list.map { stock ->
+            val months = yahooSymbol(stock)?.let { symbol ->
+                cachedDividendMonths(symbol)
+            } ?: emptyList()
+            stock.copy(payoutMonths = months,
+                payoutTiming = months.joinToString(" / ") { "${it}月" }.ifBlank { "配当月未取得" })
+        } }
+    }
+
+    private suspend fun refreshDividendMonths(symbols: Collection<String>) = dividendMonthRefreshMutex.withLock {
+        val today = LocalDate.now(ZoneId.of("Asia/Tokyo")).toString()
+        val dueSymbols = symbols.map { it.trim().uppercase(java.util.Locale.ROOT) }
+            .distinct()
+            .filter { symbol -> marketPreferences.getString("dividend_months_fetched_jst_$symbol", null) != today }
+        for (batch in dueSymbols.chunked(50)) {
+            val result = runCatchingCancellable { marketRepository.fetchDividendMonths(batch) }
+            if (result.isFailure) {
+                android.util.Log.w("CloudflareMarket", "配当月の取得に失敗しました", result.exceptionOrNull())
+                continue
+            }
+            val monthsBySymbol = result.getOrThrow().monthsBySymbol
+            for (symbol in batch) {
+                val months = monthsBySymbol[symbol] ?: continue
+                storeDividendMonths(symbol, months, today)
+                applyDividendMonths(symbol, months)
+            }
+        }
+    }
+
+    private suspend fun refreshDividendHistoryIfDue() {
+        val symbols = (_holdings.value.mapNotNull { yahooSymbol(it.category, it.code) } +
+            _watchlist.value.mapNotNull(::yahooSymbol)).distinct()
+        refreshDividendMonths(symbols)
     }
 
     private val _selectedMonth = MutableStateFlow<Int?>(null)
@@ -249,7 +352,7 @@ class DividendViewModel @JvmOverloads constructor(
                 yoc = 2.97,
                 nextPayoutTiming = "次回: 12月中旬 (¥3,640)",
                 nextPayoutAmount = "¥3,640",
-                dividendMonths = listOf(6, 12),
+                dividendMonths = emptyList(),
                 dividendType = "中間配当",
                 accountType = "新NISA成長枠",
                 dailyChange = "+¥35 (+1.36%)",
@@ -270,7 +373,7 @@ class DividendViewModel @JvmOverloads constructor(
                 yoc = 5.11,
                 nextPayoutTiming = "次回: 12月中旬 (¥9,700)",
                 nextPayoutAmount = "¥9,700",
-                dividendMonths = listOf(6, 12),
+                dividendMonths = emptyList(),
                 dividendType = "期末配当",
                 accountType = "新NISA成長枠",
                 dailyChange = "+¥45 (+1.11%)",
@@ -291,7 +394,7 @@ class DividendViewModel @JvmOverloads constructor(
                 yoc = 3.45,
                 nextPayoutTiming = "次回: 12月中旬 (¥5,000)",
                 nextPayoutAmount = "¥5,000",
-                dividendMonths = listOf(6, 12),
+                dividendMonths = emptyList(),
                 dividendType = "中間配当",
                 accountType = "新NISA成長枠",
                 dailyChange = "+¥12 (+0.78%)",
@@ -312,7 +415,7 @@ class DividendViewModel @JvmOverloads constructor(
                 yoc = 4.33,
                 nextPayoutTiming = "次回: 12月中旬 (¥6,500)",
                 nextPayoutAmount = "¥6,500",
-                dividendMonths = listOf(6, 12),
+                dividendMonths = emptyList(),
                 dividendType = "中間配当",
                 accountType = "特定口座",
                 dailyChange = "-¥22 (-0.69%)",
@@ -333,7 +436,7 @@ class DividendViewModel @JvmOverloads constructor(
                 yoc = 3.51,
                 nextPayoutTiming = "次回: 12月中旬 (¥5,000)",
                 nextPayoutAmount = "¥5,000",
-                dividendMonths = listOf(6, 12),
+                dividendMonths = emptyList(),
                 dividendType = "期末配当",
                 accountType = "新NISA成長枠",
                 dailyChange = "+¥34 (+1.14%)",
@@ -354,7 +457,7 @@ class DividendViewModel @JvmOverloads constructor(
                 yoc = 3.47,
                 nextPayoutTiming = "次回: 12月中旬 (¥5,200)",
                 nextPayoutAmount = "¥5,200",
-                dividendMonths = listOf(6, 12),
+                dividendMonths = emptyList(),
                 dividendType = "中間配当",
                 accountType = "特定口座",
                 dailyChange = "0.0 (0.00%)",
@@ -375,7 +478,7 @@ class DividendViewModel @JvmOverloads constructor(
                 yoc = 3.45,
                 nextPayoutTiming = "次回: 12月中旬 (¥3,625)",
                 nextPayoutAmount = "¥3,625",
-                dividendMonths = listOf(6, 12),
+                dividendMonths = emptyList(),
                 dividendType = "中間配当",
                 accountType = "新NISA成長枠",
                 dailyChange = "+¥15 (+0.33%)",
@@ -396,7 +499,7 @@ class DividendViewModel @JvmOverloads constructor(
                 yoc = 3.71,
                 nextPayoutTiming = "次回: 12月中旬 (¥6,300)",
                 nextPayoutAmount = "¥6,300",
-                dividendMonths = listOf(6, 12),
+                dividendMonths = emptyList(),
                 dividendType = "中間配当",
                 accountType = "新NISA成長枠",
                 dailyChange = "+¥20 (+0.56%)",
@@ -417,7 +520,7 @@ class DividendViewModel @JvmOverloads constructor(
                 yoc = 3.39,
                 nextPayoutTiming = "次回: 12月中旬 (¥5,250)",
                 nextPayoutAmount = "¥5,250",
-                dividendMonths = listOf(6, 12),
+                dividendMonths = emptyList(),
                 dividendType = "期末配当",
                 accountType = "新NISA成長枠",
                 dailyChange = "+¥40 (+1.27%)",
@@ -438,7 +541,7 @@ class DividendViewModel @JvmOverloads constructor(
                 yoc = 4.53,
                 nextPayoutTiming = "次回: 12月中旬 (¥9,400)",
                 nextPayoutAmount = "¥9,400",
-                dividendMonths = listOf(6, 12),
+                dividendMonths = emptyList(),
                 dividendType = "中間配当",
                 accountType = "特定口座",
                 dailyChange = "+¥10 (+0.23%)",
@@ -460,7 +563,7 @@ class DividendViewModel @JvmOverloads constructor(
                 yoc = 0.52,
                 nextPayoutTiming = "次回: 2月中旬 ($2.50)",
                 nextPayoutAmount = "¥425 ($2.50)",
-                dividendMonths = listOf(2, 5, 8, 11),
+                dividendMonths = emptyList(),
                 dividendType = "四半期配当",
                 accountType = "特定口座 (四半期)",
                 dailyChange = "+1.45 (+0.66%)",
@@ -496,7 +599,9 @@ class DividendViewModel @JvmOverloads constructor(
     private fun updatePortfolio(next: List<Holding>) {
         if (next == _holdings.value) return
         hasRestoredLocalHoldings = true
-        _holdings.value = next.map(::runtimeHolding)
+        val prices = readCachedPrices()
+        val dividends = readCachedDividendsPerShare()
+        _holdings.value = next.map { runtimeHolding(it, prices, dividends) }
         saveRequests.trySend(Unit)
     }
 
@@ -505,9 +610,9 @@ class DividendViewModel @JvmOverloads constructor(
         val watched = _watchlist.value
         withContext(Dispatchers.IO) {
             if (!holdingsLoadFailed) localImportStore.saveHoldings(snapshot)
-            localImportStore.saveWatchlist(watched)
+            if (!watchlistLoadFailed) localImportStore.saveWatchlist(watched)
         }
-        if (!holdingsLoadFailed) _saveError.value = null
+        // Saving holdings must not erase an unrelated load or notification error.
     }
 
     fun clearSaveError() { _saveError.value = null }
@@ -521,18 +626,26 @@ class DividendViewModel @JvmOverloads constructor(
         val next = PortfolioImporter.importRows(_holdings.value, rows, fields, industries)
         holdingsLoadFailed = false
         updatePortfolio(next)
+        applyCachedDividendMonths()
+        refreshRuntimeValues()
+        viewModelScope.launch { refreshDividendHistoryIfDue() }
         persistCurrentHoldings()
     }
 
     suspend fun importDvmBackups(backups: List<DvmBackupPreview>) {
         restoration.await()
         val stocks = backups.filter { it.kind == DvmBackupKind.STOCKS }.flatMap { it.stocks }
-        val next = PortfolioImporter.importStocks(_holdings.value, stocks)
+        val next = PortfolioImporter.importStocks(_holdings.value, stocks).map {
+            it.copy(dividendMonths = emptyList()).refreshPayout()
+        }
         withContext(Dispatchers.IO) {
             backups.forEach { preview -> localImportStore.saveBackup(preview.kind, preview.payload) }
         }
         holdingsLoadFailed = false
         updatePortfolio(next)
+        applyCachedDividendMonths()
+        refreshRuntimeValues()
+        viewModelScope.launch { refreshDividendHistoryIfDue() }
         persistCurrentHoldings()
     }
 
@@ -551,7 +664,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 2427.0,
                 dailyChange = "+35 (+1.36%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 輸送用機器",
                 alertEnabled = false,
@@ -570,7 +683,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 4041.0,
                 dailyChange = "+45 (+1.11%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月下旬",
                 desc = "東証PRM · 高配当ディフェンシブ",
                 alertEnabled = true,
@@ -589,7 +702,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 1428.0,
                 dailyChange = "+12 (+0.78%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · メガバンク",
                 alertEnabled = true,
@@ -608,7 +721,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 3421.0,
                 dailyChange = "-22 (-0.69%)",
                 isPositive = false,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 銀行業",
                 alertEnabled = true,
@@ -627,7 +740,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 2738.0,
                 dailyChange = "+14 (+0.49%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 銀行業",
                 alertEnabled = false,
@@ -646,7 +759,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 2857.0,
                 dailyChange = "+34 (+1.14%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 総合商社",
                 alertEnabled = true,
@@ -665,7 +778,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 3088.0,
                 dailyChange = "+40 (+1.27%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 総合商社",
                 alertEnabled = false,
@@ -684,7 +797,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 3500.0,
                 dailyChange = "+20 (+0.56%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 損害保険",
                 alertEnabled = true,
@@ -703,7 +816,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 130.0,
                 dailyChange = "0.0 (0.00%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月上旬",
                 desc = "東証PRM · 情報・通信業",
                 alertEnabled = true,
@@ -722,7 +835,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 4264.0,
                 dailyChange = "+15 (+0.33%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 通信キャリア",
                 alertEnabled = false,
@@ -741,7 +854,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 191.0,
                 dailyChange = "+1.5 (+0.78%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 通信キャリア",
                 alertEnabled = true,
@@ -760,7 +873,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 1911.0,
                 dailyChange = "+32 (+1.62%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 資源開発最大手",
                 alertEnabled = false,
@@ -779,7 +892,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 3289.0,
                 dailyChange = "+10 (+0.30%)",
                 isPositive = true,
-                payoutMonths = listOf(1, 7),
+                payoutMonths = emptyList(),
                 payoutTiming = "1月下旬 / 7月下旬",
                 desc = "東証PRM · ハウスメーカー大手",
                 alertEnabled = true,
@@ -798,7 +911,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 4027.0,
                 dailyChange = "-15 (-0.36%)",
                 isPositive = false,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 住宅・不動産開発",
                 alertEnabled = false,
@@ -817,7 +930,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 2088.0,
                 dailyChange = "+5 (+0.23%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 飲料最大手",
                 alertEnabled = false,
@@ -836,7 +949,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 5000.0,
                 dailyChange = "+20 (+0.37%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 飲料・ビール大手",
                 alertEnabled = false,
@@ -855,7 +968,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 4272.0,
                 dailyChange = "+10 (+0.23%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 製薬国内首位",
                 alertEnabled = true,
@@ -874,7 +987,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 1644.0,
                 dailyChange = "-12 (-0.69%)",
                 isPositive = false,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 医療用医薬品首位級",
                 alertEnabled = false,
@@ -893,7 +1006,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 3750.0,
                 dailyChange = "+45 (+1.19%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 精密機器・カメラ",
                 alertEnabled = true,
@@ -912,7 +1025,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 1619.0,
                 dailyChange = "+18 (+1.08%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 二輪車世界首位級",
                 alertEnabled = false,
@@ -931,7 +1044,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 5675.0,
                 dailyChange = "+20 (+0.34%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · タイヤ世界首位級",
                 alertEnabled = false,
@@ -950,7 +1063,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 3076.0,
                 dailyChange = "-32 (-0.99%)",
                 isPositive = false,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 鉄鋼国内最大手",
                 alertEnabled = true,
@@ -969,7 +1082,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 4175.0,
                 dailyChange = "+34 (+0.81%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 建機世界2位",
                 alertEnabled = true,
@@ -988,7 +1101,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 1920.0,
                 dailyChange = "+5 (+0.24%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 農機国内首位",
                 alertEnabled = false,
@@ -1007,7 +1120,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 3478.0,
                 dailyChange = "+55 (+1.53%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 総合電気最大手",
                 alertEnabled = false,
@@ -1026,7 +1139,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 2833.0,
                 dailyChange = "+12 (+0.42%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · ゲーム、映画、音楽",
                 alertEnabled = true,
@@ -1045,7 +1158,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 1250.0,
                 dailyChange = "+2 (+0.15%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 総合家電大手",
                 alertEnabled = false,
@@ -1064,7 +1177,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 2080.0,
                 dailyChange = "+12 (+0.54%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 自動車部品最大手",
                 alertEnabled = false,
@@ -1083,7 +1196,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 2700.0,
                 dailyChange = "+10 (+0.36%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 電子部品大手",
                 alertEnabled = false,
@@ -1102,7 +1215,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 5428.0,
                 dailyChange = "+20 (+0.17%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 34期連続増配企業",
                 alertEnabled = true,
@@ -1121,7 +1234,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 5777.0,
                 dailyChange = "+45 (+0.74%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 塩ビ・ウエハ世界一",
                 alertEnabled = false,
@@ -1140,7 +1253,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 3076.0,
                 dailyChange = "-10 (-0.29%)",
                 isPositive = false,
-                payoutMonths = listOf(2, 8),
+                payoutMonths = emptyList(),
                 payoutTiming = "2月下旬 / 8月下旬",
                 desc = "東証PRM · 小売国内最大手",
                 alertEnabled = false,
@@ -1159,7 +1272,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 7440.0,
                 dailyChange = "+150 (+1.88%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · ゲーム専用機世界首位",
                 alertEnabled = false,
@@ -1178,7 +1291,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 1360.0,
                 dailyChange = "+12 (+0.83%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 不動産総合デベロッパー",
                 alertEnabled = false,
@@ -1197,7 +1310,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 2608.0,
                 dailyChange = "+10 (+0.35%)",
                 isPositive = true,
-                payoutMonths = listOf(6, 12),
+                payoutMonths = emptyList(),
                 payoutTiming = "6月下旬 / 12月中旬",
                 desc = "東証PRM · 鉄道・生活サービス最大手",
                 alertEnabled = false,
@@ -1217,7 +1330,7 @@ class DividendViewModel @JvmOverloads constructor(
                 targetPrice = 200.0,
                 dailyChange = "+1.45 (+0.66%)",
                 isPositive = true,
-                payoutMonths = listOf(2, 5, 8, 11),
+                payoutMonths = emptyList(),
                 payoutTiming = "各月中旬 (四半期)",
                 desc = "NASDAQ · US Tech · 米国株",
                 alertEnabled = false,
@@ -1335,7 +1448,7 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     suspend fun resolveCloudflareSecurity(code: String): CloudflareSecurity? {
-        val security = runCatchingCancellable { marketRepository.getSecurity(code) }.getOrNull() ?: return null
+        val security = marketRepository.getSecurity(code) ?: return null
         val industry = withContext(Dispatchers.IO) { runCatching {
             Tse33IndustryMaster.industries(getApplication())[security.code.take(4).uppercase(java.util.Locale.ROOT)]
         }.getOrNull() }
@@ -1497,7 +1610,7 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     fun updateTargetYield(code: String, delta: Double) {
-        if (!restoration.isCompleted) return
+        if (!restoration.isCompleted || !canEditWatchlist()) return
         _watchlist.update { list ->
             list.map { stock ->
                 if (stock.code == code) {
@@ -1511,7 +1624,7 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     fun toggleWatchlistStock(code: String) {
-        if (!restoration.isCompleted) return
+        if (!restoration.isCompleted || !canEditWatchlist()) return
         _watchlist.update { list ->
             list.map { stock ->
                 if (stock.code == code) {
@@ -1522,8 +1635,24 @@ class DividendViewModel @JvmOverloads constructor(
         saveRequests.trySend(Unit)
     }
 
+    fun removeWatchlistStock(code: String): WatchlistStock? {
+        if (!restoration.isCompleted || !canEditWatchlist()) return null
+        val removed = _watchlist.value.firstOrNull { it.code.equals(code, true) } ?: return null
+        _watchlist.update { list -> list.filterNot { it.code.equals(code, true) } }
+        saveRequests.trySend(Unit)
+        return removed
+    }
+
+    fun restoreWatchlistStock(stock: WatchlistStock): Boolean {
+        if (!restoration.isCompleted || !canEditWatchlist()) return false
+        if (_watchlist.value.any { it.code.equals(stock.code, true) }) return false
+        _watchlist.update { list -> list + stock }
+        saveRequests.trySend(Unit)
+        return true
+    }
+
     fun toggleWatchlistMembership(holding: Holding) {
-        if (!restoration.isCompleted) return
+        if (!restoration.isCompleted || !canEditWatchlist()) return
         _watchlist.update { list ->
             if (list.any { it.code.equals(holding.code, true) }) list.filterNot { it.code.equals(holding.code, true) }
             else list + WatchlistStock(holding.code, holding.name, holding.market, holding.sector,
@@ -1532,9 +1661,37 @@ class DividendViewModel @JvmOverloads constructor(
                 holding.dividendMonths, holding.nextPayoutTiming, "", false, usdJpyRate = _exchangeRate.value?.usdJpy)
         }
         saveRequests.trySend(Unit)
+        applyCachedDividendMonths()
+        viewModelScope.launch { refreshDividendHistoryIfDue() }
     }
 
-    fun updateHolding(code: String, shares: Int, acqPrice: Double, currentPrice: Double? = null): Boolean {
+    fun addHoldingToWatchlist(holding: Holding) {
+        if (!restoration.isCompleted || !canEditWatchlist()) return
+        val stock = WatchlistStock(
+            holding.code, holding.name, holding.market, holding.sector,
+            if (holding.category == Category.US) "us" else "jp", holding.price, holding.currency, holding.dps,
+            holding.liveYield, holding.liveYield.coerceAtLeast(0.1), holding.price, holding.dailyChange, holding.isPositive,
+            holding.dividendMonths, holding.nextPayoutTiming, "", false, usdJpyRate = _exchangeRate.value?.usdJpy
+        )
+        _watchlist.update { list ->
+            if (list.any { it.code.equals(holding.code, true) }) list else list + stock
+        }
+        saveRequests.trySend(Unit)
+        applyCachedDividendMonths()
+        viewModelScope.launch { refreshDividendHistoryIfDue() }
+    }
+
+    private fun canEditWatchlist(): Boolean {
+        if (watchlistLoadFailed) _saveError.value = getApplication<android.app.Application>().getString(R.string.watchlist_restore_required)
+        return !watchlistLoadFailed
+    }
+
+    fun updateHolding(
+        code: String,
+        shares: Int,
+        acqPrice: Double,
+        currentPrice: Double? = null
+    ): Boolean {
         if (!restoration.isCompleted || holdingsLoadFailed) return false
         if (shares < 0 || !PortfolioMath.validMoney(acqPrice) ||
             (currentPrice != null && !PortfolioMath.validMoney(currentPrice))) return false
@@ -1543,9 +1700,25 @@ class DividendViewModel @JvmOverloads constructor(
             if (!holding.code.equals(code, true)) holding else {
                 val free = if (holding.shares > 0) (shares.toDouble() * holding.effectiveTaxFreeShares / holding.shares).toInt() else 0
                 holding.copy(shares = shares, acqPrice = acqPrice, price = currentPrice ?: holding.price,
-                    taxFreeShares = free).refreshPayout()
+                    taxFreeShares = free
+                ).refreshPayout()
             }
         })
+        return true
+    }
+
+    fun removeHolding(id: String): Boolean {
+        if (!restoration.isCompleted || holdingsLoadFailed) return false
+        val current = _holdings.value
+        if (current.none { it.id == id }) return false
+        updatePortfolio(current.filterNot { it.id == id })
+        return true
+    }
+
+    fun restoreHolding(holding: Holding): Boolean {
+        if (!restoration.isCompleted || holdingsLoadFailed) return false
+        if (_holdings.value.any { it.id == holding.id || it.code.equals(holding.code, true) }) return false
+        updatePortfolio(_holdings.value + holding)
         return true
     }
 
@@ -1575,13 +1748,17 @@ class DividendViewModel @JvmOverloads constructor(
             sector = security?.industry ?: preset?.sector ?: "業種未登録",
             market = preset?.market ?: if (currency == "$") "米国株" else "東証", category = if (currency == "$") Category.US else Category.JAPAN,
             price = price, currency = currency, shares = 0, acqPrice = 0.0, dps = dps, yieldRate = 0.0, yoc = 0.0,
-            nextPayoutTiming = "配当月未取得", nextPayoutAmount = "—", dividendMonths = preset?.payoutMonths ?: emptyList(),
+            nextPayoutTiming = "配当月未取得", nextPayoutAmount = "—", dividendMonths = emptyList(),
             dividendType = "", accountType = "", dailyChange = "—", isPositive = true
         )
         val merged = runCatching {
             PortfolioMath.mergeAllocations(template.copy(price = price, dps = dps, name = security?.name ?: template.name), allocations)
         }.getOrNull() ?: return false
         updatePortfolio(if (old == null) _holdings.value + merged else _holdings.value.map { if (it.id == old.id) merged else it })
+        applyCachedDividendMonths()
+        yahooSymbol(merged.category, merged.code)?.let { symbol ->
+            viewModelScope.launch { refreshDividendMonths(listOf(symbol)) }
+        }
         return true
     }
 
@@ -1620,11 +1797,20 @@ class DividendViewModel @JvmOverloads constructor(
                     restoration.await()
                     // Worker must see the latest stock alert flags before it can run.
                     if (enabled) persistCurrentHoldings()
+                    if (enabled && kind == NotificationKind.DIVIDEND_CHANGE) {
+                        _financialData.value.values.forEach { data ->
+                            notificationStore.seedDividendChangeBaseline(data.code, data.dividends.map { it.year to it.dps })
+                        }
+                    }
                     val settings = withContext(Dispatchers.IO) { notificationStore.setEnabled(kind, enabled) }
                     _notificationSettings.value = settings
                     notificationScheduler(getApplication(), settings)
+                    if (!enabled && kind == NotificationKind.DIVIDEND_CHANGE) notificationStore.clearPendingDividendChanges()
                     if (!enabled) DiviewNotifications(getApplication()).cancel(kind)
-                }.onFailure { _saveError.value = "通知設定を保存できませんでした。もう一度お試しください。" }
+                    if (enabled && kind == NotificationKind.DIVIDEND_CHANGE) {
+                        launch { refreshFinancialDataIfDue(force = true) }
+                    }
+                }.onFailure { _saveError.value = getApplication<android.app.Application>().getString(R.string.dividend_view_model_message) }
             }
         }
     }
@@ -1648,6 +1834,7 @@ class DividendViewModel @JvmOverloads constructor(
             _watchlist.value = emptyList()
             hasRestoredLocalHoldings = true
             holdingsLoadFailed = false
+            watchlistLoadFailed = false
             _themeMode.value = "dark"
             _selectedAccent.value = "emerald"
             _isOledBlack.value = false
@@ -1670,28 +1857,47 @@ class DividendViewModel @JvmOverloads constructor(
             val (heldResult, watchedResult) = withContext(Dispatchers.IO) {
                 runCatching { localImportStore.loadHoldings() } to runCatching { localImportStore.loadWatchlist() }
             }
-            heldResult.onSuccess { restored -> if (restored != null) _holdings.value = restored }.onFailure {
+            heldResult.onSuccess { restored ->
+                _holdings.value = (restored ?: _holdings.value).map { it.copy(dividendMonths = emptyList()).refreshPayout() }
+            }.onFailure {
                 holdingsLoadFailed = true
                 _holdings.value = emptyList()
-                _saveError.value = "保存データを読み込めませんでした。バックアップから復元してください。"
+                _saveError.value = getApplication<android.app.Application>().getString(R.string.dividend_view_model_message_2)
             }
-            watchedResult.onSuccess { restored -> if (restored != null) _watchlist.value = restored }.onFailure {
+            watchedResult.onSuccess { restored ->
+                _watchlist.value = (restored ?: _watchlist.value).map {
+                    it.copy(payoutMonths = emptyList(), payoutTiming = "配当月未取得")
+                }
+            }.onFailure {
+                watchlistLoadFailed = true
                 _watchlist.value = emptyList()
-                _saveError.value = "監視銘柄の保存データを読み込めませんでした。"
+                _saveError.value = getApplication<android.app.Application>().getString(R.string.dividend_view_model_message_3)
             }
             withContext(Dispatchers.IO) {
                 identities = Tse33IndustryMaster.identities(getApplication())
                 _exchangeRate.value = runCatching { marketPreferences.getString("fx", null)?.let { ExchangeRate.parse(JSONObject(it)) } }.getOrNull()
-                val cached = _holdings.value.map { it.code }.distinct().mapNotNull { code ->
+                val cached = (_holdings.value.map { it.code } + _watchlist.value.filter { it.category == "jp" }.map { it.code })
+                    .distinct().mapNotNull { code ->
                     runCatching { marketPreferences.getString("financial_$code", null)?.let { FinancialData.parse(JSONObject(it), code) } }.getOrNull()
                 }
                 _financialData.value = cached.associateBy { it.code }
             }
+            if (_notificationSettings.value.dividendChangeEnabled) {
+                _financialData.value.values.forEach { data ->
+                    notificationStore.seedDividendChangeBaseline(data.code, data.dividends.map { it.year to it.dps })
+                }
+            }
+            applyCachedDividendMonths()
             refreshRuntimeValues()
+            // Readiness includes the first durable save. Otherwise a late startup
+            // write can replace a backup or other edit made immediately after startup.
+            runCatchingCancellable { persistCurrentHoldings() }.onFailure {
+                _saveError.value = getApplication<android.app.Application>().getString(R.string.dividend_view_model_message_4)
+            }
             restoration.complete(Unit)
             for (ignored in saveRequests) {
                 runCatchingCancellable { persistCurrentHoldings() }.onFailure {
-                    _saveError.value = "保有情報を保存できませんでした。もう一度保存してください。"
+                    _saveError.value = getApplication<android.app.Application>().getString(R.string.dividend_view_model_message_4)
                 }
             }
         }
@@ -1704,11 +1910,12 @@ class DividendViewModel @JvmOverloads constructor(
             if (refreshOnStart) {
                 launch { refreshExchangeRate() }
                 runCatching { notificationScheduler(getApplication(), _notificationSettings.value) }.onFailure {
-                    _saveError.value = "通知の定期確認を設定できませんでした。通知設定を確認してください。"
+                    _saveError.value = getApplication<android.app.Application>().getString(R.string.dividend_view_model_message_5)
                 }
                 seedPopularHoldingsFromCloudflare()
                 refreshMarketPricesIfDue()
-                launch { refreshFinancialDataIfDue() }
+                launch { refreshFinancialDataIfDue(force = _notificationSettings.value.dividendChangeEnabled) }
+                launch { refreshDividendHistoryIfDue() }
             }
         }
     }

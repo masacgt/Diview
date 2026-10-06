@@ -778,6 +778,46 @@ export default {
 
     if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
 
+    if (url.pathname === '/api/v1/dividend-months') {
+      if (!env.MARKET_DATA) return json({ error: 'market_data_unavailable' }, 503);
+      const rawSymbols = String(url.searchParams.get('symbols') || '').split(',').map(value => value.trim());
+      const symbols = [...new Set(rawSymbols.map(value => value.toUpperCase()))];
+      if (symbols.length === 0 || symbols.length > 50 || symbols.some(symbol => !/^[A-Z0-9.^_=-]{1,32}$/.test(symbol))) {
+        return json({ error: 'invalid_request' }, 400);
+      }
+
+      const todayParts = Object.fromEntries(new Intl.DateTimeFormat('en', {
+        timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit'
+      }).formatToParts(new Date()).map(part => [part.type, part.value]));
+      const asOf = `${todayParts.year}-${todayParts.month}-${todayParts.day}`;
+      const cutoff = new Date(Date.parse(`${asOf}T00:00:00.000Z`) - 365 * 24 * 60 * 60 * 1000)
+        .toISOString().slice(0, 10);
+      try {
+        const items = await Promise.all(symbols.map(async symbol => {
+          const safeSymbol = symbol.replaceAll('^', '_').replaceAll('=', '_').replaceAll('/', '_');
+          const object = await env.MARKET_DATA.get(`market/yfinance/securities/${safeSymbol}.json`);
+          if (!object) return { symbol, months: [] };
+          const document = await object.json();
+          const dividendEvents = Array.isArray(document.actions?.dividends) ? document.actions.dividends : [];
+          const months = [...new Set(dividendEvents
+            .filter(event => {
+              const date = String(event?.date || '');
+              const amount = finiteNumber(event?.amount);
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < cutoff || date > asOf || !(amount > 0)) return false;
+              const parsedDate = new Date(`${date}T00:00:00.000Z`);
+              return Number.isFinite(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === date;
+            })
+            .map(event => Number(String(event.date).slice(5, 7))))]
+            .filter(month => month >= 1 && month <= 12)
+            .sort((a, b) => a - b);
+          return { symbol, months };
+        }));
+        return json({ as_of: asOf, lookback_days: 365, items });
+      } catch {
+        return json({ error: 'dividend_history_unavailable' }, 503);
+      }
+    }
+
     if (url.pathname === '/api/v1/popular-holdings') {
       if (!env.MARKET_DATA) return json({ error: 'market_data_unavailable' }, 503);
       const requestedDate = String(url.searchParams.get('date') || '');
@@ -817,11 +857,10 @@ export default {
         const yieldRate = dps !== null && dps >= 0
           ? (dps / currentPrice) * 100
           : finiteNumber(row.yield_rate);
-        const industry = String(statistics.industry || statistics.sector || '').trim();
         return {
           code,
           name: String(row.name || code),
-          sector: industry || null,
+          sector: String(row.sector || '').trim() || null,
           current_price: currentPrice,
           acquisition_price: point.close,
           acquisition_date: point.date,

@@ -1,5 +1,6 @@
 package com.kurogane.dividend.security
 
+import com.kurogane.dividend.R
 import android.content.Context
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -15,7 +16,7 @@ class AppAuthentication(private val activity: FragmentActivity) {
     fun authenticate(onSuccess: () -> Unit, onError: (String) -> Unit) {
         if (inProgress) return
         if (BiometricManager.from(activity).canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
-            onError("端末の設定で指紋・顔認証または画面ロックを登録してください。")
+            onError(activity.getString(R.string.app_authentication_message))
             return
         }
         inProgress = true
@@ -27,12 +28,12 @@ class AppAuthentication(private val activity: FragmentActivity) {
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 inProgress = false
                 onError(if (errorCode == BiometricPrompt.ERROR_USER_CANCELED || errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON)
-                    "認証がキャンセルされました。" else "認証できませんでした：$errString")
+                    activity.getString(R.string.app_authentication_message_2) else activity.getString(R.string.app_authentication_message_3, (errString).toString()))
             }
         })
         prompt!!.authenticate(BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Diviewをロック解除")
-            .setSubtitle("指紋・顔認証または端末の画面ロックで確認")
+            .setTitle(activity.getString(R.string.app_authentication_message_4))
+            .setSubtitle(activity.getString(R.string.app_authentication_message_5))
             .setAllowedAuthenticators(authenticators)
             .build())
     }

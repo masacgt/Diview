@@ -1,5 +1,8 @@
 package com.kurogane.dividend.ui.screens
 
+import com.kurogane.dividend.ui.components.AdaptiveRow
+import androidx.compose.ui.res.stringResource
+import com.kurogane.dividend.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import androidx.compose.animation.*
@@ -18,6 +21,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -67,12 +71,14 @@ fun AnnualDividendScreen(
     viewModel: DividendViewModel,
     onNavigateToDetail: (String) -> Unit = {}
 ) {
+    val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
     val isPrivacyActive by viewModel.isPrivacyActive.collectAsStateWithLifecycle()
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
     val selectedMonth by viewModel.selectedMonth.collectAsStateWithLifecycle()
+    val financialData by viewModel.financialData.collectAsStateWithLifecycle()
 
-    var selectedTab by remember { mutableIntStateOf(2) } // 0: 配当推移, 1: 資産推移, 2: 分析
+    var selectedTab by rememberSaveable { mutableIntStateOf(2) } // 0: 配当推移, 1: 資産推移, 2: 分析
     var assetTrackingPeriod by rememberSaveable { mutableStateOf("5y") }
     var evalBasis by remember { mutableStateOf("eval") } // "eval" or "cost"
 
@@ -118,13 +124,13 @@ fun AnnualDividendScreen(
                     border = BorderStroke(1.dp, BorderColor)
                 ) {
                     Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
-                        Row(
+                        AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                "税引前配当額",
+                                stringResource(R.string.annual_dividend_text),
                                 fontSize = AppTextSize.caption,
                                 fontWeight = FontWeight.Bold,
                                 color = OnSurfaceVariant
@@ -138,20 +144,20 @@ fun AnnualDividendScreen(
                                         .padding(horizontal = 9.dp, vertical = 4.dp)
                                 ) {
                                     Text(
-                                        text = if (isPrivacyActive) "月換算 ¥•••••" else "月換算 ¥${currencyFormat.format((grossAnnualDividend / 12).roundToLong())}",
+                                        text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_5) else resources.getString(R.string.annual_dividend_label_6, (currencyFormat.format((grossAnnualDividend / 12).roundToLong())).toString()),
                                         fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryEmerald,
-                                        maxLines = 1,
+                                        maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                                         softWrap = false
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(3.dp))
                                 Text(
-                                    text = if (isPrivacyActive) "税引後 ¥•••••" else "税引後 ¥${currencyFormat.format((netAnnualDividend / 12).roundToLong())}",
+                                    text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_7) else resources.getString(R.string.annual_dividend_label_8, (currencyFormat.format((netAnnualDividend / 12).roundToLong())).toString()),
                                     fontSize = AppTextSize.dense,
                                     color = OnSurfaceVariant,
-                                    maxLines = 1,
+                                    maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                                     softWrap = false
                                 )
                             }
@@ -169,15 +175,15 @@ fun AnnualDividendScreen(
                                     fontSize = AppTextSize.hero,
                                     letterSpacing = (-0.5).sp
                                 ),
-                                maxLines = 1,
+                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                                 softWrap = false
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("/ 年", color = OnSurfaceVariant, fontSize = AppTextSize.caption, modifier = Modifier.padding(bottom = 4.dp))
+                            Text(stringResource(R.string.annual_dividend_text_2), color = OnSurfaceVariant, fontSize = AppTextSize.caption, modifier = Modifier.padding(bottom = 4.dp))
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = if (isPrivacyActive) "税引き後配当額: ¥ •••••••" else "税引き後配当額: ¥${currencyFormat.format(netAnnualDividend.toLong())}",
+                            text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_9) else resources.getString(R.string.annual_dividend_label_10, (currencyFormat.format(netAnnualDividend.toLong())).toString()),
                             fontSize = AppTextSize.caption,
                             fontWeight = FontWeight.Medium,
                             color = OnSurfaceVariant
@@ -186,7 +192,7 @@ fun AnnualDividendScreen(
                         HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        Row(
+                        AdaptiveRow(
                             modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
@@ -199,7 +205,7 @@ fun AnnualDividendScreen(
                                     .border(0.5.dp, BorderColor, RoundedCornerShape(14.dp))
                                     .padding(12.dp)
                             ) {
-                                Text("取得額配当利回り", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = 1, softWrap = false)
+                                Text(stringResource(R.string.annual_dividend_text_3), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1, softWrap = false)
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
@@ -208,18 +214,18 @@ fun AnnualDividendScreen(
                                         fontWeight = FontWeight.ExtraBold,
                                         color = PrimaryEmerald,
                                         fontFamily = FontFamily.Monospace,
-                                        maxLines = 1,
+                                        maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                                         softWrap = false
                                     )
                                     Spacer(modifier = Modifier.width(2.dp))
-                                    Text("%", fontSize = AppTextSize.dense, color = OnSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
+                                    Text(stringResource(R.string.annual_dividend_text_4), fontSize = AppTextSize.dense, color = OnSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = if (isPrivacyActive) "取得額 ¥••••" else "取得額 ¥${currencyFormat.format(totalCost.toLong())}",
+                                    text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_11) else resources.getString(R.string.annual_dividend_label_12, (currencyFormat.format(totalCost.toLong())).toString()),
                                     fontSize = AppTextSize.dense,
                                     color = OnSurfaceVariant,
-                                    maxLines = 1,
+                                    maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                                     softWrap = false
                                 )
                             }
@@ -233,7 +239,7 @@ fun AnnualDividendScreen(
                                     .border(0.5.dp, BorderColor, RoundedCornerShape(14.dp))
                                     .padding(12.dp)
                             ) {
-                                Text("評価額配当利回り", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = 1, softWrap = false)
+                                Text(stringResource(R.string.annual_dividend_text_5), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1, softWrap = false)
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
@@ -242,18 +248,18 @@ fun AnnualDividendScreen(
                                         fontWeight = FontWeight.ExtraBold,
                                         color = PrimaryEmerald,
                                         fontFamily = FontFamily.Monospace,
-                                        maxLines = 1,
+                                        maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                                         softWrap = false
                                     )
                                     Spacer(modifier = Modifier.width(2.dp))
-                                    Text("%", fontSize = AppTextSize.dense, color = OnSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
+                                    Text(stringResource(R.string.annual_dividend_text_4), fontSize = AppTextSize.dense, color = OnSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
                                 }
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = if (isPrivacyActive) "評価額 ¥••••" else "評価額 ¥${currencyFormat.format(totalAssets.toLong())}",
+                                    text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_13) else resources.getString(R.string.annual_dividend_label_14, (currencyFormat.format(totalAssets.toLong())).toString()),
                                     fontSize = AppTextSize.dense,
                                     color = OnSurfaceVariant,
-                                    maxLines = 1,
+                                    maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                                     softWrap = false
                                 )
                             }
@@ -263,7 +269,7 @@ fun AnnualDividendScreen(
             }
             // 3-way pill tab selector
             item {
-                Row(
+                AdaptiveRow(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
@@ -274,21 +280,21 @@ fun AnnualDividendScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     AnnualDividendTab(
-                        label = "配当分析",
-                        icon = Icons.Default.TrendingUp,
+                        label = resources.getString(R.string.annual_dividend_label_19),
+                        icon = Icons.AutoMirrored.Filled.TrendingUp,
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
                         modifier = Modifier.weight(1f)
                     )
                     AnnualDividendTab(
-                        label = "資産推移",
+                        label = resources.getString(R.string.annual_dividend_label_49),
                         icon = Icons.Default.AccountBalance,
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
                         modifier = Modifier.weight(1f)
                     )
                     AnnualDividendTab(
-                        label = "分析",
+                        label = resources.getString(R.string.analysis),
                         icon = Icons.Default.DataUsage,
                         selected = selectedTab == 2,
                         onClick = { selectedTab = 2 },
@@ -324,6 +330,15 @@ fun AnnualDividendScreen(
                         totalAnnualDividend = totalAnnualDiv,
                         selectedMonth = selectedMonth,
                         isPrivacyActive = isPrivacyActive
+                    )
+                }
+                item {
+                    DividendChangeAnalysisCards(
+                        holdings = holdings,
+                        financialData = financialData,
+                        isPrivacyActive = isPrivacyActive,
+                        taxRateMode = taxRateMode,
+                        onNavigateToDetail = onNavigateToDetail
                     )
                 }
             }
@@ -396,6 +411,7 @@ private fun MonthlyDividendEstimateCard(
     selectedMonth: Int?,
     isPrivacyActive: Boolean
 ) {
+    val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
     val monthlyDividends = remember(holdings, taxRateMode) {
         (1..12).map { month ->
@@ -427,7 +443,7 @@ private fun MonthlyDividendEstimateCard(
         border = BorderStroke(1.dp, BorderBlue)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(
+            AdaptiveRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -435,21 +451,21 @@ private fun MonthlyDividendEstimateCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.DateRange, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("月別の受取配当見込み額", fontSize = AppTextSize.body, fontWeight = FontWeight.ExtraBold, color = OnSurface)
+                    Text(stringResource(R.string.annual_dividend_text_6), fontSize = AppTextSize.body, fontWeight = FontWeight.ExtraBold, color = OnSurface)
                     Spacer(modifier = Modifier.width(6.dp))
                     Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(SurfaceContainerHigh).padding(horizontal = 4.dp, vertical = 2.dp)) {
                         Text(YearMonth.now(ZoneId.of("Asia/Tokyo")).year.toString(), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
                     }
                 }
                 Text(
-                    text = if (isPrivacyActive) "年間合計: ¥ ••••••" else "年間合計: ¥${currencyFormat.format(totalAnnualDividend.toLong())}",
+                    text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_15) else resources.getString(R.string.annual_dividend_label_16, (currencyFormat.format(totalAnnualDividend.toLong())).toString()),
                     fontSize = AppTextSize.caption,
                     fontWeight = FontWeight.ExtraBold,
                     color = NeonGreenLight
                 )
             }
 
-            Text("配当月に年間配当見込み額を配分した目安です。配当月未取得：${holdings.count { it.dps > 0 && it.dividendMonths.isEmpty() }}銘柄。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+            Text(stringResource(R.string.annual_dividend_text_7 , holdings.count { it.dps > 0 && it.dividendMonths.isEmpty() }), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
             Spacer(modifier = Modifier.height(18.dp))
 
             Row(
@@ -474,7 +490,7 @@ private fun MonthlyDividendEstimateCard(
                             fontWeight = FontWeight.Black,
                             color = if (isSelected) NeonGreenLight else SkyBlue,
                             textAlign = TextAlign.Center,
-                            maxLines = 1,
+                            maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                             softWrap = false
                         )
                         Spacer(modifier = Modifier.height(3.dp))
@@ -495,13 +511,13 @@ private fun MonthlyDividendEstimateCard(
                         }
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = "$month",
+                            text = stringResource(R.string.annual_dividend_1_s , month),
                             modifier = Modifier.fillMaxWidth(),
                             fontSize = AppTextSize.dense,
                             fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
                             color = if (isSelected) NeonGreenLight else SoftGray,
                             textAlign = TextAlign.Center,
-                            maxLines = 1,
+                            maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                             softWrap = false
                         )
                     }
@@ -511,7 +527,7 @@ private fun MonthlyDividendEstimateCard(
             Spacer(modifier = Modifier.height(10.dp))
             HorizontalDivider(color = BorderBlue, thickness = 0.5.dp)
             Spacer(modifier = Modifier.height(8.dp))
-            Row(
+            AdaptiveRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -520,17 +536,17 @@ private fun MonthlyDividendEstimateCard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(NeonGreenLight))
                         Spacer(modifier = Modifier.width(3.dp))
-                        Text("日本株", fontSize = AppTextSize.dense, color = SoftGray)
+                        Text(stringResource(R.string.japanese_stocks), fontSize = AppTextSize.dense, color = SoftGray)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(SkyBlue))
                         Spacer(modifier = Modifier.width(3.dp))
-                        Text("米国株", fontSize = AppTextSize.dense, color = SoftGray)
+                        Text(stringResource(R.string.us_stocks), fontSize = AppTextSize.dense, color = SoftGray)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF818CF8)))
                         Spacer(modifier = Modifier.width(3.dp))
-                        Text("投信", fontSize = AppTextSize.dense, color = SoftGray)
+                        Text(stringResource(R.string.funds), fontSize = AppTextSize.dense, color = SoftGray)
                     }
                 }
                 Surface(
@@ -539,7 +555,7 @@ private fun MonthlyDividendEstimateCard(
                     border = BorderStroke(0.5.dp, NeonGreen.copy(alpha = 0.3f))
                 ) {
                     Text(
-                        text = if (selectedMonth != null) "${selectedMonth}月タップ中" else "月平均: 約¥${currencyFormat.format((totalAnnualDividend / 12).toLong())}",
+                        text = if (selectedMonth != null) resources.getString(R.string.annual_dividend_label_17, (selectedMonth).toString()) else resources.getString(R.string.annual_dividend_label_18, (currencyFormat.format((totalAnnualDividend / 12).toLong())).toString()),
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         color = NeonGreenLight,
                         fontSize = AppTextSize.dense,
@@ -659,7 +675,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
         val itemVal = if (chartMode == "dividend") div else valuation
         val ratio = if (totalChartValue > 0.0) itemVal / totalChartValue else 0.0
         val sweepAngle = (ratio * 360f).toFloat()
-        val percentageStr = String.format("%.1f%%", ratio * 100.0)
+        val percentageStr = String.format(java.util.Locale.JAPAN, "%.1f%%", ratio * 100.0)
         val color = sliceColors[index % sliceColors.size]
         
         DonutSliceData(
@@ -712,7 +728,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
         sectorGroups.mapIndexed { index, (sectorName, pair) ->
         val (totalDiv, secHoldings) = pair
         val ratio = if (totalSectorDividend > 0.0) totalDiv / totalSectorDividend else 0.0
-        val percentageVal = String.format("%.1f%%", ratio * 100.0)
+        val percentageVal = String.format(java.util.Locale.JAPAN, "%.1f%%", ratio * 100.0)
         val color = sliceColors[index % sliceColors.size]
 
         SectorGroupData(
@@ -764,13 +780,13 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
             colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "構成銘柄・配当比率",
+                        stringResource(R.string.annual_dividend_text_8),
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = OnSurface
@@ -792,7 +808,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Text(
-                                "構成比率",
+                                stringResource(R.string.annual_dividend_text_9),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = if (chartMode == "holding") OnPrimary else OnSurfaceVariant,
                                     fontWeight = FontWeight.Bold,
@@ -808,7 +824,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Text(
-                                "配当比率",
+                                stringResource(R.string.annual_dividend_text_10),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = if (chartMode == "dividend") OnPrimary else OnSurfaceVariant,
                                     fontWeight = FontWeight.Bold,
@@ -829,7 +845,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "配当支払い銘柄がありません。",
+                            stringResource(R.string.annual_dividend_text_11),
                             style = MaterialTheme.typography.bodyMedium.copy(color = OnSurfaceVariant)
                         )
                     }
@@ -904,13 +920,13 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 ),
-                                maxLines = 1,
+                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             val centerVal = activeSlice?.expectedDiv ?: if (chartMode == "holding") totalAssets else totalAnnualDiv
                             Text(
-                                text = "¥${NumberFormat.getNumberInstance(Locale.JAPAN).format(centerVal.toLong())}",
+                                text = stringResource(R.string.add_holding_1_s , NumberFormat.getNumberInstance(Locale.JAPAN).format(centerVal.toLong())),
                                 style = MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.ExtraBold,
                                     color = OnSurface,
@@ -948,7 +964,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         chunkedSlices.forEach { rowSlices ->
-                            Row(
+                            AdaptiveRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
@@ -969,7 +985,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                             }
                                             .padding(10.dp)
                                     ) {
-                                        Row(
+                                        AdaptiveRow(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
@@ -991,7 +1007,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                                         color = OnSurface,
                                                         fontWeight = FontWeight.SemiBold
                                                     ),
-                                                    maxLines = 1,
+                                                    maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                                                     modifier = Modifier.weight(1f)
                                                 )
                                             }
@@ -1025,13 +1041,13 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
             colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "セクター別比率",
+                        stringResource(R.string.annual_dividend_text_12),
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = OnSurface
@@ -1044,7 +1060,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            "${formattedSectors.size}業種分散",
+                            stringResource(R.string.annual_dividend_text_13 , formattedSectors.size),
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = PrimaryEmerald,
                                 fontWeight = FontWeight.Bold
@@ -1086,7 +1102,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(sec.color))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                "${sec.name} ${sec.percentageVal}",
+                                stringResource(R.string.add_holding_1_s_2_s , sec.name, sec.percentageVal),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
                                     fontSize = AppTextSize.dense
@@ -1122,7 +1138,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                 val defensivePct = if (totalValue > 0.0) (defensiveSum / totalValue) * 100.0 else 0.0
 
                 // Sector Quick Grid Metrics (Cyclical, Mixed, Defensive dynamic cards)
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -1135,16 +1151,16 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
-                                "景気敏感",
+                                stringResource(R.string.annual_dividend_text_14),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
                                     fontWeight = FontWeight.Bold
                                 ),
-                                maxLines = 1
+                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1
                              )
                              Spacer(modifier = Modifier.height(2.dp))
                              Text(
-                                 text = String.format("%.1f%%", cyclicalPct),
+                                 text = String.format(java.util.Locale.JAPAN, "%.1f%%", cyclicalPct),
                                  style = MaterialTheme.typography.bodyMedium.copy(
                                      color = ErrorRed,
                                      fontWeight = FontWeight.Black,
@@ -1152,12 +1168,12 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                  )
                              )
                              Text(
-                                 "卸売・輸送用機器等",
+                                 stringResource(R.string.annual_dividend_text_15),
                                  style = MaterialTheme.typography.labelSmall.copy(
                                      color = OnSurfaceVariant,
                                      fontSize = AppTextSize.dense
                                  ),
-                                 maxLines = 1
+                                 maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1
                              )
                         }
                     }
@@ -1171,16 +1187,16 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
-                                "景気影響が混在",
+                                stringResource(R.string.annual_dividend_text_16),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
                                     fontWeight = FontWeight.Bold
                                 ),
-                                maxLines = 1
+                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = String.format("%.1f%%", mixedPct),
+                                text = String.format(java.util.Locale.JAPAN, "%.1f%%", mixedPct),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = SkyBlue,
                                     fontWeight = FontWeight.Black,
@@ -1188,12 +1204,12 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 )
                             )
                             Text(
-                                "水産・化学・保険業等",
+                                stringResource(R.string.annual_dividend_text_17),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
                                     fontSize = AppTextSize.dense
                                 ),
-                                maxLines = 1
+                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1
                             )
                         }
                     }
@@ -1207,16 +1223,16 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
-                                "ディフェンシブ",
+                                stringResource(R.string.annual_dividend_text_18),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
                                     fontWeight = FontWeight.Bold
                                 ),
-                                maxLines = 1
+                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = String.format("%.1f%%", defensivePct),
+                                text = String.format(java.util.Locale.JAPAN, "%.1f%%", defensivePct),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = PrimaryEmeraldContainer,
                                     fontWeight = FontWeight.Black,
@@ -1224,12 +1240,12 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 )
                             )
                             Text(
-                                "食料・医薬品等",
+                                stringResource(R.string.annual_dividend_text_19),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
                                     fontSize = AppTextSize.dense
                                 ),
-                                maxLines = 1
+                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1
                             )
                         }
                     }
@@ -1242,13 +1258,13 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
+            AdaptiveRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "セクター・銘柄構成詳細",
+                    stringResource(R.string.annual_dividend_text_20),
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = OnSurface),
                     modifier = Modifier.weight(1f)
                 )
@@ -1256,7 +1272,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(SurfaceContainerHigh).padding(2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    listOf("valuation" to "評価額", "dividend" to "配当額").forEach { (mode, title) ->
+                    listOf("valuation" to stringResource(R.string.annual_dividend_label), "dividend" to stringResource(R.string.annual_dividend_label_2)).forEach { (mode, title) ->
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
@@ -1283,7 +1299,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
+                        AdaptiveRow(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { expandedSectors[sec.name] = !isOpen }
@@ -1295,12 +1311,12 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(sec.color))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    "${sec.name}：${sec.holdings.size}銘柄",
+                                    stringResource(R.string.annual_dividend_text_21 , sec.name, sec.holdings.size),
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         color = OnSurface,
                                         fontWeight = FontWeight.Bold
                                     ),
-                                    maxLines = 1,
+                                    maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                                     modifier = Modifier.weight(1f, fill = false),
                                     softWrap = false
                                 )
@@ -1323,7 +1339,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    "¥${NumberFormat.getNumberInstance(Locale.JAPAN).format(sectorAmount.toLong())}${if (sectorValueMode == "dividend") " / 年" else ""}",
+                                    stringResource(R.string.annual_dividend_1_s_2_s , NumberFormat.getNumberInstance(Locale.JAPAN).format(sectorAmount.toLong()), if (sectorValueMode == "dividend") " / 年" else ""),
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = sec.color,
                                         fontWeight = FontWeight.Bold,
@@ -1355,7 +1371,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                     val amountShare = if (sectorCompositionTotal > 0.0) holdingAmount / sectorCompositionTotal * 100.0 else 0.0
                                     val currentYield = if (h.price > 0) (h.dps / h.price) * 100 else 0.0
 
-                                    Row(
+                                    AdaptiveRow(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(8.dp))
@@ -1392,10 +1408,10 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                                         color = OnSurface,
                                                         fontWeight = FontWeight.Bold
                                                     ),
-                                                    maxLines = 1
+                                                    maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1
                                                 )
                                                 Text(
-                                                    "保有 ${h.shares}株 • 利回り ${String.format("%.2f%%", currentYield)}",
+                                                    stringResource(R.string.annual_dividend_text_22 , h.shares, String.format(java.util.Locale.JAPAN, "%.2f%%", currentYield)),
                                                     style = MaterialTheme.typography.labelSmall.copy(
                                                         color = OnSurfaceVariant,
                                                         fontSize = AppTextSize.dense
@@ -1405,7 +1421,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                         }
                                         Column(horizontalAlignment = Alignment.End) {
                                             Text(
-                                                "¥${NumberFormat.getNumberInstance(Locale.JAPAN).format(holdingAmount.toLong())}${if (sectorValueMode == "dividend") " / 年" else ""}",
+                                                stringResource(R.string.annual_dividend_1_s_2_s , NumberFormat.getNumberInstance(Locale.JAPAN).format(holdingAmount.toLong()), if (sectorValueMode == "dividend") " / 年" else ""),
                                                 style = MaterialTheme.typography.bodySmall.copy(
                                                     color = OnSurface,
                                                     fontWeight = FontWeight.SemiBold,
@@ -1413,7 +1429,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                                 )
                                             )
                                             Text(
-                                                "構成比 " + String.format(Locale.JAPAN, "%.1f%%", amountShare),
+                                                stringResource(R.string.annual_dividend_text_23) + String.format(Locale.JAPAN, "%.1f%%", amountShare),
                                                 style = MaterialTheme.typography.labelSmall.copy(
                                                     color = sec.color,
                                                     fontSize = AppTextSize.dense,
@@ -1454,7 +1470,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
             border = BorderStroke(1.dp, BorderBlue)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -1469,7 +1485,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                "AIポートフォリオ診断",
+                                stringResource(R.string.annual_dividend_text_24),
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     color = OnSurface,
                                     fontWeight = FontWeight.Bold,
@@ -1477,7 +1493,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 )
                             )
                             Text(
-                                "分散スコア & リスク評価",
+                                stringResource(R.string.annual_dividend_text_25),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
                                     fontSize = AppTextSize.dense
@@ -1525,7 +1541,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                 )
                 if (portfolioDiagnosis.missingLabels.isNotEmpty()) {
                     Text(
-                        text = "未評価: ${portfolioDiagnosis.missingLabels.joinToString("、")}",
+                        text = stringResource(R.string.annual_dividend_text_26 , portfolioDiagnosis.missingLabels.joinToString("、")),
                         color = AccentAmber,
                         fontSize = AppTextSize.dense
                     )
@@ -1533,7 +1549,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -1546,7 +1562,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             .padding(10.dp)
                     ) {
                         Text(
-                            "増配・非減配の実績",
+                            stringResource(R.string.annual_dividend_text_27),
                             color = OnSurfaceVariant,
                             fontSize = AppTextSize.dense
                         )
@@ -1567,7 +1583,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             .padding(10.dp)
                     ) {
                         Text(
-                            "減配リスク",
+                            stringResource(R.string.annual_dividend_text_28),
                             color = OnSurfaceVariant,
                             fontSize = AppTextSize.dense
                         )
@@ -1594,6 +1610,7 @@ private fun CompoundingSimulationSection(
     totalCost: Double,
     isPrivacyActive: Boolean
 ) {
+    val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
     var loading by remember { mutableStateOf(false) }
     var updateFailed by remember { mutableStateOf(false) }
@@ -1635,65 +1652,65 @@ private fun CompoundingSimulationSection(
     }
     fun signedPercent(value: Double?): String = value?.let { String.format(Locale.JAPAN, "%+.2f%%", it) } ?: "未取得"
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Timeline, null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("年間配当推移", color = OnSurface, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.annual_dividend_text_29), color = OnSurface, fontWeight = FontWeight.Bold)
                 }
-                Text("${years.first().year}年〜${years.last().year}年・現在株数で換算した参考推移", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                Text(stringResource(R.string.annual_dividend_text_30 , years.first().year, years.last().year), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
             }
             Surface(shape = RoundedCornerShape(8.dp), color = PrimaryEmerald.copy(alpha = .15f)) {
-                Text("5期", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+                Text(stringResource(R.string.annual_dividend_text_31), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
             }
         }
-        Text("国内株の現在保有株数 × 分割調整済みの各期実績配当。実際の受取履歴ではありません。米国株・投資信託は対象外です。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-        Text("出典：金融庁EDINET / JPX TDnet（IRBANK加工）", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+        Text(stringResource(R.string.annual_dividend_text_32), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+        Text(stringResource(R.string.annual_dividend_text_33), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        if (updateFailed) Text("一部の履歴を更新できませんでした。取得済みの値を表示しています。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+        if (updateFailed) Text(stringResource(R.string.annual_dividend_text_34), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Card(Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.TrendingUp, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
+                            Icon(Icons.AutoMirrored.Filled.TrendingUp, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("年間配当の増加額", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Text(stringResource(R.string.annual_dividend_text_35), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
                         Surface(shape = RoundedCornerShape(4.dp), color = PrimaryEmerald.copy(alpha = .15f)) {
                             Text(signedPercent(increaseRate), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
                         }
                     }
                     Text(signedMoney(increaseAmount), color = if ((increaseAmount ?: 0.0) >= 0.0) PrimaryEmerald else ErrorRed, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                    Text("${firstPoint?.year?.let { "${it}期" } ?: "開始期未取得"} → ${latestPoint?.year?.let { "${it}期" } ?: "最新期未取得"}・年額差", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                    Text(stringResource(R.string.annual_dividend_text_36 , firstPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, (it).toString()) } ?: resources.getString(R.string.annual_dividend_label_20), latestPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, (it).toString()) } ?: resources.getString(R.string.annual_dividend_label_21)), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 }
             }
             Card(Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.ShowChart, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
+                        Icon(Icons.AutoMirrored.Filled.ShowChart, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("平均成長", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                        Text(stringResource(R.string.annual_dividend_text_37), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
-                    Text(cagr?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: "未取得", color = PrimaryEmerald, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                    Text("年平均増配率（CAGR）", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                    Text("年平均増配額 ${signedMoney(averageAnnualIncrease)} /年", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                    Text(cagr?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: resources.getString(R.string.not_available), color = PrimaryEmerald, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text(stringResource(R.string.annual_dividend_text_38), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                    Text(stringResource(R.string.annual_dividend_text_39 , signedMoney(averageAnnualIncrease)), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                 }
             }
         }
 
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(7.dp).clip(CircleShape).background(PrimaryEmerald))
                         Spacer(Modifier.width(5.dp))
-                        Text("年間配当額（現在株数換算・取得済み分）", color = OnSurface, fontSize = AppTextSize.dense)
+                        Text(stringResource(R.string.annual_dividend_text_40), color = OnSurface, fontSize = AppTextSize.dense)
                     }
                     Surface(shape = RoundedCornerShape(12.dp), color = PrimaryEmerald.copy(alpha = .12f), border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = .3f))) {
-                        Text("開始期比 ${signedPercent(increaseRate)}", modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.annual_dividend_text_41 , signedPercent(increaseRate)), modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                     }
                 }
                 val chartColor = PrimaryEmerald
@@ -1718,24 +1735,24 @@ private fun CompoundingSimulationSection(
                         }
                     }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     years.forEachIndexed { index, point ->
                         Text(point.year.toString(), color = if (index == selectedIndex) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = if (index == selectedIndex) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     }
                 }
-                Text("年次推移データグリッド（年間配当額と前年差）", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(stringResource(R.string.annual_dividend_text_42), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     years.forEachIndexed { index, point ->
                         val previousAmount = years.getOrNull(index - 1)?.amount
                         val yearChange = if (point.amount != null && previousAmount != null) point.amount - previousAmount else null
                         val isSelected = index == selectedIndex
                         Card(Modifier.weight(1f).clickable { selectedYearIndex = index }, shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = if (isSelected) SurfaceContainerHigh else BackgroundDark), border = BorderStroke(1.dp, if (isSelected) PrimaryEmerald else Color.Transparent)) {
                             Column(Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text("${point.year}", color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                Text("${point.covered}/${point.expected}銘柄", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-                                Text("年額", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-                                Text(if (point.amount == null) "未取得" else if (isPrivacyActive) "••••" else "¥${format.format(point.amount.toLong())}", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
-                                Text("前年差", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                                Text(stringResource(R.string.annual_dividend_1_s , point.year), color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.annual_dividend_text_43 , point.covered, point.expected), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                                Text(stringResource(R.string.annual_dividend_text_44), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                                Text(if (point.amount == null) stringResource(R.string.not_available) else if (isPrivacyActive) "••••" else "¥${format.format(point.amount.toLong())}", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.annual_dividend_text_45), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                                 Text(signedMoney(yearChange), color = if ((yearChange ?: 0.0) >= 0.0) PrimaryEmerald else ErrorRed, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                             }
                         }
@@ -1744,17 +1761,17 @@ private fun CompoundingSimulationSection(
                 Surface(shape = RoundedCornerShape(10.dp), color = BackgroundDark, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("${selectedYear.year}期・現在株数で換算", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                            Text("年間配当額 ${money(selectedYear.amount)}", color = OnSurface, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.annual_dividend_text_46 , selectedYear.year), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Text(stringResource(R.string.annual_dividend_text_47 , money(selectedYear.amount)), color = OnSurface, fontWeight = FontWeight.Bold)
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text("取得済み ${selectedYear.covered}/${selectedYear.expected}銘柄", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                            Text("月換算 ${money(selectedYear.amount?.div(12))}", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.annual_dividend_text_48 , selectedYear.covered, selectedYear.expected), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Text(stringResource(R.string.annual_dividend_text_49 , money(selectedYear.amount?.div(12))), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
-                Text("表示額は取得できた銘柄分の小計です。履歴がない銘柄は除外し、実績0円の記録は0円として含めます。税引後では現在の口座区分を適用します。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-                TextButton(onClick = { if (!loading) scope.launch { load() } }, enabled = !loading) { Text("履歴を更新") }
+                Text(stringResource(R.string.annual_dividend_text_50), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                TextButton(onClick = { if (!loading) scope.launch { load(force = true) } }, enabled = !loading) { Text(stringResource(R.string.annual_dividend_text_51)) }
             }
         }
     }
@@ -1772,6 +1789,7 @@ private fun AssetTrackingSection(
     onPeriodSelected: (String) -> Unit,
     loadMonthlyPriceHistory: suspend (List<String>, List<String>) -> List<CloudflareMonthlyPriceSeries>
 ) {
+    val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val currentYear = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).year
     // 1. Dynamic states for user interactivity
     var selectedYearIndex by remember { mutableIntStateOf(4) }
@@ -1845,10 +1863,10 @@ private fun AssetTrackingSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("国内株の現在株数 × 各年末の実際の終値（今年は直近月）。取得額は現在の取得額を比較基準とします。過去の保有資産額ではありません。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-        if (annualHistoryFailed) Text("株価履歴を取得できませんでした。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+        Text(stringResource(R.string.annual_dividend_text_52), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+        if (annualHistoryFailed) Text(stringResource(R.string.annual_dividend_text_53), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
         // A. Header Title row with switch pills
-        Row(
+        AdaptiveRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -1863,7 +1881,7 @@ private fun AssetTrackingSection(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        "資産・配当金推移",
+                        stringResource(R.string.annual_dividend_text_54),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = OnSurface
@@ -1871,7 +1889,7 @@ private fun AssetTrackingSection(
                     )
                 }
                 Text(
-                    if (selectedPeriod == "5y") "${currentYear - 4}年〜${currentYear}年・年末株価による参考評価" else "過去12か月・月末株価による参考評価",
+                    if (selectedPeriod == "5y") resources.getString(R.string.annual_dividend_label_22, (currentYear - 4).toString(), (currentYear).toString()) else resources.getString(R.string.annual_dividend_label_23),
                     style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 )
             }
@@ -1891,7 +1909,7 @@ private fun AssetTrackingSection(
                     modifier = Modifier.clickable { onPeriodSelected("5y") }
                 ) {
                     Text(
-                        "5年",
+                        stringResource(R.string.annual_dividend_text_55),
                         color = if (selectedPeriod == "5y") OnPrimary else OnSurfaceVariant,
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold,
@@ -1905,7 +1923,7 @@ private fun AssetTrackingSection(
                     modifier = Modifier.clickable { onPeriodSelected("12m") }
                 ) {
                     Text(
-                        "12ヶ月",
+                        stringResource(R.string.annual_dividend_text_56),
                         color = if (selectedPeriod == "12m") OnPrimary else OnSurfaceVariant,
                         fontSize = AppTextSize.dense,
                         fontWeight = if (selectedPeriod == "12m") FontWeight.ExtraBold else FontWeight.Normal,
@@ -1916,7 +1934,7 @@ private fun AssetTrackingSection(
         }
 
         // B. Dual Asset KPI Header Rows
-        Row(
+        AdaptiveRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -1927,7 +1945,7 @@ private fun AssetTrackingSection(
                 colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
+                    AdaptiveRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
@@ -1935,7 +1953,7 @@ private fun AssetTrackingSection(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.AccountBalance, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("資産評価額", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Text(stringResource(R.string.annual_dividend_text_57), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
                         Surface(
                             shape = RoundedCornerShape(4.dp),
@@ -1960,7 +1978,7 @@ private fun AssetTrackingSection(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        if (isPrivacyActive) "投資元本: ¥••••" else "投資元本: ¥${currencyFormat.format(realCost.toLong())}",
+                        if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_24) else resources.getString(R.string.annual_dividend_label_25, (currencyFormat.format(realCost.toLong())).toString()),
                         color = OnSurfaceVariant,
                         fontSize = AppTextSize.dense
                     )
@@ -1974,22 +1992,22 @@ private fun AssetTrackingSection(
                 colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
+                    AdaptiveRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.TrendingUp, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
+                            Icon(Icons.AutoMirrored.Filled.TrendingUp, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("通算含み益", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Text(stringResource(R.string.annual_dividend_text_58), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
                         Surface(
                             shape = RoundedCornerShape(4.dp),
                             color = SkyBlue.copy(alpha = 0.15f)
                         ) {
                             Text(
-                                "簿価利回り",
+                                stringResource(R.string.annual_dividend_text_59),
                                 color = SkyBlue,
                                 fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold,
@@ -2007,7 +2025,7 @@ private fun AssetTrackingSection(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        "Yield on Cost: " + String.format("%.2f%%", (totalAnnualDiv / realCost) * 100),
+                        stringResource(R.string.annual_dividend_yield_on_cost) + String.format(java.util.Locale.JAPAN, "%.2f%%", (totalAnnualDiv / realCost) * 100),
                         color = OnSurfaceVariant,
                         fontSize = AppTextSize.dense
                     )
@@ -2023,7 +2041,7 @@ private fun AssetTrackingSection(
             colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -2031,11 +2049,11 @@ private fun AssetTrackingSection(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmeraldContainer))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("評価額 (時価)", color = OnSurface, fontSize = AppTextSize.dense)
+                        Text(stringResource(R.string.annual_dividend_text_60), color = OnSurface, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.width(10.dp))
                         Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF64748B)))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("累積投資元本 (簿価)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                        Text(stringResource(R.string.annual_dividend_text_61), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
 
                     Surface(
@@ -2044,7 +2062,7 @@ private fun AssetTrackingSection(
                         border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
                     ) {
                         Text(
-                            text = if (isPrivacyActive) "含み益: ¥••••" else "含み益: +¥${historicalMoney(gains[4])} (+${historicalPercent(gainsPct[4])})",
+                            text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_26) else resources.getString(R.string.annual_dividend_label_27, (historicalMoney(gains[4])).toString(), (historicalPercent(gainsPct[4])).toString()),
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             color = PrimaryEmerald,
                             fontSize = AppTextSize.dense,
@@ -2129,7 +2147,7 @@ private fun AssetTrackingSection(
                 }
 
                 // X-Axis
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -2149,7 +2167,7 @@ private fun AssetTrackingSection(
 
                 // D. Interactive data grid matching the selector in image
                 Text(
-                    "年次推移データグリッド (元本 vs 時価対比)",
+                    stringResource(R.string.annual_dividend_text_62),
                     color = OnSurface,
                     fontSize = AppTextSize.dense,
                     fontWeight = FontWeight.Bold,
@@ -2157,7 +2175,7 @@ private fun AssetTrackingSection(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
 
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -2183,12 +2201,12 @@ private fun AssetTrackingSection(
                                 Text(yr, color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    "元: " + String.format("%.0f万", costs[idx] / 10000.0),
+                                    stringResource(R.string.annual_dividend_text_63) + String.format(java.util.Locale.JAPAN, resources.getString(R.string.annual_dividend_label_28), costs[idx] / 10000.0),
                                     color = OnSurfaceVariant,
                                     fontSize = AppTextSize.dense
                                 )
                                 Text(
-                                    "時: " + historicalWan(assets[idx]),
+                                    stringResource(R.string.annual_dividend_text_64) + historicalWan(assets[idx]),
                                     color = OnSurface,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
@@ -2221,10 +2239,10 @@ private fun AssetTrackingSection(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("$selYearStr 詳細", color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.annual_dividend_text_65 , selYearStr), color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = if (isPrivacyActive) "評価額: ¥••••••••" else "評価額: ¥${historicalMoney(assets[selectedYearIndex])}",
+                                text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_29) else resources.getString(R.string.annual_dividend_label_30, (historicalMoney(assets[selectedYearIndex])).toString()),
                                 color = OnSurface,
                                 fontSize = AppTextSize.body,
                                 fontWeight = FontWeight.Bold,
@@ -2234,12 +2252,12 @@ private fun AssetTrackingSection(
 
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = if (isPrivacyActive) "投資元本: ¥••••" else "投資元本: ¥${historicalMoney(costs[selectedYearIndex])}",
+                                text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_24) else resources.getString(R.string.annual_dividend_label_25, (historicalMoney(costs[selectedYearIndex])).toString()),
                                 color = OnSurfaceVariant,
                                 fontSize = AppTextSize.dense
                             )
                             Text(
-                                text = if (isPrivacyActive) "含み損益: ••••" else "損益比較 ¥${historicalMoney(gains[selectedYearIndex])} (${historicalPercent(gainsPct[selectedYearIndex])})",
+                                text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_31) else resources.getString(R.string.annual_dividend_label_32, (historicalMoney(gains[selectedYearIndex])).toString(), (historicalPercent(gainsPct[selectedYearIndex])).toString()),
                                 color = if (gains[selectedYearIndex] >= 0) PrimaryEmeraldContainer else ErrorRed,
                                 fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold,
@@ -2258,7 +2276,7 @@ private fun AssetTrackingSection(
             colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -2273,7 +2291,7 @@ private fun AssetTrackingSection(
                         Spacer(modifier = Modifier.width(6.dp))
                         Column {
                             Text(
-                                "未来30年・複利成長シミュレーター",
+                                stringResource(R.string.annual_dividend_text_66),
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
@@ -2281,7 +2299,7 @@ private fun AssetTrackingSection(
                                 )
                             )
                             Text(
-                                "毎月の積立額と配当再投資による複利試算",
+                                stringResource(R.string.annual_dividend_text_67),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
                                     fontSize = AppTextSize.dense
@@ -2296,7 +2314,7 @@ private fun AssetTrackingSection(
                         border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
                     ) {
                         Text(
-                            text = "複利シミュレーション",
+                            text = stringResource(R.string.annual_dividend_text_68),
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                             color = PrimaryEmerald,
                             fontSize = AppTextSize.dense,
@@ -2308,19 +2326,19 @@ private fun AssetTrackingSection(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Selector 1: Monthly Savings Pills
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "毎月の新規積立額:",
+                        stringResource(R.string.annual_dividend_text_69),
                         color = OnSurfaceVariant,
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "¥" + currencyFormat.format(monthlySavings.toLong()),
+                        stringResource(R.string.annual_dividend_text_70) + currencyFormat.format(monthlySavings.toLong()),
                         color = OnSurface,
                         fontSize = AppTextSize.caption,
                         fontWeight = FontWeight.Black,
@@ -2328,7 +2346,7 @@ private fun AssetTrackingSection(
                     )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -2361,13 +2379,13 @@ private fun AssetTrackingSection(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Selector 2: Yield Ratio Selection
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "想定配当利回り:",
+                        stringResource(R.string.annual_dividend_text_71),
                         color = OnSurfaceVariant,
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
@@ -2381,7 +2399,7 @@ private fun AssetTrackingSection(
                     )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -2426,8 +2444,8 @@ private fun AssetTrackingSection(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("配当金を自動で再投資する (複利効果)", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text("税引後(20.315%控除)の配当金を元本に自動組み入れ", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Text(stringResource(R.string.annual_dividend_text_72), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.annual_dividend_text_73), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
                         Switch(
                             checked = isReinvestSelected,
@@ -2444,7 +2462,7 @@ private fun AssetTrackingSection(
 
                 // Simulation Result Header
                 Text(
-                    "複利成長シミュレーション結果",
+                    stringResource(R.string.annual_dividend_text_74),
                     color = OnSurfaceVariant,
                     fontSize = AppTextSize.dense,
                     fontWeight = FontWeight.Bold
@@ -2452,7 +2470,7 @@ private fun AssetTrackingSection(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // 3 columns of simulation results
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
@@ -2475,32 +2493,32 @@ private fun AssetTrackingSection(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    "${yr}年後 (" + (currentYear + yr) + ")",
+                                    stringResource(R.string.annual_dividend_text_75 , yr) + (currentYear + yr) + ")",
                                     color = if (is30Year) PrimaryEmerald else OnSurfaceVariant,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = if (isPrivacyActive) "••••" else String.format("¥%.0f万", valAmt / 10000.0),
+                                    text = if (isPrivacyActive) "••••" else String.format(java.util.Locale.JAPAN, resources.getString(R.string.annual_dividend_label_33), valAmt / 10000.0),
                                     color = OnSurface,
                                     fontSize = AppTextSize.body,
                                     fontWeight = FontWeight.Black,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
-                                    text = if (isPrivacyActive) "元本: ••••" else String.format("元本: ¥%.0f万", costAmt / 10000.0),
+                                    text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_34) else String.format(java.util.Locale.JAPAN, resources.getString(R.string.annual_dividend_label_35), costAmt / 10000.0),
                                     color = OnSurfaceVariant,
                                     fontSize = AppTextSize.dense
                                 )
 
                                 Spacer(modifier = Modifier.height(6.dp))
-                                Divider(color = BorderColor)
+                                HorizontalDivider(color = BorderColor)
                                 Spacer(modifier = Modifier.height(6.dp))
 
-                                Text("月配当(目安)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                Text(stringResource(R.string.annual_dividend_text_76), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 Text(
-                                    text = if (isPrivacyActive) "¥••••/月" else "¥${currencyFormat.format(monthDiv.toLong())}/月",
+                                    text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_36) else resources.getString(R.string.annual_dividend_label_37, (currencyFormat.format(monthDiv.toLong())).toString()),
                                     color = if (is30Year) PrimaryEmeraldContainer else SkyBlue,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
@@ -2531,12 +2549,12 @@ private fun AssetTrackingSection(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = String.format(
-                                "現在の資産評価額 ¥%,.0f万から、毎月 ¥%s を積立、利回り %.2f%% で運用し、さらに配当金を再投資%sした場合のシミュレーションです。複利効果により、30年間の累計不労所得・資産価値は加速度的に成長します。",
+                            text = String.format(java.util.Locale.JAPAN,
+                                resources.getString(R.string.annual_dividend_label_38),
                                 realAssets / 10000.0,
                                 currencyFormat.format(monthlySavings.toLong()),
                                 yieldRate * 100,
-                                if (isReinvestSelected) "し続けた" else "せず貯蓄"
+                                if (isReinvestSelected) resources.getString(R.string.annual_dividend_label_39) else resources.getString(R.string.annual_dividend_label_40)
                             ),
                             color = PrimaryEmerald,
                             fontSize = AppTextSize.dense,
@@ -2552,7 +2570,7 @@ private fun AssetTrackingSection(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
+            AdaptiveRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -2566,14 +2584,14 @@ private fun AssetTrackingSection(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        "年次推移・元本 VS 評価額",
+                        stringResource(R.string.annual_dividend_text_77),
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = OnSurface
                         )
                     )
                 }
-                Text("${currentYear - 4}〜$currentYear", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                Text(stringResource(R.string.annual_dividend_1_s_2_s_2 , currentYear - 4, currentYear), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2603,7 +2621,7 @@ private fun AssetTrackingSection(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        "'" + title.take(4).drop(2),
+                                        stringResource(R.string.annual_dividend_text_78) + title.take(4).drop(2),
                                         color = OnSurface,
                                         fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold
@@ -2622,7 +2640,7 @@ private fun AssetTrackingSection(
                                                 color = PrimaryEmeraldContainer.copy(alpha = 0.15f)
                                             ) {
                                                 Text(
-                                                    "含み益最大",
+                                                    stringResource(R.string.annual_dividend_text_79),
                                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                                     color = PrimaryEmeraldContainer,
                                                     fontSize = AppTextSize.dense,
@@ -2635,7 +2653,7 @@ private fun AssetTrackingSection(
                                                 color = OnSurfaceVariant.copy(alpha = 0.15f)
                                             ) {
                                                 Text(
-                                                    "確定",
+                                                    stringResource(R.string.annual_dividend_text_80),
                                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                                     color = OnSurfaceVariant,
                                                     fontSize = AppTextSize.dense,
@@ -2645,7 +2663,7 @@ private fun AssetTrackingSection(
                                         }
                                     }
                                     Text(
-                                        text = if (isPrivacyActive) "元本 ¥•••• • 評価額 ¥••••" else "元本 ¥${historicalMoney(costs[index])} • 評価額 ¥${historicalMoney(assets[index])}",
+                                        text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_41) else resources.getString(R.string.annual_dividend_label_42, (historicalMoney(costs[index])).toString(), (historicalMoney(assets[index])).toString()),
                                         color = OnSurfaceVariant,
                                         fontSize = AppTextSize.dense
                                     )
@@ -2654,14 +2672,14 @@ private fun AssetTrackingSection(
 
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    text = if (isPrivacyActive) "••••" else String.format("%s¥%s", prefix, historicalMoney(gains[index])),
+                                    text = if (isPrivacyActive) "••••" else String.format(java.util.Locale.JAPAN, "%s¥%s", prefix, historicalMoney(gains[index])),
                                     color = if (isGain) PrimaryEmeraldContainer else ErrorRed,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
-                                    text = if (index == 0) "基準年" else historicalPercent(gainsPct[index]),
+                                    text = if (index == 0) resources.getString(R.string.annual_dividend_label_43) else historicalPercent(gainsPct[index]),
                                     color = if (index == 0) OnSurfaceVariant else if (isGain) PrimaryEmeraldContainer else ErrorRed,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
@@ -2690,6 +2708,7 @@ private fun AssetTrackingTwelveMonthSection(
     currencyFormat: NumberFormat,
     loadMonthlyPriceHistory: suspend (List<String>, List<String>) -> List<CloudflareMonthlyPriceSeries>
 ) {
+    val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val months = remember {
         val currentMonth = YearMonth.now(ZoneId.of("Asia/Tokyo"))
         (11 downTo 0).map { currentMonth.minusMonths(it.toLong()) }
@@ -2713,7 +2732,7 @@ private fun AssetTrackingTwelveMonthSection(
         if (targetCodes.isEmpty()) return@LaunchedEffect
         isHistoryLoading = true
         historyLoadFailed = false
-        runCatching { loadMonthlyPriceHistory(targetCodes, monthKeys) }
+        com.kurogane.dividend.data.runCatchingCancellable { loadMonthlyPriceHistory(targetCodes, monthKeys) }
             .onSuccess { series ->
                 monthlyPriceHistory = series.associate { row -> row.code to row.prices.associateBy { it.month } }
             }
@@ -2760,7 +2779,7 @@ private fun AssetTrackingTwelveMonthSection(
         border = BorderStroke(1.dp, BorderColor)
     ) {
         Column(Modifier.fillMaxWidth().padding(14.dp)) {
-            Row(
+            AdaptiveRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -2768,11 +2787,11 @@ private fun AssetTrackingTwelveMonthSection(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmeraldContainer))
                     Spacer(Modifier.width(5.dp))
-                    Text("国内株評価額 (時価)", color = OnSurface, fontSize = AppTextSize.dense)
+                    Text(stringResource(R.string.annual_dividend_text_81), color = OnSurface, fontSize = AppTextSize.dense)
                     Spacer(Modifier.width(10.dp))
                     Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF64748B)))
                     Spacer(Modifier.width(5.dp))
-                    Text("取得元本 (現在保有分)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                    Text(stringResource(R.string.annual_dividend_text_82), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 }
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -2781,9 +2800,9 @@ private fun AssetTrackingTwelveMonthSection(
                 ) {
                     Text(
                         text = when {
-                            isPrivacyActive -> "含み益 ¥••••"
-                            latest.gain == null -> if (isHistoryLoading) "履歴取得中" else "履歴なし"
-                            else -> "含み益 ${if (latest.gain >= 0) "+" else "−"}¥${currencyFormat.format(kotlin.math.abs(latest.gain).toLong())}"
+                            isPrivacyActive -> resources.getString(R.string.annual_dividend_label_44)
+                            latest.gain == null -> if (isHistoryLoading) resources.getString(R.string.annual_dividend_label_45) else resources.getString(R.string.annual_dividend_label_46)
+                            else -> resources.getString(R.string.annual_dividend_label_47, (if (latest.gain >= 0) "+" else "−").toString(), (currencyFormat.format(kotlin.math.abs(latest.gain).toLong())).toString())
                         },
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                         color = if ((latest.gain ?: 0.0) >= 0) PrimaryEmerald else ErrorRed,
@@ -2846,7 +2865,7 @@ private fun AssetTrackingTwelveMonthSection(
                 }
             }
 
-            Row(
+            AdaptiveRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 5.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -2863,17 +2882,17 @@ private fun AssetTrackingTwelveMonthSection(
             }
 
             Spacer(Modifier.height(10.dp))
-            Row(
+            AdaptiveRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("月次推移データ (現在の保有数で再評価)", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                Text(if (isHistoryLoading) "株価履歴取得中" else "月末株価", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.annual_dividend_text_83), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                Text(if (isHistoryLoading) stringResource(R.string.annual_dividend_label_3) else stringResource(R.string.annual_dividend_label_4), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(8.dp))
 
-            Row(
+            AdaptiveRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -2893,44 +2912,44 @@ private fun AssetTrackingTwelveMonthSection(
                             .padding(horizontal = 8.dp, vertical = 10.dp)
                     ) {
                         Text(
-                        text = if (isLatest) "${item.month}月最新" else "${item.month}月",
+                        text = if (isLatest) resources.getString(R.string.annual_dividend_label_48, (item.month).toString()) else resources.getString(R.string.ex_dividend_matrix_dialog_text_4, (item.month).toString()),
                             color = if (isLatest) PrimaryEmerald else OnSurface,
                             fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold,
-                            maxLines = 1,
+                            maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                             softWrap = false
                         )
                         Spacer(Modifier.height(7.dp))
                         Text(
-                            text = if (isPrivacyActive) "元: ••••" else "元: ${formatAssetWan(item.cost)}",
+                            text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_50) else resources.getString(R.string.annual_dividend_label_51, (formatAssetWan(item.cost)).toString()),
                             color = OnSurfaceVariant,
                             fontSize = AppTextSize.dense,
-                            maxLines = 1,
+                            maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                             softWrap = false
                         )
                         Text(
                             text = when {
-                                isPrivacyActive -> "時: ••••"
-                                item.value == null -> "時: 履歴なし"
-                                else -> "時: ${formatAssetWan(item.value)}"
+                                isPrivacyActive -> resources.getString(R.string.annual_dividend_label_52)
+                                item.value == null -> resources.getString(R.string.annual_dividend_label_53)
+                                else -> resources.getString(R.string.annual_dividend_label_54, (formatAssetWan(item.value)).toString())
                             },
                             color = if (isLatest) PrimaryEmerald else OnSurface,
                             fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold,
-                            maxLines = 1,
+                            maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                             softWrap = false
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
                             text = when {
                                 isPrivacyActive -> "••••"
-                                item.gain == null -> "損益: —"
+                                item.gain == null -> resources.getString(R.string.annual_dividend_label_55)
                                 else -> "${if (item.gain >= 0) "+" else "−"}${formatAssetWan(kotlin.math.abs(item.gain))}"
                             },
                             color = gainColor,
                             fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.ExtraBold,
-                            maxLines = 1,
+                            maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                             softWrap = false
                         )
                     }
@@ -2939,11 +2958,11 @@ private fun AssetTrackingTwelveMonthSection(
             Spacer(Modifier.height(6.dp))
             Text(
                 text = buildString {
-                    append("現在の保有株数に各月の株価を適用した参考値です。取得株数の過去履歴は含みません。")
-                    if (unsupportedCount > 0) append(" 国内株以外 ${unsupportedCount}銘柄は対象外です。")
-                    if (historyLoadFailed) append(" 株価履歴を取得できませんでした。")
-                    else if (targetHoldings.isEmpty()) append(" 対象となる国内株がありません。")
-                    else if (!isHistoryLoading && monthlySnapshots.none { it.value != null }) append(" 月末株価がないため表示できる履歴がありません。")
+                    append(resources.getString(R.string.annual_dividend_label_56))
+                    if (unsupportedCount > 0) append(resources.getString(R.string.annual_dividend_label_57, (unsupportedCount).toString()))
+                    if (historyLoadFailed) append(resources.getString(R.string.annual_dividend_label_58))
+                    else if (targetHoldings.isEmpty()) append(resources.getString(R.string.annual_dividend_label_59))
+                    else if (!isHistoryLoading && monthlySnapshots.none { it.value != null }) append(resources.getString(R.string.annual_dividend_label_60))
                 },
                 color = OnSurfaceVariant,
                 fontSize = AppTextSize.dense

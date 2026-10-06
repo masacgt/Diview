@@ -20,9 +20,10 @@ class DiviewNotifications(private val context: Context) {
 
     fun createChannels() {
         listOf(
-            Triple(PRICE_CHANNEL, "買場シグナル・株価アラート", "取得株価から目標利回りへの到達をお知らせします"),
-            Triple(DIVIDEND_CHANNEL, "配当月リマインダー", "登録した配当受取月をお知らせします"),
-            Triple(TEST_CHANNEL, "テスト通知", "通知が受信できるか確認します")
+            Triple(PRICE_CHANNEL, context.getString(R.string.settings_text_11), context.getString(R.string.diview_notifications_message_2)),
+            Triple(DIVIDEND_CHANNEL, context.getString(R.string.diview_notifications_message_3), context.getString(R.string.diview_notifications_message_4)),
+            Triple(DIVIDEND_CHANGE_CHANNEL, context.getString(R.string.notification_dividend_change_title), context.getString(R.string.notification_dividend_change_description)),
+            Triple(TEST_CHANNEL, context.getString(R.string.settings_label_32), context.getString(R.string.diview_notifications_message_6))
         ).forEach { (id, name, description) ->
             manager.createNotificationChannel(NotificationChannel(id, name, NotificationManager.IMPORTANCE_DEFAULT).apply {
                 this.description = description
@@ -48,7 +49,7 @@ class DiviewNotifications(private val context: Context) {
         }
         val pending = PendingIntent.getActivity(context, id, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val public = NotificationCompat.Builder(context, channel).setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Diview").setContentText("新しいお知らせがあります").build()
+            .setContentTitle("Diview").setContentText(context.getString(R.string.diview_notifications_message_7)).build()
         val notification = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_notification).setContentTitle(title.take(160)).setContentText(text.take(1000))
             .setStyle(NotificationCompat.BigTextStyle().bigText(text.take(1000)))
@@ -61,21 +62,31 @@ class DiviewNotifications(private val context: Context) {
         } catch (_: SecurityException) { false }
     }
 
-    fun test(): Boolean = post(TEST_ID, TEST_CHANNEL, "Diviewのテスト通知", "通知が有効です。タップすると通知設定を開きます。", "settings")
-    fun cancel(kind: NotificationKind) = manager.cancel(if (kind == NotificationKind.PRICE) PRICE_ID else DIVIDEND_ID)
-    fun clear() { manager.cancel(PRICE_ID); manager.cancel(DIVIDEND_ID); manager.cancel(TEST_ID) }
+    fun test(): Boolean = post(TEST_ID, TEST_CHANNEL, context.getString(R.string.diview_notifications_message_8), context.getString(R.string.diview_notifications_message_9), "settings")
+    fun cancel(kind: NotificationKind) = manager.cancel(when (kind) {
+        NotificationKind.PRICE -> PRICE_ID
+        NotificationKind.DIVIDEND -> DIVIDEND_ID
+        NotificationKind.DIVIDEND_CHANGE -> DIVIDEND_CHANGE_ID
+    })
+    fun clear() { manager.cancel(PRICE_ID); manager.cancel(DIVIDEND_ID); manager.cancel(DIVIDEND_CHANGE_ID); manager.cancel(TEST_ID) }
 
     companion object {
         const val PRICE_CHANNEL = "diview_price_alerts"
         const val DIVIDEND_CHANNEL = "diview_dividend_reminders"
+        const val DIVIDEND_CHANGE_CHANNEL = "diview_dividend_changes"
         const val TEST_CHANNEL = "diview_notification_test"
         const val PRICE_ID = 8101
         const val DIVIDEND_ID = 8102
+        const val DIVIDEND_CHANGE_ID = 8104
         const val TEST_ID = 8103
         const val ACTION_OPEN = "com.kurogane.dividend.OPEN_NOTIFICATION"
         private val destinations = setOf("watchlist", "annual", "settings")
 
-        fun channel(kind: NotificationKind): String = if (kind == NotificationKind.PRICE) PRICE_CHANNEL else DIVIDEND_CHANNEL
+        fun channel(kind: NotificationKind): String = when (kind) {
+            NotificationKind.PRICE -> PRICE_CHANNEL
+            NotificationKind.DIVIDEND -> DIVIDEND_CHANNEL
+            NotificationKind.DIVIDEND_CHANGE -> DIVIDEND_CHANGE_CHANNEL
+        }
 
         fun destination(intent: Intent?): String? {
             if (intent?.action != ACTION_OPEN) return null
