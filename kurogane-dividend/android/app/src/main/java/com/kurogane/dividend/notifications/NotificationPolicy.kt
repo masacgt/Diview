@@ -9,17 +9,29 @@ import java.time.LocalTime
 import java.time.ZonedDateTime
 import java.time.ZoneId
 
-enum class NotificationKind { PRICE, DIVIDEND }
+enum class NotificationKind { PRICE, DIVIDEND, DIVIDEND_CHANGE }
 
 data class NotificationSettings(
     val priceEnabled: Boolean = false,
     val dividendEnabled: Boolean = false,
-    val revision: Long = 0L
+    val revision: Long = 0L,
+    val dividendChangeEnabled: Boolean = false
 ) {
     fun enabled(kind: NotificationKind): Boolean = when (kind) {
         NotificationKind.PRICE -> priceEnabled
         NotificationKind.DIVIDEND -> dividendEnabled
+        NotificationKind.DIVIDEND_CHANGE -> dividendChangeEnabled
     }
+}
+
+data class DividendChangeEvent(
+    val code: String,
+    val name: String,
+    val fiscalYear: Int,
+    val previousDps: Double,
+    val currentDps: Double
+) {
+    val isIncrease: Boolean get() = currentDps > previousDps
 }
 
 data class PriceAlertState(

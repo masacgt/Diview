@@ -25,8 +25,8 @@ def display_code(value: object) -> str:
     return code[:4] if code.endswith("0") else code
 
 
-def fetch_codes(api_key: str) -> list[str]:
-    codes: set[str] = set()
+def fetch_securities(api_key: str) -> list[dict[str, str]]:
+    securities: dict[str, str] = {}
     cursor: str | None = None
     seen_cursors: set[str] = set()
     while True:
@@ -50,18 +50,24 @@ def fetch_codes(api_key: str) -> list[str]:
             if not isinstance(row, dict) or "Code" not in row:
                 raise RuntimeError("J-Quants master response contains an invalid issue row")
             code = display_code(row["Code"])
-            if code in codes:
+            if code in securities:
                 raise RuntimeError(f"Duplicate issue code in J-Quants master: {code}")
-            codes.add(code)
+            industry = str(row.get("S33Nm") or "").strip()
+            securities[code] = industry
         cursor = payload.get("pagination_key")
         if not cursor:
             break
         if not isinstance(cursor, str) or cursor in seen_cursors:
             raise RuntimeError("Invalid or repeated J-Quants pagination key")
         seen_cursors.add(cursor)
-    if len(codes) < 1000:
-        raise RuntimeError(f"J-Quants master returned only {len(codes)} issues; refusing partial universe")
-    return sorted(codes)
+    if len(securities) < 1000:
+        raise RuntimeError(f"J-Quants master returned only {len(securities)} issues; refusing partial universe")
+    return [{"security_code_display": code, "sector_name": securities[code]} for code in sorted(securities)]
+
+
+def fetch_codes(api_key: str) -> list[str]:
+    """Compatibility helper for callers that only need the listed issue codes."""
+    return [row["security_code_display"] for row in fetch_securities(api_key)]
 
 
 def main() -> None:
@@ -71,15 +77,15 @@ def main() -> None:
     api_key = os.environ.get("JQUANTS_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("JQUANTS_API_KEY is required")
-    codes = fetch_codes(api_key)
+    securities = fetch_securities(api_key)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.output.with_suffix(args.output.suffix + ".tmp")
     with temporary.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.writer(stream)
-        writer.writerow(["security_code_display"])
-        writer.writerows((code,) for code in codes)
+        writer.writerow(["security_code_display", "sector_name"])
+        writer.writerows((row["security_code_display"], row["sector_name"]) for row in securities)
     temporary.replace(args.output)
-    print(f"Saved {len(codes)} J-Quants listed issues to {args.output}")
+    print(f"Saved {len(securities)} J-Quants listed issues to {args.output}")
 
 
 if __name__ == "__main__":

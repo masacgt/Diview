@@ -95,6 +95,26 @@ class CloudflareMarketRepositoryTest {
         assertEquals(mapOf("7203" to 2000.0), result)
     }
 
+    @Test fun parsesCloudflareDividendMonthsAndKeepsOnlyRequestedSymbolsAndValidMonths() = runBlocking {
+        val response = """{"as_of":"2026-10-05","lookback_days":365,"items":[
+            {"symbol":"7203.T","months":[12,6,6,0,13]},
+            {"symbol":"MSFT","months":[]},
+            {"symbol":"AAPL","months":[3]}]}"""
+        val result = repository(Connection(200, response)).fetchDividendMonths(listOf("7203.T", "msft"))
+
+        assertEquals(java.time.LocalDate.parse("2026-10-05"), result.asOf)
+        assertEquals(mapOf("7203.T" to listOf(6, 12), "MSFT" to emptyList<Int>()), result.monthsBySymbol)
+    }
+
+    @Test fun dividendMonthRequestRejectsEmptyOversizedAndUnsafeSymbolBatches() {
+        val repo = repository(Connection(200, "{}"))
+        assertThrows(IllegalArgumentException::class.java) { runBlocking { repo.fetchDividendMonths(emptyList()) } }
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { repo.fetchDividendMonths((1..51).map { "T$it" }) }
+        }
+        assertThrows(IllegalArgumentException::class.java) { runBlocking { repo.fetchDividendMonths(listOf("../private")) } }
+    }
+
     @Test fun oversizedResponseFailsWithConnectionClosed() {
         val connection = Connection(200, " ".repeat(8 * 1024 * 1024 + 1))
         assertThrows(IllegalArgumentException::class.java) { runBlocking { repository(connection).searchSecurities("7203") } }

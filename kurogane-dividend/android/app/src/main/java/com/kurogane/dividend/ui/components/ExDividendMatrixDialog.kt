@@ -1,7 +1,12 @@
 package com.kurogane.dividend.ui.components
 
+import androidx.compose.ui.res.stringResource
+import com.kurogane.dividend.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -15,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -28,11 +35,14 @@ fun ExDividendMatrixDialog(
     onDismiss: () -> Unit
 ) {
     if (!isOpen) return
+    val largeText = LocalDensity.current.fontScale >= 1.4f
+    val maxDialogHeight = LocalConfiguration.current.screenHeightDp.dp * 0.85f
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(max = maxDialogHeight)
                 .wrapContentHeight(),
             shape = RoundedCornerShape(20.dp),
             color = SurfaceContainer
@@ -40,10 +50,11 @@ fun ExDividendMatrixDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(20.dp)
             ) {
                 // Header
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -65,14 +76,14 @@ fun ExDividendMatrixDialog(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                "年間権利落ち・配当金カレンダー",
+                                stringResource(R.string.ex_dividend_matrix_dialog_text),
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface
                                 )
                             )
                             Text(
-                                "12ヶ月配当密度ヒートマップ",
+                                stringResource(R.string.ex_dividend_matrix_dialog_text_2),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
                                     fontSize = AppTextSize.dense
@@ -83,9 +94,9 @@ fun ExDividendMatrixDialog(
 
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.minimumInteractiveComponentSize().size(28.dp)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = OnSurfaceVariant)
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close), tint = OnSurfaceVariant)
                     }
                 }
 
@@ -96,13 +107,15 @@ fun ExDividendMatrixDialog(
                 val dividendStrengths = listOf(1, 2, 4, 1, 2, 5, 1, 2, 3, 1, 2, 5)
 
                 Text(
-                    "月別受取密度",
+                    stringResource(R.string.ex_dividend_matrix_dialog_text_3),
                     style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontWeight = FontWeight.SemiBold)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().then(
+                        if (largeText) Modifier.horizontalScroll(rememberScrollState()) else Modifier
+                    ),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     months.zip(dividendStrengths).forEach { (month, strength) ->
@@ -116,15 +129,14 @@ fun ExDividendMatrixDialog(
                         val textColor = if (strength >= 4) OnPrimary else OnSurface
 
                         Column(
-                            modifier = Modifier
-                                .weight(1f)
+                            modifier = (if (largeText) Modifier.width(48.dp) else Modifier.weight(1f))
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(bg)
                                 .padding(vertical = 6.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                "${month}月",
+                                stringResource(R.string.ex_dividend_matrix_dialog_text_4 , month),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = textColor,
                                     fontWeight = FontWeight.Bold,
@@ -139,7 +151,7 @@ fun ExDividendMatrixDialog(
 
                 // Stocks breakdown table
                 Text(
-                    "銘柄別 権利付最終日 / 入金月",
+                    stringResource(R.string.ex_dividend_matrix_dialog_text_5),
                     style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontWeight = FontWeight.SemiBold)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -153,11 +165,11 @@ fun ExDividendMatrixDialog(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     MatrixRow("7203 トヨタ自動車", "3月 / 9月末", "6月 / 12月入金", "¥7,280")
-                    Divider(color = SurfaceContainerHighest)
+                    HorizontalDivider(color = SurfaceContainerHighest)
                     MatrixRow("8316 三井住友FG", "3月 / 9月末", "6月 / 12月入金", "¥13,000")
-                    Divider(color = SurfaceContainerHighest)
+                    HorizontalDivider(color = SurfaceContainerHighest)
                     MatrixRow("9432 日本電信電話", "3月 / 9月末", "6月 / 12月入金", "¥520")
-                    Divider(color = SurfaceContainerHighest)
+                    HorizontalDivider(color = SurfaceContainerHighest)
                     MatrixRow("AAPL アップル", "2, 5, 8, 11月", "各月中旬 (四半期)", "$10.0")
                 }
 
@@ -169,7 +181,7 @@ fun ExDividendMatrixDialog(
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("閉じる", color = OnPrimary, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.close), color = OnPrimary, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -183,14 +195,14 @@ private fun MatrixRow(
     payoutTiming: String,
     expectedAmount: String
 ) {
-    Row(
+    AdaptiveRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
             Text(title, style = MaterialTheme.typography.bodySmall.copy(color = OnSurface, fontWeight = FontWeight.SemiBold))
-            Text("$rightsMonth → $payoutTiming", style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontSize = AppTextSize.dense))
+            Text(stringResource(R.string.ex_dividend_matrix_dialog_1_s_2_s , rightsMonth, payoutTiming), style = MaterialTheme.typography.labelSmall.copy(color = OnSurfaceVariant, fontSize = AppTextSize.dense))
         }
         Text(
             expectedAmount,

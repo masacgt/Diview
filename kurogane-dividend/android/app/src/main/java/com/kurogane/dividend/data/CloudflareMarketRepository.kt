@@ -66,6 +66,11 @@ data class CloudflareMonthlyPriceSeries(
     val prices: List<CloudflareMonthlyPrice>
 )
 
+data class CloudflareDividendMonths(
+    val asOf: LocalDate,
+    val monthsBySymbol: Map<String, List<Int>>
+)
+
 /** Public, read-only access to the app's Cloudflare D1/R2 data. No credentials belong in the APK. */
 class CloudflareMarketRepository(
     private val baseUrl: String = BuildConfig.DIVIEW_D1_API_BASE_URL,
@@ -207,6 +212,36 @@ class CloudflareMarketRepository(
             }
             CloudflareMonthlyPriceSeries(code, monthlyPrices)
         }
+    }
+
+    /** Returns dividend months observed in the last 365 days from the Cloudflare R2 history. */
+    suspend fun fetchDividendMonths(symbols: List<String>): CloudflareDividendMonths = withContext(ioDispatcher) {
+        val normalizedSymbols = symbols.map { it.trim().uppercase(java.util.Locale.ROOT) }.distinct()
+        require(normalizedSymbols.isNotEmpty() && normalizedSymbols.size <= 50 &&
+            normalizedSymbols.all { it.matches(Regex("[A-Z0-9.^_=-]{1,32}")) }) {
+            "配当履歴の銘柄コードは1〜50件で指定してください"
+        }
+        val encodedSymbols = URLEncoder.encode(normalizedSymbols.joinToString(","), Charsets.UTF_8.name())
+        val root = getJson("/api/v1/dividend-months?symbols=$encodedSymbols")
+        val asOf = runCatching { LocalDate.parse(root.optString("as_of")) }
+            .getOrElse { throw IOException("Cloudflareの配当履歴日付が正しくありません", it) }
+        val rows = root.optJSONArray("items") ?: throw IOException("Cloudflareの配当履歴にitemsがありません")
+        val requested = normalizedSymbols.toSet()
+        val monthsBySymbol = buildMap {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val symbol = row.optString("symbol").trim().uppercase(java.util.Locale.ROOT)
+                if (symbol !in requested) continue
+                val months = row.optJSONArray("months") ?: continue
+                val validMonths = (0 until months.length())
+                    .map { months.optInt(it, -1) }
+                    .filter { it in 1..12 }
+                    .distinct()
+                    .sorted()
+                put(symbol, validMonths)
+            }
+        }
+        CloudflareDividendMonths(asOf, monthsBySymbol)
     }
 
     suspend fun financialDocument(code: String): JSONObject? = withContext(ioDispatcher) {

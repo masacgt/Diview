@@ -70,6 +70,28 @@ class PortfolioPersistenceTest {
         assertEquals(1111.0, restored.acqPrice, 0.0)
     }
 
+    @Test fun unreadableWatchlistIsNotOverwrittenByStartupOrHoldingSave() {
+        val prefs = application.getSharedPreferences("local_import_store", Context.MODE_PRIVATE)
+        val broken = "invalid encrypted watchlist"
+        prefs.edit().putString("watchlist", broken).commit()
+        val vm = model()
+        instrumentation.runOnMainSync { assertTrue(vm.updateHolding("7203", 137, 1100.0)) }
+        awaitSaved { LocalImportStore(application).loadHoldings()?.firstOrNull { it.code == "7203" }?.shares == 137 }
+        assertEquals(broken, prefs.getString("watchlist", null))
+        instrumentation.runOnMainSync { vm.toggleWatchlistMembership(vm.holdings.value.first()) }
+        assertTrue(vm.watchlist.value.isEmpty())
+        assertEquals(broken, prefs.getString("watchlist", null))
+        assertNotNull(vm.saveError.value)
+    }
+
+    @Test fun runtimeYieldUsesTheCachedPrice() {
+        application.getSharedPreferences("cloudflare_market_cache", Context.MODE_PRIVATE).edit()
+            .putString("prices", """{"7203":3000.0}""").commit()
+        val holding = model().holdings.value.first { it.code == "7203" }
+        assertEquals(3000.0, holding.price, 0.0)
+        assertEquals(holding.dps / 3000.0 * 100.0, holding.yieldRate, 0.00001)
+    }
+
     @Test fun rapidEditsPersistTheLatestValue() {
         val model = model()
         instrumentation.runOnMainSync { (1..100).forEach { model.updateHolding("7203", it, 1000.0) } }

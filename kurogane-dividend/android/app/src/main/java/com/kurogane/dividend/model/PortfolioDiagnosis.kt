@@ -372,7 +372,7 @@ object PortfolioDiagnosisGenerator {
         return MetricValue(
             value = concentration,
             formatted = "${format(concentration, 1)}%",
-            detail = "配当月登録分（年間配当の${format(coverage, 1)}%）"
+            detail = "月別計算対象（年間配当の${format(coverage, 1)}%）"
         )
     }
 

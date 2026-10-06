@@ -4,14 +4,23 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val releaseSigning = listOf("STORE_FILE", "STORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD")
+    .associateWith { providers.environmentVariable("DIVIEW_RELEASE_$it").orNull }
+val hasReleaseSigning = releaseSigning.values.any { !it.isNullOrBlank() }
+if (hasReleaseSigning) {
+    require(releaseSigning.values.all { !it.isNullOrBlank() }) {
+        "Set all four DIVIEW_RELEASE_STORE_FILE, STORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD environment variables."
+    }
+}
+
 android {
     namespace = "com.kurogane.dividend"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.kurogane.dividend"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
 
@@ -24,9 +33,19 @@ android {
         )
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) create("production") {
+            storeFile = file(releaseSigning.getValue("STORE_FILE")!!)
+            storePassword = releaseSigning.getValue("STORE_PASSWORD")
+            keyAlias = releaseSigning.getValue("KEY_ALIAS")
+            keyPassword = releaseSigning.getValue("KEY_PASSWORD")
+        }
+    }
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("production")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -60,7 +79,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.navigation:navigation-compose:2.8.3")
+    implementation("androidx.navigation:navigation-compose:2.8.9")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
