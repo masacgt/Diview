@@ -14,7 +14,9 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -76,6 +78,7 @@ fun SettingsScreen(
     val exchangeRateError by viewModel.exchangeRateError.collectAsStateWithLifecycle()
     val targetYield by viewModel.roadmapTargetYield.collectAsStateWithLifecycle()
     val threshold by viewModel.compositionThreshold.collectAsStateWithLifecycle()
+    val compositionOtherEnabled by viewModel.compositionOtherEnabled.collectAsStateWithLifecycle()
     val maskAtStartup by viewModel.maskAtStartup.collectAsStateWithLifecycle()
     var confirmReset by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -139,20 +142,24 @@ fun SettingsScreen(
                         Segment(stringResource(R.string.settings_label), dataTab == "import", Modifier.weight(1f)) { dataTab = "import" }
                         Segment(stringResource(R.string.settings_label_2), dataTab == "export", Modifier.weight(1f)) { dataTab = "export" }
                     }
-                    if (dataTab == "import") {
-                        BrokerCsvImportCard(onImportCsv = { rows, fields -> viewModel.importCsvRows(rows, fields) })
-                        HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                        Label(stringResource(R.string.csv_import_label_2), 9, OnSurface, true)
-                        DvmBackupFolderImportCard(onImportDvm = { backups -> viewModel.importDvmBackups(backups) })
-                        AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Label(stringResource(R.string.settings_label_9), 7, SettingsMuted)
-                            Label(stringResource(R.string.asset_management_text_6 , viewModel.holdings.collectAsStateWithLifecycle().value.size), 7, SettingsMint)
-                        }
-                    } else {
-                        Label(stringResource(R.string.settings_label_11), 9, SettingsMuted)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ActionButton(stringResource(R.string.settings_label_12), Modifier.weight(1f)) { if (!isExporting) csvExporter.launch("Diview-portfolio.csv") }
-                            ActionButton(stringResource(R.string.settings_label_13), Modifier.weight(1f)) { if (!isExporting) jsonExporter.launch("Diview-portfolio.json") }
+                    Box(Modifier.fillMaxWidth().height(220.dp)) {
+                        Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (dataTab == "import") {
+                                BrokerCsvImportCard(onImportCsv = { rows, fields -> viewModel.importCsvRows(rows, fields) })
+                                HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
+                                Label(stringResource(R.string.csv_import_label_2), 9, OnSurface, true)
+                                DvmBackupFolderImportCard(onImportDvm = { backups -> viewModel.importDvmBackups(backups) })
+                                AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Label(stringResource(R.string.settings_label_9), 7, SettingsMuted)
+                                    Label(stringResource(R.string.asset_management_text_6 , viewModel.holdings.collectAsStateWithLifecycle().value.size), 7, SettingsMint)
+                                }
+                            } else {
+                                Label(stringResource(R.string.settings_label_11), 9, SettingsMuted)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    ActionButton(stringResource(R.string.settings_label_12), Modifier.weight(1f)) { if (!isExporting) csvExporter.launch("Diview-portfolio.csv") }
+                                    ActionButton(stringResource(R.string.settings_label_13), Modifier.weight(1f)) { if (!isExporting) jsonExporter.launch("Diview-portfolio.json") }
+                                }
+                            }
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
@@ -169,7 +176,7 @@ fun SettingsScreen(
                         Label(if (themeMode == "dark") resources.getString(R.string.settings_dark_active) else if (themeMode == "light") resources.getString(R.string.settings_label_59) else resources.getString(R.string.settings_label_60), 8, SettingsMint)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        listOf("dark" to stringResource(R.string.settings_label_42), "light" to stringResource(R.string.settings_label_43), "system" to stringResource(R.string.settings_label_44)).forEach { (mode, name) ->
+                        listOf("system" to stringResource(R.string.settings_label_44), "light" to stringResource(R.string.settings_label_43), "dark" to stringResource(R.string.settings_label_42)).forEach { (mode, name) ->
                             Segment(name, themeMode == mode, Modifier.weight(1f)) { viewModel.setThemeMode(mode) }
                         }
                     }
@@ -243,9 +250,10 @@ fun SettingsScreen(
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_23), 9, OnSurface, true); Label(stringResource(R.string.settings_1_s , threshold), 8, SettingsMint) }
-                    ThresholdSlider(threshold, viewModel::setCompositionThreshold)
-                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_24), 7, SettingsMuted); Label(stringResource(R.string.settings_label_25), 7, SettingsMint); Label(stringResource(R.string.settings_label_26), 7, SettingsMuted) }
+                    SettingToggle("構成比の小さい項目を「その他」に集約", "有効時、選択した閾値未満の項目をまとめます", compositionOtherEnabled, viewModel::setCompositionOtherEnabled)
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_23), 9, if (compositionOtherEnabled) OnSurface else SettingsMuted, true); Label(stringResource(R.string.settings_1_s , threshold), 8, if (compositionOtherEnabled) SettingsMint else SettingsMuted) }
+                    ThresholdSlider(threshold, viewModel::setCompositionThreshold, enabled = compositionOtherEnabled)
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label("1%", 7, SettingsMuted); Label("10%", 7, SettingsMuted) }
                 }
             }
         }
@@ -429,26 +437,27 @@ private fun SupportRow(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ThresholdSlider(value: Int, onValueChange: (Int) -> Unit) {
+private fun ThresholdSlider(value: Int, onValueChange: (Int) -> Unit, enabled: Boolean = true) {
     val changeValue by rememberUpdatedState(onValueChange)
     val label = stringResource(R.string.settings_label_23)
     val trackColor = SurfaceContainerHighest
     val accentColor = PrimaryEmeraldContainer
+    val disabledColor = SettingsMuted
     Canvas(Modifier.fillMaxWidth().height(48.dp).semantics {
         contentDescription = label
-        progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), 3f..10f, 6)
+        progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), 1f..10f, value - 1)
         setProgress { requested ->
-            if (!requested.isFinite()) false else { changeValue(requested.roundToInt().coerceIn(3, 10)); true }
+            if (!enabled || !requested.isFinite()) false else { changeValue(requested.roundToInt().coerceIn(1, 10)); true }
         }
     }.pointerInput(Unit) {
-        detectTapGestures { changeValue((3 + (it.x / size.width * 7).roundToInt()).coerceIn(3, 10)) }
+        detectTapGestures { if (enabled) changeValue((1 + (it.x / size.width * 9).roundToInt()).coerceIn(1, 10)) }
     }.pointerInput(Unit) {
-        detectDragGestures { change, _ -> change.consume(); changeValue((3 + (change.position.x / size.width * 7).roundToInt()).coerceIn(3, 10)) }
+        detectDragGestures { change, _ -> change.consume(); if (enabled) changeValue((1 + (change.position.x / size.width * 9).roundToInt()).coerceIn(1, 10)) }
     }) {
         val y = size.height / 2f
-        val x = (value - 3) / 7f * size.width
+        val x = (value - 1) / 9f * size.width
         drawLine(trackColor, Offset(0f, y), Offset(size.width, y), 4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-        drawLine(accentColor, Offset(0f, y), Offset(x, y), 4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-        drawCircle(accentColor, 6.dp.toPx(), Offset(x, y))
+        drawLine(if (enabled) accentColor else disabledColor, Offset(0f, y), Offset(x, y), 4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        drawCircle(if (enabled) accentColor else disabledColor, 6.dp.toPx(), Offset(x, y))
     }
 }

@@ -94,7 +94,7 @@ class DividendViewModel @JvmOverloads constructor(
     private val _isPrivacyActive = MutableStateFlow(displayPreferences.getBoolean("mask_at_startup", false))
     val isPrivacyActive: StateFlow<Boolean> = _isPrivacyActive.asStateFlow()
 
-    private val _themeMode = MutableStateFlow(displayPreferences.getString("theme_mode", "dark") ?: "dark")
+    private val _themeMode = MutableStateFlow(displayPreferences.getString("theme_mode", "system") ?: "system")
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
 
     private val _isOledBlack = MutableStateFlow(displayPreferences.getBoolean("oled_black", false))
@@ -114,6 +114,8 @@ class DividendViewModel @JvmOverloads constructor(
     val roadmapTargetYield = _roadmapTargetYield.asStateFlow()
     private val _compositionThreshold = MutableStateFlow(displayPreferences.getInt("composition_threshold", 5))
     val compositionThreshold = _compositionThreshold.asStateFlow()
+    private val _compositionOtherEnabled = MutableStateFlow(displayPreferences.getBoolean("composition_other_enabled", true))
+    val compositionOtherEnabled = _compositionOtherEnabled.asStateFlow()
     private val _roadmapShareTab = MutableStateFlow(displayPreferences.getInt("roadmap_share_tab", 0))
     val roadmapShareTab = _roadmapShareTab.asStateFlow()
     private val _roadmapShareMasked = MutableStateFlow(displayPreferences.getBoolean("roadmap_share_masked", _maskAtStartup.value))
@@ -135,8 +137,12 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     fun setCompositionThreshold(value: Int) {
-        if (value !in 3..10) return
+        if (value !in 1..10) return
         saveDisplaySetting(displayPreferences.edit().putInt("composition_threshold", value)) { _compositionThreshold.value = value }
+    }
+
+    fun setCompositionOtherEnabled(enabled: Boolean) {
+        saveDisplaySetting(displayPreferences.edit().putBoolean("composition_other_enabled", enabled)) { _compositionOtherEnabled.value = enabled }
     }
 
     fun setRoadmapShareTab(value: Int) {
@@ -159,6 +165,8 @@ class DividendViewModel @JvmOverloads constructor(
     private var identities: Map<String, JapaneseSecurityIdentity> = emptyMap()
     private val _financialData = MutableStateFlow<Map<String, FinancialData>>(emptyMap())
     val financialData = _financialData.asStateFlow()
+    private val _dividendEventRevision = MutableStateFlow(0)
+    val dividendEventRevision = _dividendEventRevision.asStateFlow()
     private val financialMutex = Mutex()
     private val financialLoading = mutableSetOf<String>()
     private val financialSlots = Semaphore(4)
@@ -245,7 +253,19 @@ class DividendViewModel @JvmOverloads constructor(
         val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
         if (!normalized.matches(Regex("[A-Z0-9]{4}"))) return null
         val today = PriceRefreshPolicy.japanDate(System.currentTimeMillis())
-        if (!force && marketPreferences.getString("financial_date_$normalized", null) == today) _financialData.value[normalized]?.let { return it }
+        if (!force && marketPreferences.getString("financial_date_$normalized", null) == today) {
+            _financialData.value[normalized]?.let { return it }
+            val cached = withContext(Dispatchers.IO) {
+                runCatching {
+                    marketPreferences.getString("financial_$normalized", null)
+                        ?.let { FinancialData.parse(JSONObject(it), normalized) }
+                }.getOrNull()
+            }
+            if (cached != null && generation == dataGeneration.get()) {
+                _financialData.update { it + (normalized to cached) }
+                return cached
+            }
+        }
         val allowed = financialMutex.withLock { financialLoading.add(normalized) }
         if (!allowed) return _financialData.value[normalized]
         try {
@@ -269,6 +289,13 @@ class DividendViewModel @JvmOverloads constructor(
         _holdings.value.filter { it.category == Category.JAPAN }.map { it.code }.distinct().map { code ->
             async { runCatchingCancellable { fetchFinancialData(code, force = force) } }
         }.awaitAll()
+    }
+
+    fun refreshAnalysisFinancialDataIfDue() {
+        viewModelScope.launch {
+            restoration.await()
+            refreshFinancialDataIfDue()
+        }
     }
 
     private suspend fun refreshFinancialDataIfDue(force: Boolean = false) = coroutineScope {
@@ -343,11 +370,33 @@ class DividendViewModel @JvmOverloads constructor(
         } }
     }
 
+    fun dividendEventsFor(code: String): List<com.kurogane.dividend.data.CloudflareDividendEvent> = runCatching {
+        val normalized = yahooSymbol(Category.JAPAN, code) ?: yahooSymbol(Category.US, code) ?: return@runCatching emptyList()
+        val rows = marketPreferences.getString("dividend_events_$normalized", null)?.let(::JSONArray)
+            ?: return@runCatching emptyList()
+        (0 until rows.length()).mapNotNull { index ->
+            val row = rows.optJSONObject(index) ?: return@mapNotNull null
+            val date = runCatching { LocalDate.parse(row.optString("date")) }.getOrNull() ?: return@mapNotNull null
+            val amount = row.optDouble("amount", Double.NaN).takeIf { it.isFinite() && it > 0.0 } ?: return@mapNotNull null
+            com.kurogane.dividend.data.CloudflareDividendEvent(date, amount)
+        }.sortedBy { it.date }
+    }.getOrDefault(emptyList())
+
+    private fun storeDividendEvents(symbol: String, events: List<com.kurogane.dividend.data.CloudflareDividendEvent>) {
+        val rows = JSONArray()
+        events.forEach { event -> rows.put(JSONObject().put("date", event.date.toString()).put("amount", event.amountPerShare)) }
+        marketPreferences.edit().putString("dividend_events_$symbol", rows.toString()).apply()
+        _dividendEventRevision.update { it + 1 }
+    }
+
     private suspend fun refreshDividendMonths(symbols: Collection<String>) = dividendMonthRefreshMutex.withLock {
         val today = LocalDate.now(ZoneId.of("Asia/Tokyo")).toString()
         val dueSymbols = symbols.map { it.trim().uppercase(java.util.Locale.ROOT) }
             .distinct()
-            .filter { symbol -> marketPreferences.getString("dividend_months_fetched_jst_$symbol", null) != today }
+            .filter { symbol ->
+                marketPreferences.getString("dividend_months_fetched_jst_$symbol", null) != today ||
+                    marketPreferences.getString("dividend_events_fetched_jst_$symbol", null) != today
+            }
         for (batch in dueSymbols.chunked(50)) {
             val result = runCatchingCancellable { marketRepository.fetchDividendMonths(batch) }
             if (result.isFailure) {
@@ -355,19 +404,26 @@ class DividendViewModel @JvmOverloads constructor(
                 continue
             }
             val monthsBySymbol = result.getOrThrow().monthsBySymbol
+            val eventsBySymbol = result.getOrThrow().eventsBySymbol
             for (symbol in batch) {
                 val months = monthsBySymbol[symbol] ?: continue
                 storeDividendMonths(symbol, months, today)
+                storeDividendEvents(symbol, eventsBySymbol[symbol].orEmpty())
+                marketPreferences.edit().putString("dividend_events_fetched_jst_$symbol", today).apply()
                 applyDividendMonths(symbol, months)
             }
         }
     }
 
     private suspend fun refreshDividendHistoryIfDue() {
+        if (!refreshOnStart || dividendHistoryRefreshStarted) return
+        dividendHistoryRefreshStarted = true
         val symbols = (_holdings.value.mapNotNull { yahooSymbol(it.category, it.code) } +
             _watchlist.value.mapNotNull(::yahooSymbol)).distinct()
         refreshDividendMonths(symbols)
     }
+
+    private var dividendHistoryRefreshStarted = false
 
     private val _selectedMonth = MutableStateFlow<Int?>(null)
     val selectedMonth: StateFlow<Int?> = _selectedMonth.asStateFlow()
@@ -668,7 +724,6 @@ class DividendViewModel @JvmOverloads constructor(
         updatePortfolio(next)
         applyCachedDividendMonths()
         refreshRuntimeValues()
-        viewModelScope.launch { refreshDividendHistoryIfDue() }
         persistCurrentHoldings()
     }
 
@@ -685,7 +740,6 @@ class DividendViewModel @JvmOverloads constructor(
         updatePortfolio(next)
         applyCachedDividendMonths()
         refreshRuntimeValues()
-        viewModelScope.launch { refreshDividendHistoryIfDue() }
         persistCurrentHoldings()
     }
 
@@ -1730,7 +1784,6 @@ class DividendViewModel @JvmOverloads constructor(
         }
         saveRequests.trySend(Unit)
         applyCachedDividendMonths()
-        viewModelScope.launch { refreshDividendHistoryIfDue() }
     }
 
     fun addHoldingToWatchlist(holding: Holding) {
@@ -1746,7 +1799,6 @@ class DividendViewModel @JvmOverloads constructor(
         }
         saveRequests.trySend(Unit)
         applyCachedDividendMonths()
-        viewModelScope.launch { refreshDividendHistoryIfDue() }
     }
 
     suspend fun registerWatchlistStock(code: String): Boolean {
@@ -1827,9 +1879,6 @@ class DividendViewModel @JvmOverloads constructor(
 
     private fun refreshAllocationMonths(merged: Holding) {
         applyCachedDividendMonths()
-        yahooSymbol(merged.category, merged.code)?.let { symbol ->
-            viewModelScope.launch { refreshDividendMonths(listOf(symbol)) }
-        }
     }
 
     private fun allocatedHolding(code: String, allocations: List<HoldingAllocation>, security: CloudflareSecurity?, holdings: List<Holding>): Holding? {
@@ -1931,7 +1980,7 @@ class DividendViewModel @JvmOverloads constructor(
             hasRestoredLocalHoldings = true
             holdingsLoadFailed = false
             watchlistLoadFailed = false
-            _themeMode.value = "dark"
+            _themeMode.value = "system"
             _selectedAccent.value = "emerald"
             _isOledBlack.value = false
             _isPrivacyActive.value = false
@@ -1939,6 +1988,7 @@ class DividendViewModel @JvmOverloads constructor(
             _calculationBasis.value = "eval"
             _roadmapTargetYield.value = 4.0
             _compositionThreshold.value = 5
+            _compositionOtherEnabled.value = true
             _roadmapShareTab.value = 0
             _roadmapShareMasked.value = false
             _taxRateMode.value = "gross"

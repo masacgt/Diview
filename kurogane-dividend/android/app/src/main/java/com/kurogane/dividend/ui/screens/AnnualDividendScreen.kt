@@ -81,6 +81,7 @@ fun AnnualDividendScreen(
     var selectedTab by rememberSaveable { mutableIntStateOf(2) } // 0: 配当推移, 1: 資産推移, 2: 分析
     var assetTrackingPeriod by rememberSaveable { mutableStateOf("5y") }
     val compositionThreshold by viewModel.compositionThreshold.collectAsStateWithLifecycle()
+    val compositionOtherEnabled by viewModel.compositionOtherEnabled.collectAsStateWithLifecycle()
 
     val totalAssets = remember(holdings) { holdings.sumOf { it.totalValuation } }
     val totalCost = remember(holdings) { holdings.sumOf { it.totalCost } }
@@ -306,7 +307,7 @@ fun AnnualDividendScreen(
             // Tab 2: Sector & Composition Analysis
             if (selectedTab == 2) {
                 item {
-                    CompositionAnalysisSection(holdings = holdings, taxRateMode = taxRateMode, totalAssets = totalAssets, totalAnnualDiv = totalAnnualDiv, compositionThreshold = compositionThreshold)
+                    CompositionAnalysisSection(holdings = holdings, taxRateMode = taxRateMode, totalAssets = totalAssets, totalAnnualDiv = totalAnnualDiv, compositionThreshold = compositionThreshold, compositionOtherEnabled = compositionOtherEnabled)
                 }
             }
 
@@ -413,15 +414,12 @@ private fun MonthlyDividendEstimateCard(
 ) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
-    val monthlyDividends = remember(holdings, taxRateMode) {
+    val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
+    val monthlyDividends = remember(holdings, taxRateMode, dividendEventRevision) {
         (1..12).map { month ->
             val amount = holdings.sumOf { holding ->
-                val annualDividend = holding.getEffectiveAnnualDividend(taxRateMode)
-                val dividendMonths = holding.dividendMonths
-                when {
-                    dividendMonths.isEmpty() -> annualDividend / 12.0
-                    month in dividendMonths -> annualDividend / dividendMonths.size
-                    else -> 0.0
+                viewModel.dividendEventsFor(holding.code).filter { it.date.monthValue == month }.sumOf { event ->
+                    holding.copy(dps = event.amountPerShare).getEffectiveAnnualDividend(taxRateMode)
                 }
             }
             val label = when {
@@ -466,11 +464,12 @@ private fun MonthlyDividendEstimateCard(
             }
 
             Text(stringResource(R.string.annual_dividend_text_7 , holdings.count { it.dps > 0 && it.dividendMonths.isEmpty() }), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+            Text("過去365日の実際の配当支払日・1株配当額をもとに、現在の保有株数で算出しています。履歴がない銘柄は含みません。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
             Spacer(modifier = Modifier.height(18.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth().height(145.dp),
-                horizontalArrangement = Arrangement.spacedBy(1.dp),
+                horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.Bottom
             ) {
                 monthlyDividends.forEach { (month, amount, label) ->
@@ -555,7 +554,10 @@ private fun MonthlyDividendEstimateCard(
                     border = BorderStroke(0.5.dp, NeonGreen.copy(alpha = 0.3f))
                 ) {
                     Text(
-                        text = if (selectedMonth != null) resources.getString(R.string.annual_dividend_label_17, (selectedMonth).toString()) else resources.getString(R.string.annual_dividend_label_18, (currencyFormat.format((totalAnnualDividend / 12).toLong())).toString()),
+                        text = selectedMonth?.let { month ->
+                            val amount = monthlyDividends.firstOrNull { it.first == month }?.second ?: 0.0
+                            "${month}月: ¥${currencyFormat.format(amount.toLong())}"
+                        } ?: "月平均: ¥${currencyFormat.format((monthlyDividends.sumOf { it.second } / 12).toLong())}",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         color = NeonGreenLight,
                         fontSize = AppTextSize.dense,
@@ -618,7 +620,7 @@ private data class SectorCompositionRow(
 
 @Composable
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.model.Holding>, taxRateMode: String, totalAssets: Double, totalAnnualDiv: Double, compositionThreshold: Int) {
+private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.model.Holding>, taxRateMode: String, totalAssets: Double, totalAnnualDiv: Double, compositionThreshold: Int, compositionOtherEnabled: Boolean) {
     var isVisible by remember { mutableStateOf(false) }
     var chartMode by remember { mutableStateOf("dividend") } // "holding" or "dividend"
     var sectorValueMode by remember { mutableStateOf("valuation") } // "valuation" or "dividend"
@@ -672,11 +674,11 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
 
     // Build Donut Slice Objects
     val compositionValues = mappedHoldings.map { if (chartMode == "dividend") it.second else it.third }
-    val donutSlices = com.kurogane.dividend.model.PortfolioMath.compositionGroups(compositionValues, compositionThreshold)
+    val donutSlices = com.kurogane.dividend.model.PortfolioMath.compositionGroups(compositionValues, compositionThreshold, compositionOtherEnabled)
         .mapIndexed { index, group ->
             val itemVal = group.sumOf { compositionValues[it] }
             val ratio = if (totalChartValue > 0.0) itemVal / totalChartValue else 0.0
-            val isOther = group.all { compositionValues[it] / totalChartValue * 100 < compositionThreshold }
+            val isOther = compositionOtherEnabled && group.all { compositionValues[it] / totalChartValue * 100 < compositionThreshold }
             val holding = mappedHoldings[group.first()].first
             DonutSliceData(
                 code = if (isOther) "__other__" else holding.code,
@@ -691,7 +693,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
     var activeStockCode by remember { mutableStateOf<String?>(null) }
 
     // Reset active stock selection on load/mode switch to display totals by default
-    LaunchedEffect(holdings, chartMode, compositionThreshold) {
+    LaunchedEffect(holdings, chartMode, compositionThreshold, compositionOtherEnabled) {
         activeStockCode = null
     }
 
@@ -1620,7 +1622,7 @@ private fun CompoundingSimulationSection(
         try { updateFailed = viewModel.fetchPortfolioFinancialData(force = force).any { it.isFailure } }
         finally { loading = false }
     }
-    LaunchedEffect(holdings.map { it.code }) { load() }
+    LaunchedEffect(holdings.map { it.code }) { viewModel.refreshAnalysisFinancialDataIfDue() }
     val currentYear = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).year
     val years = remember(holdings, financialData, taxRateMode, currentYear) {
         com.kurogane.dividend.model.DividendHistory.calculate(holdings, financialData, (currentYear - 4)..currentYear, taxRateMode)
@@ -1714,30 +1716,31 @@ private fun CompoundingSimulationSection(
                 }
                 val chartColor = PrimaryEmerald
                 val chartGridColor = BorderColor
+                Column(Modifier.fillMaxWidth()) {
                 Canvas(Modifier.fillMaxWidth().height(136.dp)) {
                     val gridTop = size.height * .2f
                     val gridMid = size.height * .55f
                     val gridBottom = size.height * .9f
                     listOf(gridTop, gridMid, gridBottom).forEach { y -> drawLine(chartGridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx()) }
                     val count = years.size
-                    val groupWidth = 32.dp.toPx()
-                    val spacing = (size.width - count * groupWidth) / (count + 1)
+                    val groupWidth = size.width / count
                     years.forEachIndexed { index, point ->
-                        val left = spacing + index * (groupWidth + spacing)
+                        val centerX = groupWidth * (index + .5f)
                         val barHeight = point.amount?.let { (it / maxValue).toFloat().coerceIn(0f, 1f) * size.height * .78f } ?: 0f
                         if (index == selectedIndex) {
-                            drawRoundRect(chartColor.copy(alpha = .08f), Offset(left - 5.dp.toPx(), 0f), Size(groupWidth + 10.dp.toPx(), size.height), cornerRadius = CornerRadius(6.dp.toPx()))
-                            drawRoundRect(chartColor.copy(alpha = .35f), Offset(left - 5.dp.toPx(), 0f), Size(groupWidth + 10.dp.toPx(), size.height), cornerRadius = CornerRadius(6.dp.toPx()), style = Stroke(1.dp.toPx()))
+                            drawRoundRect(chartColor.copy(alpha = .08f), Offset(centerX - groupWidth * .45f, 0f), Size(groupWidth * .9f, size.height), cornerRadius = CornerRadius(6.dp.toPx()))
+                            drawRoundRect(chartColor.copy(alpha = .35f), Offset(centerX - groupWidth * .45f, 0f), Size(groupWidth * .9f, size.height), cornerRadius = CornerRadius(6.dp.toPx()), style = Stroke(1.dp.toPx()))
                         }
                         if (barHeight > 0f) {
-                            drawRoundRect(Brush.verticalGradient(listOf(chartColor, chartColor.copy(alpha = .45f)), startY = size.height - barHeight, endY = size.height), Offset(left + (groupWidth - 16.dp.toPx()) / 2f, size.height - barHeight), Size(16.dp.toPx(), barHeight), cornerRadius = CornerRadius(4.dp.toPx()))
+                            drawRoundRect(Brush.verticalGradient(listOf(chartColor, chartColor.copy(alpha = .45f)), startY = size.height - barHeight, endY = size.height), Offset(centerX - 8.dp.toPx(), size.height - barHeight), Size(16.dp.toPx(), barHeight), cornerRadius = CornerRadius(4.dp.toPx()))
                         }
                     }
                 }
-                AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                AdaptiveRow(Modifier.fillMaxWidth()) {
                     years.forEachIndexed { index, point ->
                         Text(point.year.toString(), color = if (index == selectedIndex) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = if (index == selectedIndex) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     }
+                }
                 }
                 Text(stringResource(R.string.annual_dividend_text_42), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                 AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {

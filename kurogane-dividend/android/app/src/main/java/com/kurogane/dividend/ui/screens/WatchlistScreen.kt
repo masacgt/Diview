@@ -898,6 +898,7 @@ fun WatchlistScreen(
                                 Text(stringResource(R.string.watchlist_text_18), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnPrimary)
                             }
 
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             IconButton(
                                 onClick = {
                                     if (stock.alertEnabled) viewModel.toggleWatchlistStock(stock.code)
@@ -915,10 +916,13 @@ fun WatchlistScreen(
                             ) {
                                 Icon(
                                     imageVector = if (stock.alertEnabled) Icons.Default.NotificationsActive else Icons.Default.Notifications,
-                                    contentDescription = stringResource(R.string.watchlist_alert_toggle),
+                                    contentDescription = stringResource(if (stock.alertEnabled) R.string.watchlist_alert_enabled else R.string.watchlist_alert_disabled),
                                     tint = if (stock.alertEnabled) PrimaryEmerald else SoftGray,
                                     modifier = Modifier.size(16.dp)
                                 )
+                            }
+
+                            Text(stringResource(R.string.watchlist_alert_short), color = OnSurfaceVariant, fontSize = 9.sp, maxLines = 1)
                             }
 
                             Button(
