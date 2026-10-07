@@ -69,8 +69,11 @@ data class CloudflareMonthlyPriceSeries(
 
 data class CloudflareDividendMonths(
     val asOf: LocalDate,
-    val monthsBySymbol: Map<String, List<Int>>
+    val monthsBySymbol: Map<String, List<Int>>,
+    val eventsBySymbol: Map<String, List<CloudflareDividendEvent>> = emptyMap()
 )
+
+data class CloudflareDividendEvent(val date: LocalDate, val amountPerShare: Double)
 
 /** Public, read-only access to the app's Cloudflare D1/R2 data. No credentials belong in the APK. */
 class CloudflareMarketRepository(
@@ -228,6 +231,22 @@ class CloudflareMarketRepository(
             .getOrElse { throw IOException("Cloudflareの配当履歴日付が正しくありません", it) }
         val rows = root.optJSONArray("items") ?: throw IOException("Cloudflareの配当履歴にitemsがありません")
         val requested = normalizedSymbols.toSet()
+        val eventsBySymbol = buildMap {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val symbol = row.optString("symbol").trim().uppercase(java.util.Locale.ROOT)
+                if (symbol !in requested) continue
+                val events = row.optJSONArray("events") ?: continue
+                put(symbol, (0 until events.length()).mapNotNull { eventIndex ->
+                    val event = events.optJSONObject(eventIndex) ?: return@mapNotNull null
+                    val date = runCatching { LocalDate.parse(event.optString("date")) }.getOrNull()
+                        ?: return@mapNotNull null
+                    val amount = event.numberOrNull("amount")?.takeIf { it > 0.0 }
+                        ?: return@mapNotNull null
+                    CloudflareDividendEvent(date, amount)
+                }.distinctBy { it.date to it.amountPerShare }.sortedBy { it.date })
+            }
+        }
         val monthsBySymbol = buildMap {
             for (index in 0 until rows.length()) {
                 val row = rows.optJSONObject(index) ?: continue
@@ -242,7 +261,7 @@ class CloudflareMarketRepository(
                 put(symbol, validMonths)
             }
         }
-        CloudflareDividendMonths(asOf, monthsBySymbol)
+        CloudflareDividendMonths(asOf, monthsBySymbol, eventsBySymbol)
     }
 
     suspend fun financialDocument(code: String): JSONObject? = withContext(ioDispatcher) {

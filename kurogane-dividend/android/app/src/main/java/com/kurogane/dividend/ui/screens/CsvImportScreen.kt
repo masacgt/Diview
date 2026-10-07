@@ -21,6 +21,10 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -63,6 +67,7 @@ fun CsvImportScreen(
     var fileReadJob by remember { mutableStateOf<Job?>(null) }
     var isReading by remember { mutableStateOf(false) }
     var isImporting by remember { mutableStateOf(false) }
+    var guideExpanded by remember { mutableStateOf(true) }
 
     val csvPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -155,6 +160,39 @@ fun CsvImportScreen(
                 }
                 item {
                     ImportCard(onClick = { if (!isReading && !isImporting) csvPicker.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel")) }, title = if (selectedFile.isBlank()) resources.getString(R.string.csv_select_file) else selectedFile, subtitle = resources.getString(R.string.csv_import_label_16), icon = Icons.Default.UploadFile)
+                }
+                item {
+                    Card(colors = CardDefaults.cardColors(containerColor = SurfaceContainer), shape = RoundedCornerShape(14.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(Modifier.fillMaxWidth().clickable { guideExpanded = !guideExpanded }, verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Lightbulb, null, tint = PrimaryEmerald)
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.csv_guide_title), Modifier.weight(1f), color = OnSurface, fontWeight = FontWeight.Bold)
+                                Icon(Icons.Default.ExpandMore, null, tint = OnSurfaceVariant)
+                            }
+                            if (guideExpanded) {
+                                AdaptiveRow(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    CsvBroker.entries.forEach { item ->
+                                        Text(item.label, Modifier.clip(RoundedCornerShape(50)).background(if (broker == item) PrimaryEmerald else SurfaceContainerHighest).clickable { broker = item; brokerWasAutoDetected = false; csvResult = csvResult?.copy(broker = item) }.padding(horizontal = 10.dp, vertical = 7.dp), color = if (broker == item) OnPrimary else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                Card(colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh), shape = RoundedCornerShape(10.dp)) {
+                                    Row(Modifier.padding(10.dp), verticalAlignment = Alignment.Top) {
+                                        Icon(Icons.Default.Lightbulb, null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(stringResource(R.string.csv_guide_notice), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                                    }
+                                }
+                                Text(stringResource(when (broker ?: CsvBroker.SBI) {
+                                    CsvBroker.SBI -> R.string.csv_guide_sbi
+                                    CsvBroker.RAKUTEN -> R.string.csv_guide_rakuten
+                                    CsvBroker.MONEX -> R.string.csv_guide_monex
+                                    CsvBroker.MATSUI -> R.string.csv_guide_matsui
+                                }), color = OnSurface, fontSize = AppTextSize.caption, lineHeight = 18.sp)
+                                Text(stringResource(R.string.csv_guide_steps), color = PrimaryEmerald, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 }
                     csvResult?.let { result ->
                     item {

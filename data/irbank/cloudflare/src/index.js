@@ -799,7 +799,7 @@ export default {
           if (!object) return { symbol, months: [] };
           const document = await object.json();
           const dividendEvents = Array.isArray(document.actions?.dividends) ? document.actions.dividends : [];
-          const months = [...new Set(dividendEvents
+          const events = dividendEvents
             .filter(event => {
               const date = String(event?.date || '');
               const amount = finiteNumber(event?.amount);
@@ -807,10 +807,13 @@ export default {
               const parsedDate = new Date(`${date}T00:00:00.000Z`);
               return Number.isFinite(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === date;
             })
-            .map(event => Number(String(event.date).slice(5, 7))))]
+            .map(event => ({ date: String(event.date), amount: finiteNumber(event.amount) }))
+            .sort((a, b) => a.date.localeCompare(b.date));
+          const months = [...new Set(events
+            .map(event => Number(event.date.slice(5, 7))))]
             .filter(month => month >= 1 && month <= 12)
             .sort((a, b) => a - b);
-          return { symbol, months };
+          return { symbol, months, events };
         }));
         return json({ as_of: asOf, lookback_days: 365, items });
       } catch {

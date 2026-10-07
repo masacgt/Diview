@@ -12,11 +12,12 @@ object PortfolioMath {
         return if (denominator > 0) (dividend / denominator * 100).takeIf(Double::isFinite) ?: 0.0 else 0.0
     }
 
-    /** Each position occurs once; positions strictly below the threshold form the final group. */
-    fun compositionGroups(values: List<Double>, thresholdPercent: Int): List<List<Int>> {
+    /** Each position occurs once; positions strictly below the threshold form the final group when enabled. */
+    fun compositionGroups(values: List<Double>, thresholdPercent: Int, aggregateOther: Boolean = true): List<List<Int>> {
+        if (!aggregateOther) return values.indices.map(::listOf)
         val total = values.sum()
         if (total <= 0) return emptyList()
-        val (small, large) = values.indices.partition { values[it] / total * 100 < thresholdPercent }
+        val (small, large) = values.indices.partition { values[it] / total * 100 < thresholdPercent.coerceIn(1, 10) }
         return large.map { listOf(it) } + if (small.isEmpty()) emptyList() else listOf(small)
     }
 
