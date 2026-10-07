@@ -17,6 +17,7 @@ data class CloudflareSearchHit(
     val code: String,
     val name: String,
     val cachedPrice: Double? = null,
+    val annualDividendPerShare: Double? = null,
     val industry: String? = null
 )
 

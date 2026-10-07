@@ -31,6 +31,33 @@ object BrokerCsvImporter {
         "account" to listOf("預り区分", "口座", "口座区分", "預り", "勘定")
     )
 
+    /** Returns a broker only when the file name or its header contains a distinctive marker. */
+    fun detectBroker(bytes: ByteArray, fileName: String): CsvBroker? {
+        val name = normalizeDetectionText(fileName)
+        val fileMatches = listOf(
+            CsvBroker.SBI to listOf("sbi", "sbi証券", "sbisec"),
+            CsvBroker.RAKUTEN to listOf("楽天証券", "rakuten", "rakutensec"),
+            CsvBroker.MONEX to listOf("マネックス", "monex"),
+            CsvBroker.MATSUI to listOf("松井証券", "matsui")
+        ).filter { (_, markers) -> markers.any(name::contains) }.map { it.first }.distinct()
+        if (fileMatches.isNotEmpty()) return fileMatches.singleOrNull()
+        val text = runCatching { decode(bytes, CsvBroker.SBI).first }.getOrDefault("")
+        val headerText = runCatching {
+            CsvTokenizer.parse(text.removePrefix("\uFEFF")).take(8).flatten()
+                .joinToString(" ", transform = ::normalizeDetectionText)
+        }.getOrDefault("")
+        val matches = buildList {
+            if (listOf("預り区分", "預り残高").any(headerText::contains)) add(CsvBroker.SBI)
+            if ("平均取得額" in headerText) add(CsvBroker.RAKUTEN)
+            if ("保有残高一覧" in headerText) add(CsvBroker.MONEX)
+            if (listOf("取得平均", "銘柄名称").any(headerText::contains)) add(CsvBroker.MATSUI)
+        }.distinct()
+        return matches.singleOrNull()
+    }
+
+    private fun normalizeDetectionText(value: String): String =
+        Normalizer.normalize(value, Normalizer.Form.NFKC).lowercase(Locale.ROOT).replace(Regex("[\\s　\"'「」『』]"), "")
+
     fun parse(bytes: ByteArray, broker: CsvBroker, securityNames: Map<String, String> = emptyMap(), fundNames: Collection<String> = emptyList()): CsvImportResult {
         require(bytes.size <= 10 * 1024 * 1024) { "CSVは10MB以下のファイルを選択してください" }
         val (text, encoding) = decode(bytes, broker)

@@ -67,15 +67,15 @@ fun SettingsScreen(
     val isOledBlack by viewModel.isOledBlack.collectAsStateWithLifecycle()
     val selectedAccent by viewModel.selectedAccent.collectAsStateWithLifecycle()
     var dataTab by rememberSaveable { mutableStateOf("import") }
-    var calcBasis by rememberSaveable { mutableStateOf("eval") }
+    val calcBasis by viewModel.calculationBasis.collectAsStateWithLifecycle()
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
     val taxDeduction = taxRateMode == "net"
     val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
     val biometricEnabled by viewModel.biometricEnabled.collectAsStateWithLifecycle()
     val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
     val exchangeRateError by viewModel.exchangeRateError.collectAsStateWithLifecycle()
-    var targetYield by rememberSaveable { mutableStateOf("4.0") }
-    var threshold by rememberSaveable { mutableIntStateOf(5) }
+    val targetYield by viewModel.roadmapTargetYield.collectAsStateWithLifecycle()
+    val threshold by viewModel.compositionThreshold.collectAsStateWithLifecycle()
     val maskAtStartup by viewModel.maskAtStartup.collectAsStateWithLifecycle()
     var confirmReset by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -140,36 +140,14 @@ fun SettingsScreen(
                         Segment(stringResource(R.string.settings_label_2), dataTab == "export", Modifier.weight(1f)) { dataTab = "export" }
                     }
                     if (dataTab == "import") {
-                        AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Label(stringResource(R.string.settings_label_3), 9, SettingsMuted)
-                            Label(stringResource(R.string.settings_label_4), 8, SettingsMint)
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            listOf("SBI証券", "楽天証券", "マネックス", "松井証券").forEach { broker ->
-                                Column(Modifier.weight(1f).clip(RoundedCornerShape(6.dp)).background(SettingsInset).border(1.dp, SettingsBorder, RoundedCornerShape(6.dp)).padding(vertical = 5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Label(broker, 8, SettingsMint, true)
-                                    Label(stringResource(R.string.settings_label_5), 7, SettingsMuted)
-                                }
-                            }
-                        }
-                        Column(
-                            Modifier.fillMaxWidth().heightIn(min = 88.dp).padding(vertical = 8.dp).clip(RoundedCornerShape(9.dp))
-                                .background(SettingsInset).border(1.dp, SettingsMint.copy(alpha = .48f), RoundedCornerShape(9.dp))
-                                .clickable(onClick = onNavigateToCsv),
-                            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(Icons.Default.CloudUpload, null, tint = SettingsMint, modifier = Modifier.size(21.dp))
-                            Spacer(Modifier.height(3.dp))
-                            Label(stringResource(R.string.settings_label_6), 9, OnSurface, true)
-                            Label(stringResource(R.string.settings_label_7), 7, SettingsMuted)
-                            Spacer(Modifier.height(4.dp))
-                            Label(stringResource(R.string.settings_label_8), 8, SettingsMint, true)
-                        }
+                        BrokerCsvImportCard(onImportCsv = { rows, fields -> viewModel.importCsvRows(rows, fields) })
+                        HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
+                        Label(stringResource(R.string.csv_import_label_2), 9, OnSurface, true)
+                        DvmBackupFolderImportCard(onImportDvm = { backups -> viewModel.importDvmBackups(backups) })
                         AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Label(stringResource(R.string.settings_label_9), 7, SettingsMuted)
                             Label(stringResource(R.string.asset_management_text_6 , viewModel.holdings.collectAsStateWithLifecycle().value.size), 7, SettingsMint)
                         }
-                        Label(stringResource(R.string.settings_label_10), 7, SettingsMuted)
                     } else {
                         Label(stringResource(R.string.settings_label_11), 9, SettingsMuted)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -241,8 +219,8 @@ fun SettingsScreen(
                         Label(stringResource(R.string.settings_label_17), 9, OnSurface, true); Label(stringResource(R.string.settings_label_18), 7, SettingsMuted)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        BasisChoice(stringResource(R.string.settings_text_5), stringResource(R.string.settings_label_47), calcBasis == "eval", Modifier.weight(1f)) { calcBasis = "eval" }
-                        BasisChoice(stringResource(R.string.settings_text_6), stringResource(R.string.settings_label_48), calcBasis == "cost", Modifier.weight(1f)) { calcBasis = "cost" }
+                        BasisChoice(stringResource(R.string.settings_text_5), stringResource(R.string.settings_label_47), calcBasis == "eval", Modifier.weight(1f)) { viewModel.setCalculationBasis("eval") }
+                        BasisChoice(stringResource(R.string.settings_text_6), stringResource(R.string.settings_label_48), calcBasis == "cost", Modifier.weight(1f)) { viewModel.setCalculationBasis("cost") }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     SettingToggle(stringResource(R.string.settings_text_7), stringResource(R.string.settings_label_49), taxDeduction, { viewModel.setTaxRateMode(if (it) "net" else "gross") })
@@ -258,15 +236,15 @@ fun SettingsScreen(
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_21), 9, OnSurface, true); Label(stringResource(R.string.settings_label_22 , String.format(java.util.Locale.JAPAN, "%.2f", targetYield.toDoubleOrNull() ?: 0.0)), 8, SettingsMint) }
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_21), 9, OnSurface, true); Label(stringResource(R.string.settings_label_22 , String.format(java.util.Locale.JAPAN, "%.2f", targetYield)), 8, SettingsMint) }
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         listOf("3.5" to stringResource(R.string.settings_label_51), "4.0" to stringResource(R.string.settings_label_52), "4.5" to stringResource(R.string.settings_label_53)).forEach { (value, label) ->
-                            Segment(label, targetYield == value, Modifier.weight(1f)) { targetYield = value }
+                            Segment(label, targetYield == value.toDouble(), Modifier.weight(1f)) { viewModel.setRoadmapTargetYield(value.toDouble()) }
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_23), 9, OnSurface, true); Label(stringResource(R.string.settings_1_s , threshold), 8, SettingsMint) }
-                    ThresholdSlider(threshold) { threshold = it }
+                    ThresholdSlider(threshold, viewModel::setCompositionThreshold)
                     AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_24), 7, SettingsMuted); Label(stringResource(R.string.settings_label_25), 7, SettingsMint); Label(stringResource(R.string.settings_label_26), 7, SettingsMuted) }
                 }
             }
@@ -327,7 +305,18 @@ fun SettingsScreen(
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     SupportRow(stringResource(R.string.settings_label_38), onNavigateToTerms)
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SupportRow(stringResource(R.string.settings_label_39), {})
+                    SupportRow(stringResource(R.string.settings_label_39)) {
+                        val market = android.content.Intent(android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("market://details?id=${context.packageName}"))
+                        try { context.startActivity(market) }
+                        catch (_: android.content.ActivityNotFoundException) {
+                            try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}"))) }
+                            catch (_: android.content.ActivityNotFoundException) {
+                                Toast.makeText(context, R.string.review_open_failed, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     AdaptiveRow(Modifier.fillMaxWidth().padding(vertical = 9.dp), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_40), 8, SettingsMuted); Label(stringResource(R.string.settings_v_1_s_build_2_s , com.kurogane.dividend.BuildConfig.VERSION_NAME, com.kurogane.dividend.BuildConfig.VERSION_CODE), 8, OnSurface, true) }
                 }

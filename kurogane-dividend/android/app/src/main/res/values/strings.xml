@@ -102,7 +102,6 @@
     <string name="annual_dividend_text_30">"%1$s年〜%2$s年・現在株数で換算した参考推移"</string>
     <string name="annual_dividend_text_31">"5期"</string>
     <string name="annual_dividend_text_32">"国内株の現在保有株数 × 分割調整済みの各期実績配当。実際の受取履歴ではありません。米国株・投資信託は対象外です。"</string>
-    <string name="annual_dividend_text_33">"出典：金融庁EDINET / JPX TDnet（IRBANK加工）"</string>
     <string name="annual_dividend_text_34">"一部の履歴を更新できませんでした。取得済みの値を表示しています。"</string>
     <string name="annual_dividend_text_35">"年間配当の増加額"</string>
     <string name="annual_dividend_text_36">"%1$s → %2$s・年額差"</string>
@@ -254,7 +253,7 @@
     <string name="roadmap_text_10">"現在実績: ¥%1$s"</string>
     <string name="roadmap_text_11">"あと ¥%1$s / 月 で攻略"</string>
     <string name="roadmap_text_12">"マイルストーン達成済！"</string>
-    <string name="roadmap_text_13">"年額 +¥%1$s でSTEP %2$sクリア。配当利回り 4.00%% 想定時、必要な追加投資元本は約 ¥%3$s万円 です。"</string>
+    <string name="roadmap_text_13">"年額 +¥%1$s でSTEP %2$sクリア。配当利回り %4$s%% 想定時、必要な追加投資元本は約 ¥%3$s万円 です。"</string>
     <string name="roadmap_text_14">"達成度を共有する"</string>
     <string name="roadmap_text_15">"画像で保存"</string>
     <string name="roadmap_text_16">"3大ステージ・レベル帯"</string>
@@ -327,7 +326,7 @@
     <string name="settings_label_11">"登録中の保有株・配当情報・取得単価データを保存します。"</string>
     <string name="settings_label_12">"▦  CSV形式で保存"</string>
     <string name="settings_label_13">"{ }  JSONバックアップ"</string>
-    <string name="settings_label_14">"♢  CSVファイルは端末内でのみ安全に処理され、外部サーバーにアップロードされることはありません。"</string>
+    <string name="settings_label_14">"CSVは端末内で解析します。保有データは端末のGoogleバックアップ設定が有効な場合、Google Driveへ自動バックアップされます。"</string>
     <string name="settings_text_2">"外観・テーマ設定"</string>
     <string name="settings_label_15">"カラーテーマ"</string>
     <string name="settings_label_16">"アクセントカラー"</string>
@@ -381,7 +380,7 @@
     <string name="stock_detail_text_5">"税引前"</string>
     <string name="stock_detail_text_6">"取得利回り"</string>
     <string name="stock_detail_text_7">"単価%1$s%2$s"</string>
-    <string name="stock_detail_text_8">"1株配当金の実績（最大4期）"</string>
+    <string name="stock_detail_text_8">"1株配当金の実績（最大8期）"</string>
     <string name="stock_detail_text_9">"配当履歴未取得"</string>
     <string name="stock_detail_text_10">"4期増配率: %1$s"</string>
     <string name="stock_detail_text_11">"配当性向: 約%1$s"</string>
@@ -430,7 +429,7 @@
     <string name="stock_detail_text_51">"評価：%1$s"</string>
     <string name="stock_detail_1_s_2">"（ %1$s ）"</string>
     <string name="stock_detail_text_52">"配当性向 (当期見込)"</string>
-    <string name="stock_detail_text_53">"配当性向：%1$s"</string>
+    <string name="stock_detail_text_53">"%1$s"</string>
     <string name="stock_detail_text_54" formatted="false">"0% (低負担)"</string>
     <string name="stock_detail_text_55" formatted="false">"適正目安 30〜50%"</string>
     <string name="stock_detail_text_56" formatted="false">"100% (高負担)"</string>
@@ -687,8 +686,10 @@
     <string name="stock_detail_label_5">"%1$s期"</string>
     <string name="stock_detail_label_6">"現状維持"</string>
     <string name="stock_detail_label_7">"+100株"</string>
-    <string name="stock_detail_label_8">"+250株"</string>
-    <string name="stock_detail_label_9">"+500株"</string>
+    <string name="stock_detail_label_8">"+500株"</string>
+    <string name="stock_detail_label_9">"+1000株"</string>
+    <string name="stock_detail_health_grade">"評価 %1$s"</string>
+    <string name="stock_detail_health_payout">"配当性向 %1$s"</string>
     <string name="stock_detail_label_10">"%1$s連続 +%2$s"</string>
     <string name="stock_detail_label_11">"増配率 %1$s"</string>
     <string name="stock_detail_label_12">"通知ON"</string>
@@ -918,5 +919,56 @@
     <string name="exchange_rate_error_2">"為替を更新できませんでした。保存済みレートを使用中です"</string>
     <string name="search_high_dividend" formatted="false">高配当 (3%以上)</string>
     <string name="csv_select_file">CSVファイルを選択</string>
+    <string name="csv_broker_auto_detected">%1$sのCSVと判定しました</string>
+    <string name="csv_broker_auto_unknown">CSVから証券会社を特定できませんでした。会社を選択してください。</string>
+    <string name="csv_broker_manual_selection">%1$sを選択中</string>
+    <string name="csv_dvm_folder_title">DVMバックアップのフォルダを選択</string>
+    <string name="csv_dvm_folder_subtitle">フォルダ内の対応する.DVMファイルを探して自動で取り込みます</string>
+    <string name="csv_dvm_folder_empty">フォルダ内に対応するDVMバックアップが見つかりませんでした</string>
+    <string name="csv_dvm_folder_skipped">対応するDVMファイルを%1$d件取り込みました。対応外または破損したファイルはスキップしました。</string>
+    <string name="csv_dvm_folder_imported">DVMバックアップを%1$d種類取り込みました</string>
     <string name="all">すべて</string>
+    <string name="setting_save_failed">設定を保存できませんでした。再試行してください。</string>
+    <string name="review_open_failed">レビュー画面を開けませんでした。ストアまたはブラウザを確認してください。</string>
+    <string name="composition_other">その他 (%1$d銘柄)</string>
+    <string name="watchlist_added">監視銘柄に登録しました</string>
+    <string name="watchlist_add_failed">監視銘柄に登録できませんでした。銘柄コードを確認して再試行してください。</string>
+    <string name="roadmap_save_description">プレビューの画像を端末に保存します</string>
+    <string name="roadmap_progress_tab">QUEST %1$d 進捗カード</string>
+    <string name="roadmap_certificate_tab">LV.%1$d 踏破認定証</string>
+    <string name="roadmap_level_complete">LEVEL %1$d COMPLETE</string>
+    <string name="roadmap_certificate_title">%1$s 踏破認定証</string>
+    <string name="roadmap_certificate_steps">STEP %1$d〜%2$d を完全達成</string>
+    <string name="roadmap_master_rank">認定ランク: LEVEL %1$d MASTER</string>
+    <string name="roadmap_challenger_rank">現在のステータス: LEVEL %1$d CHALLENGER</string>
+    <string name="roadmap_masked_target">月 ¥***</string>
+    <string name="roadmap_masked_goal">目標額: 月 ¥*** 自給に向けて挑戦中</string>
+    <string name="roadmap_export_busy">画像を処理しています…</string>
+    <string name="roadmap_share_choose">共有先を選択してシェア</string>
+    <string name="roadmap_saved_document">画像を保存しました</string>
+    <string name="roadmap_saved_pictures">画像を Pictures/Diview に保存しました</string>
+    <string name="roadmap_export_failed">画像を生成・保存・共有できませんでした。空き容量や利用できるアプリを確認して再試行してください。</string>
+    <string name="roadmap_security_unselected">銘柄コードを入力して適用してください</string>
+    <string name="roadmap_security_selected">選択中の銘柄</string>
+    <string name="roadmap_allocation_invalid">数量は0以上の整数、取得単価は0以上の数値で入力し、1株以上の口座を指定してください。</string>
+    <string name="roadmap_allocation_failed">登録できませんでした。数量・取得単価・銘柄を確認して再試行してください。</string>
+    <string name="roadmap_registering">登録しています…</string>
+    <string name="watchlist_projection_note">各1単元（日本株100株・米国株1株）、税引前の試算です。取得済みの配当月に均等配分します。配当月未取得は%1$d銘柄あり、月別集計から除外しています。権利落ち日・実際の入金日は未取得です。</string>
+    <string name="watchlist_projection_fx_missing"> 為替未取得の米国株は円換算集計から除外しています。</string>
+    <string name="watchlist_projection_header">監視%1$d銘柄の配当シミュレーション</string>
+    <string name="watchlist_known_months">取得済みの配当月から集計</string>
+    <string name="watchlist_ex_date_missing">権利落ち日データ未取得</string>
+    <string name="watchlist_peak_share">最大月の構成比: %1$s</string>
+    <string name="watchlist_jp_projection">日本株 年間: %1$s</string>
+    <string name="watchlist_us_projection">米国株 年間: %1$s</string>
+    <string name="watchlist_annual_estimate">年間配当試算 (税引前)</string>
+    <string name="watchlist_monthly_estimate">月平均試算 (税引前)</string>
+    <string name="watchlist_empty_month_count">%1$d ヶ月 (既知データ内)</string>
+    <string name="watchlist_empty_months">配当を確認できない月: %1$s</string>
+    <string name="watchlist_suggestion_note">候補を監視銘柄に追加して、取得できた配当月を比較できます。権利落ち日や実際の入金日は銘柄の開示情報で確認してください。</string>
+    <string name="watchlist_months_missing">配当月未取得</string>
+    <string name="roadmap_certificate_steps_amount">STEP %1$d〜%2$d (月¥%3$s・年¥%4$s) を完全達成</string>
+    <string name="roadmap_all_complete">ALL QUESTS COMPLETE</string>
+    <string name="roadmap_all_steps_complete">全30STEPを達成</string>
+    <string name="yield_basis_cost_detail">取得単価比</string>
 </resources>

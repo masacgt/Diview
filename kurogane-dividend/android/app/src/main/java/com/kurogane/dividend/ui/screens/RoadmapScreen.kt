@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,8 +50,8 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Bottom Sheet State for Share Achievement modal (Added for sharing progress)
-    var showShareBottomSheet by remember { mutableStateOf(false) }
-    val shareSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showShareBottomSheet by rememberSaveable { mutableStateOf(false) }
+    var saveRoadmapImage by rememberSaveable { mutableStateOf(false) }
 
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = viewModel.roadmapScrollIndex,
@@ -71,6 +72,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
     val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
+    val targetYield by viewModel.roadmapTargetYield.collectAsStateWithLifecycle()
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
 
     // Calculate real-time annual expected dividend and monthly income
@@ -121,7 +123,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
 
         val status = if (isCompleted) "completed" else if (isPrevCompleted) "active" else "locked"
         val statusLabel = if (isCompleted) "達成済" else if (isPrevCompleted) "挑戦中" else "ロック中"
-        val currentRate = if (isCompleted) 100f else (monthlyIncome.toFloat() / step.targetMonthly.toFloat()).coerceIn(0f, 0.99f)
+        val currentRate = if (isCompleted) 1f else (monthlyIncome.toFloat() / step.targetMonthly.toFloat()).coerceIn(0f, 0.99f)
         
         DynamicMilestone(
             step = step,
@@ -397,7 +399,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         // Dynamic simulation tip card
                         val shortage = maxOf(0L, activeStep.targetMonthly - monthlyIncome)
                         val shortageAnnual = shortage * 12
-                        val neededPrincipalAt4 = Math.round(shortageAnnual / 0.04 / 10000.0)
+                        val neededPrincipalAt4 = Math.round(shortageAnnual / (targetYield / 100.0) / 10000.0)
 
                         Surface(
                             shape = RoundedCornerShape(10.dp),
@@ -412,7 +414,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 Icon(Icons.Default.Timeline, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = stringResource(R.string.roadmap_text_13 , currencyFormat.format(shortageAnnual), activeStep.step, neededPrincipalAt4),
+                                    text = stringResource(R.string.roadmap_text_13 , currencyFormat.format(shortageAnnual), activeStep.step, neededPrincipalAt4, String.format(Locale.JAPAN, "%.2f", targetYield)),
                                     color = OnSurfaceVariant,
                                     fontSize = AppTextSize.dense,
                                     lineHeight = 14.sp
@@ -428,12 +430,16 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
-                                onClick = { showShareBottomSheet = true },
+                                onClick = {
+                                    saveRoadmapImage = false
+                                    if (viewModel.isPrivacyActive.value) viewModel.setRoadmapShareMasked(true)
+                                    showShareBottomSheet = true
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(42.dp)
+                                    .heightIn(min = 42.dp)
                             ) {
                                 Icon(Icons.Default.Share, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -441,12 +447,16 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             }
 
                             Button(
-                                onClick = {},
+                                onClick = {
+                                    saveRoadmapImage = true
+                                    if (viewModel.isPrivacyActive.value) viewModel.setRoadmapShareMasked(true)
+                                    showShareBottomSheet = true
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHighest),
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(42.dp)
+                                    .heightIn(min = 42.dp)
                             ) {
                                 Icon(Icons.Default.Download, contentDescription = null, tint = OnSurface, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -811,8 +821,8 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                    Text(label, fontSize = AppTextSize.dense, color = if (yield == 4.0) PrimaryEmerald else OnSurfaceVariant)
-                                                    Text(stringResource(R.string.roadmap_text_31 , capital), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = if (yield == 4.0) PrimaryEmerald else OnSurface)
+                                                    Text(label, fontSize = AppTextSize.dense, color = if (yield == targetYield) PrimaryEmerald else OnSurfaceVariant)
+                                                    Text(stringResource(R.string.roadmap_text_31 , capital), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = if (yield == targetYield) PrimaryEmerald else OnSurface)
                                                 }
                                             }
                                         }
@@ -830,996 +840,21 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
         }
     }
 
-    // Modal Bottom Sheet: 複数口座一括配分登録 (Image 2)
-    if (showBottomSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showBottomSheet = false },
-            sheetState = sheetState,
-            containerColor = BackgroundDark,
-            tonalElevation = 8.dp,
-            scrimColor = Color.Black.copy(alpha = 0.6f)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Modal Header
-                AdaptiveRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(PrimaryEmerald.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.GridView, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                stringResource(R.string.add_holding_text),
-                                color = OnSurface,
-                                fontSize = AppTextSize.body,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                stringResource(R.string.add_holding_text_3),
-                                color = OnSurfaceVariant,
-                                fontSize = AppTextSize.dense
-                            )
-                        }
-                    }
+    if (showBottomSheet) RoadmapAllocationSheet(viewModel) { showBottomSheet = false }
 
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(SurfaceContainerHigh)
-                            .clickable { showBottomSheet = false },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close), tint = OnSurfaceVariant, modifier = Modifier.size(16.dp))
-                    }
-                }
-
-                HorizontalDivider(color = BorderColor)
-
-                // Active stock selector state
-                var selectedTickerInput by remember { mutableStateOf("AAPL") }
-                val activeTicker = selectedTickerInput.uppercase(Locale.ROOT).trim()
-
-                // Static DB for demonstration matching Image 2
-                val activeStockName = when (activeTicker) {
-                    "AAPL" -> "アップル"
-                    "7203" -> "トヨタ自動車 (TOYOTA)"
-                    "8316" -> "三井住友フィナンシャルG"
-                    "9432" -> "日本電信電話 (NTT)"
-                    else -> "$activeTicker Corp."
-                }
-                val activeStockMarket = when (activeTicker) {
-                    "AAPL" -> "NASDAQ ・ US Tech ・ 米国株"
-                    else -> "東証PRM ・ 日本株 ・ 円建て"
-                }
-                val activeStockCurrency = if (activeTicker == "AAPL") "$" else "¥"
-                val activeStockPrice = when (activeTicker) {
-                    "AAPL" -> 220.0
-                    "7203" -> 2600.0
-                    "8316" -> 9800.0
-                    "9432" -> 170.0
-                    else -> 1000.0
-                }
-                val activeStockYield = when (activeTicker) {
-                    "AAPL" -> 0.45
-                    "7203" -> 2.80
-                    "8316" -> 3.50
-                    "9432" -> 3.20
-                    else -> 3.00
-                }
-                val activeStockDPS = activeStockPrice * (activeStockYield / 100.0)
-
-                // Input States for the 4 Accounts
-                var sharesNisaGrowth by remember { mutableStateOf("5") }
-                var priceNisaGrowth by remember { mutableStateOf("220.00") }
-
-                var sharesNisaTsumitate by remember { mutableStateOf("0") }
-                var priceNisaTsumitate by remember { mutableStateOf("2600") }
-
-                var sharesTokutei by remember { mutableStateOf("5") }
-                var priceTokutei by remember { mutableStateOf("220.00") }
-
-                var sharesIppan by remember { mutableStateOf("0") }
-                var priceIppan by remember { mutableStateOf("220.00") }
-
-                // Search Bar Input
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Search, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            stringResource(R.string.roadmap_text_32),
-                            color = OnSurfaceVariant,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    AdaptiveRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextField(
-                            value = selectedTickerInput,
-                            onValueChange = { selectedTickerInput = it },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = SurfaceContainerHigh,
-                                unfocusedContainerColor = SurfaceContainerHigh,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                focusedTextColor = OnSurface,
-                                unfocusedTextColor = OnSurface
-                            ),
-                            placeholder = { Text(stringResource(R.string.roadmap_text_33), fontSize = AppTextSize.dense, color = OnSurfaceVariant) },
-                            singleLine = true
-                        )
-                        Button(
-                            onClick = { /* Apply */ },
-                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.height(46.dp)
-                        ) {
-                            Text(stringResource(R.string.roadmap_text_34), color = OnPrimary, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // Candidate Chips matching Image 2
-                    AdaptiveRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        listOf("AAPL", "7203", "8316", "9432").forEach { code ->
-                            val label = when (code) {
-                                "AAPL" -> "AAPL アップル"
-                                "7203" -> "7203 トヨタ"
-                                "8316" -> "8316 三井住友"
-                                "9432" -> "9432 NTT"
-                                else -> code
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = if (activeTicker == code) PrimaryEmerald.copy(alpha = 0.2f) else SurfaceContainerHigh,
-                                border = BorderStroke(1.dp, if (activeTicker == code) PrimaryEmerald else Color.Transparent),
-                                modifier = Modifier
-                                    .clickable {
-                                        selectedTickerInput = code
-                                        // Auto fill price template values based on stock selection
-                                        val templatePrice = when (code) {
-                                            "AAPL" -> "220.00"
-                                            "7203" -> "2600"
-                                            "8316" -> "9800"
-                                            "9432" -> "170"
-                                            else -> "100"
-                                        }
-                                        priceNisaGrowth = templatePrice
-                                        priceNisaTsumitate = templatePrice
-                                        priceTokutei = templatePrice
-                                        priceIppan = templatePrice
-                                    }
-                            ) {
-                                Text(
-                                    text = label,
-                                    color = if (activeTicker == code) PrimaryEmerald else OnSurface,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Active Stock Preview Card matching Image 2
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-                    border = BorderStroke(1.dp, BorderBlue)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(PrimaryEmerald.copy(alpha = 0.12f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        activeTicker.take(4),
-                                        color = PrimaryEmerald,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        activeStockName,
-                                        color = OnSurface,
-                                        fontSize = AppTextSize.body,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        activeStockMarket,
-                                        color = OnSurfaceVariant,
-                                        fontSize = AppTextSize.dense
-                                    )
-                                }
-                            }
-
-                            Column(horizontalAlignment = Alignment.End) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = Color(0x1F10B981)
-                                ) {
-                                    Text(
-                                        stringResource(R.string.roadmap_text_35),
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        color = PrimaryEmerald,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    stringResource(R.string.roadmap_text_36 , activeStockCurrency) + String.format(java.util.Locale.JAPAN, "%.2f", activeStockDPS),
-                                    color = OnSurface,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-                        HorizontalDivider(color = BorderColor)
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                stringResource(R.string.roadmap_text_37 , activeStockCurrency) + currencyFormat.format(activeStockPrice.toInt()),
-                                color = OnSurface,
-                                fontSize = AppTextSize.caption,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            Text(
-                                stringResource(R.string.roadmap_text_38) + String.format(java.util.Locale.JAPAN, "%.2f%%", activeStockYield),
-                                color = PrimaryEmerald,
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                // Header sub-label Matrix Allocation
-                AdaptiveRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AccountBalance, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            stringResource(R.string.add_holding_text_8),
-                            color = OnSurfaceVariant,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Text(
-                        stringResource(R.string.roadmap_text_39),
-                        color = ErrorRed,
-                        fontSize = AppTextSize.dense,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable {
-                            sharesNisaGrowth = "0"
-                            sharesNisaTsumitate = "0"
-                            sharesTokutei = "0"
-                            sharesIppan = "0"
-                        }
-                    )
-                }
-
-                // Account Allocation Cards Grid inside BottomSheet
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Account Row 1: 新NISA 成長投資枠
-                    AccountMatrixCard(
-                        title = resources.getString(R.string.roadmap_label_12),
-                        isTaxFree = true,
-                        shares = sharesNisaGrowth,
-                        price = priceNisaGrowth,
-                        currency = activeStockCurrency,
-                        onSharesChange = { sharesNisaGrowth = it },
-                        onPriceChange = { priceNisaGrowth = it },
-                        usWithholdingEnabled = usTaxDeduction,
-                        dps = activeStockDPS
-                    )
-
-                    // Account Row 2: 新NISA つみたて枠
-                    AccountMatrixCard(
-                        title = resources.getString(R.string.roadmap_label_13),
-                        isTaxFree = true,
-                        shares = sharesNisaTsumitate,
-                        price = priceNisaTsumitate,
-                        currency = activeStockCurrency,
-                        onSharesChange = { sharesNisaTsumitate = it },
-                        onPriceChange = { priceNisaTsumitate = it },
-                        usWithholdingEnabled = usTaxDeduction,
-                        dps = activeStockDPS
-                    )
-
-                    // Account Row 3: 特定口座 (源泉徴収あり)
-                    AccountMatrixCard(
-                        title = resources.getString(R.string.roadmap_label_14),
-                        isTaxFree = false,
-                        shares = sharesTokutei,
-                        price = priceTokutei,
-                        currency = activeStockCurrency,
-                        onSharesChange = { sharesTokutei = it },
-                        onPriceChange = { priceTokutei = it },
-                        usWithholdingEnabled = usTaxDeduction,
-                        dps = activeStockDPS
-                    )
-
-                    // Account Row 4: 一般口座 (確定申告)
-                    AccountMatrixCard(
-                        title = resources.getString(R.string.roadmap_label_15),
-                        isTaxFree = false,
-                        shares = sharesIppan,
-                        price = priceIppan,
-                        currency = activeStockCurrency,
-                        onSharesChange = { sharesIppan = it },
-                        onPriceChange = { priceIppan = it },
-                        usWithholdingEnabled = usTaxDeduction,
-                        dps = activeStockDPS
-                    )
-                }
-
-                // Save Action Button inside BottomSheet
-                Button(
-                    onClick = {
-                        val entries = listOf(
-                            Triple(sharesNisaGrowth, priceNisaGrowth, "新NISA成長枠"),
-                            Triple(sharesNisaTsumitate, priceNisaTsumitate, "新NISAつみたて投資枠"),
-                            Triple(sharesTokutei, priceTokutei, "特定口座"),
-                            Triple(sharesIppan, priceIppan, "一般口座")
-                        )
-                        val allocations = entries.mapNotNull { (quantity, price, account) ->
-                            val shares = quantity.toIntOrNull() ?: return@mapNotNull null
-                            val cost = price.toDoubleOrNull() ?: return@mapNotNull null
-                            com.kurogane.dividend.model.HoldingAllocation(shares, cost, account)
-                        }
-                        if (allocations.size != entries.size || !viewModel.addHoldingAllocations(activeTicker, allocations)) return@Button
-                        showBottomSheet = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                ) {
-                    Icon(Icons.Default.Check, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        stringResource(R.string.roadmap_text_40),
-                        color = OnPrimary,
-                        fontSize = AppTextSize.body,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-    }
-
-    // Modal Bottom Sheet: 達成状況をシェア (Image 1 & 2 share certificate)
     if (showShareBottomSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showShareBottomSheet = false },
-            sheetState = shareSheetState,
-            containerColor = BackgroundDark,
-            tonalElevation = 8.dp,
-            scrimColor = Color.Black.copy(alpha = 0.6f)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Share Modal Header matching image perfectly
-                AdaptiveRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(PrimaryEmerald.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Share, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                stringResource(R.string.roadmap_text_41),
-                                color = OnSurface,
-                                fontSize = AppTextSize.body,
-                                fontWeight = FontWeight.Black
-                            )
-                            Text(
-                                stringResource(R.string.roadmap_text_42),
-                                color = OnSurfaceVariant,
-                                fontSize = AppTextSize.dense
-                            )
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(SurfaceContainerHigh)
-                            .clickable { showShareBottomSheet = false },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close), tint = OnSurfaceVariant, modifier = Modifier.size(16.dp))
-                    }
-                }
-
-                // Interactive Tab Selector: 進捗カード vs 踏破認定証
-                var selectedShareTab by remember { mutableIntStateOf(1) } // Default active: 踏破認定証
-                AdaptiveRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { selectedShareTab = 0 },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedShareTab == 0) SurfaceContainerHigh else Color.Transparent
-                        ),
-                        border = if (selectedShareTab == 0) BorderStroke(1.dp, BorderColor) else null,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(40.dp)
-                    ) {
-                        Icon(Icons.Default.ShoppingCart, contentDescription = null, tint = OnSurface, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(stringResource(R.string.roadmap_text_43), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                    }
-
-                    Button(
-                        onClick = { selectedShareTab = 1 },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedShareTab == 1) SurfaceContainerHigh else Color.Transparent
-                        ),
-                        border = if (selectedShareTab == 1) BorderStroke(1.dp, BorderColor) else null,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(40.dp)
-                    ) {
-                        Icon(Icons.Default.WorkspacePremium, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(stringResource(R.string.roadmap_text_44), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                // Masking Switch Options Row
-                var isAmountMasked by remember { mutableStateOf(false) }
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = SurfaceContainerHigh,
-                    border = BorderStroke(1.dp, BorderColor),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.VisibilityOff, contentDescription = null, tint = OnSurfaceVariant, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.roadmap_text_45), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                        }
-                        Switch(
-                            checked = isAmountMasked,
-                            onCheckedChange = { isAmountMasked = it },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = OnSurface,
-                                checkedTrackColor = PrimaryEmerald
-                            )
-                        )
-                    }
-                }
-
-                // Dynamic Certificate Card Box View matching Image perfectly
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(SurfaceContainerHigh)
-                        .border(1.dp, if (selectedShareTab == 1) PrimaryEmerald.copy(alpha = 0.4f) else BorderColor, RoundedCornerShape(16.dp))
-                        .padding(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        if (selectedShareTab == 1) {
-                            // Medal design matching image
-                            Box(
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(CircleShape)
-                                    .background(PrimaryEmerald.copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(PrimaryEmerald.copy(alpha = 0.25f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Default.WorkspacePremium,
-                                        contentDescription = null,
-                                        tint = PrimaryEmerald,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                stringResource(R.string.roadmap_level_1_complete),
-                                color = PrimaryEmerald,
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                stringResource(R.string.roadmap_text_46),
-                                color = OnSurface,
-                                fontSize = AppTextSize.section,
-                                fontWeight = FontWeight.Black
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                stringResource(R.string.roadmap_text_47),
-                                color = OnSurfaceVariant,
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Medium
-                            )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Inner sub-card with highlight title
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = BackgroundDark,
-                                border = BorderStroke(1.dp, BorderColor),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        stringResource(R.string.roadmap_text_48),
-                                        color = OnSurfaceVariant,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        stringResource(R.string.roadmap_text_49),
-                                        color = PrimaryEmeraldContainer,
-                                        fontSize = AppTextSize.body,
-                                        fontWeight = FontWeight.Black,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = stringResource(R.string.roadmap_text_50) + if (isAmountMasked) resources.getString(R.string.roadmap_label_5) else resources.getString(R.string.roadmap_label_6, (currencyFormat.format(monthlyIncome)).toString()),
-                                        color = OnSurface,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            AdaptiveRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    stringResource(R.string.roadmap_text_51),
-                                    color = OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    stringResource(R.string.roadmap_roadmap_quest),
-                                    color = OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
-                        } else {
-                            // Quest Card View (Tab 0 Selected)
-                            Box(
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(CircleShape)
-                                    .background(SkyBlue.copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(SkyBlue.copy(alpha = 0.25f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Default.ShoppingCart,
-                                        contentDescription = null,
-                                        tint = SkyBlue,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                stringResource(R.string.roadmap_current_active_quest),
-                                color = SkyBlue,
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                stringResource(R.string.roadmap_quest_1_s , activeStep.step) + activeStep.name.substringAfter(": "),
-                                color = OnSurface,
-                                fontSize = AppTextSize.section,
-                                fontWeight = FontWeight.Black
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                stringResource(R.string.roadmap_text_52 , currencyFormat.format(activeStep.targetMonthly)),
-                                color = OnSurfaceVariant,
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Medium
-                            )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Inner progress sub-card
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = BackgroundDark,
-                                border = BorderStroke(1.dp, BorderColor),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        stringResource(R.string.roadmap_text_53),
-                                        color = OnSurfaceVariant,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        stringResource(R.string.roadmap_text_54 , (activeQuest.currentRate * 100).toInt()),
-                                        color = PrimaryEmeraldContainer,
-                                        fontSize = AppTextSize.body,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = stringResource(R.string.roadmap_text_55) + if (isAmountMasked) resources.getString(R.string.roadmap_label_5) else resources.getString(R.string.roadmap_label_6, (currencyFormat.format(monthlyIncome)).toString()),
-                                        color = OnSurface,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            AdaptiveRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    stringResource(R.string.roadmap_text_56),
-                                    color = OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    stringResource(R.string.roadmap_roadmap_quest),
-                                    color = OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Premium Gradient Share Action Button matching image perfectly
-                Button(
-                    onClick = { showShareBottomSheet = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = OnSurface),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(Color(0xFFE2E8F0), Color(0xFFCBD5E1))
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                ) {
-                    Text(
-                        stringResource(R.string.roadmap_text_57),
-                        color = BackgroundDark,
-                        fontSize = AppTextSize.caption,
-                        fontWeight = FontWeight.Black
-                    )
-                }
-            }
-        }
-    }
-}
-
-// Custom Account matrix allocation form Card component
-@Composable
-private fun AccountMatrixCard(
-    title: String,
-    isTaxFree: Boolean,
-    usWithholdingEnabled: Boolean = true,
-    shares: String,
-    price: String,
-    currency: String,
-    onSharesChange: (String) -> Unit,
-    onPriceChange: (String) -> Unit,
-    dps: Double
-) {
-    val resources = androidx.compose.ui.platform.LocalContext.current.resources
-    val numShares = shares.toIntOrNull() ?: 0
-    val unitPrice = price.toDoubleOrNull() ?: 0.0
-    val totalCost = numShares * unitPrice
-    val rawDividend = numShares * dps
-    val usTax = currency == "$" && usWithholdingEnabled
-    val finalDividend = com.kurogane.dividend.model.DividendTax.net(rawDividend, if (isTaxFree) 1.0 else 0.0, usTax)
-    val taxAmt = if (isTaxFree) rawDividend * (if (usTax) .9 else 1.0) * .20315 else rawDividend - finalDividend
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = BackgroundDark),
-        border = BorderStroke(1.dp, BorderColor)
-    ) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            // Header Row
-            AdaptiveRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(if (isTaxFree) PrimaryEmerald else SecondaryIndigo)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(title, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = if (isTaxFree) PrimaryEmerald.copy(alpha = 0.15f) else Color(0x1F94A3B8)
-                    ) {
-                        Text(
-                            text = if (isTaxFree) (if (usTax) resources.getString(R.string.roadmap_label_7) else resources.getString(R.string.roadmap_label_8)) else (if (usTax) resources.getString(R.string.roadmap_label_9) else resources.getString(R.string.roadmap_label_10)),
-                            color = if (isTaxFree) PrimaryEmerald else OnSurfaceVariant,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                        )
-                    }
-                }
-
-                Text(
-                    text = stringResource(R.string.roadmap_text_58 , currency) + String.format(java.util.Locale.JAPAN, resources.getString(R.string.roadmap_label_11), finalDividend),
-                    color = if (numShares > 0) PrimaryEmerald else OnSurfaceVariant,
-                    fontSize = AppTextSize.dense,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Text Inputs Row
-            AdaptiveRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Shares Input Column
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.roadmap_text_59), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        TextField(
-                            value = shares,
-                            onValueChange = onSharesChange,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(38.dp),
-                            shape = RoundedCornerShape(6.dp),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = SurfaceContainerHigh,
-                                unfocusedContainerColor = SurfaceContainerHigh,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                focusedTextColor = OnSurface,
-                                unfocusedTextColor = OnSurface
-                            ),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
-                        )
-                        // Quick add buttons
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(SurfaceContainerHigh)
-                                .clickable { onSharesChange(((shares.toIntOrNull() ?: 0) + 10).toString()) }
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        ) {
-                            Text(stringResource(R.string.add_holding_text_13), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(SurfaceContainerHigh)
-                                .clickable { onSharesChange(((shares.toIntOrNull() ?: 0) + 100).toString()) }
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        ) {
-                            Text(stringResource(R.string.add_holding_text_14), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-
-                // Acquisition Price Input Column
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.roadmap_text_60), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        TextField(
-                            value = price,
-                            onValueChange = onPriceChange,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(38.dp),
-                            shape = RoundedCornerShape(6.dp),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = SurfaceContainerHigh,
-                                unfocusedContainerColor = SurfaceContainerHigh,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                focusedTextColor = OnSurface,
-                                unfocusedTextColor = OnSurface
-                            ),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
-                        )
-                        Text(stringResource(R.string.roadmap_text_61), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                    }
-                }
-            }
-
-            if (numShares > 0) {
-                Spacer(modifier = Modifier.height(8.dp))
-                AdaptiveRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        stringResource(R.string.roadmap_text_62 , currency) + String.format(java.util.Locale.JAPAN, "%.2f", totalCost),
-                        color = OnSurfaceVariant,
-                        fontSize = AppTextSize.dense
-                    )
-
-                    if (isTaxFree) {
-                        Text(
-                            stringResource(R.string.roadmap_text_63 , currency) + String.format(java.util.Locale.JAPAN, "%.2f", taxAmt),
-                            color = PrimaryEmerald,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Bold
-                        )
-                    } else {
-                        Text(
-                            stringResource(R.string.roadmap_text_64 , currency) + String.format(java.util.Locale.JAPAN, "%.2f", taxAmt),
-                            color = ErrorRed,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
+        val completedStage = (highestCompletedStep / 10).coerceAtLeast(1)
+        val stageEnd = milestoneSteps[completedStage * 10 - 1]
+        RoadmapShareSheet(
+            viewModel = viewModel,
+            achievement = com.kurogane.dividend.model.RoadmapAchievement(
+                activeStep.step, activeStep.name, activeStep.targetMonthly, monthlyIncome, highestCompletedStep,
+                listOf(resources.getString(R.string.roadmap_text_18), resources.getString(R.string.roadmap_text_19), resources.getString(R.string.roadmap_text_20))[completedStage - 1],
+                stageEnd.title, stageEnd.targetMonthly
+            ),
+            saveImage = saveRoadmapImage,
+            onDismiss = { showShareBottomSheet = false }
+        )
     }
 }
 

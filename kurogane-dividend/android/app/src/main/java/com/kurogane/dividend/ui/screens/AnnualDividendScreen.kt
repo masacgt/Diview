@@ -80,7 +80,7 @@ fun AnnualDividendScreen(
 
     var selectedTab by rememberSaveable { mutableIntStateOf(2) } // 0: 配当推移, 1: 資産推移, 2: 分析
     var assetTrackingPeriod by rememberSaveable { mutableStateOf("5y") }
-    var evalBasis by remember { mutableStateOf("eval") } // "eval" or "cost"
+    val compositionThreshold by viewModel.compositionThreshold.collectAsStateWithLifecycle()
 
     val totalAssets = remember(holdings) { holdings.sumOf { it.totalValuation } }
     val totalCost = remember(holdings) { holdings.sumOf { it.totalCost } }
@@ -306,7 +306,7 @@ fun AnnualDividendScreen(
             // Tab 2: Sector & Composition Analysis
             if (selectedTab == 2) {
                 item {
-                    CompositionAnalysisSection(holdings = holdings, taxRateMode = taxRateMode, totalAssets = totalAssets, totalAnnualDiv = totalAnnualDiv)
+                    CompositionAnalysisSection(holdings = holdings, taxRateMode = taxRateMode, totalAssets = totalAssets, totalAnnualDiv = totalAnnualDiv, compositionThreshold = compositionThreshold)
                 }
             }
 
@@ -618,7 +618,7 @@ private data class SectorCompositionRow(
 
 @Composable
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.model.Holding>, taxRateMode: String, totalAssets: Double, totalAnnualDiv: Double) {
+private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.model.Holding>, taxRateMode: String, totalAssets: Double, totalAnnualDiv: Double, compositionThreshold: Int) {
     var isVisible by remember { mutableStateOf(false) }
     var chartMode by remember { mutableStateOf("dividend") } // "holding" or "dividend"
     var sectorValueMode by remember { mutableStateOf("valuation") } // "valuation" or "dividend"
@@ -671,27 +671,27 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
     )
 
     // Build Donut Slice Objects
-    val donutSlices = mappedHoldings.mapIndexed { index, (holding, div, valuation) ->
-        val itemVal = if (chartMode == "dividend") div else valuation
-        val ratio = if (totalChartValue > 0.0) itemVal / totalChartValue else 0.0
-        val sweepAngle = (ratio * 360f).toFloat()
-        val percentageStr = String.format(java.util.Locale.JAPAN, "%.1f%%", ratio * 100.0)
-        val color = sliceColors[index % sliceColors.size]
-        
-        DonutSliceData(
-            code = holding.code,
-            name = holding.name,
-            expectedDiv = itemVal,
-            sweepAngle = sweepAngle,
-            percentage = percentageStr,
-            color = color
-        )
-    }
+    val compositionValues = mappedHoldings.map { if (chartMode == "dividend") it.second else it.third }
+    val donutSlices = com.kurogane.dividend.model.PortfolioMath.compositionGroups(compositionValues, compositionThreshold)
+        .mapIndexed { index, group ->
+            val itemVal = group.sumOf { compositionValues[it] }
+            val ratio = if (totalChartValue > 0.0) itemVal / totalChartValue else 0.0
+            val isOther = group.all { compositionValues[it] / totalChartValue * 100 < compositionThreshold }
+            val holding = mappedHoldings[group.first()].first
+            DonutSliceData(
+                code = if (isOther) "__other__" else holding.code,
+                name = if (isOther) context.getString(R.string.composition_other, group.size) else holding.name,
+                expectedDiv = itemVal,
+                sweepAngle = (ratio * 360).toFloat(),
+                percentage = String.format(Locale.JAPAN, "%.1f%%", ratio * 100),
+                color = if (isOther) OnSurfaceVariant else sliceColors[index % sliceColors.size]
+            )
+        }
 
     var activeStockCode by remember { mutableStateOf<String?>(null) }
 
     // Reset active stock selection on load/mode switch to display totals by default
-    LaunchedEffect(holdings, chartMode) {
+    LaunchedEffect(holdings, chartMode, compositionThreshold) {
         activeStockCode = null
     }
 
@@ -944,7 +944,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = if (activeSlice != null) activeSlice.percentage else "${donutSlices.size}銘柄分散中",
+                                    text = if (activeSlice != null) activeSlice.percentage else "${mappedHoldings.size}銘柄分散中",
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         color = activeSlice?.color ?: PrimaryEmerald,
                                         fontWeight = FontWeight.Bold,
@@ -1666,7 +1666,6 @@ private fun CompoundingSimulationSection(
             }
         }
         Text(stringResource(R.string.annual_dividend_text_32), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-        Text(stringResource(R.string.annual_dividend_text_33), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (updateFailed) Text(stringResource(R.string.annual_dividend_text_34), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
 

@@ -123,7 +123,8 @@ fun AssetManagementScreen(
     val gainPctVal = remember(totalGainVal, totalCostVal) { if (totalCostVal > 0.0) (totalGainVal / totalCostVal) * 100.0 else 0.0 }
     val totalAnnualDivVal = remember(holdings, taxRateMode) { holdings.sumOf { it.getEffectiveAnnualDividend(taxRateMode) } }
     val netAnnualDivVal = remember(holdings) { holdings.sumOf { it.getEffectiveAnnualDividend("net") } }
-    val avgYield = remember(totalAnnualDivVal, totalAssetsVal) { if (totalAssetsVal > 0.0) (totalAnnualDivVal / totalAssetsVal) * 100.0 else 0.0 }
+    val calculationBasis by viewModel.calculationBasis.collectAsStateWithLifecycle()
+    val avgYield = com.kurogane.dividend.model.PortfolioMath.portfolioYield(totalAnnualDivVal, totalAssetsVal, totalCostVal, calculationBasis)
 
     // Dynamic Annual Dividend Target based on currently active roadmap step optimized with remember
     val totalAnnualExpectedDividendForRoadmap = remember(holdings, taxRateMode) {
@@ -157,12 +158,12 @@ fun AssetManagementScreen(
     }
 
     // Sorted holdings optimized with remember
-    val displayedHoldings = remember(filteredHoldings, sortCriteria, sortDirection, taxRateMode) {
+    val displayedHoldings = remember(filteredHoldings, sortCriteria, sortDirection, taxRateMode, calculationBasis) {
         filteredHoldings.sortedWith { a, b ->
             val comp = when (sortCriteria) {
                 "val" -> a.totalValuation.compareTo(b.totalValuation)
                 "gain" -> a.gainLossPercent.compareTo(b.gainLossPercent)
-                "div" -> a.yieldRate.compareTo(b.yieldRate)
+                "div" -> (if (calculationBasis == "cost") a.liveYoc else a.liveYield).compareTo(if (calculationBasis == "cost") b.liveYoc else b.liveYield)
                 "div_amt" -> a.getEffectiveAnnualDividend(taxRateMode).compareTo(b.getEffectiveAnnualDividend(taxRateMode))
                 "code" -> a.code.compareTo(b.code)
                 else -> a.totalValuation.compareTo(b.totalValuation)
@@ -582,7 +583,14 @@ fun AssetManagementScreen(
                         Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.EventBusy, contentDescription = null, tint = SoftGray, modifier = Modifier.size(32.dp))
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text(stringResource(R.string.asset_management_text_9), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
+                            Text(
+                                stringResource(R.string.asset_management_text_9),
+                                modifier = Modifier.fillMaxWidth(),
+                                color = OnSurface,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = AppTextSize.body,
+                                textAlign = TextAlign.Center
+                            )
                             Text(
                                 if (selectedMonth != null) resources.getString(R.string.asset_management_label_17, (selectedMonth).toString()) else resources.getString(R.string.asset_management_label_18),
                                 color = SoftGray,
@@ -793,8 +801,8 @@ fun AssetManagementScreen(
                                 }
                                 HoldingMetricTile(
                                     label = resources.getString(R.string.asset_management_label_31),
-                                    value = "${String.format(java.util.Locale.JAPAN, "%.2f", holding.yieldRate)}%",
-                                    detail = "現在株価比",
+                                    value = "${String.format(java.util.Locale.JAPAN, "%.2f", if (calculationBasis == "cost") holding.liveYoc else holding.liveYield)}%",
+                                    detail = if (calculationBasis == "cost") resources.getString(R.string.yield_basis_cost_detail) else "現在株価比",
                                     modifier = Modifier.weight(1f),
                                     valueColor = NeonGreenLight
                                 )

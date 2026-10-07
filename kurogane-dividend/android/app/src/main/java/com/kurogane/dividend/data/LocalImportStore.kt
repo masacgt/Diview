@@ -1,6 +1,7 @@
 package com.kurogane.dividend.data
 
 import android.content.Context
+import android.app.backup.BackupManager
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -11,6 +12,7 @@ import com.kurogane.dividend.model.WatchlistStock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.KeyStore
+import java.io.File
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -18,26 +20,46 @@ import javax.crypto.spec.GCMParameterSpec
 
 /** App-private encrypted storage. Nothing in this class performs network access. */
 class LocalImportStore(context: Context) {
-    private val prefs = context.getSharedPreferences("local_import_store", Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val prefs = appContext.getSharedPreferences("local_import_store", Context.MODE_PRIVATE)
+    private val autoBackupFile = File(appContext.filesDir, "diview_auto_backup.json")
     private var cachedKey: SecretKey? = null
 
-    fun hasHoldings(): Boolean = prefs.contains("holdings")
+    fun hasHoldings(): Boolean = prefs.contains("holdings") || autoBackupFile.isFile
 
-    fun saveHoldings(holdings: List<Holding>) = save("holdings", JSONArray().apply { holdings.forEach { put(it.toJson()) } }.toString().toByteArray())
+    fun saveHoldings(holdings: List<Holding>) {
+        save("holdings", JSONArray().apply { holdings.forEach { put(it.toJson()) } }.toString().toByteArray())
+        writeAutoBackupSnapshot(holdings, loadWatchlist().orEmpty())
+    }
     fun loadHoldings(): List<Holding>? = load("holdings")?.let { bytes ->
         val array = JSONArray(bytes.toString(Charsets.UTF_8))
         (0 until array.length()).map { array.getJSONObject(it).toHolding() }
+    } ?: readAutoBackupSnapshot()?.optJSONArray("holdings")?.let { array ->
+        (0 until array.length()).map { array.getJSONObject(it).toHolding() }.also { restored ->
+            save("holdings", JSONArray().apply { restored.forEach { put(it.toJson()) } }.toString().toByteArray())
+        }
     }
-    fun saveBackup(kind: DvmBackupKind, plaintext: ByteArray) = save("dvm_${kind.name}", plaintext)
+    fun saveBackup(kind: DvmBackupKind, plaintext: ByteArray) {
+        save("dvm_${kind.name}", plaintext)
+        writeAutoBackupSnapshot(loadHoldings().orEmpty(), loadWatchlist().orEmpty())
+    }
     fun readBackup(kind: DvmBackupKind): ByteArray? = load("dvm_${kind.name}")
+        ?: readAutoBackupSnapshot()?.optJSONObject("dvmBackups")?.optString(kind.name)?.takeIf(String::isNotBlank)?.let {
+            android.util.Base64.decode(it, android.util.Base64.NO_WRAP).also { bytes -> save("dvm_${kind.name}", bytes) }
+        }
     fun saveFeedbackDraft(draft: JSONObject) = save("feedback_draft", draft.toString().toByteArray(Charsets.UTF_8))
     fun loadFeedbackDraft(): JSONObject? = load("feedback_draft")?.let { JSONObject(it.toString(Charsets.UTF_8)) }
 
     fun clearFeedbackDraft() { check(prefs.edit().remove("feedback_draft").commit()) }
 
-    fun clear() { check(prefs.edit().clear().commit()) { "データを初期化できませんでした" } }
+    fun clear() {
+        check(prefs.edit().clear().commit()) { "データを初期化できませんでした" }
+        autoBackupFile.delete()
+        BackupManager(appContext).dataChanged()
+    }
 
-    fun saveWatchlist(stocks: List<WatchlistStock>) = save("watchlist", JSONArray().apply {
+    fun saveWatchlist(stocks: List<WatchlistStock>) {
+        save("watchlist", JSONArray().apply {
         stocks.forEach { stock -> put(JSONObject().apply {
             put("code", stock.code); put("name", stock.name); put("market", stock.market); put("sector", stock.sector)
             put("category", stock.category); put("price", stock.price); put("currency", stock.currency); put("dps", stock.dps)
@@ -46,23 +68,62 @@ class LocalImportStore(context: Context) {
             put("payoutTiming", stock.payoutTiming); put("desc", stock.desc); put("alertEnabled", stock.alertEnabled)
             put("badge", stock.badge); put("defaultShares", stock.defaultShares)
         }) }
-    }.toString().toByteArray(Charsets.UTF_8))
+        }.toString().toByteArray(Charsets.UTF_8))
+        writeAutoBackupSnapshot(loadHoldings().orEmpty(), stocks)
+    }
 
     fun loadWatchlist(): List<WatchlistStock>? = load("watchlist")?.let { bytes ->
         val array = JSONArray(bytes.toString(Charsets.UTF_8))
         (0 until array.length()).map { index ->
             val row = array.getJSONObject(index)
-            WatchlistStock(row.getString("code"), row.getString("name"), row.getString("market"), row.getString("sector"),
-                row.getString("category"), row.getDouble("price"), row.getString("currency"), row.getDouble("dps"),
-                row.getDouble("currentYield"), row.getDouble("targetYield"), row.getDouble("targetPrice"), row.getString("dailyChange"),
-                row.getBoolean("isPositive"), row.getJSONArray("payoutMonths").let { a -> (0 until a.length()).map { a.getInt(it) } },
-                row.getString("payoutTiming"), row.getString("desc"), row.optBoolean("alertEnabled"),
-                if (row.isNull("badge")) null else row.optString("badge"), row.optInt("defaultShares", 100)).also {
+            row.toWatchlistStock().also {
                 require(PortfolioMath.validCode(it.code) && listOf(it.price, it.dps, it.targetPrice).all(PortfolioMath::validMoney) &&
                     it.currentYield.isFinite() && it.targetYield.isFinite() && it.targetYield > 0) { "監視銘柄の保存データが正しくありません" }
             }
         }
+    } ?: readAutoBackupSnapshot()?.optJSONArray("watchlist")?.let { array ->
+        (0 until array.length()).map { array.getJSONObject(it).toWatchlistStock() }.also { restored ->
+            save("watchlist", JSONArray().apply { restored.forEach { put(it.toJson()) } }.toString().toByteArray(Charsets.UTF_8))
+        }
     }
+
+    private fun writeAutoBackupSnapshot(holdings: List<Holding>, watchlist: List<WatchlistStock>) {
+        val snapshot = JSONObject().put("version", 1)
+            .put("holdings", JSONArray().apply { holdings.forEach { put(it.toJson()) } })
+            .put("watchlist", JSONArray().apply { watchlist.forEach { put(it.toJson()) } })
+            .put("dvmBackups", JSONObject().apply {
+                DvmBackupKind.entries.forEach { kind -> readBackup(kind)?.let { put(kind.name, android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP)) } }
+            })
+        val tempFile = File(appContext.filesDir, "diview_auto_backup.tmp")
+        tempFile.writeText(snapshot.toString(), Charsets.UTF_8)
+        if (!tempFile.renameTo(autoBackupFile)) {
+            autoBackupFile.writeText(snapshot.toString(), Charsets.UTF_8)
+            tempFile.delete()
+        }
+        BackupManager(appContext).dataChanged()
+    }
+
+    private fun readAutoBackupSnapshot(): JSONObject? = runCatching {
+        if (!autoBackupFile.isFile || autoBackupFile.length() > 10 * 1024 * 1024) return null
+        JSONObject(autoBackupFile.readText(Charsets.UTF_8)).takeIf { it.optInt("version") == 1 }
+    }.getOrNull()
+
+    private fun WatchlistStock.toJson() = JSONObject().apply {
+        put("code", code); put("name", name); put("market", market); put("sector", sector); put("category", category)
+        put("price", price); put("currency", currency); put("dps", dps); put("currentYield", currentYield)
+        put("targetYield", targetYield); put("targetPrice", targetPrice); put("dailyChange", dailyChange)
+        put("isPositive", isPositive); put("payoutMonths", JSONArray(payoutMonths)); put("payoutTiming", payoutTiming)
+        put("desc", desc); put("alertEnabled", alertEnabled); put("badge", badge); put("defaultShares", defaultShares)
+    }
+
+    private fun JSONObject.toWatchlistStock() = WatchlistStock(
+        getString("code"), getString("name"), getString("market"), getString("sector"), getString("category"),
+        getDouble("price"), getString("currency"), getDouble("dps"), getDouble("currentYield"), getDouble("targetYield"),
+        getDouble("targetPrice"), getString("dailyChange"), getBoolean("isPositive"),
+        getJSONArray("payoutMonths").let { months -> (0 until months.length()).map { months.getInt(it) } },
+        getString("payoutTiming"), getString("desc"), optBoolean("alertEnabled"),
+        if (isNull("badge")) null else optString("badge"), optInt("defaultShares", 100)
+    )
 
     private fun save(key: String, clear: ByteArray) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, secretKey()) }
