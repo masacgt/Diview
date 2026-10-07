@@ -399,7 +399,7 @@
     <string name="stock_detail_text_23">"タップで切替"</string>
     <string name="stock_detail_text_24">"① 健全性"</string>
     <string name="stock_detail_text_25">"② 買場シグナル"</string>
-    <string name="stock_detail_text_26">"検討圏 %1$s%%"</string>
+    <string name="stock_detail_text_26">"配当利回り %1$s%%"</string>
     <string name="stock_detail_text_27">"③ 増配耐性"</string>
     <string name="stock_detail_text_28">"④ 集中リスク"</string>
     <string name="stock_detail_1_s_2_s">"%1$s %2$s%%"</string>
