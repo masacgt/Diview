@@ -89,16 +89,20 @@ fun SearchSheet(
             remoteCandidates = result.getOrNull()?.map { hit ->
                 val local = candidates.firstOrNull { it.code.equals(hit.code, ignoreCase = true) }
                 val price = hit.cachedPrice?.let { "¥${java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN).format(it.toLong())}" }
+                val yieldRate = hit.cachedPrice?.takeIf { it > 0.0 }?.let { currentPrice ->
+                    hit.annualDividendPerShare?.let { dps -> "%.2f%%".format(java.util.Locale.JAPAN, dps / currentPrice * 100.0) }
+                }
                 local?.copy(
                     name = hit.name,
                     desc = hit.industry?.let { "東証 • $it" } ?: local.desc,
-                    price = price ?: local.price
+                    price = price ?: local.price,
+                    yieldRate = yieldRate ?: local.yieldRate
                 ) ?: CandidateStock(
                     code = hit.code,
                     name = hit.name,
                     desc = hit.industry?.let { "東証 • $it" } ?: "日本株 • Cloudflare銘柄マスター",
                     price = price ?: "株価未取得",
-                    yieldRate = "--",
+                    yieldRate = yieldRate ?: "--",
                     cat = "jp",
                     isHigh = false
                 )
@@ -298,55 +302,6 @@ fun SearchSheet(
                     }
                 }
 
-                // Quick hot search tags
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Whatshot,
-                            contentDescription = null,
-                            tint = PrimaryEmerald,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            stringResource(R.string.search_text_4),
-                            color = OnSurfaceVariant,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        val hotTags = listOf("7203 トヨタ", "8316 三井住友FG", "9432 NTT", "8058 三菱商事", "AAPL アップル")
-                        hotTags.forEach { tag ->
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(SurfaceContainer)
-                                    .clickable {
-                                        val codeOnly = tag.split(" ").first()
-                                        searchQuery = codeOnly
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    tag,
-                                    color = PrimaryEmerald,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
-                }
-
                 // Candidate Count and List Header
                 AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
@@ -448,22 +403,6 @@ fun SearchSheet(
                     }
                 }
 
-                // Close Button
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainer),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        stringResource(R.string.close),
-                        color = OnSurface,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = AppTextSize.body
-                    )
-                }
             }
         }
     }

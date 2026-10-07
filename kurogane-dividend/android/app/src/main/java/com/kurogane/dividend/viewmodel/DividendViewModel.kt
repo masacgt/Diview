@@ -108,6 +108,46 @@ class DividendViewModel @JvmOverloads constructor(
     private val _maskAtStartup = MutableStateFlow(displayPreferences.getBoolean("mask_at_startup", false))
     val maskAtStartup: StateFlow<Boolean> = _maskAtStartup.asStateFlow()
 
+    private val _calculationBasis = MutableStateFlow(displayPreferences.getString("calculation_basis", "eval") ?: "eval")
+    val calculationBasis = _calculationBasis.asStateFlow()
+    private val _roadmapTargetYield = MutableStateFlow(displayPreferences.getFloat("roadmap_target_yield", 4f).toDouble())
+    val roadmapTargetYield = _roadmapTargetYield.asStateFlow()
+    private val _compositionThreshold = MutableStateFlow(displayPreferences.getInt("composition_threshold", 5))
+    val compositionThreshold = _compositionThreshold.asStateFlow()
+    private val _roadmapShareTab = MutableStateFlow(displayPreferences.getInt("roadmap_share_tab", 0))
+    val roadmapShareTab = _roadmapShareTab.asStateFlow()
+    private val _roadmapShareMasked = MutableStateFlow(displayPreferences.getBoolean("roadmap_share_masked", _maskAtStartup.value))
+    val roadmapShareMasked = _roadmapShareMasked.asStateFlow()
+
+    private fun saveDisplaySetting(editor: android.content.SharedPreferences.Editor, update: () -> Unit) {
+        if (editor.commit()) update()
+        else _saveError.value = getApplication<Application>().getString(R.string.setting_save_failed)
+    }
+
+    fun setCalculationBasis(basis: String) {
+        if (basis !in setOf("eval", "cost")) return
+        saveDisplaySetting(displayPreferences.edit().putString("calculation_basis", basis)) { _calculationBasis.value = basis }
+    }
+
+    fun setRoadmapTargetYield(value: Double) {
+        if (value !in setOf(3.5, 4.0, 4.5)) return
+        saveDisplaySetting(displayPreferences.edit().putFloat("roadmap_target_yield", value.toFloat())) { _roadmapTargetYield.value = value }
+    }
+
+    fun setCompositionThreshold(value: Int) {
+        if (value !in 3..10) return
+        saveDisplaySetting(displayPreferences.edit().putInt("composition_threshold", value)) { _compositionThreshold.value = value }
+    }
+
+    fun setRoadmapShareTab(value: Int) {
+        if (value !in 0..1) return
+        saveDisplaySetting(displayPreferences.edit().putInt("roadmap_share_tab", value)) { _roadmapShareTab.value = value }
+    }
+
+    fun setRoadmapShareMasked(value: Boolean) {
+        saveDisplaySetting(displayPreferences.edit().putBoolean("roadmap_share_masked", value)) { _roadmapShareMasked.value = value }
+    }
+
     private val _usTaxDeduction = MutableStateFlow(displayPreferences.getBoolean("us_tax_deduction", true))
     val usTaxDeduction = _usTaxDeduction.asStateFlow()
     private val _biometricEnabled = MutableStateFlow(displayPreferences.getBoolean("biometric_enabled", false))
@@ -1420,6 +1460,7 @@ class DividendViewModel @JvmOverloads constructor(
             hit.copy(
                 name = japaneseName(hit.code, hit.name),
                 cachedPrice = cachedPrices[hit.code.uppercase(java.util.Locale.ROOT)],
+                annualDividendPerShare = readCachedDividendsPerShare()[hit.code.uppercase(java.util.Locale.ROOT)],
                 industry = industries[hit.code.take(4).uppercase(java.util.Locale.ROOT)]
             )
         }
@@ -1442,9 +1483,36 @@ class DividendViewModel @JvmOverloads constructor(
     suspend fun registerCloudflareAllocations(code: String, allocations: List<HoldingAllocation>): Boolean {
         restoration.await()
         val security = resolveCloudflareSecurity(code) ?: return false
-        val added = addAllocations(code, allocations, security)
-        if (added) persistCurrentHoldings()
-        return added
+        return registerResolvedAllocations(code, allocations, security)
+    }
+
+    suspend fun registerResolvedAllocations(code: String, allocations: List<HoldingAllocation>, security: CloudflareSecurity?): Boolean {
+        restoration.await()
+        if (security != null && !security.code.equals(code, true)) return false
+        val registered = saveMutex.withLock {
+            // Publish only after a durable save. Once writing starts, finish the transaction even
+            // if the sheet closes; otherwise a retry could add the same shares twice.
+            withContext(kotlinx.coroutines.NonCancellable) {
+                var saved: Holding? = null
+                while (saved == null) {
+                    val before = _holdings.value
+                    val merged = allocatedHolding(code, allocations, security, before) ?: return@withContext null
+                    val updated = if (before.any { it.id == merged.id }) before.map { if (it.id == merged.id) merged else it } else before + merged
+                    val prices = readCachedPrices()
+                    val dividends = readCachedDividendsPerShare()
+                    val next = updated.map { runtimeHolding(it, prices, dividends) }
+                    withContext(Dispatchers.IO) { localImportStore.saveHoldings(next) }
+                    // If a price refresh or another edit happened during IO, merge onto that
+                    // newer snapshot and save it before publishing.
+                    if (_holdings.compareAndSet(before, next)) saved = merged
+                }
+                saved
+            }
+        } ?: return false
+        hasRestoredLocalHoldings = true
+        refreshAllocationMonths(registered)
+        viewModelScope.launch { refreshMarketPricesIfDue(force = true) }
+        return true
     }
 
     suspend fun resolveCloudflareSecurity(code: String): CloudflareSecurity? {
@@ -1505,12 +1573,12 @@ class DividendViewModel @JvmOverloads constructor(
         marketPreferences.edit().putString("monthly_prices_$code", rows.toString()).apply()
     }
 
-    private suspend fun refreshMarketPricesIfDue() {
+    private suspend fun refreshMarketPricesIfDue(force: Boolean = false) {
         val generation = dataGeneration.get()
         val now = System.currentTimeMillis()
         val lastFetchAt = marketPreferences.getLong("last_price_fetch_at", 0L)
         val lastFetchJstDate = marketPreferences.getString("last_price_fetch_jst_date", null)
-        if (!PriceRefreshPolicy.shouldFetch(now, lastFetchAt, lastFetchJstDate)) return
+        if (!force && !PriceRefreshPolicy.shouldFetch(now, lastFetchAt, lastFetchJstDate)) return
 
         runCatchingCancellable { marketRepository.fetchPriceQuotes() }
             .onSuccess { fetchedQuotes ->
@@ -1681,6 +1749,23 @@ class DividendViewModel @JvmOverloads constructor(
         viewModelScope.launch { refreshDividendHistoryIfDue() }
     }
 
+    suspend fun registerWatchlistStock(code: String): Boolean {
+        restoration.await()
+        if (!canEditWatchlist()) return false
+        val normalized = PortfolioMath.normalizeCode(code)
+        if (!PortfolioMath.validCode(normalized)) return false
+        if (_watchlist.value.none { it.code.equals(normalized, true) }) {
+            val owned = _holdings.value.firstOrNull { it.code.equals(normalized, true) }
+            val security = if (owned == null) resolveCloudflareSecurity(normalized) else null
+            val holding = com.kurogane.dividend.model.StockDetailResolver.resolve(
+                normalized, _holdings.value, _watchlist.value, security
+            ) ?: return false
+            addHoldingToWatchlist(holding)
+        }
+        persistCurrentHoldings()
+        return true
+    }
+
     private fun canEditWatchlist(): Boolean {
         if (watchlistLoadFailed) _saveError.value = getApplication<android.app.Application>().getString(R.string.watchlist_restore_required)
         return !watchlistLoadFailed
@@ -1732,16 +1817,32 @@ class DividendViewModel @JvmOverloads constructor(
         addAllocations(code, listOf(HoldingAllocation(shares, acqPrice, accountType)), cloudflareSecurity)
 
     private fun addAllocations(code: String, allocations: List<HoldingAllocation>, security: CloudflareSecurity?): Boolean {
-        if (!restoration.isCompleted || holdingsLoadFailed) return false
+        val before = _holdings.value
+        val merged = allocatedHolding(code, allocations, security, before) ?: return false
+        updatePortfolio(if (before.any { it.id == merged.id }) before.map { if (it.id == merged.id) merged else it } else before + merged)
+        refreshAllocationMonths(merged)
+        viewModelScope.launch { refreshMarketPricesIfDue(force = true) }
+        return true
+    }
+
+    private fun refreshAllocationMonths(merged: Holding) {
+        applyCachedDividendMonths()
+        yahooSymbol(merged.category, merged.code)?.let { symbol ->
+            viewModelScope.launch { refreshDividendMonths(listOf(symbol)) }
+        }
+    }
+
+    private fun allocatedHolding(code: String, allocations: List<HoldingAllocation>, security: CloudflareSecurity?, holdings: List<Holding>): Holding? {
+        if (!restoration.isCompleted || holdingsLoadFailed) return null
         val normalized = PortfolioMath.normalizeCode(code)
         if (!PortfolioMath.validCode(normalized) || allocations.isEmpty() || allocations.none { it.shares > 0 } ||
-            allocations.any { it.shares < 0 || !PortfolioMath.validMoney(it.acquisitionPrice) || it.accountType.isBlank() }) return false
-        val old = _holdings.value.firstOrNull { it.code.equals(normalized, true) }
+            allocations.any { it.shares < 0 || !PortfolioMath.validMoney(it.acquisitionPrice) || it.accountType.isBlank() }) return null
+        val old = holdings.firstOrNull { it.code.equals(normalized, true) }
         val preset = _watchlist.value.firstOrNull { it.code.equals(normalized, true) }
-        if (old == null && preset == null && security == null) return false
+        if (old == null && preset == null && security == null) return null
         val dps = security?.annualDividendPerShare ?: old?.dps ?: preset?.dps ?: 0.0
         val price = readCachedPrices()[normalized] ?: security?.marketPrice ?: old?.price ?: preset?.price ?: 0.0
-        if (!PortfolioMath.validMoney(dps) || !PortfolioMath.validMoney(price)) return false
+        if (!PortfolioMath.validMoney(dps) || !PortfolioMath.validMoney(price)) return null
         val currency = old?.currency ?: preset?.currency ?: if (normalized.matches(Regex("[A-Z]+"))) "$" else "¥"
         val template = old ?: Holding(
             id = "holding-$normalized", code = normalized, name = security?.name ?: preset?.name.orEmpty(),
@@ -1753,13 +1854,8 @@ class DividendViewModel @JvmOverloads constructor(
         )
         val merged = runCatching {
             PortfolioMath.mergeAllocations(template.copy(price = price, dps = dps, name = security?.name ?: template.name), allocations)
-        }.getOrNull() ?: return false
-        updatePortfolio(if (old == null) _holdings.value + merged else _holdings.value.map { if (it.id == old.id) merged else it })
-        applyCachedDividendMonths()
-        yahooSymbol(merged.category, merged.code)?.let { symbol ->
-            viewModelScope.launch { refreshDividendMonths(listOf(symbol)) }
-        }
-        return true
+        }.getOrNull() ?: return null
+        return merged
     }
 
     fun addHoldingAllocations(code: String, allocations: List<HoldingAllocation>): Boolean = addAllocations(code, allocations, null)
@@ -1840,6 +1936,11 @@ class DividendViewModel @JvmOverloads constructor(
             _isOledBlack.value = false
             _isPrivacyActive.value = false
             _maskAtStartup.value = false
+            _calculationBasis.value = "eval"
+            _roadmapTargetYield.value = 4.0
+            _compositionThreshold.value = 5
+            _roadmapShareTab.value = 0
+            _roadmapShareMasked.value = false
             _taxRateMode.value = "gross"
             _usTaxDeduction.value = true
             _biometricEnabled.value = false

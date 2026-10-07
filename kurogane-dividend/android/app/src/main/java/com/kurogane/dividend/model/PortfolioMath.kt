@@ -7,6 +7,19 @@ data class HoldingAllocation(val shares: Int, val acquisitionPrice: Double, val 
 
 /** Validation and arithmetic shared by imports, editing and multi-account registration. */
 object PortfolioMath {
+    fun portfolioYield(dividend: Double, valuation: Double, cost: Double, basis: String): Double {
+        val denominator = if (basis == "cost") cost else valuation
+        return if (denominator > 0) (dividend / denominator * 100).takeIf(Double::isFinite) ?: 0.0 else 0.0
+    }
+
+    /** Each position occurs once; positions strictly below the threshold form the final group. */
+    fun compositionGroups(values: List<Double>, thresholdPercent: Int): List<List<Int>> {
+        val total = values.sum()
+        if (total <= 0) return emptyList()
+        val (small, large) = values.indices.partition { values[it] / total * 100 < thresholdPercent }
+        return large.map { listOf(it) } + if (small.isEmpty()) emptyList() else listOf(small)
+    }
+
     fun validMoney(value: Double): Boolean = value.isFinite() && value >= 0.0 && value <= 1.0e12
 
     fun wholeShares(value: Double?): Int? = value?.takeIf {

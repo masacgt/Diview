@@ -516,7 +516,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 StockDetailScreen(
                                     stockCode = code,
                                     viewModel = viewModel,
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { navController.popBackStack() },
+                                    onOpenAddHolding = { selectedCode ->
+                                        prefilledAddHoldingCode = selectedCode
+                                        showAddHoldingSheet = true
+                                    }
                                 )
                             }
                         }

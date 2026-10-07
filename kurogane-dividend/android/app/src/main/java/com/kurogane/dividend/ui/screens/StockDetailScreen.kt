@@ -39,13 +39,15 @@ import com.kurogane.dividend.model.StockAnalysisNarrativeGenerator
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import java.text.NumberFormat
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StockDetailScreen(
     stockCode: String = "7203",
     viewModel: DividendViewModel,
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    onOpenAddHolding: (String) -> Unit = {}
 ) {
     val resources = LocalContext.current.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
@@ -54,6 +56,8 @@ fun StockDetailScreen(
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
     val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
     val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarScope = rememberCoroutineScope()
     
     var resolvedSecurity by remember(stockCode) { mutableStateOf<com.kurogane.dividend.data.CloudflareSecurity?>(null) }
     var lookupFinished by remember(stockCode) { mutableStateOf(false) }
@@ -87,7 +91,6 @@ fun StockDetailScreen(
         return
     }
 
-    var showHoldingQuickEdit by remember(currentHolding.id) { mutableStateOf(false) }
     var showDeleteHoldingConfirmation by remember(currentHolding.id) { mutableStateOf(false) }
     val isOwnedHolding = holdings.any { it.id == currentHolding.id }
     val isBookmarked = watchlist.any { it.code.equals(currentHolding.code, true) }
@@ -105,6 +108,7 @@ fun StockDetailScreen(
     val currentPrice = currentHolding.price
     val dps = currentHolding.dps
     val financial = financialData[currentHolding.code]
+    val fiscalMonth = financial?.period?.substringAfterLast('/')?.toIntOrNull()?.takeIf { it in 1..12 }
     val baseProfile = financial?.profile ?: com.kurogane.dividend.model.StockFinancialProfile()
     var financialError by remember(currentHolding.code) { mutableStateOf(false) }
     var financialLoading by remember(currentHolding.code) { mutableStateOf(false) }
@@ -166,6 +170,7 @@ fun StockDetailScreen(
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = BackgroundDark
     ) { innerPadding ->
         LazyColumn(
@@ -175,20 +180,13 @@ fun StockDetailScreen(
                 .padding(horizontal = 14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            item {
-                Text(stringResource(R.string.stock_detail_text), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-            }
-
-            item {
-                Text(stringResource(R.string.stock_detail_text_2 , financial?.period?.ifBlank { resources.getString(R.string.not_available) } ?: resources.getString(R.string.not_available), if (financialError) resources.getString(R.string.stock_detail_label_14) else ""), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-                if (currentHolding.category == com.kurogane.dividend.model.Category.JAPAN) {
-                    when {
-                        financialLoading -> StatusMessage(resources.getString(R.string.data_loading))
-                        financialError -> StatusMessage(financialFailure ?: resources.getString(R.string.financial_update_failed),
-                            color = ErrorRed, actionLabel = resources.getString(R.string.retry), onAction = { financialRetry++ })
-                        financial == null -> StatusMessage(resources.getString(R.string.financial_empty),
-                            actionLabel = resources.getString(R.string.retry), onAction = { financialRetry++ })
-                    }
+            if (currentHolding.category == com.kurogane.dividend.model.Category.JAPAN) item {
+                when {
+                    financialLoading -> StatusMessage(resources.getString(R.string.data_loading))
+                    financialError -> StatusMessage(financialFailure ?: resources.getString(R.string.financial_update_failed),
+                        color = ErrorRed, actionLabel = resources.getString(R.string.retry), onAction = { financialRetry++ })
+                    financial == null -> StatusMessage(resources.getString(R.string.financial_empty),
+                        actionLabel = resources.getString(R.string.retry), onAction = { financialRetry++ })
                 }
             }
             // 1. Hero Stock Header Card
@@ -257,11 +255,23 @@ fun StockDetailScreen(
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
+                                    fiscalMonth?.let { month ->
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Surface(shape = RoundedCornerShape(4.dp), color = BackgroundDark, border = BorderStroke(1.dp, BorderColor)) {
+                                            Text("${month}月決算", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                        }
+                                    }
                                 }
                             }
 
                             IconButton(
-                                onClick = { viewModel.addHoldingToWatchlist(currentHolding) },
+                                onClick = {
+                                    if (isBookmarked) viewModel.removeWatchlistStock(currentHolding.code)
+                                    else viewModel.addHoldingToWatchlist(currentHolding)
+                                    snackbarScope.launch {
+                                        snackbarHostState.showSnackbar(if (isBookmarked) "Watchlistから解除しました" else "Watchlistに登録しました")
+                                    }
+                                },
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(if (isBookmarked) PrimaryEmerald.copy(alpha = 0.2f) else SurfaceContainer)
@@ -363,7 +373,7 @@ fun StockDetailScreen(
                 }
             }
 
-            // 2. 1株配当金の推移 (4期) Bar Chart Card
+            // 2. 1株配当金の推移 (最大8期) Bar Chart Card
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -401,7 +411,7 @@ fun StockDetailScreen(
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.Bottom
                             ) {
-                                val history = financial?.dividends.orEmpty().takeLast(4)
+                                val history = financial?.dividends.orEmpty().takeLast(8)
                                 val maxDps = history.maxOfOrNull { it.dps }?.takeIf { it > 0 } ?: 1.0
                                 val prefix = currentHolding.currency
                                 val bars = history.map { point -> Triple(stringResource(R.string.stock_detail_label_5, (point.year).toString()), stringResource(R.string.add_holding_1_s_2_s_2, (prefix).toString(), (point.dps.financialText()).toString()), (point.dps / maxDps * 0.95).toFloat()) }
@@ -498,7 +508,8 @@ fun StockDetailScreen(
                                         Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(stringResource(R.string.add_holding_1_s_2_s , profile.healthGrade, profile.payoutRatio.financialText(1, "%")), color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
+                                    Text(stringResource(R.string.stock_detail_health_grade, profile.healthGrade), color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
+                                    Text(stringResource(R.string.stock_detail_health_payout, profile.payoutRatio.financialText(1, "%")), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     Text(profile.healthEvaluation, color = PrimaryEmerald, fontSize = AppTextSize.dense)
                                 }
                             }
@@ -1712,8 +1723,8 @@ fun StockDetailScreen(
                             listOf(
                                 0 to stringResource(R.string.stock_detail_label_6),
                                 100 to stringResource(R.string.stock_detail_label_7),
-                                250 to stringResource(R.string.stock_detail_label_8),
-                                500 to stringResource(R.string.stock_detail_label_9)
+                                500 to stringResource(R.string.stock_detail_label_8),
+                                1000 to stringResource(R.string.stock_detail_label_9)
                             ).forEach { (count, label) ->
                                 val isSelected = simAddedShares == count
                                 Surface(
@@ -1827,7 +1838,7 @@ fun StockDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Button(
-                        onClick = { showHoldingQuickEdit = true },
+                        onClick = { onOpenAddHolding(currentHolding.code) },
                         enabled = isOwnedHolding,
                         modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
@@ -1855,10 +1866,6 @@ fun StockDetailScreen(
                 Spacer(modifier = Modifier.height(60.dp))
             }
         }
-    }
-
-    if (showHoldingQuickEdit && isOwnedHolding) {
-        HoldingQuickEditModal(currentHolding, viewModel) { showHoldingQuickEdit = false }
     }
 
     if (showDeleteHoldingConfirmation) {

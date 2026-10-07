@@ -138,11 +138,15 @@ class ReleaseReadinessTest {
                         9 -> SearchSheet(true, {}, {}, { emptyList() })
                         10 -> AddHoldingSheet(true, "8316", {}, onResolveSecurity = { null }, onRegisterCollective = { _, _ -> false })
                         11 -> ExDividendMatrixDialog(true, {})
+                        12 -> RoadmapShareSheet(vm, com.kurogane.dividend.model.RoadmapAchievement(
+                            11, "STEP 11: 月25,000円", 25000, 22000, 10, "インフラ自給期", "週末の外食や趣味にかかる費用を自給", 20000
+                        ), true, {})
+                        13 -> RoadmapAllocationSheet(vm, {})
                     }
                 }
             }
         }
-        val names = listOf("asset", "annual", "roadmap", "watchlist", "settings", "stock", "csv", "feedback", "terms", "search", "add", "matrix")
+        val names = listOf("asset", "annual", "roadmap", "watchlist", "settings", "stock", "csv", "feedback", "terms", "search", "add", "matrix", "roadmap-share", "roadmap-allocation")
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val images = File(context.getExternalFilesDir(null), "release-quality").apply { mkdirs() }
         for (isLight in listOf(false, true)) {
@@ -168,6 +172,8 @@ class ReleaseReadinessTest {
                     }
                 }
                 if (index < 9) compose.onAllNodes(hasScrollAction()).onFirst().performTouchInput { swipeUp() }
+                if (index == 12) compose.onNodeWithTag("roadmap_export_action").performScrollTo().assertIsDisplayed()
+                if (index == 13) compose.onNodeWithText(app.getString(R.string.roadmap_text_40)).performScrollTo().assertIsDisplayed()
             }
         }
     }
