@@ -36,6 +36,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -81,6 +82,7 @@ fun WatchlistScreen(
     onNavigateToDetail: (String) -> Unit = {},
     onOpenAddHolding: (String) -> Unit = {}
 ) {
+    val feedbackView = LocalView.current
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
     val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
@@ -783,7 +785,10 @@ fun WatchlistScreen(
                                         Text(stringResource(R.string.watchlist_text_15), color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
                                         Spacer(modifier = Modifier.width(4.dp))
                                         IconButton(
-                                            onClick = { viewModel.updateTargetYield(stock.code, -0.05) },
+                                            onClick = {
+                                                feedbackView.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                                                viewModel.updateTargetYield(stock.code, -0.05)
+                                            },
                                             modifier = Modifier.minimumInteractiveComponentSize().size(18.dp)
                                         ) {
                                             Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.watchlist_a11y_2), tint = OnSurface, modifier = Modifier.size(12.dp))
@@ -797,7 +802,10 @@ fun WatchlistScreen(
                                             modifier = Modifier.padding(horizontal = 4.dp)
                                         )
                                         IconButton(
-                                            onClick = { viewModel.updateTargetYield(stock.code, 0.05) },
+                                            onClick = {
+                                                feedbackView.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                                                viewModel.updateTargetYield(stock.code, 0.05)
+                                            },
                                             modifier = Modifier.minimumInteractiveComponentSize().size(18.dp)
                                         ) {
                                             Icon(Icons.Default.Add, contentDescription = stringResource(R.string.watchlist_a11y_3), tint = OnSurface, modifier = Modifier.size(12.dp))
