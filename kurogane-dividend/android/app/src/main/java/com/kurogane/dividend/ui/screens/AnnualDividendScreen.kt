@@ -1661,7 +1661,6 @@ private fun CompoundingSimulationSection(
                     Spacer(Modifier.width(6.dp))
                     Text(stringResource(R.string.annual_dividend_text_29), color = OnSurface, fontWeight = FontWeight.Bold)
                 }
-                Text(stringResource(R.string.annual_dividend_text_30 , years.first().year, years.last().year), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
             }
             Surface(shape = RoundedCornerShape(8.dp), color = PrimaryEmerald.copy(alpha = .15f)) {
                 Text(stringResource(R.string.annual_dividend_text_31), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
