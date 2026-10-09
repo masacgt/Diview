@@ -424,14 +424,14 @@ fun StockDetailScreen(
                                     ) {
                                         Text(dpsVal, color = if (isProjected) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
                                         Spacer(modifier = Modifier.height(4.dp))
-                                        Box(
+                                        BoxWithConstraints(
                                             modifier = Modifier.weight(1f).fillMaxWidth(),
                                             contentAlignment = Alignment.BottomCenter
                                         ) {
                                             Box(
                                                 modifier = Modifier
                                                     .width(26.dp)
-                                                    .height((60 * ratio).dp)
+                                                    .height(maxHeight * ratio.coerceIn(0f, 0.95f))
                                                     .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                                                     .background(
                                                         if (isProjected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
