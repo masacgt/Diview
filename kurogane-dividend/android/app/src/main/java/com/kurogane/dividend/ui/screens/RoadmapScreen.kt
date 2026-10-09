@@ -162,21 +162,6 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
 
     Scaffold(
         containerColor = BackgroundDark,
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showBottomSheet = true },
-                containerColor = PrimaryEmerald,
-                contentColor = OnPrimary,
-                shape = CircleShape,
-                modifier = Modifier.padding(bottom = 16.dp, end = 8.dp)
-            ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = stringResource(R.string.add_holding_text),
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
     ) { innerPadding ->
         LazyColumn(
             state = listState,
