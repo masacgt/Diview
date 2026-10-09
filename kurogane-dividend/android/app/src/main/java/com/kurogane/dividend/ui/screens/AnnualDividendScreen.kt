@@ -295,7 +295,7 @@ fun AnnualDividendScreen(
                         modifier = Modifier.weight(1f)
                     )
                     AnnualDividendTab(
-                        label = resources.getString(R.string.analysis),
+                        label = resources.getString(R.string.annual_dividend_label_61),
                         icon = Icons.Default.DataUsage,
                         selected = selectedTab == 2,
                         onClick = { selectedTab = 2 },

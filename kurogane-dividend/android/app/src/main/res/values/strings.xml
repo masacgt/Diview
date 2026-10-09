@@ -874,6 +874,7 @@
 
     <string name="add_holding_sheet_label" formatted="false">"課税 20.315%"</string>
     <string name="annual_dividend_label_19">"配当分析"</string>
+    <string name="annual_dividend_label_61">"構成銘柄"</string>
     <string name="annual_dividend_label_49">"資産推移"</string>
     <string name="asset_management_label_5" formatted="false">"超高配当水準 (4%~)"</string>
     <string name="asset_management_label_20" formatted="false">"高配当水準 (3%~)"</string>
