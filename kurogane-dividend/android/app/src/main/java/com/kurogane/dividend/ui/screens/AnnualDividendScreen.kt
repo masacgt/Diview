@@ -17,8 +17,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.*
@@ -40,6 +41,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -65,7 +67,6 @@ import java.time.YearMonth
 import java.time.ZoneId
 import java.util.Locale
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,7 +81,7 @@ fun AnnualDividendScreen(
     val selectedMonth by viewModel.selectedMonth.collectAsStateWithLifecycle()
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
 
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) } // 0: 配当分析, 1: 増配減配, 2: 構成銘柄
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
     var assetTrackingPeriod by rememberSaveable { mutableStateOf("5y") }
     val compositionThreshold by viewModel.compositionThreshold.collectAsStateWithLifecycle()
     val compositionOtherEnabled by viewModel.compositionOtherEnabled.collectAsStateWithLifecycle()
@@ -95,53 +96,47 @@ fun AnnualDividendScreen(
 
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
 
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = viewModel.annualScrollIndex,
-        initialFirstVisibleItemScrollOffset = viewModel.annualScrollOffset
-    )
+    val listStates = List(3) { page ->
+        rememberLazyListState(
+            initialFirstVisibleItemIndex = if (page == 0) viewModel.annualScrollIndex else 0,
+            initialFirstVisibleItemScrollOffset = if (page == 0) viewModel.annualScrollOffset else 0
+        )
+    }
     val screenScope = rememberCoroutineScope()
     val selectAnalysisTab = rememberUpdatedState<(Int) -> Unit> { index ->
-        if (index in 0..2 && index != selectedTab) {
-            selectedTab = index
-            screenScope.launch { listState.animateScrollToItem(0) }
+        if (index in 0..2 && index != pagerState.currentPage) {
+            screenScope.launch { pagerState.animateScrollToPage(index) }
         }
     }
-    val currentSelectedTab = rememberUpdatedState(selectedTab)
-    val swipeThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) { 72.dp.toPx() }
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
-            .collect { (index, offset) ->
-                viewModel.annualScrollIndex = index
-                viewModel.annualScrollOffset = offset
+    LaunchedEffect(listStates) {
+        listStates.forEachIndexed { page, state ->
+            launch {
+                snapshotFlow { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }
+                    .collect { (index, offset) ->
+                        if (page == 0) {
+                            viewModel.annualScrollIndex = index
+                            viewModel.annualScrollOffset = offset
+                        }
+                    }
             }
+        }
     }
 
     Scaffold(
         containerColor = BackgroundDark,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp)
-                .pointerInput(swipeThresholdPx) {
-                    var horizontalDistance = 0f
-                    detectHorizontalDragGestures(
-                        onHorizontalDrag = { _, dragAmount -> horizontalDistance += dragAmount },
-                        onDragEnd = {
-                            if (abs(horizontalDistance) >= swipeThresholdPx) {
-                                val direction = if (horizontalDistance < 0f) 1 else -1
-                                selectAnalysisTab.value((currentSelectedTab.value + direction).coerceIn(0, 2))
-                            }
-                            horizontalDistance = 0f
-                        },
-                        onDragCancel = { horizontalDistance = 0f }
-                    )
-                },
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+            beyondViewportPageCount = 1,
+            key = { it }
+        ) { page ->
+            LazyColumn(
+                state = listStates[page],
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             // 3-way pill tab selector stays at the top of the Analysis screen.
             item {
                 AdaptiveRow(
@@ -157,64 +152,56 @@ fun AnnualDividendScreen(
                     AnnualDividendTab(
                         label = resources.getString(R.string.annual_dividend_label_19),
                         icon = Icons.AutoMirrored.Filled.TrendingUp,
-                        selected = selectedTab == 0,
+                        selectionProgress = (1f - kotlin.math.abs(pagerState.currentPage + pagerState.currentPageOffsetFraction)).coerceIn(0f, 1f),
                         onClick = { selectAnalysisTab.value(0) },
                         modifier = Modifier.weight(1f)
                     )
                     AnnualDividendTab(
                         label = resources.getString(R.string.annual_dividend_label_49),
                         icon = Icons.Default.AccountBalance,
-                        selected = selectedTab == 1,
+                        selectionProgress = (1f - kotlin.math.abs(pagerState.currentPage + pagerState.currentPageOffsetFraction - 1f)).coerceIn(0f, 1f),
                         onClick = { selectAnalysisTab.value(1) },
                         modifier = Modifier.weight(1f)
                     )
                     AnnualDividendTab(
                         label = resources.getString(R.string.annual_dividend_label_61),
                         icon = Icons.Default.DataUsage,
-                        selected = selectedTab == 2,
+                        selectionProgress = (1f - kotlin.math.abs(pagerState.currentPage + pagerState.currentPageOffsetFraction - 2f)).coerceIn(0f, 1f),
                         onClick = { selectAnalysisTab.value(2) },
                         modifier = Modifier.weight(1f)
                     )
                 }
             }
             item {
-                AnimatedContent(
-                    targetState = selectedTab,
-                    transitionSpec = {
-                        (fadeIn(tween(160)) + slideInVertically(tween(160)) { it / 5 }) togetherWith
-                            (fadeOut(tween(120)) + slideOutVertically(tween(120)) { -it / 5 })
-                    },
-                    label = "analysis_subtab_indicator"
-                ) { activeTab ->
-                    val activeLabel = when (activeTab) {
-                        1 -> resources.getString(R.string.annual_dividend_label_49)
-                        2 -> resources.getString(R.string.annual_dividend_label_61)
-                        else -> resources.getString(R.string.annual_dividend_label_19)
-                    }
-                    AdaptiveRow(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Surface(shape = RoundedCornerShape(50), color = PrimaryEmerald.copy(alpha = 0.14f)) {
-                                Text(
-                                    "表示中",
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                    color = PrimaryEmerald,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Text(activeLabel, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                val activeTab = pagerState.currentPage
+                val activeLabel = when (activeTab) {
+                    1 -> resources.getString(R.string.annual_dividend_label_49)
+                    2 -> resources.getString(R.string.annual_dividend_label_61)
+                    else -> resources.getString(R.string.annual_dividend_label_19)
+                }
+                AdaptiveRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Surface(shape = RoundedCornerShape(50), color = PrimaryEmerald.copy(alpha = 0.14f)) {
+                            Text(
+                                "表示中",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                color = PrimaryEmerald,
+                                fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
-                        Text("左右スワイプで切替  ${activeTab + 1}/3", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                        Text(activeLabel, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                     }
+                    Text("左右スワイプで切替  ${activeTab + 1}/3", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 }
             }
 
             // Hero Card: Annual Expected Dividend
-            if (selectedTab == 0) item {
+            if (page == 0) item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -368,14 +355,14 @@ fun AnnualDividendScreen(
                 }
             }
             // Tab 2: Sector & Composition Analysis
-            if (selectedTab == 2) {
+            if (page == 2) {
                 item {
                     CompositionAnalysisSection(holdings = holdings, taxRateMode = taxRateMode, totalAssets = totalAssets, totalAnnualDiv = totalAnnualDiv, compositionThreshold = compositionThreshold, compositionOtherEnabled = compositionOtherEnabled)
                 }
             }
 
             // Tab 0: Dividend Compounding Simulation
-            if (selectedTab == 0) {
+            if (page == 0) {
                 item {
                     CompoundingSimulationSection(
                         viewModel = viewModel,
@@ -407,7 +394,7 @@ fun AnnualDividendScreen(
             }
 
             // Tab 1: Dividend increase/decrease and asset tracking
-            if (selectedTab == 1) {
+            if (page == 1) {
                 item {
                     DividendChangeAnalysisCards(
                         holdings = holdings,
@@ -444,6 +431,7 @@ fun AnnualDividendScreen(
             item {
                 Spacer(modifier = Modifier.height(32.dp))
             }
+            }
         }
     }
 }
@@ -452,16 +440,20 @@ fun AnnualDividendScreen(
 private fun AnnualDividendTab(
     label: String,
     icon: ImageVector,
-    selected: Boolean,
+    selectionProgress: Float,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val tabShape = RoundedCornerShape(12.dp)
+    val selected = selectionProgress >= 0.5f
+    val backgroundColor = lerp(SurfaceContainer, PrimaryEmerald, selectionProgress)
+    val borderColor = lerp(BorderColor, PrimaryEmerald, selectionProgress)
+    val foregroundColor = lerp(OnSurface, OnPrimary, selectionProgress)
     Column(
         modifier = modifier
             .clip(tabShape)
-            .background(if (selected) PrimaryEmerald else SurfaceContainer)
-            .border(1.dp, if (selected) PrimaryEmerald else BorderColor, tabShape)
+            .background(backgroundColor)
+            .border(1.dp, borderColor, tabShape)
             .selectable(selected = selected, onClick = onClick, role = Role.Tab)
             .padding(horizontal = 3.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -475,21 +467,21 @@ private fun AnnualDividendTab(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (selected) OnPrimary else OnSurfaceVariant,
+                tint = lerp(OnSurfaceVariant, OnPrimary, selectionProgress),
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(5.dp))
             Text(
                 text = label,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = if (selected) OnPrimary else OnSurface,
+                color = foregroundColor,
                 fontSize = AppTextSize.dense,
                 maxLines = 1
             )
         }
         Box(
             Modifier.width(22.dp).height(2.dp).clip(CircleShape)
-                .background(if (selected) OnPrimary else Color.Transparent)
+                .background(OnPrimary.copy(alpha = selectionProgress))
         )
     }
 }
