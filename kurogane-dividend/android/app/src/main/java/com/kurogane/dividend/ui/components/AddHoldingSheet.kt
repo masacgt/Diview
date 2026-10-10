@@ -31,6 +31,7 @@ import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.data.CloudflareSecurity
 import com.kurogane.dividend.data.runCatchingCancellable
 import com.kurogane.dividend.model.HoldingAllocation
+import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.PortfolioMath
 import java.text.NumberFormat
 import java.util.Locale
@@ -53,8 +54,9 @@ fun AddHoldingSheet(
     onDismiss: () -> Unit,
     usdJpyRate: Double? = null,
     usWithholdingEnabled: Boolean = true,
+    existingHoldings: List<Holding> = emptyList(),
     onResolveSecurity: suspend (code: String) -> CloudflareSecurity?,
-    onRegisterCollective: suspend (code: String, allocations: List<HoldingAllocation>) -> Boolean
+    onRegisterCollective: suspend (code: String, allocations: List<HoldingAllocation>, replaceExisting: Boolean) -> Boolean
 ) {
     if (!visible) return
 
@@ -104,15 +106,44 @@ fun AddHoldingSheet(
 
     var generalShares by remember { mutableStateOf("0") }
     var generalPrice by remember { mutableStateOf(selectedStock.price.toString()) }
+    val existingHolding = existingHoldings.firstOrNull { it.code.equals(stockCodeInput.trim(), ignoreCase = true) }
+
+    LaunchedEffect(prefilledCode, existingHolding?.id) {
+        val holding = existingHoldings.firstOrNull { it.code.equals(prefilledCode.trim(), ignoreCase = true) }
+            ?: existingHolding
+            ?: return@LaunchedEffect
+        val sharesByAccount = when {
+            holding.accountType.contains("つみたて") || holding.accountType.contains("積立") -> listOf(0, holding.shares, 0, 0)
+            holding.accountType.contains("特定") -> listOf(0, 0, holding.shares, 0)
+            holding.accountType.contains("一般") -> listOf(0, 0, 0, holding.shares)
+            holding.accountType.contains("複数") -> {
+                val taxFree = holding.effectiveTaxFreeShares
+                listOf(taxFree, 0, (holding.shares - taxFree).coerceAtLeast(0), 0)
+            }
+            PortfolioMath.isTaxFree(holding.accountType) -> listOf(holding.shares, 0, 0, 0)
+            else -> listOf(0, 0, holding.shares, 0)
+        }
+        nisaShares = sharesByAccount[0].toString()
+        tsumitateShares = sharesByAccount[1].toString()
+        tokuteiShares = sharesByAccount[2].toString()
+        generalShares = sharesByAccount[3].toString()
+        val acquisitionPrice = holding.acqPrice.toString()
+        nisaPrice = acquisitionPrice
+        tsumitatePrice = acquisitionPrice
+        tokuteiPrice = acquisitionPrice
+        generalPrice = acquisitionPrice
+    }
 
     // Dynamic update prices when stock selection changes
     fun updateSelectedStock(stock: PresetStock) {
         selectedStock = stock
         stockCodeInput = stock.code
-        nisaPrice = stock.price.toString()
-        tsumitatePrice = stock.price.toString()
-        tokuteiPrice = stock.price.toString()
-        generalPrice = stock.price.toString()
+        val acquisitionPrice = existingHoldings.firstOrNull { it.code.equals(stock.code, ignoreCase = true) }?.acqPrice
+            ?: stock.price
+        nisaPrice = acquisitionPrice.toString()
+        tsumitatePrice = acquisitionPrice.toString()
+        tokuteiPrice = acquisitionPrice.toString()
+        generalPrice = acquisitionPrice.toString()
     }
 
     // Presets or custom stock changes
@@ -463,6 +494,22 @@ fun AddHoldingSheet(
                         Quadruple("一般口座", resources.getString(R.string.add_holding_sheet_label), generalDividend, generalShares, generalPrice, { value: String -> generalShares = value }, { value: String -> generalPrice = value })
                 )
 
+                existingHolding?.let { holding ->
+                    Text(
+                        stringResource(R.string.add_holding_text_25, currencyFormat.format(holding.shares)),
+                        color = PrimaryEmerald,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = AppTextSize.caption
+                    )
+                    if (holding.accountType.contains("複数")) {
+                        Text(
+                            stringResource(R.string.add_holding_text_26),
+                            color = OnSurfaceVariant,
+                            fontSize = AppTextSize.dense
+                        )
+                    }
+                }
+
                 accounts.forEach { (title, tag, divAmount, sharesVal, priceVal, onSharesChange, onPriceChange) ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -691,7 +738,7 @@ fun AddHoldingSheet(
                                             HoldingAllocation(tShares, tPrice, "新NISAつみたて投資枠"),
                                             HoldingAllocation(tkShares, tkPrice, "特定口座"),
                                             HoldingAllocation(gShares, gPrice, "一般口座")
-                                        ))
+                                        ), existingHolding != null)
                                     }
                                     registerError = !result.getOrDefault(false)
                                     registerErrorDetail = result.exceptionOrNull()?.let { networkErrorMessage(resources, it) }
