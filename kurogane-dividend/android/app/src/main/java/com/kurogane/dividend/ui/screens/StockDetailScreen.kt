@@ -2079,7 +2079,7 @@ fun StockDetailScreen(
 private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative) {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = SurfaceContainerLow,
+        color = BackgroundDark,
         border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f)),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -2089,13 +2089,10 @@ private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    stringResource(R.string.stock_detail_text_79),
-                    modifier = Modifier.weight(1f),
-                    color = OnSurface,
-                    fontSize = AppTextSize.body,
-                    fontWeight = FontWeight.Bold
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.stock_detail_text_79), color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.stock_detail_text_80), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                }
                 if (analysisNarrative.score != null) {
                     Text(
                         stringResource(R.string.stock_detail_text_81, analysisNarrative.grade.toString(), analysisNarrative.score),
@@ -2106,10 +2103,55 @@ private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative
                 }
             }
             Text(
-                stringResource(R.string.stock_detail_text_82, analysisNarrative.title),
+                stringResource(R.string.stock_detail_text_82 , analysisNarrative.title, analysisNarrative.findings.size),
                 color = OnSurface,
                 fontSize = AppTextSize.dense,
                 lineHeight = 16.sp
+            )
+            Text(
+                stringResource(R.string.stock_detail_text_83 , String.format(Locale.JAPAN, "%,d", StockAnalysisNarrative.TOTAL_COMBINATIONS), String.format(Locale.JAPAN, "%,d", analysisNarrative.possibleCombinations)),
+                color = PrimaryEmerald,
+                fontSize = AppTextSize.dense,
+                lineHeight = 15.sp
+            )
+            Text(
+                stringResource(R.string.stock_detail_text_84),
+                color = OnSurfaceVariant,
+                fontSize = AppTextSize.dense,
+                lineHeight = 14.sp
+            )
+            if (analysisNarrative.complete && analysisNarrative.combinationIndex != null) {
+                Text(
+                    stringResource(R.string.stock_detail_text_85 , analysisNarrative.combinationIndex + 1, StockAnalysisNarrative.TOTAL_COMBINATIONS),
+                    color = OnSurfaceVariant,
+                    fontSize = AppTextSize.dense,
+                    fontFamily = FontFamily.Monospace
+                )
+            } else {
+                Text(
+                    stringResource(R.string.stock_detail_text_86 , analysisNarrative.missingLabels.joinToString("、")),
+                    color = AccentAmber,
+                    fontSize = AppTextSize.dense,
+                    lineHeight = 15.sp
+                )
+            }
+            HorizontalDivider(color = BorderColor)
+            analysisNarrative.findings.forEach { finding ->
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        stringResource(R.string.stock_detail_text_87 , finding.label, finding.formattedValue, finding.bandLabel, finding.position.label),
+                        color = if (finding.score >= 65) PrimaryEmerald else AccentAmber,
+                        fontSize = AppTextSize.dense,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(finding.text, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
+                }
+            }
+            Text(
+                stringResource(R.string.stock_detail_text_88),
+                color = OnSurfaceVariant,
+                fontSize = AppTextSize.dense,
+                lineHeight = 14.sp
             )
         }
     }
