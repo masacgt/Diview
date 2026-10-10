@@ -70,7 +70,7 @@ fun AddHoldingSheet(
         )
     }
 
-    var stockCodeInput by rememberSaveable { mutableStateOf(prefilledCode.ifEmpty { "8316" }) }
+    var stockCodeInput by rememberSaveable { mutableStateOf(prefilledCode) }
     var selectedStock by remember {
         mutableStateOf(
             presets.find { it.code == stockCodeInput } ?: presets[2]
@@ -361,14 +361,19 @@ fun AddHoldingSheet(
                     )
                 }
 
-                // Presets selection row
-                Row(
+                // Display preset suggestions only after input begins.
+                val suggestionQuery = stockCodeInput.trim()
+                val localSuggestions = if (suggestionQuery.isEmpty()) emptyList() else presets.filter { stock ->
+                    stock.code.contains(suggestionQuery, ignoreCase = true) ||
+                        stock.name.contains(suggestionQuery, ignoreCase = true)
+                }
+                if (localSuggestions.isNotEmpty()) Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    presets.forEach { stock ->
+                    localSuggestions.forEach { stock ->
                         val active = selectedStock.code == stock.code
                         Box(
                             modifier = Modifier
