@@ -1865,6 +1865,17 @@ private fun CompoundingSimulationSection(
     val years = remember(holdings, financialData, taxRateMode, currentYear) {
         com.kurogane.dividend.model.DividendHistory.calculate(holdings, financialData, (currentYear - 4)..currentYear, taxRateMode)
     }
+    var annualBarsVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(years) {
+        annualBarsVisible = false
+        withFrameNanos { }
+        annualBarsVisible = true
+    }
+    val annualBarsProgress by animateFloatAsState(
+        targetValue = if (annualBarsVisible) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f),
+        label = "Annual dividend bars"
+    )
     val format = NumberFormat.getNumberInstance(Locale.JAPAN)
     fun money(value: Double?): String = if (value == null) "未取得" else if (isPrivacyActive) "¥••••" else "¥${format.format(value.toLong())}"
     var selectedYearIndex by remember { mutableIntStateOf(4) }
@@ -1948,7 +1959,10 @@ private fun CompoundingSimulationSection(
                     val canvasGroupWidth = size.width / count
                     years.forEachIndexed { index, point ->
                         val centerX = canvasGroupWidth * (index + .5f)
-                        val barHeight = point.amount?.let { (it / maxValue).toFloat().coerceIn(0f, 1f) * plotHeight } ?: 0f
+                        val stagger = index * 0.08f
+                        val barProgress = ((annualBarsProgress - stagger) / (1f - stagger)).coerceAtLeast(0f)
+                        val normalizedHeight = point.amount?.let { (it / maxValue).toFloat().coerceIn(0f, 1f) } ?: 0f
+                        val barHeight = normalizedHeight * plotHeight * barProgress
                         if (index == selectedIndex) {
                             drawRoundRect(chartColor.copy(alpha = .08f), Offset(centerX - canvasGroupWidth * .45f, 0f), Size(canvasGroupWidth * .9f, size.height), cornerRadius = CornerRadius(6.dp.toPx()))
                             drawRoundRect(chartColor.copy(alpha = .35f), Offset(centerX - canvasGroupWidth * .45f, 0f), Size(canvasGroupWidth * .9f, size.height), cornerRadius = CornerRadius(6.dp.toPx()), style = Stroke(1.dp.toPx()))
@@ -1961,7 +1975,9 @@ private fun CompoundingSimulationSection(
                 if (!isPrivacyActive) {
                     years.forEachIndexed { index, point ->
                         point.amount?.let { amount ->
-                            val normalized = (amount / maxValue).toFloat().coerceIn(0f, 1f)
+                            val stagger = index * 0.08f
+                            val barProgress = ((annualBarsProgress - stagger) / (1f - stagger)).coerceAtLeast(0f)
+                            val normalized = (amount / maxValue).toFloat().coerceIn(0f, 1f) * barProgress
                             val roundedTenThousands = kotlin.math.round(amount / 1_000.0) / 10.0
                             Text(
                                 text = String.format(Locale.JAPAN, "%.1f万", roundedTenThousands),
