@@ -1707,15 +1707,15 @@ private fun CompoundingSimulationSection(
                 val chartHeight = 136.dp
                 val groupWidth = maxWidth / years.size
                 Canvas(Modifier.fillMaxWidth().height(chartHeight)) {
-                    val gridTop = size.height * .2f
-                    val gridMid = size.height * .55f
+                    val gridTop = size.height * .38f
+                    val gridMid = size.height * .62f
                     val gridBottom = size.height * .9f
                     listOf(gridTop, gridMid, gridBottom).forEach { y -> drawLine(chartGridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx()) }
                     val count = years.size
                     val canvasGroupWidth = size.width / count
                     years.forEachIndexed { index, point ->
                         val centerX = canvasGroupWidth * (index + .5f)
-                        val barHeight = point.amount?.let { (it / maxValue).toFloat().coerceIn(0f, 1f) * size.height * .78f } ?: 0f
+                        val barHeight = point.amount?.let { (it / maxValue).toFloat().coerceIn(0f, 1f) * size.height * .62f } ?: 0f
                         if (index == selectedIndex) {
                             drawRoundRect(chartColor.copy(alpha = .08f), Offset(centerX - canvasGroupWidth * .45f, 0f), Size(canvasGroupWidth * .9f, size.height), cornerRadius = CornerRadius(6.dp.toPx()))
                             drawRoundRect(chartColor.copy(alpha = .35f), Offset(centerX - canvasGroupWidth * .45f, 0f), Size(canvasGroupWidth * .9f, size.height), cornerRadius = CornerRadius(6.dp.toPx()), style = Stroke(1.dp.toPx()))
@@ -1735,7 +1735,7 @@ private fun CompoundingSimulationSection(
                                 modifier = Modifier
                                     .offset(
                                         x = groupWidth * (index + 0.5f) - 28.dp,
-                                        y = chartHeight * (1f - normalized * .78f) - 18.dp
+                                        y = chartHeight * (.90f - normalized * .62f) - 18.dp
                                     )
                                     .width(56.dp),
                                 color = if (index == selectedIndex) PrimaryEmerald else OnSurfaceVariant,
