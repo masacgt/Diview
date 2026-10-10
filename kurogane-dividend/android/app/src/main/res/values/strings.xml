@@ -111,8 +111,8 @@
     <string name="annual_dividend_text_34">"一部の履歴を更新できませんでした。取得済みの値を表示しています。"</string>
     <string name="annual_dividend_text_35">"年間配当の増加額"</string>
     <string name="annual_dividend_text_36">"%1$s → %2$s・年額差"</string>
-    <string name="annual_dividend_text_37">"平均成長"</string>
-    <string name="annual_dividend_text_38">"年平均増配率（CAGR）"</string>
+    <string name="annual_dividend_text_37">"年平均増配率"</string>
+    <string name="annual_dividend_text_38"></string>
     <string name="annual_dividend_text_39">"年平均増配額 %1$s /年"</string>
     <string name="annual_dividend_text_40">"年間配当額（現在株数換算・取得済み分）"</string>
     <string name="annual_dividend_text_41">"開始期比 %1$s"</string>
