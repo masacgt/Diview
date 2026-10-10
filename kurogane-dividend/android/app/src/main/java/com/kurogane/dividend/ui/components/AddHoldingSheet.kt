@@ -190,7 +190,10 @@ fun AddHoldingSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
+            confirmValueChange = { targetValue -> targetValue != SheetValue.Hidden }
+        ),
         containerColor = SurfaceContainerLow,
         scrimColor = Color.Black.copy(alpha = 0.6f),
         dragHandle = {
