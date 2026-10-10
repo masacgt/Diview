@@ -13,6 +13,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
@@ -46,6 +49,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.kurogane.dividend.model.WatchlistStock
 import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.viewmodel.DividendViewModel
@@ -54,6 +59,8 @@ import java.util.Locale
 import com.kurogane.dividend.ui.components.rememberNotificationAccess
 import com.kurogane.dividend.notifications.NotificationKind
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 private fun sortWatchlist(
     stocks: List<WatchlistStock>,
@@ -86,6 +93,13 @@ fun WatchlistScreen(
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
     val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
+    val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
+    val latestCalculatedRightsDate = remember(watchlist, dividendEventRevision) {
+        watchlist.asSequence()
+            .flatMap { stock -> viewModel.dividendEventsFor(stock.code).asSequence() }
+            .mapNotNull { it.finalRightsDate }
+            .maxOrNull()
+    }
     val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     val notificationAccess = rememberNotificationAccess { action ->
@@ -187,7 +201,7 @@ fun WatchlistScreen(
     val matrixSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var showGraphBottomSheet by remember { mutableStateOf(false) }
-    val graphSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val graphSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
     // Process filters
     val filteredList = watchlist.filter { stock ->
@@ -236,6 +250,7 @@ fun WatchlistScreen(
 
     Scaffold(
         containerColor = BackgroundDark,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         LazyColumn(
@@ -784,15 +799,12 @@ fun WatchlistScreen(
                                     ) {
                                         Text(stringResource(R.string.watchlist_text_15), color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        IconButton(
-                                            onClick = {
-                                                feedbackView.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
-                                                viewModel.updateTargetYield(stock.code, -0.05)
-                                            },
-                                            modifier = Modifier.minimumInteractiveComponentSize().size(18.dp)
-                                        ) {
-                                            Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.watchlist_a11y_2), tint = OnSurface, modifier = Modifier.size(12.dp))
-                                        }
+                                        TargetYieldAdjustButton(
+                                            icon = Icons.Default.Remove,
+                                            contentDescription = stringResource(R.string.watchlist_a11y_2),
+                                            feedbackView = feedbackView,
+                                            onAdjust = { viewModel.updateTargetYield(stock.code, -0.05) }
+                                        )
                                         Text(
                                             stringResource(R.string.settings_1_s , String.format(Locale.JAPAN, "%.2f", stock.targetYield)),
                                             color = PrimaryEmerald,
@@ -801,15 +813,12 @@ fun WatchlistScreen(
                                             fontFamily = FontFamily.Monospace,
                                             modifier = Modifier.padding(horizontal = 4.dp)
                                         )
-                                        IconButton(
-                                            onClick = {
-                                                feedbackView.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
-                                                viewModel.updateTargetYield(stock.code, 0.05)
-                                            },
-                                            modifier = Modifier.minimumInteractiveComponentSize().size(18.dp)
-                                        ) {
-                                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.watchlist_a11y_3), tint = OnSurface, modifier = Modifier.size(12.dp))
-                                        }
+                                        TargetYieldAdjustButton(
+                                            icon = Icons.Default.Add,
+                                            contentDescription = stringResource(R.string.watchlist_a11y_3),
+                                            feedbackView = feedbackView,
+                                            onAdjust = { viewModel.updateTargetYield(stock.code, 0.05) }
+                                        )
                                     }
                                 }
 
@@ -866,7 +875,7 @@ fun WatchlistScreen(
                                         border = BorderStroke(0.5.dp, PrimaryEmerald.copy(alpha = 0.35f))
                                     ) {
                                         Text(
-                                            stringResource(R.string.watchlist_text_17 , stock.currency, stock.dps),
+                                            stringResource(R.string.watchlist_text_17 , stock.currency, stock.dps.roundToInt()),
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                                             color = PrimaryEmerald,
                                             fontSize = AppTextSize.dense,
@@ -898,31 +907,39 @@ fun WatchlistScreen(
                                 Text(stringResource(R.string.watchlist_text_18), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnPrimary)
                             }
 
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            IconButton(
+                            Button(
                                 onClick = {
                                     if (stock.alertEnabled) viewModel.toggleWatchlistStock(stock.code)
                                     else notificationAccess.request("price:${stock.code}")
                                 },
                                 modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(SurfaceContainer)
-                                    .border(
-                                        width = 0.5.dp,
-                                        color = if (stock.alertEnabled) PrimaryEmerald.copy(alpha = 0.4f) else Color.Transparent,
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
+                                    .widthIn(min = 116.dp)
+                                    .heightIn(min = 48.dp)
+                                    .semantics {
+                                        stateDescription = resources.getString(
+                                            if (stock.alertEnabled) R.string.watchlist_alert_enabled
+                                            else R.string.watchlist_alert_disabled
+                                        )
+                                    },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainer, contentColor = OnSurface),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                border = if (stock.alertEnabled) BorderStroke(0.5.dp, PrimaryEmerald.copy(alpha = 0.4f)) else null
                             ) {
                                 Icon(
                                     imageVector = if (stock.alertEnabled) Icons.Default.NotificationsActive else Icons.Default.Notifications,
-                                    contentDescription = stringResource(if (stock.alertEnabled) R.string.watchlist_alert_enabled else R.string.watchlist_alert_disabled),
+                                    contentDescription = null,
                                     tint = if (stock.alertEnabled) PrimaryEmerald else SoftGray,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(14.dp)
                                 )
-                            }
-
-                            Text(stringResource(R.string.watchlist_alert_short), color = OnSurfaceVariant, fontSize = 9.sp, maxLines = 1)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    stringResource(R.string.watchlist_alert_short),
+                                    color = OnSurfaceVariant,
+                                    fontSize = 9.sp,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
 
                             Button(
@@ -1288,8 +1305,19 @@ fun WatchlistScreen(
                     ) {
                         Text(stringResource(R.string.watchlist_text_31), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(stringResource(R.string.not_available), color = PrimaryEmerald, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold)
-                        Text(stringResource(R.string.watchlist_ex_date_missing), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                        Text(
+                            latestCalculatedRightsDate?.let { stringResource(R.string.watchlist_next_ex_date_value, it.monthValue, it.dayOfMonth) }
+                                ?: stringResource(R.string.not_available),
+                            color = PrimaryEmerald,
+                            fontSize = AppTextSize.section,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (latestCalculatedRightsDate != null) stringResource(R.string.watchlist_next_ex_date_source)
+                            else stringResource(R.string.watchlist_ex_date_missing),
+                            color = OnSurfaceVariant,
+                            fontSize = AppTextSize.dense
+                        )
                     }
 
                     // Card 3
@@ -1657,7 +1685,10 @@ fun WatchlistScreen(
 
                 // Card 2: 12-month calendar bar graph Card
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                        .heightIn(max = 320.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                     border = BorderStroke(1.dp, BorderColor)
@@ -1898,6 +1929,49 @@ fun WatchlistScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TargetYieldAdjustButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    feedbackView: android.view.View,
+    onAdjust: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    var repeatedDuringPress by remember { mutableStateOf(false) }
+    val latestOnAdjust by rememberUpdatedState(onAdjust)
+
+    LaunchedEffect(interactionSource) {
+        interactionSource.interactions.collect { interaction ->
+            if (interaction is PressInteraction.Press) repeatedDuringPress = false
+        }
+    }
+    LaunchedEffect(isPressed) {
+        if (!isPressed) return@LaunchedEffect
+        delay(450)
+        repeatedDuringPress = true
+        feedbackView.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+        latestOnAdjust()
+        while (true) {
+            delay(100)
+            latestOnAdjust()
+        }
+    }
+
+    IconButton(
+        onClick = {
+            if (!repeatedDuringPress) {
+                feedbackView.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                latestOnAdjust()
+            }
+        },
+        modifier = Modifier.minimumInteractiveComponentSize().size(18.dp),
+        interactionSource = interactionSource
+    ) {
+        Icon(icon, contentDescription = contentDescription, tint = OnSurface, modifier = Modifier.size(12.dp))
     }
 }
 
