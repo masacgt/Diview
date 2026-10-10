@@ -87,7 +87,8 @@ private fun sortWatchlist(
 fun WatchlistScreen(
     viewModel: DividendViewModel,
     onNavigateToDetail: (String) -> Unit = {},
-    onOpenAddHolding: (String) -> Unit = {}
+    onOpenAddHolding: (String) -> Unit = {},
+    scrollToTopRequest: Int = 0
 ) {
     val feedbackView = LocalView.current
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
@@ -160,6 +161,9 @@ fun WatchlistScreen(
         initialFirstVisibleItemIndex = viewModel.watchlistScrollIndex,
         initialFirstVisibleItemScrollOffset = viewModel.watchlistScrollOffset
     )
+    LaunchedEffect(scrollToTopRequest) {
+        if (scrollToTopRequest > 0) listState.scrollToTopIn200ms()
+    }
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
             .collect { (index, offset) ->

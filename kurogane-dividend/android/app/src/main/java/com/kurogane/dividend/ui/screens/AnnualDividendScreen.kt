@@ -77,7 +77,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun AnnualDividendScreen(
     viewModel: DividendViewModel,
-    onNavigateToDetail: (String) -> Unit = {}
+    onNavigateToDetail: (String) -> Unit = {},
+    scrollToTopRequest: Int = 0
 ) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
@@ -109,11 +110,29 @@ fun AnnualDividendScreen(
         rememberLazyListState(legacyPosition.first, legacyPosition.second)
     }
     val screenScope = rememberCoroutineScope()
+    LaunchedEffect(scrollToTopRequest) {
+        if (scrollToTopRequest > 0) listStates[pagerState.currentPage].scrollToTopIn200ms()
+    }
     val analysisPagePosition = (
         pagerState.currentPage + pagerState.currentPageOffsetFraction
     ).coerceIn(0f, 2f)
     val selectAnalysisTab = rememberUpdatedState<(Int) -> Unit> { index ->
-        if (index in 0..2 && index != pagerState.currentPage) {
+        if (index == 0 && pagerState.currentPage == 0 && pagerState.isScrollInProgress.not()) {
+            screenScope.launch {
+                val state = listStates[0]
+                val startIndex = state.firstVisibleItemIndex
+                val startOffset = state.firstVisibleItemScrollOffset
+                if (startIndex != 0 || startOffset != 0) {
+                    animate(1f, 0f, animationSpec = tween(durationMillis = 200)) { fraction, _ ->
+                        state.requestScrollToItem(
+                            (startIndex * fraction).roundToInt(),
+                            if (startIndex == 0) (startOffset * fraction).roundToInt() else 0
+                        )
+                    }
+                    state.scrollToItem(0)
+                }
+            }
+        } else if (index in 0..2 && index != pagerState.currentPage) {
             screenScope.launch { pagerState.animateScrollToPage(index) }
         }
     }
