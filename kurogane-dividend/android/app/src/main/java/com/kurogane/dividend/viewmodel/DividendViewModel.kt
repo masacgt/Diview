@@ -1639,29 +1639,12 @@ class DividendViewModel @JvmOverloads constructor(
     suspend fun fetchStockAnalysis(code: String): CloudflareStockAnalysis? =
         marketRepository.getStockAnalysis(code)
 
-    suspend fun fetchMonthlyPriceHistory(codes: List<String>, months: List<String>): List<CloudflareMonthlyPriceSeries> {
-        val normalizedCodes = codes.distinct()
-        val cachedByCode = normalizedCodes.associateWith { code -> readCachedMonthlyPrices(code) }.toMutableMap()
-        val missingMonths = normalizedCodes.associateWith { code -> months.distinct().filterNot { cachedByCode[code].orEmpty().containsKey(it) } }
-        val codesToFetch = normalizedCodes.filter { missingMonths[it].orEmpty().isNotEmpty() }
-        if (codesToFetch.isNotEmpty()) {
-            runCatchingCancellable {
-                codesToFetch.chunked(20).flatMap { batch ->
-                    marketRepository.fetchMonthlyPriceHistory(batch, months.distinct().filter { month ->
-                        batch.any { code -> month in missingMonths[code].orEmpty() }
-                    })
-                }
-            }.onSuccess { fetched ->
-                fetched.forEach { series ->
-                    val merged = cachedByCode[series.code].orEmpty().toMutableMap()
-                    series.prices.forEach { price -> merged[price.month] = price }
-                    cachedByCode[series.code] = merged
-                    saveCachedMonthlyPrices(series.code, merged)
-                }
-            }.onFailure { if (cachedByCode.values.all { it.isEmpty() }) throw it }
-        }
-        return normalizedCodes.mapNotNull { code ->
-            cachedByCode[code].orEmpty().values.filter { it.month in months }.takeIf { it.isNotEmpty() }
+    fun cachedMonthlyPriceHistory(codes: List<String>, months: List<String>): List<CloudflareMonthlyPriceSeries> {
+        val requestedMonths = months.toSet()
+        return codes.distinct().mapNotNull { code ->
+            readCachedMonthlyPrices(code).values
+                .filter { it.month in requestedMonths }
+                .takeIf { it.isNotEmpty() }
                 ?.let { prices -> CloudflareMonthlyPriceSeries(code, prices.sortedBy { it.month }) }
         }
     }

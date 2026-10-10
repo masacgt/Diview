@@ -848,6 +848,16 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         color = PrimaryEmerald,
                                         modifier = Modifier.padding(bottom = 6.dp)
                                     )
+                                    Text(
+                                        stringResource(
+                                            R.string.roadmap_text_65,
+                                            currencyFormat.format(shortageAmt.coerceAtLeast(0)),
+                                            currencyFormat.format(shortageAnnualAmt.coerceAtLeast(0))
+                                        ),
+                                        fontSize = AppTextSize.dense,
+                                        color = OnSurfaceVariant,
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
                                     
                                     AdaptiveRow(
                                         modifier = Modifier.fillMaxWidth(),
