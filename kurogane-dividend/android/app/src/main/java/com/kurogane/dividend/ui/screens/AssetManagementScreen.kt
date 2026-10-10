@@ -104,7 +104,7 @@ private fun OdometerAmount(
                             if (animate) {
                                 rollingDigit = (finalDigit + 2) % 10
                                 repeat(8) {
-                                    kotlinx.coroutines.delay(55)
+                                    kotlinx.coroutines.delay(38)
                                     rollingDigit = (rollingDigit + 1) % 10
                                 }
                             } else {
@@ -114,8 +114,8 @@ private fun OdometerAmount(
                         AnimatedContent(
                             targetState = rollingDigit,
                             transitionSpec = {
-                                (slideInVertically(tween(70, easing = LinearOutSlowInEasing)) { it } + fadeIn(tween(70)))
-                                    .togetherWith(slideOutVertically(tween(70, easing = LinearOutSlowInEasing)) { -it } + fadeOut(tween(70)))
+                                (slideInVertically(tween(49, easing = LinearOutSlowInEasing)) { it } + fadeIn(tween(49)))
+                                    .togetherWith(slideOutVertically(tween(49, easing = LinearOutSlowInEasing)) { -it } + fadeOut(tween(49)))
                             },
                             label = "asset-value-rolling-digit-$place"
                         ) { digit ->
