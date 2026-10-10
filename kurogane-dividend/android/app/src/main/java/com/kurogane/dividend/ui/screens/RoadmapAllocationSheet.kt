@@ -514,7 +514,7 @@ private fun AccountMatrixCard(
         colors = CardDefaults.cardColors(containerColor = BackgroundDark),
         border = BorderStroke(1.dp, BorderColor)
     ) {
-        Column(modifier = Modifier.padding(10.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
             // Header Row
             AdaptiveRow(
                 modifier = Modifier.fillMaxWidth(),
@@ -553,7 +553,7 @@ private fun AccountMatrixCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Text Inputs Row
             AdaptiveRow(
@@ -574,7 +574,7 @@ private fun AccountMatrixCard(
                             onValueChange = onSharesChange,
                             modifier = Modifier
                                 .weight(1f)
-                                .heightIn(min = 38.dp),
+                                .heightIn(min = 28.dp),
                             shape = RoundedCornerShape(6.dp),
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = SurfaceContainerHigh,
@@ -623,7 +623,7 @@ private fun AccountMatrixCard(
                             onValueChange = onPriceChange,
                             modifier = Modifier
                                 .weight(1f)
-                                .heightIn(min = 38.dp),
+                                .heightIn(min = 28.dp),
                             shape = RoundedCornerShape(6.dp),
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = SurfaceContainerHigh,
@@ -643,7 +643,7 @@ private fun AccountMatrixCard(
             }
 
             if (numShares > 0) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
