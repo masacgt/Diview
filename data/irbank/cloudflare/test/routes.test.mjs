@@ -6,7 +6,7 @@ function environment(limit = 1, storageFails = false) {
   const rows = new Map();
   return {
     APP_DEFINITIONS: { get: async () => null },
-    MARKET_DATA: { get: async () => ({ json: async () => ({ security: { code: '7203' }, financials: { annual: [{ fiscal_year: '2026/03' }] }, dividends: { records: [] }, valuation: { history: [] }, officers: ['private-not-needed'] }) }) },
+    MARKET_DATA: { get: async () => ({ json: async () => ({ security: { code: '7203' }, financials: { annual: [{ fiscal_year: '2026/03' }] }, dividends: { records: [{ fiscal_year: 2025, annual_dps_adjusted: 10 }] }, valuation: { history: [] }, officers: ['private-not-needed'] }) }) },
     DB: { prepare: sql => ({ bind: (...values) => ({
       first: async () => sql.includes('api_request_log') ? { request_count: limit } : rows.get(values[0]),
       run: async () => { if (storageFails) throw Error('storage unavailable'); if (sql.includes('INSERT INTO support_feedback') && !rows.has(values[0])) rows.set(values[0], { request_hash: values[2] }); }
@@ -46,6 +46,60 @@ test('financial API only returns the necessary public document fields', async ()
   assert.equal(data.security.code, '7203');
   assert.equal(data.officers, undefined);
   assert.equal((await worker.fetch(new Request('https://example.com/api/v1/financial-data/7203', { method: 'POST' }), environment())).status, 405);
+});
+
+test('financial API falls back to full calendar-year Yahoo distributions when issuer history is absent', async () => {
+  const code = '1306';
+  const year = new Date().getUTCFullYear();
+  const bundle = { security: { code }, sources: { yfinance: { attribution: 'Yahoo Finance via yfinance' } },
+    dividend_history_by_source: { yfinance: [
+      { date: `${year - 2}-03-01`, amount: 10 }, { date: `${year - 2}-09-01`, amount: 15 },
+      { date: `${year - 1}-03-01`, amount: 12 }, { date: `${year - 1}-09-01`, amount: 18 },
+      { date: `${year}-03-01`, amount: 99 }
+    ] } };
+  const env = dividendEnvironment(new Map([
+    [`market/securities/v1/${code}.json`, bundle]
+  ]));
+  const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.dividends.history_basis, 'calendar_year_observed_distributions');
+  assert.deepEqual(data.dividends.records, [
+    { fiscal_year: year - 2, annual_dps_adjusted: 25 },
+    { fiscal_year: year - 1, annual_dps_adjusted: 30 }
+  ]);
+});
+
+test('financial API falls back to Yahoo when an issuer overview exists without dividend rows', async () => {
+  const code = '1306';
+  const currentYear = Number(new Intl.DateTimeFormat('en', { timeZone: 'Asia/Tokyo', year: 'numeric' }).format(new Date()));
+  const documents = new Map([
+    [`market/irbank/v1/securities/${code}/overview.json`, {
+      security: { code, name: 'ETF' }, financials: { annual: [] }, dividends: { records: [] }, valuation: { history: [] }
+    }],
+    [`market/securities/v1/${code}.json`, {
+      security: { code }, dividend_history_by_source: { yfinance: [
+        { date: `${currentYear - 1}-03-01`, amount: 10 },
+        { date: `${currentYear - 1}-03-01`, amount: 10 },
+        { date: `${currentYear - 1}-02-30`, amount: 100 },
+        { date: `${currentYear - 1}-09-01`, amount: 15 }
+      ] }
+    }]
+  ]);
+  const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), dividendEnvironment(documents));
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.security.name, 'ETF');
+  assert.deepEqual(data.dividends.records, [{ fiscal_year: currentYear - 1, annual_dps_adjusted: 25 }]);
+});
+
+test('financial API rejects a unified bundle for a different security', async () => {
+  const code = '1306';
+  const env = dividendEnvironment(new Map([[`market/securities/v1/${code}.json`, {
+    security: { code: '1489' }, dividend_history_by_source: { yfinance: [{ date: '2024-03-01', amount: 10 }] }
+  }]]));
+  const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
+  assert.equal(response.status, 404);
 });
 
 test('dividend-months returns sorted recent observed months from R2 for each requested symbol', async () => {

@@ -12,7 +12,8 @@ data class FinancialData(
     val period: String,
     val profile: StockFinancialProfile,
     val dividends: List<FiscalDividend>,
-    val values: Map<String, Double?>
+    val values: Map<String, Double?>,
+    val dividendHistoryBasis: String = "fiscal_year_reported"
 ) {
     companion object {
         fun parse(root: JSONObject, expectedCode: String): FinancialData {
@@ -23,7 +24,8 @@ data class FinancialData(
                 .filter { it.optInt("fiscal_year") in 1900..2100 }.sortedBy { it.optInt("fiscal_year") }
             // Unadjusted DPS cannot be mixed with a current-share history after a split.
             val dividends = rows.mapNotNull { row -> row.number("annual_dps_adjusted")?.takeIf { it >= 0 }
-                ?.let { FiscalDividend(row.getInt("fiscal_year"), it) } }.distinctBy { it.year }
+                ?.let { FiscalDividend(row.getInt("fiscal_year"), it) } }
+                .associateBy { it.year }.values.sortedBy { it.year }
             val annual = root.optJSONObject("financials")?.optJSONArray("annual")
             val financial = (0 until (annual?.length() ?: 0)).mapNotNull { annual?.optJSONObject(it) }
                 .filter { it.optString("fiscal_year").matches(Regex("\\d{4}/\\d{2}")) }
@@ -54,10 +56,12 @@ data class FinancialData(
                 .filter { it.optString("fiscal_year").take(4).toIntOrNull()?.let { year ->
                     period.take(4).toIntOrNull()?.let { year in (it - 4)..it } } == true }
                 .mapNotNull { it.number("dividend_yield_adjusted") }
+            val calendarYearEvents = root.optJSONObject("dividends")?.optString("history_basis") == "calendar_year_observed_distributions"
             val profile = StockFinancialProfile(
                 payoutRatio = payout ?: Double.NaN, equityRatio = equity ?: Double.NaN,
-                consecutiveYears = dividend?.number("consecutive_dividend_increase_years")?.toInt() ?: -1,
-                noCutYears = if (dividends.size >= 2) noCut else -1, growthRate = growth ?: Double.NaN,
+                consecutiveYears = if (calendarYearEvents) -1 else dividend?.number("consecutive_dividend_increase_years")?.toInt() ?: -1,
+                noCutYears = if (!calendarYearEvents && dividends.size >= 2) noCut else -1,
+                growthRate = if (calendarYearEvents) Double.NaN else growth ?: Double.NaN,
                 eps = valuation?.number("eps_adjusted") ?: Double.NaN,
                 bps = valuation?.number("bps_adjusted") ?: Double.NaN,
                 operatingMargin = operating ?: Double.NaN, fcfMargin = fcfMargin,
@@ -75,7 +79,8 @@ data class FinancialData(
             return FinancialData(code, period, profile, dividends, mapOf(
                 "payout_ratio" to payout, "equity_ratio" to equity, "operating_margin" to operating,
                 "fcf_margin" to fcfMargin, "dividend_growth_years" to dividend?.number("consecutive_dividend_increase_years")
-            ))
+            ), root.optJSONObject("dividends")?.optString("history_basis")
+                ?.takeIf { it == "calendar_year_observed_distributions" } ?: "fiscal_year_reported")
         }
     }
 }

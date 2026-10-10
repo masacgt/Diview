@@ -13,9 +13,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
-import boto3
-
-
 BUCKET = os.environ.get("R2_BUCKET", "diview-market-data")
 IRBANK_ROOT = "market/irbank/v1/"
 IRBANK_DIVIDENDS = IRBANK_ROOT + "securities/"
@@ -25,6 +22,8 @@ WORKERS = max(1, min(32, int(os.environ.get("R2_PUBLISH_WORKERS", "16"))))
 
 
 def client_from_env() -> Any:
+    import boto3
+
     account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "8d8f4f1f3c53232aaf7c7d6dd7b33944")
     access = os.environ.get("R2_ACCESS_KEY_ID", "").strip()
     secret = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
@@ -57,6 +56,29 @@ def read_optional_json(client: Any, key: str) -> Any | None:
         raise
 
 
+def clean_yahoo_events(records: Any) -> list[dict[str, Any]]:
+    """Keep valid, positive Yahoo events and remove exact duplicate observations."""
+    if not isinstance(records, list):
+        return []
+    events: dict[tuple[str, float], dict[str, Any]] = {}
+    for row in records:
+        if not isinstance(row, dict):
+            continue
+        date = row.get("date")
+        amount = row.get("amount")
+        if not isinstance(date, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+            continue
+        try:
+            datetime.strptime(date, "%Y-%m-%d")
+            amount = float(amount)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if not math.isfinite(amount) or amount <= 0:
+            continue
+        events[(date, amount)] = {"date": date, "amount": amount}
+    return [events[key] for key in sorted(events)]
+
+
 def code_from_yahoo_key(key: str) -> str | None:
     name = key[len(YFINANCE_DIVIDENDS):]
     if not name.endswith(".json"):
@@ -70,7 +92,7 @@ def code_from_yahoo_key(key: str) -> str | None:
     return code if re.fullmatch(r"[A-Z0-9]{4,5}", code) else None
 
 
-def publish(client: Any, *, fetch_yahoo_gaps: bool = False) -> tuple[int, int, int, int, int, int, int, int, int]:
+def publish(client: Any, *, fetch_yahoo_gaps: bool = False) -> tuple[int, int, int, int, int, int, int, int, int, int]:
     catalog = read_json(client, IRBANK_ROOT + "catalog.json")
     securities = catalog.get("securities", [])
     irbank: dict[str, dict[str, Any]] = {}
@@ -116,14 +138,12 @@ def publish(client: Any, *, fetch_yahoo_gaps: bool = False) -> tuple[int, int, i
         code = code_from_yahoo_key(key)
         if not code:
             return None
-        if code in irbank and irbank[code].get("records"):
-            return None
         compact = read_json(client, key)
         return code, {
             "r2_key": key,
             "updated_at": compact.get("updated_at"),
             "attribution": compact.get("source", "Yahoo Finance via yfinance"),
-            "records": compact.get("records", []),
+            "records": clean_yahoo_events(compact.get("records", [])),
         }
 
     yahoo_keys = list_keys(client, YFINANCE_DIVIDENDS)
@@ -143,7 +163,7 @@ def publish(client: Any, *, fetch_yahoo_gaps: bool = False) -> tuple[int, int, i
         previous = read_json(client, source_key)
         if not previous:
             return None
-        records = (previous.get("actions") or {}).get("dividends", [])
+        records = clean_yahoo_events((previous.get("actions") or {}).get("dividends", []))
         compact_key = f"{YFINANCE_DIVIDENDS}{symbol}.json"
         compact = {
             "schema_version": 1,
@@ -216,6 +236,8 @@ def publish(client: Any, *, fetch_yahoo_gaps: bool = False) -> tuple[int, int, i
 
     timestamp = datetime.now(timezone.utc).isoformat()
     codes = sorted(irbank.keys() | yahoo.keys())
+    if not codes:
+        raise RuntimeError("Refusing to publish or prune an empty security universe")
     existing_output_keys = set(list_keys(client, OUTPUT_PREFIX))
 
     def publish_one(code: str) -> bool:
@@ -257,12 +279,19 @@ def publish(client: Any, *, fetch_yahoo_gaps: bool = False) -> tuple[int, int, i
             written += int(changed)
             if index % 200 == 0 or index == len(codes):
                 print(f"Published {index}/{len(codes)} security bundles", flush=True)
+    expected_output_keys = {f"{OUTPUT_PREFIX}{code}.json" for code in codes}
+    stale_output_keys = sorted(
+        key for key in existing_output_keys - expected_output_keys
+        if re.fullmatch(re.escape(OUTPUT_PREFIX) + r"[A-Z0-9]{4}\.json", key)
+    )
+    for key in stale_output_keys:
+        client.delete_object(Bucket=BUCKET, Key=key)
     irbank_records = sum(len(source.get("records", [])) for source in irbank.values())
     yahoo_records = sum(len(source.get("records", [])) for source in yahoo.values())
     irbank_with_records = sum(bool(source.get("records")) for source in irbank.values())
     yahoo_with_records = sum(bool(source.get("records")) for source in yahoo.values())
     uncovered = sum(not irbank.get(code, {}).get("records") and not yahoo.get(code, {}).get("records") for code in codes)
-    return (len(codes), written, len(irbank.keys() & yahoo.keys()), irbank_with_records,
+    return (len(codes), written, len(stale_output_keys), len(irbank.keys() & yahoo.keys()), irbank_with_records,
             yahoo_with_records, uncovered, irbank_records, yahoo_records, live_fetched)
 
 
@@ -272,11 +301,12 @@ def main() -> int:
     parser.add_argument("--fetch-yahoo-gaps", action="store_true",
                         help="Query Yahoo only for listed securities still missing dividend events after cached-data migration")
     args = parser.parse_args()
-    count, written, overlap, irbank_count, yahoo_count, uncovered, irbank_events, yahoo_events, live_fetched = publish(
+    count, written, stale_removed, overlap, irbank_count, yahoo_count, uncovered, irbank_events, yahoo_events, live_fetched = publish(
         client_from_env(), fetch_yahoo_gaps=args.fetch_yahoo_gaps
     )
     print(json.dumps({"bucket": BUCKET, "prefix": OUTPUT_PREFIX, "security_count": count,
-                      "written": written, "irbank_yfinance_overlap": overlap,
+                      "written": written, "stale_unified_objects_removed": stale_removed,
+                      "irbank_yfinance_overlap": overlap,
                       "irbank_securities_with_dividends": irbank_count,
                       "irbank_dividend_records": irbank_events,
                       "yfinance_securities_with_dividends": yahoo_count,
