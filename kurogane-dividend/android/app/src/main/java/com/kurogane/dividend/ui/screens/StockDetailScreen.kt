@@ -10,6 +10,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.*
@@ -31,6 +35,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
@@ -97,7 +104,9 @@ fun StockDetailScreen(
 
     // Selected status tab: default to "risk" to highlight the user requested detailed mock
     var selectedStatusTab by rememberSaveable(stockCode) { mutableStateOf("risk") }
-    var simAddedShares by rememberSaveable(stockCode) { mutableIntStateOf(100) }
+    var simAddedSharesInput by rememberSaveable(stockCode) { mutableStateOf("100") }
+    var showBuyUpSimulator by rememberSaveable(stockCode) { mutableStateOf(false) }
+    val simAddedShares = simAddedSharesInput.toIntOrNull() ?: 0
     val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
     val notificationAccess = com.kurogane.dividend.ui.components.rememberNotificationAccess {
         viewModel.setNotificationEnabled(com.kurogane.dividend.notifications.NotificationKind.DIVIDEND, true)
@@ -133,13 +142,63 @@ fun StockDetailScreen(
         (backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())
     ) }
     val healthNarrative = remember(financial) { StockAnalysisNarrativeGenerator.generate(financial?.values.orEmpty()) }
-    val valuationNarrative = remember(backendAnalysisValues) { StockAnalysisNarrativeGenerator.generate(backendAnalysisValues.orEmpty().filterKeys { it == "per" || it == "pbr" }) }
+    val valuationValues = remember(backendAnalysisValues, financial) {
+        ((backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())).filterKeys { it == "per" || it == "pbr" }
+    }
+    val valuationNarrative = remember(valuationValues) { StockAnalysisNarrativeGenerator.generate(valuationValues) }
     val profile = baseProfile.copy(
         healthGrade = healthNarrative.grade ?: "未判定", healthScore = healthNarrative.score ?: -1,
         healthEvaluation = healthNarrative.title, healthDiagnosisComment = healthNarrative.findings.joinToString(" ") { it.text }.ifBlank { "財務指標未取得" },
         valuationScore = valuationNarrative.score ?: -1,
         buySignalTitle = valuationNarrative.title,
         buySignalComment = valuationNarrative.findings.joinToString(" ") { it.text }.ifBlank { "株価指標未取得" }
+    )
+    val buySignalDiagnosisItems = buildList {
+        if (profile.yieldRangeMin.isFinite() && profile.yieldRangeAvg.isFinite() && profile.yieldRangeMax.isFinite()) {
+            val yieldPosition = when {
+                currentHolding.yieldRate < profile.yieldRangeMin -> "過去の最低水準を下回っています"
+                currentHolding.yieldRate > profile.yieldRangeMax -> "過去の最高水準を上回っています"
+                currentHolding.yieldRate >= profile.yieldRangeAvg -> "過去平均以上です"
+                else -> "過去平均を下回っています"
+            }
+            add("配当利回り：現在${currentHolding.yieldRate.financialText(2, "%")}、過去実績は最低${profile.yieldRangeMin.financialText(2, "%")}・平均${profile.yieldRangeAvg.financialText(2, "%")}・最高${profile.yieldRangeMax.financialText(2, "%")}です。$yieldPosition。")
+        } else {
+            add("配当利回り：過去の利回り実績が不足しているため、過去平均との差は判定できません。現在値は${currentHolding.yieldRate.financialText(2, "%")}です。")
+        }
+        valuationNarrative.findings.forEach { add(it.text) }
+        if (valuationNarrative.missingLabels.isNotEmpty()) {
+            add("未取得の株価指標：${valuationNarrative.missingLabels.joinToString("・")}。取得できた指標のみで評価しています。")
+        }
+    }
+    val growthDurabilityDiagnosisItems = listOf(
+        when {
+            profile.consecutiveYears > 0 -> "連続増配実績：${profile.consecutiveYears}期連続で増配しています。長期の継続性を見る材料ですが、今後の利益・キャッシュの裏付けも確認が必要です。"
+            profile.consecutiveYears == 0 -> "連続増配実績：直近の連続増配は確認できません。増配年数だけでなく、減配の有無や配当水準の推移も合わせて見ます。"
+            else -> "連続増配実績：データ未取得のため、連続増配年数は判定できません。"
+        },
+        when {
+            profile.noCutYears > 0 -> "減配しなかった期間：${profile.noCutYears}年です。記録期間内に減配がないことを示しますが、将来の配当を保証するものではありません。"
+            profile.noCutYears == 0 -> "減配しなかった期間：直近の連続記録はありません。過去の配当推移を確認してください。"
+            else -> "減配しなかった期間：比較できる配当履歴が不足しています。"
+        },
+        if (profile.growthRate.isFinite()) {
+            val growthDirection = when {
+                profile.growthRate > 0.0 -> "増配傾向"
+                profile.growthRate < 0.0 -> "減配傾向"
+                else -> "横ばい"
+            }
+            "配当成長率：取得できた直近最大5期の年平均成長率（CAGR）は${profile.growthRate.financialText(1, "%")}で、${growthDirection}です。"
+        } else {
+            "配当成長率：連続した複数期の比較データが不足しているため算出できません。"
+        },
+        when {
+            !profile.payoutRatio.isFinite() -> "配当性向：未取得のため、利益に対する配当負担は判定できません。"
+            profile.payoutRatio > 100.0 -> "配当性向：約${profile.payoutRatio.financialText(1, "%")}で利益を上回っています。利益以外の資金に依存していないか注意が必要です。"
+            profile.payoutRatio > 70.0 -> "配当性向：約${profile.payoutRatio.financialText(1, "%")}と高めです。利益が落ちると配当維持の余裕が縮む可能性があります。"
+            profile.payoutRatio >= 0.0 -> "配当性向：約${profile.payoutRatio.financialText(1, "%")}です。利益のうち配当に回していない部分もあり、利益変動への余地を確認する材料になります。"
+            else -> "配当性向：約${profile.payoutRatio.financialText(1, "%")}です。赤字や特殊要因の影響を含む可能性があるため、決算内容の確認が必要です。"
+        },
+        "財務面の支え：自己資本比率${profile.equityRatio.financialText(1, "%")}、営業利益率${profile.operatingMargin.financialText(1, "%")}、${profile.fcfStatus}です。未取得の指標は評価に含めていません。"
     )
     val liveYield = if (currentPrice > 0) (dps / currentPrice) * 100.0 else 0.0
     val liveYoc = if (currentHolding.acqPrice > 0) (dps / currentHolding.acqPrice) * 100.0 else liveYield
@@ -166,11 +225,39 @@ fun StockDetailScreen(
 
     val isHighRisk = divDependency > 10.0
     val riskBadgeText = if (divDependency > 25.0) "高リスク・要分散" else if (divDependency > 10.0) "やや高め" else "適正範囲"
-
+    val cutImpactRatio = if (totalPortfolioDiv > 0) cutImpact.toDouble() / totalPortfolioDiv * 100.0 else 0.0
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
+    val riskDiagnosisItems = listOf(
+        if (totalPortfolioDiv > 0) {
+            val stockRisk = when {
+                divDependency > 25.0 -> "目安の10%を大きく上回っています"
+                divDependency > 10.0 -> "目安の10%を上回っています"
+                else -> "目安の10%以内です"
+            }
+            "銘柄配当依存度：年間配当の約${divDependencyStr}%を${currentHolding.name}が占めています。$stockRisk。"
+        } else {
+            "銘柄配当依存度：年間配当データがないため、構成比を算出できません。"
+        },
+        if (totalPortfolioVal > 0) {
+            "セクター集中度：${cleanSectorName}の評価額比率は約${sectorDependencyStr}%で、${sectorRiskText}の状態です。"
+        } else {
+            "セクター集中度：評価額データがないため、構成比を算出できません。"
+        },
+        if (totalPortfolioDiv > 0) {
+            "減配時の影響：${currentHolding.name}の配当が50%減ると、年間配当は約¥${currencyFormat.format(cutImpact)}（全体の約${String.format(Locale.JAPAN, "%.1f", cutImpactRatio)}%）減る試算です。"
+        } else {
+            "減配時の影響：年間配当データがないため、試算できません。"
+        },
+        when {
+            divDependency > 25.0 || sectorDependency > 30.0 -> "見直しの目安：追加投資を別銘柄・別セクターへ分散し、集中度を少しずつ下げる方法があります。"
+            divDependency > 10.0 || sectorDependency > 20.0 -> "見直しの目安：今後の追加投資先を分散すると、特定銘柄やセクターへの依存を抑えられます。"
+            else -> "現在は銘柄・セクターの集中が比較的小さい状態です。複数の投資先への分散を続けると、偏りを抑えやすくなります。"
+        }
+    )
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = BackgroundDark
     ) { innerPadding ->
         LazyColumn(
@@ -365,7 +452,7 @@ fun StockDetailScreen(
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text(stringResource(R.string.stock_detail_text_6), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     Text(String.format(Locale.JAPAN, "%.2f%% YOC", currentHolding.liveYoc), fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.caption, fontFamily = FontFamily.Monospace)
-                                    Text(stringResource(R.string.stock_detail_text_7 , currentHolding.currency, currentHolding.acqPrice), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    Text(stringResource(R.string.stock_detail_text_7, currentHolding.currency, currentHolding.acqPrice.toLong()), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
                         }
@@ -400,11 +487,13 @@ fun StockDetailScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         // 4 Bars Container
+                        val chartFontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+                        val chartHeight = (120f + 80f * (chartFontScale - 1f).coerceAtLeast(0f)).dp
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = BackgroundDark,
                             border = BorderStroke(1.dp, BorderColor),
-                            modifier = Modifier.fillMaxWidth().height(120.dp)
+                            modifier = Modifier.fillMaxWidth().height(chartHeight)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxSize().padding(12.dp),
@@ -414,7 +503,19 @@ fun StockDetailScreen(
                                 val history = financial?.dividends.orEmpty().takeLast(8)
                                 val maxDps = history.maxOfOrNull { it.dps }?.takeIf { it > 0 } ?: 1.0
                                 val prefix = currentHolding.currency
-                                val bars = history.map { point -> Triple(stringResource(R.string.stock_detail_label_5, (point.year).toString()), stringResource(R.string.add_holding_1_s_2_s_2, (prefix).toString(), (point.dps.financialText()).toString()), (point.dps / maxDps * 0.95).toFloat()) }
+                                val bars = history.map { point ->
+                                    val roundedDps = kotlin.math.round(point.dps * 10.0) / 10.0
+                                    val dpsText = if (roundedDps % 1.0 == 0.0) {
+                                        String.format(Locale.JAPAN, "%.0f", roundedDps)
+                                    } else {
+                                        String.format(Locale.JAPAN, "%.1f", roundedDps)
+                                    }
+                                    Triple(
+                                        stringResource(R.string.stock_detail_label_5, point.year.toString()),
+                                        stringResource(R.string.add_holding_1_s_2_s_2, prefix, dpsText),
+                                        (point.dps / maxDps * 0.95).toFloat()
+                                    )
+                                }
                                 if (bars.isEmpty()) Text(stringResource(R.string.stock_detail_text_9), color = OnSurfaceVariant)
                                 bars.forEach { (term, dpsVal, ratio) ->
                                     val isProjected = term == bars.lastOrNull()?.first
@@ -807,30 +908,32 @@ fun StockDetailScreen(
                                     // Diagnosis comment card follows the shared analysis-card styling.
                                     Surface(
                                         shape = RoundedCornerShape(12.dp),
-                                        color = Color(0x1A10B981),
-                                        border = BorderStroke(1.dp, Color(0x4010B981)),
+                                        color = AccentAmber.copy(alpha = 0.08f),
+                                        border = BorderStroke(1.dp, AccentAmber.copy(alpha = 0.35f)),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Row(
-                                            modifier = Modifier.padding(10.dp),
-                                            verticalAlignment = Alignment.Top
+                                        Column(
+                                            modifier = Modifier.padding(12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
-                                            Icon(
-                                                Icons.Default.AutoAwesome,
-                                                contentDescription = null,
-                                                tint = PrimaryEmerald,
-                                                modifier = Modifier.size(18.dp).padding(top = 1.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                if (isHighRisk)
-                                                    resources.getString(R.string.stock_detail_label_28, (divDependencyStr).toString())
-                                                else
-                                                    resources.getString(R.string.stock_detail_label_29, (divDependencyStr).toString()),
-                                                color = OnSurface.copy(alpha = 0.9f),
-                                                fontSize = AppTextSize.dense,
-                                                lineHeight = 16.sp
-                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    Icons.Default.AutoAwesome,
+                                                    contentDescription = null,
+                                                    tint = AccentAmber,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("診断コメント", color = AccentAmber, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                            }
+                                            riskDiagnosisItems.forEachIndexed { index, item ->
+                                                Text(
+                                                    "${index + 1}. $item",
+                                                    color = OnSurface.copy(alpha = 0.92f),
+                                                    fontSize = AppTextSize.dense,
+                                                    lineHeight = 18.sp
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -1094,12 +1197,15 @@ fun StockDetailScreen(
                                                     )
                                                 }
                                                 Spacer(modifier = Modifier.height(6.dp))
-                                                Text(
-                                                    profile.buySignalComment,
-                                                    color = OnSurface.copy(alpha = 0.95f),
-                                                    fontSize = AppTextSize.dense,
-                                                    lineHeight = 16.sp
-                                                )
+                                                Text("診断コメント", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                                buySignalDiagnosisItems.forEachIndexed { index, item ->
+                                                    Text(
+                                                        "${index + 1}. $item",
+                                                        color = OnSurface.copy(alpha = 0.95f),
+                                                        fontSize = AppTextSize.dense,
+                                                        lineHeight = 18.sp
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -1539,12 +1645,15 @@ fun StockDetailScreen(
                                                     )
                                                 }
                                                 Spacer(Modifier.height(6.dp))
-                                                Text(
-                                                    stringResource(R.string.stock_detail_text_72 , profile.noCutYears.financialYears(), profile.growthRate.financialText(1, "%")),
-                                                    color = OnSurface.copy(alpha = 0.95f),
-                                                    fontSize = AppTextSize.dense,
-                                                    lineHeight = 16.sp
-                                                )
+                                                Text("診断コメント", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                                growthDurabilityDiagnosisItems.forEachIndexed { index, item ->
+                                                    Text(
+                                                        "${index + 1}. $item",
+                                                        color = OnSurface.copy(alpha = 0.95f),
+                                                        fontSize = AppTextSize.dense,
+                                                        lineHeight = 18.sp
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -1555,8 +1664,153 @@ fun StockDetailScreen(
                 }
             }
 
-            // 4. 買い増しシミュレーター Card
+
+
             item {
+                StockAnalysisNarrativeCard(analysisNarrative)
+            }
+
+            // 5. 次回権利落ち・直近イベント
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
+                    border = BorderStroke(1.dp, BorderColor)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        AdaptiveRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.stock_detail_text_73), fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body)
+                            }
+                            Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.15f)) {
+                                Text(if (isAlertOn && notificationAccess.dividendAllowed) stringResource(R.string.stock_detail_label_12) else stringResource(R.string.stock_detail_label_13), modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = BackgroundDark,
+                            border = BorderStroke(1.dp, BorderColor),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(stringResource(R.string.stock_detail_text_74), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    Text(stringResource(R.string.stock_detail_text_75), color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                                }
+                                Surface(shape = RoundedCornerShape(8.dp), color = PrimaryEmerald.copy(alpha = 0.15f)) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(currentHolding.dividendMonths.filter { it in 1..12 }.distinct().sorted().joinToString(resources.getString(R.string.stock_detail_label_20)) { resources.getString(R.string.ex_dividend_matrix_dialog_text_4, (it).toString()) }.ifEmpty { resources.getString(R.string.not_available) }, color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        AdaptiveRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.AlarmOn, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.stock_detail_text_76), color = OnSurface, fontSize = AppTextSize.dense)
+                            }
+                            Switch(
+                                checked = isAlertOn,
+                                onCheckedChange = {
+                                    if (it) notificationAccess.request("dividend")
+                                    else viewModel.setNotificationEnabled(com.kurogane.dividend.notifications.NotificationKind.DIVIDEND, false)
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = OnSurface, checkedTrackColor = PrimaryEmerald)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 6. Action buttons
+            item {
+                AdaptiveRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { onOpenAddHolding(currentHolding.code) },
+                        enabled = isOwnedHolding,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp), tint = OnSurface)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(stringResource(R.string.stock_detail_text_77), color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = { showDeleteHoldingConfirmation = true },
+                        enabled = isOwnedHolding,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp), tint = ErrorRed)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(stringResource(R.string.stock_detail_text_78), color = ErrorRed, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            item {
+                Button(
+                    onClick = { showBuyUpSimulator = true },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)
+                ) {
+                    Icon(Icons.Default.Calculate, contentDescription = null, tint = OnPrimary)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.stock_detail_text_12), color = OnPrimary, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(60.dp))
+            }
+        }
+    }
+
+    if (showBuyUpSimulator) {
+        ModalBottomSheet(
+            onDismissRequest = { showBuyUpSimulator = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = SurfaceContainerLow,
+            contentColor = OnSurface
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -1678,42 +1932,47 @@ fun StockDetailScreen(
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(stringResource(R.string.annual_dividend_1_s , simAddedShares), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body, fontFamily = FontFamily.Monospace)
+                                    BasicTextField(
+                                        value = simAddedSharesInput,
+                                        onValueChange = { input ->
+                                            simAddedSharesInput = input.filter(Char::isDigit).take(9)
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true,
+                                        textStyle = TextStyle(
+                                            color = OnSurface,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = AppTextSize.body,
+                                            fontFamily = FontFamily.Monospace
+                                        ),
+                                        cursorBrush = SolidColor(PrimaryEmerald),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                                    )
                                     Text(stringResource(R.string.asset_management_text_29), color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                 }
                             }
                             Button(
-                                onClick = { simAddedShares = (simAddedShares - 10).coerceAtLeast(0) },
+                                onClick = { simAddedSharesInput = (simAddedShares - 100).coerceAtLeast(0).toString() },
                                 colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainer),
                                 shape = RoundedCornerShape(10.dp),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text(stringResource(R.string.stock_detail_text_21), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text("-100", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                             Button(
-                                onClick = { simAddedShares = com.kurogane.dividend.model.PortfolioMath.addShares(simAddedShares, 10) },
-                                colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainer),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(stringResource(R.string.add_holding_text_13), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            }
-                            Button(
-                                onClick = { simAddedShares = com.kurogane.dividend.model.PortfolioMath.addShares(simAddedShares, 100) },
+                                onClick = { simAddedSharesInput = com.kurogane.dividend.model.PortfolioMath.addShares(simAddedShares, 100).toString() },
                                 colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainer),
                                 shape = RoundedCornerShape(10.dp),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                 modifier = Modifier.weight(1.2f)
                             ) {
-                                Text(stringResource(R.string.add_holding_text_14), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text("+100", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                             IconButton(
-                                onClick = { simAddedShares = 100 },
+                                onClick = { simAddedSharesInput = "100" },
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(SurfaceContainer)
@@ -1742,7 +2001,7 @@ fun StockDetailScreen(
                                     border = BorderStroke(0.5.dp, if (isSelected) PrimaryEmerald else BorderColor),
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clickable { simAddedShares = count }
+                                        .clickable { simAddedSharesInput = count.toString() }
                                 ) {
                                     Text(
                                         label,
@@ -1757,122 +2016,6 @@ fun StockDetailScreen(
                         }
                     }
                 }
-            }
-
-            item {
-                StockAnalysisNarrativeCard(analysisNarrative)
-            }
-
-            // 5. 次回権利落ち・直近イベント
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-                    border = BorderStroke(1.dp, BorderColor)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(R.string.stock_detail_text_73), fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body)
-                            }
-                            Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.15f)) {
-                                Text(if (isAlertOn && notificationAccess.dividendAllowed) stringResource(R.string.stock_detail_label_12) else stringResource(R.string.stock_detail_label_13), modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = BackgroundDark,
-                            border = BorderStroke(1.dp, BorderColor),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(stringResource(R.string.stock_detail_text_74), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    Text(stringResource(R.string.stock_detail_text_75), color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
-                                }
-                                Surface(shape = RoundedCornerShape(8.dp), color = PrimaryEmerald.copy(alpha = 0.15f)) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(currentHolding.dividendMonths.filter { it in 1..12 }.distinct().sorted().joinToString(resources.getString(R.string.stock_detail_label_20)) { resources.getString(R.string.ex_dividend_matrix_dialog_text_4, (it).toString()) }.ifEmpty { resources.getString(R.string.not_available) }, color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.AlarmOn, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(R.string.stock_detail_text_76), color = OnSurface, fontSize = AppTextSize.dense)
-                            }
-                            Switch(
-                                checked = isAlertOn,
-                                onCheckedChange = {
-                                    if (it) notificationAccess.request("dividend")
-                                    else viewModel.setNotificationEnabled(com.kurogane.dividend.notifications.NotificationKind.DIVIDEND, false)
-                                },
-                                colors = SwitchDefaults.colors(checkedThumbColor = OnSurface, checkedTrackColor = PrimaryEmerald)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 6. Action buttons
-            item {
-                AdaptiveRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { onOpenAddHolding(currentHolding.code) },
-                        enabled = isOwnedHolding,
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp), tint = OnSurface)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(stringResource(R.string.stock_detail_text_77), color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
-                    }
-                    Button(
-                        onClick = { showDeleteHoldingConfirmation = true },
-                        enabled = isOwnedHolding,
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp), tint = ErrorRed)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(stringResource(R.string.stock_detail_text_78), color = ErrorRed, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(60.dp))
             }
         }
     }

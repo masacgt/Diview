@@ -244,7 +244,11 @@ object StockAnalysisNarrativeGenerator {
                 else -> BandPosition.UPPER
             }
             val digit = bandIndex * 9 + detailIndex
-            val formatted = String.format(Locale.JAPAN, "%.2f%s", value, rule.unit)
+            val formatted = if (rule.key == "dividend_growth_years") {
+                String.format(Locale.JAPAN, "%d%s", value.toInt(), rule.unit)
+            } else {
+                String.format(Locale.JAPAN, "%.2f%s", value, rule.unit)
+            }
             findings += StockAnalysisFinding(
                 key = rule.key,
                 label = rule.label,
