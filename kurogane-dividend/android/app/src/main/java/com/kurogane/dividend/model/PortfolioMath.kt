@@ -42,7 +42,17 @@ object PortfolioMath {
 
     fun adjustedTarget(current: Double, delta: Double): Double {
         require(current.isFinite() && delta.isFinite()) { "利回りは有限の数値を指定してください" }
-        return round((current + delta).coerceIn(0.1, 100.0) * 100.0) / 100.0
+        if (delta == 0.0) return current.coerceIn(0.1, 100.0)
+        val currentHundredths = round(current.coerceIn(0.1, 100.0) * 100.0).toInt()
+        val currentTick = currentHundredths / 5
+        val nextTick = if (delta > 0.0) {
+            currentTick + 1
+        } else if (currentHundredths % 5 == 0) {
+            currentTick - 1
+        } else {
+            currentTick
+        }
+        return (nextTick * 5 / 100.0).coerceIn(0.1, 100.0)
     }
 
     fun addShares(current: Int, delta: Int): Int =
