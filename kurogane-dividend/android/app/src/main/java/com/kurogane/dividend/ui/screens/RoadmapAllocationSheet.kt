@@ -567,14 +567,14 @@ private fun AccountMatrixCard(
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         TextField(
                             value = shares,
                             onValueChange = onSharesChange,
                             modifier = Modifier
                                 .weight(1f)
-                                .heightIn(min = 28.dp),
+                                .height(48.dp),
                             shape = RoundedCornerShape(6.dp),
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = SurfaceContainerHigh,
@@ -591,21 +591,27 @@ private fun AccountMatrixCard(
                         // Quick add buttons
                         Box(
                             modifier = Modifier
+                                .width(48.dp)
+                                .height(48.dp)
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(SurfaceContainerHigh)
                                 .clickable { onSharesChange(PortfolioMath.addShares(shares.toIntOrNull() ?: 0, 10).toString()) }
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                                .padding(horizontal = 1.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text(stringResource(R.string.add_holding_text_13), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.add_holding_text_13), color = OnSurface, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
                         Box(
                             modifier = Modifier
+                                .width(48.dp)
+                                .height(48.dp)
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(SurfaceContainerHigh)
                                 .clickable { onSharesChange(PortfolioMath.addShares(shares.toIntOrNull() ?: 0, 100).toString()) }
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                                .padding(horizontal = 1.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text(stringResource(R.string.add_holding_text_14), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.add_holding_text_14), color = OnSurface, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
                     }
                 }
@@ -623,7 +629,7 @@ private fun AccountMatrixCard(
                             onValueChange = onPriceChange,
                             modifier = Modifier
                                 .weight(1f)
-                                .heightIn(min = 28.dp),
+                                .height(48.dp),
                             shape = RoundedCornerShape(6.dp),
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = SurfaceContainerHigh,
