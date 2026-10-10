@@ -313,7 +313,8 @@ fun AnnualDividendScreen(
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(SurfaceContainerHigh)
                                     .border(0.5.dp, BorderColor, RoundedCornerShape(14.dp))
-                                    .padding(horizontal = 12.dp, vertical = 7.dp)
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(stringResource(R.string.annual_dividend_text_3), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1, softWrap = false)
                                 Spacer(modifier = Modifier.height(2.dp))
@@ -347,7 +348,8 @@ fun AnnualDividendScreen(
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(SurfaceContainerHigh)
                                     .border(0.5.dp, BorderColor, RoundedCornerShape(14.dp))
-                                    .padding(horizontal = 12.dp, vertical = 7.dp)
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(stringResource(R.string.annual_dividend_text_5), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1, softWrap = false)
                                 Spacer(modifier = Modifier.height(2.dp))
