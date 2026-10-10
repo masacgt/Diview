@@ -42,7 +42,7 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToLong
 
-/** Cards from the supplied dividend monitor, appended to the dividend trend subtab. */
+/** Summary of dividend changes shown on the dividend-change subtab. */
 @Composable
 internal fun DividendChangeAnalysisCards(
     holdings: List<Holding>,
@@ -54,10 +54,69 @@ internal fun DividendChangeAnalysisCards(
     val analysis = remember(holdings, financialData, taxRateMode) {
         DividendChangeAnalysis.calculate(holdings, financialData, taxRateMode)
     }
-    var filter by rememberSaveable { mutableStateOf("all") }
-    var changeSort by rememberSaveable { mutableStateOf("impact") }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        MonitorHeading("増配・減配＆減配リスク診断", Icons.AutoMirrored.Filled.TrendingUp)
+        AnnualImpactCard(analysis, isPrivacyActive, taxRateMode)
+        MonitorKpis(analysis, isPrivacyActive)
+    }
+}
+
+/** Payout-health and held-stock risk panels shown on the dividend-analysis subtab. */
+@Composable
+internal fun DividendPayoutHealthAndRiskCards(
+    holdings: List<Holding>,
+    financialData: Map<String, FinancialData>,
+    taxRateMode: String,
+    onNavigateToDetail: (String) -> Unit
+) {
+    val analysis = remember(holdings, financialData, taxRateMode) {
+        DividendChangeAnalysis.calculate(holdings, financialData, taxRateMode)
+    }
     var riskSort by rememberSaveable { mutableStateOf("payout") }
     var showAllRisks by rememberSaveable { mutableStateOf(false) }
+    val riskRows = remember(analysis, riskSort) {
+        when (riskSort) {
+            "years" -> analysis.securities.sortedBy { it.profile?.noCutYears?.takeIf { years -> years >= 0 } ?: Int.MAX_VALUE }
+            else -> analysis.securities.sortedByDescending {
+                it.payoutRatio?.let { ratio -> if (ratio < 0) Double.POSITIVE_INFINITY else ratio }
+                    ?: Double.NEGATIVE_INFINITY
+            }
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        PayoutHealthCard(analysis)
+        MonitorHeading("保有銘柄の減配リスク診断", Icons.Default.Shield)
+        MonitorSelectors("並び替え", listOf("payout" to stringResource(R.string.dividend_change_analysis_cards_label), "years" to stringResource(R.string.dividend_change_analysis_cards_label_2)), riskSort) { riskSort = it }
+        if (riskRows.isEmpty()) {
+            MonitorEmptyCard("保有する国内株を追加すると、配当性向と非減配年数を表示します。")
+        }
+        (if (showAllRisks) riskRows else riskRows.take(5)).forEach { row ->
+            key(row.code) {
+                DividendRiskCard(row, onClick = { onNavigateToDetail(row.code) })
+            }
+        }
+        if (riskRows.size > 5) {
+            TextButton(onClick = { showAllRisks = !showAllRisks }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Text(if (showAllRisks) stringResource(R.string.dividend_change_analysis_cards_label_3) else stringResource(R.string.dividend_change_analysis_cards_label_4, (riskRows.size).toString()), color = PrimaryEmerald)
+            }
+        }
+    }
+}
+
+/** Per-stock increase/decrease list shown at the bottom of the dividend-change tab. */
+@Composable
+internal fun DividendChangeSecuritiesList(
+    holdings: List<Holding>,
+    financialData: Map<String, FinancialData>,
+    isPrivacyActive: Boolean,
+    taxRateMode: String,
+    onNavigateToDetail: (String) -> Unit
+) {
+    val analysis = remember(holdings, financialData, taxRateMode) {
+        DividendChangeAnalysis.calculate(holdings, financialData, taxRateMode)
+    }
+    var filter by rememberSaveable { mutableStateOf("all") }
+    var changeSort by rememberSaveable { mutableStateOf("impact") }
     val rows = remember(analysis, filter, changeSort) {
         val filtered = analysis.securities.filter {
             when (filter) {
@@ -74,47 +133,16 @@ internal fun DividendChangeAnalysisCards(
             else -> filtered.sortedByDescending { it.annualImpact ?: Double.NEGATIVE_INFINITY }
         }
     }
-    val riskRows = remember(analysis, riskSort) {
-        when (riskSort) {
-            "years" -> analysis.securities.sortedBy { it.profile?.noCutYears?.takeIf { years -> years >= 0 } ?: Int.MAX_VALUE }
-            else -> analysis.securities.sortedByDescending {
-                it.payoutRatio?.let { ratio -> if (ratio < 0) Double.POSITIVE_INFINITY else ratio }
-                    ?: Double.NEGATIVE_INFINITY
-            }
-        }
-    }
-
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        MonitorHeading("増配・減配＆減配リスク診断", Icons.AutoMirrored.Filled.TrendingUp)
-        AnnualImpactCard(analysis, isPrivacyActive, taxRateMode)
-        MonitorKpis(analysis, isPrivacyActive)
-        PayoutHealthCard(analysis)
-
-        MonitorHeading("保有銘柄の減配リスク診断", Icons.Default.Shield)
-        MonitorSelectors("並び替え", listOf("payout" to stringResource(R.string.dividend_change_analysis_cards_label), "years" to stringResource(R.string.dividend_change_analysis_cards_label_2)), riskSort) { riskSort = it }
-        if (riskRows.isEmpty()) {
-            MonitorEmptyCard("保有する国内株を追加すると、配当性向と非減配年数を表示します。")
-        }
-        (if (showAllRisks) riskRows else riskRows.take(5)).forEach { row ->
-            key(row.code) {
-                DividendRiskCard(row, onClick = { onNavigateToDetail(row.code) })
-            }
-        }
-        if (riskRows.size > 5) {
-            TextButton(onClick = { showAllRisks = !showAllRisks }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text(if (showAllRisks) stringResource(R.string.dividend_change_analysis_cards_label_3) else stringResource(R.string.dividend_change_analysis_cards_label_4, (riskRows.size).toString()), color = PrimaryEmerald)
-            }
-        }
-
         MonitorHeading("銘柄別の増配・減配", Icons.Default.QueryStats)
         val counts = analysis.securities
         MonitorSelectors(
             label = null,
             options = listOf(
-                "all" to stringResource(R.string.dividend_change_analysis_cards_label_5, (counts.size).toString()),
-                "increase" to stringResource(R.string.dividend_change_analysis_cards_label_6, (counts.count { it.change == DividendChangeStatus.INCREASE }).toString()),
-                "monitor" to stringResource(R.string.dividend_change_analysis_cards_label_7, (analysis.monitoring.size).toString()),
-                "maintain" to stringResource(R.string.dividend_change_analysis_cards_label_8, (counts.count { it.change == DividendChangeStatus.MAINTAIN }).toString())
+                "all" to stringResource(R.string.dividend_change_analysis_cards_label_5, counts.size),
+                "increase" to stringResource(R.string.dividend_change_analysis_cards_label_6, counts.count { it.change == DividendChangeStatus.INCREASE }),
+                "monitor" to stringResource(R.string.dividend_change_analysis_cards_label_7, analysis.monitoring.size),
+                "maintain" to stringResource(R.string.dividend_change_analysis_cards_label_8, counts.count { it.change == DividendChangeStatus.MAINTAIN })
             ),
             selected = filter,
             onSelect = { filter = it }

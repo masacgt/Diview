@@ -112,7 +112,15 @@ class DividendViewModel @JvmOverloads constructor(
     val calculationBasis = _calculationBasis.asStateFlow()
     private val _roadmapTargetYield = MutableStateFlow(displayPreferences.getFloat("roadmap_target_yield", 4f).toDouble())
     val roadmapTargetYield = _roadmapTargetYield.asStateFlow()
-    private val _compositionThreshold = MutableStateFlow(displayPreferences.getInt("composition_threshold", 5))
+    private val _growthSimulatorMonthlyContribution = MutableStateFlow(
+        displayPreferences.getLong("growth_simulator_monthly_contribution", 30_000L).coerceIn(0L, 1_000_000L)
+    )
+    val growthSimulatorMonthlyContribution = _growthSimulatorMonthlyContribution.asStateFlow()
+    private val _growthSimulatorDividendYield = MutableStateFlow(
+        displayPreferences.getInt("growth_simulator_dividend_yield_tenths", 40).coerceIn(0, 300) / 10.0
+    )
+    val growthSimulatorDividendYield = _growthSimulatorDividendYield.asStateFlow()
+    private val _compositionThreshold = MutableStateFlow(displayPreferences.getInt("composition_threshold", 5).coerceIn(1, 10))
     val compositionThreshold = _compositionThreshold.asStateFlow()
     private val _compositionOtherEnabled = MutableStateFlow(displayPreferences.getBoolean("composition_other_enabled", true))
     val compositionOtherEnabled = _compositionOtherEnabled.asStateFlow()
@@ -136,9 +144,39 @@ class DividendViewModel @JvmOverloads constructor(
         saveDisplaySetting(displayPreferences.edit().putFloat("roadmap_target_yield", value.toFloat())) { _roadmapTargetYield.value = value }
     }
 
+    fun setGrowthSimulatorMonthlyContribution(value: Long) {
+        val bounded = value.coerceIn(0L, 1_000_000L)
+        saveDisplaySetting(displayPreferences.edit().putLong("growth_simulator_monthly_contribution", bounded)) {
+            _growthSimulatorMonthlyContribution.value = bounded
+        }
+    }
+
+    fun setGrowthSimulatorDividendYield(value: Double) {
+        val tenths = kotlin.math.round(value * 10.0).toInt().coerceIn(0, 300)
+        saveDisplaySetting(displayPreferences.edit().putInt("growth_simulator_dividend_yield_tenths", tenths)) {
+            _growthSimulatorDividendYield.value = tenths / 10.0
+        }
+    }
+
     fun setCompositionThreshold(value: Int) {
         if (value !in 1..10) return
-        saveDisplaySetting(displayPreferences.edit().putInt("composition_threshold", value)) { _compositionThreshold.value = value }
+        updateCompositionThreshold(value)
+        persistCompositionThreshold()
+    }
+
+    fun updateCompositionThreshold(value: Int) {
+        if (value in 1..10 && _compositionThreshold.value != value) {
+            _compositionThreshold.value = value
+        }
+    }
+
+    fun persistCompositionThreshold() {
+        val value = _compositionThreshold.value
+        if (displayPreferences.getInt("composition_threshold", 5) == value) return
+        if (!displayPreferences.edit().putInt("composition_threshold", value).commit()) {
+            _compositionThreshold.value = displayPreferences.getInt("composition_threshold", 5).coerceIn(1, 10)
+            _saveError.value = getApplication<Application>().getString(R.string.setting_save_failed)
+        }
     }
 
     fun setCompositionOtherEnabled(enabled: Boolean) {
@@ -378,13 +416,19 @@ class DividendViewModel @JvmOverloads constructor(
             val row = rows.optJSONObject(index) ?: return@mapNotNull null
             val date = runCatching { LocalDate.parse(row.optString("date")) }.getOrNull() ?: return@mapNotNull null
             val amount = row.optDouble("amount", Double.NaN).takeIf { it.isFinite() && it > 0.0 } ?: return@mapNotNull null
-            com.kurogane.dividend.data.CloudflareDividendEvent(date, amount)
+            val finalRightsDate = runCatching { LocalDate.parse(row.optString("final_rights_date")) }.getOrNull()
+            com.kurogane.dividend.data.CloudflareDividendEvent(date, amount, finalRightsDate)
         }.sortedBy { it.date }
     }.getOrDefault(emptyList())
 
     private fun storeDividendEvents(symbol: String, events: List<com.kurogane.dividend.data.CloudflareDividendEvent>) {
         val rows = JSONArray()
-        events.forEach { event -> rows.put(JSONObject().put("date", event.date.toString()).put("amount", event.amountPerShare)) }
+        events.forEach { event ->
+            rows.put(JSONObject()
+                .put("date", event.date.toString())
+                .put("amount", event.amountPerShare)
+                .put("final_rights_date", event.finalRightsDate?.toString()))
+        }
         marketPreferences.edit().putString("dividend_events_$symbol", rows.toString()).apply()
         _dividendEventRevision.update { it + 1 }
     }
@@ -1571,11 +1615,25 @@ class DividendViewModel @JvmOverloads constructor(
 
     suspend fun resolveCloudflareSecurity(code: String): CloudflareSecurity? {
         val security = marketRepository.getSecurity(code) ?: return null
+        val financialData = if ((security.annualDividendPerShare ?: 0.0) <= 0.0) {
+            runCatchingCancellable { fetchFinancialData(security.code) }.getOrNull()
+        } else {
+            _financialData.value[security.code]
+        }
+        val annualDividendPerShare = security.annualDividendPerShare
+            ?.takeIf { it > 0.0 }
+            ?: financialData?.dividends?.lastOrNull()?.dps
+            ?: security.annualDividendPerShare
         val industry = withContext(Dispatchers.IO) { runCatching {
             Tse33IndustryMaster.industries(getApplication())[security.code.take(4).uppercase(java.util.Locale.ROOT)]
         }.getOrNull() }
         val cachedPrice = readCachedPrices()[security.code.uppercase(java.util.Locale.ROOT)]
-        return security.copy(name = japaneseName(security.code, security.name), marketPrice = security.marketPrice ?: cachedPrice, industry = industry)
+        return security.copy(
+            name = japaneseName(security.code, security.name),
+            annualDividendPerShare = annualDividendPerShare,
+            marketPrice = security.marketPrice ?: cachedPrice,
+            industry = industry
+        )
     }
 
     suspend fun fetchStockAnalysis(code: String): CloudflareStockAnalysis? =
@@ -1632,11 +1690,19 @@ class DividendViewModel @JvmOverloads constructor(
         val now = System.currentTimeMillis()
         val lastFetchAt = marketPreferences.getLong("last_price_fetch_at", 0L)
         val lastFetchJstDate = marketPreferences.getString("last_price_fetch_jst_date", null)
-        if (!force && !PriceRefreshPolicy.shouldFetch(now, lastFetchAt, lastFetchJstDate)) return
+        val lastPostCloseProbeAt = marketPreferences.getLong("last_price_post_close_probe_at", 0L)
+        val lastPostCloseFetchJstDate = marketPreferences.getString("last_price_post_close_fetch_jst_date", null)
+        if (!force && !PriceRefreshPolicy.shouldFetch(now, lastFetchAt, lastFetchJstDate, lastPostCloseProbeAt, lastPostCloseFetchJstDate)) return
 
-        runCatchingCancellable { marketRepository.fetchPriceQuotes() }
-            .onSuccess { fetchedQuotes ->
+        runCatchingCancellable { marketRepository.fetchPriceCatalogSnapshot() }
+            .onSuccess { snapshot ->
                 if (generation != dataGeneration.get()) return@onSuccess
+                val afterClose = PriceRefreshPolicy.isAfterClose(now)
+                if (afterClose && !PriceRefreshPolicy.isCatalogCurrentForJapanDate(now, snapshot.marketDataDate)) {
+                    marketPreferences.edit().putLong("last_price_post_close_probe_at", now).apply()
+                    return@onSuccess
+                }
+                val fetchedQuotes = snapshot.quotes
                 val fetchedPrices = fetchedQuotes.mapValues { it.value.price }
                 val cachedDividendsPerShare = readCachedDividendsPerShare().toMutableMap()
                 fetchedQuotes.forEach { (code, quote) ->
@@ -1651,6 +1717,12 @@ class DividendViewModel @JvmOverloads constructor(
                     .putString("dividend_per_share", dividendJson.toString())
                     .putLong("last_price_fetch_at", now)
                     .putString("last_price_fetch_jst_date", PriceRefreshPolicy.japanDate(now))
+                    .also { editor ->
+                        if (afterClose) {
+                            editor.putLong("last_price_post_close_probe_at", now)
+                                .putString("last_price_post_close_fetch_jst_date", PriceRefreshPolicy.japanDate(now))
+                        }
+                    }
                     .apply()
                 applyPrices(mergedPrices, cachedDividendsPerShare)
             }
@@ -1987,6 +2059,8 @@ class DividendViewModel @JvmOverloads constructor(
             _maskAtStartup.value = false
             _calculationBasis.value = "eval"
             _roadmapTargetYield.value = 4.0
+            _growthSimulatorMonthlyContribution.value = 30_000L
+            _growthSimulatorDividendYield.value = 4.0
             _compositionThreshold.value = 5
             _compositionOtherEnabled.value = true
             _roadmapShareTab.value = 0
@@ -2059,6 +2133,9 @@ class DividendViewModel @JvmOverloads constructor(
             restoration.await()
             applyCachedPrices()
             if (refreshOnStart) {
+                // Start the payout-month request as soon as local Watchlist data is restored.
+                // The monthly projection observes the Watchlist flow and updates when results arrive.
+                launch { refreshDividendHistoryIfDue() }
                 launch { refreshExchangeRate() }
                 runCatching { notificationScheduler(getApplication(), _notificationSettings.value) }.onFailure {
                     _saveError.value = getApplication<android.app.Application>().getString(R.string.dividend_view_model_message_5)
@@ -2066,7 +2143,6 @@ class DividendViewModel @JvmOverloads constructor(
                 seedPopularHoldingsFromCloudflare()
                 refreshMarketPricesIfDue()
                 launch { refreshFinancialDataIfDue(force = _notificationSettings.value.dividendChangeEnabled) }
-                launch { refreshDividendHistoryIfDue() }
             }
         }
     }
