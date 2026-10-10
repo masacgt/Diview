@@ -14,6 +14,25 @@ database_id = "e5046cbb-dd81-4f7c-aa25-1e7a2616d8d7"
 binding = "MARKET_DATA"
 bucket_name = "diview-market-data"
 
+[[queues.producers]]
+binding = "MARKET_PRICE_QUEUE"
+queue = "diview-market-prices"
+
+[[queues.consumers]]
+queue = "diview-market-prices"
+max_batch_size = 1
+max_batch_timeout = 5
+max_retries = 3
+dead_letter_queue = "diview-market-prices-dlq"
+max_concurrency = 1
+
+[[queues.consumers]]
+queue = "diview-market-prices-dlq"
+max_batch_size = 1
+max_batch_timeout = 5
+max_retries = 3
+max_concurrency = 1
+
 # Set the production namespace id before remote seed/deploy.
 [[kv_namespaces]]
 binding = "APP_DEFINITIONS"
