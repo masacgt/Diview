@@ -1578,13 +1578,13 @@ class DividendViewModel @JvmOverloads constructor(
         return added
     }
 
-    suspend fun registerCloudflareAllocations(code: String, allocations: List<HoldingAllocation>): Boolean {
+    suspend fun registerCloudflareAllocations(code: String, allocations: List<HoldingAllocation>, replaceExisting: Boolean = false): Boolean {
         restoration.await()
         val security = resolveCloudflareSecurity(code) ?: return false
-        return registerResolvedAllocations(code, allocations, security)
+        return registerResolvedAllocations(code, allocations, security, replaceExisting)
     }
 
-    suspend fun registerResolvedAllocations(code: String, allocations: List<HoldingAllocation>, security: CloudflareSecurity?): Boolean {
+    suspend fun registerResolvedAllocations(code: String, allocations: List<HoldingAllocation>, security: CloudflareSecurity?, replaceExisting: Boolean = false): Boolean {
         restoration.await()
         if (security != null && !security.code.equals(code, true)) return false
         val registered = saveMutex.withLock {
@@ -1594,7 +1594,7 @@ class DividendViewModel @JvmOverloads constructor(
                 var saved: Holding? = null
                 while (saved == null) {
                     val before = _holdings.value
-                    val merged = allocatedHolding(code, allocations, security, before) ?: return@withContext null
+                    val merged = allocatedHolding(code, allocations, security, before, replaceExisting) ?: return@withContext null
                     val updated = if (before.any { it.id == merged.id }) before.map { if (it.id == merged.id) merged else it } else before + merged
                     val prices = readCachedPrices()
                     val dividends = readCachedDividendsPerShare()
@@ -1953,7 +1953,7 @@ class DividendViewModel @JvmOverloads constructor(
         applyCachedDividendMonths()
     }
 
-    private fun allocatedHolding(code: String, allocations: List<HoldingAllocation>, security: CloudflareSecurity?, holdings: List<Holding>): Holding? {
+    private fun allocatedHolding(code: String, allocations: List<HoldingAllocation>, security: CloudflareSecurity?, holdings: List<Holding>, replaceExisting: Boolean = false): Holding? {
         if (!restoration.isCompleted || holdingsLoadFailed) return null
         val normalized = PortfolioMath.normalizeCode(code)
         if (!PortfolioMath.validCode(normalized) || allocations.isEmpty() || allocations.none { it.shares > 0 } ||
@@ -1973,8 +1973,11 @@ class DividendViewModel @JvmOverloads constructor(
             nextPayoutTiming = "配当月未取得", nextPayoutAmount = "—", dividendMonths = emptyList(),
             dividendType = "", accountType = "", dailyChange = "—", isPositive = true
         )
+        val mergeBase = if (replaceExisting && old != null) {
+            template.copy(shares = 0, acqPrice = 0.0, taxFreeShares = 0, accountType = "")
+        } else template
         val merged = runCatching {
-            PortfolioMath.mergeAllocations(template.copy(price = price, dps = dps, name = security?.name ?: template.name), allocations)
+            PortfolioMath.mergeAllocations(mergeBase.copy(price = price, dps = dps, name = security?.name ?: template.name), allocations)
         }.getOrNull() ?: return null
         return merged
     }

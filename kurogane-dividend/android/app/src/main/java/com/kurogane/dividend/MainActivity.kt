@@ -547,12 +547,13 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         AddHoldingSheet(
                             usdJpyRate = exchangeRate?.usdJpy,
                             usWithholdingEnabled = usTaxDeduction,
+                            existingHoldings = viewModel.holdings.value,
                             visible = showAddHoldingSheet,
                             prefilledCode = prefilledAddHoldingCode,
                             onDismiss = { showAddHoldingSheet = false },
                             onResolveSecurity = { code -> viewModel.resolveCloudflareSecurity(code) },
-                            onRegisterCollective = { code, allocations ->
-                                val registered = viewModel.registerCloudflareAllocations(code, allocations)
+                            onRegisterCollective = { code, allocations, replaceExisting ->
+                                val registered = viewModel.registerCloudflareAllocations(code, allocations, replaceExisting)
                                 if (registered) showAddHoldingSheet = false
                                 registered
                             }
