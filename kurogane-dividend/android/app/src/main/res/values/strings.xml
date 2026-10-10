@@ -851,6 +851,7 @@
     <string name="dividend_change_analysis_cards_label_21">"フリーCF未取得"</string>
     <string name="dividend_change_analysis_cards_label_22">"年間増減 "</string>
     <string name="dividend_change_analysis_cards_label_23">"%1$s期実績 "</string>
+    <string name="dividend_change_analysis_cards_label_24">"連続増配年数順"</string>
     <string name="roadmap_label_5">"¥••,••• / 月"</string>
     <string name="roadmap_label_6">"¥%1$s / 月"</string>
     <string name="roadmap_label_7" formatted="false">"国内非課税・米国10%"</string>

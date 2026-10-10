@@ -73,10 +73,10 @@ internal fun DividendPayoutHealthAndRiskCards(
         DividendChangeAnalysis.calculate(holdings, financialData, taxRateMode)
     }
     var riskSort by rememberSaveable { mutableStateOf("payout") }
-    var showAllRisks by rememberSaveable { mutableStateOf(false) }
     val riskRows = remember(analysis, riskSort) {
         when (riskSort) {
-            "years" -> analysis.securities.sortedBy { it.profile?.noCutYears?.takeIf { years -> years >= 0 } ?: Int.MAX_VALUE }
+            "years" -> analysis.securities.sortedByDescending { it.profile?.noCutYears?.takeIf { years -> years >= 0 } ?: -1 }
+            "growth" -> analysis.securities.sortedByDescending { it.profile?.consecutiveYears?.takeIf { years -> years >= 0 } ?: -1 }
             else -> analysis.securities.sortedByDescending {
                 it.payoutRatio?.let { ratio -> if (ratio < 0) Double.POSITIVE_INFINITY else ratio }
                     ?: Double.NEGATIVE_INFINITY
@@ -86,18 +86,13 @@ internal fun DividendPayoutHealthAndRiskCards(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         PayoutHealthCard(analysis)
         MonitorHeading("保有銘柄の減配リスク診断", Icons.Default.Shield)
-        MonitorSelectors("並び替え", listOf("payout" to stringResource(R.string.dividend_change_analysis_cards_label), "years" to stringResource(R.string.dividend_change_analysis_cards_label_2)), riskSort) { riskSort = it }
+        MonitorSelectors("並び替え", listOf("payout" to stringResource(R.string.dividend_change_analysis_cards_label), "years" to stringResource(R.string.dividend_change_analysis_cards_label_2), "growth" to stringResource(R.string.dividend_change_analysis_cards_label_24)), riskSort) { riskSort = it }
         if (riskRows.isEmpty()) {
             MonitorEmptyCard("保有する国内株を追加すると、配当性向と非減配年数を表示します。")
         }
-        (if (showAllRisks) riskRows else riskRows.take(5)).forEach { row ->
+        riskRows.forEach { row ->
             key(row.code) {
                 DividendRiskCard(row, onClick = { onNavigateToDetail(row.code) })
-            }
-        }
-        if (riskRows.size > 5) {
-            TextButton(onClick = { showAllRisks = !showAllRisks }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text(if (showAllRisks) stringResource(R.string.dividend_change_analysis_cards_label_3) else stringResource(R.string.dividend_change_analysis_cards_label_4, (riskRows.size).toString()), color = PrimaryEmerald)
             }
         }
     }
