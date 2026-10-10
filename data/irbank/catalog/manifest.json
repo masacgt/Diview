@@ -315,5 +315,29 @@
       "count": 11
     }
   ],
-  "note": "The API returned fewer than requested on some pages, and the directory contains overlapping pages. Counts do not prove full coverage."
+  "note": "The API returned fewer than requested on some pages, and the directory contains overlapping pages. Counts do not prove full coverage.",
+  "core_data_supplement_20261010": {
+    "source": "IRBANK Connect screen_securities; subsequent core endpoint acquisitions",
+    "added_securities": [
+      {
+        "security_code": "545A0",
+        "security_code_display": "545A",
+        "edinet_code": "E41323",
+        "name": "トランヴィア"
+      },
+      {
+        "security_code": "584A0",
+        "security_code_display": "584A",
+        "edinet_code": "E41753",
+        "name": "LiNKX"
+      },
+      {
+        "security_code": "634A0",
+        "security_code_display": "634A",
+        "edinet_code": "E41715",
+        "name": "レイヤード"
+      }
+    ],
+    "note": "Three E-code issuers absent from the 2026-10-03 core snapshot and present in the 2026-10-08 Connect catalog were added. API pagination discrepancy remains; this supplement does not claim a complete current listed-security universe."
+  }
 }

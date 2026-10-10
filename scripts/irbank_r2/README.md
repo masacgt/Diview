@@ -51,6 +51,7 @@ Set-Location "C:\Codex\Diview"
 - `market/irbank/v1/securities/{code}/dividends.json`: compact dividend-only records for source aggregation.
 - `market/irbank/v1/securities/{code}/daily_prices.json`: optional full daily history.
 - `market/irbank/v1/securities/{code}/weekly_margin.json`: optional weekly margin history.
+- `market/irbank/v1/securities/{code}/jsf_margin.json`: optional JSF daily lending and reverse-fee history (available when included in the prepared snapshot).
 
 ## Unified per-security view
 
@@ -60,6 +61,6 @@ IRBANK and Yahoo source snapshots remain available at their existing keys. To al
 python scripts/r2_unified/publish_securities.py
 ```
 
-The output is `market/securities/v1/{code}.json`. It records each provider's source key and update/attribution metadata, and exposes dividend rows grouped under `dividend_history_by_source`. Large price and financial histories stay at their existing source keys, avoiding a second copy of those files. The merger does not deduplicate or reinterpret rows with different date/forecast semantics. For IRBANK securities without dividend rows, it extracts dividend actions from any existing yfinance security history and writes a compact yfinance dividend object. Rerun after an IRBANK upload; the scheduled yfinance workflow republishes the combined objects after its daily update. Both workflows use the IRBANK security master and do not call J-Quants API.
+The output is `market/securities/v1/{code}.json`. It records each provider's source key and update/attribution metadata, and exposes dividend rows grouped under `dividend_history_by_source`. Large price and financial histories stay at their existing source keys, avoiding a second copy of those files. The merger does not deduplicate or reinterpret rows with different date/forecast semantics. For IRBANK securities without dividend rows, it extracts dividend actions from any existing yfinance security history and writes a compact yfinance dividend object. Rerun after an IRBANK upload; the scheduled weekly yfinance workflow republishes the combined objects after its minimal refresh. Both workflows use the IRBANK security master and do not call J-Quants API.
 
 The Worker exposes `/api/v1/irbank/catalog`, `/api/v1/irbank/manifest`, `/api/v1/irbank/securities/{code}`, and the optional `/prices` and `/weekly-margin` families. Four-character numeric and alphabetic codes are accepted; five-character codes with a trailing `0` are normalized.

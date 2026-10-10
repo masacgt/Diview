@@ -1,37 +1,37 @@
 {
-  "generated_at": "2026-10-03T06:52:59.970Z",
-  "securities": 3960,
-  "edinet_codes_matched_to_securities": 3960,
-  "valuation_files": 1683,
+  "generated_at": "2026-10-09T22:18:53.562Z",
+  "securities": 3963,
+  "edinet_codes_matched_to_securities": 3963,
+  "valuation_files": 1686,
   "financials": {
     "annual": {
-      "source_files": 786,
-      "edinet_codes_with_response": 3741,
-      "periods": 61407
+      "source_files": 789,
+      "edinet_codes_with_response": 3744,
+      "periods": 61204
     },
     "quarterly": {
-      "source_files": 749,
-      "edinet_codes_with_response": 3741,
-      "periods": 257770
+      "source_files": 752,
+      "edinet_codes_with_response": 3744,
+      "periods": 257772
     },
     "semiannual": {
-      "source_files": 749,
-      "edinet_codes_with_response": 3741,
-      "periods": 104025
+      "source_files": 752,
+      "edinet_codes_with_response": 3744,
+      "periods": 104029
     }
   },
-  "financial_period_rows": 422987,
+  "financial_period_rows": 423005,
   "dividend_event_rows": 45152,
   "companies_with_dividend_data": 3191,
   "dividend_events_with_unadjusted_dps": 44052,
   "dividend_events_with_adjusted_dps": 44933,
   "dividend_events_with_rights_date": 0,
   "companies_with_financial_periods": {
-    "annual": 3728,
-    "quarterly": 3729,
-    "semiannual": 3728
+    "annual": 3730,
+    "quarterly": 3731,
+    "semiannual": 3730
   },
-  "companies_without_any_annual_period": 232,
+  "companies_without_any_annual_period": 233,
   "securities_without_annual_period": [
     "13080",
     "13090",
@@ -264,7 +264,8 @@
     "92820",
     "92840",
     "92850",
-    "92860"
+    "92860",
+    "545A0"
   ],
   "edinet_codes_without_annual_period": [
     "G03196",
@@ -498,7 +499,8 @@
     "G12276",
     "G12678",
     "G13077",
-    "G13216"
+    "G13216",
+    "E41323"
   ],
-  "files_created": 3965
+  "files_created": 3968
 }

@@ -28,7 +28,6 @@ for (const type of types) {
   const dir = path.join(root, 'raw', 'financials', type);
   const files = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).sort();
   const seen = new Set();
-  let rows = 0;
   for (const file of files) {
     const batch = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
     sourceMeta.financials[type] ??= batch.fields;
@@ -49,11 +48,11 @@ for (const type of types) {
         existing.set(key, period);
         company.financials[type].push(period);
       }
-      rows += company.financials[type].length;
     }
   }
   for (const company of companies.values()) company.financials[type].sort((a, b) => a.fiscal_year.localeCompare(b.fiscal_year));
-  seenPeriods.set(type, { source_files: files.length, edinet_codes_with_response: seen.size, periods: rows });
+  const periodCount = [...companies.values()].reduce((count, company) => count + company.financials[type].length, 0);
+  seenPeriods.set(type, { source_files: files.length, edinet_codes_with_response: seen.size, periods: periodCount });
 }
 
 const valuationDir = path.join(root, 'raw', 'valuation');
