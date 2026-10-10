@@ -85,6 +85,7 @@ class DividendViewModel @JvmOverloads constructor(
     var assetScrollOffset = 0
     var annualScrollIndex = 0
     var annualScrollOffset = 0
+    var annualAnalysisScrollPositions: List<Pair<Int, Int>> = List(3) { 0 to 0 }
     var roadmapScrollIndex = 0
     var roadmapScrollOffset = 0
     var roadmapStageFilter = 1
