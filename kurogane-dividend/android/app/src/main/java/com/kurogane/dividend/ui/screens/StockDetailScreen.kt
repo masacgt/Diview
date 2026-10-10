@@ -25,7 +25,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.layout.onGloballyPositioned
 import com.kurogane.dividend.R
 import com.kurogane.dividend.ui.components.StatusMessage
 import com.kurogane.dividend.ui.networkErrorMessage
@@ -112,6 +114,8 @@ fun StockDetailScreen(
     val defaultClimate = remember(currentHolding.sector) { Tse33IndustryMaster.defaultClimate(currentHolding.sector) }
     val selectedClimate = stockClimateOverrides[currentHolding.code] ?: defaultClimate
     var climateMenuExpanded by remember(currentHolding.code) { mutableStateOf(false) }
+    var climateSelectorWidthPx by remember(currentHolding.code) { mutableIntStateOf(0) }
+    val density = LocalDensity.current
     var editingBenefitIndex by rememberSaveable(currentHolding.code) { mutableIntStateOf(-1) }
     var newBenefitName by rememberSaveable(currentHolding.code) { mutableStateOf("") }
     var newBenefitValue by rememberSaveable(currentHolding.code) { mutableStateOf("") }
@@ -1871,7 +1875,10 @@ fun StockDetailScreen(
                                             textAlign = androidx.compose.ui.text.style.TextAlign.End
                                         )
                                     }
-                                    Box {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth()
+                                            .onGloballyPositioned { climateSelectorWidthPx = it.size.width }
+                                    ) {
                                         OutlinedButton(
                                             onClick = { climateMenuExpanded = true },
                                             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
@@ -1891,7 +1898,13 @@ fun StockDetailScreen(
                                         DropdownMenu(
                                             expanded = climateMenuExpanded,
                                             onDismissRequest = { climateMenuExpanded = false },
-                                            modifier = Modifier.widthIn(min = 240.dp),
+                                            modifier = Modifier.width(
+                                                if (climateSelectorWidthPx > 0) {
+                                                    with(density) { climateSelectorWidthPx.toDp() }
+                                                } else {
+                                                    240.dp
+                                                }
+                                            ),
                                             shape = RoundedCornerShape(16.dp),
                                             containerColor = SurfaceContainerLow,
                                             tonalElevation = 3.dp,
