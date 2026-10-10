@@ -901,7 +901,7 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                 ) {
                     Icon(Icons.Default.HourglassBottom, contentDescription = null, tint = OnPrimary)
                     Spacer(Modifier.width(8.dp))
-                    Text("未来30年・複利成長シミュレーター", color = OnPrimary, fontWeight = FontWeight.Bold)
+                    Text("福利シミュレーター", color = OnPrimary, fontWeight = FontWeight.Bold)
                 }
             }
             item { Spacer(modifier = Modifier.height(20.dp)) }
@@ -950,6 +950,19 @@ private fun RoadmapGrowthSimulatorSheet(
     onDismiss: () -> Unit
 ) {
     var reinvest by rememberSaveable { mutableStateOf(true) }
+    // Monthly deposits are made at month-end. Dividends are calculated on the
+    // invested balance before each deposit; cash dividends earn no return.
+    fun projection(years: Int): Triple<Double, Double, Double> {
+        val monthlyRate = dividendYield.coerceIn(0.0, 30.0) / 100.0 / 12.0
+        var investedAssets = currentAssets.coerceAtLeast(0.0)
+        var cashDividends = 0.0
+        repeat(years * 12) {
+            val dividend = investedAssets * monthlyRate
+            if (reinvest) investedAssets += dividend else cashDividends += dividend
+            investedAssets += monthlyContribution.coerceAtLeast(0L)
+        }
+        return Triple(investedAssets + cashDividends, investedAssets * monthlyRate, cashDividends)
+    }
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.JAPAN) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -969,7 +982,7 @@ private fun RoadmapGrowthSimulatorSheet(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.HourglassBottom, contentDescription = null, tint = PrimaryEmerald)
                 Spacer(Modifier.width(8.dp))
-                Text("未来30年・複利成長シミュレーター", modifier = Modifier.weight(1f), fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
+                Text("福利シミュレーター", modifier = Modifier.weight(1f), fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
                 IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close)) }
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -985,12 +998,8 @@ private fun RoadmapGrowthSimulatorSheet(
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(10, 20, 30).forEach { years ->
-                    val monthlyRate = dividendYield / 100.0 / 12.0
-                    var value = currentAssets.coerceAtLeast(0.0)
-                    repeat(years * 12) { value = value * (1.0 + if (reinvest) monthlyRate else 0.0) + monthlyContribution }
-                    if (!reinvest) value += currentAssets * dividendYield / 100.0 * years
+                    val (value, estimatedMonthlyDividend, _) = projection(years)
                     val principal = currentCost.coerceAtLeast(0.0) + monthlyContribution * 12.0 * years
-                    val estimatedMonthlyDividend = value * dividendYield / 100.0 / 12.0
                     Column(
                         Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(SurfaceContainerHigh)
                             .border(1.dp, if (years == 30) PrimaryEmerald else BorderColor, RoundedCornerShape(12.dp)).padding(horizontal = 6.dp, vertical = 10.dp),
@@ -1023,6 +1032,10 @@ private fun RoadmapGrowthSimulatorSheet(
                     }
                 }
             }
+            Text(
+                "資産額は投資評価額と累計受取配当の合計です。配当は毎月末に発生し、積立は月末に行う想定です。株価変動・税金・手数料は含みません。月配当は投資中の資産のみから計算します。",
+                color = OnSurfaceVariant, fontSize = AppTextSize.dense
+            )
             GrowthSimulatorStepper(
                 label = "毎月の積立額",
                 value = "¥${numberFormat.format(monthlyContribution)}",
