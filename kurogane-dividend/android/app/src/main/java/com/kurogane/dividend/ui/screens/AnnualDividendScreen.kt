@@ -65,6 +65,7 @@ import com.kurogane.dividend.model.PortfolioDiagnosisGenerator
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import java.text.NumberFormat
 import kotlin.math.atan2
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlin.math.sqrt
@@ -1854,26 +1855,41 @@ private fun CompoundingSimulationSection(
                 }
                 val chartColor = PrimaryEmerald
                 val chartGridColor = BorderColor
+                val barAreaBottomFraction = .90f
+                val barAreaHeightFraction = .62f
+                val targetGridStep = maxValue / 3.0
+                val gridMagnitude = 10.0.pow(kotlin.math.floor(kotlin.math.log10(targetGridStep)))
+                val normalizedGridStep = targetGridStep / gridMagnitude
+                val gridStepMultiplier = when {
+                    normalizedGridStep >= 5.0 -> 5.0
+                    normalizedGridStep >= 2.0 -> 2.0
+                    else -> 1.0
+                }
+                val amountGuideStep = gridMagnitude * gridStepMultiplier
+                val amountGuideCount = kotlin.math.floor(maxValue / amountGuideStep).toInt()
                 Column(Modifier.fillMaxWidth()) {
                 BoxWithConstraints(Modifier.fillMaxWidth().height(136.dp)) {
                 val chartHeight = 136.dp
                 val groupWidth = maxWidth / years.size
                 Canvas(Modifier.fillMaxWidth().height(chartHeight)) {
-                    val gridTop = size.height * .38f
-                    val gridMid = size.height * .62f
-                    val gridBottom = size.height * .9f
-                    listOf(gridTop, gridMid, gridBottom).forEach { y -> drawLine(chartGridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx()) }
+                    val plotBottom = size.height * barAreaBottomFraction
+                    val plotHeight = size.height * barAreaHeightFraction
+                    (0..amountGuideCount).forEach { guideIndex ->
+                        val guideAmount = guideIndex * amountGuideStep
+                        val y = plotBottom - plotHeight * (guideAmount / maxValue).toFloat()
+                        drawLine(chartGridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+                    }
                     val count = years.size
                     val canvasGroupWidth = size.width / count
                     years.forEachIndexed { index, point ->
                         val centerX = canvasGroupWidth * (index + .5f)
-                        val barHeight = point.amount?.let { (it / maxValue).toFloat().coerceIn(0f, 1f) * size.height * .62f } ?: 0f
+                        val barHeight = point.amount?.let { (it / maxValue).toFloat().coerceIn(0f, 1f) * plotHeight } ?: 0f
                         if (index == selectedIndex) {
                             drawRoundRect(chartColor.copy(alpha = .08f), Offset(centerX - canvasGroupWidth * .45f, 0f), Size(canvasGroupWidth * .9f, size.height), cornerRadius = CornerRadius(6.dp.toPx()))
                             drawRoundRect(chartColor.copy(alpha = .35f), Offset(centerX - canvasGroupWidth * .45f, 0f), Size(canvasGroupWidth * .9f, size.height), cornerRadius = CornerRadius(6.dp.toPx()), style = Stroke(1.dp.toPx()))
                         }
                         if (barHeight > 0f) {
-                            drawRoundRect(Brush.verticalGradient(listOf(chartColor, chartColor.copy(alpha = .45f)), startY = size.height - barHeight, endY = size.height), Offset(centerX - 8.dp.toPx(), size.height - barHeight), Size(16.dp.toPx(), barHeight), cornerRadius = CornerRadius(4.dp.toPx()))
+                            drawRoundRect(Brush.verticalGradient(listOf(chartColor, chartColor.copy(alpha = .45f)), startY = plotBottom - barHeight, endY = plotBottom), Offset(centerX - 16.dp.toPx(), plotBottom - barHeight), Size(32.dp.toPx(), barHeight), cornerRadius = CornerRadius(4.dp.toPx()))
                         }
                     }
                 }
@@ -1887,7 +1903,7 @@ private fun CompoundingSimulationSection(
                                 modifier = Modifier
                                     .offset(
                                         x = groupWidth * (index + 0.5f) - 28.dp,
-                                        y = chartHeight * (.90f - normalized * .62f) - 18.dp
+                                        y = chartHeight * (barAreaBottomFraction - normalized * barAreaHeightFraction) - 18.dp
                                     )
                                     .width(56.dp),
                                 color = if (index == selectedIndex) PrimaryEmerald else OnSurfaceVariant,
