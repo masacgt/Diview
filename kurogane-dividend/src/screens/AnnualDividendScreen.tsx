@@ -146,22 +146,19 @@ export const AnnualDividendScreen: React.FC = () => {
   const [simReinvest, setSimReinvest] = useState(true); // default reinvest
 
   const calculateCompoundProj = (years: number) => {
-    let current = liveTotalValuation;
-    const monthlyVal = simMonthlyDeposit;
-    const yieldRate = simYield / 100;
-    const capAppreciation = 0.035; // conservative 3.5% capital growth
-    // tax-adjusted yield (approx 20.315% tax)
-    const annualGrowth = capAppreciation + (simReinvest ? yieldRate * 0.8 : 0);
-
-    let totalInvested = liveTotalCost;
-    for (let i = 0; i < years; i++) {
-      current = current * (1 + annualGrowth) + (monthlyVal * 12) * (1 + annualGrowth / 2);
-      totalInvested += (monthlyVal * 12);
+    let investedAssets = Math.max(0, liveTotalValuation);
+    let cashDividends = 0;
+    const monthlyRate = simYield / 100 / 12;
+    for (let month = 0; month < years * 12; month++) {
+      const dividend = investedAssets * monthlyRate;
+      if (simReinvest) investedAssets += dividend;
+      else cashDividends += dividend;
+      investedAssets += simMonthlyDeposit;
     }
     return {
-      assets: Math.round(current),
-      invested: totalInvested,
-      monthlyPassive: Math.round((current * yieldRate) / 12)
+      assets: Math.round(investedAssets + cashDividends),
+      invested: Math.max(0, liveTotalCost) + simMonthlyDeposit * 12 * years,
+      monthlyPassive: Math.round(investedAssets * monthlyRate)
     };
   };
 
@@ -1266,7 +1263,7 @@ export const AnnualDividendScreen: React.FC = () => {
                   <div className="flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-accent text-[20px] animate-pulse">hourglass_empty</span>
                     <div className="text-left">
-                      <h4 className="font-bold text-xs text-white">未来30年・複利成長シミュレーター</h4>
+                      <h4 className="font-bold text-xs text-white">福利シミュレーター</h4>
                       <span className="text-[9.5px] text-[#bbcabf] block">毎月の積立額と配当再投資による複利試算</span>
                     </div>
                   </div>
@@ -1420,10 +1417,7 @@ export const AnnualDividendScreen: React.FC = () => {
                 <div className="p-2 rounded-xl bg-[#171f33]/40 border border-slate-800/60 text-[10px] text-[#bbcabf] leading-relaxed flex gap-1.5 items-start text-left">
                   <span className="material-symbols-outlined text-[13px] text-accent shrink-0 mt-0.5">info</span>
                   <p>
-                    現在の資産評価額 ¥{Math.round(liveTotalValuation / 10000).toLocaleString()}万から、毎月 <strong className="text-white">¥{simMonthlyDeposit.toLocaleString()}</strong> を積立、利回り <strong className="text-accent">{simYield}%</strong> で運用し、さらに配当金を再投資し続けた場合のシミュレーションです。
-                    {simReinvest && (
-                      <span> 複利効果により、30年間の累計不労所得・資産価値は加速度的に成長します。</span>
-                    )}
+                    現在の資産評価額 ¥{Math.round(liveTotalValuation / 10000).toLocaleString()}万から、毎月 <strong className="text-white">¥{simMonthlyDeposit.toLocaleString()}</strong> を月末に積立、利回り <strong className="text-accent">{simYield}%</strong> の配当を毎月受け取る想定です。{simReinvest ? '配当金を再投資します。' : '配当金は現金で保有します。'}資産額には累計受取配当を含み、月配当は投資資産のみを基に計算します。株価変動・税金・手数料は含みません。
                   </p>
                 </div>
               </div>
