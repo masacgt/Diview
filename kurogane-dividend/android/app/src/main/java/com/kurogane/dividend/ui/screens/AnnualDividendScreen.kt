@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -63,6 +64,8 @@ import kotlin.math.sqrt
 import java.time.YearMonth
 import java.time.ZoneId
 import java.util.Locale
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,6 +99,15 @@ fun AnnualDividendScreen(
         initialFirstVisibleItemIndex = viewModel.annualScrollIndex,
         initialFirstVisibleItemScrollOffset = viewModel.annualScrollOffset
     )
+    val screenScope = rememberCoroutineScope()
+    val selectAnalysisTab = rememberUpdatedState<(Int) -> Unit> { index ->
+        if (index in 0..2 && index != selectedTab) {
+            selectedTab = index
+            screenScope.launch { listState.animateScrollToItem(0) }
+        }
+    }
+    val currentSelectedTab = rememberUpdatedState(selectedTab)
+    val swipeThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) { 72.dp.toPx() }
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
             .collect { (index, offset) ->
@@ -113,7 +125,21 @@ fun AnnualDividendScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .pointerInput(swipeThresholdPx) {
+                    var horizontalDistance = 0f
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { _, dragAmount -> horizontalDistance += dragAmount },
+                        onDragEnd = {
+                            if (abs(horizontalDistance) >= swipeThresholdPx) {
+                                val direction = if (horizontalDistance < 0f) 1 else -1
+                                selectAnalysisTab.value((currentSelectedTab.value + direction).coerceIn(0, 2))
+                            }
+                            horizontalDistance = 0f
+                        },
+                        onDragCancel = { horizontalDistance = 0f }
+                    )
+                },
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // 3-way pill tab selector stays at the top of the Analysis screen.
@@ -132,23 +158,58 @@ fun AnnualDividendScreen(
                         label = resources.getString(R.string.annual_dividend_label_19),
                         icon = Icons.AutoMirrored.Filled.TrendingUp,
                         selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
+                        onClick = { selectAnalysisTab.value(0) },
                         modifier = Modifier.weight(1f)
                     )
                     AnnualDividendTab(
                         label = resources.getString(R.string.annual_dividend_label_49),
                         icon = Icons.Default.AccountBalance,
                         selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
+                        onClick = { selectAnalysisTab.value(1) },
                         modifier = Modifier.weight(1f)
                     )
                     AnnualDividendTab(
                         label = resources.getString(R.string.annual_dividend_label_61),
                         icon = Icons.Default.DataUsage,
                         selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
+                        onClick = { selectAnalysisTab.value(2) },
                         modifier = Modifier.weight(1f)
                     )
+                }
+            }
+            item {
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = {
+                        (fadeIn(tween(160)) + slideInVertically(tween(160)) { it / 5 }) togetherWith
+                            (fadeOut(tween(120)) + slideOutVertically(tween(120)) { -it / 5 })
+                    },
+                    label = "analysis_subtab_indicator"
+                ) { activeTab ->
+                    val activeLabel = when (activeTab) {
+                        1 -> resources.getString(R.string.annual_dividend_label_49)
+                        2 -> resources.getString(R.string.annual_dividend_label_61)
+                        else -> resources.getString(R.string.annual_dividend_label_19)
+                    }
+                    AdaptiveRow(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Surface(shape = RoundedCornerShape(50), color = PrimaryEmerald.copy(alpha = 0.14f)) {
+                                Text(
+                                    "表示中",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    color = PrimaryEmerald,
+                                    fontSize = AppTextSize.dense,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Text(activeLabel, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                        }
+                        Text("左右スワイプで切替  ${activeTab + 1}/3", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                    }
                 }
             }
 
