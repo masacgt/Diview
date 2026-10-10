@@ -204,9 +204,9 @@ internal fun RoadmapShareSheet(viewModel: DividendViewModel, achievement: Roadma
                         onClick = { viewModel.setRoadmapShareTab(0) },
                         enabled = !isBusy,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedShareTab == 0) SurfaceContainerHigh else Color.Transparent
+                            containerColor = if (selectedShareTab == 0) PrimaryEmerald.copy(alpha = 0.12f) else SurfaceContainerHigh
                         ),
-                        border = if (selectedShareTab == 0) BorderStroke(1.dp, BorderColor) else null,
+                        border = BorderStroke(1.dp, if (selectedShareTab == 0) PrimaryEmerald.copy(alpha = 0.55f) else BorderColor),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
                             .weight(1f)
@@ -221,9 +221,9 @@ internal fun RoadmapShareSheet(viewModel: DividendViewModel, achievement: Roadma
                         onClick = { viewModel.setRoadmapShareTab(1) },
                         enabled = !isBusy && achievement.canCertify,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedShareTab == 1) SurfaceContainerHigh else Color.Transparent
+                            containerColor = if (selectedShareTab == 1) PrimaryEmerald.copy(alpha = 0.12f) else SurfaceContainerHigh
                         ),
-                        border = if (selectedShareTab == 1) BorderStroke(1.dp, BorderColor) else null,
+                        border = BorderStroke(1.dp, if (selectedShareTab == 1) PrimaryEmerald.copy(alpha = 0.55f) else BorderColor),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
                             .weight(1f)
@@ -498,6 +498,19 @@ internal fun RoadmapShareSheet(viewModel: DividendViewModel, achievement: Roadma
                                 )
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            stringResource(R.string.app_name),
+                            color = OnSurface,
+                            fontSize = AppTextSize.dense,
+                            fontWeight = FontWeight.Black
+                        )
+                        Text(
+                            stringResource(R.string.main_activity_label),
+                            color = OnSurfaceVariant,
+                            fontSize = AppTextSize.caption
+                        )
                     }
                 }
 
