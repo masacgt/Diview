@@ -77,7 +77,7 @@ fun AnnualDividendScreen(
     val selectedMonth by viewModel.selectedMonth.collectAsStateWithLifecycle()
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
 
-    var selectedTab by rememberSaveable { mutableIntStateOf(2) } // 0: 配当推移, 1: 資産推移, 2: 分析
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) } // 0: 配当分析, 1: 増配減配, 2: 構成銘柄
     var assetTrackingPeriod by rememberSaveable { mutableStateOf("5y") }
     val compositionThreshold by viewModel.compositionThreshold.collectAsStateWithLifecycle()
     val compositionOtherEnabled by viewModel.compositionOtherEnabled.collectAsStateWithLifecycle()
