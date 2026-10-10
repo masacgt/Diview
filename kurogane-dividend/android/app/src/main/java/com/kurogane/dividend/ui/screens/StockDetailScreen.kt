@@ -46,6 +46,9 @@ import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.model.StockAnalysisNarrative
 import com.kurogane.dividend.model.StockAnalysisNarrativeGenerator
 import com.kurogane.dividend.viewmodel.DividendViewModel
+import com.kurogane.dividend.model.ShareholderBenefit
+import com.kurogane.dividend.model.StockClimate
+import com.kurogane.dividend.data.Tse33IndustryMaster
 import java.text.NumberFormat
 import java.util.Locale
 import kotlinx.coroutines.launch
@@ -61,6 +64,8 @@ fun StockDetailScreen(
     val resources = LocalContext.current.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
     val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
+    val shareholderBenefits by viewModel.shareholderBenefits.collectAsStateWithLifecycle()
+    val stockClimateOverrides by viewModel.stockClimateOverrides.collectAsStateWithLifecycle()
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
     val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
@@ -103,6 +108,13 @@ fun StockDetailScreen(
     var showDeleteHoldingConfirmation by remember(currentHolding.id) { mutableStateOf(false) }
     val isOwnedHolding = holdings.any { it.id == currentHolding.id }
     val isBookmarked = watchlist.any { it.code.equals(currentHolding.code, true) }
+    val stockBenefits = shareholderBenefits[currentHolding.code].orEmpty()
+    val defaultClimate = remember(currentHolding.sector) { Tse33IndustryMaster.defaultClimate(currentHolding.sector) }
+    val selectedClimate = stockClimateOverrides[currentHolding.code] ?: defaultClimate
+    var climateMenuExpanded by remember(currentHolding.code) { mutableStateOf(false) }
+    var editingBenefitIndex by rememberSaveable(currentHolding.code) { mutableIntStateOf(-1) }
+    var newBenefitName by rememberSaveable(currentHolding.code) { mutableStateOf("") }
+    var newBenefitValue by rememberSaveable(currentHolding.code) { mutableStateOf("") }
 
     // Selected status tab: default to "risk" to highlight the user requested detailed mock
     var selectedStatusTab by rememberSaveable(stockCode) { mutableStateOf("risk") }
@@ -1821,6 +1833,308 @@ fun StockDetailScreen(
                     Icon(Icons.Default.Calculate, contentDescription = null, tint = OnPrimary)
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.stock_detail_text_12), color = OnPrimary, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            item {
+                val displayedBenefits = stockBenefits.filter { it.name.isNotBlank() || it.marketValue.isNotBlank() }
+                val benefitAnnualValue = displayedBenefits.sumOf { it.marketValue.toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0 }
+                val positionValue = currentHolding.totalValuation
+                val benefitYield = if (positionValue > 0.0) benefitAnnualValue / positionValue * 100.0 else null
+                val combinedAnnualValue = currentHolding.getEffectiveAnnualDividend(taxRateMode) + benefitAnnualValue
+                val combinedYield = if (positionValue > 0.0) combinedAnnualValue / positionValue * 100.0 else null
+                val yenFormat = NumberFormat.getIntegerInstance(Locale.JAPAN)
+                val hasSavedBenefit = displayedBenefits.isNotEmpty()
+                val climateDescription = when (selectedClimate) {
+                    StockClimate.CYCLICAL -> "景気拡大期に業績・株価が大きく伸長する特性を持ちます。インフレ・金利動向に注視したポートフォリオ管理が有効です。"
+                    StockClimate.DEFENSIVE -> "景気後退局面でも需要が比較的安定し、業績や株価の変動が小さい傾向があります。"
+                    StockClimate.NEUTRAL -> "景気による業績への影響は中程度です。企業固有の成長性や収益動向も確認しましょう。"
+                    null -> "業種の初期分類がありません。景気特性を選択して登録できます。"
+                }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
+                    border = BorderStroke(1.dp, BorderColor)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(
+                                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
+                                    .background(PrimaryEmerald.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Tune, contentDescription = null, tint = PrimaryEmerald)
+                            }
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("銘柄属性・特典設定", color = OnSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    "景気サイクル耐性・株主優待の記録と利回り換算",
+                                    color = OnSurfaceVariant,
+                                    fontSize = AppTextSize.dense
+                                )
+                            }
+                            Surface(
+                                shape = CircleShape,
+                                color = PrimaryEmerald.copy(alpha = 0.12f),
+                                border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.4f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.widthIn(max = 130.dp).padding(horizontal = 9.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Box(Modifier.size(7.dp).clip(CircleShape).background(PrimaryEmerald))
+                                    Text(
+                                        "${selectedClimate?.label ?: "景気特性未設定"} / ${if (hasSavedBenefit) "優待あり" else "優待未登録"}",
+                                        color = PrimaryEmerald,
+                                        fontSize = 11.sp,
+                                        lineHeight = 15.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(color = BorderColor.copy(alpha = 0.7f))
+
+                        if (currentHolding.category == com.kurogane.dividend.model.Category.JAPAN) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                                border = BorderStroke(1.dp, BorderColor.copy(alpha = 0.65f))
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(22.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("景気特性", color = OnSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                        Spacer(Modifier.weight(1f))
+                                        Text(
+                                            if (stockClimateOverrides.containsKey(currentHolding.code)) "手動設定" else "${cleanSectorName}の標準分類",
+                                            color = OnSurfaceVariant,
+                                            fontSize = 12.sp,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.End
+                                        )
+                                    }
+                                    Box {
+                                        OutlinedButton(
+                                            onClick = { climateMenuExpanded = true },
+                                            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                                            shape = RoundedCornerShape(14.dp),
+                                            colors = ButtonDefaults.outlinedButtonColors(containerColor = SurfaceContainerLowest)
+                                        ) {
+                                            Text(
+                                                selectedClimate?.label ?: "選択してください",
+                                                modifier = Modifier.weight(1f),
+                                                color = PrimaryEmerald,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = "景気特性を選択", tint = OnSurfaceVariant)
+                                        }
+                                        DropdownMenu(
+                                            expanded = climateMenuExpanded,
+                                            onDismissRequest = { climateMenuExpanded = false }
+                                        ) {
+                                            StockClimate.entries.forEach { climate ->
+                                                DropdownMenuItem(
+                                                    text = { Text(climate.label) },
+                                                    onClick = {
+                                                        viewModel.setStockClimateOverride(currentHolding.code, climate)
+                                                        climateMenuExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Text(climateDescription, color = OnSurfaceVariant, fontSize = 14.sp, lineHeight = 22.sp)
+                                    if (stockClimateOverrides.containsKey(currentHolding.code)) {
+                                        TextButton(
+                                            onClick = { viewModel.setStockClimateOverride(currentHolding.code, null) },
+                                            modifier = Modifier.align(Alignment.End).heightIn(min = 34.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                        ) { Text("業種の初期分類に戻す", color = OnSurfaceVariant, fontSize = AppTextSize.dense) }
+                                    }
+                                }
+                            }
+                        }
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = SurfaceContainer),
+                            border = BorderStroke(1.dp, BorderColor.copy(alpha = 0.65f))
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(22.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("株主優待", color = OnSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.weight(1f))
+                                    Text(
+                                        "優待利回り ${benefitYield?.let { "+${String.format(Locale.JAPAN, "%.2f", it)}%" } ?: "—"}",
+                                        color = PrimaryEmerald,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Text("優待の名前と相場金額を記録できます。", color = OnSurfaceVariant, fontSize = 14.sp)
+
+                                displayedBenefits.forEachIndexed { index, benefit ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                                            .background(SurfaceContainerLowest)
+                                            .border(1.dp, PrimaryEmerald.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+                                            .clickable { editingBenefitIndex = if (editingBenefitIndex == index) -1 else index }
+                                            .padding(start = 10.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.size(38.dp).clip(RoundedCornerShape(10.dp))
+                                                .background(PrimaryEmerald.copy(alpha = 0.14f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
+                                        }
+                                        Column(
+                                            modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Text(benefit.name.ifBlank { "優待名未設定" }, color = OnSurface, fontWeight = FontWeight.Bold, maxLines = 1)
+                                            Text("年間相当額", color = OnSurfaceVariant, fontSize = 12.sp)
+                                        }
+                                        Text(
+                                            "¥${benefit.marketValue.toLongOrNull()?.let { yenFormat.format(it) } ?: "0"}",
+                                            color = PrimaryEmerald,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        IconButton(
+                                            onClick = {
+                                                viewModel.setShareholderBenefits(
+                                                    currentHolding.code,
+                                                    displayedBenefits.filterIndexed { itemIndex, _ -> itemIndex != index }
+                                                )
+                                                editingBenefitIndex = -1
+                                            },
+                                            modifier = Modifier.size(40.dp)
+                                        ) {
+                                            Icon(Icons.Default.Close, contentDescription = "${benefit.name.ifBlank { "株主優待" }}を削除", tint = OnSurfaceVariant)
+                                        }
+                                    }
+                                    if (editingBenefitIndex == index) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            OutlinedTextField(
+                                                value = benefit.name,
+                                                onValueChange = { value ->
+                                                    val updated = displayedBenefits.toMutableList()
+                                                    updated[index] = benefit.copy(name = value)
+                                                    viewModel.setShareholderBenefits(currentHolding.code, updated)
+                                                },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                placeholder = { Text("優待名") },
+                                                singleLine = true,
+                                                shape = RoundedCornerShape(12.dp)
+                                            )
+                                            OutlinedTextField(
+                                                value = benefit.marketValue,
+                                                onValueChange = { value ->
+                                                    val updated = displayedBenefits.toMutableList()
+                                                    updated[index] = benefit.copy(marketValue = value.filter(Char::isDigit))
+                                                    viewModel.setShareholderBenefits(currentHolding.code, updated)
+                                                },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                placeholder = { Text("相場金額（円）") },
+                                                singleLine = true,
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                shape = RoundedCornerShape(12.dp),
+                                                trailingIcon = { Text("円", color = OnSurfaceVariant) }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                OutlinedTextField(
+                                    value = newBenefitName,
+                                    onValueChange = { newBenefitName = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    placeholder = { Text("優待名") },
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                OutlinedTextField(
+                                    value = newBenefitValue,
+                                    onValueChange = { newBenefitValue = it.filter(Char::isDigit) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    placeholder = { Text("相場金額（円）") },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    shape = RoundedCornerShape(14.dp),
+                                    trailingIcon = { Text("円", color = OnSurfaceVariant) }
+                                )
+                                Button(
+                                    onClick = {
+                                        viewModel.setShareholderBenefits(
+                                            currentHolding.code,
+                                            displayedBenefits + ShareholderBenefit(newBenefitName.trim(), newBenefitValue)
+                                        )
+                                        newBenefitName = ""
+                                        newBenefitValue = ""
+                                    },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                                    enabled = newBenefitName.isNotBlank(),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh, contentColor = PrimaryEmerald)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("優待を追加", fontWeight = FontWeight.Bold)
+                                }
+
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLowest)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Icon(Icons.Default.Percent, contentDescription = null, tint = PrimaryEmerald)
+                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text("配当＋優待 合計実質利回り ", color = OnSurface, fontSize = 13.sp)
+                                                Text(
+                                                    combinedYield?.let { "${String.format(Locale.JAPAN, "%.2f", it)}%" } ?: "—",
+                                                    color = PrimaryEmerald,
+                                                    fontSize = 17.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Text(
+                                                "年間 ¥${yenFormat.format(combinedAnnualValue.coerceAtLeast(0.0).toLong())} 相当",
+                                                color = OnSurfaceVariant,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
