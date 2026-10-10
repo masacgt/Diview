@@ -116,7 +116,11 @@ fun AnnualDividendScreen(
     var commonHeaderHeightPx by remember { mutableIntStateOf(with(density) { 112.dp.roundToPx() }) }
     var subtabRowHeightPx by remember { mutableIntStateOf(with(density) { 56.dp.roundToPx() }) }
     var lastSettledPage by remember { mutableIntStateOf(pagerState.settledPage) }
-    val headerScrollOffsetPx = listStates[pagerState.settledPage].let { state ->
+    val settledHeaderWasHidden = listStates[lastSettledPage].let { state ->
+        if (state.firstVisibleItemIndex > 0) commonHeaderHeightPx >= subtabRowHeightPx
+        else state.firstVisibleItemScrollOffset >= subtabRowHeightPx
+    }
+    val headerScrollOffsetPx = listStates[lastSettledPage].let { state ->
         if (state.firstVisibleItemIndex > 0) commonHeaderHeightPx
         else state.firstVisibleItemScrollOffset.coerceAtMost(commonHeaderHeightPx)
     }
@@ -162,9 +166,21 @@ fun AnnualDividendScreen(
               beyondViewportPageCount = 1,
               key = { it }
           ) { page ->
+            val pageScrollState = listStates[page]
+            val alignIncomingTopContent = page != lastSettledPage &&
+                page == pagerState.targetPage &&
+                settledHeaderWasHidden &&
+                pageScrollState.firstVisibleItemIndex == 0 &&
+                pageScrollState.firstVisibleItemScrollOffset == 0
+            val incomingContentOffsetPx = if (alignIncomingTopContent) {
+                commonHeaderHeightPx + with(density) { 16.dp.roundToPx() }
+            } else 0
             LazyColumn(
                 state = listStates[page],
-                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .offset { IntOffset(0, -incomingContentOffsetPx) }
+                    .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item { Spacer(Modifier.height(with(androidx.compose.ui.platform.LocalDensity.current) { commonHeaderHeightPx.toDp() })) }
