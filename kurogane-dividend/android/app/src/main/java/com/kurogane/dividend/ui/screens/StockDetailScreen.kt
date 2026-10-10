@@ -1890,15 +1890,51 @@ fun StockDetailScreen(
                                         }
                                         DropdownMenu(
                                             expanded = climateMenuExpanded,
-                                            onDismissRequest = { climateMenuExpanded = false }
+                                            onDismissRequest = { climateMenuExpanded = false },
+                                            modifier = Modifier.widthIn(min = 240.dp),
+                                            shape = RoundedCornerShape(16.dp),
+                                            containerColor = SurfaceContainerLow,
+                                            tonalElevation = 3.dp,
+                                            shadowElevation = 8.dp,
+                                            border = BorderStroke(1.dp, BorderColor)
                                         ) {
                                             StockClimate.entries.forEach { climate ->
+                                                val isSelected = selectedClimate == climate
                                                 DropdownMenuItem(
-                                                    text = { Text(climate.label) },
+                                                    text = {
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                        ) {
+                                                            Box(
+                                                                modifier = Modifier.size(8.dp).clip(CircleShape)
+                                                                    .background(if (isSelected) PrimaryEmerald else BorderColor)
+                                                            )
+                                                            Text(
+                                                                climate.label,
+                                                                color = if (isSelected) PrimaryEmerald else OnSurface,
+                                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                                            )
+                                                            Spacer(Modifier.weight(1f))
+                                                            if (isSelected) {
+                                                                Icon(
+                                                                    Icons.Default.Check,
+                                                                    contentDescription = "選択中",
+                                                                    tint = PrimaryEmerald,
+                                                                    modifier = Modifier.size(18.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    },
                                                     onClick = {
                                                         viewModel.setStockClimateOverride(currentHolding.code, climate)
                                                         climateMenuExpanded = false
-                                                    }
+                                                    },
+                                                    modifier = Modifier.padding(horizontal = 6.dp)
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .background(if (isSelected) PrimaryEmerald.copy(alpha = 0.1f) else Color.Transparent),
+                                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
                                                 )
                                             }
                                         }
