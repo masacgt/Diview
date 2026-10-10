@@ -1795,8 +1795,8 @@ private fun CompoundingSimulationSection(
             }
         }
 
-        AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Card(Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
+        AdaptiveRow(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1812,7 +1812,7 @@ private fun CompoundingSimulationSection(
                     Text(stringResource(R.string.annual_dividend_text_36 , firstPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, (it).toString()) } ?: resources.getString(R.string.annual_dividend_label_20), latestPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, (it).toString()) } ?: resources.getString(R.string.annual_dividend_label_21)), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 }
             }
-            Card(Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
+            Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.AutoMirrored.Filled.ShowChart, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
