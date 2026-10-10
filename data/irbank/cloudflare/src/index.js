@@ -102,6 +102,7 @@ function publicRateLimitRoute(pathname) {
   if (pathname.startsWith('/api/v1/securities/')) return 'security';
   if (pathname === '/api/v1/security-search') return 'security-search';
   if (pathname === '/api/v1/search-catalog') return 'search-catalog';
+  if (pathname === '/api/v1/live-quotes') return 'live-quotes';
   if (pathname.startsWith('/api/v1/')) return pathname.slice('/api/v1/'.length);
   return null;
 }
@@ -243,8 +244,16 @@ async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
   const row = indexed?.row;
   if (!row) return null;
   const snapshot = indexed.snapshot;
-  const quoteObject = await env.MARKET_DATA.get(`market/yfinance/live_quotes/${String(displayCode).toUpperCase()}.json`);
-  const liveQuote = quoteObject ? await quoteObject.json() : null;
+  const completionObject = await env.MARKET_DATA.get('market/yfinance/live_quotes_completion.json');
+  const completion = completionObject ? await completionObject.json() : {};
+  const publishedRunId = String(completion.last_completed_run_id || '');
+  const publishedDate = String(completion.last_completed_date || '');
+  const publishedQuoteObject = publishedRunId
+    ? await env.MARKET_DATA.get(liveQuoteRunObjectKey(publishedRunId, String(displayCode).toUpperCase()))
+    : null;
+  const candidateObject = publishedQuoteObject;
+  const candidateQuote = candidateObject ? await candidateObject.json() : null;
+  const liveQuote = candidateQuote && (!publishedDate || String(candidateQuote.date || '') <= publishedDate) ? candidateQuote : null;
   const quote = liveQuote || row.latest_daily_price || {};
   return { summary: row, price: {
     symbol: row.symbol,
@@ -262,10 +271,14 @@ async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
   }};
 }
 
-const LIVE_MARKET_BATCH_SIZE = 12;
-const LIVE_MARKET_CONCURRENCY = 6;
+const LIVE_MARKET_BATCH_SIZE = 2;
+const LIVE_MARKET_CONCURRENCY = 2;
+const LIVE_MARKET_ENQUEUE_LIMIT = 100;
+const LIVE_MARKET_LEGACY_BATCH_SIZE = 12;
+const LIVE_MARKET_LEGACY_GROUPS_PER_CRON = 100;
 const MARKET_PRICE_QUEUE = 'diview-market-prices';
 const MARKET_PRICE_DLQ = 'diview-market-prices-dlq';
+const LIVE_QUOTE_RUN_PREFIX = 'market/yfinance/live_quote_runs/';
 
 function tokyoDate(timestamp) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(timestamp * 1000));
@@ -286,45 +299,47 @@ async function saveDailyPricePoint(env, code, quote) {
   }), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
 }
 
-function quoteBatchResultKey(runDate, batchIndex) {
-  return `market/yfinance/live_quote_batches/${runDate}/${batchIndex}.json`;
+function liveQuoteRunObjectKey(runId, code) {
+  return `${LIVE_QUOTE_RUN_PREFIX}${runId}/${code}.json`;
 }
 
-async function finalizeLiveQuoteRun(env, runDate, totalBatches) {
-  const prefix = `market/yfinance/live_quote_batches/${runDate}/`;
-  const result = await env.MARKET_DATA.list({ prefix, limit: 1000 });
-  if ((result.objects || []).length < totalBatches) return;
-  const failedBatches = (result.objects || []).filter(item => item.customMetadata?.status === 'failed').length;
-  const processedSymbols = (result.objects || []).reduce((sum, item) => sum + (Number(item.customMetadata?.processed_symbols) || 0), 0);
-  const catalogObject = await env.MARKET_DATA.get('market/yfinance/search_catalog.json');
-  if (catalogObject) {
-    const catalog = await catalogObject.json();
-    catalog.generated_at = isoNow();
-    catalog.market_data_date = runDate;
-    catalog.market_data_completed_at = catalog.generated_at;
-    catalog.market_data_failed_batches = failedBatches;
-    await env.MARKET_DATA.put('market/yfinance/search_catalog.json', JSON.stringify(catalog), {
-      httpMetadata: { contentType: 'application/json; charset=utf-8' },
-    });
-  }
-  const completionObject = await env.MARKET_DATA.get('market/yfinance/live_quotes_completion.json');
-  const completion = completionObject ? await completionObject.json() : {};
-  await env.MARKET_DATA.put('market/yfinance/live_quotes_completion.json', JSON.stringify({
-    ...completion,
-    last_completed_date: runDate,
-    last_completed_at: isoNow(),
-    last_failed_batches: failedBatches,
-    live_quote_count: processedSymbols,
+async function ensureLiveQuoteRun(env, runId, runDate, totalBatches, universeSize, enqueuedBatches = 0) {
+  const now = isoNow();
+  await env.DB.prepare(`INSERT OR IGNORE INTO market_price_refresh_runs
+    (run_id, run_date, total_batches, universe_size, enqueued_batches, status, started_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)`)
+    .bind(runId, runDate, totalBatches, universeSize, enqueuedBatches, now, now).run();
+}
+
+async function publishCompletedQuoteRun(env, run) {
+  if (!run || run.status !== 'complete' || !run.market_data_date) return;
+  const key = 'market/yfinance/live_quotes_completion.json';
+  const existingObject = await env.MARKET_DATA.get(key);
+  const existing = existingObject ? await existingObject.json() : {};
+  if (existing.last_completed_run_id === run.run_id && existing.last_completed_date === run.market_data_date) return;
+  if (String(existing.last_completed_run_id || '') > String(run.run_id || '')) return;
+  const completedAt = run.completed_at || isoNow();
+  await env.MARKET_DATA.put(key, JSON.stringify({
+    ...existing,
+    last_completed_date: run.market_data_date,
+    last_completed_run_id: run.run_id,
+    last_completed_at: completedAt,
+    last_failed_batches: 0,
+    live_quote_count: Number(run.processed_symbols || 0),
+    last_run_status: 'complete',
+    last_run_date: run.run_date,
+    last_run_batches_total: Number(run.total_batches || 0),
+    last_run_batches_completed: Number(run.completed_batches || 0),
   }), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
 }
 
-async function refreshLiveMarketQuotes(env, requestedCodes) {
+async function refreshLiveMarketQuotes(env, requestedCodes, runId) {
   const codes = [...new Set((requestedCodes || []).map(value => String(value || '').toUpperCase()).filter(code => /^[A-Z0-9]{4,5}$/.test(code)))];
-  if (!codes.length) return { processed: 0, failed: 0, skipped: 'empty_batch' };
+  if (!codes.length) return { processed: 0, failed: 0, marketDataDate: null, skipped: 'empty_batch' };
   const now = isoNow();
   let processed = 0;
   let failed = 0;
-  const updatedQuotes = [];
+  let marketDataDate = null;
   for (let start = 0; start < codes.length; start += LIVE_MARKET_CONCURRENCY) {
     const group = codes.slice(start, start + LIVE_MARKET_CONCURRENCY);
     const results = await Promise.all(group.map(async code => {
@@ -368,46 +383,28 @@ async function refreshLiveMarketQuotes(env, requestedCodes) {
     }));
 
     await Promise.all(results.filter(Boolean).map(async ({ code, quote }) => {
-      const key = `market/yfinance/live_quotes/${code}.json`;
+      const key = liveQuoteRunObjectKey(runId, code);
       const existing = await env.MARKET_DATA.get(key);
       const previous = existing ? await existing.json() : null;
       if (!previous?.date || previous.date <= quote.date) {
         await env.MARKET_DATA.put(key, JSON.stringify(quote), {
           httpMetadata: { contentType: 'application/json; charset=utf-8' },
-          customMetadata: { source: 'Yahoo Finance chart API', quoteDate: quote.date },
+          customMetadata: {
+            source: 'Yahoo Finance chart API',
+            quoteDate: quote.date,
+            close: String(quote.close),
+            adjustedClose: String(quote.adjusted_close),
+            volume: String(quote.volume ?? ''),
+          },
         });
         await saveDailyPricePoint(env, code, quote);
-        processed += 1;
-        updatedQuotes.push({ code, quote });
       }
+      processed += 1;
+      if (!marketDataDate || quote.date > marketDataDate) marketDataDate = quote.date;
     }));
     failed += group.length - results.filter(Boolean).length;
   }
-
-  if (updatedQuotes.length) {
-    const catalogObject = await env.MARKET_DATA.get('market/yfinance/search_catalog.json');
-    if (catalogObject) {
-      const catalog = await catalogObject.json();
-      const updates = new Map(updatedQuotes.map(({ code, quote }) => [code, quote]));
-      catalog.items = (catalog.items || []).map(item => {
-        const quote = updates.get(String(item.code || '').toUpperCase());
-        if (!quote) return item;
-        const price = finiteNumber(quote.close);
-        const dividend = finiteNumber(item.annual_dividend_per_share);
-        return {
-          ...item,
-          price: price > 0 ? price : item.price,
-          yield_rate: price > 0 && dividend !== null && dividend >= 0 ? Math.round(dividend / price * 10000) / 100 : item.yield_rate,
-          quote_date: quote.date,
-          quote_updated_at: quote.updated_at,
-        };
-      });
-      await env.MARKET_DATA.put('market/yfinance/search_catalog.json', JSON.stringify(catalog), {
-        httpMetadata: { contentType: 'application/json; charset=utf-8' },
-      });
-    }
-  }
-  return { processed, failed };
+  return { processed, failed, marketDataDate };
 }
 
 async function enqueueDailyMarketQuotes(env, scheduledTime) {
@@ -422,45 +419,212 @@ async function enqueueDailyMarketQuotes(env, scheduledTime) {
   let state = stateObject ? await stateObject.json() : {};
   const completionObject = await env.MARKET_DATA.get('market/yfinance/live_quotes_completion.json');
   const completion = completionObject ? await completionObject.json() : {};
-  const firstRunPending = !completion.last_completed_date;
-  if (!firstRunPending && (['Sat', 'Sun'].includes(parts.weekday) || Number(parts.hour) < 17)) return;
-  if (state.queue_run_date === runDate && Number(state.queue_batches_enqueued || 0) >= Number(state.queue_batches_total || 0)) return;
-  const universe = await env.DB.prepare(
-    'SELECT security_code_display FROM securities ORDER BY security_code'
-  ).all();
-  const codes = (universe.results || []).map(row => String(row.security_code_display || '').toUpperCase()).filter(code => /^[A-Z0-9]{4,5}$/.test(code));
-  const groups = [];
-  for (let offset = 0; offset < codes.length; offset += LIVE_MARKET_BATCH_SIZE) groups.push(codes.slice(offset, offset + LIVE_MARKET_BATCH_SIZE));
-  if (!groups.length) return;
-  if (state.queue_run_date !== runDate || !Number.isInteger(state.queue_batches_total)) {
-    state = { ...state, queue_run_date: runDate, queue_batches_total: groups.length, queue_batches_enqueued: 0, universe_size: codes.length };
+  const firstRunPending = !completion.last_completed_run_id && !completion.last_completed_date;
+  const legacyCurrentRunPending = !completion.last_completed_run_id && state.queue_run_date === runDate;
+  if (!firstRunPending && !legacyCurrentRunPending && (['Sat', 'Sun'].includes(parts.weekday) || Number(parts.hour) < 17)) return;
+  const latestActiveRun = await env.DB.prepare(`SELECT run_id FROM market_price_refresh_runs
+    WHERE status IN ('queued', 'running') ORDER BY run_date DESC LIMIT 1`).first();
+  if (latestActiveRun && latestActiveRun.run_id !== runDate) return;
+
+  const stateRunDate = String(state.queue_run_date || '');
+  const oldBatchSize = Number(state.queue_batch_size || LIVE_MARKET_LEGACY_BATCH_SIZE);
+  const oldTotalBatches = Number(state.queue_batches_total || 0);
+  const oldEnqueuedBatches = Number(state.queue_batches_enqueued || 0);
+  const universeRow = await env.DB.prepare(`SELECT COUNT(*) AS count FROM securities
+    WHERE length(security_code_display) BETWEEN 4 AND 5
+      AND security_code_display NOT GLOB '*[^A-Za-z0-9]*'`).first();
+  const universeSize = Number(universeRow?.count || 0);
+  if (universeSize <= 0) return;
+  const totalBatches = Math.ceil(universeSize / LIVE_MARKET_BATCH_SIZE);
+
+  if (stateRunDate === runDate && oldBatchSize !== LIVE_MARKET_BATCH_SIZE) {
+    const legacyPrefix = `market/yfinance/live_quote_batches/${runDate}/`;
+    const legacyResults = await env.MARKET_DATA.list({ prefix: legacyPrefix, limit: 1000, include: ['customMetadata'] });
+    const completedParents = (legacyResults.objects || []).map(object => {
+      const index = Number(object.key.slice(legacyPrefix.length).replace(/\.json$/, ''));
+      return Number.isInteger(index) && index >= 0 && ['complete', 'failed'].includes(object.customMetadata?.status) ? index : null;
+    }).filter(index => index !== null);
+    const neverEnqueuedParents = Array.from({ length: Math.max(0, oldTotalBatches - oldEnqueuedBatches) }, (_, index) => oldEnqueuedBatches + index);
+    const legacyBackfillIndexes = [...new Set([...completedParents, ...neverEnqueuedParents])].sort((a, b) => a - b);
+    state = {
+      ...state,
+      queue_run_date: runDate,
+      queue_batch_size: LIVE_MARKET_BATCH_SIZE,
+      queue_batches_total: totalBatches,
+      queue_batches_enqueued: totalBatches,
+      universe_size: universeSize,
+      legacy_batch_size: oldBatchSize,
+      legacy_total_batches: oldTotalBatches,
+      legacy_backfill_indexes: legacyBackfillIndexes,
+      legacy_backfill_cursor: 0,
+      legacy_backfilled_indexes: [],
+    };
+    await ensureLiveQuoteRun(env, runDate, runDate, totalBatches, universeSize, totalBatches);
     await env.MARKET_DATA.put(stateKey, JSON.stringify(state), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
   }
+
+  if (state.queue_run_date !== runDate) {
+    state = {
+      ...state,
+      queue_run_date: runDate,
+      queue_batch_size: LIVE_MARKET_BATCH_SIZE,
+      queue_batches_total: totalBatches,
+      queue_batches_enqueued: 0,
+      universe_size: universeSize,
+      last_enqueue_at: isoNow(),
+    };
+    await ensureLiveQuoteRun(env, runDate, runDate, totalBatches, universeSize, 0);
+    await env.MARKET_DATA.put(stateKey, JSON.stringify(state), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
+  }
+
+  if (Number(state.legacy_total_batches || 0) > 0 && !(stateRunDate === runDate && oldBatchSize !== LIVE_MARKET_BATCH_SIZE)) {
+    const legacyPrefix = `market/yfinance/live_quote_batches/${runDate}/`;
+    const legacyResults = await env.MARKET_DATA.list({ prefix: legacyPrefix, limit: 1000, include: ['customMetadata'] });
+    const newlyCompleted = (legacyResults.objects || []).map(object => {
+      const index = Number(object.key.slice(legacyPrefix.length).replace(/\.json$/, ''));
+      return Number.isInteger(index) && index >= 0 && ['complete', 'failed'].includes(object.customMetadata?.status) ? index : null;
+    }).filter(index => index !== null);
+    const known = new Set(state.legacy_backfill_indexes || []);
+    const additions = newlyCompleted.filter(index => !known.has(index));
+    if (additions.length) {
+      state = { ...state, legacy_backfill_indexes: [...known, ...additions].sort((a, b) => a - b) };
+      await env.MARKET_DATA.put(stateKey, JSON.stringify(state), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
+    }
+  }
+
+  if (state.legacy_backfill_indexes?.length) {
+    const backfilled = new Set(state.legacy_backfilled_indexes || []);
+    const remaining = state.legacy_backfill_indexes.filter(index => !backfilled.has(index)).slice(0, LIVE_MARKET_LEGACY_GROUPS_PER_CRON);
+    if (remaining.length) {
+      const statements = remaining.map(index => env.DB.prepare(`SELECT security_code_display AS code
+        FROM securities ORDER BY security_code LIMIT ? OFFSET ?`).bind(
+        Number(state.legacy_batch_size || LIVE_MARKET_LEGACY_BATCH_SIZE),
+        index * Number(state.legacy_batch_size || LIVE_MARKET_LEGACY_BATCH_SIZE),
+      ));
+      const legacyRows = await env.DB.batch(statements);
+      const messages = [];
+      const childrenPerParent = Math.ceil(Number(state.legacy_batch_size || LIVE_MARKET_LEGACY_BATCH_SIZE) / LIVE_MARKET_BATCH_SIZE);
+      legacyRows.forEach((result, parentOffset) => {
+        const symbols = (result.results || []).map(row => String(row.code || '').toUpperCase()).filter(code => /^[A-Z0-9]{4,5}$/.test(code));
+        for (let offset = 0; offset < symbols.length; offset += LIVE_MARKET_BATCH_SIZE) {
+          messages.push({ body: {
+            run_id: runDate,
+            run_date: runDate,
+            batch_index: remaining[parentOffset] * childrenPerParent + Math.floor(offset / LIVE_MARKET_BATCH_SIZE),
+            total_batches: totalBatches,
+            symbols: symbols.slice(offset, offset + LIVE_MARKET_BATCH_SIZE),
+          } });
+        }
+      });
+      for (let offset = 0; offset < messages.length; offset += LIVE_MARKET_ENQUEUE_LIMIT) {
+        await env.MARKET_PRICE_QUEUE.sendBatch(messages.slice(offset, offset + LIVE_MARKET_ENQUEUE_LIMIT));
+      }
+      remaining.forEach(index => backfilled.add(index));
+      state = {
+        ...state,
+        legacy_backfilled_indexes: [...backfilled].sort((a, b) => a - b),
+        legacy_backfill_cursor: Number(state.legacy_backfill_cursor || 0) + remaining.length,
+      };
+      await env.MARKET_DATA.put(stateKey, JSON.stringify(state), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
+    }
+  }
+
   if (state.queue_batches_enqueued >= state.queue_batches_total) return;
-  let nextBatch = state.queue_batches_enqueued;
-  while (nextBatch < groups.length) {
-    const end = Math.min(groups.length, nextBatch + 100);
-    await env.MARKET_PRICE_QUEUE.sendBatch(groups.slice(nextBatch, end).map((symbols, index) => ({
-      body: { run_date: runDate, batch_index: nextBatch + index, total_batches: groups.length, symbols },
-    })));
-    nextBatch = end;
-    state = { ...state, queue_batches_enqueued: nextBatch, last_enqueue_at: isoNow() };
-    await env.MARKET_DATA.put(stateKey, JSON.stringify(state), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
+  const nextBatch = Number(state.queue_batches_enqueued || 0);
+  const batchCount = Math.min(LIVE_MARKET_ENQUEUE_LIMIT, state.queue_batches_total - nextBatch);
+  const result = await env.DB.prepare(`SELECT security_code_display AS code FROM securities
+    WHERE length(security_code_display) BETWEEN 4 AND 5
+      AND security_code_display NOT GLOB '*[^A-Za-z0-9]*'
+    ORDER BY security_code LIMIT ? OFFSET ?`).bind(batchCount * LIVE_MARKET_BATCH_SIZE, nextBatch * LIVE_MARKET_BATCH_SIZE).all();
+  const codes = (result.results || []).map(row => String(row.code || '').toUpperCase());
+  const messages = [];
+  for (let offset = 0; offset < codes.length; offset += LIVE_MARKET_BATCH_SIZE) {
+    messages.push({ body: {
+      run_id: runDate,
+      run_date: runDate,
+      batch_index: nextBatch + messages.length,
+      total_batches: state.queue_batches_total,
+      symbols: codes.slice(offset, offset + LIVE_MARKET_BATCH_SIZE),
+    } });
   }
+  if (!messages.length) return;
+  await env.MARKET_PRICE_QUEUE.sendBatch(messages);
+  state = { ...state, queue_batches_enqueued: nextBatch + messages.length, last_enqueue_at: isoNow() };
+  await env.DB.prepare('UPDATE market_price_refresh_runs SET enqueued_batches = ?, updated_at = ? WHERE run_id = ?')
+    .bind(state.queue_batches_enqueued, isoNow(), runDate).run();
+  await env.MARKET_DATA.put(stateKey, JSON.stringify(state), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
 }
 
-async function recordMarketBatchResult(env, message, status, processedSymbols = 0) {
-  const runDate = String(message?.run_date || '');
+async function recordMarketBatchResult(env, message, status, processedSymbols = 0, marketDataDate = null) {
+  const runId = String(message?.run_id || message?.run_date || '');
+  const runDate = String(message?.run_date || runId);
   const batchIndex = Number(message?.batch_index);
   const totalBatches = Number(message?.total_batches);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(runDate) || !Number.isInteger(batchIndex) || batchIndex < 0 || !Number.isInteger(totalBatches) || totalBatches < 1) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(runId) || !/^\d{4}-\d{2}-\d{2}$/.test(runDate) || !Number.isInteger(batchIndex) || batchIndex < 0 || !Number.isInteger(totalBatches) || totalBatches < 1) {
     throw new Error('Invalid market-price queue message');
   }
-  await env.MARKET_DATA.put(quoteBatchResultKey(runDate, batchIndex), JSON.stringify({ status, processed_at: isoNow() }), {
-    httpMetadata: { contentType: 'application/json; charset=utf-8' },
-    customMetadata: { status, processed_symbols: String(processedSymbols) },
-  });
-  await finalizeLiveQuoteRun(env, runDate, totalBatches);
+  await ensureLiveQuoteRun(env, runId, runDate, totalBatches, totalBatches * LIVE_MARKET_BATCH_SIZE, totalBatches);
+  const completedAt = isoNow();
+  const results = await env.DB.batch([
+    env.DB.prepare(`INSERT OR IGNORE INTO market_price_refresh_batches
+      (run_id, batch_index, status, processed_symbols, market_data_date, completed_at)
+      VALUES (?, ?, ?, ?, ?, ?)`)
+      .bind(runId, batchIndex, status, processedSymbols, marketDataDate, completedAt),
+    env.DB.prepare(`UPDATE market_price_refresh_runs SET
+        completed_batches = completed_batches + 1,
+        failed_batches = failed_batches + CASE WHEN ? = 'failed' THEN 1 ELSE 0 END,
+        processed_symbols = processed_symbols + ?,
+        market_data_date = CASE WHEN ? IS NULL THEN market_data_date
+          WHEN market_data_date IS NULL OR market_data_date < ? THEN ? ELSE market_data_date END,
+        status = CASE WHEN completed_batches + 1 >= total_batches
+          THEN CASE WHEN failed_batches + CASE WHEN ? = 'failed' THEN 1 ELSE 0 END > 0 THEN 'partial' ELSE 'complete' END
+          ELSE 'running' END,
+        last_batch_at = ?,
+        completed_at = CASE WHEN completed_batches + 1 >= total_batches THEN ? ELSE NULL END,
+        updated_at = ?
+      WHERE run_id = ? AND changes() = 1
+      RETURNING run_id, run_date, total_batches, completed_batches, failed_batches,
+        processed_symbols, market_data_date, status, completed_at`)
+      .bind(status, processedSymbols, marketDataDate, marketDataDate, marketDataDate, status,
+        completedAt, completedAt, completedAt, runId),
+  ]);
+  let run = results?.[1]?.results?.[0] || null;
+  if (!run) run = await env.DB.prepare(`SELECT run_id, run_date, total_batches, completed_batches,
+    failed_batches, processed_symbols, market_data_date, status, completed_at
+    FROM market_price_refresh_runs WHERE run_id = ?`).bind(runId).first();
+  if (run?.status === 'complete') await publishCompletedQuoteRun(env, run);
+}
+
+async function splitLegacyMarketQueueMessage(env, body) {
+  const runDate = String(body?.run_date || '');
+  const symbols = [...new Set((Array.isArray(body?.symbols) ? body.symbols : [])
+    .map(value => String(value || '').toUpperCase())
+    .filter(code => /^[A-Z0-9]{4,5}$/.test(code)))];
+  const parentIndex = Number(body?.batch_index);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(runDate) || !Number.isInteger(parentIndex) || parentIndex < 0 || !symbols.length) {
+    throw new Error('Invalid legacy market-price queue message');
+  }
+  const stateObject = await env.MARKET_DATA.get('market/yfinance/live_quotes_state.json');
+  const state = stateObject ? await stateObject.json() : {};
+  const legacyBatchSize = Number(state.legacy_batch_size || LIVE_MARKET_LEGACY_BATCH_SIZE);
+  const universeSize = Number(state.universe_size || Number(body.total_batches || 0) * legacyBatchSize);
+  const totalBatches = Math.ceil(universeSize / LIVE_MARKET_BATCH_SIZE);
+  if (!totalBatches) throw new Error('Market-price universe is empty');
+  await ensureLiveQuoteRun(env, runDate, runDate, totalBatches, universeSize, totalBatches);
+  const childrenPerParent = Math.ceil(legacyBatchSize / LIVE_MARKET_BATCH_SIZE);
+  const messages = [];
+  for (let offset = 0; offset < symbols.length; offset += LIVE_MARKET_BATCH_SIZE) {
+    messages.push({ body: {
+      run_id: runDate,
+      run_date: runDate,
+      batch_index: parentIndex * childrenPerParent + Math.floor(offset / LIVE_MARKET_BATCH_SIZE),
+      total_batches: totalBatches,
+      symbols: symbols.slice(offset, offset + LIVE_MARKET_BATCH_SIZE),
+    } });
+  }
+  for (let offset = 0; offset < messages.length; offset += LIVE_MARKET_ENQUEUE_LIMIT) {
+    await env.MARKET_PRICE_QUEUE.sendBatch(messages.slice(offset, offset + LIVE_MARKET_ENQUEUE_LIMIT));
+  }
 }
 
 async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
@@ -884,6 +1048,7 @@ export default {
       url.pathname === '/api/v1/health' ||
       url.pathname === '/api/v1/security-search' ||
       url.pathname === '/api/v1/search-catalog' ||
+      url.pathname === '/api/v1/live-quotes' ||
       url.pathname === '/api/v1/irbank/manifest' ||
       url.pathname === '/api/v1/irbank/catalog' ||
       url.pathname.startsWith('/api/v1/financial-data/') ||
@@ -985,9 +1150,13 @@ export default {
 
     if (url.pathname === '/api/v1/health' && request.method === 'GET') {
       let latestRun = null;
+      let quoteRun = null;
       let d1Available = true;
       try {
         latestRun = await env.DB.prepare(`SELECT started_at, finished_at, status, processed, failed FROM scheduled_run_log ORDER BY id DESC LIMIT 1`).first();
+        quoteRun = await env.DB.prepare(`SELECT run_date, total_batches, enqueued_batches, completed_batches,
+          processed_symbols, failed_batches, market_data_date, status, last_batch_at, completed_at
+          FROM market_price_refresh_runs ORDER BY run_date DESC LIMIT 1`).first();
       } catch {
         d1Available = false;
       }
@@ -995,12 +1164,29 @@ export default {
       const marketRefresh = marketRefreshObject ? await marketRefreshObject.json() : {};
       const marketCompletionObject = await env.MARKET_DATA?.get('market/yfinance/live_quotes_completion.json');
       const marketCompletion = marketCompletionObject ? await marketCompletionObject.json() : {};
-      const liveQuoteCount = Number(marketCompletion.live_quote_count ?? marketRefresh.live_quote_count ?? 0);
+      const hasPublishedRun = !!marketCompletion.last_completed_run_id;
+      const liveQuoteCount = Number((hasPublishedRun ? marketCompletion.live_quote_count : null) ?? quoteRun?.processed_symbols ?? marketRefresh.live_quote_count ?? 0);
       const marketObject = await env.MARKET_DATA?.head('market/yfinance/latest_market_data.json');
-      const marketUploadedAt = marketCompletion.last_completed_at || marketObject?.uploaded?.toISOString?.() || null;
+      const marketUploadedAt = (hasPublishedRun ? marketCompletion.last_completed_at : null) || marketObject?.uploaded?.toISOString?.() || null;
       const stockDefs = await appDefinitionDocument(env, 'stock-analysis-definitions:v1') || {};
       const watchDefs = await appDefinitionDocument(env, 'watchlist-analysis-definitions:v1') || {};
-      return json({ ok: true, checked_at: isoNow(), d1: d1Available, market: { available: !!marketObject, uploaded: marketUploadedAt, snapshot_uploaded: marketObject?.uploaded?.toISOString?.() || null, age_days: marketUploadedAt ? daysOld(marketUploadedAt) : null, stale_after_days: Number(config.market_stale_days || 3), live_quote_count: liveQuoteCount, live_refresh_date: marketRefresh.queue_run_date || null, live_refresh_batches_total: Number(marketRefresh.queue_batches_total || 0), live_refresh_batches_enqueued: Number(marketRefresh.queue_batches_enqueued || 0), live_refresh_last_batch_at: marketRefresh.last_batch_at || null, live_refresh_last_completed_date: marketCompletion.last_completed_date || null, live_refresh_failed_batches: Number(marketCompletion.last_failed_batches || 0) }, definitions: { stock_version: stockDefs.version || null, watchlist_version: watchDefs.version || null }, latest_scheduled_run: latestRun || null });
+      return json({ ok: true, checked_at: isoNow(), d1: d1Available, market: {
+        available: !!marketObject,
+        uploaded: marketUploadedAt,
+        snapshot_uploaded: marketObject?.uploaded?.toISOString?.() || null,
+        age_days: marketUploadedAt ? daysOld(marketUploadedAt) : null,
+        stale_after_days: Number(config.market_stale_days || 3),
+        live_quote_count: liveQuoteCount,
+        live_refresh_date: quoteRun?.run_date || marketRefresh.queue_run_date || null,
+        live_refresh_batches_total: Number(quoteRun?.total_batches ?? marketRefresh.queue_batches_total ?? 0),
+        live_refresh_batches_enqueued: Number(quoteRun?.enqueued_batches ?? marketRefresh.queue_batches_enqueued ?? 0),
+        live_refresh_batches_completed: Number(quoteRun?.completed_batches || 0),
+        live_refresh_last_batch_at: quoteRun?.last_batch_at || marketRefresh.last_batch_at || null,
+        live_refresh_last_completed_date: hasPublishedRun ? marketCompletion.last_completed_date || null : null,
+        live_refresh_failed_batches: Number(quoteRun?.failed_batches ?? (hasPublishedRun ? marketCompletion.last_failed_batches : null) ?? 0),
+        live_refresh_status: quoteRun?.status || (hasPublishedRun ? marketCompletion.last_run_status : null) || null,
+        live_refresh_market_data_date: quoteRun?.market_data_date || (hasPublishedRun ? marketCompletion.last_completed_date : null) || null,
+      }, definitions: { stock_version: stockDefs.version || null, watchlist_version: watchDefs.version || null }, latest_scheduled_run: latestRun || null });
     }
 
     if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
@@ -1066,9 +1252,19 @@ export default {
       const catalogObject = await env.MARKET_DATA.get('market/yfinance/search_catalog.json');
       if (!catalogObject) return json({ error: 'search_catalog_unavailable' }, 503);
       const catalog = JSON.parse(await catalogObject.text());
+      const completionObject = await env.MARKET_DATA.get('market/yfinance/live_quotes_completion.json');
+      const completion = completionObject ? await completionObject.json() : {};
+      const publishedRunId = String(completion.last_completed_run_id || '');
+      const stableMarketDate = publishedRunId
+        ? String(completion.last_completed_date || '')
+        : completion.last_completed_date
+          ? '0000-00-00'
+          : String(catalog.market_data_date || '');
+      const legacyUnpublished = !publishedRunId && !!completion.last_completed_date;
       const candidates = (catalog.items || [])
         .filter(row => irbankR2Code(String(row?.code || ''))
           && finiteNumber(row?.price) > 0
+          && (!legacyUnpublished ? (!stableMarketDate || !row.quote_date || String(row.quote_date) <= stableMarketDate) : !row.quote_date)
           && finiteNumber(row?.estimated_average_trading_value_20d) > 0)
         .sort((a, b) => finiteNumber(b.estimated_average_trading_value_20d) - finiteNumber(a.estimated_average_trading_value_20d)
           || String(a.code).localeCompare(String(b.code)));
@@ -1089,7 +1285,15 @@ export default {
             : best;
         }, null);
         if (!point) return null;
-        const currentPrice = finiteNumber(row.price);
+        const liveObject = publishedRunId
+          ? await env.MARKET_DATA.get(liveQuoteRunObjectKey(publishedRunId, code))
+          : null;
+        const liveQuote = liveObject ? await liveObject.json() : null;
+        const catalogDate = String(row.quote_date || '');
+        const catalogPrice = !catalogDate || !stableMarketDate || catalogDate <= stableMarketDate
+          ? finiteNumber(row.price)
+          : null;
+        const currentPrice = finiteNumber(liveQuote?.close) || catalogPrice;
         if (!(currentPrice > 0)) return null;
         const statistics = document.statistics_current || {};
         const dps = finiteNumber(statistics.dividendRate);
@@ -1137,9 +1341,20 @@ export default {
         timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit'
       }).formatToParts(new Date()).map(part => [part.type, part.value]));
       const today = `${todayParts.year}-${todayParts.month}-${todayParts.day}`;
+      const [completionObject, catalogObject] = await Promise.all([
+        env.MARKET_DATA.get('market/yfinance/live_quotes_completion.json'),
+        env.MARKET_DATA.get('market/yfinance/search_catalog.json'),
+      ]);
+      const completion = completionObject ? await completionObject.json() : {};
+      const catalog = catalogObject ? await catalogObject.json() : {};
+      const stableMarketDate = completion.last_completed_run_id
+        ? String(completion.last_completed_date || '')
+        : completion.last_completed_date
+          ? '0000-00-00'
+          : String(catalog.market_data_date || today);
       const currentMonth = today.slice(0, 7);
       const cutoffs = months.map(month => {
-        if (month >= currentMonth) return [month, today];
+        if (month >= currentMonth) return [month, stableMarketDate];
         const nextMonth = new Date(`${month}-01T00:00:00.000Z`);
         nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
         nextMonth.setUTCDate(0);
@@ -1185,6 +1400,58 @@ export default {
       const response = json({ items, requested_months: months });
       response.headers.set('cache-control', 'public, max-age=300');
       return response;
+    }
+
+    if (url.pathname === '/api/v1/live-quotes') {
+      if (!env.MARKET_DATA) return json({ error: 'market_data_unavailable' }, 503);
+      const limit = Math.max(1, Math.min(250, Number.parseInt(url.searchParams.get('limit') || '200', 10) || 200));
+      const requestedRunId = String(url.searchParams.get('run_id') || '');
+      const requestedDate = String(url.searchParams.get('market_data_date') || '');
+      const cursor = String(url.searchParams.get('cursor') || '');
+      if ((requestedRunId && !/^\d{4}-\d{2}-\d{2}$/.test(requestedRunId))
+        || (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate))
+        || cursor.length > 2048) return json({ error: 'invalid_request' }, 400);
+
+      try {
+        const completionObject = await env.MARKET_DATA.get('market/yfinance/live_quotes_completion.json');
+        const completion = completionObject ? await completionObject.json() : {};
+        const runId = requestedRunId || String(completion.last_completed_run_id || '');
+        const marketDataDate = requestedDate || (runId === completion.last_completed_run_id
+          ? String(completion.last_completed_date || '')
+          : '');
+        if (!runId) return json({
+          run_id: null,
+          market_data_date: null,
+          complete: false,
+          legacy_unpublished: !!completion.last_completed_date,
+          items: [],
+          next_cursor: null,
+        });
+        if (!marketDataDate) return json({ error: 'market_data_date_required' }, 400);
+        const result = await env.MARKET_DATA.list({
+          prefix: `${LIVE_QUOTE_RUN_PREFIX}${runId}/`,
+          limit,
+          cursor: cursor || undefined,
+          include: ['customMetadata'],
+        });
+        const items = (result.objects || []).map(object => {
+          const code = object.key.slice(`${LIVE_QUOTE_RUN_PREFIX}${runId}/`.length).replace(/\.json$/, '').toUpperCase();
+          const price = Number(object.customMetadata?.close);
+          if (!/^[A-Z0-9]{4,5}$/.test(code) || !Number.isFinite(price) || price <= 0) return null;
+          return { code, price, quote_date: String(object.customMetadata?.quoteDate || marketDataDate) };
+        }).filter(Boolean);
+        const response = json({
+          run_id: runId,
+          market_data_date: marketDataDate,
+          complete: true,
+          items,
+          next_cursor: result.truncated ? result.cursor : null,
+        });
+        response.headers.set('cache-control', 'public, max-age=300');
+        return response;
+      } catch {
+        return json({ error: 'live_quotes_unavailable' }, 503);
+      }
     }
 
     if (url.pathname === '/api/v1/search-catalog') {
@@ -1386,19 +1653,33 @@ export default {
     for (const message of batch.messages) {
       const body = message.body || {};
       try {
-        const resultKey = quoteBatchResultKey(String(body.run_date || ''), Number(body.batch_index));
-        if (await env.MARKET_DATA.get(resultKey)) {
+        const symbols = Array.isArray(body.symbols) ? body.symbols : [];
+        if (!body.run_id && symbols.length > LIVE_MARKET_BATCH_SIZE) {
+          await splitLegacyMarketQueueMessage(env, body);
+          message.ack();
+          continue;
+        }
+        const runId = String(body.run_id || body.run_date || '');
+        const runDate = String(body.run_date || runId);
+        const batchIndex = Number(body.batch_index);
+        const previousResult = await env.DB.prepare(`SELECT status FROM market_price_refresh_batches
+          WHERE run_id = ? AND batch_index = ?`).bind(runId, batchIndex).first();
+        if (previousResult) {
+          const completedRun = await env.DB.prepare(`SELECT run_id, run_date, total_batches, completed_batches,
+            failed_batches, processed_symbols, market_data_date, status, completed_at
+            FROM market_price_refresh_runs WHERE run_id = ?`).bind(runId).first();
+          if (completedRun?.status === 'complete') await publishCompletedQuoteRun(env, completedRun);
           message.ack();
           continue;
         }
         if (deadLetter) {
-          await recordMarketBatchResult(env, body, 'failed');
+          await recordMarketBatchResult(env, { ...body, run_id: runId, run_date: runDate }, 'failed');
           message.ack();
           continue;
         }
-        const result = await refreshLiveMarketQuotes(env, body.symbols);
+        const result = await refreshLiveMarketQuotes(env, symbols, runId);
         if (result.failed > 0) throw new Error(`Yahoo quote fetch failed for ${result.failed} symbols`);
-        await recordMarketBatchResult(env, body, 'complete', result.processed);
+        await recordMarketBatchResult(env, { ...body, run_id: runId, run_date: runDate }, 'complete', result.processed, result.marketDataDate);
         message.ack();
       } catch (error) {
         if (deadLetter) {

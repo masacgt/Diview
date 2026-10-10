@@ -72,7 +72,14 @@ test('dividend-months returns sorted recent observed months from R2 for each req
   assert.equal(data.as_of, today);
   assert.equal(data.lookback_days, 365);
   assert.deepEqual(data.items, [
-    { symbol: '7203.T', months: [...new Set([Number(today.slice(5, 7)), Number(recentDate.slice(5, 7))])].sort((a, b) => a - b) },
+    {
+      symbol: '7203.T',
+      months: [...new Set([Number(today.slice(5, 7)), Number(recentDate.slice(5, 7))])].sort((a, b) => a - b),
+      events: [
+        { date: recentDate, amount: 30, final_rights_date: null },
+        { date: today, amount: 25, final_rights_date: null },
+      ],
+    },
     { symbol: 'MSFT', months: [] }
   ]);
 });
@@ -81,6 +88,77 @@ test('dividend-months validates batches and reports missing R2 storage', async (
   assert.equal((await worker.fetch(new Request('https://example.com/api/v1/dividend-months?symbols=7203.T,../secret'), dividendEnvironment(new Map()))).status, 400);
   assert.equal((await worker.fetch(new Request(`https://example.com/api/v1/dividend-months?symbols=${Array.from({ length: 51 }, (_, i) => `T${i}`).join(',')}`), dividendEnvironment(new Map()))).status, 400);
   assert.equal((await worker.fetch(new Request('https://example.com/api/v1/dividend-months?symbols=7203.T'), dividendEnvironment(new Map(), false))).status, 503);
+});
+
+test('live-quotes pages only the immutable completed run and validates cursors', async () => {
+  const env = dividendEnvironment(new Map([['market/yfinance/live_quotes_completion.json', {
+    last_completed_run_id: '2026-10-09', last_completed_date: '2026-10-09'
+  }]]));
+  const listCalls = [];
+  env.MARKET_DATA.list = async options => {
+    listCalls.push(options);
+    return {
+      objects: [{ key: 'market/yfinance/live_quote_runs/2026-10-09/7203.json', customMetadata: { close: '2100', quoteDate: '2026-10-09' } }],
+      truncated: true,
+      cursor: 'opaque-next-token'
+    };
+  };
+  const first = await worker.fetch(new Request('https://example.com/api/v1/live-quotes?limit=1'), env);
+  assert.equal(first.status, 200);
+  const firstPage = await first.json();
+  assert.equal(firstPage.run_id, '2026-10-09');
+  assert.equal(firstPage.market_data_date, '2026-10-09');
+  assert.deepEqual(firstPage.items, [{ code: '7203', price: 2100, quote_date: '2026-10-09' }]);
+  assert.equal(firstPage.next_cursor, 'opaque-next-token');
+  assert.equal(listCalls[0].prefix, 'market/yfinance/live_quote_runs/2026-10-09/');
+  assert.equal(listCalls[0].limit, 1);
+
+  const second = await worker.fetch(new Request('https://example.com/api/v1/live-quotes?run_id=2026-10-09&market_data_date=2026-10-09&cursor=opaque-next-token'), env);
+  assert.equal(second.status, 200);
+  assert.equal(listCalls[1].cursor, 'opaque-next-token');
+  assert.equal((await worker.fetch(new Request('https://example.com/api/v1/live-quotes?run_id=../bad'), env)).status, 400);
+});
+
+test('legacy completion metadata is not exposed as a published quote snapshot', async () => {
+  const env = dividendEnvironment(new Map([['market/yfinance/live_quotes_completion.json', {
+    last_completed_date: '2026-10-10', live_quote_count: 3960
+  }]]));
+  env.MARKET_DATA.list = async () => assert.fail('no versioned run should be listed');
+  const response = await worker.fetch(new Request('https://example.com/api/v1/live-quotes?limit=2'), env);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    run_id: null,
+    market_data_date: null,
+    complete: false,
+    legacy_unpublished: true,
+    items: [],
+    next_cursor: null,
+  });
+});
+
+test('legacy 12-symbol queue deliveries are forwarded as six two-symbol jobs', async () => {
+  const messages = [];
+  let acknowledged = false;
+  const env = {
+    MARKET_DATA: {
+      get: async key => key.endsWith('live_quotes_state.json')
+        ? { json: async () => ({ universe_size: 3960, queue_run_date: '2026-10-10' }) }
+        : null
+    },
+    MARKET_PRICE_QUEUE: { sendBatch: async batch => messages.push(...batch) },
+    DB: { prepare: () => ({ bind: () => ({ run: async () => ({ success: true }) }) }) }
+  };
+  await worker.queue({ queue: 'diview-market-prices', messages: [{
+    body: { run_date: '2026-10-10', batch_index: 7, total_batches: 330, symbols: Array.from({ length: 12 }, (_, index) => String(7200 + index)) },
+    ack: () => { acknowledged = true; },
+    retry: () => assert.fail('legacy forwarding should not retry')
+  }] }, env);
+
+  assert.equal(acknowledged, true);
+  assert.equal(messages.length, 6);
+  assert.ok(messages.every(message => message.body.symbols.length === 2));
+  assert.deepEqual(messages.map(message => message.body.batch_index), [42, 43, 44, 45, 46, 47]);
+  assert.ok(messages.every(message => message.body.total_batches === 1980));
 });
 
 test('feedback acceptance, retries, collisions and storage failure are distinct', async () => {
