@@ -1,6 +1,7 @@
 package com.kurogane.dividend.ui.screens
 
 import com.kurogane.dividend.ui.components.AdaptiveRow
+import com.kurogane.dividend.ui.components.RollingMoney
 import androidx.compose.ui.res.stringResource
 import com.kurogane.dividend.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -120,23 +121,33 @@ fun AnnualDividendScreen(
     var commonHeaderHeightPx by remember { mutableIntStateOf(with(density) { 112.dp.roundToPx() }) }
     var subtabRowHeightPx by remember { mutableIntStateOf(with(density) { 56.dp.roundToPx() }) }
     var lastSettledPage by remember { mutableIntStateOf(pagerState.settledPage) }
-    val settledHeaderWasHidden = listStates[lastSettledPage].let { state ->
-        if (state.firstVisibleItemIndex > 0) commonHeaderHeightPx >= subtabRowHeightPx
-        else state.firstVisibleItemScrollOffset >= subtabRowHeightPx
-    }
-    val headerScrollOffsetPx = listStates[lastSettledPage].let { state ->
+    fun headerScrollOffset(page: Int): Int = listStates[page].let { state ->
         if (state.firstVisibleItemIndex > 0) commonHeaderHeightPx
         else state.firstVisibleItemScrollOffset.coerceAtMost(commonHeaderHeightPx)
+    }
+    val pagePosition = (
+        pagerState.currentPage + pagerState.currentPageOffsetFraction
+    ).coerceIn(0f, 2f)
+    val swipeProgress = kotlin.math.abs(pagePosition - lastSettledPage).coerceIn(0f, 1f)
+    val settledHeaderOffsetPx = headerScrollOffset(lastSettledPage)
+    val targetPageAtTop = pagerState.targetPage != lastSettledPage &&
+        listStates[pagerState.targetPage].firstVisibleItemIndex == 0 &&
+        listStates[pagerState.targetPage].firstVisibleItemScrollOffset == 0
+    val sourceHeaderHidden = settledHeaderOffsetPx >= subtabRowHeightPx
+    val revealHeaderDuringSwipe = sourceHeaderHidden && targetPageAtTop
+    val swipeHeaderHideOffsetPx = ((commonHeaderHeightPx - settledHeaderOffsetPx) * swipeProgress).roundToInt()
+    val headerScrollOffsetPx = if (revealHeaderDuringSwipe) {
+        (commonHeaderHeightPx * (1f - swipeProgress)).roundToInt()
+    } else {
+        maxOf(settledHeaderOffsetPx, settledHeaderOffsetPx + swipeHeaderHideOffsetPx)
     }
     LaunchedEffect(pagerState, listStates) {
         snapshotFlow { pagerState.settledPage }.collect { page ->
             if (page != lastSettledPage) {
-                val source = listStates[lastSettledPage]
-                val sourceHeaderHidden = if (source.firstVisibleItemIndex > 0) {
-                    commonHeaderHeightPx >= subtabRowHeightPx
-                } else source.firstVisibleItemScrollOffset >= subtabRowHeightPx
                 val target = listStates[page]
-                if (sourceHeaderHidden && target.firstVisibleItemIndex == 0 && target.firstVisibleItemScrollOffset == 0) {
+                val sourceWasHidden = headerScrollOffset(lastSettledPage) >= subtabRowHeightPx
+                val targetWasAtTop = target.firstVisibleItemIndex == 0 && target.firstVisibleItemScrollOffset == 0
+                if (targetWasAtTop && !sourceWasHidden) {
                     target.scrollToItem(1)
                 }
                 lastSettledPage = page
@@ -170,24 +181,29 @@ fun AnnualDividendScreen(
               beyondViewportPageCount = 1,
               key = { it }
           ) { page ->
-            val pageScrollState = listStates[page]
-            val alignIncomingTopContent = page != lastSettledPage &&
-                page == pagerState.targetPage &&
-                settledHeaderWasHidden &&
-                pageScrollState.firstVisibleItemIndex == 0 &&
-                pageScrollState.firstVisibleItemScrollOffset == 0
-            val incomingContentOffsetPx = if (alignIncomingTopContent) {
-                commonHeaderHeightPx + with(density) { 16.dp.roundToPx() }
-            } else 0
+            val incomingHeaderSpacePx = if (page == pagerState.targetPage && page != lastSettledPage) {
+                if (revealHeaderDuringSwipe) {
+                    (commonHeaderHeightPx * swipeProgress).roundToInt()
+                } else {
+                    commonHeaderHeightPx - headerScrollOffsetPx
+                }
+            } else commonHeaderHeightPx
             LazyColumn(
                 state = listStates[page],
                 modifier = Modifier
                     .fillMaxSize()
-                    .offset { IntOffset(0, -incomingContentOffsetPx) }
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                item { Spacer(Modifier.height(with(androidx.compose.ui.platform.LocalDensity.current) { commonHeaderHeightPx.toDp() })) }
+                item {
+                    Spacer(
+                        Modifier.height(
+                            with(density) {
+                                incomingHeaderSpacePx.coerceAtLeast(0).toDp()
+                            }
+                        )
+                    )
+                }
 
             // Hero Card: Annual Expected Dividend
             if (page == 0) item {
@@ -241,18 +257,16 @@ fun AnnualDividendScreen(
 
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(verticalAlignment = Alignment.Bottom) {
-                            Text(
-                                text = if (isPrivacyActive) "¥••••••••" else "¥${currencyFormat.format(grossAnnualDividend.toLong())}",
+                            RollingMoney(
+                                amount = if (isPrivacyActive) "¥••••••••" else "¥${currencyFormat.format(grossAnnualDividend.toLong())}",
                                 modifier = Modifier.weight(1f, fill = false),
                                 style = MaterialTheme.typography.headlineLarge.copy(
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = OnSurface,
-                                    fontFamily = FontFamily.SansSerif,
-                                    fontSize = AppTextSize.hero,
-                                    letterSpacing = (-0.5).sp
-                                ),
-                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
-                                softWrap = false
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = OnSurface,
+                                        fontFamily = FontFamily.SansSerif,
+                                        fontSize = AppTextSize.hero,
+                                        letterSpacing = (-0.5).sp
+                                )
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(R.string.annual_dividend_text_2), color = OnSurfaceVariant, fontSize = AppTextSize.caption, modifier = Modifier.padding(bottom = 4.dp))
@@ -776,13 +790,15 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
         return classifyIndustry(industriesByCode[code])
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(chartMode) {
+        isVisible = false
+        withFrameNanos { }
         isVisible = true
     }
 
     val animatedProgress by animateFloatAsState(
         targetValue = if (isVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 480, easing = FastOutSlowInEasing),
         label = "donutAnimation"
     )
 
@@ -949,6 +965,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(if (chartMode == "holding") PrimaryEmerald else Color.Transparent)
+                                .animateContentSize(animationSpec = tween(190))
                                 .clickable { chartMode = "holding" }
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
@@ -965,6 +982,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(if (chartMode == "dividend") PrimaryEmerald else Color.Transparent)
+                                .animateContentSize(animationSpec = tween(190))
                                 .clickable { chartMode = "dividend" }
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
@@ -1899,7 +1917,11 @@ private fun CompoundingSimulationSection(
                     Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(stringResource(R.string.annual_dividend_text_46 , selectedYear.year), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                            Text(stringResource(R.string.annual_dividend_text_47 , money(selectedYear.amount)), color = OnSurface, fontWeight = FontWeight.Bold)
+                            AnimatedContent(targetState = money(selectedYear.amount),
+                                transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(180)) },
+                                label = "Selected year dividend") { amount ->
+                                Text(stringResource(R.string.annual_dividend_text_47, amount), color = OnSurface, fontWeight = FontWeight.Bold)
+                            }
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Text(stringResource(R.string.annual_dividend_text_48 , selectedYear.covered, selectedYear.expected), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
@@ -2207,6 +2229,13 @@ private fun AssetTrackingSection(
                 val assetChartGridColor = BorderColor
                 val assetChartAccent = PrimaryEmerald
                 val assetChartBarColor = PrimaryEmeraldContainer
+                var assetBarsVisible by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) { assetBarsVisible = true }
+                val assetBarProgress by animateFloatAsState(
+                    targetValue = if (assetBarsVisible) 1f else 0f,
+                    animationSpec = tween(durationMillis = 600),
+                    label = "Asset history bars"
+                )
                 Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2231,8 +2260,8 @@ private fun AssetTrackingSection(
                         val costRatio = (costVal / maxVal).toFloat()
                         val assetRatio = (assetVal / maxVal).takeIf { it.isFinite() }?.toFloat() ?: 0f
 
-                        val costBarHeight = size.height * costRatio * 0.8f
-                        val assetBarHeight = size.height * assetRatio * 0.8f
+                        val costBarHeight = size.height * costRatio * 0.8f * assetBarProgress
+                        val assetBarHeight = size.height * assetRatio * 0.8f * assetBarProgress
 
                         val groupLeft = spacing + i * (groupWidth + spacing)
 
