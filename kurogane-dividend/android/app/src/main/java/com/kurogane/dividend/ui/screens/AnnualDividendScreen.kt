@@ -234,7 +234,7 @@ fun AnnualDividendScreen(
                     border = BorderStroke(1.dp, BorderColor)
                 ) {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(start = 18.dp, top = 0.dp, end = 18.dp, bottom = 12.dp)
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp)
                     ) {
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
@@ -275,7 +275,7 @@ fun AnnualDividendScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Row(verticalAlignment = Alignment.Bottom) {
                             RollingMoney(
                                 amount = if (isPrivacyActive) "¥••••••••" else "¥${currencyFormat.format(grossAnnualDividend.toLong())}",
@@ -291,16 +291,16 @@ fun AnnualDividendScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(R.string.annual_dividend_text_2), color = OnSurfaceVariant, fontSize = AppTextSize.caption, modifier = Modifier.padding(bottom = 4.dp))
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_9) else resources.getString(R.string.annual_dividend_label_10, (currencyFormat.format(netAnnualDividend.toLong())).toString()),
                             fontSize = AppTextSize.caption,
                             fontWeight = FontWeight.Medium,
                             color = OnSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
@@ -313,7 +313,7 @@ fun AnnualDividendScreen(
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(SurfaceContainerHigh)
                                     .border(0.5.dp, BorderColor, RoundedCornerShape(14.dp))
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(stringResource(R.string.annual_dividend_text_3), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1, softWrap = false)
@@ -348,7 +348,7 @@ fun AnnualDividendScreen(
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(SurfaceContainerHigh)
                                     .border(0.5.dp, BorderColor, RoundedCornerShape(14.dp))
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(stringResource(R.string.annual_dividend_text_5), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1, softWrap = false)
