@@ -41,6 +41,8 @@ jobs:
       - name: Check Tokyo Stock Exchange session
         id: check
         run: python scripts/yfinance_r2/check_market_day.py
+        env:
+          ALLOW_CLOSED_MARKET: ${{ github.event_name == 'workflow_dispatch' }}
 
   universe:
     needs: market-calendar
@@ -82,7 +84,7 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
       - name: Fetch full history and upload to R2
-        run: python scripts/yfinance_r2/fetch_and_upload.py
+        run: python scripts/yfinance_r2/fetch_app_data.py
         env:
           MARKET_UNIVERSE_CSV: irbank-universe.csv
           YFINANCE_INITIAL_PERIOD: max
@@ -120,7 +122,7 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
       - name: Publish latest summary
-        run: python scripts/yfinance_r2/fetch_and_upload.py --aggregate
+        run: python scripts/yfinance_r2/fetch_app_data.py --aggregate
         env:
           MARKET_UNIVERSE_CSV: irbank-universe.csv
           YFINANCE_SHARD_COUNT: "24"
