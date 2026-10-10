@@ -444,32 +444,6 @@ fun AnnualDividendScreen(
                       modifier = Modifier.weight(1f)
                   )
               }
-              Spacer(Modifier.height(16.dp))
-              val activeTab = pagerState.currentPage
-              val activeLabel = when (activeTab) {
-                  1 -> resources.getString(R.string.annual_dividend_label_49)
-                  2 -> resources.getString(R.string.annual_dividend_label_61)
-                  else -> resources.getString(R.string.annual_dividend_label_19)
-              }
-              AdaptiveRow(
-                  modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                  horizontalArrangement = Arrangement.SpaceBetween,
-                  verticalAlignment = Alignment.CenterVertically
-              ) {
-                  Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                      Surface(shape = RoundedCornerShape(50), color = PrimaryEmerald.copy(alpha = 0.14f)) {
-                          Text(
-                              "表示中",
-                              modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                              color = PrimaryEmerald,
-                              fontSize = AppTextSize.dense,
-                              fontWeight = FontWeight.Bold
-                          )
-                      }
-                      Text(activeLabel, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                  }
-                  Text("左右スワイプで切替  ${activeTab + 1}/3", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-              }
           }
         }
     }
