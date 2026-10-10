@@ -728,7 +728,7 @@ fun AssetManagementScreen(
                                             ) {
                                                 Text(
                                                     holding.code,
-                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.6.dp),
                                                     color = when (holding.category) {
                                                         Category.US -> SecondaryIndigo
                                                         Category.FUND -> ErrorRed
@@ -745,7 +745,7 @@ fun AssetManagementScreen(
                                                 Surface(shape = RoundedCornerShape(4.dp), color = BorderColor) {
                                                     Text(
                                                         compactAccountLabel(holding.accountType),
-                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.6.dp),
                                                         color = SecondaryIndigo,
                                                         fontSize = 8.sp,
                                                         fontWeight = FontWeight.Medium,
