@@ -38,6 +38,11 @@ data class CloudflareMarketQuote(
     val annualDividendPerShare: Double?
 )
 
+data class CloudflarePriceCatalogSnapshot(
+    val quotes: Map<String, CloudflareMarketQuote>,
+    val marketDataDate: String?
+)
+
 data class CloudflarePopularStock(
     val code: String,
     val name: String,
@@ -73,7 +78,11 @@ data class CloudflareDividendMonths(
     val eventsBySymbol: Map<String, List<CloudflareDividendEvent>> = emptyMap()
 )
 
-data class CloudflareDividendEvent(val date: LocalDate, val amountPerShare: Double)
+data class CloudflareDividendEvent(
+    val date: LocalDate,
+    val amountPerShare: Double,
+    val finalRightsDate: LocalDate? = null
+)
 
 /** Public, read-only access to the app's Cloudflare D1/R2 data. No credentials belong in the APK. */
 class CloudflareMarketRepository(
@@ -128,11 +137,11 @@ class CloudflareMarketRepository(
         )
     }
 
-    /** Fetches the public catalog only when the caller's JST/12-hour gate permits a price refresh. */
-    suspend fun fetchPriceQuotes(): Map<String, CloudflareMarketQuote> = withContext(ioDispatcher) {
+    /** Fetches prices together with the server timestamp used to confirm the daily refresh completed. */
+    suspend fun fetchPriceCatalogSnapshot(): CloudflarePriceCatalogSnapshot = withContext(ioDispatcher) {
         val root = getJson("/api/v1/search-catalog")
         val rows = root.optJSONArray("items") ?: error("Cloudflareの銘柄カタログにitemsがありません")
-        buildMap {
+        val quotes = buildMap {
             for (index in 0 until rows.length()) {
                 val row = rows.optJSONObject(index) ?: continue
                 val code = row.optString("code").trim().uppercase()
@@ -145,7 +154,10 @@ class CloudflareMarketRepository(
                 }
             }
         }
+        CloudflarePriceCatalogSnapshot(quotes, root.optString("market_data_date").takeIf(String::isNotBlank))
     }
+
+    suspend fun fetchPriceQuotes(): Map<String, CloudflareMarketQuote> = fetchPriceCatalogSnapshot().quotes
 
     suspend fun fetchPriceCatalog(): Map<String, Double> = fetchPriceQuotes().mapValues { it.value.price }
 
@@ -243,7 +255,8 @@ class CloudflareMarketRepository(
                         ?: return@mapNotNull null
                     val amount = event.numberOrNull("amount")?.takeIf { it > 0.0 }
                         ?: return@mapNotNull null
-                    CloudflareDividendEvent(date, amount)
+                    val finalRightsDate = runCatching { LocalDate.parse(event.optString("final_rights_date")) }.getOrNull()
+                    CloudflareDividendEvent(date, amount, finalRightsDate)
                 }.distinctBy { it.date to it.amountPerShare }.sortedBy { it.date })
             }
         }
@@ -298,16 +311,43 @@ class CloudflareMarketRepository(
 
 class MarketHttpException(val status: Int) : IOException("Cloudflare API HTTP $status")
 
-/** The price feed is eligible only once on each Japan-local date, and never more often than 12 hours. */
+/** Refreshes once per Japan-local date, with a throttled after-close retry until the day's catalog is published. */
 object PriceRefreshPolicy {
     private const val MINIMUM_INTERVAL_MILLIS = 12L * 60L * 60L * 1_000L
+    private const val POST_CLOSE_PROBE_INTERVAL_MILLIS = 30L * 60L * 1_000L
     private val japanZone = java.time.ZoneId.of("Asia/Tokyo")
 
-    fun shouldFetch(nowEpochMillis: Long, lastFetchEpochMillis: Long, lastFetchJapanDate: String?): Boolean {
-        if (lastFetchEpochMillis <= 0L) return true
+    fun shouldFetch(
+        nowEpochMillis: Long,
+        lastFetchEpochMillis: Long,
+        lastFetchJapanDate: String?,
+        lastPostCloseProbeEpochMillis: Long = 0L,
+        lastPostCloseFetchJapanDate: String? = null
+    ): Boolean {
         val todayInJapan = java.time.Instant.ofEpochMilli(nowEpochMillis).atZone(japanZone).toLocalDate().toString()
-        if (lastFetchJapanDate == todayInJapan) return false
+        if (lastFetchEpochMillis <= 0L) {
+            return lastPostCloseProbeEpochMillis <= 0L || nowEpochMillis - lastPostCloseProbeEpochMillis >= POST_CLOSE_PROBE_INTERVAL_MILLIS
+        }
+        if (lastFetchJapanDate == todayInJapan) {
+            if (!isAfterClose(nowEpochMillis) || lastPostCloseFetchJapanDate == todayInJapan) return false
+            return lastPostCloseProbeEpochMillis <= 0L || nowEpochMillis - lastPostCloseProbeEpochMillis >= POST_CLOSE_PROBE_INTERVAL_MILLIS
+        }
         return nowEpochMillis - lastFetchEpochMillis >= MINIMUM_INTERVAL_MILLIS
+    }
+
+    fun isAfterClose(epochMillis: Long): Boolean =
+        java.time.Instant.ofEpochMilli(epochMillis).atZone(japanZone).hour >= 18
+
+    fun isCatalogCurrentForJapanDate(nowEpochMillis: Long, catalogDate: String?): Boolean {
+        val catalogMarketDate = catalogDate?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() } ?: return false
+        val todayInJapan = java.time.Instant.ofEpochMilli(nowEpochMillis).atZone(japanZone).toLocalDate()
+        val dayOfWeek = todayInJapan.dayOfWeek
+        val latestWeekday = when (dayOfWeek) {
+            java.time.DayOfWeek.SATURDAY -> todayInJapan.minusDays(1)
+            java.time.DayOfWeek.SUNDAY -> todayInJapan.minusDays(2)
+            else -> todayInJapan
+        }
+        return catalogMarketDate >= latestWeekday
     }
 
     fun japanDate(epochMillis: Long): String =

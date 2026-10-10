@@ -187,6 +187,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 Scaffold(
                     snackbarHost = { SnackbarHost(snackbarHostState) },
                     modifier = Modifier.fillMaxSize(),
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
                     containerColor = dynamicBg,
                     topBar = {
                         val isMainTab = currentRoute in listOf("asset", "annual", "roadmap", "watchlist")
@@ -454,6 +455,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     viewModel = viewModel,
                                     onNavigateToDetail = { code -> navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true } },
                                     onOpenAddHolding = { code ->
+                                        prefilledAddHoldingCode = code
+                                        showAddHoldingSheet = true
+                                    },
+                                    onOpenHoldingRegistration = { code ->
                                         prefilledAddHoldingCode = code
                                         showAddHoldingSheet = true
                                     }
