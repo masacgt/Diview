@@ -30,6 +30,20 @@ class FinancialDataTest {
         assertEquals("未取得", data.profile.payoutRatio.financialText())
         assertTrue(data.dividends.isEmpty())
     }
+    @Test fun identifiesObservedCalendarYearDistributionsWithoutCallingThemFiscalMetrics() {
+        val root = JSONObject("""{"security":{"code":"1306"},"dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"fiscal_year":2024,"annual_dps_adjusted":100},{"fiscal_year":2025,"annual_dps_adjusted":110}]}}""")
+        val data = FinancialData.parse(root, "1306")
+        assertEquals("calendar_year_observed_distributions", data.dividendHistoryBasis)
+        assertEquals(110.0, data.dividends.last().dps, 0.0)
+        assertEquals(-1, data.profile.noCutYears)
+        assertTrue(data.profile.growthRate.isNaN())
+    }
+    @Test fun duplicateFiscalYearUsesLastPublishedRecordOnlyOnce() {
+        val root = JSONObject("""{"security":{"code":"7203"},"dividends":{"records":[{"fiscal_year":2024,"annual_dps_adjusted":10},{"fiscal_year":2024,"annual_dps_adjusted":12},{"fiscal_year":2025,"annual_dps_adjusted":15}]}}""")
+        val data = FinancialData.parse(root, "7203")
+        assertEquals(listOf(2024, 2025), data.dividends.map { it.year })
+        assertEquals(12.0, data.dividends.first().dps, 0.0)
+    }
     @Test fun rejectsOtherSecurityAndDoesNotUseUnadjustedHistory() {
         assertThrows(IllegalArgumentException::class.java) { FinancialData.parse(document(), "2914") }
         val root = document()

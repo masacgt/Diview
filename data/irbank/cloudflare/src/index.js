@@ -1499,11 +1499,51 @@ export default {
     const financialMatch = url.pathname.match(/^\/api\/v1\/financial-data\/([A-Z0-9]{4})$/);
     if (financialMatch) {
       if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
-      const object = await env.MARKET_DATA.get(`market/irbank/v1/securities/${financialMatch[1]}/overview.json`);
-      if (!object) return json({ error: 'not_found' }, 404);
-      const document = await object.json();
-      return json({ security: document.security, financials: { annual: document.financials?.annual || [] },
-        dividends: document.dividends, valuation: document.valuation, sources: document.sources });
+      const code = financialMatch[1];
+      const object = await env.MARKET_DATA.get(`market/irbank/v1/securities/${code}/overview.json`);
+      let document = null;
+      if (object) {
+        document = await object.json();
+        const issuerRecords = document.dividends?.records;
+        const hasUsableIssuerDividend = Array.isArray(issuerRecords) && issuerRecords.some(record =>
+          Number.isInteger(Number(record?.fiscal_year)) && Number(record.fiscal_year) >= 1900 &&
+          Number(record.fiscal_year) <= 2100 && finiteNumber(record?.annual_dps_adjusted) != null &&
+          Number(record.annual_dps_adjusted) >= 0);
+        if (hasUsableIssuerDividend) {
+          return json({ security: document.security, financials: { annual: document.financials?.annual || [] },
+            dividends: document.dividends, valuation: document.valuation, sources: document.sources });
+        }
+      }
+
+      // ETFs and funds have no issuer financial statements; use Yahoo's observed
+      // distribution events, grouped by complete calendar year. Never label
+      // these as fiscal-year/company-reported DPS.
+      const unified = await env.MARKET_DATA.get(`market/securities/v1/${code}.json`);
+      if (!unified) return json({ error: 'not_found' }, 404);
+      const bundle = await unified.json();
+      if (bundle.security?.code && String(bundle.security.code) !== code) return json({ error: 'not_found' }, 404);
+      const events = bundle.dividend_history_by_source?.yfinance;
+      if (!Array.isArray(events) || events.length === 0) return json({ error: 'not_found' }, 404);
+      const currentYear = Number(new Intl.DateTimeFormat('en', { timeZone: 'Asia/Tokyo', year: 'numeric' }).format(new Date()));
+      const yearly = new Map();
+      const seenEvents = new Set();
+      for (const event of events) {
+        const date = typeof event?.date === 'string' ? event.date : '';
+        const year = Number(date.slice(0, 4));
+        const amount = finiteNumber(event?.amount);
+        const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T00:00:00.000Z`) : null;
+        if (!parsedDate || parsedDate.toISOString().slice(0, 10) !== date || !Number.isInteger(year) || year < 1900 || year >= currentYear || amount == null || amount <= 0) continue;
+        const eventKey = `${date}:${amount}`;
+        if (seenEvents.has(eventKey)) continue;
+        seenEvents.add(eventKey);
+        yearly.set(year, (yearly.get(year) || 0) + amount);
+      }
+      const records = [...yearly.entries()].sort(([a], [b]) => a - b)
+        .map(([year, amount]) => ({ fiscal_year: year, annual_dps_adjusted: amount }));
+      if (!records.length) return json({ error: 'not_found' }, 404);
+      return json({ security: document?.security || { code }, financials: { annual: document?.financials?.annual || [] },
+        dividends: { records, history_basis: 'calendar_year_observed_distributions', source: 'Yahoo Finance via yfinance' },
+        valuation: document?.valuation || { history: [] }, sources: { ...(bundle.sources || {}), ...(document?.sources || {}) } });
     }
 
     const irbankMatch = url.pathname.match(/^\/api\/v1\/irbank\/securities\/([^/]+)(?:\/(prices|weekly-margin|jsf-margin))?$/);
