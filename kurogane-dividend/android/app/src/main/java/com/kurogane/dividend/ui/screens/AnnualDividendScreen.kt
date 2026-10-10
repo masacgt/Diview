@@ -706,7 +706,6 @@ private fun MonthlyDividendEstimateCard(
             }
 
             Text(stringResource(R.string.annual_dividend_text_7 , holdings.count { it.dps > 0 && it.dividendMonths.isEmpty() }), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-            Text(stringResource(R.string.annual_dividend_info_note), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
             Spacer(modifier = Modifier.height(18.dp))
 
             Row(
@@ -2052,7 +2051,7 @@ private fun CompoundingSimulationSection(
 
         AdaptiveRow(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.AutoMirrored.Filled.TrendingUp, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
@@ -2068,14 +2067,13 @@ private fun CompoundingSimulationSection(
                 }
             }
             Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.AutoMirrored.Filled.ShowChart, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(4.dp))
                         Text(stringResource(R.string.annual_dividend_text_37), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
                     Text(cagr?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: resources.getString(R.string.not_available), color = PrimaryEmerald, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                    Text(stringResource(R.string.annual_dividend_text_38), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     Text(stringResource(R.string.annual_dividend_text_39 , signedMoney(averageAnnualIncrease)), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                 }
             }

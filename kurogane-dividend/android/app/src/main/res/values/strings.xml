@@ -77,7 +77,6 @@
     <string name="annual_dividend_info_content_description">配当グラフの説明</string>
     <string name="annual_dividend_info_title">グラフの見方</string>
     <string name="annual_dividend_info_description">年間合計は現在の年間配当見込みです。棒グラフは過去365日の実際の配当支払額を、現在の保有株数で月別に集計しています。見込みと実績は一致しないことがあります。配当履歴がない銘柄はグラフに含みません。</string>
-    <string name="annual_dividend_info_note">過去365日の実際の配当支払額を、現在の保有株数で月別に集計しています。</string>
     <string name="annual_dividend_1_s">"%1$s"</string>
     <string name="japanese_stocks">"日本株"</string>
     <string name="us_stocks">"米国株"</string>
