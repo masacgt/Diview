@@ -1,0 +1,36 @@
+name: Calculate monthly Japanese equity last rights dates
+
+on:
+  schedule:
+    # 18:17 UTC on day 1 is 03:17 JST on the first calendar day of each month.
+    - cron: "17 18 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yfinance-rights-dates
+  cancel-in-progress: false
+
+jobs:
+  calculate-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/yfinance_r2/requirements.txt
+      - name: Install calculation and R2 dependencies
+        run: python -m pip install -r scripts/yfinance_r2/requirements.txt
+      - name: Calculate rights dates from stored Yahoo dividend events
+        run: python scripts/yfinance_r2/calculate_rights_dates.py --upload
+        env:
+          CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: diview-market-data
+          R2_PREFIX: market/yfinance
