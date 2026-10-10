@@ -141,10 +141,13 @@ class CloudflareMarketRepository(
     suspend fun fetchPriceCatalogSnapshot(): CloudflarePriceCatalogSnapshot = withContext(ioDispatcher) {
         val root = getJson("/api/v1/search-catalog")
         val rows = root.optJSONArray("items") ?: error("Cloudflareの銘柄カタログにitemsがありません")
+        val catalogDate = root.optString("market_data_date").takeIf(String::isNotBlank)
         val quotes = buildMap {
             for (index in 0 until rows.length()) {
                 val row = rows.optJSONObject(index) ?: continue
-                val code = row.optString("code").trim().uppercase()
+                val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT)
+                val quoteDate = row.optString("quote_date").takeIf(String::isNotBlank)
+                if (catalogDate != null && quoteDate != null && quoteDate > catalogDate) continue
                 val price = row.numberOrNull("price")
                 if (isSecurityCode(code) && price != null && PortfolioMath.validMoney(price) && price > 0.0) {
                     val annualDividend = row.numberOrNull("annual_dividend_per_share")
@@ -153,8 +156,41 @@ class CloudflareMarketRepository(
                     put(code, CloudflareMarketQuote(price, annualDividend))
                 }
             }
+        }.toMutableMap()
+
+        var page = getJson("/api/v1/live-quotes?limit=200")
+        var liveDate: String? = null
+        var runId: String? = null
+        val legacyUnpublished = page.optBoolean("legacy_unpublished")
+        if (legacyUnpublished) quotes.clear()
+        while (true) {
+            val pageRunId = page.optString("run_id").takeIf(String::isNotBlank)
+            val pageDate = page.optString("market_data_date").takeIf(String::isNotBlank)
+            if (page.optBoolean("complete") && pageRunId != null && pageDate != null) {
+                if (runId == null) {
+                    runId = pageRunId
+                    liveDate = pageDate
+                }
+                if (pageRunId != runId || pageDate != liveDate) error("Cloudflareの価格ページが同じ更新回を指していません")
+                val liveRows = page.optJSONArray("items") ?: org.json.JSONArray()
+                for (index in 0 until liveRows.length()) {
+                    val row = liveRows.optJSONObject(index) ?: continue
+                    val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT)
+                    val price = row.numberOrNull("price")
+                        ?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }
+                    if (isSecurityCode(code) && price != null) {
+                        val annualDividend = quotes[code]?.annualDividendPerShare
+                        quotes[code] = CloudflareMarketQuote(price, annualDividend)
+                    }
+                }
+            }
+            val cursor = page.optString("next_cursor").takeIf(String::isNotBlank) ?: break
+            val encodedRunId = URLEncoder.encode(runId ?: error("価格ページのrun_idがありません"), Charsets.UTF_8.name())
+            val encodedDate = URLEncoder.encode(liveDate ?: error("価格ページの日付がありません"), Charsets.UTF_8.name())
+            val encodedCursor = URLEncoder.encode(cursor, Charsets.UTF_8.name())
+            page = getJson("/api/v1/live-quotes?limit=200&run_id=$encodedRunId&market_data_date=$encodedDate&cursor=$encodedCursor")
         }
-        CloudflarePriceCatalogSnapshot(quotes, root.optString("market_data_date").takeIf(String::isNotBlank))
+        CloudflarePriceCatalogSnapshot(quotes, if (legacyUnpublished) null else liveDate ?: catalogDate)
     }
 
     suspend fun fetchPriceQuotes(): Map<String, CloudflareMarketQuote> = fetchPriceCatalogSnapshot().quotes

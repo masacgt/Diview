@@ -25,6 +25,12 @@ class CloudflareMarketRepositoryTest {
     private fun repository(connection: Connection, base: String = "https://example.com") =
         CloudflareMarketRepository(base, Dispatchers.Unconfined) { connection }
 
+    private fun repository(connections: MutableList<Connection>, requestedUrls: MutableList<String>) =
+        CloudflareMarketRepository("https://example.com", Dispatchers.Unconfined) { url ->
+            requestedUrls += url.toString()
+            connections.removeAt(0)
+        }
+
     @Test fun parsesValidSecurityAndClosesTheConnection() = runBlocking {
         val connection = Connection(200, """{"code":"7203","name":"トヨタ","dividend":{"annual_dps_adjusted":100},"market_price":{"close":2000}}""")
         val stock = repository(connection).getSecurity(" 7203 ")!!
@@ -93,6 +99,43 @@ class CloudflareMarketRepositoryTest {
     @Test fun catalogFiltersNonfiniteNegativeAndZeroPrices() = runBlocking {
         val result = repository(Connection(200, """{"items":[{"code":"7203","price":2000},{"code":"9999","price":-1},{"code":"130A","price":"NaN"},{"code":"0000","price":0}]}""")).fetchPriceCatalog()
         assertEquals(mapOf("7203" to 2000.0), result)
+    }
+
+    @Test fun priceSnapshotPagesCompletedQuotesAndIgnoresPartialCatalogRows() = runBlocking {
+        val connections = mutableListOf(
+            Connection(200, """{"market_data_date":"2026-10-09","items":[
+                {"code":"7203","price":2000,"annual_dividend_per_share":100,"quote_date":"2026-10-09"},
+                {"code":"9999","price":100,"annual_dividend_per_share":25,"quote_date":"2026-10-09"},
+                {"code":"130A","price":500,"quote_date":"2026-10-10"}]}"""),
+            Connection(200, """{"run_id":"2026-10-09","market_data_date":"2026-10-09","complete":true,
+                "items":[{"code":"7203","price":2100}],"next_cursor":"next /="}"""),
+            Connection(200, """{"run_id":"2026-10-09","market_data_date":"2026-10-09","complete":true,
+                "items":[{"code":"9999","price":110}],"next_cursor":null}""")
+        )
+        val urls = mutableListOf<String>()
+        val snapshot = repository(connections, urls).fetchPriceCatalogSnapshot()
+
+        assertEquals("2026-10-09", snapshot.marketDataDate)
+        assertEquals(setOf("7203", "9999"), snapshot.quotes.keys)
+        assertEquals(2100.0, snapshot.quotes.getValue("7203").price, 0.0)
+        assertEquals(100.0, snapshot.quotes.getValue("7203").annualDividendPerShare!!, 0.0)
+        assertEquals(110.0, snapshot.quotes.getValue("9999").price, 0.0)
+        assertEquals(25.0, snapshot.quotes.getValue("9999").annualDividendPerShare!!, 0.0)
+        assertEquals(3, urls.size)
+        assertTrue(urls[1].contains("/api/v1/live-quotes?limit=200"))
+        assertTrue(urls[2].contains("run_id=2026-10-09"))
+        assertTrue(urls[2].contains("market_data_date=2026-10-09"))
+        assertTrue(urls[2].contains("cursor=next+%2F%3D"))
+    }
+
+    @Test fun priceSnapshotDoesNotTrustLegacyCompletionWithoutRunSnapshot() = runBlocking {
+        val snapshot = repository(mutableListOf(
+            Connection(200, """{"market_data_date":"2026-10-10","items":[{"code":"7203","price":2000,"quote_date":"2026-10-10"}]}"""),
+            Connection(200, """{"run_id":null,"market_data_date":null,"complete":false,"legacy_unpublished":true,"items":[],"next_cursor":null}""")
+        ), mutableListOf()).fetchPriceCatalogSnapshot()
+
+        assertNull(snapshot.marketDataDate)
+        assertTrue(snapshot.quotes.isEmpty())
     }
 
     @Test fun parsesCloudflareDividendMonthsAndKeepsOnlyRequestedSymbolsAndValidMonths() = runBlocking {

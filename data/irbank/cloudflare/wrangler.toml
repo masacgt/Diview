@@ -2,6 +2,10 @@ name = "diview-irbank"
 compatibility_date = "2026-10-03"
 main = "src/index.js"
 
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [triggers]
 crons = ["17 * * * *"]
 
