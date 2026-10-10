@@ -70,24 +70,11 @@ val BorderBlue: Color @Composable get() = BorderColor
 @Composable
 private fun OdometerAmount(
     targetValue: Long,
+    animate: Boolean = true,
     numberFormat: NumberFormat,
     modifier: Modifier = Modifier
 ) {
-    val displayedValue = remember { mutableLongStateOf(0L) }
-    LaunchedEffect(targetValue) {
-        val startValue = displayedValue.longValue
-        val progress = Animatable(0f)
-        progress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing)
-        ) {
-            displayedValue.longValue = startValue +
-                ((targetValue - startValue).toDouble() * value).roundToLong()
-        }
-        displayedValue.longValue = targetValue
-    }
-
-    val displayedNumber = numberFormat.format(displayedValue.longValue)
+    val targetNumber = numberFormat.format(targetValue)
     val textStyle = TextStyle(
         fontSize = AppTextSize.hero,
         fontWeight = FontWeight.ExtraBold,
@@ -105,25 +92,32 @@ private fun OdometerAmount(
     ) {
         Text(text = "¥", style = textStyle)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            displayedNumber.forEachIndexed { index, character ->
-                val place = displayedNumber.length - index - 1
+            targetNumber.forEachIndexed { index, character ->
+                val place = targetNumber.length - index - 1
                 key("odometer-place-$place") {
                     if (character.isDigit()) {
+                        val finalDigit = character.digitToInt()
+                        var rollingDigit by remember(place, targetValue) {
+                            mutableIntStateOf(if (animate) (finalDigit + 2) % 10 else finalDigit)
+                        }
+                        LaunchedEffect(animate, targetValue, place) {
+                            if (animate) {
+                                rollingDigit = (finalDigit + 2) % 10
+                                repeat(8) {
+                                    kotlinx.coroutines.delay(55)
+                                    rollingDigit = (rollingDigit + 1) % 10
+                                }
+                            } else {
+                                rollingDigit = finalDigit
+                            }
+                        }
                         AnimatedContent(
-                            targetState = character,
+                            targetState = rollingDigit,
                             transitionSpec = {
-                                val direction = if (targetState >= initialState) 1 else -1
-                                (
-                                    slideInVertically(tween(120, easing = LinearOutSlowInEasing)) { height ->
-                                        height * direction
-                                    } + fadeIn(tween(90))
-                                ).togetherWith(
-                                    slideOutVertically(tween(120, easing = LinearOutSlowInEasing)) { height ->
-                                        -height * direction
-                                    } + fadeOut(tween(90))
-                                )
+                                (slideInVertically(tween(70, easing = LinearOutSlowInEasing)) { it } + fadeIn(tween(70)))
+                                    .togetherWith(slideOutVertically(tween(70, easing = LinearOutSlowInEasing)) { -it } + fadeOut(tween(70)))
                             },
-                            label = "asset-value-digit-$place"
+                            label = "asset-value-rolling-digit-$place"
                         ) { digit ->
                             Text(text = digit.toString(), style = textStyle)
                         }
