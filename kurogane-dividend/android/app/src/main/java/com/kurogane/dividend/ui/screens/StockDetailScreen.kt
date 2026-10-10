@@ -1783,59 +1783,6 @@ fun StockDetailScreen(
                 }
             }
 
-            // 6. Action buttons
-            item {
-                AdaptiveRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { onOpenAddHolding(currentHolding.code) },
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isOwnedHolding) Icons.Default.Edit else Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = OnSurface
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isOwnedHolding) stringResource(R.string.stock_detail_text_77) else stringResource(R.string.stock_detail_text_89),
-                            color = OnSurface,
-                            fontSize = AppTextSize.caption,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Button(
-                        onClick = { showDeleteHoldingConfirmation = true },
-                        enabled = isOwnedHolding,
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp), tint = ErrorRed)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(stringResource(R.string.stock_detail_text_78), color = ErrorRed, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            item {
-                Button(
-                    onClick = { showBuyUpSimulator = true },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)
-                ) {
-                    Icon(Icons.Default.Calculate, contentDescription = null, tint = OnPrimary)
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.stock_detail_text_12), color = OnPrimary, fontWeight = FontWeight.Bold)
-                }
-            }
-
             item {
                 val displayedBenefits = stockBenefits.filter { it.name.isNotBlank() || it.marketValue.isNotBlank() }
                 val benefitAnnualValue = displayedBenefits.sumOf { it.marketValue.toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0 }
@@ -2137,6 +2084,61 @@ fun StockDetailScreen(
                     }
                 }
             }
+
+
+            // 6. Action buttons
+            item {
+                AdaptiveRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { onOpenAddHolding(currentHolding.code) },
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isOwnedHolding) Icons.Default.Edit else Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = OnSurface
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isOwnedHolding) stringResource(R.string.stock_detail_text_77) else stringResource(R.string.stock_detail_text_89),
+                            color = OnSurface,
+                            fontSize = AppTextSize.caption,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Button(
+                        onClick = { showDeleteHoldingConfirmation = true },
+                        enabled = isOwnedHolding,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp), tint = ErrorRed)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(stringResource(R.string.stock_detail_text_78), color = ErrorRed, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            item {
+                Button(
+                    onClick = { showBuyUpSimulator = true },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)
+                ) {
+                    Icon(Icons.Default.Calculate, contentDescription = null, tint = OnPrimary)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.stock_detail_text_12), color = OnPrimary, fontWeight = FontWeight.Bold)
+                }
+            }
+
 
             item {
                 Spacer(modifier = Modifier.height(60.dp))
