@@ -68,7 +68,8 @@ val BorderBlue: Color @Composable get() = BorderColor
 fun AssetManagementScreen(
     viewModel: DividendViewModel,
     onNavigateToDetail: (String) -> Unit = {},
-    onOpenAddHolding: (String) -> Unit = {}
+    onOpenAddHolding: (String) -> Unit = {},
+    onOpenHoldingRegistration: (String) -> Unit = onOpenAddHolding
 ) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
@@ -209,6 +210,7 @@ fun AssetManagementScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         floatingActionButton = {
             Box(
                 modifier = Modifier
@@ -243,7 +245,7 @@ fun AssetManagementScreen(
                 .padding(innerPadding)
                 .testTag("asset_management_list"),
             state = listState,
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+            contentPadding = PaddingValues(horizontal = 14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             if (hasMissingExchangeRate) {
@@ -835,7 +837,7 @@ fun AssetManagementScreen(
                                     modifier = Modifier.weight(1f),
                                     showEditHint = true,
                                     onClick = {
-                                        quickEditHolding = holding
+                                        onOpenHoldingRegistration(holding.code)
                                     }
                                 )
                             }

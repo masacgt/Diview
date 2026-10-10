@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -48,6 +49,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
     // Bottom Sheet State for multi-account allocation modal
     var showBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showGrowthSimulator by rememberSaveable { mutableStateOf(false) }
 
     // Bottom Sheet State for Share Achievement modal (Added for sharing progress)
     var showShareBottomSheet by rememberSaveable { mutableStateOf(false) }
@@ -73,6 +75,8 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
     val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
     val targetYield by viewModel.roadmapTargetYield.collectAsStateWithLifecycle()
+    val simulatorMonthlyContribution by viewModel.growthSimulatorMonthlyContribution.collectAsStateWithLifecycle()
+    val simulatorDividendYield by viewModel.growthSimulatorDividendYield.collectAsStateWithLifecycle()
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
 
     // Calculate real-time annual expected dividend and monthly income
@@ -162,6 +166,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
 
     Scaffold(
         containerColor = BackgroundDark,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
         LazyColumn(
             state = listState,
@@ -385,6 +390,23 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         val shortage = maxOf(0L, activeStep.targetMonthly - monthlyIncome)
                         val shortageAnnual = shortage * 12
                         val neededPrincipalAt4 = Math.round(shortageAnnual / (targetYield / 100.0) / 10000.0)
+                        val summaryMetrics = listOf(
+                            Triple(
+                                R.string.roadmap_summary_annual_shortfall,
+                                stringResource(R.string.roadmap_summary_yen, currencyFormat.format(shortageAnnual)),
+                                ErrorRed
+                            ),
+                            Triple(
+                                R.string.roadmap_summary_yield,
+                                "${String.format(Locale.JAPAN, "%.2f", targetYield)}%",
+                                PrimaryEmerald
+                            ),
+                            Triple(
+                                R.string.roadmap_summary_required_principal,
+                                stringResource(R.string.roadmap_summary_principal, NumberFormat.getNumberInstance(Locale.JAPAN).format(neededPrincipalAt4)),
+                                OnSurface
+                            )
+                        )
 
                         Surface(
                             shape = RoundedCornerShape(10.dp),
@@ -392,18 +414,52 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             border = BorderStroke(1.dp, BorderBlue),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(
-                                modifier = Modifier.padding(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.Timeline, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = stringResource(R.string.roadmap_text_13 , currencyFormat.format(shortageAnnual), activeStep.step, neededPrincipalAt4, String.format(Locale.JAPAN, "%.2f", targetYield)),
-                                    color = OnSurfaceVariant,
+                                    text = stringResource(R.string.roadmap_text_13, activeStep.step),
+                                    color = PrimaryEmerald,
                                     fontSize = AppTextSize.dense,
-                                    lineHeight = 14.sp
+                                    fontWeight = FontWeight.Bold
                                 )
+                                AdaptiveRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    summaryMetrics.forEach { (labelRes, value, valueColor) ->
+                                        Surface(
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = SurfaceContainer,
+                                            border = BorderStroke(0.5.dp, BorderBlue.copy(alpha = 0.6f))
+                                        ) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 6.dp, vertical = 8.dp),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                Text(
+                                                    text = stringResource(labelRes),
+                                                    color = OnSurfaceVariant,
+                                                    fontSize = AppTextSize.dense,
+                                                    maxLines = 1
+                                                )
+                                                Text(
+                                                    text = value,
+                                                    color = valueColor,
+                                                    fontSize = AppTextSize.caption,
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -799,16 +855,16 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                     ) {
                                         listOf(3.5 to "3.50%", 4.0 to "4.00%", 4.5 to "4.50%").forEach { (yield, label) ->
                                             val capital = Math.round(shortageAnnualAmt / (yield / 100.0) / 10000.0)
-                                            Box(
+                                            Column(
                                                 modifier = Modifier
                                                     .weight(1f)
-                                                    .padding(vertical = 6.dp),
-                                                contentAlignment = Alignment.Center
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(SurfaceContainerHigh)
+                                                    .padding(horizontal = 3.dp, vertical = 10.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
-                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                    Text(label, fontSize = AppTextSize.dense, color = if (yield == targetYield) PrimaryEmerald else OnSurfaceVariant)
-                                                    Text(stringResource(R.string.roadmap_text_31 , capital), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = if (yield == targetYield) PrimaryEmerald else OnSurface)
-                                                }
+                                                Text(label, fontSize = AppTextSize.dense, color = if (yield == targetYield) PrimaryEmerald else OnSurfaceVariant)
+                                                Text(stringResource(R.string.roadmap_text_31 , capital), fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, color = if (yield == targetYield) PrimaryEmerald else OnSurface)
                                             }
                                         }
                                     }
@@ -822,10 +878,35 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
             item {
                 Spacer(modifier = Modifier.height(80.dp))
             }
+            item {
+                Button(
+                    onClick = { showGrowthSimulator = true },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)
+                ) {
+                    Icon(Icons.Default.HourglassBottom, contentDescription = null, tint = OnPrimary)
+                    Spacer(Modifier.width(8.dp))
+                    Text("未来30年・複利成長シミュレーター", color = OnPrimary, fontWeight = FontWeight.Bold)
+                }
+            }
+            item { Spacer(modifier = Modifier.height(20.dp)) }
         }
     }
 
     if (showBottomSheet) RoadmapAllocationSheet(viewModel) { showBottomSheet = false }
+
+    if (showGrowthSimulator) {
+        RoadmapGrowthSimulatorSheet(
+            currentAssets = holdings.sumOf { it.totalValuation },
+            currentCost = holdings.sumOf { it.totalCost },
+            monthlyContribution = simulatorMonthlyContribution,
+            dividendYield = simulatorDividendYield,
+            onMonthlyContributionChange = viewModel::setGrowthSimulatorMonthlyContribution,
+            onDividendYieldChange = viewModel::setGrowthSimulatorDividendYield,
+            onDismiss = { showGrowthSimulator = false }
+        )
+    }
 
     if (showShareBottomSheet) {
         val completedStage = (highestCompletedStep / 10).coerceAtLeast(1)
@@ -840,6 +921,143 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
             saveImage = saveRoadmapImage,
             onDismiss = { showShareBottomSheet = false }
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RoadmapGrowthSimulatorSheet(
+    currentAssets: Double,
+    currentCost: Double,
+    monthlyContribution: Long,
+    dividendYield: Double,
+    onMonthlyContributionChange: (Long) -> Unit,
+    onDividendYieldChange: (Double) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var reinvest by rememberSaveable { mutableStateOf(true) }
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.JAPAN) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = SurfaceContainerLow,
+        contentColor = OnSurface,
+        dragHandle = null
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .navigationBarsPadding().imePadding().padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(Modifier.align(Alignment.CenterHorizontally).width(42.dp).height(5.dp).clip(CircleShape).background(BorderColor))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.HourglassBottom, contentDescription = null, tint = PrimaryEmerald)
+                Spacer(Modifier.width(8.dp))
+                Text("未来30年・複利成長シミュレーター", modifier = Modifier.weight(1f), fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close)) }
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("複利シミュレーション結果", modifier = Modifier.weight(1f), color = OnSurfaceVariant, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("配当金を再投資", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                    Switch(
+                        checked = reinvest,
+                        onCheckedChange = { reinvest = it },
+                        modifier = Modifier.height(32.dp)
+                    )
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(10, 20, 30).forEach { years ->
+                    val monthlyRate = dividendYield / 100.0 / 12.0
+                    var value = currentAssets.coerceAtLeast(0.0)
+                    repeat(years * 12) { value = value * (1.0 + if (reinvest) monthlyRate else 0.0) + monthlyContribution }
+                    if (!reinvest) value += currentAssets * dividendYield / 100.0 * years
+                    val principal = currentCost.coerceAtLeast(0.0) + monthlyContribution * 12.0 * years
+                    val estimatedMonthlyDividend = value * dividendYield / 100.0 / 12.0
+                    Column(
+                        Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(SurfaceContainerHigh)
+                            .border(1.dp, if (years == 30) PrimaryEmerald else BorderColor, RoundedCornerShape(12.dp)).padding(horizontal = 6.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        Text(
+                            "${years}年後 (${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) + years})",
+                            color = if (years == 30) PrimaryEmerald else OnSurfaceVariant,
+                            fontSize = AppTextSize.dense,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1
+                        )
+                        Text(
+                            "¥${kotlin.math.round(value / 10_000.0).toLong()}万",
+                            color = OnSurface,
+                            fontSize = AppTextSize.dense,
+                            fontWeight = FontWeight.Black,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1
+                        )
+                        Text(
+                            "元本: ¥${kotlin.math.round(principal / 10_000.0).toLong()}万",
+                            color = OnSurfaceVariant,
+                            fontSize = AppTextSize.dense,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1
+                        )
+                        HorizontalDivider(color = BorderColor)
+                        Text("月配当(目安)", color = OnSurfaceVariant, fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
+                        Text(
+                            "¥${numberFormat.format(kotlin.math.round(estimatedMonthlyDividend).toLong())}/月",
+                            color = PrimaryEmerald,
+                            fontSize = AppTextSize.dense,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+            GrowthSimulatorStepper(
+                label = "毎月の積立額",
+                value = "¥${numberFormat.format(monthlyContribution)}",
+                onDecrease = {
+                    val step = if (monthlyContribution <= 20_000L) 1_000L else 5_000L
+                    onMonthlyContributionChange((monthlyContribution - step).coerceAtLeast(0L))
+                },
+                onIncrease = {
+                    val step = if (monthlyContribution < 20_000L) 1_000L else 5_000L
+                    onMonthlyContributionChange((monthlyContribution + step).coerceAtMost(1_000_000L))
+                }
+            )
+            GrowthSimulatorStepper(
+                label = "想定配当利回り",
+                value = String.format(Locale.JAPAN, "%.2f%%", dividendYield),
+                onDecrease = { onDividendYieldChange((dividendYield - 0.10).coerceAtLeast(0.0)) },
+                onIncrease = { onDividendYieldChange((dividendYield + 0.10).coerceAtMost(30.0)) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun GrowthSimulatorStepper(label: String, value: String, onDecrease: () -> Unit, onIncrease: () -> Unit) {
+    Surface(shape = RoundedCornerShape(12.dp), color = BackgroundDark, border = BorderStroke(1.dp, BorderColor)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(label, modifier = Modifier.weight(1.15f), color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1)
+            IconButton(onClick = onDecrease, modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(SurfaceContainerHighest)) {
+                Icon(Icons.Default.Remove, contentDescription = "$label を下げる", tint = OnSurface)
+            }
+            Text(value, modifier = Modifier.weight(1f), color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontFamily = FontFamily.Monospace, maxLines = 1)
+            IconButton(onClick = onIncrease, modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(SurfaceContainerHighest)) {
+                Icon(Icons.Default.Add, contentDescription = "$label を上げる", tint = OnSurface)
+            }
+        }
     }
 }
 

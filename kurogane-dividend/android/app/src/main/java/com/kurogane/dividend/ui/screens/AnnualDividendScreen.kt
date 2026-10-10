@@ -106,7 +106,8 @@ fun AnnualDividendScreen(
     }
 
     Scaffold(
-        containerColor = BackgroundDark
+        containerColor = BackgroundDark,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
         LazyColumn(
             state = listState,
@@ -116,8 +117,44 @@ fun AnnualDividendScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Hero Card: Annual Expected Dividend
+            // 3-way pill tab selector stays at the top of the Analysis screen.
             item {
+                AdaptiveRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(SurfaceContainerLow)
+                        .padding(5.dp)
+                        .selectableGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AnnualDividendTab(
+                        label = resources.getString(R.string.annual_dividend_label_19),
+                        icon = Icons.AutoMirrored.Filled.TrendingUp,
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        modifier = Modifier.weight(1f)
+                    )
+                    AnnualDividendTab(
+                        label = resources.getString(R.string.annual_dividend_label_49),
+                        icon = Icons.Default.AccountBalance,
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        modifier = Modifier.weight(1f)
+                    )
+                    AnnualDividendTab(
+                        label = resources.getString(R.string.annual_dividend_label_61),
+                        icon = Icons.Default.DataUsage,
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // Hero Card: Annual Expected Dividend
+            if (selectedTab == 0) item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -268,42 +305,6 @@ fun AnnualDividendScreen(
                     }
                 }
             }
-            // 3-way pill tab selector
-            item {
-                AdaptiveRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(SurfaceContainerHigh)
-                        .padding(4.dp)
-                        .selectableGroup(),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AnnualDividendTab(
-                        label = resources.getString(R.string.annual_dividend_label_19),
-                        icon = Icons.AutoMirrored.Filled.TrendingUp,
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        modifier = Modifier.weight(1f)
-                    )
-                    AnnualDividendTab(
-                        label = resources.getString(R.string.annual_dividend_label_49),
-                        icon = Icons.Default.AccountBalance,
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        modifier = Modifier.weight(1f)
-                    )
-                    AnnualDividendTab(
-                        label = resources.getString(R.string.annual_dividend_label_61),
-                        icon = Icons.Default.DataUsage,
-                        selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
             // Tab 2: Sector & Composition Analysis
             if (selectedTab == 2) {
                 item {
@@ -334,6 +335,18 @@ fun AnnualDividendScreen(
                     )
                 }
                 item {
+                    DividendPayoutHealthAndRiskCards(
+                        holdings = holdings,
+                        financialData = financialData,
+                        taxRateMode = taxRateMode,
+                        onNavigateToDetail = onNavigateToDetail
+                    )
+                }
+            }
+
+            // Tab 1: Dividend increase/decrease and asset tracking
+            if (selectedTab == 1) {
+                item {
                     DividendChangeAnalysisCards(
                         holdings = holdings,
                         financialData = financialData,
@@ -342,10 +355,6 @@ fun AnnualDividendScreen(
                         onNavigateToDetail = onNavigateToDetail
                     )
                 }
-            }
-
-            // Tab 1: Asset Tracking
-            if (selectedTab == 1) {
                 item {
                     AssetTrackingSection(
                         holdings = holdings,
@@ -357,6 +366,15 @@ fun AnnualDividendScreen(
                         selectedPeriod = assetTrackingPeriod,
                         onPeriodSelected = { assetTrackingPeriod = it },
                         loadMonthlyPriceHistory = { codes, months -> viewModel.fetchMonthlyPriceHistory(codes, months) }
+                    )
+                }
+                item {
+                    DividendChangeSecuritiesList(
+                        holdings = holdings,
+                        financialData = financialData,
+                        isPrivacyActive = isPrivacyActive,
+                        taxRateMode = taxRateMode,
+                        onNavigateToDetail = onNavigateToDetail
                     )
                 }
             }
@@ -376,29 +394,40 @@ private fun AnnualDividendTab(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val tabShape = RoundedCornerShape(10.dp)
-    Row(
+    val tabShape = RoundedCornerShape(12.dp)
+    Column(
         modifier = modifier
             .clip(tabShape)
-            .background(if (selected) PrimaryEmerald else Color.Transparent)
+            .background(if (selected) PrimaryEmerald else SurfaceContainer)
+            .border(1.dp, if (selected) PrimaryEmerald else BorderColor, tabShape)
             .selectable(selected = selected, onClick = onClick, role = Role.Tab)
-            .heightIn(min = 48.dp)
-            .padding(horizontal = 4.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 3.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (selected) OnPrimary else OnSurface,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(5.dp))
-        Text(
-            text = label,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) OnPrimary else OnSurface,
-            fontSize = AppTextSize.dense
+        Row(
+            modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (selected) OnPrimary else OnSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = label,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) OnPrimary else OnSurface,
+                fontSize = AppTextSize.dense,
+                maxLines = 1
+            )
+        }
+        Box(
+            Modifier.width(22.dp).height(2.dp).clip(CircleShape)
+                .background(if (selected) OnPrimary else Color.Transparent)
         )
     }
 }
@@ -1771,7 +1800,6 @@ private fun CompoundingSimulationSection(
                         }
                     }
                 }
-                Text(stringResource(R.string.annual_dividend_text_50), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                 TextButton(onClick = { if (!loading) scope.launch { load(force = true) } }, enabled = !loading) { Text(stringResource(R.string.annual_dividend_text_51)) }
             }
         }
@@ -1864,7 +1892,6 @@ private fun AssetTrackingSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(stringResource(R.string.annual_dividend_text_52), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
         if (annualHistoryFailed) Text(stringResource(R.string.annual_dividend_text_53), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
         // A. Header Title row with switch pills
         AdaptiveRow(
