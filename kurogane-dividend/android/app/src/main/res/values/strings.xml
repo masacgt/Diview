@@ -319,6 +319,7 @@
     <string name="roadmap_text_62">"投資元本: %1$s"</string>
     <string name="roadmap_text_63">"NISA節税効果: +%1$s"</string>
     <string name="roadmap_text_64">"源泉控除税額: -%1$s"</string>
+    <string name="roadmap_text_65">"月%1$s円（年%2$s円）の不足を配当で補うための元本目安"</string>
     <string name="settings_text">"データ管理＆バックアップ"</string>
     <string name="settings_label">"▧  インポート (取込)"</string>
     <string name="settings_label_2">"⇩  エクスポート (保存)"</string>
