@@ -221,7 +221,9 @@ fun AnnualDividendScreen(
                     colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                     border = BorderStroke(1.dp, BorderColor)
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(start = 18.dp, top = 0.dp, end = 18.dp, bottom = 12.dp)
+                    ) {
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -286,9 +288,9 @@ fun AnnualDividendScreen(
                             fontWeight = FontWeight.Medium,
                             color = OnSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
 
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
@@ -301,10 +303,10 @@ fun AnnualDividendScreen(
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(SurfaceContainerHigh)
                                     .border(0.5.dp, BorderColor, RoundedCornerShape(14.dp))
-                                    .padding(12.dp)
+                                    .padding(horizontal = 12.dp, vertical = 7.dp)
                             ) {
                                 Text(stringResource(R.string.annual_dividend_text_3), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1, softWrap = false)
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
                                         text = if (isPrivacyActive) "•••" else String.format(Locale.JAPAN, "%.2f", yieldOnCost),
@@ -318,7 +320,7 @@ fun AnnualDividendScreen(
                                     Spacer(modifier = Modifier.width(2.dp))
                                     Text(stringResource(R.string.annual_dividend_text_4), fontSize = AppTextSize.dense, color = OnSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
                                 }
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_11) else resources.getString(R.string.annual_dividend_label_12, (currencyFormat.format(totalCost.toLong())).toString()),
                                     fontSize = AppTextSize.dense,
@@ -335,10 +337,10 @@ fun AnnualDividendScreen(
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(SurfaceContainerHigh)
                                     .border(0.5.dp, BorderColor, RoundedCornerShape(14.dp))
-                                    .padding(12.dp)
+                                    .padding(horizontal = 12.dp, vertical = 7.dp)
                             ) {
                                 Text(stringResource(R.string.annual_dividend_text_5), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1, softWrap = false)
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
                                         text = if (isPrivacyActive) "•••" else String.format(Locale.JAPAN, "%.2f", yieldOnValuation),
