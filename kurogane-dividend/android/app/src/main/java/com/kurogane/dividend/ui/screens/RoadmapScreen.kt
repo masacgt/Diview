@@ -41,7 +41,7 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RoadmapScreen(viewModel: DividendViewModel) {
+fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     var openStep by remember { mutableStateOf<Int?>(null) }
     var selectedStageFilter by remember { mutableIntStateOf(viewModel.roadmapStageFilter) } // 0: All, 1: LV.1, 2: LV.2, 3: LV.3
@@ -60,6 +60,9 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
         initialFirstVisibleItemIndex = viewModel.roadmapScrollIndex,
         initialFirstVisibleItemScrollOffset = viewModel.roadmapScrollOffset
     )
+    LaunchedEffect(scrollToTopRequest) {
+        if (scrollToTopRequest > 0) listState.scrollToTopIn200ms()
+    }
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
             .collect { (index, offset) ->

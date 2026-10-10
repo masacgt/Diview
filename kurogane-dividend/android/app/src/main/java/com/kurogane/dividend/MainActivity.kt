@@ -176,6 +176,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 var showNotificationsDialog by remember { mutableStateOf(false) }
                 var showAddHoldingSheet by remember { mutableStateOf(false) }
                 var prefilledAddHoldingCode by remember { mutableStateOf("") }
+                val scrollToTopRequests = remember { mutableStateMapOf<String, Int>() }
                 val saveError by viewModel.saveError.collectAsStateWithLifecycle()
                 val snackbarHostState = remember { SnackbarHostState() }
                 LaunchedEffect(saveError) {
@@ -392,7 +393,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                                 .fillMaxHeight()
                                                 .testTag("main_tab_$route")
                                                 .selectable(selected, role = Role.Tab, onClick = {
-                                                    if (!selected) {
+                                                    if (selected && route in listOf("annual", "roadmap", "watchlist")) {
+                                                        scrollToTopRequests[route] = (scrollToTopRequests[route] ?: 0) + 1
+                                                    } else if (!selected) {
                                                         // Save the tab itself, without its settings/detail screens.
                                                         while (tabs.none { it.first == navController.currentDestination?.route }) {
                                                             if (!navController.popBackStack()) break
@@ -467,15 +470,17 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             composable("annual") {
                                 AnnualDividendScreen(
                                     viewModel = viewModel,
+                                    scrollToTopRequest = scrollToTopRequests["annual"] ?: 0,
                                     onNavigateToDetail = { code -> navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true } }
                                 )
                             }
                             composable("roadmap") {
-                                RoadmapScreen(viewModel = viewModel)
+                                RoadmapScreen(viewModel = viewModel, scrollToTopRequest = scrollToTopRequests["roadmap"] ?: 0)
                             }
                             composable("watchlist") {
                                 WatchlistScreen(
                                     viewModel = viewModel,
+                                    scrollToTopRequest = scrollToTopRequests["watchlist"] ?: 0,
                                     onNavigateToDetail = { code -> navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true } },
                                     onOpenAddHolding = { code ->
                                         prefilledAddHoldingCode = code
