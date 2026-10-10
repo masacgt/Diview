@@ -401,49 +401,53 @@ fun AddHoldingSheet(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(Icons.Default.CorporateFare, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                         Text(stringResource(R.string.add_holding_text_8), color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(PrimaryEmeraldContainer.copy(alpha = 0.15f))
-                                .heightIn(min = 48.dp)
-                                .clickable {
-                                    nisaPrice = selectedStock.price.toString()
-                                    tsumitatePrice = selectedStock.price.toString()
-                                    tokuteiPrice = selectedStock.price.toString()
-                                    generalPrice = selectedStock.price.toString()
-                                }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Icon(Icons.Default.Edit, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(10.dp))
-                                Text(stringResource(R.string.add_holding_text_9), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(PrimaryEmeraldContainer.copy(alpha = 0.15f))
+                            .heightIn(min = 48.dp)
+                            .clickable {
+                                nisaPrice = selectedStock.price.toString()
+                                tsumitatePrice = selectedStock.price.toString()
+                                tokuteiPrice = selectedStock.price.toString()
+                                generalPrice = selectedStock.price.toString()
                             }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Icon(Icons.Default.Edit, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(10.dp))
+                            Text(stringResource(R.string.add_holding_text_9), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(SurfaceContainerHighest)
-                                .heightIn(min = 48.dp)
-                                .clickable {
-                                    nisaShares = "0"
-                                    tsumitateShares = "0"
-                                    tokuteiShares = "0"
-                                    generalShares = "0"
-                                }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Icon(Icons.Default.Refresh, contentDescription = null, tint = OnSurface, modifier = Modifier.size(10.dp))
-                                Text(stringResource(R.string.add_holding_text_10), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(SurfaceContainerHighest)
+                            .heightIn(min = 48.dp)
+                            .clickable {
+                                nisaShares = "0"
+                                tsumitateShares = "0"
+                                tokuteiShares = "0"
+                                generalShares = "0"
                             }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, tint = OnSurface, modifier = Modifier.size(10.dp))
+                            Text(stringResource(R.string.add_holding_text_10), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -500,39 +504,38 @@ fun AddHoldingSheet(
                             ) {
                                 // Shares Input Field with Helper tags
                                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    AdaptiveRow(
+                                    Text(stringResource(R.string.add_holding_text_12), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Text(stringResource(R.string.add_holding_text_12), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(4.dp))
-                                                    .background(SurfaceContainerHighest)
-                                                    .heightIn(min = 48.dp)
-                                .clickable {
-                                                        val curr = sharesVal.toIntOrNull() ?: 0
-                                                        onSharesChange((curr + 10).toString())
-                                                    }
-                                                    .padding(horizontal = 4.dp, vertical = 2.dp)
-                                            ) {
-                                                Text(stringResource(R.string.add_holding_text_13), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                            }
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(4.dp))
-                                                    .background(SurfaceContainerHighest)
-                                                    .heightIn(min = 48.dp)
-                                .clickable {
-                                                        val curr = sharesVal.toIntOrNull() ?: 0
-                                                        onSharesChange((curr + 100).toString())
-                                                    }
-                                                    .padding(horizontal = 4.dp, vertical = 2.dp)
-                                            ) {
-                                                Text(stringResource(R.string.add_holding_text_14), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                            }
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(SurfaceContainerHighest)
+                                                .heightIn(min = 36.dp)
+                                                .clickable {
+                                                    val curr = sharesVal.toIntOrNull() ?: 0
+                                                    onSharesChange((curr - 100).coerceAtLeast(0).toString())
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(stringResource(R.string.add_holding_text_13), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(SurfaceContainerHighest)
+                                                .heightIn(min = 36.dp)
+                                                .clickable {
+                                                    val curr = sharesVal.toIntOrNull() ?: 0
+                                                    onSharesChange((curr + 100).toString())
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(stringResource(R.string.add_holding_text_14), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                         }
                                     }
 
