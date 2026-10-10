@@ -426,7 +426,7 @@ fun WatchlistScreen(
                             Button(
                                 onClick = { showGraphBottomSheet = true },
                                 colors = ButtonDefaults.buttonColors(containerColor = BackgroundDark),
-                                border = BorderStroke(1.dp, BorderColor),
+                                border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.4f)),
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier
                                     .weight(1f)
