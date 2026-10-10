@@ -64,6 +64,7 @@ import com.kurogane.dividend.model.PortfolioDiagnosisGenerator
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import java.text.NumberFormat
 import kotlin.math.atan2
+import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlin.math.sqrt
 import java.time.YearMonth
@@ -107,6 +108,9 @@ fun AnnualDividendScreen(
         rememberLazyListState(legacyPosition.first, legacyPosition.second)
     }
     val screenScope = rememberCoroutineScope()
+    val analysisPagePosition = (
+        pagerState.currentPage + pagerState.currentPageOffsetFraction
+    ).coerceIn(0f, 2f)
     val selectAnalysisTab = rememberUpdatedState<(Int) -> Unit> { index ->
         if (index in 0..2 && index != pagerState.currentPage) {
             screenScope.launch { pagerState.animateScrollToPage(index) }
@@ -418,14 +422,41 @@ fun AnnualDividendScreen(
             }
             }
           }
+          Box(
+              modifier = Modifier
+                  .fillMaxWidth()
+                  .height(3.dp)
+                  .align(Alignment.TopCenter)
+                  .zIndex(2f)
+          ) {
+              BoxWithConstraints(
+                  modifier = Modifier
+                      .fillMaxSize()
+                      .padding(horizontal = 21.dp)
+              ) {
+                  val indicatorGap = 6.dp
+                  val indicatorWidth = (maxWidth - indicatorGap * 2) / 3
+                  Box(
+                      modifier = Modifier
+                          .width(indicatorWidth)
+                          .fillMaxHeight()
+                          .offset {
+                              val stepPx = with(density) { (indicatorWidth + indicatorGap).toPx() }
+                              IntOffset((analysisPagePosition * stepPx).roundToInt(), 0)
+                          }
+                          .background(PrimaryEmerald)
+                  )
+              }
+          }
           Column(
               modifier = Modifier
                   .fillMaxWidth()
                   .padding(horizontal = 16.dp)
+                  .padding(top = 3.dp)
                   .offset { IntOffset(0, -headerScrollOffsetPx) }
                   .zIndex(1f)
                   .background(BackgroundDark)
-                  .onSizeChanged { commonHeaderHeightPx = it.height }
+                  .onSizeChanged { commonHeaderHeightPx = it.height + with(density) { 3.dp.roundToPx() } }
           ) {
               AdaptiveRow(
                   modifier = Modifier
