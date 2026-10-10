@@ -466,7 +466,7 @@
     <string name="stock_detail_text_79">"銘柄総合分析の詳細判定"</string>
     <string name="stock_detail_text_80">"7指標を各5帯域・9位置で評価"</string>
     <string name="stock_detail_text_81">"%1$s %2$s点"</string>
-    <string name="stock_detail_text_82">"総合判定: %1$s。評価できた%2$s指標を重み付けして算出しています。"</string>
+    <string name="stock_detail_text_82">"総合判定: %1$s"</string>
     <string name="stock_detail_text_83">"全7指標の文章パターン: 45^7 = %1$s通り。今回の入力で選択可能な組合せ: %2$s通り。"</string>
     <string name="stock_detail_text_84">"市場指標はCloudflare API、財務指標は取得した決算実績を使用します。未取得の値は未評価です。"</string>
     <string name="stock_detail_text_85">"判定パターン %1$s / %2$s"</string>
