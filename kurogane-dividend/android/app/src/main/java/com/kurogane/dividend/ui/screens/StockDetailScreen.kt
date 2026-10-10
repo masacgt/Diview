@@ -1770,14 +1770,23 @@ fun StockDetailScreen(
                 ) {
                     Button(
                         onClick = { onOpenAddHolding(currentHolding.code) },
-                        enabled = isOwnedHolding,
                         modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp), tint = OnSurface)
+                        Icon(
+                            imageVector = if (isOwnedHolding) Icons.Default.Edit else Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = OnSurface
+                        )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(stringResource(R.string.stock_detail_text_77), color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if (isOwnedHolding) stringResource(R.string.stock_detail_text_77) else stringResource(R.string.stock_detail_text_89),
+                            color = OnSurface,
+                            fontSize = AppTextSize.caption,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                     Button(
                         onClick = { showDeleteHoldingConfirmation = true },

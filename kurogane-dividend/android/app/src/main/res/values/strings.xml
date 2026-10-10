@@ -470,6 +470,7 @@
     <string name="stock_detail_text_86">"未取得の指標: %1$s。データがない項目は評価に含めません。"</string>
     <string name="stock_detail_text_87">"%1$s  %2$s・%3$s（%4$s）"</string>
     <string name="stock_detail_text_88">"評価は取得できた指標に基づく参考情報です。業種特性、最新開示、株価変動も合わせて確認してください。"</string>
+    <string name="stock_detail_text_89">"保有銘柄に追加"</string>
     <string name="terms_privacy_text">"規約とプライバシー"</string>
     <string name="terms_privacy_diview_security_core">"Diview Security Core"</string>
     <string name="terms_privacy_text_2">"保護稼働中"</string>
