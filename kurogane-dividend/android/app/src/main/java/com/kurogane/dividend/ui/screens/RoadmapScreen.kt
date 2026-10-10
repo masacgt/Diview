@@ -1,6 +1,7 @@
 package com.kurogane.dividend.ui.screens
 
 import com.kurogane.dividend.ui.components.AdaptiveRow
+import com.kurogane.dividend.ui.components.SmoothMoney
 import androidx.compose.ui.res.stringResource
 import com.kurogane.dividend.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -1001,14 +1002,9 @@ private fun RoadmapGrowthSimulatorSheet(
                             textAlign = TextAlign.Center,
                             maxLines = 1
                         )
-                        Text(
-                            "¥${kotlin.math.round(value / 10_000.0).toLong()}万",
-                            color = OnSurface,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Black,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1
-                        )
+                        SmoothMoney(value, inTenThousands = true,
+                            style = androidx.compose.ui.text.TextStyle(color = OnSurface, fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Black, textAlign = TextAlign.Center))
                         Text(
                             "元本: ¥${kotlin.math.round(principal / 10_000.0).toLong()}万",
                             color = OnSurfaceVariant,
@@ -1018,14 +1014,9 @@ private fun RoadmapGrowthSimulatorSheet(
                         )
                         HorizontalDivider(color = BorderColor)
                         Text("月配当(目安)", color = OnSurfaceVariant, fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
-                        Text(
-                            "¥${numberFormat.format(kotlin.math.round(estimatedMonthlyDividend).toLong())}/月",
-                            color = PrimaryEmerald,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1
-                        )
+                        SmoothMoney(estimatedMonthlyDividend, suffix = "/月",
+                            style = androidx.compose.ui.text.TextStyle(color = PrimaryEmerald, fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center))
                     }
                 }
             }

@@ -5,6 +5,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kurogane.dividend.data.financialText
 import com.kurogane.dividend.data.financialYears
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -531,8 +533,15 @@ fun StockDetailScreen(
                                         (point.dps / maxDps * 0.95).toFloat()
                                     )
                                 }
+                                var barsVisible by remember(stockCode) { mutableStateOf(false) }
+                                LaunchedEffect(stockCode, bars.isNotEmpty()) { if (bars.isNotEmpty()) barsVisible = true }
                                 if (bars.isEmpty()) Text(stringResource(R.string.stock_detail_text_9), color = OnSurfaceVariant)
-                                bars.forEach { (term, dpsVal, ratio) ->
+                                bars.forEachIndexed { index, (term, dpsVal, ratio) ->
+                                    val animatedRatio by animateFloatAsState(
+                                        targetValue = if (barsVisible) ratio.coerceIn(0f, 0.95f) else 0f,
+                                        animationSpec = tween(durationMillis = 560, delayMillis = index * 30),
+                                        label = "Dividend bar height"
+                                    )
                                     val isProjected = term == bars.lastOrNull()?.first
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -547,7 +556,7 @@ fun StockDetailScreen(
                                             Box(
                                                 modifier = Modifier
                                                     .width(26.dp)
-                                                    .height(maxHeight * ratio.coerceIn(0f, 0.95f))
+                                                    .height(maxHeight * animatedRatio)
                                                     .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                                                     .background(
                                                         if (isProjected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
