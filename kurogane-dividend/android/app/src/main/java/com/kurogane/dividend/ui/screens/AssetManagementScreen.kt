@@ -39,10 +39,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,6 +56,7 @@ import com.kurogane.dividend.viewmodel.DividendViewModel
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.roundToLong
 
 // Local High-Fidelity Color Theme matching React Web App CSS
 val SpaceNavy: Color @Composable get() = BackgroundDark
@@ -62,6 +66,75 @@ val NeonGreen: Color @Composable get() = PrimaryEmeraldContainer
 val NeonGreenLight: Color @Composable get() = PrimaryEmerald
 val SoftGray: Color @Composable get() = OnSurfaceVariant
 val BorderBlue: Color @Composable get() = BorderColor
+
+@Composable
+private fun OdometerAmount(
+    targetValue: Long,
+    numberFormat: NumberFormat,
+    modifier: Modifier = Modifier
+) {
+    val displayedValue = remember { mutableLongStateOf(0L) }
+    LaunchedEffect(targetValue) {
+        val startValue = displayedValue.longValue
+        val progress = Animatable(0f)
+        progress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing)
+        ) {
+            displayedValue.longValue = startValue +
+                ((targetValue - startValue).toDouble() * value).roundToLong()
+        }
+        displayedValue.longValue = targetValue
+    }
+
+    val displayedNumber = numberFormat.format(displayedValue.longValue)
+    val textStyle = TextStyle(
+        fontSize = AppTextSize.hero,
+        fontWeight = FontWeight.ExtraBold,
+        color = OnSurface,
+        fontFamily = FontFamily.SansSerif,
+        fontFeatureSettings = "tnum",
+        letterSpacing = (-0.5).sp
+    )
+
+    Row(
+        modifier = modifier.clearAndSetSemantics {
+            contentDescription = "¥${numberFormat.format(targetValue)}"
+        },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = "¥", style = textStyle)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            displayedNumber.forEachIndexed { index, character ->
+                val place = displayedNumber.length - index - 1
+                key("odometer-place-$place") {
+                    if (character.isDigit()) {
+                        AnimatedContent(
+                            targetState = character,
+                            transitionSpec = {
+                                val direction = if (targetState >= initialState) 1 else -1
+                                (
+                                    slideInVertically(tween(120, easing = LinearOutSlowInEasing)) { height ->
+                                        height * direction
+                                    } + fadeIn(tween(90))
+                                ).togetherWith(
+                                    slideOutVertically(tween(120, easing = LinearOutSlowInEasing)) { height ->
+                                        -height * direction
+                                    } + fadeOut(tween(90))
+                                )
+                            },
+                            label = "asset-value-digit-$place"
+                        ) { digit ->
+                            Text(text = digit.toString(), style = textStyle)
+                        }
+                    } else {
+                        Text(text = character.toString(), style = textStyle)
+                    }
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -298,14 +371,21 @@ fun AssetManagementScreen(
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = if (isPrivacyActive) "¥ •,•••,•••,•••" else "¥${javaCurrencyFormat.format(totalAssetsVal.toLong())}",
-                            fontSize = AppTextSize.hero,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = OnSurface,
-                            fontFamily = FontFamily.SansSerif,
-                            letterSpacing = (-0.5).sp
-                        )
+                        if (isPrivacyActive) {
+                            Text(
+                                text = "¥ •,•••,•••,•••",
+                                fontSize = AppTextSize.hero,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = OnSurface,
+                                fontFamily = FontFamily.SansSerif,
+                                letterSpacing = (-0.5).sp
+                            )
+                        } else {
+                            OdometerAmount(
+                                targetValue = totalAssetsVal.toLong(),
+                                numberFormat = javaCurrencyFormat
+                            )
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_3) else resources.getString(R.string.annual_dividend_label_25, (javaCurrencyFormat.format(totalCostVal.toLong())).toString()),
