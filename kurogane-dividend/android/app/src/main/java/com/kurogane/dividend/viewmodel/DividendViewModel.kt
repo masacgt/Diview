@@ -1649,6 +1649,48 @@ class DividendViewModel @JvmOverloads constructor(
         }
     }
 
+    private suspend fun preloadMonthlyPriceHistoryIfMissing() {
+        val codes = _holdings.value
+            .filter { it.category == Category.JAPAN && it.shares > 0 }
+            .map { holding ->
+                holding.code.trim().uppercase(java.util.Locale.ROOT).removeSuffix(".T").let { code ->
+                    if (code.length == 5 && code.endsWith('0')) code.dropLast(1) else code
+                }
+            }
+            .filter { it.matches(Regex("[A-Z0-9]{4}")) }
+            .distinct()
+        if (codes.isEmpty()) return
+
+        val currentMonth = java.time.YearMonth.now(java.time.ZoneId.of("Asia/Tokyo"))
+        val months = (60 downTo 0).map { currentMonth.minusMonths(it.toLong()).toString() }
+        val cachedByCode = codes.associateWith { readCachedMonthlyPrices(it) }.toMutableMap()
+        val missingMonths = codes.associateWith { code ->
+            months.filterNot { month -> cachedByCode[code].orEmpty().containsKey(month) }
+        }
+        val codesToFetch = codes.filter { missingMonths[it].orEmpty().isNotEmpty() }
+        if (codesToFetch.isEmpty()) return
+
+        runCatchingCancellable {
+            codesToFetch.chunked(20).flatMap { batch ->
+                months.chunked(12).flatMap { monthBatch ->
+                    val neededMonths = monthBatch.filter { month ->
+                        batch.any { code -> month in missingMonths[code].orEmpty() }
+                    }
+                    if (neededMonths.isEmpty()) emptyList()
+                    else marketRepository.fetchMonthlyPriceHistory(batch, neededMonths)
+                }
+            }
+        }.onSuccess { fetched ->
+            fetched.forEach { series ->
+                val merged = cachedByCode[series.code].orEmpty().toMutableMap()
+                series.prices.forEach { price -> merged[price.month] = price }
+                saveCachedMonthlyPrices(series.code, merged)
+            }
+        }.onFailure { error ->
+            android.util.Log.w("CloudflareMarket", "月次価格履歴のキャッシュ補充に失敗しました", error)
+        }
+    }
+
     private fun readCachedMonthlyPrices(code: String): Map<String, com.kurogane.dividend.data.CloudflareMonthlyPrice> = runCatching {
         val rows = JSONArray(marketPreferences.getString("monthly_prices_$code", "[]") ?: "[]")
         (0 until rows.length()).mapNotNull { index ->
@@ -2123,6 +2165,7 @@ class DividendViewModel @JvmOverloads constructor(
                 // The monthly projection observes the Watchlist flow and updates when results arrive.
                 launch { refreshDividendHistoryIfDue() }
                 launch { refreshExchangeRate() }
+                launch { preloadMonthlyPriceHistoryIfMissing() }
                 runCatching { notificationScheduler(getApplication(), _notificationSettings.value) }.onFailure {
                     _saveError.value = getApplication<android.app.Application>().getString(R.string.dividend_view_model_message_5)
                 }
