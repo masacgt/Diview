@@ -399,9 +399,10 @@ fun BrokerCsvImportCard(onImportCsv: suspend (List<CsvHoldingRow>, Set<String>) 
                             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBoundedBytes(10 * 1024 * 1024) }
                                 ?: error(resources.getString(R.string.csv_import_label_6))
                             val detected = BrokerCsvImporter.detectBroker(bytes, selectedFile)
-                            broker = detected
+                            val parserBroker = detected ?: CsvBroker.SBI
+                            broker = parserBroker
                             brokerWasAutoDetected = detected != null
-                            BrokerCsvImporter.parse(bytes, detected ?: CsvBroker.SBI, LocalSecurityCatalog.names(context), LocalSecurityCatalog.fundNames(context))
+                            BrokerCsvImporter.parse(bytes, parserBroker, LocalSecurityCatalog.names(context), LocalSecurityCatalog.fundNames(context))
                         }
                     }.onSuccess { result ->
                         csvResult = result
@@ -415,23 +416,13 @@ fun BrokerCsvImportCard(onImportCsv: suspend (List<CsvHoldingRow>, Set<String>) 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             text = when {
+                selectedFile.isBlank() -> stringResource(R.string.settings_csv_auto_detection_hint)
                 brokerWasAutoDetected -> resources.getString(R.string.csv_broker_auto_detected, broker?.label.orEmpty())
-                broker == null -> stringResource(R.string.csv_broker_auto_unknown)
-                else -> resources.getString(R.string.csv_broker_manual_selection, broker?.label.orEmpty())
+                else -> stringResource(R.string.settings_csv_unknown_broker_hint)
             },
             color = if (brokerWasAutoDetected) PrimaryEmerald else OnSurfaceVariant,
             fontWeight = FontWeight.Bold
         )
-        Text(stringResource(R.string.csv_import_text), color = OnSurface, fontWeight = FontWeight.Bold)
-        AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            CsvBroker.entries.forEach { item ->
-                Text(item.label, Modifier.weight(1f).clip(RoundedCornerShape(9.dp))
-                    .background(if (broker == item) SurfaceContainerHighest else SurfaceContainer)
-                    .clickable(enabled = !isReading && !isImporting) { broker = item; brokerWasAutoDetected = false; csvResult = csvResult?.copy(broker = item); complete = false; error = null }
-                    .padding(vertical = 11.dp, horizontal = 4.dp),
-                    color = if (broker == item) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-            }
-        }
         ImportCard(
             onClick = { if (!isReading && !isImporting) picker.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel")) },
             title = selectedFile.ifBlank { resources.getString(R.string.csv_select_file) },

@@ -7,6 +7,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.widget.Toast
 import com.kurogane.dividend.security.fragmentActivity
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,9 +15,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -66,6 +65,8 @@ fun SettingsScreen(
 ) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val systemDarkTheme = isSystemInDarkTheme()
+    val oledBlackAvailable = themeMode == "dark" || (themeMode == "system" && systemDarkTheme)
     val isOledBlack by viewModel.isOledBlack.collectAsStateWithLifecycle()
     val selectedAccent by viewModel.selectedAccent.collectAsStateWithLifecycle()
     var dataTab by rememberSaveable { mutableStateOf("import") }
@@ -142,23 +143,21 @@ fun SettingsScreen(
                         Segment(stringResource(R.string.settings_label), dataTab == "import", Modifier.weight(1f)) { dataTab = "import" }
                         Segment(stringResource(R.string.settings_label_2), dataTab == "export", Modifier.weight(1f)) { dataTab = "export" }
                     }
-                    Box(Modifier.fillMaxWidth().height(220.dp)) {
-                        Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (dataTab == "import") {
-                                BrokerCsvImportCard(onImportCsv = { rows, fields -> viewModel.importCsvRows(rows, fields) })
-                                HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                                Label(stringResource(R.string.csv_import_label_2), 9, OnSurface, true)
-                                DvmBackupFolderImportCard(onImportDvm = { backups -> viewModel.importDvmBackups(backups) })
-                                AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Label(stringResource(R.string.settings_label_9), 7, SettingsMuted)
-                                    Label(stringResource(R.string.asset_management_text_6 , viewModel.holdings.collectAsStateWithLifecycle().value.size), 7, SettingsMint)
-                                }
-                            } else {
-                                Label(stringResource(R.string.settings_label_11), 9, SettingsMuted)
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    ActionButton(stringResource(R.string.settings_label_12), Modifier.weight(1f)) { if (!isExporting) csvExporter.launch("Diview-portfolio.csv") }
-                                    ActionButton(stringResource(R.string.settings_label_13), Modifier.weight(1f)) { if (!isExporting) jsonExporter.launch("Diview-portfolio.json") }
-                                }
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (dataTab == "import") {
+                            BrokerCsvImportCard(onImportCsv = { rows, fields -> viewModel.importCsvRows(rows, fields) })
+                            HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
+                            Label(stringResource(R.string.csv_import_label_2), 9, OnSurface, true)
+                            DvmBackupFolderImportCard(onImportDvm = { backups -> viewModel.importDvmBackups(backups) })
+                            AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Label(stringResource(R.string.settings_label_9), 7, SettingsMuted)
+                                Label(stringResource(R.string.asset_management_text_6 , viewModel.holdings.collectAsStateWithLifecycle().value.size), 7, SettingsMint)
+                            }
+                        } else {
+                            Label(stringResource(R.string.settings_label_11), 9, SettingsMuted)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                ActionButton(stringResource(R.string.settings_label_12), Modifier.weight(1f)) { if (!isExporting) csvExporter.launch("Diview-portfolio.csv") }
+                                ActionButton(stringResource(R.string.settings_label_13), Modifier.weight(1f)) { if (!isExporting) jsonExporter.launch("Diview-portfolio.json") }
                             }
                         }
                     }
@@ -214,7 +213,14 @@ fun SettingsScreen(
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle(stringResource(R.string.settings_text_3), stringResource(R.string.settings_label_45), isOledBlack, { viewModel.setIsOledBlack(it) }, tag = stringResource(R.string.settings_label_46))
+                    SettingToggle(
+                        stringResource(R.string.settings_text_3),
+                        if (oledBlackAvailable) stringResource(R.string.settings_label_45) else "ダークテーマで利用できます",
+                        isOledBlack,
+                        { viewModel.setIsOledBlack(it) },
+                        tag = stringResource(R.string.settings_label_46),
+                        enabled = oledBlackAvailable
+                    )
                 }
             }
         }
@@ -251,9 +257,14 @@ fun SettingsScreen(
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     SettingToggle("構成比の小さい項目を「その他」に集約", "有効時、選択した閾値未満の項目をまとめます", compositionOtherEnabled, viewModel::setCompositionOtherEnabled)
-                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_23), 9, if (compositionOtherEnabled) OnSurface else SettingsMuted, true); Label(stringResource(R.string.settings_1_s , threshold), 8, if (compositionOtherEnabled) SettingsMint else SettingsMuted) }
-                    ThresholdSlider(threshold, viewModel::setCompositionThreshold, enabled = compositionOtherEnabled)
-                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label("1%", 7, SettingsMuted); Label("10%", 7, SettingsMuted) }
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_23), 9, if (compositionOtherEnabled) OnSurface else SettingsMuted.copy(alpha = .55f), true); Label(stringResource(R.string.settings_1_s , threshold), 8, if (compositionOtherEnabled) SettingsMint else SettingsMuted.copy(alpha = .55f)) }
+                    ThresholdSlider(
+                        value = threshold,
+                        onValueChange = viewModel::updateCompositionThreshold,
+                        onValueChangeFinished = viewModel::persistCompositionThreshold,
+                        enabled = compositionOtherEnabled
+                    )
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label("1%", 7, if (compositionOtherEnabled) SettingsMuted else SettingsMuted.copy(alpha = .45f)); Label("10%", 7, if (compositionOtherEnabled) SettingsMuted else SettingsMuted.copy(alpha = .45f)) }
                 }
             }
         }
@@ -300,7 +311,7 @@ fun SettingsScreen(
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) { Label(stringResource(R.string.settings_label_34), 9, ErrorRed, true); Label(stringResource(R.string.settings_label_35), 7, SettingsMuted) }
-                        Box(Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(5.dp)).background(ErrorRed.copy(alpha = .10f)).border(1.dp, ErrorRed.copy(alpha = .45f), RoundedCornerShape(5.dp)).clickable(role = Role.Button) { confirmReset = true }.padding(horizontal = 9.dp, vertical = 5.dp)) { Label(stringResource(R.string.settings_label_36), 8, ErrorRed, true) }
+                        Box(Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(5.dp)).background(ErrorRed.copy(alpha = .10f)).border(1.dp, ErrorRed.copy(alpha = .45f), RoundedCornerShape(5.dp)).clickable(role = Role.Button) { confirmReset = true }.padding(horizontal = 9.dp, vertical = 5.dp), contentAlignment = Alignment.Center) { Label(stringResource(R.string.settings_label_36), 8, ErrorRed, true) }
                     }
                 }
             }
@@ -400,14 +411,14 @@ private fun SettingToggle(title: String, detail: String, checked: Boolean, onCha
     AdaptiveRow(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onChanged), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Label(title, 8, OnSurface, true)
+                Label(title, 8, if (enabled) OnSurface else SettingsMuted, true)
                 if (tag != null) Box(Modifier.clip(RoundedCornerShape(3.dp)).background(SettingsMint.copy(alpha = .13f)).padding(horizontal = 4.dp, vertical = 1.dp)) { Label(tag, 6, SettingsMint, true) }
             }
-            Label(detail, 7, SettingsMuted)
+            Label(detail, 7, if (enabled) SettingsMuted else SettingsMuted.copy(alpha = .65f))
         }
         Spacer(Modifier.width(8.dp))
-        Box(Modifier.width(31.dp).height(17.dp).clip(CircleShape).background(if (checked) PrimaryEmeraldContainer else SurfaceContainerHighest).padding(2.dp), contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart) {
-            Box(Modifier.size(13.dp).clip(CircleShape).background(OnSurface))
+        Box(Modifier.width(31.dp).height(17.dp).clip(CircleShape).background(if (!enabled) SettingsMuted.copy(alpha = .35f) else if (checked) PrimaryEmeraldContainer else SurfaceContainerHighest).padding(2.dp), contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart) {
+            Box(Modifier.size(13.dp).clip(CircleShape).background(if (enabled) OnSurface else SettingsMuted.copy(alpha = .7f)))
         }
     }
 }
@@ -437,22 +448,50 @@ private fun SupportRow(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ThresholdSlider(value: Int, onValueChange: (Int) -> Unit, enabled: Boolean = true) {
+private fun ThresholdSlider(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    enabled: Boolean = true
+) {
     val changeValue by rememberUpdatedState(onValueChange)
+    val finishValueChange by rememberUpdatedState(onValueChangeFinished)
     val label = stringResource(R.string.settings_label_23)
     val trackColor = SurfaceContainerHighest
     val accentColor = PrimaryEmeraldContainer
     val disabledColor = SettingsMuted
     Canvas(Modifier.fillMaxWidth().height(48.dp).semantics {
         contentDescription = label
-        progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), 1f..10f, value - 1)
+        if (enabled) progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), 1f..10f, value - 1)
+        else disabled()
         setProgress { requested ->
-            if (!enabled || !requested.isFinite()) false else { changeValue(requested.roundToInt().coerceIn(1, 10)); true }
+            if (!enabled || !requested.isFinite()) false else {
+                val nextValue = requested.roundToInt().coerceIn(1, 10)
+                if (nextValue != value) {
+                    changeValue(nextValue)
+                    finishValueChange()
+                }
+                true
+            }
         }
-    }.pointerInput(Unit) {
-        detectTapGestures { if (enabled) changeValue((1 + (it.x / size.width * 9).roundToInt()).coerceIn(1, 10)) }
-    }.pointerInput(Unit) {
-        detectDragGestures { change, _ -> change.consume(); if (enabled) changeValue((1 + (change.position.x / size.width * 9).roundToInt()).coerceIn(1, 10)) }
+    }.pointerInput(enabled) {
+        detectTapGestures {
+            if (enabled) {
+                val nextValue = (1 + (it.x / size.width * 9).roundToInt()).coerceIn(1, 10)
+                if (nextValue != value) {
+                    changeValue(nextValue)
+                    finishValueChange()
+                }
+            }
+        }
+    }.pointerInput(enabled) {
+        detectDragGestures(
+            onDragEnd = { if (enabled) finishValueChange() },
+            onDragCancel = { if (enabled) finishValueChange() }
+        ) { change, _ ->
+            change.consume()
+            if (enabled) changeValue((1 + (change.position.x / size.width * 9).roundToInt()).coerceIn(1, 10))
+        }
     }) {
         val y = size.height / 2f
         val x = (value - 1) / 9f * size.width
