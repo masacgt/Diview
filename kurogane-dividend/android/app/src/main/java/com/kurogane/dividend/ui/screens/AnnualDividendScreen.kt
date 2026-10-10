@@ -4,7 +4,6 @@ import com.kurogane.dividend.ui.components.AdaptiveRow
 import androidx.compose.ui.res.stringResource
 import com.kurogane.dividend.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -1643,14 +1642,6 @@ private fun CompoundingSimulationSection(
 ) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
-    var loading by remember { mutableStateOf(false) }
-    var updateFailed by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    suspend fun load(force: Boolean = false) {
-        loading = true
-        try { updateFailed = viewModel.fetchPortfolioFinancialData(force = force).any { it.isFailure } }
-        finally { loading = false }
-    }
     LaunchedEffect(holdings.map { it.code }) { viewModel.refreshAnalysisFinancialDataIfDue() }
     val currentYear = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).year
     val years = remember(holdings, financialData, taxRateMode, currentYear) {
@@ -1696,8 +1687,6 @@ private fun CompoundingSimulationSection(
             }
         }
         Text(stringResource(R.string.annual_dividend_text_32), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        if (updateFailed) Text(stringResource(R.string.annual_dividend_text_34), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
 
         AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Card(Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
@@ -1779,7 +1768,6 @@ private fun CompoundingSimulationSection(
                         Card(Modifier.weight(1f).clickable { selectedYearIndex = index }, shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = if (isSelected) SurfaceContainerHigh else BackgroundDark), border = BorderStroke(1.dp, if (isSelected) PrimaryEmerald else Color.Transparent)) {
                             Column(Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text(stringResource(R.string.annual_dividend_1_s , point.year), color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                Text(stringResource(R.string.annual_dividend_text_43 , point.covered, point.expected), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                                 Text(stringResource(R.string.annual_dividend_text_44), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                                 Text(if (point.amount == null) stringResource(R.string.not_available) else if (isPrivacyActive) "••••" else "¥${format.format(point.amount.toLong())}", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                                 Text(stringResource(R.string.annual_dividend_text_45), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
@@ -1800,7 +1788,6 @@ private fun CompoundingSimulationSection(
                         }
                     }
                 }
-                TextButton(onClick = { if (!loading) scope.launch { load(force = true) } }, enabled = !loading) { Text(stringResource(R.string.annual_dividend_text_51)) }
             }
         }
     }
