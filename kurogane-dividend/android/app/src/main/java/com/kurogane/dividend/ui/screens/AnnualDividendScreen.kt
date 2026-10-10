@@ -591,14 +591,23 @@ private fun MonthlyDividendEstimateCard(
 ) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
+    var showDividendInfo by remember { mutableStateOf(false) }
     val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
-    val monthlyDividends = remember(holdings, taxRateMode, dividendEventRevision) {
+    val monthlyByCategory = remember(holdings, taxRateMode, dividendEventRevision) {
         (1..12).map { month ->
-            val amount = holdings.sumOf { holding ->
-                viewModel.dividendEventsFor(holding.code).filter { it.date.monthValue == month }.sumOf { event ->
-                    holding.copy(dps = event.amountPerShare).getEffectiveAnnualDividend(taxRateMode)
+            listOf(Category.JAPAN, Category.US, Category.FUND).map { category ->
+                holdings.filter { it.category == category }.sumOf { holding ->
+                    viewModel.dividendEventsFor(holding.code).filter { it.date.monthValue == month }.sumOf { event ->
+                        holding.copy(dps = event.amountPerShare).getEffectiveAnnualDividend(taxRateMode)
+                    }
                 }
             }
+        }
+    }
+    val monthlyDividends = remember(monthlyByCategory) {
+        monthlyByCategory.mapIndexed { index, categories ->
+            val month = index + 1
+            val amount = categories.sum()
             val label = when {
                 amount >= 10_000 -> String.format(Locale.JAPAN, "%.1f万", amount / 10_000.0)
                 amount > 0 -> String.format(Locale.JAPAN, "%.1f千", amount / 1_000.0)
@@ -628,8 +637,62 @@ private fun MonthlyDividendEstimateCard(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(stringResource(R.string.annual_dividend_text_6), fontSize = AppTextSize.body, fontWeight = FontWeight.ExtraBold, color = OnSurface)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(SurfaceContainerHigh).padding(horizontal = 4.dp, vertical = 2.dp)) {
-                        Text(YearMonth.now(ZoneId.of("Asia/Tokyo")).year.toString(), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
+                    Box {
+                        IconButton(
+                            onClick = { showDividendInfo = true },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = stringResource(R.string.annual_dividend_info_content_description),
+                                tint = OnSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showDividendInfo,
+                            onDismissRequest = { showDividendInfo = false },
+                            modifier = Modifier.widthIn(max = 300.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            containerColor = CardDark,
+                            tonalElevation = 0.dp,
+                            shadowElevation = 12.dp
+                        ) {
+                            Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = PrimaryEmerald.copy(alpha = 0.14f),
+                                        modifier = Modifier.size(30.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                Icons.Default.Info,
+                                                contentDescription = null,
+                                                tint = NeonGreen,
+                                                modifier = Modifier.size(17.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(
+                                        stringResource(R.string.annual_dividend_info_title),
+                                        color = OnSurface,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = AppTextSize.body
+                                    )
+                                }
+                                Spacer(Modifier.height(12.dp))
+                                HorizontalDivider(color = BorderBlue, thickness = 0.75.dp)
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    stringResource(R.string.annual_dividend_info_description),
+                                    color = OnSurfaceVariant,
+                                    fontSize = AppTextSize.caption,
+                                    lineHeight = 20.sp
+                                )
+                            }
+                        }
                     }
                 }
                 Text(
@@ -641,7 +704,7 @@ private fun MonthlyDividendEstimateCard(
             }
 
             Text(stringResource(R.string.annual_dividend_text_7 , holdings.count { it.dps > 0 && it.dividendMonths.isEmpty() }), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-            Text("過去365日の実際の配当支払日・1株配当額をもとに、現在の保有株数で算出しています。履歴がない銘柄は含みません。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+            Text(stringResource(R.string.annual_dividend_info_note), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
             Spacer(modifier = Modifier.height(18.dp))
 
             Row(
