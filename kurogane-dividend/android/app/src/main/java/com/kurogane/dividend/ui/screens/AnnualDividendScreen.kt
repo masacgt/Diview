@@ -1734,24 +1734,51 @@ private fun CompoundingSimulationSection(
                 val chartColor = PrimaryEmerald
                 val chartGridColor = BorderColor
                 Column(Modifier.fillMaxWidth()) {
-                Canvas(Modifier.fillMaxWidth().height(136.dp)) {
+                BoxWithConstraints(Modifier.fillMaxWidth().height(136.dp)) {
+                val chartHeight = 136.dp
+                val groupWidth = maxWidth / years.size
+                Canvas(Modifier.fillMaxWidth().height(chartHeight)) {
                     val gridTop = size.height * .2f
                     val gridMid = size.height * .55f
                     val gridBottom = size.height * .9f
                     listOf(gridTop, gridMid, gridBottom).forEach { y -> drawLine(chartGridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx()) }
                     val count = years.size
-                    val groupWidth = size.width / count
+                    val canvasGroupWidth = size.width / count
                     years.forEachIndexed { index, point ->
-                        val centerX = groupWidth * (index + .5f)
+                        val centerX = canvasGroupWidth * (index + .5f)
                         val barHeight = point.amount?.let { (it / maxValue).toFloat().coerceIn(0f, 1f) * size.height * .78f } ?: 0f
                         if (index == selectedIndex) {
-                            drawRoundRect(chartColor.copy(alpha = .08f), Offset(centerX - groupWidth * .45f, 0f), Size(groupWidth * .9f, size.height), cornerRadius = CornerRadius(6.dp.toPx()))
-                            drawRoundRect(chartColor.copy(alpha = .35f), Offset(centerX - groupWidth * .45f, 0f), Size(groupWidth * .9f, size.height), cornerRadius = CornerRadius(6.dp.toPx()), style = Stroke(1.dp.toPx()))
+                            drawRoundRect(chartColor.copy(alpha = .08f), Offset(centerX - canvasGroupWidth * .45f, 0f), Size(canvasGroupWidth * .9f, size.height), cornerRadius = CornerRadius(6.dp.toPx()))
+                            drawRoundRect(chartColor.copy(alpha = .35f), Offset(centerX - canvasGroupWidth * .45f, 0f), Size(canvasGroupWidth * .9f, size.height), cornerRadius = CornerRadius(6.dp.toPx()), style = Stroke(1.dp.toPx()))
                         }
                         if (barHeight > 0f) {
                             drawRoundRect(Brush.verticalGradient(listOf(chartColor, chartColor.copy(alpha = .45f)), startY = size.height - barHeight, endY = size.height), Offset(centerX - 8.dp.toPx(), size.height - barHeight), Size(16.dp.toPx(), barHeight), cornerRadius = CornerRadius(4.dp.toPx()))
                         }
                     }
+                }
+                if (!isPrivacyActive) {
+                    years.forEachIndexed { index, point ->
+                        point.amount?.let { amount ->
+                            val normalized = (amount / maxValue).toFloat().coerceIn(0f, 1f)
+                            val roundedTenThousands = kotlin.math.round(amount / 1_000.0) / 10.0
+                            Text(
+                                text = String.format(Locale.JAPAN, "%.1f万", roundedTenThousands),
+                                modifier = Modifier
+                                    .offset(
+                                        x = groupWidth * (index + 0.5f) - 28.dp,
+                                        y = chartHeight * (1f - normalized * .78f) - 18.dp
+                                    )
+                                    .width(56.dp),
+                                color = if (index == selectedIndex) PrimaryEmerald else OnSurfaceVariant,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+                }
                 }
                 AdaptiveRow(Modifier.fillMaxWidth()) {
                     years.forEachIndexed { index, point ->
@@ -1771,7 +1798,15 @@ private fun CompoundingSimulationSection(
                                 Text(stringResource(R.string.annual_dividend_text_44), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                                 Text(if (point.amount == null) stringResource(R.string.not_available) else if (isPrivacyActive) "••••" else "¥${format.format(point.amount.toLong())}", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                                 Text(stringResource(R.string.annual_dividend_text_45), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-                                Text(signedMoney(yearChange), color = if ((yearChange ?: 0.0) >= 0.0) PrimaryEmerald else ErrorRed, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                                Text(
+                                    signedMoney(yearChange),
+                                    color = if ((yearChange ?: 0.0) >= 0.0) PrimaryEmerald else ErrorRed,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
                             }
                         }
                     }
