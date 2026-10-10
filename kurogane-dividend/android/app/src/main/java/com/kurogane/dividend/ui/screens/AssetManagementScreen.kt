@@ -698,7 +698,9 @@ fun AssetManagementScreen(
                                 if (selectedMonth != null) NeonGreenLight.copy(alpha = 0.5f) else BorderBlue
                             )
                         ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
+                        Column(
+                            modifier = Modifier.padding(start = 14.dp, top = 14.dp, end = 14.dp, bottom = 8.dp)
+                        ) {
                             // Top Row: Code, Name, Sector, Valuation & Gain
                             AdaptiveRow(
                                 modifier = Modifier.fillMaxWidth(),
@@ -785,7 +787,7 @@ fun AssetManagementScreen(
 
                             Spacer(modifier = Modifier.height(10.dp))
                             HorizontalDivider(color = BorderBlue, thickness = 0.5.dp)
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
 
                             // Four compact metric tiles matching the portfolio card design.
                             Row(
@@ -793,7 +795,7 @@ fun AssetManagementScreen(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(CardDarkLighter)
-                                    .padding(horizontal = 4.dp, vertical = 7.dp),
+                                    .padding(horizontal = 4.dp, vertical = 0.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 val latestChangeColor = when {
@@ -1391,7 +1393,7 @@ private fun HoldingMetricTile(
     Column(
         modifier = modifier
             .then(clickModifier)
-            .padding(horizontal = if (showEditHint) 3.dp else 2.dp, vertical = if (showEditHint) 4.dp else 2.dp),
+            .padding(horizontal = if (showEditHint) 3.dp else 2.dp, vertical = 0.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -1415,7 +1417,7 @@ private fun HoldingMetricDivider() {
     Box(
         Modifier
             .width(1.dp)
-            .height(32.dp)
+            .height(24.dp)
             .background(BorderBlue)
     )
 }
