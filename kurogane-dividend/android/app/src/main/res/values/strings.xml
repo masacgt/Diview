@@ -99,6 +99,9 @@
     <string name="annual_dividend_text_22">"保有 %1$s株 • 利回り %2$s"</string>
     <string name="annual_dividend_text_23">"構成比 "</string>
     <string name="annual_dividend_text_24">"ポートフォリオ診断"</string>
+    <string name="annual_dividend_portfolio_info_content_description">ポートフォリオ診断の説明</string>
+    <string name="annual_dividend_portfolio_info_title">診断について</string>
+    <string name="annual_dividend_portfolio_info_description">ポートフォリオ診断に記載されている内容は、一般的な情報です。すべての状況に当てはまるとは限らず、必ずしも正しいとは限りません。将来の運用成果を保証するものでもありません。投資判断はご自身で行ってください。</string>
     <string name="annual_dividend_text_25">"分散スコア &amp; リスク評価"</string>
     <string name="annual_dividend_text_26">"未評価: %1$s"</string>
     <string name="annual_dividend_text_27">"増配・非減配の実績"</string>

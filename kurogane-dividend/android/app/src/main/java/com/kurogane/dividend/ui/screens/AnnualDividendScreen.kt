@@ -1731,14 +1731,17 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
-                            Text(
-                                stringResource(R.string.annual_dividend_text_24),
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    color = OnSurface,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = AppTextSize.body
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    stringResource(R.string.annual_dividend_text_24),
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        color = OnSurface,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = AppTextSize.body
+                                    )
                                 )
-                            )
+                                PortfolioDiagnosisInfo()
+                            }
                             Text(
                                 stringResource(R.string.annual_dividend_text_25),
                                 style = MaterialTheme.typography.labelSmall.copy(
@@ -1843,6 +1846,60 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PortfolioDiagnosisInfo() {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }, modifier = Modifier.size(28.dp)) {
+            Icon(
+                Icons.Default.Info,
+                contentDescription = stringResource(R.string.annual_dividend_portfolio_info_content_description),
+                tint = OnSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.widthIn(max = 320.dp),
+            shape = RoundedCornerShape(16.dp),
+            containerColor = CardDark,
+            tonalElevation = 0.dp,
+            shadowElevation = 12.dp
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = PrimaryEmerald.copy(alpha = 0.14f),
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Info, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(17.dp))
+                        }
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        stringResource(R.string.annual_dividend_portfolio_info_title),
+                        color = OnSurface,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = AppTextSize.body
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = BorderBlue, thickness = 0.75.dp)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    stringResource(R.string.annual_dividend_portfolio_info_description),
+                    color = OnSurfaceVariant,
+                    fontSize = AppTextSize.caption,
+                    lineHeight = 20.sp
+                )
             }
         }
     }
