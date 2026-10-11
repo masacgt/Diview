@@ -768,7 +768,12 @@ fun WatchlistScreen(
                                 )
                             },
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
+                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
+                        border = if (isReached) {
+                            BorderStroke(1.5.dp, Color(0xFF34D399))
+                        } else {
+                            null
+                        }
                     ) {
                     Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                         AdaptiveRow(
