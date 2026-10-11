@@ -1,6 +1,7 @@
 package com.kurogane.dividend.ui.screens
 
 import com.kurogane.dividend.ui.components.AdaptiveRow
+import com.kurogane.dividend.ui.components.DiviewSnackbarHost
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kurogane.dividend.data.financialText
 import com.kurogane.dividend.data.financialYears
@@ -76,6 +77,14 @@ fun StockDetailScreen(
     val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarScope = rememberCoroutineScope()
+    var watchlistSnackbarJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    fun showWatchlistSnackbar(message: String) {
+        watchlistSnackbarJob?.cancel()
+        snackbarHostState.currentSnackbarData?.dismiss()
+        watchlistSnackbarJob = snackbarScope.launch {
+            snackbarHostState.showSnackbar(message)
+        }
+    }
     
     var resolvedSecurity by remember(stockCode) { mutableStateOf<com.kurogane.dividend.data.CloudflareSecurity?>(null) }
     var lookupFinished by remember(stockCode) { mutableStateOf(false) }
@@ -278,7 +287,7 @@ fun StockDetailScreen(
     )
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { DiviewSnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = BackgroundDark
     ) { innerPadding ->
@@ -393,9 +402,7 @@ fun StockDetailScreen(
                                 onClick = {
                                     if (isBookmarked) viewModel.removeWatchlistStock(currentHolding.code)
                                     else viewModel.addHoldingToWatchlist(currentHolding)
-                                    snackbarScope.launch {
-                                        snackbarHostState.showSnackbar(if (isBookmarked) "Watchlistから解除しました" else "Watchlistに登録しました")
-                                    }
+                                    showWatchlistSnackbar(if (isBookmarked) "Watchlistから解除しました" else "Watchlistに登録しました")
                                 },
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
@@ -568,16 +575,29 @@ fun StockDetailScreen(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         modifier = Modifier.weight(1f).fillMaxHeight()
                                     ) {
-                                        Text(dpsVal, color = if (isProjected) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
-                                        Spacer(modifier = Modifier.height(4.dp))
                                         BoxWithConstraints(
                                             modifier = Modifier.weight(1f).fillMaxWidth(),
                                             contentAlignment = Alignment.BottomCenter
                                         ) {
+                                            val barHeight = maxHeight * animatedRatio.coerceIn(0f, 0.95f) * 0.72f
+                                            Text(
+                                                dpsVal,
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomCenter)
+                                                    .offset(y = -(barHeight + 2.dp))
+                                                    .fillMaxWidth(),
+                                                color = if (isProjected) PrimaryEmerald else OnSurfaceVariant,
+                                                fontSize = if (dpsVal.length >= 6) AppTextSize.dense * 0.8f else AppTextSize.dense,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
                                             Box(
                                                 modifier = Modifier
                                                     .width(26.dp)
-                                                    .height(maxHeight * animatedRatio)
+                                                    .height(barHeight)
                                                     .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                                                     .background(
                                                         if (isProjected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
