@@ -568,9 +568,11 @@
     <string name="watchlist_text_17">"1株配当 %1$s%2$s"</string>
     <string name="watchlist_text_18">"保有登録"</string>
     <string name="watchlist_alert_toggle">"Alert Toggle"</string>
-    <string name="watchlist_alert_short">アラート</string>
+    <string name="watchlist_alert_short">買場アラート</string>
     <string name="watchlist_alert_enabled">買場アラートを鳴らす（タップで個別設定）</string>
     <string name="watchlist_alert_disabled">買場アラートを鳴らさない（タップで個別設定）</string>
+    <string name="watchlist_alert_registered">買場アラートを登録しました</string>
+    <string name="watchlist_alert_removed">買場アラートを解除しました</string>
     <string name="csv_guide_title">各証券会社のCSV出力方法ガイド</string>
     <string name="csv_guide_notice">CSVのメニュー名や出力項目は、証券会社の画面・時期により異なる場合があります。保有銘柄のCSVを選び、この画面で読み込んでください。</string>
     <string name="csv_guide_sbi">ログイン後、「口座管理」から「保有証券」を開き、CSVダウンロードを選択します。ダウンロードしたCSVを上の取り込みから選んでください。</string>

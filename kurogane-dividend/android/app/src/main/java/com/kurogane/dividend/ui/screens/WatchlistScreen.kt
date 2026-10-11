@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
@@ -98,6 +99,8 @@ fun WatchlistScreen(
     val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
     val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val screenScope = rememberCoroutineScope()
     val latestCalculatedRightsDate = remember(watchlist, dividendEventRevision) {
         watchlist.asSequence()
             .flatMap { stock -> viewModel.dividendEventsFor(stock.code).asSequence() }
@@ -108,13 +111,16 @@ fun WatchlistScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val notificationAccess = rememberNotificationAccess { action ->
         val code = action.substringAfter(':', "")
-        if (viewModel.watchlist.value.any { it.code == code && !it.alertEnabled }) viewModel.toggleWatchlistStock(code)
+        if (viewModel.watchlist.value.any { it.code == code && !it.alertEnabled }) {
+            viewModel.toggleWatchlistStock(code)
+            screenScope.launch {
+                snackbarHostState.showSnackbar(resources.getString(R.string.watchlist_alert_registered))
+            }
+        }
         viewModel.setNotificationEnabled(NotificationKind.PRICE, true)
     }
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
     var revealedWatchlistCode by remember { mutableStateOf<String?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val screenScope = rememberCoroutineScope()
     var showAddWatchlist by remember { mutableStateOf(false) }
     var isAddingWatchlist by remember { mutableStateOf(false) }
 
@@ -259,12 +265,47 @@ fun WatchlistScreen(
         }
     }
 
+    val badgeTextFor: (WatchlistStock) -> String = { stock ->
+        val currentYield = com.kurogane.dividend.model.PortfolioMath.yieldPercent(stock.dps, stock.price)
+        when {
+            currentYield >= stock.targetYield -> resources.getString(R.string.watchlist_badge)
+            currentYield >= stock.targetYield - 0.25 -> resources.getString(R.string.watchlist_badge_3)
+            currentYield >= 4.0 -> resources.getString(
+                R.string.watchlist_badge_2,
+                String.format(Locale.JAPAN, "%.2f", currentYield)
+            )
+            else -> resources.getString(R.string.watchlist_badge_4)
+        }
+    }
+    val badgeTextMeasurer = rememberTextMeasurer()
+    val badgeTextStyle = LocalTextStyle.current.copy(fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+    val widestBadgeTextPx = remember(watchlist, resources, badgeTextMeasurer, badgeTextStyle) {
+        watchlist.maxOfOrNull { stock ->
+            badgeTextMeasurer.measure(AnnotatedString(badgeTextFor(stock)), style = badgeTextStyle, maxLines = 1).size.width
+        } ?: 0
+    }
+    val badgeWidth = with(LocalDensity.current) { widestBadgeTextPx.toDp() } + 34.dp
+
     val readyCount = watchlist.filter { com.kurogane.dividend.model.PortfolioMath.yieldPercent(it.dps, it.price) >= it.targetYield }.size
 
     Scaffold(
         containerColor = BackgroundDark,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = {
+            SnackbarHost(snackbarHostState) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    modifier = Modifier.padding(horizontal = 12.dp).border(
+                        BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.45f)),
+                        RoundedCornerShape(12.dp)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    containerColor = SurfaceContainerHigh,
+                    contentColor = OnSurface,
+                    actionColor = PrimaryEmerald
+                )
+            }
+        }
     ) { innerPadding ->
         LazyColumn(
             state = listState,
@@ -692,15 +733,7 @@ fun WatchlistScreen(
                     else -> resources.getString(R.string.watchlist_label_23)
                 }
                 
-                val dynamicBadge = if (isReached) {
-                    resources.getString(R.string.watchlist_badge)
-                } else if (isClose) {
-                    resources.getString(R.string.watchlist_badge_3)
-                } else if (currentYield >= 4.0) {
-                    resources.getString(R.string.watchlist_badge_2, String.format(java.util.Locale.JAPAN, "%.2f", currentYield))
-                } else {
-                    resources.getString(R.string.watchlist_badge_4)
-                }
+                val dynamicBadge = badgeTextFor(stock)
 
                 val badgeColor = if (isReached) {
                     PrimaryEmerald
@@ -785,7 +818,7 @@ fun WatchlistScreen(
                             shape = CircleShape,
                             color = badgeColor.copy(alpha = 0.15f),
                             border = BorderStroke(0.5.dp, badgeColor.copy(alpha = 0.5f)),
-                            modifier = Modifier.weight(1f).padding(end = 6.dp)
+                            modifier = Modifier.padding(end = 6.dp).width(badgeWidth)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 1.dp),
@@ -808,6 +841,11 @@ fun WatchlistScreen(
                                 )
                             }
                         }
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                         Button(
                             onClick = { onOpenAddHolding(stock.code) },
                             modifier = Modifier.widthIn(min = 82.dp).height(32.dp),
@@ -822,7 +860,12 @@ fun WatchlistScreen(
                         Spacer(modifier = Modifier.width(4.dp))
                         Button(
                             onClick = {
-                                if (stock.alertEnabled) viewModel.toggleWatchlistStock(stock.code)
+                                if (stock.alertEnabled) {
+                                    viewModel.toggleWatchlistStock(stock.code)
+                                    screenScope.launch {
+                                        snackbarHostState.showSnackbar(resources.getString(R.string.watchlist_alert_removed))
+                                    }
+                                }
                                 else notificationAccess.request("price:${stock.code}")
                             },
                             modifier = Modifier
@@ -872,6 +915,7 @@ fun WatchlistScreen(
                                 maxLines = 1,
                                 softWrap = false
                             )
+                        }
                         }
                         }
 
@@ -2254,11 +2298,10 @@ private fun TargetYieldAdjustButton(
         if (!isPressed) return@LaunchedEffect
         delay(450)
         repeatedDuringPress = true
-        feedbackView.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
-        latestOnAdjust()
         while (true) {
-            delay(100)
+            feedbackView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
             latestOnAdjust()
+            delay(100)
         }
     }
 
