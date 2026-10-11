@@ -587,7 +587,7 @@
     <string name="watchlist_text_34">"潜在配当規模 (各1単元)"</string>
     <string name="watchlist_text_35">"¥42,800"</string>
     <string name="watchlist_text_36" formatted="false">"想定利回り 3.84%"</string>
-    <string name="watchlist_text_37">"12ヶ月配当密度ヒートマップマトリクス"</string>
+    <string name="watchlist_text_37">"配当密度ヒートマップ"</string>
     <string name="watchlist_text_38">"少"</string>
     <string name="watchlist_text_39">"多"</string>
     <string name="watchlist_text_40">"銘柄"</string>
@@ -618,6 +618,7 @@
     <string name="watchlist_text_65">"Q4 (10-12月) 🟢"</string>
     <string name="watchlist_text_66">受取配当カレンダー</string>
     <string name="watchlist_calendar_info_content_description">受取配当カレンダーの説明</string>
+    <string name="watchlist_heatmap_info_content_description">配当密度ヒートマップの説明</string>
     <string name="watchlist_calendar_info_title">受取配当カレンダーについて</string>
     <string name="watchlist_text_67">"日株集中"</string>
     <string name="watchlist_text_68">"米株"</string>
