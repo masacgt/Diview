@@ -279,7 +279,8 @@ fun WatchlistScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
+                    border = BorderStroke(1.dp, BorderBlue)
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         AdaptiveRow(
@@ -772,7 +773,7 @@ fun WatchlistScreen(
                         border = if (isReached) {
                             BorderStroke(1.5.dp, PrimaryEmerald)
                         } else {
-                            null
+                            BorderStroke(1.dp, BorderBlue)
                         }
                     ) {
                     Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
