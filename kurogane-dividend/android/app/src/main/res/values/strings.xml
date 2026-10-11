@@ -22,6 +22,7 @@
     <string name="back">戻る</string>
     <string name="close">閉じる</string>
     <string name="stock_lookup_failed">銘柄情報を取得できませんでした</string>
+    <string name="stock_climate_info_content_description">景気特性の説明</string>
     <string name="draft_save_failed">下書きを保存できませんでした。もう一度保存してください。</string>
     <string name="draft_clear_failed">送信は完了しましたが、下書きを削除できませんでした。</string>
 
