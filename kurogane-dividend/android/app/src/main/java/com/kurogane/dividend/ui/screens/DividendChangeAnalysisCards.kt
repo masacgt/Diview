@@ -530,19 +530,25 @@ private fun AnnualImpactInfo(comparisonDescription: String) {
 private fun DistributionCell(label: String, count: Int, total: Int, color: Color, modifier: Modifier, compact: Boolean = false) {
     Column(modifier.clip(RoundedCornerShape(12.dp)).background(SurfaceContainer).padding(if (compact) 1.dp else 10.dp),
         verticalArrangement = Arrangement.spacedBy(if (compact) 1.dp else 4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Box(Modifier.size(5.dp).background(color, CircleShape))
-            Text(label, fontSize = if (compact) 10.sp else 11.sp,
-                lineHeight = if (compact) 15.sp else TextUnit.Unspecified, color = OnSurfaceVariant)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(Modifier.size(5.dp).background(color, CircleShape))
+                Text(label, fontSize = if (compact) 10.sp else 11.sp,
+                    lineHeight = if (compact) 15.sp else TextUnit.Unspecified, color = OnSurfaceVariant)
+            }
+            Text(percent(if (total > 0) count.toDouble() / total * 100 else null),
+                fontSize = if (compact) 9.sp else 10.sp,
+                lineHeight = if (compact) 13.sp else TextUnit.Unspecified,
+                color = color)
         }
         Text(stringResource(R.string.dividend_change_analysis_cards_text_8 , count),
             fontSize = if (compact) 14.sp else 17.sp,
             lineHeight = if (compact) 19.sp else TextUnit.Unspecified,
             fontWeight = FontWeight.Bold, color = OnSurface)
-        Text(percent(if (total > 0) count.toDouble() / total * 100 else null),
-            fontSize = if (compact) 9.sp else 10.sp,
-            lineHeight = if (compact) 13.sp else TextUnit.Unspecified,
-            color = color)
     }
 }
 
