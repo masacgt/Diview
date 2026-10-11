@@ -1209,12 +1209,22 @@ export default {
         const rightsDatesObject = await env.MARKET_DATA.get('market/yfinance/rights_dates.json');
         const rightsDatesDocument = rightsDatesObject ? await rightsDatesObject.json() : null;
         const rightsDatesByEvent = new Map((rightsDatesDocument?.records || [])
-          .map(event => [`${String(event.symbol || '').toUpperCase()}|${String(event.ex_dividend_date || '')}`, event.final_rights_date]));
+          .map(event => [`${String(event.symbol || '').toUpperCase()}|${String(event.ex_dividend_date || '')}`, {
+            finalRightsDate: event.final_rights_date || null,
+            recordDate: event.record_date || null,
+          }]));
         const items = await Promise.all(symbols.map(async symbol => {
           const safeSymbol = symbol.replaceAll('^', '_').replaceAll('=', '_').replaceAll('/', '_');
           const object = await env.MARKET_DATA.get(`market/yfinance/securities/${safeSymbol}.json`);
           if (!object) return { symbol, months: [] };
           const document = await object.json();
+          const rawUpcomingExDate = finiteNumber(document.statistics_current?.exDividendDate);
+          const upcomingExDate = rawUpcomingExDate
+            ? new Date(rawUpcomingExDate * 1000).toISOString().slice(0, 10)
+            : null;
+          const upcomingRightsDates = upcomingExDate && upcomingExDate > asOf
+            ? rightsDatesByEvent.get(`${symbol}|${upcomingExDate}`) || null
+            : null;
           const dividendEvents = Array.isArray(document.actions?.dividends) ? document.actions.dividends : [];
           const events = dividendEvents
             .filter(event => {
@@ -1224,17 +1234,30 @@ export default {
               const parsedDate = new Date(`${date}T00:00:00.000Z`);
               return Number.isFinite(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === date;
             })
-            .map(event => ({
-              date: String(event.date),
-              amount: finiteNumber(event.amount),
-              final_rights_date: rightsDatesByEvent.get(`${symbol}|${String(event.date)}`) || null,
-            }))
+            .map(event => {
+              const rightsDates = rightsDatesByEvent.get(`${symbol}|${String(event.date)}`) || {};
+              return {
+                date: String(event.date),
+                amount: finiteNumber(event.amount),
+                final_rights_date: rightsDates.finalRightsDate || null,
+                record_date: rightsDates.recordDate || null,
+              };
+            })
             .sort((a, b) => a.date.localeCompare(b.date));
           const months = [...new Set(events
             .map(event => Number(event.date.slice(5, 7))))]
             .filter(month => month >= 1 && month <= 12)
             .sort((a, b) => a - b);
-          return { symbol, months, events };
+          return {
+            symbol,
+            months,
+            events,
+            upcoming_event: upcomingRightsDates ? {
+              ex_dividend_date: upcomingExDate,
+              final_rights_date: upcomingRightsDates.finalRightsDate || null,
+              record_date: upcomingRightsDates.recordDate || null,
+            } : null,
+          };
         }));
         return json({ as_of: asOf, lookback_days: 365,
           rights_dates_generated_at: rightsDatesDocument?.generated_at || null, items });

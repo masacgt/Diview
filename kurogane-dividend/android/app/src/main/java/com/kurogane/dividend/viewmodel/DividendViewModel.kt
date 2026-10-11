@@ -16,6 +16,7 @@ import com.kurogane.dividend.model.ShareholderBenefit
 import com.kurogane.dividend.model.StockClimate
 import com.kurogane.dividend.data.CloudflareMarketRepository
 import com.kurogane.dividend.data.CloudflareDividendEvent
+import com.kurogane.dividend.data.CloudflareUpcomingDividendEvent
 import com.kurogane.dividend.data.CloudflareSecurity
 import com.kurogane.dividend.data.CloudflareStockAnalysis
 import com.kurogane.dividend.data.CloudflareSearchHit
@@ -261,6 +262,7 @@ class DividendViewModel @JvmOverloads constructor(
     val dividendEventRevision = _dividendEventRevision.asStateFlow()
     private val dividendEventCacheLock = Any()
     private val dividendEventCache = mutableMapOf<String, List<CloudflareDividendEvent>>()
+    private val upcomingDividendEventCache = mutableMapOf<String, CloudflareUpcomingDividendEvent?>()
     private val watchlistProjectionCache = WatchlistProjectionCache()
     private val financialMutex = Mutex()
     private val financialLoading = mutableSetOf<String>()
@@ -517,12 +519,49 @@ class DividendViewModel @JvmOverloads constructor(
                 val date = runCatching { LocalDate.parse(row.optString("date")) }.getOrNull() ?: return@mapNotNull null
                 val amount = row.optDouble("amount", Double.NaN).takeIf { it.isFinite() && it > 0.0 } ?: return@mapNotNull null
                 val finalRightsDate = runCatching { LocalDate.parse(row.optString("final_rights_date")) }.getOrNull()
-                CloudflareDividendEvent(date, amount, finalRightsDate)
+                val recordDate = runCatching { LocalDate.parse(row.optString("record_date")) }.getOrNull()
+                CloudflareDividendEvent(date, amount, finalRightsDate, recordDate)
             }.sortedBy { it.date }
         }.getOrDefault(emptyList())
 
         return synchronized(dividendEventCacheLock) {
             dividendEventCache.getOrPut(normalized) { parsed }
+        }
+    }
+
+    fun upcomingDividendEventFor(code: String): CloudflareUpcomingDividendEvent? {
+        val normalized = yahooSymbol(Category.JAPAN, code) ?: yahooSymbol(Category.US, code) ?: return null
+        synchronized(dividendEventCacheLock) {
+            if (upcomingDividendEventCache.containsKey(normalized)) return upcomingDividendEventCache[normalized]
+        }
+        val parsed = runCatching {
+            val row = marketPreferences.getString("upcoming_dividend_event_$normalized", null)
+                ?.takeIf { it.isNotBlank() }?.let(::JSONObject) ?: return@runCatching null
+            val exDividendDate = LocalDate.parse(row.optString("ex_dividend_date"))
+            val finalRightsDate = runCatching { LocalDate.parse(row.optString("final_rights_date")) }.getOrNull()
+            val recordDate = runCatching { LocalDate.parse(row.optString("record_date")) }.getOrNull()
+            CloudflareUpcomingDividendEvent(exDividendDate, finalRightsDate, recordDate)
+        }.getOrNull()
+        return synchronized(dividendEventCacheLock) {
+            upcomingDividendEventCache.getOrPut(normalized) { parsed }
+        }
+    }
+
+    private fun storeUpcomingDividendEvent(
+        symbol: String,
+        event: CloudflareUpcomingDividendEvent?
+    ) {
+        val normalized = symbol.uppercase(java.util.Locale.ROOT)
+        if (event == null) {
+            marketPreferences.edit().putString("upcoming_dividend_event_$normalized", "").apply()
+        } else {
+            marketPreferences.edit().putString("upcoming_dividend_event_$normalized", JSONObject()
+                .put("ex_dividend_date", event.exDividendDate.toString())
+                .put("final_rights_date", event.finalRightsDate?.toString().orEmpty())
+                .put("record_date", event.recordDate?.toString().orEmpty()).toString()).apply()
+        }
+        synchronized(dividendEventCacheLock) {
+            upcomingDividendEventCache[normalized] = event
         }
     }
 
@@ -532,7 +571,8 @@ class DividendViewModel @JvmOverloads constructor(
             rows.put(JSONObject()
                 .put("date", event.date.toString())
                 .put("amount", event.amountPerShare)
-                .put("final_rights_date", event.finalRightsDate?.toString()))
+                .put("final_rights_date", event.finalRightsDate?.toString())
+                .put("record_date", event.recordDate?.toString()))
         }
         marketPreferences.edit().putString("dividend_events_$symbol", rows.toString()).apply()
         synchronized(dividendEventCacheLock) {
@@ -561,6 +601,7 @@ class DividendViewModel @JvmOverloads constructor(
                 val months = monthsBySymbol[symbol] ?: continue
                 storeDividendMonths(symbol, months, today)
                 storeDividendEvents(symbol, eventsBySymbol[symbol].orEmpty())
+                storeUpcomingDividendEvent(symbol, result.getOrThrow().upcomingEventsBySymbol[symbol])
                 marketPreferences.edit().putString("dividend_events_fetched_jst_$symbol", today).apply()
                 applyDividendMonths(symbol, months)
             }

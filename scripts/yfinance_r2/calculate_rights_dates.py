@@ -37,6 +37,20 @@ def previous_session(calendar: Any, ex_date: date) -> date:
     return sessions[-1].date()
 
 
+def next_session(calendar: Any, ex_date: date) -> date:
+    """The first XTKS session after ex-date is the standard record date."""
+    last_session = calendar.last_session.date()
+    if ex_date >= last_session:
+        raise ValueError(f"XTKS calendar history does not cover the day after {ex_date}")
+    sessions = calendar.sessions_in_range(
+        (ex_date + timedelta(days=1)).isoformat(),
+        min(last_session, ex_date + timedelta(days=14)).isoformat(),
+    )
+    if not len(sessions):
+        raise ValueError(f"no XTKS session after ex-dividend date {ex_date}")
+    return sessions[0].date()
+
+
 def build_records(rows: list[dict[str, Any]], calendar: Any) -> tuple[list[dict[str, Any]], int]:
     records: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
@@ -45,13 +59,18 @@ def build_records(rows: list[dict[str, Any]], calendar: Any) -> tuple[list[dict[
         symbol = str(row.get("symbol") or row.get("yfinance_symbol") or "").strip().upper()
         code = str(row.get("security_code") or symbol.removesuffix(".T")).strip().upper()
         raw_date = str(row.get("date") or row.get("ex_dividend_date") or "")[:10]
+        upcoming = row.get("upcoming") is True
         amount_value = row.get("amount", row.get("dividend_per_share"))
         try:
             ex_date = date.fromisoformat(raw_date)
-            amount = float(amount_value)
         except (TypeError, ValueError):
             continue
-        if not re.fullmatch(r"[A-Z0-9]{4,5}", code) or not symbol or not amount > 0:
+        try:
+            amount = float(amount_value) if amount_value is not None else None
+        except (TypeError, ValueError):
+            amount = None
+        if (not re.fullmatch(r"[A-Z0-9]{4,5}", code) or not symbol or
+                (not upcoming and (amount is None or not amount > 0))):
             continue
         key = (symbol, ex_date.isoformat())
         if key in seen:
@@ -59,6 +78,7 @@ def build_records(rows: list[dict[str, Any]], calendar: Any) -> tuple[list[dict[
         seen.add(key)
         try:
             final_rights_date = previous_session(calendar, ex_date).isoformat()
+            record_date = next_session(calendar, ex_date).isoformat()
         except ValueError:
             skipped_events += 1
             continue
@@ -67,9 +87,11 @@ def build_records(rows: list[dict[str, Any]], calendar: Any) -> tuple[list[dict[
             "symbol": symbol,
             "ex_dividend_date": ex_date.isoformat(),
             "final_rights_date": final_rights_date,
+            "record_date": record_date,
             "dividend_per_share": amount,
+            "event_type": "upcoming" if upcoming else "observed",
             "source": "Yahoo Finance via yfinance",
-            "calculation_method": "previous_XTKS_session_before_ex_dividend_date",
+            "calculation_method": "previous_and_next_XTKS_sessions_around_ex_dividend_date",
         })
     return sorted(records, key=lambda row: (row["security_code"], row["ex_dividend_date"])), skipped_events
 
@@ -81,7 +103,7 @@ def read_csv(path: Path) -> list[dict[str, Any]]:
 
 def write_csv(path: Path, records: list[dict[str, Any]], generated_at: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    columns = ["security_code", "symbol", "ex_dividend_date", "final_rights_date",
+    columns = ["security_code", "symbol", "ex_dividend_date", "final_rights_date", "record_date",
                "dividend_per_share", "source", "calculation_method", "generated_at"]
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns)
@@ -112,7 +134,21 @@ def rows_from_r2(client: Any, bucket: str) -> tuple[list[dict[str, Any]], int]:
         response = client.get_object(Bucket=bucket, Key=key)
         document = json.loads(response["Body"].read())
         symbol = str(document.get("symbol") or Path(key).stem).upper()
-        return [{"symbol": symbol, **row} for row in document.get("records", []) if isinstance(row, dict)]
+        rows = [{"symbol": symbol, **row} for row in document.get("records", []) if isinstance(row, dict)]
+        safe_symbol = symbol.replace("^", "_").replace("=", "_").replace("/", "_")
+        try:
+            security_response = client.get_object(
+                Bucket=bucket, Key=f"{PREFIX}/securities/{safe_symbol}.json")
+        except client.exceptions.NoSuchKey:
+            return rows
+        security_document = json.loads(security_response["Body"].read())
+        raw_ex_date = security_document.get("statistics_current", {}).get("exDividendDate")
+        if raw_ex_date is not None:
+            ex_timestamp = float(raw_ex_date)
+            ex_date = datetime.fromtimestamp(ex_timestamp, UTC).date()
+            if ex_date > datetime.now(UTC).date():
+                rows.append({"symbol": symbol, "date": ex_date.isoformat(), "upcoming": True})
+        return rows
 
     rows: list[dict[str, Any]] = []
     workers = max(1, min(int(os.environ.get("RIGHTS_DATE_WORKERS", "16")), 32))
@@ -149,7 +185,7 @@ def main() -> int:
         "source": "Yahoo Finance via yfinance",
         "generated_at": generated_at,
         "calendar": "XTKS",
-        "calculation_method": "last XTKS session strictly before Yahoo ex-dividend date",
+        "calculation_method": "previous XTKS session is the last cum-rights date; next XTKS session is the inferred record date",
         "settlement_rule_note": "Derived from the observed ex-dividend date; this is a calculated historical date, not an issuer-announced future schedule.",
         "source_symbols": source_symbols,
         "event_count": len(records),

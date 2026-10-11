@@ -1723,21 +1723,17 @@ fun StockDetailScreen(
                     viewModel.dividendEventsFor(currentHolding.code)
                 }
                 val nextDividendEvent = dividendEvents.firstOrNull { !it.date.isBefore(java.time.LocalDate.now()) }
-                val rightsDate = nextDividendEvent?.finalRightsDate
-                val dateFormat = java.time.format.DateTimeFormatter.ofPattern("M月d日", Locale.JAPAN)
-                val nextPaymentText = nextDividendEvent?.date?.let { date ->
-                    val period = when {
-                        date.dayOfMonth <= 10 -> "上旬"
-                        date.dayOfMonth <= 20 -> "中旬"
-                        else -> "下旬"
-                    }
-                    "${date.year}年${date.monthValue}月$period"
-                } ?: currentHolding.dividendMonths.filter { it in 1..12 }.distinct().sorted().firstOrNull()?.let { month ->
-                    "${if (month <= java.time.LocalDate.now().monthValue) java.time.LocalDate.now().year + 1 else java.time.LocalDate.now().year}年${month}月"
-                } ?: "配当予定未取得"
+                val upcomingDividendEvent = remember(currentHolding.code, dividendEventRevision) {
+                    viewModel.upcomingDividendEventFor(currentHolding.code)
+                }
+                val nextExDividendDate = upcomingDividendEvent?.exDividendDate ?: nextDividendEvent?.date
+                val finalRightsDate = upcomingDividendEvent?.finalRightsDate ?: nextDividendEvent?.finalRightsDate
+                val recordDate = upcomingDividendEvent?.recordDate ?: nextDividendEvent?.recordDate
+                val dateFormat = java.time.format.DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.JAPAN)
+                val nextExDividendText = nextExDividendDate?.format(dateFormat) ?: "権利落ち日未取得"
                 val estimatedAmount = currentHolding.shares * currentHolding.dps / currentHolding.priceUnit * currentHolding.currencyFactor
-                val rightsDateText = rightsDate?.format(dateFormat) ?: "権利日未取得"
-                val nextRightsDateText = nextDividendEvent?.date?.format(dateFormat) ?: "権利日未取得"
+                val finalRightsDateText = finalRightsDate?.format(dateFormat) ?: "未取得"
+                val recordDateText = recordDate?.format(dateFormat) ?: "未取得"
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -1781,9 +1777,8 @@ fun StockDetailScreen(
                             Column(modifier = Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text("次回支払予定日", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                        Text(nextPaymentText, color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
-                                        Text("権利付最終日：$rightsDateText", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                        Text("次回権利落ち日", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                        Text(nextExDividendText, color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
                                     }
                                     Column(horizontalAlignment = Alignment.End) {
                                         Text("予想受取額（1株 ${currentHolding.currency}${NumberFormat.getIntegerInstance(Locale.JAPAN).format(currentHolding.dps.toLong())}）", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
@@ -1793,7 +1788,7 @@ fun StockDetailScreen(
                                             fontSize = 20.sp,
                                             fontWeight = FontWeight.Black
                                         )
-                                        Text(if (nextDividendEvent != null) "確定済み" else "配当月情報に基づく目安", color = PrimaryEmerald, fontSize = AppTextSize.dense)
+                                        Text(if (upcomingDividendEvent != null || nextDividendEvent != null) "権利日程取得済み" else "配当月情報に基づく目安", color = PrimaryEmerald, fontSize = AppTextSize.dense)
                                     }
                                 }
                                 Text(
@@ -1805,19 +1800,25 @@ fun StockDetailScreen(
                             }
                         }
 
-                        AdaptiveRow(
+                        Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            shape = RoundedCornerShape(12.dp),
+                            color = SurfaceContainer
                         ) {
-                            listOf("中間権利確定" to rightsDateText, "期末権利確定" to nextRightsDateText).forEach { (label, value) ->
-                                Surface(
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = SurfaceContainer,
-                                ) {
-                                    Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                listOf(
+                                    "権利付き最終日" to finalRightsDateText,
+                                    "権利落ち日" to nextExDividendText,
+                                    "権利確定日（推定）" to recordDateText
+                                ).forEachIndexed { index, (label, value) ->
+                                    if (index > 0) HorizontalDivider(color = BorderColor.copy(alpha = 0.55f))
+                                    AdaptiveRow(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         Text(label, color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                        Text(value, color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                                        Text(value, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
