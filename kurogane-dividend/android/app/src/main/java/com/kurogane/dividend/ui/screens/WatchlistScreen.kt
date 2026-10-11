@@ -283,11 +283,14 @@ fun WatchlistScreen(
                         R.string.watchlist_badge_2,
                         String.format(Locale.JAPAN, "%.2f", currentYield)
                     )
-                    if (dynamicBadge.length > widestDynamicLength ||
-                        (dynamicBadge.length == widestDynamicLength && currentYield > widestDynamicYield)
+                    val dynamicWidthCandidate = dynamicBadge.map { character ->
+                        if (character in '0'..'9') '8' else character
+                    }.joinToString("")
+                    if (dynamicWidthCandidate.length > widestDynamicLength ||
+                        (dynamicWidthCandidate.length == widestDynamicLength && currentYield > widestDynamicYield)
                     ) {
-                        widestDynamicBadge = dynamicBadge
-                        widestDynamicLength = dynamicBadge.length
+                        widestDynamicBadge = dynamicWidthCandidate
+                        widestDynamicLength = dynamicWidthCandidate.length
                         widestDynamicYield = currentYield
                     }
                 }
