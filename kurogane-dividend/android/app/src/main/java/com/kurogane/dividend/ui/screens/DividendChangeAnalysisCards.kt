@@ -254,7 +254,7 @@ internal fun WatchlistDividendPayoutRiskContent(
                         verticalOffset.snapTo(startOffset)
                         verticalOffset.animateTo(
                             targetValue = 0f,
-                            animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
+                            animationSpec = tween(durationMillis = 360, easing = FastOutSlowInEasing)
                         )
                     }
                 }
