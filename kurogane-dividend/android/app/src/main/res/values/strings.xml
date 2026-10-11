@@ -561,7 +561,7 @@
     <string name="watchlist_payout_diagnosis_button">"配当性向診断"</string>
     <string name="watchlist_payout_diagnosis_count">"日本株・%1$d銘柄"</string>
     <string name="watchlist_1_s_2_s">"%1$s (%2$s)"</string>
-    <string name="watchlist_text_13">"ウォッチリスト銘柄に追加"</string>
+    <string name="watchlist_text_13">"銘柄をウォッチリストに追加"</string>
     <string name="watchlist_text_14">"監視銘柄コード・銘柄名・セクターで検索"</string>
     <string name="watchlist_a11y">"目標利回り"</string>
     <string name="watchlist_text_15">"目標:"</string>
