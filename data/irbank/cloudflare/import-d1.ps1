@@ -15,9 +15,14 @@ if (Test-Path $StatePath) {
     foreach ($name in $state.completed) { $done[$name] = $true }
 }
 
+$AnnualFinancialFiles = @(Get-ChildItem $ImportDir -Filter 'financial_periods_annual_*.sql' | Sort-Object Name)
+if ($AnnualFinancialFiles.Count -eq 0) {
+    throw 'Annual-only D1 import files are missing. Run node ..\scripts\build-d1-import.cjs first.'
+}
+
 $files = @(
     Get-ChildItem $ImportDir -Filter 'securities_*.sql' | Sort-Object Name
-    Get-ChildItem $ImportDir -Filter 'financial_periods_*.sql' | Sort-Object Name
+    $AnnualFinancialFiles
     Get-ChildItem $ImportDir -Filter 'dividend_events_*.sql' | Sort-Object Name
 )
 foreach ($file in $files) {

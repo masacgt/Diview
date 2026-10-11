@@ -1,0 +1,137 @@
+{
+  "fields": [
+    {
+      "key": "sales",
+      "label": "売上高",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "operating_profit",
+      "label": "営業利益",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "ordinary_income",
+      "label": "経常利益",
+      "unit": "million_jpy",
+      "note": "J-GAAP 固有。IFRS / US-GAAP 提出企業では null"
+    },
+    {
+      "key": "net_income",
+      "label": "当期純利益(親会社株主帰属)",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "eps",
+      "label": "1株当たり当期純利益(EPS)",
+      "unit": "jpy_per_share",
+      "note": "株式分割未調整(as-reported)。分割年をまたぐ期間は同一株数基準ではない。"
+    },
+    {
+      "key": "operating_cf",
+      "label": "営業活動によるCF",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "investing_cf",
+      "label": "投資活動によるCF",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "extraordinary_income",
+      "label": "特別利益",
+      "unit": "million_jpy",
+      "note": "J-GAAP 固有。IFRS / US-GAAP 提出企業では null"
+    },
+    {
+      "key": "extraordinary_loss",
+      "label": "特別損失",
+      "unit": "million_jpy",
+      "note": "J-GAAP 固有。IFRS / US-GAAP 提出企業では null"
+    },
+    {
+      "key": "total_assets",
+      "label": "総資産",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "net_assets",
+      "label": "純資産",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "total_liabilities",
+      "label": "負債合計",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "equity_ratio_computed",
+      "label": "自己資本比率",
+      "unit": "percent",
+      "note": "総資産と自己資本から算出した計算値 (%)。四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "gross_profit",
+      "label": "売上総利益",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "income_before_tax",
+      "label": "税引前利益",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "income_taxes",
+      "label": "法人税等",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "rd_expenses",
+      "label": "研究開発費",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "depreciation",
+      "label": "減価償却費",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "capital_expenditure",
+      "label": "設備投資額",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "owners_equity",
+      "label": "親会社の所有者に帰属する持分(自己資本)",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "interest_bearing_debt",
+      "label": "有利子負債",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "cash_and_equivalents",
+      "label": "現金及び現金同等物",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    }
+  ],
+  "results": [
+    {
+      "edinet_code": "E41323",
+      "periods": []
+    }
+  ],
+  "not_found": [],
+  "attribution": {
+    "source_label": "金融庁 EDINET / TDnet",
+    "license_note": "EDINET 由来データは金融庁 EDINET、TDnet 由来データは JPX TDnet を出典とし、加工は IRBANK が実施。再配信時は出典の明示が必要。",
+    "processed_by": "IRBANK"
+  }
+}

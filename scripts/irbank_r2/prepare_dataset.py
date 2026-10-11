@@ -17,7 +17,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE = ROOT / "irbankMCP" / "irbank"
 DEFAULT_OUTPUT = Path.home() / "AppData" / "Local" / "Temp" / "diview-irbank-r2-ready"
-FAMILIES = ("organization", "dividends", "valuation", "shareholders", "segments")
+FAMILIES = ("organization", "dividends", "valuation", "shareholders", "segments", "disclosures")
 FINANCIAL_PERIODS = ("annual", "quarterly", "semiannual")
 
 
@@ -103,7 +103,68 @@ def main() -> int:
     category_docs = {name: load_by_edinet(source / name) for name in FAMILIES}
     financial_data, financial_attributions = financial_periods(source)
     margin_docs = load_by_edinet(source / "weekly_margin") if args.include_jpx else {}
+    jsf_margin_docs = load_by_edinet(source / "jsf_margin")
     price_docs = load_by_edinet(source / "prices") if args.include_jpx else {}
+    app_required_docs: dict[str, Any] = {}
+    app_snapshot = read_json(source / "app_required_7203_20261008.json") if (source / "app_required_7203_20261008.json").is_file() else {}
+    for path in source.glob("app_required_*.json"):
+        document = read_json(path)
+        code = str(document.get("security_code") or "")
+        if code:
+            app_required_docs.setdefault(code, {})
+            for family in ("weekly_margin", "jsf_margin", "disclosures"):
+                if family in document:
+                    app_required_docs[code][family] = document[family]
+        canonical_default_code = next((str(row.get("security_code")) for row in master if row.get("edinet_code") == "E02144"), "")
+        security_code = str(document.get("security_code") or canonical_default_code)
+        if security_code:
+            target = app_required_docs.setdefault(security_code, {})
+            for family in ("organization", "dividends", "valuation", "shareholders", "segments"):
+                if family in document:
+                    target[family] = document[family]
+            if isinstance(document.get("basic"), dict) and "edinet_code" in document["basic"]:
+                target["organization"] = document
+            if "annual_dps" in {row.get("key") for row in document.get("fields", [])} and "records" in document:
+                target["dividends"] = document
+            if "history" in document:
+                target["valuation"] = document
+            if "shareholders" in document:
+                target["shareholders"] = document
+            if "segments" in document:
+                target["segments"] = document
+        if document.get("results"):
+            for result in document["results"]:
+                if result.get("periods") is not None and result.get("edinet_code"):
+                    target = app_required_docs.setdefault(str(result["edinet_code"]), {})
+                    period_type = path.stem.split("_")[-1]
+                    if period_type in FINANCIAL_PERIODS:
+                        target[f"financials_{period_type}"] = result["periods"]
+        if isinstance(document.get("fields"), list):
+            edinet = str(document.get("edinet_code") or "")
+            if edinet:
+                master_row = next((row for row in master if row.get("edinet_code") == edinet), None)
+                if master_row:
+                    code = str(master_row.get("security_code") or "")
+                    target = app_required_docs.setdefault(code, {})
+                    if isinstance(document.get("history"), list):
+                        target["valuation"] = document
+                    if isinstance(document.get("records"), list) and "annual_dps" in {row.get("key") for row in document["fields"]}:
+                        target["dividends"] = document
+                    if isinstance(document.get("shareholders"), list):
+                        target["shareholders"] = document
+                    if isinstance(document.get("segments"), list):
+                        target["segments"] = document
+        financial_bundle = document.get("financials")
+        if isinstance(financial_bundle, dict):
+            for period_type in FINANCIAL_PERIODS:
+                response = financial_bundle.get(period_type)
+                result = next((row for row in response.get("results", []) if row.get("edinet_code")), None) if isinstance(response, dict) else None
+                if result:
+                    app_required_docs.setdefault(str(result["edinet_code"]), {})[f"financials_{period_type}"] = result.get("periods", [])
+        if isinstance(document.get("results"), list):
+            result = next((row for row in document["results"] if row.get("edinet_code")), None)
+            if result:
+                app_required_docs.setdefault(str(result["edinet_code"]), {})[f"financials_{path.stem.rsplit('_', 1)[-1]}"] = result.get("periods", [])
 
     catalog: list[dict[str, Any]] = []
     index: list[dict[str, Any]] = []
@@ -126,8 +187,10 @@ def main() -> int:
             "valuation": None,
             "segments": None,
             "shareholders": None,
+            "disclosures": None,
             "sources": {},
         }
+        dividend_bundle: dict[str, Any] | None = None
         for family, docs in category_docs.items():
             document = docs.get(edinet)
             if not document:
@@ -143,11 +206,20 @@ def main() -> int:
                 }
             elif family == "dividends":
                 company[family] = {"records": document.get("records", [])}
+                dividend_bundle = {
+                    "schema_version": 1,
+                    "source": "IRBANK Connect",
+                    "security_code": code,
+                    "records": document.get("records", []),
+                    "attribution": attribution(document),
+                }
             elif family == "valuation":
                 company[family] = {
                     "history": document.get("history", []),
                     "per_5y_avg": document.get("per_5y_avg"),
                 }
+            elif family == "disclosures":
+                company[family] = {"records": document.get("records", [])}
             else:
                 collection = "segments" if family == "segments" else "shareholders"
                 company[family] = {"records": document.get(collection, [])}
@@ -162,6 +234,59 @@ def main() -> int:
             company["sources"].setdefault("financials", {})[period_type] = source_info
 
         key_dir = Path("market") / "irbank" / "v1" / "securities" / code
+        app_required = app_required_docs.get(str(master_row.get("security_code") or "")) or app_required_docs.get(code) or (app_required_docs.get("E00012") if code == "7203" else None)
+        if app_required:
+            for family, key in (("weekly_margin", "weekly_margin"), ("jsf_margin", "jsf_margin"), ("disclosures", "disclosures")):
+                document = app_required.get(family)
+                if not document:
+                    continue
+                filename = {"weekly_margin": "weekly_margin.json", "jsf_margin": "jsf_margin.json", "disclosures": "disclosures.json"}[family]
+                size, digest = write_json(output / key_dir / filename, document)
+                object_meta.append({"key": (key_dir / filename).as_posix(), "bytes": size, "sha256": digest, "family": family})
+                if family == "disclosures":
+                    company["disclosures"] = {"records": document.get("records", [])}
+                    company["sources"][family] = attribution(document)
+            for family in ("organization", "dividends", "valuation", "shareholders", "segments"):
+                document = app_required.get(family)
+                if not document:
+                    continue
+                if family == "organization":
+                    company[family] = {"basic": document.get("basic", {}), "financials": document.get("financials", {}),
+                        "securities": document.get("securities", []), "disclosures": document.get("disclosures", []), "officers": document.get("officers", [])}
+                elif family == "dividends":
+                    company[family] = {"records": document.get("records", [])}
+                elif family == "valuation":
+                    company[family] = {"history": document.get("history", []), "per_5y_avg": document.get("per_5y_avg")}
+                else:
+                    collection = "segments" if family == "segments" else "shareholders"
+                    company[family] = {"records": document.get(collection, [])}
+                if attribution(document):
+                    company["sources"][family] = attribution(document)
+            financial_override = {period: app_required.get(f"financials_{period}") for period in FINANCIAL_PERIODS}
+            if any(financial_override.values()):
+                company["financials"] = {period: financial_override[period] or company["financials"].get(period, []) for period in FINANCIAL_PERIODS}
+            if app_required.get("disclosures"):
+                company["disclosures"] = {"records": app_required["disclosures"].get("records", [])}
+                company["sources"]["disclosures"] = attribution(app_required["disclosures"])
+            for family in ("organization", "dividends", "valuation", "shareholders", "segments"):
+                document = app_required.get(family)
+                if not document:
+                    continue
+                if family == "organization":
+                    company[family] = {"basic": document.get("basic", {}), "financials": document.get("financials", {}),
+                        "securities": document.get("securities", []), "disclosures": document.get("disclosures", []), "officers": document.get("officers", [])}
+                elif family == "dividends":
+                    company[family] = {"records": document.get("records", [])}
+                elif family == "valuation":
+                    company[family] = {"history": document.get("history", []), "per_5y_avg": document.get("per_5y_avg")}
+                else:
+                    collection = "segments" if family == "segments" else "shareholders"
+                    company[family] = {"records": document.get(collection, [])}
+                if attribution(document):
+                    company["sources"][family] = attribution(document)
+            financial_override = {period: app_required.get(f"financials_{period}") for period in FINANCIAL_PERIODS}
+            if any(financial_override.values()):
+                company["financials"] = {period: financial_override[period] or company["financials"].get(period, []) for period in FINANCIAL_PERIODS}
         overview_size, overview_hash = write_json(output / key_dir / "overview.json", company)
         object_meta.append({
             "key": (key_dir / "overview.json").as_posix(),
@@ -169,6 +294,14 @@ def main() -> int:
             "sha256": overview_hash,
             "family": "overview",
         })
+        if dividend_bundle is not None:
+            dividend_size, dividend_hash = write_json(output / key_dir / "dividends.json", dividend_bundle)
+            object_meta.append({
+                "key": (key_dir / "dividends.json").as_posix(),
+                "bytes": dividend_size,
+                "sha256": dividend_hash,
+                "family": "dividends",
+            })
         index.append({"code": code, "edinet_code": edinet, "key": (key_dir / "overview.json").as_posix()})
         catalog.append({
             "code": code,
@@ -177,13 +310,17 @@ def main() -> int:
             "has_overview": True,
         })
 
-        for family, docs in (("prices", price_docs), ("weekly_margin", margin_docs)):
+        for family, docs in (("prices", price_docs), ("weekly_margin", margin_docs), ("jsf_margin", jsf_margin_docs)):
             document = docs.get(edinet)
             if not document:
                 if args.include_jpx:
                     missing[family] += 1
                 continue
-            filename = "daily_prices.json" if family == "prices" else "weekly_margin.json"
+            filename = {
+                "prices": "daily_prices.json",
+                "weekly_margin": "weekly_margin.json",
+                "jsf_margin": "jsf_margin.json",
+            }[family]
             size, digest = write_json(output / key_dir / filename, document)
             object_meta.append({
                 "key": (key_dir / filename).as_posix(),
@@ -217,12 +354,15 @@ def main() -> int:
         "security_count": len(catalog),
         "overview_count": len(index),
         "jpx_data_included": bool(args.include_jpx),
+        "jsf_margin_included": bool(jsf_margin_docs),
         "layout": {
             "catalog": "market/irbank/v1/catalog.json",
             "index": "market/irbank/v1/index.json",
             "overview": "market/irbank/v1/securities/{4_digit_code}/overview.json",
+            "dividends": "market/irbank/v1/securities/{4_digit_code}/dividends.json",
             "daily_prices": "market/irbank/v1/securities/{4_digit_code}/daily_prices.json",
             "weekly_margin": "market/irbank/v1/securities/{4_digit_code}/weekly_margin.json",
+            "jsf_margin": "market/irbank/v1/securities/{4_digit_code}/jsf_margin.json",
         },
         "missing_families": dict(sorted(missing.items())),
         "objects": sorted(object_meta, key=lambda row: row["key"]),

@@ -1,0 +1,300 @@
+{
+  "fields": [
+    {
+      "key": "sales",
+      "label": "売上高",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "operating_profit",
+      "label": "営業利益",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "ordinary_income",
+      "label": "経常利益",
+      "unit": "million_jpy",
+      "note": "J-GAAP 固有。IFRS / US-GAAP 提出企業では null"
+    },
+    {
+      "key": "net_income",
+      "label": "当期純利益(親会社株主帰属)",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "eps",
+      "label": "1株当たり当期純利益(EPS)",
+      "unit": "jpy_per_share",
+      "note": "株式分割未調整(as-reported)。分割年をまたぐ期間は同一株数基準ではない。"
+    },
+    {
+      "key": "operating_cf",
+      "label": "営業活動によるCF",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "investing_cf",
+      "label": "投資活動によるCF",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "extraordinary_income",
+      "label": "特別利益",
+      "unit": "million_jpy",
+      "note": "J-GAAP 固有。IFRS / US-GAAP 提出企業では null"
+    },
+    {
+      "key": "extraordinary_loss",
+      "label": "特別損失",
+      "unit": "million_jpy",
+      "note": "J-GAAP 固有。IFRS / US-GAAP 提出企業では null"
+    },
+    {
+      "key": "total_assets",
+      "label": "総資産",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "net_assets",
+      "label": "純資産",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "total_liabilities",
+      "label": "負債合計",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "equity_ratio_computed",
+      "label": "自己資本比率",
+      "unit": "percent",
+      "note": "総資産と自己資本から算出した計算値 (%)。四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "gross_profit",
+      "label": "売上総利益",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "income_before_tax",
+      "label": "税引前利益",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "income_taxes",
+      "label": "法人税等",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "rd_expenses",
+      "label": "研究開発費",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "depreciation",
+      "label": "減価償却費",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "capital_expenditure",
+      "label": "設備投資額",
+      "unit": "million_jpy"
+    },
+    {
+      "key": "owners_equity",
+      "label": "親会社の所有者に帰属する持分(自己資本)",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "interest_bearing_debt",
+      "label": "有利子負債",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    },
+    {
+      "key": "cash_and_equivalents",
+      "label": "現金及び現金同等物",
+      "unit": "million_jpy",
+      "note": "四半期・半期モードでは full_year 行にのみ値が入る"
+    }
+  ],
+  "results": [
+    {
+      "edinet_code": "E41753",
+      "periods": [
+        {
+          "fiscal_year": "2021/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": false,
+          "sales": 298,
+          "operating_profit": null,
+          "ordinary_income": -97,
+          "net_income": -97,
+          "eps": -1881.61,
+          "operating_cf": null,
+          "investing_cf": null,
+          "extraordinary_income": null,
+          "extraordinary_loss": null,
+          "total_assets": 1182,
+          "net_assets": 1142,
+          "total_liabilities": 41,
+          "equity_ratio_computed": 96.567745537,
+          "gross_profit": null,
+          "income_before_tax": null,
+          "income_taxes": null,
+          "rd_expenses": null,
+          "depreciation": null,
+          "capital_expenditure": null,
+          "owners_equity": 1142,
+          "interest_bearing_debt": null,
+          "cash_and_equivalents": null
+        },
+        {
+          "fiscal_year": "2022/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": false,
+          "sales": 537,
+          "operating_profit": null,
+          "ordinary_income": -20,
+          "net_income": -256,
+          "eps": -3993.64,
+          "operating_cf": null,
+          "investing_cf": null,
+          "extraordinary_income": null,
+          "extraordinary_loss": null,
+          "total_assets": 943,
+          "net_assets": 886,
+          "total_liabilities": 57,
+          "equity_ratio_computed": 93.922136518,
+          "gross_profit": null,
+          "income_before_tax": null,
+          "income_taxes": null,
+          "rd_expenses": null,
+          "depreciation": null,
+          "capital_expenditure": null,
+          "owners_equity": 886,
+          "interest_bearing_debt": null,
+          "cash_and_equivalents": null
+        },
+        {
+          "fiscal_year": "2023/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": false,
+          "sales": 672,
+          "operating_profit": null,
+          "ordinary_income": 56,
+          "net_income": 77,
+          "eps": 1202,
+          "operating_cf": null,
+          "investing_cf": null,
+          "extraordinary_income": null,
+          "extraordinary_loss": null,
+          "total_assets": 1029,
+          "net_assets": 959,
+          "total_liabilities": 70,
+          "equity_ratio_computed": 93.185058344,
+          "gross_profit": null,
+          "income_before_tax": null,
+          "income_taxes": null,
+          "rd_expenses": null,
+          "depreciation": null,
+          "capital_expenditure": null,
+          "owners_equity": 959,
+          "interest_bearing_debt": null,
+          "cash_and_equivalents": 847
+        },
+        {
+          "fiscal_year": "2024/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": false,
+          "sales": 827,
+          "operating_profit": 138,
+          "ordinary_income": 138,
+          "net_income": 87,
+          "eps": 13.75,
+          "operating_cf": 186,
+          "investing_cf": -17,
+          "extraordinary_income": 1,
+          "extraordinary_loss": null,
+          "total_assets": 1005,
+          "net_assets": 885,
+          "total_liabilities": 120,
+          "equity_ratio_computed": 87.718697627,
+          "gross_profit": 369,
+          "income_before_tax": 139,
+          "income_taxes": 51,
+          "rd_expenses": null,
+          "depreciation": 1,
+          "capital_expenditure": null,
+          "owners_equity": 881,
+          "interest_bearing_debt": null,
+          "cash_and_equivalents": 870
+        },
+        {
+          "fiscal_year": "2025/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": false,
+          "sales": 1374,
+          "operating_profit": 336,
+          "ordinary_income": 336,
+          "net_income": 228,
+          "eps": 35.16,
+          "operating_cf": 293,
+          "investing_cf": -10,
+          "extraordinary_income": 0,
+          "extraordinary_loss": 0,
+          "total_assets": 1530,
+          "net_assets": 1293,
+          "total_liabilities": 237,
+          "equity_ratio_computed": 84.057399767,
+          "gross_profit": 682,
+          "income_before_tax": 337,
+          "income_taxes": 109,
+          "rd_expenses": null,
+          "depreciation": 5,
+          "capital_expenditure": 11,
+          "owners_equity": 1286,
+          "interest_bearing_debt": null,
+          "cash_and_equivalents": 1334
+        },
+        {
+          "fiscal_year": "2026/06",
+          "accounting_standard": "J-GAAP",
+          "is_consolidated": false,
+          "sales": 1910,
+          "operating_profit": 457,
+          "ordinary_income": 440,
+          "net_income": 297,
+          "eps": 45.05,
+          "operating_cf": 347,
+          "investing_cf": -55,
+          "extraordinary_income": 4,
+          "extraordinary_loss": null,
+          "total_assets": 2095,
+          "net_assets": 1730,
+          "total_liabilities": 365,
+          "equity_ratio_computed": 82.428071709,
+          "gross_profit": 954,
+          "income_before_tax": 444,
+          "income_taxes": 146,
+          "rd_expenses": null,
+          "depreciation": 7,
+          "capital_expenditure": 8,
+          "owners_equity": 1727,
+          "interest_bearing_debt": null,
+          "cash_and_equivalents": 1756
+        }
+      ]
+    }
+  ],
+  "not_found": [],
+  "attribution": {
+    "source_label": "金融庁 EDINET / TDnet",
+    "license_note": "EDINET 由来データは金融庁 EDINET、TDnet 由来データは JPX TDnet を出典とし、加工は IRBANK が実施。再配信時は出典の明示が必要。",
+    "processed_by": "IRBANK"
+  }
+}

@@ -1,6 +1,11 @@
 package com.kurogane.dividend
 
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.os.Bundle
+import android.content.Intent
+import com.kurogane.dividend.notifications.DiviewNotifications
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -14,17 +19,21 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -34,6 +43,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.kurogane.dividend.ui.screens.AnnualDividendScreen
 import com.kurogane.dividend.ui.screens.AssetManagementScreen
 import com.kurogane.dividend.ui.screens.RoadmapScreen
@@ -57,22 +67,103 @@ import com.kurogane.dividend.ui.components.SearchSheet
 import com.kurogane.dividend.ui.components.AddHoldingSheet
 import com.kurogane.dividend.viewmodel.DividendViewModel
 
-class MainActivity : ComponentActivity() {
+class MainActivity : androidx.fragment.app.FragmentActivity() {
 
     private val viewModel: DividendViewModel by viewModels()
+    private val notificationDestination = MutableStateFlow<String?>(null)
+    private val appLocked = MutableStateFlow(true)
+    private lateinit var authentication: com.kurogane.dividend.security.AppAuthentication
+    private val authError = MutableStateFlow<String?>(null)
+    private var autoPromptRequested = false
+    private var navigationController: androidx.navigation.NavHostController? = null
+    private var savedNavigation: Bundle? = null
+
+    override fun onStop() {
+        if (viewModel.biometricEnabled.value && !isChangingConfigurations) {
+            if (!appLocked.value) savedNavigation = navigationController?.saveState()
+            if (!authentication.inProgress) autoPromptRequested = false
+            appLocked.value = true
+        }
+        super.onStop()
+    }
+
+    private fun completeUnlock() {
+        savedNavigation?.let { navigationController?.restoreState(it) }
+        savedNavigation = null
+        appLocked.value = false
+        authError.value = null
+    }
+
+    fun authenticatePreference(enabled: Boolean) {
+        autoPromptRequested = true
+        authentication.authenticate(onSuccess = {
+            if (!viewModel.setBiometricEnabled(enabled)) android.widget.Toast.makeText(this, "認証設定を保存できませんでした", android.widget.Toast.LENGTH_LONG).show()
+            completeUnlock()
+        }, onError = {
+            authError.value = it
+            android.widget.Toast.makeText(this, it, android.widget.Toast.LENGTH_LONG).show()
+        })
+    }
+
+    private fun unlock() {
+        autoPromptRequested = true
+        authentication.authenticate(
+        onSuccess = { completeUnlock() },
+        onError = { authError.value = it }
+        )
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        notificationDestination.value = DiviewNotifications.destination(intent)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        authentication = com.kurogane.dividend.security.AppAuthentication(this)
+        appLocked.value = viewModel.biometricEnabled.value
+        DiviewNotifications(this).createChannels()
+        if (savedInstanceState == null) notificationDestination.value = DiviewNotifications.destination(intent)
         setContent {
-            val themeMode by viewModel.themeMode.collectAsState()
-            val isOledBlack by viewModel.isOledBlack.collectAsState()
-            val selectedAccent by viewModel.selectedAccent.collectAsState()
+            val resources = androidx.compose.ui.platform.LocalContext.current.resources
+            val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+            val isOledBlack by viewModel.isOledBlack.collectAsStateWithLifecycle()
+            val selectedAccent by viewModel.selectedAccent.collectAsStateWithLifecycle()
             KuroganeDividendTheme(
                 themeMode = themeMode,
                 isOledBlack = isOledBlack,
                 selectedAccent = selectedAccent
             ) {
+                val biometricEnabled by viewModel.biometricEnabled.collectAsStateWithLifecycle()
+                val locked by appLocked.collectAsStateWithLifecycle()
+                val error by authError.collectAsStateWithLifecycle()
+                SideEffect {
+                    if (biometricEnabled) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                    else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                }
                 val navController = rememberNavController()
+                SideEffect { navigationController = navController }
+                if (biometricEnabled && locked) {
+                    LaunchedEffect(Unit) { if (!autoPromptRequested) unlock() }
+                    Column(Modifier.fillMaxSize().background(BackgroundDark).padding(24.dp),
+                        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Lock, null, tint = PrimaryEmerald)
+                        Text(stringResource(R.string.main_activity_text), color = OnSurface)
+                        error?.let { Text(it, color = OnSurfaceVariant) }
+                        Button(onClick = { unlock() }) { Text(stringResource(R.string.main_activity_text_2)) }
+                        TextButton(onClick = { startActivity(Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS)) }) { Text(stringResource(R.string.main_activity_text_3)) }
+                    }
+                    return@KuroganeDividendTheme
+                }
+
+                val destination by notificationDestination.collectAsStateWithLifecycle()
+                LaunchedEffect(destination) {
+                    destination?.let { route ->
+                        navController.navigate(route) { launchSingleTop = true }
+                        notificationDestination.value = null
+                    }
+                }
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
@@ -85,11 +176,19 @@ class MainActivity : ComponentActivity() {
                 var showNotificationsDialog by remember { mutableStateOf(false) }
                 var showAddHoldingSheet by remember { mutableStateOf(false) }
                 var prefilledAddHoldingCode by remember { mutableStateOf("") }
+                val scrollToTopRequests = remember { mutableStateMapOf<String, Int>() }
+                val saveError by viewModel.saveError.collectAsStateWithLifecycle()
+                val snackbarHostState = remember { SnackbarHostState() }
+                LaunchedEffect(saveError) {
+                    saveError?.let { snackbarHostState.showSnackbar(it); viewModel.clearSaveError() }
+                }
 
                 val dynamicBg = BackgroundDark
 
                 Scaffold(
+                    snackbarHost = { SnackbarHost(snackbarHostState) },
                     modifier = Modifier.fillMaxSize(),
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
                     containerColor = dynamicBg,
                     topBar = {
                         val isMainTab = currentRoute in listOf("asset", "annual", "roadmap", "watchlist")
@@ -97,20 +196,20 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier
                                 .statusBarsPadding()
                                 .fillMaxWidth()
-                                .height(56.dp)
+                                .heightIn(min = 56.dp)
                                 .background(dynamicBg)
                                 .border(BorderStroke(0.5.dp, BorderColor))
-                                .padding(horizontal = 12.dp),
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             if (isMainTab) {
                                 // Left side main tab title layout
                                 val (title, subtitle, icon) = when (currentRoute) {
-                                    "asset" -> Triple("資産管理", "ASSET MANAGEMENT", Icons.Default.AccountBalanceWallet)
-                                    "annual" -> Triple("年間配当", "ANNUAL DIVIDEND", Icons.Default.PieChart)
-                                    "roadmap" -> Triple("Roadmap Quest", "不労所得 RPG", Icons.Default.Flag)
-                                    "watchlist" -> Triple("Watchlist", "WATCHLIST", Icons.Default.Bookmark)
-                                    else -> Triple("資産管理", "ASSET MANAGEMENT", Icons.Default.AccountBalanceWallet)
+                                    "asset" -> Triple(stringResource(R.string.asset_management), stringResource(R.string.main_activity_asset_management), Icons.Default.AccountBalanceWallet)
+                                    "annual" -> Triple(stringResource(R.string.analysis), stringResource(R.string.main_activity_annual_dividend), Icons.Default.PieChart)
+                                    "roadmap" -> Triple(stringResource(R.string.roadmap_roadmap_quest), stringResource(R.string.main_activity_label), Icons.Default.Flag)
+                                    "watchlist" -> Triple(stringResource(R.string.main_activity_watchlist), stringResource(R.string.main_activity_watchlist_2), Icons.Default.Bookmark)
+                                    else -> Triple(stringResource(R.string.asset_management), stringResource(R.string.main_activity_asset_management), Icons.Default.AccountBalanceWallet)
                                 }
 
                                 Row(
@@ -155,7 +254,7 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     IconButton(onClick = { navController.popBackStack() }, modifier = Modifier.size(36.dp)) {
-                                        Icon(Icons.Default.ArrowBack, contentDescription = "戻る", tint = OnSurface, modifier = Modifier.size(18.dp))
+                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = OnSurface, modifier = Modifier.size(18.dp))
                                     }
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Box(
@@ -175,8 +274,8 @@ class MainActivity : ComponentActivity() {
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column {
-                                        Text("設定・データ管理", fontSize = AppTextSize.section, fontWeight = FontWeight.ExtraBold, color = OnSurface)
-                                        Text("SETTINGS", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, letterSpacing = 0.5.sp)
+                                        Text(stringResource(R.string.settings_title), fontSize = AppTextSize.section, fontWeight = FontWeight.ExtraBold, color = OnSurface)
+                                        Text(stringResource(R.string.main_activity_settings), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, letterSpacing = 0.5.sp)
                                     }
                                 }
                             } else {
@@ -192,7 +291,7 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     IconButton(onClick = { navController.popBackStack() }) {
-                                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = OnSurface)
+                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = OnSurface)
                                     }
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
@@ -211,13 +310,13 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 // Search Button
                                 IconButton(onClick = { showSearchSheet = true }) {
-                                    Icon(Icons.Default.Search, contentDescription = "Search", tint = OnSurfaceVariant)
+                                    Icon(Icons.Default.Search, contentDescription = stringResource(R.string.main_activity_a11y), tint = OnSurfaceVariant)
                                 }
 
                                 // Notification Button with pulse badge
                                 Box(contentAlignment = Alignment.TopEnd) {
                                     IconButton(onClick = { showNotificationsDialog = true }) {
-                                        Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = OnSurfaceVariant)
+                                        Icon(Icons.Default.Notifications, contentDescription = stringResource(R.string.main_activity_a11y_2), tint = OnSurfaceVariant)
                                     }
                                     Box(
                                         modifier = Modifier
@@ -229,10 +328,10 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 // Settings Button
-                                IconButton(onClick = { navController.navigate("settings") }) {
+                                IconButton(onClick = { navController.navigate("settings") { launchSingleTop = true } }) {
                                     Icon(
                                         Icons.Default.Settings,
-                                        contentDescription = "Settings",
+                                        contentDescription = stringResource(R.string.main_activity_a11y_3),
                                         tint = if (currentRoute == "settings") PrimaryEmerald else OnSurfaceVariant
                                     )
                                 }
@@ -253,8 +352,8 @@ class MainActivity : ComponentActivity() {
                             BoxWithConstraints(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(64.dp)
                                     .background(BackgroundDark)
+                                    .navigationBarsPadding()
                                     .border(BorderStroke(0.5.dp, BorderColor))
                             ) {
                                 val tabWidth = maxWidth / 4
@@ -268,7 +367,7 @@ class MainActivity : ComponentActivity() {
                                     // Sliding active indicator pill at the top of bottom bar
                                     Box(
                                         modifier = Modifier
-                                            .offset(x = indicatorOffset, y = 0.dp)
+                                            .offset { androidx.compose.ui.unit.IntOffset(indicatorOffset.roundToPx(), 0) }
                                             .width(32.dp)
                                             .height(3.dp)
                                             .clip(RoundedCornerShape(1.5.dp))
@@ -277,14 +376,14 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 Row(
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).heightIn(min = 64.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     val tabs = listOf(
-                                        Triple("asset", "資産管理", Icons.Default.AccountBalanceWallet),
-                                        Triple("annual", "年間配当", Icons.Default.PieChart),
-                                        Triple("roadmap", "ロードマップ", Icons.Default.Flag),
-                                        Triple("watchlist", "Watchlist", Icons.Default.Bookmark)
+                                        Triple("asset", stringResource(R.string.asset_management), Icons.Default.AccountBalanceWallet),
+                                        Triple("annual", stringResource(R.string.analysis), Icons.Default.PieChart),
+                                        Triple("roadmap", stringResource(R.string.main_activity_label_2), Icons.Default.Flag),
+                                        Triple("watchlist", stringResource(R.string.main_activity_watchlist), Icons.Default.Bookmark)
                                     )
                                     tabs.forEach { (route, label, icon) ->
                                         val selected = currentRoute == route
@@ -292,9 +391,27 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .fillMaxHeight()
-                                                .clickable {
-                                                    if (!selected) navController.navigate(route)
-                                                },
+                                                .testTag("main_tab_$route")
+                                                .selectable(selected, role = Role.Tab, onClick = {
+                                                    if (selected && route in listOf("annual", "roadmap", "watchlist")) {
+                                                        scrollToTopRequests[route] = (scrollToTopRequests[route] ?: 0) + 1
+                                                    } else if (!selected) {
+                                                        // Save the tab itself, without its settings/detail screens.
+                                                        while (tabs.none { it.first == navController.currentDestination?.route }) {
+                                                            if (!navController.popBackStack()) break
+                                                        }
+                                                        navController.navigate(route) {
+                                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                                saveState = true
+                                                            }
+                                                            launchSingleTop = true
+                                                            restoreState = true
+                                                        }
+                                                        // Older saved stacks may still include a secondary screen.
+                                                        navController.popBackStack(route, inclusive = false)
+                                                    }
+                                                })
+                                                .padding(vertical = 8.dp),
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                             verticalArrangement = Arrangement.Center
                                         ) {
@@ -339,8 +456,12 @@ class MainActivity : ComponentActivity() {
                             composable("asset") {
                                 AssetManagementScreen(
                                     viewModel = viewModel,
-                                    onNavigateToDetail = { code -> navController.navigate("detail/$code") },
+                                    onNavigateToDetail = { code -> navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true } },
                                     onOpenAddHolding = { code ->
+                                        prefilledAddHoldingCode = code
+                                        showAddHoldingSheet = true
+                                    },
+                                    onOpenHoldingRegistration = { code ->
                                         prefilledAddHoldingCode = code
                                         showAddHoldingSheet = true
                                     }
@@ -349,16 +470,18 @@ class MainActivity : ComponentActivity() {
                             composable("annual") {
                                 AnnualDividendScreen(
                                     viewModel = viewModel,
-                                    onNavigateToDetail = { code -> navController.navigate("detail/$code") }
+                                    scrollToTopRequest = scrollToTopRequests["annual"] ?: 0,
+                                    onNavigateToDetail = { code -> navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true } }
                                 )
                             }
                             composable("roadmap") {
-                                RoadmapScreen(viewModel = viewModel)
+                                RoadmapScreen(viewModel = viewModel, scrollToTopRequest = scrollToTopRequests["roadmap"] ?: 0)
                             }
                             composable("watchlist") {
                                 WatchlistScreen(
                                     viewModel = viewModel,
-                                    onNavigateToDetail = { code -> navController.navigate("detail/$code") },
+                                    scrollToTopRequest = scrollToTopRequests["watchlist"] ?: 0,
+                                    onNavigateToDetail = { code -> navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true } },
                                     onOpenAddHolding = { code ->
                                         prefilledAddHoldingCode = code
                                         showAddHoldingSheet = true
@@ -369,9 +492,9 @@ class MainActivity : ComponentActivity() {
                                 SettingsScreen(
                                     viewModel = viewModel,
                                     onBack = { navController.popBackStack() },
-                                    onNavigateToFeedback = { navController.navigate("contact_feedback") },
-                                    onNavigateToTerms = { navController.navigate("terms_privacy") },
-                                    onNavigateToCsv = { navController.navigate("csv_import") }
+                                    onNavigateToFeedback = { navController.navigate("contact_feedback") { launchSingleTop = true } },
+                                    onNavigateToTerms = { navController.navigate("terms_privacy") { launchSingleTop = true } },
+                                    onNavigateToCsv = { navController.navigate("csv_import") { launchSingleTop = true } }
                                 )
                             }
                             composable("csv_import") {
@@ -403,7 +526,11 @@ class MainActivity : ComponentActivity() {
                                 StockDetailScreen(
                                     stockCode = code,
                                     viewModel = viewModel,
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { navController.popBackStack() },
+                                    onOpenAddHolding = { selectedCode ->
+                                        prefilledAddHoldingCode = selectedCode
+                                        showAddHoldingSheet = true
+                                    }
                                 )
                             }
                         }
@@ -415,23 +542,23 @@ class MainActivity : ComponentActivity() {
                             onSearch = { query -> viewModel.searchCloudflareSecurities(query) },
                             onSelectStock = { code ->
                                 showSearchSheet = false
-                                navController.navigate("detail/$code")
+                                navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true }
                             }
                         )
 
                         // Add Asset / Joint Portfolio Matrix Sheet Overlay
+                        val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
+                        val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
                         AddHoldingSheet(
+                            usdJpyRate = exchangeRate?.usdJpy,
+                            usWithholdingEnabled = usTaxDeduction,
+                            existingHoldings = viewModel.holdings.value,
                             visible = showAddHoldingSheet,
                             prefilledCode = prefilledAddHoldingCode,
                             onDismiss = { showAddHoldingSheet = false },
                             onResolveSecurity = { code -> viewModel.resolveCloudflareSecurity(code) },
-                            onRegisterCollective = { code, totalShares, weightedAcqPrice, primaryAccount ->
-                                val registered = viewModel.registerCloudflareHolding(
-                                    code,
-                                    totalShares,
-                                    weightedAcqPrice,
-                                    primaryAccount
-                                )
+                            onRegisterCollective = { code, allocations, replaceExisting ->
+                                val registered = viewModel.registerCloudflareAllocations(code, allocations, replaceExisting)
                                 if (registered) showAddHoldingSheet = false
                                 registered
                             }
@@ -439,6 +566,11 @@ class MainActivity : ComponentActivity() {
 
                         // Notification Dialog
                         if (showNotificationsDialog) {
+                            val watched by viewModel.watchlist.collectAsStateWithLifecycle()
+                            val owned by viewModel.holdings.collectAsStateWithLifecycle()
+                            val taxMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
+                            val ready = watched.filter { it.alertEnabled && it.isReady }
+                            val monthlyIncome = owned.sumOf { it.getEffectiveAnnualDividend(taxMode) } / 12.0
                             AlertDialog(
                                 onDismissRequest = { showNotificationsDialog = false },
                                 confirmButton = {
@@ -446,23 +578,23 @@ class MainActivity : ComponentActivity() {
                                         onClick = { showNotificationsDialog = false },
                                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmeraldContainer)
                                     ) {
-                                        Text("確認", color = OnPrimary, fontWeight = FontWeight.Bold)
+                                        Text(stringResource(R.string.main_activity_text_4), color = OnPrimary, fontWeight = FontWeight.Bold)
                                     }
                                 },
                                 title = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.Notifications, contentDescription = null, tint = PrimaryEmerald)
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("お知らせ・通知", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section)
+                                        Text(stringResource(R.string.main_activity_text_5), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section)
                                     }
                                 },
                                 text = {
                                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        Text("🔔 利回りシグナル検知", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
-                                        Text("日本たばこ産業 (JT) の株価が目標買場利回り (4.80%) に接近しました。現在の実効利回りは 4.73% です。", color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
+                                        Text(stringResource(R.string.main_activity_text_6), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
+                                        Text(if (ready.isEmpty()) stringResource(R.string.main_activity_label_3) else ready.joinToString("\n") { resources.getString(R.string.main_activity_label_4, (it.name).toString(), (String.format(java.util.Locale.JAPAN, "%.2f", it.currentYield)).toString(), (String.format(java.util.Locale.JAPAN, "%.2f", it.targetYield)).toString()) }, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
                                         HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
-                                        Text("🎉 ロードマップ進捗アップデート", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
-                                        Text("STEP 5 「水道光熱費の全額自給 (月3万円)」を達成しました！次のクエスト「食費・日用品の全額自給 (月5万円)」に挑戦中です。", color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
+                                        Text(stringResource(R.string.main_activity_text_7), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
+                                        Text(stringResource(R.string.main_activity_text_8 , java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN).format(monthlyIncome.toLong())), color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
                                     }
                                 },
                                 containerColor = SurfaceContainer,

@@ -33,11 +33,11 @@ data class StockAnalysisNarrative(
     val complete: Boolean get() = missingLabels.isEmpty()
 
     companion object {
-        const val TOTAL_COMBINATIONS: Long = 170_859_375L // 15^7
+        const val TOTAL_COMBINATIONS: Long = 373_669_453_125L // 45^7
     }
 }
 
-/** Deterministic 5-band x 3-position narratives for the seven backend stock-analysis metrics. */
+/** Deterministic 5-band x 9-position narratives for the seven backend stock-analysis metrics. */
 object StockAnalysisNarrativeGenerator {
     private data class Band(val label: String, val score: Int, val explanation: String)
     private data class Rule(
@@ -64,9 +64,15 @@ object StockAnalysisNarrativeGenerator {
                 Band("割高", 25, "利益に対する評価倍率は高い水準です。成長期待が弱まった場合の調整にも注意してください。")
             ),
             positionText = listOf(
-                "この帯域の下側にあり、PERだけを見れば価格負担は比較的軽い位置です。",
-                "この帯域の中央付近で、評価は帯域の基準値に近い位置です。",
-                "この帯域の上側にあり、次の評価帯との境界に近づいています。"
+                "PER帯の始点に近く、同じ評価帯では倍率が低い側です。",
+                "PER帯の前半にあり、利益に対する価格負担は比較的軽い位置です。",
+                "PER帯の中央へ近づいており、帯域の中ほどに差しかかっています。",
+                "PER帯の中央域に入り、評価倍率は中心値を下回る位置です。",
+                "PER帯の中央付近で、利益に対する評価は基準値に近い水準です。",
+                "PER帯の中央域にあり、評価倍率は中心値を上回っています。",
+                "PER帯の後半に入り、利益成長への期待が評価に表れています。",
+                "PER帯の上側にあり、現在の倍率を利益成長で支えられるかが焦点です。",
+                "PER帯の終点に近く、次の評価帯との境界が近づいています。"
             )
         ),
         Rule(
@@ -81,9 +87,15 @@ object StockAnalysisNarrativeGenerator {
                 Band("高評価", 25, "純資産に対する評価倍率は高い水準です。収益性が落ちた際の倍率縮小に注意してください。")
             ),
             positionText = listOf(
-                "この帯域の下側にあり、純資産に対する倍率は相対的に低い位置です。",
-                "この帯域の中央付近で、資産評価は帯域の標準に近い位置です。",
-                "この帯域の上側にあり、次の倍率帯との境界が近づいています。"
+                "PBR帯の始点に近く、純資産に対する倍率は低い側です。",
+                "PBR帯の前半にあり、資産に対する株価評価は比較的抑えられています。",
+                "PBR帯の中央へ近づき、純資産に対する倍率が帯域の中ほどにあります。",
+                "PBR帯の中央域に入り、資産評価は中心値を下回る位置です。",
+                "PBR帯の中央付近で、純資産に対する評価は帯域の基準に近い水準です。",
+                "PBR帯の中央域にあり、純資産に対する倍率は中心値を上回っています。",
+                "PBR帯の後半に入り、株価は純資産に対して高めに評価されています。",
+                "PBR帯の上側にあり、高い資本効率が続くかが判断材料になります。",
+                "PBR帯の終点に近く、次の倍率帯との境界が近づいています。"
             )
         ),
         Rule(
@@ -98,9 +110,15 @@ object StockAnalysisNarrativeGenerator {
                 Band("要警戒", 20, "配当負担が非常に大きい水準です。一時利益や借入に依存していないか確認してください。")
             ),
             positionText = listOf(
-                "この帯域の下側にあり、配当負担は帯域内では軽い位置です。",
-                "この帯域の中央付近で、利益に対する配当負担は基準値に近い位置です。",
-                "この帯域の上側にあり、配当負担が次の注意水準へ近づいています。"
+                "配当性向帯の始点に近く、利益に対する配当負担は軽い側です。",
+                "配当性向帯の前半にあり、利益のうち配当に回す割合は比較的低めです。",
+                "配当性向帯の中央へ近づき、利益に対する配当負担が増しています。",
+                "配当性向帯の中央域に入り、配当負担は中心値を下回る位置です。",
+                "配当性向帯の中央付近で、利益と配当の比率は基準値に近い水準です。",
+                "配当性向帯の中央域にあり、配当負担は中心値を上回っています。",
+                "配当性向帯の後半に入り、利益が減った場合の配当余力に注意が必要です。",
+                "配当性向帯の上側にあり、配当負担は次の注意水準に近づいています。",
+                "配当性向帯の終点に近く、利益の変化が配当維持に影響しやすい水準です。"
             )
         ),
         Rule(
@@ -115,9 +133,15 @@ object StockAnalysisNarrativeGenerator {
                 Band("非常に高い", 100, "自己資本の厚みが大きく、財務面の耐久力が期待できる水準です。業種ごとの適正値も考慮してください。")
             ),
             positionText = listOf(
-                "この帯域の下側にあり、自己資本の厚みは境界値に近い位置です。",
-                "この帯域の中央付近で、自己資本比率は同帯域の中間にあります。",
-                "この帯域の上側にあり、次の安定性評価帯に近づいています。"
+                "自己資本比率帯の始点に近く、財務の厚みは低い側です。",
+                "自己資本比率帯の前半にあり、自己資本の余裕はまだ小さめです。",
+                "自己資本比率帯の中央へ近づき、負債とのバランスが改善しています。",
+                "自己資本比率帯の中央域に入り、帯域の中心値を下回る位置です。",
+                "自己資本比率帯の中央付近で、財務構成は同帯域の基準に近い水準です。",
+                "自己資本比率帯の中央域にあり、自己資本の厚みは中心値を上回ります。",
+                "自己資本比率帯の後半に入り、財務の安定性を支える余裕が増しています。",
+                "自己資本比率帯の上側にあり、次の安定性評価帯が近づいています。",
+                "自己資本比率帯の終点に近く、自己資本の厚みが大きい水準です。"
             )
         ),
         Rule(
@@ -132,9 +156,15 @@ object StockAnalysisNarrativeGenerator {
                 Band("高収益", 100, "本業の利益率は高い水準です。競争優位性や高収益の持続性を確認してください。")
             ),
             positionText = listOf(
-                "この帯域の下側にあり、利益率は次の水準へ届く手前です。",
-                "この帯域の中央付近で、営業採算は帯域の標準に近い位置です。",
-                "この帯域の上側にあり、次の収益性評価帯が視野に入る位置です。"
+                "営業利益率帯の始点に近く、本業の採算は低い側です。",
+                "営業利益率帯の前半にあり、売上から得る利益はまだ限られています。",
+                "営業利益率帯の中央へ近づき、本業の採算は改善側にあります。",
+                "営業利益率帯の中央域に入り、利益率は帯域の中心値を下回ります。",
+                "営業利益率帯の中央付近で、本業の採算は同帯域の基準に近い水準です。",
+                "営業利益率帯の中央域にあり、利益率は中心値を上回っています。",
+                "営業利益率帯の後半に入り、売上に対する利益の割合は高まっています。",
+                "営業利益率帯の上側にあり、次の収益性評価帯に近づいています。",
+                "営業利益率帯の終点に近く、高い利益率を維持できるかが焦点です。"
             )
         ),
         Rule(
@@ -149,9 +179,15 @@ object StockAnalysisNarrativeGenerator {
                 Band("非常に強い", 100, "売上に対する現金創出力は強い水準です。配当、投資、債務返済を支える余力があります。")
             ),
             positionText = listOf(
-                "この帯域の下側にあり、キャッシュ創出の弱さが強い位置です。",
-                "この帯域の中央付近で、現金余力は同帯域の基準に近い位置です。",
-                "この帯域の上側にあり、次のキャッシュ余力帯へ近づいています。"
+                "FCF余力帯の始点に近く、売上に対する現金創出は弱い側です。",
+                "FCF余力帯の前半にあり、現金収支には引き続き注意が必要です。",
+                "FCF余力帯の中央へ近づき、キャッシュ創出は持ち直しています。",
+                "FCF余力帯の中央域に入り、現金余力は中心値を下回る水準です。",
+                "FCF余力帯の中央付近で、売上から生む現金は基準に近い水準です。",
+                "FCF余力帯の中央域で、現金余力は中心値を超える水準です。",
+                "FCF余力帯の後半に入り、投資や還元に回せる余地が広がっています。",
+                "FCF余力帯の上側にあり、次のキャッシュ余力帯に近づいています。",
+                "FCF余力帯の終点に近く、現金創出力は帯域内で強い水準です。"
             )
         ),
         Rule(
@@ -166,16 +202,22 @@ object StockAnalysisNarrativeGenerator {
                 Band("長期増配", 100, "10年以上の連続増配実績があります。長い実績に加えて今後の利益と現金が支えられるか確認してください。")
             ),
             positionText = listOf(
-                "この帯域の下側にあり、次の増配実績年数に達するまで距離があります。",
-                "この帯域の中央付近で、同じ増配実績帯の中間に位置しています。",
-                "この帯域の上側にあり、次の継続年数の節目に近づいています。"
+                "連続増配年数帯の始点に近く、継続実績は短い側です。",
+                "連続増配年数帯の前半にあり、長期実績の評価にはまだ期間が必要です。",
+                "連続増配年数帯の中央へ近づき、複数年の増配実績が積み上がっています。",
+                "連続増配年数帯の中央域に入り、実績年数は節目の手前です。",
+                "連続増配年数帯の中央付近で、同じ実績帯の基準に近い年数です。",
+                "連続増配年数帯の中央域にあり、次の節目を超えた実績があります。",
+                "連続増配年数帯の後半に入り、長期の継続実績に近づいています。",
+                "連続増配年数帯の上側にあり、次の年数の節目が近づいています。",
+                "連続増配年数帯の終点に近く、長期にわたる増配実績があります。"
             )
         )
     )
 
     init {
         require(rules.size == 7 && rules.all { it.bands.size == 5 && it.ranges.size == 5 })
-        require(rules.all { it.positionText.size == 3 })
+        require(rules.all { it.positionText.size == 9 })
     }
 
     fun generate(values: Map<String, Double?>): StockAnalysisNarrative {
@@ -195,13 +237,18 @@ object StockAnalysisNarrativeGenerator {
             val band = rule.bands[bandIndex]
             val range = rule.ranges[bandIndex]
             val fraction = ((value - range.first) / (range.second - range.first)).coerceIn(0.0, 1.0)
-            val position = when {
-                fraction < 1.0 / 3.0 -> BandPosition.LOWER
-                fraction >= 2.0 / 3.0 -> BandPosition.UPPER
-                else -> BandPosition.CENTER
+            val detailIndex = (fraction * 9.0).toInt().coerceIn(0, 8)
+            val position = when (detailIndex / 3) {
+                0 -> BandPosition.LOWER
+                1 -> BandPosition.CENTER
+                else -> BandPosition.UPPER
             }
-            val digit = bandIndex * 3 + position.digit
-            val formatted = String.format(Locale.JAPAN, "%.2f%s", value, rule.unit)
+            val digit = bandIndex * 9 + detailIndex
+            val formatted = if (rule.key == "dividend_growth_years") {
+                String.format(Locale.JAPAN, "%d%s", value.toInt(), rule.unit)
+            } else {
+                String.format(Locale.JAPAN, "%.2f%s", value, rule.unit)
+            }
             findings += StockAnalysisFinding(
                 key = rule.key,
                 label = rule.label,
@@ -210,12 +257,12 @@ object StockAnalysisNarrativeGenerator {
                 bandLabel = band.label,
                 score = band.score,
                 position = position,
-                text = "${rule.label}は${formatted}で「${band.label}」帯の${position.label}です。${rule.positionText[position.digit]}${band.explanation}",
+                text = "${rule.label}は${formatted}で「${band.label}」帯の${position.label}にあります。${rule.positionText[detailIndex]}${band.explanation}",
                 combinationDigit = digit
             )
             weightedScore += band.score * rule.weight
             totalWeight += rule.weight
-            combinationIndex = combinationIndex * 15L + digit
+            combinationIndex = combinationIndex * 45L + digit
         }
 
         val score = if (totalWeight == 0) null else (weightedScore / totalWeight).roundToInt()
@@ -236,7 +283,7 @@ object StockAnalysisNarrativeGenerator {
             else -> "評価に必要なデータがありません"
         }
         val dimensions = findings.size
-        val possible = if (dimensions == rules.size) StockAnalysisNarrative.TOTAL_COMBINATIONS else powerOf15(dimensions)
+        val possible = if (dimensions == rules.size) StockAnalysisNarrative.TOTAL_COMBINATIONS else powerOf45(dimensions)
         return StockAnalysisNarrative(
             score = score,
             grade = grade,
@@ -248,5 +295,5 @@ object StockAnalysisNarrativeGenerator {
         )
     }
 
-    private fun powerOf15(exponent: Int): Long = (0 until exponent).fold(1L) { acc, _ -> acc * 15L }
+    private fun powerOf45(exponent: Int): Long = (0 until exponent).fold(1L) { acc, _ -> acc * 45L }
 }

@@ -73,10 +73,16 @@ def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any
         upgraded,
     )
     stats = dict(document.get("statistics_current", {}))
+    stats.pop("sector", None)
+    stats.pop("industry", None)
     if isinstance(info, dict):
         stats.update({key: collector.json_safe(info[key]) for key in APP_FIELDS if key in info and info[key] is not None})
         document["profile"] = {key: stats[key] for key in APP_FIELDS if key in stats}
         document["statistics_current"] = stats
+    profile = dict(document.get("profile", {}))
+    profile.pop("sector", None)
+    profile.pop("industry", None)
+    document["profile"] = profile
 
     now = datetime.now(UTC).isoformat()
     document["source"] = "Yahoo Finance via yfinance"
@@ -129,6 +135,7 @@ def publish_search_catalog(client: Any, bucket: str, summaries: list[dict[str, A
                 "code": code,
                 "name": market.get("shortName") or market.get("longName") or old_names.get(code) or code,
                 "category": "jp",
+                "sector": security.get("sector_name") or None,
                 "estimated_average_trading_value_20d": market.get("estimated_average_trading_value_20d"),
                 "price": price if isinstance(price, (int, float)) and price > 0 else None,
                 "yield_rate": yield_rate,

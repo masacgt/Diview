@@ -1,5 +1,10 @@
 package com.kurogane.dividend.ui.screens
 
+import com.kurogane.dividend.ui.components.AdaptiveRow
+import com.kurogane.dividend.ui.components.SmoothMoney
+import androidx.compose.ui.res.stringResource
+import com.kurogane.dividend.R
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -9,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -16,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,30 +41,46 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RoadmapScreen(viewModel: DividendViewModel) {
+fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
+    val resources = androidx.compose.ui.platform.LocalContext.current.resources
     var openStep by remember { mutableStateOf<Int?>(null) }
-    var selectedStageFilter by remember { mutableIntStateOf(1) } // 0: All, 1: LV.1, 2: LV.2, 3: LV.3
+    var selectedStageFilter by remember { mutableIntStateOf(viewModel.roadmapStageFilter) } // 0: All, 1: LV.1, 2: LV.2, 3: LV.3
+    val hasSavedScrollPosition = viewModel.roadmapScrollIndex > 0 || viewModel.roadmapScrollOffset > 0
 
     // Bottom Sheet State for multi-account allocation modal
     var showBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showGrowthSimulator by rememberSaveable { mutableStateOf(false) }
 
     // Bottom Sheet State for Share Achievement modal (Added for sharing progress)
-    var showShareBottomSheet by remember { mutableStateOf(false) }
-    val shareSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showShareBottomSheet by rememberSaveable { mutableStateOf(false) }
+    var saveRoadmapImage by rememberSaveable { mutableStateOf(false) }
 
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = viewModel.roadmapScrollIndex,
         initialFirstVisibleItemScrollOffset = viewModel.roadmapScrollOffset
     )
-    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
-        viewModel.roadmapScrollIndex = listState.firstVisibleItemIndex
-        viewModel.roadmapScrollOffset = listState.firstVisibleItemScrollOffset
+    LaunchedEffect(scrollToTopRequest) {
+        if (scrollToTopRequest > 0) listState.scrollToTopIn200ms()
+    }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                viewModel.roadmapScrollIndex = index
+                viewModel.roadmapScrollOffset = offset
+            }
+    }
+    LaunchedEffect(selectedStageFilter) {
+        viewModel.roadmapStageFilter = selectedStageFilter
     }
 
     // 1. Collect live native holdings state
-    val holdings by viewModel.holdings.collectAsState()
-    val taxRateMode by viewModel.taxRateMode.collectAsState()
+    val holdings by viewModel.holdings.collectAsStateWithLifecycle()
+    val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
+    val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
+    val targetYield by viewModel.roadmapTargetYield.collectAsStateWithLifecycle()
+    val simulatorMonthlyContribution by viewModel.growthSimulatorMonthlyContribution.collectAsStateWithLifecycle()
+    val simulatorDividendYield by viewModel.growthSimulatorDividendYield.collectAsStateWithLifecycle()
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
 
     // Calculate real-time annual expected dividend and monthly income
@@ -108,7 +131,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
 
         val status = if (isCompleted) "completed" else if (isPrevCompleted) "active" else "locked"
         val statusLabel = if (isCompleted) "達成済" else if (isPrevCompleted) "挑戦中" else "ロック中"
-        val currentRate = if (isCompleted) 100f else (monthlyIncome.toFloat() / step.targetMonthly.toFloat()).coerceIn(0f, 0.99f)
+        val currentRate = if (isCompleted) 1f else (monthlyIncome.toFloat() / step.targetMonthly.toFloat()).coerceIn(0f, 0.99f)
         
         DynamicMilestone(
             step = step,
@@ -126,6 +149,22 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
         highestCompletedStep >= 10 -> 2
         else -> 1
     }
+    val completedLevel = (highestCompletedStep / 10).coerceIn(0, 3)
+    val completedLevelTitleRes = when (completedLevel) {
+        1 -> R.string.roadmap_text_18
+        2 -> R.string.roadmap_text_19
+        3 -> R.string.roadmap_text_20
+        else -> R.string.roadmap_text_18
+    }
+    val completedLevelStartStep = (completedLevel - 1) * 10 + 1
+    val completedLevelEndStep = completedLevel * 10
+    val activeStage = ((activeStep.step - 1) / 10) + 1
+
+    LaunchedEffect(activeStep.step) {
+        if (!hasSavedScrollPosition) selectedStageFilter = activeStage
+        openStep = activeStep.step
+    }
+
     val levelOneLabel = if (highestCompletedStep >= 10) "LV.1 制覇" else "LV.1 挑戦中"
     val levelTwoLabel = when {
         highestCompletedStep >= 20 -> "LV.2 制覇"
@@ -140,21 +179,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
 
     Scaffold(
         containerColor = BackgroundDark,
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showBottomSheet = true },
-                containerColor = PrimaryEmerald,
-                contentColor = OnPrimary,
-                shape = CircleShape,
-                modifier = Modifier.padding(bottom = 16.dp, end = 8.dp)
-            ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = "複数口座一括配分登録",
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
         LazyColumn(
             state = listState,
@@ -169,11 +194,11 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                     border = BorderStroke(1.dp, BorderColor)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
+                        AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
@@ -184,7 +209,11 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 border = BorderStroke(0.5.dp, PrimaryEmerald.copy(alpha = 0.4f))
                             ) {
                                 Text(
-                                    text = "● LEVEL $currentLevel 進行中: STEP ${activeStep.step}",
+                                    text = if (highestCompletedStep >= milestoneSteps.size) {
+                                        stringResource(R.string.roadmap_all_complete)
+                                    } else {
+                                        stringResource(R.string.roadmap_text, currentLevel, activeStep.step)
+                                    },
                                     color = PrimaryEmerald,
                                     fontWeight = FontWeight.ExtraBold,
                                     fontSize = AppTextSize.dense,
@@ -197,7 +226,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 border = BorderStroke(0.5.dp, SecondaryIndigo.copy(alpha = 0.4f))
                             ) {
                                 Text(
-                                    text = "🏆 クリア済み ($highestCompletedStep/30)",
+                                    text = stringResource(R.string.roadmap_text_2 , highestCompletedStep),
                                     color = SecondaryIndigo,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Black,
@@ -208,7 +237,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Trophy banner appears after all ten Level 1 steps are cleared.
+                        // Show the highest fully completed level in the trophy banner.
                         if (highestCompletedStep >= 10) Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = PrimaryEmerald.copy(alpha = 0.1f),
@@ -238,13 +267,18 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Column {
                                         Text(
-                                            "LEVEL 1 完全制覇達成！ 👑",
+                                            stringResource(R.string.roadmap_level_achievement_title, completedLevel),
                                             color = OnSurface,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = AppTextSize.dense
                                         )
                                         Text(
-                                            "生活インフラ自給期 (STEP 1〜10) を踏破完了",
+                                            stringResource(
+                                                R.string.roadmap_level_achievement_description,
+                                                stringResource(completedLevelTitleRes),
+                                                completedLevelStartStep,
+                                                completedLevelEndStep
+                                            ),
                                             color = OnSurfaceVariant,
                                             fontSize = AppTextSize.dense
                                         )
@@ -255,7 +289,11 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                     color = PrimaryEmerald.copy(alpha = 0.2f)
                                 ) {
                                     Text(
-                                        "ALL CLEAR",
+                                        if (completedLevel == 3) {
+                                            stringResource(R.string.roadmap_all_clear)
+                                        } else {
+                                            stringResource(R.string.roadmap_level_clear, completedLevel)
+                                        },
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                         color = PrimaryEmerald,
                                         fontSize = AppTextSize.dense,
@@ -267,11 +305,11 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        Text("現在の配当獲得ステータス", color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.roadmap_text_5), color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(4.dp))
                         
                         Text(
-                            "¥${currencyFormat.format(totalAnnualExpectedDividend)} / 年",
+                            stringResource(R.string.roadmap_text_6 , currencyFormat.format(totalAnnualExpectedDividend)),
                             fontSize = AppTextSize.hero,
                             fontWeight = FontWeight.Black,
                             color = OnSurface,
@@ -279,7 +317,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         )
                         
                         Text(
-                            text = "月間換算不労所得: 約 ¥${currencyFormat.format(monthlyIncome)} / 月",
+                            text = stringResource(R.string.roadmap_text_7 , currencyFormat.format(monthlyIncome)),
                             color = PrimaryEmerald,
                             fontSize = AppTextSize.body,
                             fontWeight = FontWeight.ExtraBold
@@ -295,7 +333,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
-                                Row(
+                                AdaptiveRow(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
@@ -304,14 +342,14 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         Icon(Icons.Default.ShoppingCart, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            "QUEST ${activeStep.step} 目標: ¥${currencyFormat.format(activeStep.targetMonthly)} / 月",
+                                            stringResource(R.string.roadmap_text_8 , activeStep.step, currencyFormat.format(activeStep.targetMonthly)),
                                             color = OnSurface,
                                             fontSize = AppTextSize.dense,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
                                     Text(
-                                        "${(activeQuest.currentRate * 100).toInt()}% 達成",
+                                        stringResource(R.string.roadmap_text_9 , (activeQuest.currentRate * 100).toInt()),
                                         color = PrimaryEmerald,
                                         fontWeight = FontWeight.ExtraBold,
                                         fontSize = AppTextSize.caption
@@ -337,13 +375,13 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                     trackColor = SurfaceContainerHighest
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Row(
+                                AdaptiveRow(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        "現在実績: ¥${currencyFormat.format(monthlyIncome)}",
+                                        stringResource(R.string.roadmap_text_10 , currencyFormat.format(monthlyIncome)),
                                         color = OnSurfaceVariant,
                                         fontSize = AppTextSize.dense
                                     )
@@ -354,7 +392,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                             Icon(Icons.Default.Flag, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(12.dp))
                                             Spacer(modifier = Modifier.width(3.dp))
                                             Text(
-                                                "あと ¥${currencyFormat.format(shortage)} / 月 で攻略",
+                                                stringResource(R.string.roadmap_text_11 , currencyFormat.format(shortage)),
                                                 color = ErrorRed,
                                                 fontSize = AppTextSize.dense,
                                                 fontWeight = FontWeight.Bold
@@ -362,7 +400,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         }
                                     } else {
                                         Text(
-                                            "マイルストーン達成済！",
+                                            stringResource(R.string.roadmap_text_12),
                                             color = PrimaryEmerald,
                                             fontSize = AppTextSize.dense,
                                             fontWeight = FontWeight.Bold
@@ -377,7 +415,24 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         // Dynamic simulation tip card
                         val shortage = maxOf(0L, activeStep.targetMonthly - monthlyIncome)
                         val shortageAnnual = shortage * 12
-                        val neededPrincipalAt4 = Math.round(shortageAnnual / 0.04 / 10000.0)
+                        val neededPrincipalAt4 = Math.round(shortageAnnual / (targetYield / 100.0) / 10000.0)
+                        val summaryMetrics = listOf(
+                            Triple(
+                                R.string.roadmap_summary_annual_shortfall,
+                                stringResource(R.string.roadmap_summary_yen, currencyFormat.format(shortageAnnual)),
+                                ErrorRed
+                            ),
+                            Triple(
+                                R.string.roadmap_summary_yield,
+                                "${String.format(Locale.JAPAN, "%.2f", targetYield)}%",
+                                PrimaryEmerald
+                            ),
+                            Triple(
+                                R.string.roadmap_summary_required_principal,
+                                stringResource(R.string.roadmap_summary_principal, NumberFormat.getNumberInstance(Locale.JAPAN).format(neededPrincipalAt4)),
+                                OnSurface
+                            )
+                        )
 
                         Surface(
                             shape = RoundedCornerShape(10.dp),
@@ -385,52 +440,94 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             border = BorderStroke(1.dp, BorderBlue),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(
-                                modifier = Modifier.padding(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.Timeline, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "年額 +¥${currencyFormat.format(shortageAnnual)} でSTEP ${activeStep.step}クリア。配当利回り 4.0% 想定時、必要な追加投資元本は約 ¥${neededPrincipalAt4}万円 です。",
-                                    color = OnSurfaceVariant,
+                                    text = stringResource(R.string.roadmap_text_13, activeStep.step),
+                                    color = PrimaryEmerald,
                                     fontSize = AppTextSize.dense,
-                                    lineHeight = 14.sp
+                                    fontWeight = FontWeight.Bold
                                 )
+                                AdaptiveRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    summaryMetrics.forEach { (labelRes, value, valueColor) ->
+                                        Surface(
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = SurfaceContainer,
+                                            border = BorderStroke(0.5.dp, BorderBlue.copy(alpha = 0.6f))
+                                        ) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 6.dp, vertical = 8.dp),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                Text(
+                                                    text = stringResource(labelRes),
+                                                    color = OnSurfaceVariant,
+                                                    fontSize = AppTextSize.dense,
+                                                    maxLines = 1
+                                                )
+                                                Text(
+                                                    text = value,
+                                                    color = valueColor,
+                                                    fontSize = AppTextSize.caption,
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
 
                         // Share & Save Buttons matching Image 1
-                        Row(
+                        AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
-                                onClick = { showShareBottomSheet = true },
+                                onClick = {
+                                    saveRoadmapImage = false
+                                    if (viewModel.isPrivacyActive.value) viewModel.setRoadmapShareMasked(true)
+                                    showShareBottomSheet = true
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(42.dp)
+                                    .heightIn(min = 42.dp)
                             ) {
                                 Icon(Icons.Default.Share, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("達成度を共有する", color = OnPrimary, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.roadmap_text_14), color = OnPrimary, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
 
                             Button(
-                                onClick = {},
+                                onClick = {
+                                    saveRoadmapImage = true
+                                    if (viewModel.isPrivacyActive.value) viewModel.setRoadmapShareMasked(true)
+                                    showShareBottomSheet = true
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHighest),
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(42.dp)
+                                    .heightIn(min = 42.dp)
                             ) {
                                 Icon(Icons.Default.Download, contentDescription = null, tint = OnSurface, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("画像で保存", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.roadmap_text_15), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -440,7 +537,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
             // Section 2: "3大ステージ・レベル帯" Grid selection
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
+                    AdaptiveRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
@@ -448,14 +545,14 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Star, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("3大ステージ・レベル帯", fontWeight = FontWeight.ExtraBold, color = OnSurface, fontSize = AppTextSize.body)
+                            Text(stringResource(R.string.roadmap_text_16), fontWeight = FontWeight.ExtraBold, color = OnSurface, fontSize = AppTextSize.body)
                         }
-                        Text("タップしてジャンプ", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                        Text(stringResource(R.string.roadmap_text_17), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Row(
+                    AdaptiveRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
@@ -487,8 +584,8 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         modifier = Modifier.size(12.dp)
                                     )
                                 }
-                                Text("インフラ自給期", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    Text("STEP 1-10", color = if (selectedStageFilter == 1) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.roadmap_text_18), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    Text(stringResource(R.string.roadmap_step_1_10), color = if (selectedStageFilter == 1) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -528,8 +625,8 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         modifier = Modifier.size(12.dp)
                                     )
                                 }
-                                Text("生活費・ミニFIRE", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                Text("STEP 11-20", color = if (selectedStageFilter == 2) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.roadmap_text_19), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                Text(stringResource(R.string.roadmap_step_11_20), color = if (selectedStageFilter == 2) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -569,8 +666,8 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         modifier = Modifier.size(12.dp)
                                     )
                                 }
-                                Text("完全FIRE期", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                Text("STEP 21-30", color = if (selectedStageFilter == 3) OnSurfaceVariant else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.roadmap_text_20), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                Text(stringResource(R.string.roadmap_step_21_30), color = if (selectedStageFilter == 3) OnSurfaceVariant else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -583,7 +680,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                     Icon(Icons.Default.CheckBox, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        "全30マイルストーン・クエストマップ",
+                        stringResource(R.string.roadmap_text_21),
                         fontWeight = FontWeight.ExtraBold,
                         color = OnSurface,
                         fontSize = AppTextSize.body
@@ -602,7 +699,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                 }
             }
 
-            items(filteredMilestones.size) { idx ->
+            items(filteredMilestones.size, key = { filteredMilestones[it].step.step }) { idx ->
                 val item = filteredMilestones[idx]
                 val stepData = item.step
                 val isCleared = item.status == "completed"
@@ -630,7 +727,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                             .clickable { openStep = if (isOpen) null else stepData.step }
                             .padding(14.dp)
                     ) {
-                        Row(
+                        AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
@@ -646,7 +743,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Text(
-                                            "${stepData.step}",
+                                            stringResource(R.string.annual_dividend_1_s , stepData.step),
                                             fontWeight = FontWeight.ExtraBold,
                                             fontSize = AppTextSize.caption,
                                             color = if (isCurrent) OnPrimary else if (isCleared) PrimaryEmerald else OnSurfaceVariant
@@ -707,7 +804,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
 
                         if (isOpen) {
                             Spacer(modifier = Modifier.height(10.dp))
-                            Divider(color = SurfaceContainerHighest, thickness = 0.5.dp)
+                            HorizontalDivider(color = SurfaceContainerHighest, thickness = 0.5.dp)
                             Spacer(modifier = Modifier.height(10.dp))
                             
                             Text(
@@ -721,7 +818,7 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
 
                             val shortageAmt = stepData.targetMonthly - monthlyIncome
                             
-                            Row(
+                            AdaptiveRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
@@ -733,9 +830,9 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         .padding(8.dp)
                                 ) {
                                     Column {
-                                        Text("目標額 (月額 / 年額)", fontSize = AppTextSize.dense, color = OnSurfaceVariant)
-                                        Text("¥${currencyFormat.format(stepData.targetMonthly)} /月", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurface)
-                                        Text("年額 ¥${currencyFormat.format(stepData.targetMonthly * 12)}", fontSize = AppTextSize.dense, color = OnSurfaceVariant)
+                                        Text(stringResource(R.string.roadmap_text_22), fontSize = AppTextSize.dense, color = OnSurfaceVariant)
+                                        Text(stringResource(R.string.roadmap_text_23 , currencyFormat.format(stepData.targetMonthly)), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurface)
+                                        Text(stringResource(R.string.roadmap_text_24 , currencyFormat.format(stepData.targetMonthly * 12)), fontSize = AppTextSize.dense, color = OnSurfaceVariant)
                                     }
                                 }
 
@@ -747,13 +844,13 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         .padding(8.dp)
                                 ) {
                                     Column {
-                                        Text("攻略状況", fontSize = AppTextSize.dense, color = OnSurfaceVariant)
+                                        Text(stringResource(R.string.roadmap_text_25), fontSize = AppTextSize.dense, color = OnSurfaceVariant)
                                         if (isCleared) {
-                                            Text("達成済 ✨", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
-                                            Text("現在月額 ¥${currencyFormat.format(monthlyIncome)}", fontSize = AppTextSize.dense, color = PrimaryEmerald)
+                                            Text(stringResource(R.string.roadmap_text_26), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
+                                            Text(stringResource(R.string.roadmap_text_27 , currencyFormat.format(monthlyIncome)), fontSize = AppTextSize.dense, color = PrimaryEmerald)
                                         } else {
-                                            Text("あと ¥${currencyFormat.format(shortageAmt)} /月", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = ErrorRed)
-                                            Text("年額 ¥${currencyFormat.format(shortageAmt * 12)} 不足", fontSize = AppTextSize.dense, color = OnSurfaceVariant)
+                                            Text(stringResource(R.string.roadmap_text_28 , currencyFormat.format(shortageAmt)), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = ErrorRed)
+                                            Text(stringResource(R.string.roadmap_text_29 , currencyFormat.format(shortageAmt * 12)), fontSize = AppTextSize.dense, color = OnSurfaceVariant)
                                         }
                                     }
                                 }
@@ -771,32 +868,39 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
                                         .padding(10.dp)
                                 ) {
                                     Text(
-                                        "利回り別・必要追加元本シミュレーション",
+                                        stringResource(R.string.roadmap_text_30),
                                         fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryEmerald,
                                         modifier = Modifier.padding(bottom = 6.dp)
                                     )
+                                    Text(
+                                        stringResource(
+                                            R.string.roadmap_text_65,
+                                            currencyFormat.format(shortageAmt.coerceAtLeast(0)),
+                                            currencyFormat.format(shortageAnnualAmt.coerceAtLeast(0))
+                                        ),
+                                        fontSize = AppTextSize.dense,
+                                        color = OnSurfaceVariant,
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
                                     
-                                    Row(
+                                    AdaptiveRow(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        listOf(3.5 to "3.5%", 4.0 to "4.0%", 4.5 to "4.5%").forEach { (yield, label) ->
+                                        listOf(3.5 to "3.50%", 4.0 to "4.00%", 4.5 to "4.50%").forEach { (yield, label) ->
                                             val capital = Math.round(shortageAnnualAmt / (yield / 100.0) / 10000.0)
-                                            Box(
+                                            Column(
                                                 modifier = Modifier
                                                     .weight(1f)
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(if (yield == 4.0) Color(0x1F10B981) else SurfaceContainer)
-                                                    .border(0.5.dp, if (yield == 4.0) PrimaryEmerald.copy(alpha = 0.4f) else Color.Transparent, RoundedCornerShape(6.dp))
-                                                    .padding(6.dp),
-                                                contentAlignment = Alignment.Center
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(SurfaceContainerHigh)
+                                                    .padding(horizontal = 3.dp, vertical = 10.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
-                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                    Text(label, fontSize = AppTextSize.dense, color = if (yield == 4.0) PrimaryEmerald else OnSurfaceVariant)
-                                                    Text("¥${capital}万", fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = if (yield == 4.0) PrimaryEmerald else OnSurface)
-                                                }
+                                                Text(label, fontSize = AppTextSize.dense, color = if (yield == targetYield) PrimaryEmerald else OnSurfaceVariant)
+                                                Text(stringResource(R.string.roadmap_text_31 , capital), fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, color = if (yield == targetYield) PrimaryEmerald else OnSurface)
                                             }
                                         }
                                     }
@@ -810,1003 +914,217 @@ fun RoadmapScreen(viewModel: DividendViewModel) {
             item {
                 Spacer(modifier = Modifier.height(80.dp))
             }
-        }
-    }
-
-    // Modal Bottom Sheet: 複数口座一括配分登録 (Image 2)
-    if (showBottomSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showBottomSheet = false },
-            sheetState = sheetState,
-            containerColor = BackgroundDark,
-            tonalElevation = 8.dp,
-            scrimColor = Color.Black.copy(alpha = 0.6f)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Modal Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(PrimaryEmerald.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.GridView, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                "複数口座一括配分登録",
-                                color = OnSurface,
-                                fontSize = AppTextSize.body,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                "口座間の株数・取得単価を1画面でまとめて設定",
-                                color = OnSurfaceVariant,
-                                fontSize = AppTextSize.dense
-                            )
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(SurfaceContainerHigh)
-                            .clickable { showBottomSheet = false },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = OnSurfaceVariant, modifier = Modifier.size(16.dp))
-                    }
-                }
-
-                Divider(color = BorderColor)
-
-                // Active stock selector state
-                var selectedTickerInput by remember { mutableStateOf("AAPL") }
-                val activeTicker = selectedTickerInput.uppercase(Locale.ROOT).trim()
-
-                // Static DB for demonstration matching Image 2
-                val activeStockName = when (activeTicker) {
-                    "AAPL" -> "Apple Inc."
-                    "7203" -> "トヨタ自動車 (TOYOTA)"
-                    "8316" -> "三井住友フィナンシャルG"
-                    "9432" -> "日本電信電話 (NTT)"
-                    else -> "$activeTicker Corp."
-                }
-                val activeStockMarket = when (activeTicker) {
-                    "AAPL" -> "NASDAQ ・ US Tech ・ 米国株"
-                    else -> "東証PRM ・ 日本株 ・ 円建て"
-                }
-                val activeStockCurrency = if (activeTicker == "AAPL") "$" else "¥"
-                val activeStockPrice = when (activeTicker) {
-                    "AAPL" -> 220.0
-                    "7203" -> 2600.0
-                    "8316" -> 9800.0
-                    "9432" -> 170.0
-                    else -> 1000.0
-                }
-                val activeStockYield = when (activeTicker) {
-                    "AAPL" -> 0.45
-                    "7203" -> 2.80
-                    "8316" -> 3.50
-                    "9432" -> 3.20
-                    else -> 3.00
-                }
-                val activeStockDPS = activeStockPrice * (activeStockYield / 100.0)
-
-                // Input States for the 4 Accounts
-                var sharesNisaGrowth by remember { mutableStateOf("5") }
-                var priceNisaGrowth by remember { mutableStateOf("220.00") }
-
-                var sharesNisaTsumitate by remember { mutableStateOf("0") }
-                var priceNisaTsumitate by remember { mutableStateOf("2600") }
-
-                var sharesTokutei by remember { mutableStateOf("5") }
-                var priceTokutei by remember { mutableStateOf("220.00") }
-
-                var sharesIppan by remember { mutableStateOf("0") }
-                var priceIppan by remember { mutableStateOf("220.00") }
-
-                // Search Bar Input
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Search, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            "銘柄コード・ティッカー番号入力",
-                            color = OnSurfaceVariant,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextField(
-                            value = selectedTickerInput,
-                            onValueChange = { selectedTickerInput = it },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = SurfaceContainerHigh,
-                                unfocusedContainerColor = SurfaceContainerHigh,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                focusedTextColor = OnSurface,
-                                unfocusedTextColor = OnSurface
-                            ),
-                            placeholder = { Text("例: 7203, AAPL など", fontSize = AppTextSize.dense, color = OnSurfaceVariant) },
-                            singleLine = true
-                        )
-                        Button(
-                            onClick = { /* Apply */ },
-                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.height(46.dp)
-                        ) {
-                            Text("適用", color = OnPrimary, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // Candidate Chips matching Image 2
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        listOf("AAPL", "7203", "8316", "9432").forEach { code ->
-                            val label = when (code) {
-                                "AAPL" -> "AAPL Apple"
-                                "7203" -> "7203 トヨタ"
-                                "8316" -> "8316 三井住友"
-                                "9432" -> "9432 NTT"
-                                else -> code
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = if (activeTicker == code) PrimaryEmerald.copy(alpha = 0.2f) else SurfaceContainerHigh,
-                                border = BorderStroke(1.dp, if (activeTicker == code) PrimaryEmerald else Color.Transparent),
-                                modifier = Modifier
-                                    .clickable {
-                                        selectedTickerInput = code
-                                        // Auto fill price template values based on stock selection
-                                        val templatePrice = when (code) {
-                                            "AAPL" -> "220.00"
-                                            "7203" -> "2600"
-                                            "8316" -> "9800"
-                                            "9432" -> "170"
-                                            else -> "100"
-                                        }
-                                        priceNisaGrowth = templatePrice
-                                        priceNisaTsumitate = templatePrice
-                                        priceTokutei = templatePrice
-                                        priceIppan = templatePrice
-                                    }
-                            ) {
-                                Text(
-                                    text = label,
-                                    color = if (activeTicker == code) PrimaryEmerald else OnSurface,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Active Stock Preview Card matching Image 2
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
+            item {
+                Button(
+                    onClick = { showGrowthSimulator = true },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh),
-                    border = BorderStroke(1.dp, BorderBlue)
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(PrimaryEmerald.copy(alpha = 0.12f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        activeTicker.take(4),
-                                        color = PrimaryEmerald,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        activeStockName,
-                                        color = OnSurface,
-                                        fontSize = AppTextSize.body,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        activeStockMarket,
-                                        color = OnSurfaceVariant,
-                                        fontSize = AppTextSize.dense
-                                    )
-                                }
-                            }
-
-                            Column(horizontalAlignment = Alignment.End) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = Color(0x1F10B981)
-                                ) {
-                                    Text(
-                                        "買場目安近接",
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        color = PrimaryEmerald,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    "1株配当 $activeStockCurrency" + String.format("%.2f", activeStockDPS),
-                                    color = OnSurface,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Divider(color = BorderColor)
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                "現在値: $activeStockCurrency" + currencyFormat.format(activeStockPrice.toInt()),
-                                color = OnSurface,
-                                fontSize = AppTextSize.caption,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            Text(
-                                "現在配当利回り: " + String.format("%.2f%%", activeStockYield),
-                                color = PrimaryEmerald,
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                // Header sub-label Matrix Allocation
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AccountBalance, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            "口座別 ポートフォリオ配分マトリックス",
-                            color = OnSurfaceVariant,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Text(
-                        "クリア",
-                        color = ErrorRed,
-                        fontSize = AppTextSize.dense,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable {
-                            sharesNisaGrowth = "0"
-                            sharesNisaTsumitate = "0"
-                            sharesTokutei = "0"
-                            sharesIppan = "0"
-                        }
-                    )
-                }
-
-                // Account Allocation Cards Grid inside BottomSheet
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Account Row 1: 新NISA 成長投資枠
-                    AccountMatrixCard(
-                        title = "新NISA 成長投資枠",
-                        isTaxFree = true,
-                        shares = sharesNisaGrowth,
-                        price = priceNisaGrowth,
-                        currency = activeStockCurrency,
-                        onSharesChange = { sharesNisaGrowth = it },
-                        onPriceChange = { priceNisaGrowth = it },
-                        dps = activeStockDPS
-                    )
-
-                    // Account Row 2: 新NISA つみたて枠
-                    AccountMatrixCard(
-                        title = "新NISA つみたて枠",
-                        isTaxFree = true,
-                        shares = sharesNisaTsumitate,
-                        price = priceNisaTsumitate,
-                        currency = activeStockCurrency,
-                        onSharesChange = { sharesNisaTsumitate = it },
-                        onPriceChange = { priceNisaTsumitate = it },
-                        dps = activeStockDPS
-                    )
-
-                    // Account Row 3: 特定口座 (源泉徴収あり)
-                    AccountMatrixCard(
-                        title = "特定口座 (源泉徴収あり)",
-                        isTaxFree = false,
-                        shares = sharesTokutei,
-                        price = priceTokutei,
-                        currency = activeStockCurrency,
-                        onSharesChange = { sharesTokutei = it },
-                        onPriceChange = { priceTokutei = it },
-                        dps = activeStockDPS
-                    )
-
-                    // Account Row 4: 一般口座 (確定申告)
-                    AccountMatrixCard(
-                        title = "一般口座 (確定申告)",
-                        isTaxFree = false,
-                        shares = sharesIppan,
-                        price = priceIppan,
-                        currency = activeStockCurrency,
-                        onSharesChange = { sharesIppan = it },
-                        onPriceChange = { priceIppan = it },
-                        dps = activeStockDPS
-                    )
-                }
-
-                // Save Action Button inside BottomSheet
-                Button(
-                    onClick = {
-                        // real save registration call for each account in our matrix
-                        val growthQty = sharesNisaGrowth.toIntOrNull() ?: 0
-                        val growthPx = priceNisaGrowth.toDoubleOrNull() ?: activeStockPrice
-                        if (growthQty > 0) {
-                            viewModel.addOrUpdateHolding(activeTicker, growthQty, growthPx, "NISA_GROWTH")
-                        }
-
-                        val tsumQty = sharesNisaTsumitate.toIntOrNull() ?: 0
-                        val tsumPx = priceNisaTsumitate.toDoubleOrNull() ?: activeStockPrice
-                        if (tsumQty > 0) {
-                            viewModel.addOrUpdateHolding(activeTicker, tsumQty, tsumPx, "NISA_TSUMITATE")
-                        }
-
-                        val tokQty = sharesTokutei.toIntOrNull() ?: 0
-                        val tokPx = priceTokutei.toDoubleOrNull() ?: activeStockPrice
-                        if (tokQty > 0) {
-                            viewModel.addOrUpdateHolding(activeTicker, tokQty, tokPx, "TAXABLE_WITHHELD")
-                        }
-
-                        val ippQty = sharesIppan.toIntOrNull() ?: 0
-                        val ippPx = priceIppan.toDoubleOrNull() ?: activeStockPrice
-                        if (ippQty > 0) {
-                            viewModel.addOrUpdateHolding(activeTicker, ippQty, ippPx, "TAXABLE_GENERAL")
-                        }
-
-                        showBottomSheet = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                ) {
-                    Icon(Icons.Default.Check, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        "ポートフォリオに一括追加登録",
-                        color = OnPrimary,
-                        fontSize = AppTextSize.body,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Icon(Icons.Default.HourglassBottom, contentDescription = null, tint = OnPrimary)
+                    Spacer(Modifier.width(8.dp))
+                    Text("福利シミュレーター", color = OnPrimary, fontWeight = FontWeight.Bold)
                 }
             }
+            item { Spacer(modifier = Modifier.height(20.dp)) }
         }
     }
 
-    // Modal Bottom Sheet: 達成状況をシェア (Image 1 & 2 share certificate)
+    if (showBottomSheet) RoadmapAllocationSheet(viewModel) { showBottomSheet = false }
+
+    if (showGrowthSimulator) {
+        RoadmapGrowthSimulatorSheet(
+            currentAssets = holdings.sumOf { it.totalValuation },
+            currentCost = holdings.sumOf { it.totalCost },
+            monthlyContribution = simulatorMonthlyContribution,
+            dividendYield = simulatorDividendYield,
+            onMonthlyContributionChange = viewModel::setGrowthSimulatorMonthlyContribution,
+            onDividendYieldChange = viewModel::setGrowthSimulatorDividendYield,
+            onDismiss = { showGrowthSimulator = false }
+        )
+    }
+
     if (showShareBottomSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showShareBottomSheet = false },
-            sheetState = shareSheetState,
-            containerColor = BackgroundDark,
-            tonalElevation = 8.dp,
-            scrimColor = Color.Black.copy(alpha = 0.6f)
+        val completedStage = (highestCompletedStep / 10).coerceAtLeast(1)
+        val stageEnd = milestoneSteps[completedStage * 10 - 1]
+        RoadmapShareSheet(
+            viewModel = viewModel,
+            achievement = com.kurogane.dividend.model.RoadmapAchievement(
+                activeStep.step, activeStep.name, activeStep.targetMonthly, monthlyIncome, highestCompletedStep,
+                listOf(resources.getString(R.string.roadmap_text_18), resources.getString(R.string.roadmap_text_19), resources.getString(R.string.roadmap_text_20))[completedStage - 1],
+                stageEnd.title, stageEnd.targetMonthly
+            ),
+            saveImage = saveRoadmapImage,
+            onDismiss = { showShareBottomSheet = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RoadmapGrowthSimulatorSheet(
+    currentAssets: Double,
+    currentCost: Double,
+    monthlyContribution: Long,
+    dividendYield: Double,
+    onMonthlyContributionChange: (Long) -> Unit,
+    onDividendYieldChange: (Double) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var reinvest by rememberSaveable { mutableStateOf(true) }
+    var showSimulatorInfo by remember { mutableStateOf(false) }
+    val simulatorDescription = "現在の評価額を起点に、毎月追加する金額と年間配当利回りから試算します。累計投資額は現在保有分の取得額と今後の追加額の合計です。配当は年1回受け取る想定で、再投資を選ぶと受取時に資産へ加算します。表示する月額は年間配当の月平均で、実際の支払時期・金額とは異なります。株価変動・税金・手数料は含みません。"
+    // Monthly deposits are made at month-end. Dividends are calculated on the
+    // invested balance before each deposit; cash dividends earn no return.
+    fun projection(years: Int): Triple<Double, Double, Double> {
+        val monthlyRate = dividendYield.coerceIn(0.0, 30.0) / 100.0 / 12.0
+        var investedAssets = currentAssets.coerceAtLeast(0.0)
+        var cashDividends = 0.0
+        repeat(years * 12) {
+            val dividend = investedAssets * monthlyRate
+            if (reinvest) investedAssets += dividend else cashDividends += dividend
+            investedAssets += monthlyContribution.coerceAtLeast(0L)
+        }
+        return Triple(investedAssets + cashDividends, investedAssets * monthlyRate, cashDividends)
+    }
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.JAPAN) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = SurfaceContainerLow,
+        contentColor = OnSurface,
+        dragHandle = null
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .navigationBarsPadding().imePadding().padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Share Modal Header matching image perfectly
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(PrimaryEmerald.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Share, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                "達成状況をシェア",
-                                color = OnSurface,
-                                fontSize = AppTextSize.body,
-                                fontWeight = FontWeight.Black
-                            )
-                            Text(
-                                "SNSで進捗を共有できます",
-                                color = OnSurfaceVariant,
-                                fontSize = AppTextSize.dense
-                            )
-                        }
+            Box(Modifier.align(Alignment.CenterHorizontally).width(42.dp).height(5.dp).clip(CircleShape).background(BorderColor))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.HourglassBottom, contentDescription = null, tint = PrimaryEmerald)
+                Spacer(Modifier.width(8.dp))
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("福利シミュレーター", fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
+                Box {
+                    IconButton(onClick = { showSimulatorInfo = true }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.Info, contentDescription = "福利シミュレーターの説明", tint = OnSurfaceVariant, modifier = Modifier.size(18.dp))
                     }
-
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(SurfaceContainerHigh)
-                            .clickable { showShareBottomSheet = false },
-                        contentAlignment = Alignment.Center
+                    DropdownMenu(
+                        expanded = showSimulatorInfo,
+                        onDismissRequest = { showSimulatorInfo = false },
+                        modifier = Modifier.widthIn(max = 320.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = SurfaceContainerLow,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 12.dp
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = OnSurfaceVariant, modifier = Modifier.size(16.dp))
-                    }
-                }
-
-                // Interactive Tab Selector: 進捗カード vs 踏破認定証
-                var selectedShareTab by remember { mutableIntStateOf(1) } // Default active: 踏破認定証
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { selectedShareTab = 0 },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedShareTab == 0) SurfaceContainerHigh else Color.Transparent
-                        ),
-                        border = if (selectedShareTab == 0) BorderStroke(1.dp, BorderColor) else null,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(40.dp)
-                    ) {
-                        Icon(Icons.Default.ShoppingCart, contentDescription = null, tint = OnSurface, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("QUEST 6 進捗カード", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                    }
-
-                    Button(
-                        onClick = { selectedShareTab = 1 },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedShareTab == 1) SurfaceContainerHigh else Color.Transparent
-                        ),
-                        border = if (selectedShareTab == 1) BorderStroke(1.dp, BorderColor) else null,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(40.dp)
-                    ) {
-                        Icon(Icons.Default.WorkspacePremium, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("LV.1 踏破認定証", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                // Masking Switch Options Row
-                var isAmountMasked by remember { mutableStateOf(false) }
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = SurfaceContainerHigh,
-                    border = BorderStroke(1.dp, BorderColor),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.VisibilityOff, contentDescription = null, tint = OnSurfaceVariant, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("金額を伏字にする", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                        }
-                        Switch(
-                            checked = isAmountMasked,
-                            onCheckedChange = { isAmountMasked = it },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = OnSurface,
-                                checkedTrackColor = PrimaryEmerald
-                            )
-                        )
-                    }
-                }
-
-                // Dynamic Certificate Card Box View matching Image perfectly
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(SurfaceContainerHigh)
-                        .border(1.dp, if (selectedShareTab == 1) PrimaryEmerald.copy(alpha = 0.4f) else BorderColor, RoundedCornerShape(16.dp))
-                        .padding(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        if (selectedShareTab == 1) {
-                            // Medal design matching image
-                            Box(
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(CircleShape)
-                                    .background(PrimaryEmerald.copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(PrimaryEmerald.copy(alpha = 0.25f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Default.WorkspacePremium,
-                                        contentDescription = null,
-                                        tint = PrimaryEmerald,
-                                        modifier = Modifier.size(24.dp)
-                                    )
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.14f), modifier = Modifier.size(30.dp)) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Info, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(17.dp))
+                                    }
                                 }
+                                Spacer(Modifier.width(10.dp))
+                                Text("福利シミュレーターの見方", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
                             }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                "LEVEL 1 COMPLETE",
-                                color = PrimaryEmerald,
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "生活インフラ自給期 踏破認定証",
-                                color = OnSurface,
-                                fontSize = AppTextSize.section,
-                                fontWeight = FontWeight.Black
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                "STEP 1〜10 (月2万円・年24万円) を完全達成",
-                                color = OnSurfaceVariant,
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Medium
-                            )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Inner sub-card with highlight title
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = BackgroundDark,
-                                border = BorderStroke(1.dp, BorderColor),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        "獲得した生活権益",
-                                        color = OnSurfaceVariant,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        "水道光熱費・通信費の全額自給権 ⚡ 📱",
-                                        color = PrimaryEmeraldContainer,
-                                        fontSize = AppTextSize.body,
-                                        fontWeight = FontWeight.Black,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "到達実績: " + if (isAmountMasked) "¥••,••• / 月" else "¥${currencyFormat.format(monthlyIncome)} / 月",
-                                        color = OnSurface,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    "認定ランク: LEVEL 1 MASTER",
-                                    color = OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "Roadmap Quest",
-                                    color = OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
-                        } else {
-                            // Quest Card View (Tab 0 Selected)
-                            Box(
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(CircleShape)
-                                    .background(SkyBlue.copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(SkyBlue.copy(alpha = 0.25f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Default.ShoppingCart,
-                                        contentDescription = null,
-                                        tint = SkyBlue,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                "CURRENT ACTIVE QUEST",
-                                color = SkyBlue,
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "QUEST ${activeStep.step}: " + activeStep.name.substringAfter(": "),
-                                color = OnSurface,
-                                fontSize = AppTextSize.section,
-                                fontWeight = FontWeight.Black
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                "目標額: 月 ¥${currencyFormat.format(activeStep.targetMonthly)} 自給に向けて挑戦中",
-                                color = OnSurfaceVariant,
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Medium
-                            )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Inner progress sub-card
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = BackgroundDark,
-                                border = BorderStroke(1.dp, BorderColor),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        "現在のクエスト進捗状況",
-                                        color = OnSurfaceVariant,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        "目標達成率: ${(activeQuest.currentRate * 100).toInt()}% 🚀",
-                                        color = PrimaryEmeraldContainer,
-                                        fontSize = AppTextSize.body,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "現在実績: " + if (isAmountMasked) "¥••,••• / 月" else "¥${currencyFormat.format(monthlyIncome)} / 月",
-                                        color = OnSurface,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    "現在のステータス: LEVEL 2 CHALLENGER",
-                                    color = OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "Roadmap Quest",
-                                    color = OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
+                            Spacer(Modifier.height(12.dp))
+                            HorizontalDivider(color = BorderColor, thickness = 0.75.dp)
+                            Spacer(Modifier.height(12.dp))
+                            Text(simulatorDescription, color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Premium Gradient Share Action Button matching image perfectly
-                Button(
-                    onClick = { showShareBottomSheet = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = OnSurface),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(Color(0xFFE2E8F0), Color(0xFFCBD5E1))
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                ) {
-                    Text(
-                        "𝕏 𝕏 (Twitter) でクエスト進捗をシェア",
-                        color = BackgroundDark,
-                        fontSize = AppTextSize.caption,
-                        fontWeight = FontWeight.Black
+                }
+                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close)) }
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("複利シミュレーション結果", modifier = Modifier.weight(1f), color = OnSurfaceVariant, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("配当金を再投資", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                    Switch(
+                        checked = reinvest,
+                        onCheckedChange = { reinvest = it },
+                        modifier = Modifier.height(32.dp)
                     )
                 }
             }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(10, 20, 30).forEach { years ->
+                    val (value, estimatedMonthlyDividend, _) = projection(years)
+                    val principal = currentCost.coerceAtLeast(0.0) + monthlyContribution * 12.0 * years
+                    Column(
+                        Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(SurfaceContainerHigh)
+                            .border(1.dp, if (years == 30) PrimaryEmerald else BorderColor, RoundedCornerShape(12.dp)).padding(horizontal = 6.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        Text(
+                            "${years}年後 (${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) + years})",
+                            color = if (years == 30) PrimaryEmerald else OnSurfaceVariant,
+                            fontSize = AppTextSize.dense,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1
+                        )
+                        SmoothMoney(value, inTenThousands = true,
+                            style = androidx.compose.ui.text.TextStyle(color = OnSurface, fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Black, textAlign = TextAlign.Center))
+                        Text(
+                            "元本: ¥${kotlin.math.round(principal / 10_000.0).toLong()}万",
+                            color = OnSurfaceVariant,
+                            fontSize = AppTextSize.dense,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1
+                        )
+                        HorizontalDivider(color = BorderColor)
+                        Text("月配当(目安)", color = OnSurfaceVariant, fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
+                        SmoothMoney(estimatedMonthlyDividend, suffix = "/月",
+                            style = androidx.compose.ui.text.TextStyle(color = PrimaryEmerald, fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center))
+                    }
+                }
+            }
+            GrowthSimulatorStepper(
+                label = "毎月の積立額",
+                value = "¥${numberFormat.format(monthlyContribution)}",
+                onDecrease = {
+                    val step = if (monthlyContribution <= 20_000L) 1_000L else 5_000L
+                    onMonthlyContributionChange((monthlyContribution - step).coerceAtLeast(0L))
+                },
+                onIncrease = {
+                    val step = if (monthlyContribution < 20_000L) 1_000L else 5_000L
+                    onMonthlyContributionChange((monthlyContribution + step).coerceAtMost(1_000_000L))
+                }
+            )
+            GrowthSimulatorStepper(
+                label = "想定配当利回り",
+                value = String.format(Locale.JAPAN, "%.2f%%", dividendYield),
+                onDecrease = { onDividendYieldChange((dividendYield - 0.10).coerceAtLeast(0.0)) },
+                onIncrease = { onDividendYieldChange((dividendYield + 0.10).coerceAtMost(30.0)) }
+            )
         }
     }
 }
 
-// Custom Account matrix allocation form Card component
 @Composable
-private fun AccountMatrixCard(
-    title: String,
-    isTaxFree: Boolean,
-    shares: String,
-    price: String,
-    currency: String,
-    onSharesChange: (String) -> Unit,
-    onPriceChange: (String) -> Unit,
-    dps: Double
-) {
-    val numShares = shares.toIntOrNull() ?: 0
-    val unitPrice = price.toDoubleOrNull() ?: 0.0
-    val totalCost = numShares * unitPrice
-    val rawDividend = numShares * dps
-    val finalDividend = if (isTaxFree) rawDividend else rawDividend * (1.0 - 0.20315)
-    val taxAmt = rawDividend * 0.20315
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = BackgroundDark),
-        border = BorderStroke(1.dp, BorderColor)
-    ) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            // Header Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(if (isTaxFree) PrimaryEmerald else SecondaryIndigo)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(title, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = if (isTaxFree) PrimaryEmerald.copy(alpha = 0.15f) else Color(0x1F94A3B8)
-                    ) {
-                        Text(
-                            text = if (isTaxFree) "非課税 0%" else "課税 20.315%",
-                            color = if (isTaxFree) PrimaryEmerald else OnSurfaceVariant,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                        )
-                    }
-                }
-
-                Text(
-                    text = "手取り配当: $currency" + String.format("%.2f/年", finalDividend),
-                    color = if (numShares > 0) PrimaryEmerald else OnSurfaceVariant,
-                    fontSize = AppTextSize.dense,
-                    fontWeight = FontWeight.Bold
-                )
+private fun GrowthSimulatorStepper(label: String, value: String, onDecrease: () -> Unit, onIncrease: () -> Unit) {
+    Surface(shape = RoundedCornerShape(12.dp), color = BackgroundDark, border = BorderStroke(1.dp, BorderColor)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(label, modifier = Modifier.weight(1.15f), color = OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1)
+            IconButton(onClick = onDecrease, modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(SurfaceContainerHighest)) {
+                Icon(Icons.Default.Remove, contentDescription = "$label を下げる", tint = OnSurface)
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Text Inputs Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Shares Input Column
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("保有株数", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        TextField(
-                            value = shares,
-                            onValueChange = onSharesChange,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(38.dp),
-                            shape = RoundedCornerShape(6.dp),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = SurfaceContainerHigh,
-                                unfocusedContainerColor = SurfaceContainerHigh,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                focusedTextColor = OnSurface,
-                                unfocusedTextColor = OnSurface
-                            ),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
-                        )
-                        // Quick add buttons
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(SurfaceContainerHigh)
-                                .clickable { onSharesChange(((shares.toIntOrNull() ?: 0) + 10).toString()) }
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        ) {
-                            Text("+10", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(SurfaceContainerHigh)
-                                .clickable { onSharesChange(((shares.toIntOrNull() ?: 0) + 100).toString()) }
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        ) {
-                            Text("+100", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-
-                // Acquisition Price Input Column
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("取得単価 (平均)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        TextField(
-                            value = price,
-                            onValueChange = onPriceChange,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(38.dp),
-                            shape = RoundedCornerShape(6.dp),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = SurfaceContainerHigh,
-                                unfocusedContainerColor = SurfaceContainerHigh,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                focusedTextColor = OnSurface,
-                                unfocusedTextColor = OnSurface
-                            ),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
-                        )
-                        Text("/株", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                    }
-                }
-            }
-
-            if (numShares > 0) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "投資元本: $currency" + String.format("%.2f", totalCost),
-                        color = OnSurfaceVariant,
-                        fontSize = AppTextSize.dense
-                    )
-
-                    if (isTaxFree) {
-                        Text(
-                            "NISA節税効果: +$currency" + String.format("%.2f", taxAmt),
-                            color = PrimaryEmerald,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Bold
-                        )
-                    } else {
-                        Text(
-                            "源泉控除税額: -$currency" + String.format("%.2f", taxAmt),
-                            color = ErrorRed,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
+            Text(value, modifier = Modifier.weight(1f), color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontFamily = FontFamily.Monospace, maxLines = 1)
+            IconButton(onClick = onIncrease, modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(SurfaceContainerHighest)) {
+                Icon(Icons.Default.Add, contentDescription = "$label を上げる", tint = OnSurface)
             }
         }
     }

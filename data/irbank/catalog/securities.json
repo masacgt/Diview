@@ -27718,5 +27718,44 @@
     "edinet_code": "E03229",
     "name": "ベルーナ",
     "metrics": []
+  },
+  {
+    "security_code": "545A0",
+    "security_code_display": "545A",
+    "edinet_code": "E41323",
+    "name": "トランヴィア",
+    "metrics": [
+      {
+        "field": "marketCap",
+        "value": 347.88270439,
+        "as_of": "2026-10-07"
+      }
+    ]
+  },
+  {
+    "security_code": "584A0",
+    "security_code_display": "584A",
+    "edinet_code": "E41753",
+    "name": "LiNKX",
+    "metrics": [
+      {
+        "field": "marketCap",
+        "value": 165.992508,
+        "as_of": "2026-10-07"
+      }
+    ]
+  },
+  {
+    "security_code": "634A0",
+    "security_code_display": "634A",
+    "edinet_code": "E41715",
+    "name": "レイヤード",
+    "metrics": [
+      {
+        "field": "marketCap",
+        "value": 58.68,
+        "as_of": "2026-10-07"
+      }
+    ]
   }
 ]

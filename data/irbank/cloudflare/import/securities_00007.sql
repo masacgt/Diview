@@ -458,3 +458,6 @@ INSERT OR REPLACE INTO securities (security_code,security_code_display,edinet_co
 INSERT OR REPLACE INTO securities (security_code,security_code_display,edinet_code,name,metrics_json) VALUES ('99940','9994','E03227','やまや','[]');
 INSERT OR REPLACE INTO securities (security_code,security_code_display,edinet_code,name,metrics_json) VALUES ('99960','9996','E02786','サトー商会','[]');
 INSERT OR REPLACE INTO securities (security_code,security_code_display,edinet_code,name,metrics_json) VALUES ('99970','9997','E03229','ベルーナ','[]');
+INSERT OR REPLACE INTO securities (security_code,security_code_display,edinet_code,name,metrics_json) VALUES ('545A0','545A','E41323','トランヴィア','[{"field":"marketCap","value":347.88270439,"as_of":"2026-10-07"}]');
+INSERT OR REPLACE INTO securities (security_code,security_code_display,edinet_code,name,metrics_json) VALUES ('584A0','584A','E41753','LiNKX','[{"field":"marketCap","value":165.992508,"as_of":"2026-10-07"}]');
+INSERT OR REPLACE INTO securities (security_code,security_code_display,edinet_code,name,metrics_json) VALUES ('634A0','634A','E41715','レイヤード','[{"field":"marketCap","value":58.68,"as_of":"2026-10-07"}]');

@@ -17,7 +17,7 @@ import androidx.core.view.WindowCompat
 
 @Composable
 fun KuroganeDividendTheme(
-    themeMode: String = "dark",
+    themeMode: String = "system",
     isOledBlack: Boolean = false,
     selectedAccent: String = "emerald",
     content: @Composable () -> Unit

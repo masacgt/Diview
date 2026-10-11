@@ -375,7 +375,7 @@ export const SettingsScreen: React.FC = () => {
             </div>
             <input
               type="range"
-              min="3"
+              min="1"
               max="10"
               value={threshold}
               onChange={e => setThreshold(parseInt(e.target.value) || 5)}

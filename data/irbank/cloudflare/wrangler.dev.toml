@@ -1,18 +1,20 @@
-# Local-only Worker configuration. R2 data is shared with production; D1/KV stay local.
-# The R2 binding is remote; D1 and KV use local Wrangler storage.
+# Local-only Worker configuration. R2, D1, and KV all use local Wrangler storage.
 name = "diview-irbank-dev-local"
 compatibility_date = "2026-09-28"
 main = "src/index.js"
+
+[vars]
+LOCAL_IRBANK_FIXTURES = "1"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "diview-irbank-dev-local"
 database_id = "00000000-0000-0000-0000-000000000001"
+migrations_dir = "migrations"
 
 [[r2_buckets]]
 binding = "MARKET_DATA"
 bucket_name = "diview-market-data"
-remote = true
 
 [[kv_namespaces]]
 binding = "APP_DEFINITIONS"
