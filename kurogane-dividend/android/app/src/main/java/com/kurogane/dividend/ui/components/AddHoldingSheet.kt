@@ -7,6 +7,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -24,9 +25,11 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
@@ -650,41 +653,21 @@ fun AddHoldingSheet(
                                 // Price input on the left, share input on the right.
                                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(stringResource(R.string.add_holding_text_15), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    OutlinedTextField(
+                                    CompactAccountTextField(
                                         value = priceVal,
-                                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = resources.getString(R.string.account_input_label, title, resources.getString(R.string.add_holding_text_15)) },
                                         onValueChange = onPriceChange,
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedContainerColor = BackgroundDark,
-                                            unfocusedContainerColor = BackgroundDark,
-                                            focusedBorderColor = PrimaryEmerald,
-                                            unfocusedBorderColor = SurfaceContainerHighest,
-                                            focusedTextColor = OnSurface,
-                                            unfocusedTextColor = OnSurface
-                                        ),
-                                        shape = RoundedCornerShape(8.dp)
+                                        contentDescription = resources.getString(R.string.account_input_label, title, resources.getString(R.string.add_holding_text_15)),
+                                        keyboardType = KeyboardType.Decimal
                                     )
                                 }
 
                                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(stringResource(R.string.add_holding_text_12), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    OutlinedTextField(
+                                    CompactAccountTextField(
                                         value = sharesVal,
-                                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = resources.getString(R.string.account_input_label, title, resources.getString(R.string.add_holding_text_12)) },
                                         onValueChange = onSharesChange,
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedContainerColor = BackgroundDark,
-                                            unfocusedContainerColor = BackgroundDark,
-                                            focusedBorderColor = PrimaryEmerald,
-                                            unfocusedBorderColor = SurfaceContainerHighest,
-                                            focusedTextColor = OnSurface,
-                                            unfocusedTextColor = OnSurface
-                                        ),
-                                        shape = RoundedCornerShape(8.dp)
+                                        contentDescription = resources.getString(R.string.account_input_label, title, resources.getString(R.string.add_holding_text_12)),
+                                        keyboardType = KeyboardType.Number
                                     )
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -871,3 +854,57 @@ data class Quadruple<A, B, C, D, E, F, G>(
     val sixth: F,
     val seventh: G
 )
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CompactAccountTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    contentDescription: String,
+    keyboardType: KeyboardType
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val colors = OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = BackgroundDark,
+        unfocusedContainerColor = BackgroundDark,
+        focusedBorderColor = PrimaryEmerald,
+        unfocusedBorderColor = SurfaceContainerHighest,
+        focusedTextColor = OnSurface,
+        unfocusedTextColor = OnSurface
+    )
+
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(45.dp)
+            .semantics { this.contentDescription = contentDescription },
+        textStyle = LocalTextStyle.current.copy(color = OnSurface),
+        cursorBrush = SolidColor(PrimaryEmerald),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        singleLine = true,
+        interactionSource = interactionSource,
+        decorationBox = { innerTextField ->
+            OutlinedTextFieldDefaults.DecorationBox(
+                value = value,
+                innerTextField = innerTextField,
+                enabled = true,
+                singleLine = true,
+                visualTransformation = VisualTransformation.None,
+                interactionSource = interactionSource,
+                colors = colors,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                container = {
+                    OutlinedTextFieldDefaults.Container(
+                        enabled = true,
+                        isError = false,
+                        interactionSource = interactionSource,
+                        colors = colors,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+            )
+        }
+    )
+}
