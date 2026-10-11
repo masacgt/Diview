@@ -95,19 +95,10 @@ fun WatchlistScreen(
 ) {
     val feedbackView = LocalView.current
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
-    val holdings by viewModel.holdings.collectAsStateWithLifecycle()
     val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
-    val financialData by viewModel.financialData.collectAsStateWithLifecycle()
-    val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
+    val watchlistCodes = remember(watchlist.map { it.code }) { watchlist.map { it.code } }
     val snackbarHostState = remember { SnackbarHostState() }
     val screenScope = rememberCoroutineScope()
-    val latestCalculatedRightsDate = remember(watchlist, dividendEventRevision) {
-        watchlist.asSequence()
-            .flatMap { stock -> viewModel.dividendEventsFor(stock.code).asSequence() }
-            .mapNotNull { it.finalRightsDate }
-            .maxOrNull()
-    }
-    val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     val notificationAccess = rememberNotificationAccess { action ->
         val code = action.substringAfter(':', "")
@@ -198,8 +189,6 @@ fun WatchlistScreen(
         if (projection.missingExchangeRate) resources.getString(R.string.watchlist_projection_fx_missing) else ""
     fun yen(value: Double) = "¥${currencyFormat.format(value.toLong())}"
     fun percent(value: Double) = String.format(Locale.JAPAN, "%.1f%%", value)
-    val heldCount = watchlist.filter { stock -> holdings.any { it.code == stock.code } }.size
-
     var filterState by remember { mutableStateOf("all") } // "all", "jp", "us", "ready"
     var showProjectionInfo by remember { mutableStateOf(false) }
     var showSortBottomSheet by remember { mutableStateOf(false) }
@@ -279,9 +268,38 @@ fun WatchlistScreen(
     }
     val badgeTextMeasurer = rememberTextMeasurer()
     val badgeTextStyle = LocalTextStyle.current.copy(fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-    val widestBadgeTextPx = remember(watchlist, resources, badgeTextMeasurer, badgeTextStyle) {
-        watchlist.maxOfOrNull { stock ->
-            badgeTextMeasurer.measure(AnnotatedString(badgeTextFor(stock)), style = badgeTextStyle, maxLines = 1).size.width
+    val badgeWidthCandidates = remember(watchlist, resources) {
+        val texts = linkedSetOf<String>()
+        var widestDynamicBadge: String? = null
+        var widestDynamicLength = -1
+        var widestDynamicYield = Double.NEGATIVE_INFINITY
+        watchlist.forEach { stock ->
+            val currentYield = com.kurogane.dividend.model.PortfolioMath.yieldPercent(stock.dps, stock.price)
+            when {
+                currentYield >= stock.targetYield -> texts += resources.getString(R.string.watchlist_badge)
+                currentYield >= stock.targetYield - 0.25 -> texts += resources.getString(R.string.watchlist_badge_3)
+                currentYield >= 4.0 -> {
+                    val dynamicBadge = resources.getString(
+                        R.string.watchlist_badge_2,
+                        String.format(Locale.JAPAN, "%.2f", currentYield)
+                    )
+                    if (dynamicBadge.length > widestDynamicLength ||
+                        (dynamicBadge.length == widestDynamicLength && currentYield > widestDynamicYield)
+                    ) {
+                        widestDynamicBadge = dynamicBadge
+                        widestDynamicLength = dynamicBadge.length
+                        widestDynamicYield = currentYield
+                    }
+                }
+                else -> texts += resources.getString(R.string.watchlist_badge_4)
+            }
+        }
+        widestDynamicBadge?.let(texts::add)
+        texts.sorted()
+    }
+    val widestBadgeTextPx = remember(badgeWidthCandidates, resources, badgeTextMeasurer, badgeTextStyle) {
+        badgeWidthCandidates.maxOfOrNull { text ->
+            badgeTextMeasurer.measure(AnnotatedString(text), style = badgeTextStyle, maxLines = 1).size.width
         } ?: 0
     }
     val badgeWidth = with(LocalDensity.current) { widestBadgeTextPx.toDp() } + 34.dp
@@ -354,6 +372,12 @@ fun WatchlistScreen(
                                 modifier = Modifier
                                     .clip(CircleShape)
                                     .background(BackgroundDark)
+                val holdings by viewModel.holdings.collectAsStateWithLifecycle()
+                val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
+                val heldCodes = remember(holdings.map { it.code }) { holdings.mapTo(mutableSetOf()) { it.code } }
+                val heldCount = remember(watchlistCodes, heldCodes) {
+                    watchlistCodes.count { it in heldCodes }
+                }
                                     .padding(horizontal = 8.dp, vertical = 2.dp)
                             ) {
                                 Text(stringResource(R.string.watchlist_text_3), fontSize = AppTextSize.dense, color = OnSurfaceVariant)
@@ -1422,6 +1446,13 @@ fun WatchlistScreen(
                     }
                 }
 
+            val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
+            val latestCalculatedRightsDate = remember(watchlistCodes, dividendEventRevision) {
+                watchlistCodes.asSequence()
+                    .flatMap { code -> viewModel.dividendEventsFor(code).asSequence() }
+                    .mapNotNull { it.finalRightsDate }
+                    .maxOrNull()
+            }
                 HorizontalDivider(color = BorderColor)
 
                 // KPI Sub-Grid Row (3 Cards)
@@ -2274,6 +2305,7 @@ fun WatchlistScreen(
                 }
             }
         }
+            val financialData by viewModel.financialData.collectAsStateWithLifecycle()
     }
 }
 
