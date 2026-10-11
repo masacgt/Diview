@@ -770,7 +770,7 @@ fun WatchlistScreen(
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                         border = if (isReached) {
-                            BorderStroke(1.5.dp, Color(0xFF34D399))
+                            BorderStroke(1.5.dp, PrimaryEmerald)
                         } else {
                             null
                         }
