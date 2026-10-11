@@ -45,7 +45,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
@@ -259,27 +258,6 @@ fun WatchlistScreen(
             filteredList.forEach { stock -> if (stock.code !in placedCodes) add(stock) }
         }
     }
-
-    val badgeTextFor: (WatchlistStock) -> String = { stock ->
-        val currentYield = com.kurogane.dividend.model.PortfolioMath.yieldPercent(stock.dps, stock.price)
-        when {
-            currentYield >= stock.targetYield -> resources.getString(R.string.watchlist_badge)
-            currentYield >= stock.targetYield - 0.25 -> resources.getString(R.string.watchlist_badge_3)
-            currentYield >= 4.0 -> resources.getString(
-                R.string.watchlist_badge_2,
-                String.format(Locale.JAPAN, "%.2f", currentYield)
-            )
-            else -> resources.getString(R.string.watchlist_badge_4)
-        }
-    }
-    val badgeTextMeasurer = rememberTextMeasurer()
-    val badgeTextStyle = LocalTextStyle.current.copy(fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-    val widestBadgeTextPx = remember(watchlist, resources, badgeTextMeasurer, badgeTextStyle) {
-        watchlist.maxOfOrNull { stock ->
-            badgeTextMeasurer.measure(AnnotatedString(badgeTextFor(stock)), style = badgeTextStyle, maxLines = 1).size.width
-        } ?: 0
-    }
-    val badgeWidth = with(LocalDensity.current) { widestBadgeTextPx.toDp() } + 34.dp
 
     val readyCount = watchlist.filter { com.kurogane.dividend.model.PortfolioMath.yieldPercent(it.dps, it.price) >= it.targetYield }.size
 
@@ -713,7 +691,15 @@ fun WatchlistScreen(
                     else -> resources.getString(R.string.watchlist_label_23)
                 }
                 
-                val dynamicBadge = badgeTextFor(stock)
+                val dynamicBadge = if (isReached) {
+                    resources.getString(R.string.watchlist_badge)
+                } else if (isClose) {
+                    resources.getString(R.string.watchlist_badge_3)
+                } else if (currentYield >= 4.0) {
+                    resources.getString(R.string.watchlist_badge_2, String.format(java.util.Locale.JAPAN, "%.2f", currentYield))
+                } else {
+                    resources.getString(R.string.watchlist_badge_4)
+                }
 
                 val badgeColor = if (isReached) {
                     PrimaryEmerald
@@ -782,12 +768,7 @@ fun WatchlistScreen(
                                 )
                             },
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-                        border = if (isReached) {
-                            BorderStroke(1.5.dp, Color(0xFF34D399))
-                        } else {
-                            null
-                        }
+                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
                     ) {
                     Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                         AdaptiveRow(
@@ -798,7 +779,7 @@ fun WatchlistScreen(
                             shape = CircleShape,
                             color = badgeColor.copy(alpha = 0.15f),
                             border = BorderStroke(0.5.dp, badgeColor.copy(alpha = 0.5f)),
-                            modifier = Modifier.padding(end = 6.dp).width(badgeWidth)
+                            modifier = Modifier.weight(1f).padding(end = 6.dp)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 1.dp),
