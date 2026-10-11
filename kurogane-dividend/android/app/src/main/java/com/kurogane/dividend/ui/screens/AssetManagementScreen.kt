@@ -317,7 +317,6 @@ fun AssetManagementScreen(
                     shape = RoundedCornerShape(12.dp),
                     color = SurfaceContainerHigh,
                     contentColor = OnSurface,
-                    border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.45f)),
                     tonalElevation = 6.dp
                 ) {
                     Row(
