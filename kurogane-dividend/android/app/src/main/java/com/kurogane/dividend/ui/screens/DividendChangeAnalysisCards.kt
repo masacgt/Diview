@@ -409,7 +409,8 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
                         R.string.dividend_change_analysis_cards_text_2,
                         if (taxRateMode == "net") resources.getString(R.string.dividend_change_analysis_cards_label_17)
                         else resources.getString(R.string.stock_detail_text_5)
-                    )
+                    ),
+                    excludedHistoryCount = total - compared.size
                 )
             }
             MonitorBadge(percent(analysis.growthRate, signed = true), impactColor)
@@ -452,13 +453,11 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
                     color = ErrorRed, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
-        if (total > compared.size) Text(stringResource(R.string.dividend_change_analysis_cards_text_7 , total - compared.size),
-            color = TextMuted, fontSize = 10.sp)
     }
 }
 
 @Composable
-private fun AnnualImpactInfo(comparisonDescription: String) {
+private fun AnnualImpactInfo(comparisonDescription: String, excludedHistoryCount: Int) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(
@@ -514,6 +513,15 @@ private fun AnnualImpactInfo(comparisonDescription: String) {
                     fontSize = AppTextSize.caption,
                     lineHeight = 20.sp
                 )
+                if (excludedHistoryCount > 0) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        stringResource(R.string.dividend_change_analysis_cards_text_7, excludedHistoryCount),
+                        color = OnSurfaceVariant,
+                        fontSize = AppTextSize.caption,
+                        lineHeight = 20.sp
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 Text(
                     stringResource(R.string.dividend_change_analysis_cards_text_9),
