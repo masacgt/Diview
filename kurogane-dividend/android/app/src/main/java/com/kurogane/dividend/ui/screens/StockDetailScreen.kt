@@ -12,6 +12,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -70,6 +71,7 @@ fun StockDetailScreen(
     val stockClimateOverrides by viewModel.stockClimateOverrides.collectAsStateWithLifecycle()
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
+    val stockAnalysisData by viewModel.stockAnalysisData.collectAsStateWithLifecycle()
     val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
     val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -126,6 +128,7 @@ fun StockDetailScreen(
     var showBuyUpSimulator by rememberSaveable(stockCode) { mutableStateOf(false) }
     val simAddedShares = simAddedSharesInput.toIntOrNull() ?: 0
     val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
+    val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
     val notificationAccess = com.kurogane.dividend.ui.components.rememberNotificationAccess {
         viewModel.setNotificationEnabled(com.kurogane.dividend.notifications.NotificationKind.DIVIDEND, true)
     }
@@ -152,10 +155,8 @@ fun StockDetailScreen(
             financialFailure = result.exceptionOrNull()?.let { networkErrorMessage(resources, it) }
         } finally { financialLoading = false }
     }
-    var backendAnalysisValues by remember(currentHolding.code) { mutableStateOf<Map<String, Double?>?>(null) }
-    LaunchedEffect(currentHolding.code) {
-        backendAnalysisValues = viewModel.fetchStockAnalysis(currentHolding.code)?.values
-    }
+    val backendAnalysisValues = stockAnalysisData[currentHolding.code.uppercase(Locale.ROOT).removeSuffix(".T")]?.values
+    LaunchedEffect(currentHolding.code) { viewModel.fetchStockAnalysis(currentHolding.code) }
     val analysisNarrative = remember(currentHolding, backendAnalysisValues, financial) { StockAnalysisNarrativeGenerator.generate(
         (backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())
     ) }
@@ -245,6 +246,7 @@ fun StockDetailScreen(
     val riskBadgeText = if (divDependency > 25.0) "高リスク・要分散" else if (divDependency > 10.0) "やや高め" else "適正範囲"
     val cutImpactRatio = if (totalPortfolioDiv > 0) cutImpact.toDouble() / totalPortfolioDiv * 100.0 else 0.0
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
+    val detailListState = rememberLazyListState()
     val riskDiagnosisItems = listOf(
         if (totalPortfolioDiv > 0) {
             val stockRisk = when {
@@ -279,6 +281,7 @@ fun StockDetailScreen(
         containerColor = BackgroundDark
     ) { innerPadding ->
         LazyColumn(
+            state = detailListState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
@@ -1712,69 +1715,126 @@ fun StockDetailScreen(
                 StockAnalysisNarrativeCard(analysisNarrative)
             }
 
-            // 5. 次回権利落ち・直近イベント
+            // 5. 配当月・通知設定
             item {
+                val dividendEvents = remember(currentHolding.code, dividendEventRevision) {
+                    viewModel.dividendEventsFor(currentHolding.code)
+                }
+                val nextDividendEvent = dividendEvents.firstOrNull { !it.date.isBefore(java.time.LocalDate.now()) }
+                val rightsDate = nextDividendEvent?.finalRightsDate
+                val dateFormat = java.time.format.DateTimeFormatter.ofPattern("M月d日", Locale.JAPAN)
+                val nextPaymentText = nextDividendEvent?.date?.let { date ->
+                    val period = when {
+                        date.dayOfMonth <= 10 -> "上旬"
+                        date.dayOfMonth <= 20 -> "中旬"
+                        else -> "下旬"
+                    }
+                    "${date.year}年${date.monthValue}月$period"
+                } ?: currentHolding.dividendMonths.filter { it in 1..12 }.distinct().sorted().firstOrNull()?.let { month ->
+                    "${if (month <= java.time.LocalDate.now().monthValue) java.time.LocalDate.now().year + 1 else java.time.LocalDate.now().year}年${month}月"
+                } ?: "配当予定未取得"
+                val estimatedAmount = currentHolding.shares * currentHolding.dps / currentHolding.priceUnit * currentHolding.currencyFactor
+                val rightsDateText = rightsDate?.format(dateFormat) ?: "権利日未取得"
+                val nextRightsDateText = nextDividendEvent?.date?.format(dateFormat) ?: "権利日未取得"
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                     border = BorderStroke(1.dp, BorderColor)
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(R.string.stock_detail_text_73), fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body)
+                            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier.size(34.dp).clip(RoundedCornerShape(11.dp))
+                                        .background(PrimaryEmerald.copy(alpha = 0.12f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.EventAvailable, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("次回配当金 & 権利確定スケジュール", fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body, lineHeight = 20.sp)
                             }
-                            Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.15f)) {
-                                Text(if (isAlertOn && notificationAccess.dividendAllowed) stringResource(R.string.stock_detail_label_12) else stringResource(R.string.stock_detail_label_13), modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Surface(shape = RoundedCornerShape(8.dp), color = AccentAmber.copy(alpha = 0.12f)) {
+                                Text(
+                                    currentHolding.dividendType.ifBlank { "配当予定" },
+                                    modifier = Modifier.widthIn(max = 76.dp).padding(horizontal = 8.dp, vertical = 4.dp),
+                                    color = AccentAmber,
+                                    fontSize = AppTextSize.dense,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 2
+                                )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
-
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = BackgroundDark,
-                            border = BorderStroke(1.dp, BorderColor),
+                            color = BackgroundDark.copy(alpha = 0.8f),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(stringResource(R.string.stock_detail_text_74), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    Text(stringResource(R.string.stock_detail_text_75), color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                            Column(modifier = Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("次回支払予定日", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                        Text(nextPaymentText, color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
+                                        Text("権利付最終日：$rightsDateText", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    }
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text("予想受取額（1株 ${currentHolding.currency}${NumberFormat.getIntegerInstance(Locale.JAPAN).format(currentHolding.dps.toLong())}）", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                        Text(
+                                            "${currentHolding.currency}${NumberFormat.getIntegerInstance(Locale.JAPAN).format(estimatedAmount.toLong())}",
+                                            color = PrimaryEmerald,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Black
+                                        )
+                                        Text(if (nextDividendEvent != null) "確定済み" else "配当月情報に基づく目安", color = PrimaryEmerald, fontSize = AppTextSize.dense)
+                                    }
                                 }
-                                Surface(shape = RoundedCornerShape(8.dp), color = PrimaryEmerald.copy(alpha = 0.15f)) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(currentHolding.dividendMonths.filter { it in 1..12 }.distinct().sorted().joinToString(resources.getString(R.string.stock_detail_label_20)) { resources.getString(R.string.ex_dividend_matrix_dialog_text_4, (it).toString()) }.ifEmpty { resources.getString(R.string.not_available) }, color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(
+                                    "配当月：" + currentHolding.dividendMonths.filter { it in 1..12 }.distinct().sorted()
+                                        .joinToString("・") { "${it}月" }.ifEmpty { resources.getString(R.string.not_available) },
+                                    color = OnSurfaceVariant,
+                                    fontSize = AppTextSize.dense
+                                )
+                            }
+                        }
+
+                        AdaptiveRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf("中間権利確定" to rightsDateText, "期末権利確定" to nextRightsDateText).forEach { (label, value) ->
+                                Surface(
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = SurfaceContainer,
+                                ) {
+                                    Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(label, color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                        Text(value, color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalDivider(color = BorderColor.copy(alpha = 0.7f))
 
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.AlarmOn, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(R.string.stock_detail_text_76), color = OnSurface, fontSize = AppTextSize.dense)
+                            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.AlarmOn, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text("現在の配当月リマインダー", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                    Text("保有銘柄共通", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                }
                             }
                             Switch(
                                 checked = isAlertOn,
@@ -1811,19 +1871,19 @@ fun StockDetailScreen(
                     border = BorderStroke(1.dp, BorderColor)
                 ) {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Box(
-                                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
+                                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(10.dp))
                                     .background(PrimaryEmerald.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(Icons.Default.Tune, contentDescription = null, tint = PrimaryEmerald)
                             }
                             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text("銘柄属性・特典設定", color = OnSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                Text("銘柄属性・特典設定", color = OnSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                                 Text(
                                     "景気サイクル耐性・株主優待の記録と利回り換算",
                                     color = OnSurfaceVariant,
@@ -1836,7 +1896,7 @@ fun StockDetailScreen(
                                 border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.4f))
                             ) {
                                 Row(
-                                    modifier = Modifier.widthIn(max = 130.dp).padding(horizontal = 9.dp, vertical = 7.dp),
+                                    modifier = Modifier.widthIn(max = 130.dp).padding(horizontal = 8.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
@@ -1862,13 +1922,13 @@ fun StockDetailScreen(
                                 border = BorderStroke(1.dp, BorderColor.copy(alpha = 0.65f))
                             ) {
                                 Column(
-                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(22.dp))
-                                        Spacer(Modifier.width(8.dp))
-                                        Text("景気特性", color = OnSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                        Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("景気特性", color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                         Spacer(Modifier.weight(1f))
                                         Text(
                                             if (stockClimateOverrides.containsKey(currentHolding.code)) "手動設定" else "${cleanSectorName}の標準分類",
@@ -1883,8 +1943,8 @@ fun StockDetailScreen(
                                     ) {
                                         OutlinedButton(
                                             onClick = { climateMenuExpanded = true },
-                                            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 52.dp),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                             shape = RoundedCornerShape(14.dp),
                                             colors = ButtonDefaults.outlinedButtonColors(containerColor = SurfaceContainerLowest)
                                         ) {
@@ -1954,7 +2014,7 @@ fun StockDetailScreen(
                                             }
                                         }
                                     }
-                                    Text(climateDescription, color = OnSurfaceVariant, fontSize = 14.sp, lineHeight = 22.sp)
+                                    Text(climateDescription, color = OnSurfaceVariant, fontSize = 12.sp, lineHeight = 18.sp)
                                     if (stockClimateOverrides.containsKey(currentHolding.code)) {
                                         TextButton(
                                             onClick = { viewModel.setStockClimateOverride(currentHolding.code, null) },
@@ -1973,22 +2033,22 @@ fun StockDetailScreen(
                             border = BorderStroke(1.dp, BorderColor.copy(alpha = 0.65f))
                         ) {
                             Column(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(22.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("株主優待", color = OnSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                    Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("株主優待", color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                     Spacer(Modifier.weight(1f))
                                     Text(
                                         "優待利回り ${benefitYield?.let { "+${String.format(Locale.JAPAN, "%.2f", it)}%" } ?: "—"}",
                                         color = PrimaryEmerald,
-                                        fontSize = 14.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
-                                Text("優待の名前と相場金額を記録できます。", color = OnSurfaceVariant, fontSize = 14.sp)
+                                Text("優待の名前と相場金額を記録できます。", color = OnSurfaceVariant, fontSize = 12.sp)
 
                                 displayedBenefits.forEachIndexed { index, benefit ->
                                     Row(
@@ -1996,15 +2056,15 @@ fun StockDetailScreen(
                                             .background(SurfaceContainerLowest)
                                             .border(1.dp, PrimaryEmerald.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
                                             .clickable { editingBenefitIndex = if (editingBenefitIndex == index) -1 else index }
-                                            .padding(start = 10.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
+                                    .padding(start = 6.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Box(
-                                            modifier = Modifier.size(38.dp).clip(RoundedCornerShape(10.dp))
+                                            modifier = Modifier.size(30.dp).clip(RoundedCornerShape(8.dp))
                                                 .background(PrimaryEmerald.copy(alpha = 0.14f)),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
+                                            Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
                                         }
                                         Column(
                                             modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
@@ -2016,7 +2076,7 @@ fun StockDetailScreen(
                                         Text(
                                             "¥${benefit.marketValue.toLongOrNull()?.let { yenFormat.format(it) } ?: "0"}",
                                             color = PrimaryEmerald,
-                                            fontSize = 16.sp,
+                                            fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold
                                         )
                                         IconButton(
@@ -2042,7 +2102,7 @@ fun StockDetailScreen(
                                                     viewModel.setShareholderBenefits(currentHolding.code, updated)
                                                 },
                                                 modifier = Modifier.fillMaxWidth(),
-                                                placeholder = { Text("優待名") },
+                                                placeholder = { Text("優待名", fontSize = 14.sp) },
                                                 singleLine = true,
                                                 shape = RoundedCornerShape(12.dp)
                                             )
@@ -2054,11 +2114,10 @@ fun StockDetailScreen(
                                                     viewModel.setShareholderBenefits(currentHolding.code, updated)
                                                 },
                                                 modifier = Modifier.fillMaxWidth(),
-                                                placeholder = { Text("相場金額（円）") },
+                                                placeholder = { Text("相場金額（円）", fontSize = 14.sp) },
                                                 singleLine = true,
                                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                                shape = RoundedCornerShape(12.dp),
-                                                trailingIcon = { Text("円", color = OnSurfaceVariant) }
+                                                shape = RoundedCornerShape(12.dp)
                                             )
                                         }
                                     }
@@ -2067,20 +2126,21 @@ fun StockDetailScreen(
                                 OutlinedTextField(
                                     value = newBenefitName,
                                     onValueChange = { newBenefitName = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    placeholder = { Text("優待名") },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    placeholder = { Text("優待名", fontSize = 14.sp) },
                                     singleLine = true,
                                     shape = RoundedCornerShape(14.dp)
                                 )
                                 OutlinedTextField(
                                     value = newBenefitValue,
                                     onValueChange = { newBenefitValue = it.filter(Char::isDigit) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    placeholder = { Text("相場金額（円）") },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    placeholder = { Text("相場金額（円）", fontSize = 14.sp) },
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    shape = RoundedCornerShape(14.dp),
-                                    trailingIcon = { Text("円", color = OnSurfaceVariant) }
+                                    shape = RoundedCornerShape(14.dp)
                                 )
                                 Button(
                                     onClick = {
@@ -2091,7 +2151,7 @@ fun StockDetailScreen(
                                         newBenefitName = ""
                                         newBenefitValue = ""
                                     },
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                                     enabled = newBenefitName.isNotBlank(),
                                     shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh, contentColor = PrimaryEmerald)
@@ -2107,25 +2167,25 @@ fun StockDetailScreen(
                                     colors = CardDefaults.cardColors(containerColor = SurfaceContainerLowest)
                                 ) {
                                     Row(
-                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(8.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
-                                        Icon(Icons.Default.Percent, contentDescription = null, tint = PrimaryEmerald)
+                                        Icon(Icons.Default.Percent, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
                                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text("配当＋優待 合計実質利回り ", color = OnSurface, fontSize = 13.sp)
+                                                Text("配当＋優待 合計実質利回り ", color = OnSurface, fontSize = 11.sp)
                                                 Text(
                                                     combinedYield?.let { "${String.format(Locale.JAPAN, "%.2f", it)}%" } ?: "—",
                                                     color = PrimaryEmerald,
-                                                    fontSize = 17.sp,
+                                                    fontSize = 15.sp,
                                                     fontWeight = FontWeight.Bold
                                                 )
                                             }
                                             Text(
                                                 "年間 ¥${yenFormat.format(combinedAnnualValue.coerceAtLeast(0.0).toLong())} 相当",
                                                 color = OnSurfaceVariant,
-                                                fontSize = 12.sp
+                                                fontSize = 11.sp
                                             )
                                         }
                                     }
@@ -2345,7 +2405,8 @@ fun StockDetailScreen(
                                             color = OnSurface,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = AppTextSize.body,
-                                            fontFamily = FontFamily.Monospace
+                                            fontFamily = FontFamily.Monospace,
+                                            fontFeatureSettings = LocalTextStyle.current.fontFeatureSettings
                                         ),
                                         cursorBrush = SolidColor(PrimaryEmerald),
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -2477,39 +2538,6 @@ private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative
                         fontSize = AppTextSize.body
                     )
                 }
-            }
-            Text(
-                stringResource(R.string.stock_detail_text_82 , analysisNarrative.title, analysisNarrative.findings.size),
-                color = OnSurface,
-                fontSize = AppTextSize.dense,
-                lineHeight = 16.sp
-            )
-            Text(
-                stringResource(R.string.stock_detail_text_83 , String.format(Locale.JAPAN, "%,d", StockAnalysisNarrative.TOTAL_COMBINATIONS), String.format(Locale.JAPAN, "%,d", analysisNarrative.possibleCombinations)),
-                color = PrimaryEmerald,
-                fontSize = AppTextSize.dense,
-                lineHeight = 15.sp
-            )
-            Text(
-                stringResource(R.string.stock_detail_text_84),
-                color = OnSurfaceVariant,
-                fontSize = AppTextSize.dense,
-                lineHeight = 14.sp
-            )
-            if (analysisNarrative.complete && analysisNarrative.combinationIndex != null) {
-                Text(
-                    stringResource(R.string.stock_detail_text_85 , analysisNarrative.combinationIndex + 1, StockAnalysisNarrative.TOTAL_COMBINATIONS),
-                    color = OnSurfaceVariant,
-                    fontSize = AppTextSize.dense,
-                    fontFamily = FontFamily.Monospace
-                )
-            } else {
-                Text(
-                    stringResource(R.string.stock_detail_text_86 , analysisNarrative.missingLabels.joinToString("、")),
-                    color = AccentAmber,
-                    fontSize = AppTextSize.dense,
-                    lineHeight = 15.sp
-                )
             }
             HorizontalDivider(color = BorderColor)
             analysisNarrative.findings.forEach { finding ->

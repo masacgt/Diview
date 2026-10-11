@@ -32,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.Offset
@@ -42,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -89,7 +91,6 @@ fun AnnualDividendScreen(
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
 
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
-    var assetTrackingPeriod by rememberSaveable { mutableStateOf("5y") }
     val compositionThreshold by viewModel.compositionThreshold.collectAsStateWithLifecycle()
     val compositionOtherEnabled by viewModel.compositionOtherEnabled.collectAsStateWithLifecycle()
 
@@ -148,28 +149,30 @@ fun AnnualDividendScreen(
     val pagePosition = (
         pagerState.currentPage + pagerState.currentPageOffsetFraction
     ).coerceIn(0f, 2f)
-    val swipeProgress = kotlin.math.abs(pagePosition - lastSettledPage).coerceIn(0f, 1f)
+    val pageDistanceFromSettled = pagePosition - lastSettledPage
+    val swipeHasStarted = kotlin.math.abs(pageDistanceFromSettled) > 0.001f
+    val swipeDestinationPage = (lastSettledPage + when {
+        pageDistanceFromSettled > 0f -> 1
+        pageDistanceFromSettled < 0f -> -1
+        else -> 0
+    }).coerceIn(0, 2)
+    val swipeProgress = kotlin.math.abs(pageDistanceFromSettled).coerceIn(0f, 1f)
     val settledHeaderOffsetPx = headerScrollOffset(lastSettledPage)
-    val targetPageAtTop = pagerState.targetPage != lastSettledPage &&
-        listStates[pagerState.targetPage].firstVisibleItemIndex == 0 &&
-        listStates[pagerState.targetPage].firstVisibleItemScrollOffset == 0
+    val targetPageAtTop = swipeHasStarted &&
+        swipeDestinationPage != lastSettledPage &&
+        listStates[swipeDestinationPage].firstVisibleItemIndex == 0 &&
+        listStates[swipeDestinationPage].firstVisibleItemScrollOffset == 0
     val sourceHeaderHidden = settledHeaderOffsetPx >= subtabRowHeightPx
-    val revealHeaderDuringSwipe = sourceHeaderHidden && targetPageAtTop
+    val keepHeaderForTopTarget = targetPageAtTop
     val swipeHeaderHideOffsetPx = ((commonHeaderHeightPx - settledHeaderOffsetPx) * swipeProgress).roundToInt()
-    val headerScrollOffsetPx = if (revealHeaderDuringSwipe) {
-        (commonHeaderHeightPx * (1f - swipeProgress)).roundToInt()
+    val headerScrollOffsetPx = if (keepHeaderForTopTarget) {
+        (settledHeaderOffsetPx * (1f - swipeProgress)).roundToInt()
     } else {
         maxOf(settledHeaderOffsetPx, settledHeaderOffsetPx + swipeHeaderHideOffsetPx)
     }
     LaunchedEffect(pagerState, listStates) {
         snapshotFlow { pagerState.settledPage }.collect { page ->
             if (page != lastSettledPage) {
-                val target = listStates[page]
-                val sourceWasHidden = headerScrollOffset(lastSettledPage) >= subtabRowHeightPx
-                val targetWasAtTop = target.firstVisibleItemIndex == 0 && target.firstVisibleItemScrollOffset == 0
-                if (targetWasAtTop && !sourceWasHidden) {
-                    target.scrollToItem(1)
-                }
                 lastSettledPage = page
             }
         }
@@ -198,12 +201,14 @@ fun AnnualDividendScreen(
           HorizontalPager(
               state = pagerState,
               modifier = Modifier.fillMaxSize(),
-              beyondViewportPageCount = 1,
+              beyondViewportPageCount = 0,
               key = { it }
           ) { page ->
-            val incomingHeaderSpacePx = if (page == pagerState.targetPage && page != lastSettledPage) {
-                if (revealHeaderDuringSwipe) {
+            val incomingHeaderSpacePx = if (swipeHasStarted && page == swipeDestinationPage) {
+                if (keepHeaderForTopTarget && sourceHeaderHidden) {
                     (commonHeaderHeightPx * swipeProgress).roundToInt()
+                } else if (keepHeaderForTopTarget) {
+                    commonHeaderHeightPx
                 } else {
                     commonHeaderHeightPx - headerScrollOffsetPx
                 }
@@ -317,7 +322,7 @@ fun AnnualDividendScreen(
                                 verticalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(stringResource(R.string.annual_dividend_text_3), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1, softWrap = false)
-                                Spacer(modifier = Modifier.height(2.dp))
+                                Spacer(modifier = Modifier.height(1.dp))
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
                                         text = if (isPrivacyActive) "•••" else String.format(Locale.JAPAN, "%.2f", yieldOnCost),
@@ -331,7 +336,7 @@ fun AnnualDividendScreen(
                                     Spacer(modifier = Modifier.width(2.dp))
                                     Text(stringResource(R.string.annual_dividend_text_4), fontSize = AppTextSize.dense, color = OnSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
                                 }
-                                Spacer(modifier = Modifier.height(2.dp))
+                                Spacer(modifier = Modifier.height(1.dp))
                                 Text(
                                     text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_11) else resources.getString(R.string.annual_dividend_label_12, (currencyFormat.format(totalCost.toLong())).toString()),
                                     fontSize = AppTextSize.dense,
@@ -352,7 +357,7 @@ fun AnnualDividendScreen(
                                 verticalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(stringResource(R.string.annual_dividend_text_5), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnSurfaceVariant, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1, softWrap = false)
-                                Spacer(modifier = Modifier.height(2.dp))
+                                Spacer(modifier = Modifier.height(1.dp))
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
                                         text = if (isPrivacyActive) "•••" else String.format(Locale.JAPAN, "%.2f", yieldOnValuation),
@@ -366,7 +371,7 @@ fun AnnualDividendScreen(
                                     Spacer(modifier = Modifier.width(2.dp))
                                     Text(stringResource(R.string.annual_dividend_text_4), fontSize = AppTextSize.dense, color = OnSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
                                 }
-                                Spacer(modifier = Modifier.height(2.dp))
+                                Spacer(modifier = Modifier.height(1.dp))
                                 Text(
                                     text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_13) else resources.getString(R.string.annual_dividend_label_14, (currencyFormat.format(totalAssets.toLong())).toString()),
                                     fontSize = AppTextSize.dense,
@@ -382,7 +387,7 @@ fun AnnualDividendScreen(
             // Tab 2: Sector & Composition Analysis
             if (page == 2) {
                 item {
-                    CompositionAnalysisSection(holdings = holdings, taxRateMode = taxRateMode, totalAssets = totalAssets, totalAnnualDiv = totalAnnualDiv, compositionThreshold = compositionThreshold, compositionOtherEnabled = compositionOtherEnabled)
+                    CompositionAnalysisSection(holdings = holdings, taxRateMode = taxRateMode, totalAssets = totalAssets, totalAnnualDiv = totalAnnualDiv, compositionThreshold = compositionThreshold, compositionOtherEnabled = compositionOtherEnabled, viewModel = viewModel, onNavigateToDetail = onNavigateToDetail)
                 }
             }
 
@@ -418,7 +423,7 @@ fun AnnualDividendScreen(
                 }
             }
 
-            // Tab 1: Dividend increase/decrease and asset tracking
+            // Tab 1: Dividend increase/decrease
             if (page == 1) {
                 item {
                     DividendChangeAnalysisCards(
@@ -427,19 +432,6 @@ fun AnnualDividendScreen(
                         isPrivacyActive = isPrivacyActive,
                         taxRateMode = taxRateMode,
                         onNavigateToDetail = onNavigateToDetail
-                    )
-                }
-                item {
-                    AssetTrackingSection(
-                        holdings = holdings,
-                        totalAssets = totalAssets,
-                        totalCost = totalCost,
-                        totalAnnualDiv = totalAnnualDiv,
-                        currencyFormat = currencyFormat,
-                        isPrivacyActive = isPrivacyActive,
-                        selectedPeriod = assetTrackingPeriod,
-                        onPeriodSelected = { assetTrackingPeriod = it },
-                        loadMonthlyPriceHistory = { codes, months -> viewModel.cachedMonthlyPriceHistory(codes, months) }
                     )
                 }
                 item {
@@ -551,12 +543,12 @@ private fun AnnualDividendTab(
             .background(backgroundColor)
             .border(1.dp, borderColor, tabShape)
             .selectable(selected = selected, onClick = onClick, role = Role.Tab)
-            .padding(horizontal = 3.dp, vertical = 4.dp),
+            .padding(horizontal = 3.dp, vertical = 1.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 23.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -611,6 +603,7 @@ private fun MonthlyDividendEstimateCard(
             val month = index + 1
             val amount = categories.sum()
             val label = when {
+                amount >= 1_000_000 -> String.format(Locale.JAPAN, "%.0f万", amount / 10_000.0)
                 amount >= 10_000 -> String.format(Locale.JAPAN, "%.1f万", amount / 10_000.0)
                 amount > 0 -> String.format(Locale.JAPAN, "%.1f千", amount / 1_000.0)
                 else -> "0"
@@ -621,6 +614,29 @@ private fun MonthlyDividendEstimateCard(
     val maxMonthlyAmount = remember(monthlyDividends) {
         monthlyDividends.maxOfOrNull { it.second }?.coerceAtLeast(1.0) ?: 1.0
     }
+    val quarterlyCashFlowAmounts = remember(monthlyDividends) {
+        (0..3).map { quarterIndex ->
+            monthlyDividends.drop(quarterIndex * 3).take(3).sumOf { it.second }
+        }
+    }
+    val monthlyCashFlowTotal = quarterlyCashFlowAmounts.sum()
+    val maxMonthSharePercent = remember(monthlyDividends, monthlyCashFlowTotal) {
+        val maxMonthAmount = monthlyDividends.maxOfOrNull { it.second } ?: 0.0
+        if (monthlyCashFlowTotal > 0.0) maxMonthAmount / monthlyCashFlowTotal * 100.0 else 0.0
+    }
+    val monthlyGridTargetStep = maxMonthlyAmount / 3.0
+    val monthlyGridMagnitude = 10.0.pow(kotlin.math.floor(kotlin.math.log10(monthlyGridTargetStep)))
+    val monthlyNormalizedGridStep = monthlyGridTargetStep / monthlyGridMagnitude
+    val monthlyGridStepMultiplier = when {
+        monthlyNormalizedGridStep >= 5.0 -> 5.0
+        monthlyNormalizedGridStep >= 2.0 -> 2.0
+        else -> 1.0
+    }
+    val monthlyGridStep = monthlyGridMagnitude * monthlyGridStepMultiplier
+    val monthlyGridCount = kotlin.math.floor(maxMonthlyAmount / monthlyGridStep).toInt()
+    val monthlyGridColor = BorderColor
+    val monthlyAmountLabelTopOffset = 24.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale
+    val monthlyAmountLabelSlotHeight = 16.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -709,13 +725,20 @@ private fun MonthlyDividendEstimateCard(
             Spacer(modifier = Modifier.height(18.dp))
 
             Row(
-                modifier = Modifier.fillMaxWidth().height(145.dp),
+                modifier = Modifier.fillMaxWidth().height(145.dp).drawBehind {
+                    val plotBottom = size.height - 20.dp.toPx()
+                    val plotHeight = 85.dp.toPx()
+                    (0..monthlyGridCount).forEach { guideIndex ->
+                        val guideAmount = guideIndex * monthlyGridStep
+                        val y = plotBottom - plotHeight * (guideAmount / maxMonthlyAmount).toFloat()
+                        drawLine(monthlyGridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+                    }
+                },
                 horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.Bottom
             ) {
                 monthlyDividends.forEach { (month, amount, label) ->
                     val isSelected = selectedMonth == month
-                    val isSpecialMonth = month == 6 || month == 12
                     val heightFraction = (amount / maxMonthlyAmount).toFloat().coerceIn(0.0f, 1.0f)
 
                     Column(
@@ -723,30 +746,46 @@ private fun MonthlyDividendEstimateCard(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Bottom
                     ) {
-                        Text(
-                            text = label,
-                            modifier = Modifier.fillMaxWidth(),
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Black,
-                            color = if (isSelected) NeonGreenLight else SkyBlue,
-                            textAlign = TextAlign.Center,
-                            maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
-                            softWrap = false
-                        )
-                        Spacer(modifier = Modifier.height(3.dp))
                         val barMaxHeight = 85.dp
-                        Box(modifier = Modifier.fillMaxWidth().height(barMaxHeight), contentAlignment = Alignment.BottomCenter) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(barMaxHeight * heightFraction)
-                                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                                    .background(
-                                        if (isSelected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
-                                        else if (isSpecialMonth) Brush.verticalGradient(listOf(NeonGreenLight, NeonGreen))
-                                        else Brush.verticalGradient(listOf(SkyBlue, Color(0xFF0077B6)))
-                                    )
-                                    .then(if (isSelected) Modifier.border(1.5.dp, OnSurface, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)) else Modifier)
+                        Box(modifier = Modifier.fillMaxWidth().height(barMaxHeight + monthlyAmountLabelTopOffset + monthlyAmountLabelSlotHeight)) {
+                            Box(modifier = Modifier.fillMaxWidth().height(barMaxHeight).align(Alignment.BottomCenter), contentAlignment = Alignment.BottomCenter) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(barMaxHeight * heightFraction)
+                                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                        .then(if (isSelected) Modifier.border(1.5.dp, OnSurface, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)) else Modifier),
+                                    verticalArrangement = Arrangement.Bottom
+                                ) {
+                                    val categories = monthlyByCategory[month - 1]
+                                    listOf(2, 1, 0).forEach { categoryIndex ->
+                                        val categoryAmount = categories[categoryIndex]
+                                        if (categoryAmount > 0.0 && amount > 0.0) {
+                                            Box(
+                                                Modifier.fillMaxWidth()
+                                                    .weight((categoryAmount / amount).toFloat())
+                                                    .background(when (categoryIndex) {
+                                                        0 -> NeonGreenLight
+                                                        1 -> SkyBlue
+                                                        else -> Color(0xFF818CF8)
+                                                    })
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            Text(
+                                text = label,
+                                modifier = Modifier.fillMaxWidth()
+                                    .height(monthlyAmountLabelSlotHeight)
+                                    .align(Alignment.BottomCenter)
+                                    .offset(y = -(barMaxHeight * heightFraction + monthlyAmountLabelTopOffset - monthlyAmountLabelSlotHeight)),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                color = if (isSelected) NeonGreenLight else SkyBlue,
+                                textAlign = TextAlign.Center,
+                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
+                                softWrap = false
                             )
                         }
                         Spacer(modifier = Modifier.height(3.dp))
@@ -806,6 +845,196 @@ private fun MonthlyDividendEstimateCard(
                     )
                 }
             }
+            Spacer(Modifier.height(14.dp))
+            QuarterlyCashFlowComparison(
+                quarterlyAmounts = quarterlyCashFlowAmounts,
+                totalMonthlyAmount = monthlyCashFlowTotal,
+                maxMonthSharePercent = maxMonthSharePercent,
+                isPrivacyActive = isPrivacyActive,
+                currencyFormat = currencyFormat
+            )
+        }
+    }
+}
+
+@Composable
+private fun AnnualDividendHistoryInfo(
+    description: String
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.size(28.dp)
+        ) {
+            Icon(
+                Icons.Default.Info,
+                contentDescription = stringResource(R.string.annual_dividend_info_content_description),
+                tint = OnSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.widthIn(max = 300.dp),
+            shape = RoundedCornerShape(16.dp),
+            containerColor = CardDark,
+            tonalElevation = 0.dp,
+            shadowElevation = 12.dp
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = PrimaryEmerald.copy(alpha = 0.14f),
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = null,
+                                tint = NeonGreen,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        stringResource(R.string.annual_dividend_info_title),
+                        color = OnSurface,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = AppTextSize.body
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = BorderBlue, thickness = 0.75.dp)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    description,
+                    color = OnSurfaceVariant,
+                    fontSize = AppTextSize.caption,
+                    lineHeight = 20.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuarterlyCashFlowComparison(
+    quarterlyAmounts: List<Double>,
+    totalMonthlyAmount: Double,
+    maxMonthSharePercent: Double,
+    isPrivacyActive: Boolean,
+    currencyFormat: NumberFormat
+) {
+    val quarterColors = listOf(SecondaryIndigo, PrimaryEmeraldContainer, SecondaryIndigo, PrimaryEmeraldContainer)
+    val maxMonthShareText = if (isPrivacyActive) "•••%" else String.format(Locale.JAPAN, "%.1f%%", maxMonthSharePercent)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = SurfaceContainer,
+        border = BorderStroke(1.dp, BorderBlue)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Icon(Icons.Default.PieChart, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
+                Text(
+                    stringResource(R.string.annual_dividend_quarterly_cashflow_title),
+                    modifier = Modifier.weight(1f),
+                    color = OnSurface,
+                    fontSize = AppTextSize.dense,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = SecondaryIndigo.copy(alpha = 0.14f)
+                ) {
+                    Text(
+                        stringResource(R.string.annual_dividend_quarterly_max_month_share, maxMonthShareText),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        color = SecondaryIndigo,
+                        fontSize = AppTextSize.dense,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Box(
+                Modifier.fillMaxWidth()
+                    .height(9.dp)
+                    .clip(CircleShape)
+                    .background(BorderBlue)
+            ) {
+                if (totalMonthlyAmount > 0.0) {
+                    Row(Modifier.fillMaxSize()) {
+                        quarterlyAmounts.forEachIndexed { index, amount ->
+                            if (amount > 0.0) {
+                                Box(
+                                    Modifier.weight((amount / totalMonthlyAmount).toFloat())
+                                        .fillMaxHeight()
+                                        .background(quarterColors[index])
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                quarterlyAmounts.forEachIndexed { index, amount ->
+                    val firstMonth = index * 3 + 1
+                    val lastMonth = firstMonth + 2
+                    val sharePercent = if (totalMonthlyAmount > 0.0) amount / totalMonthlyAmount * 100.0 else 0.0
+                    val amountText = if (isPrivacyActive) "¥••••" else "¥${currencyFormat.format(amount.roundToLong())}"
+                    val percentageText = if (isPrivacyActive) "•••%" else String.format(Locale.JAPAN, "%.1f%%", sharePercent)
+
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        color = BackgroundDark
+                    ) {
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                stringResource(R.string.annual_dividend_quarterly_quarter_label, index + 1, firstMonth, lastMonth),
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                amountText,
+                                color = OnSurface,
+                                fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                percentageText,
+                                color = quarterColors[index],
+                                fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -851,6 +1080,13 @@ private fun classifyIndustry(industryName: String?): IndustryClimate? {
     }
 }
 
+private fun classifyStockClimate(climate: com.kurogane.dividend.model.StockClimate?): IndustryClimate? = when (climate) {
+    com.kurogane.dividend.model.StockClimate.CYCLICAL -> IndustryClimate.CYCLICAL
+    com.kurogane.dividend.model.StockClimate.DEFENSIVE -> IndustryClimate.DEFENSIVE
+    com.kurogane.dividend.model.StockClimate.NEUTRAL -> IndustryClimate.MIXED
+    null -> null
+}
+
 private data class SectorCompositionRow(
     val name: String,
     val holdings: List<com.kurogane.dividend.model.Holding>,
@@ -861,17 +1097,19 @@ private data class SectorCompositionRow(
 
 @Composable
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.model.Holding>, taxRateMode: String, totalAssets: Double, totalAnnualDiv: Double, compositionThreshold: Int, compositionOtherEnabled: Boolean) {
+private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.model.Holding>, taxRateMode: String, totalAssets: Double, totalAnnualDiv: Double, compositionThreshold: Int, compositionOtherEnabled: Boolean, viewModel: DividendViewModel, onNavigateToDetail: (String) -> Unit) {
     var isVisible by remember { mutableStateOf(false) }
     var chartMode by remember { mutableStateOf("dividend") } // "holding" or "dividend"
     var sectorValueMode by remember { mutableStateOf("valuation") } // "valuation" or "dividend"
     val context = LocalContext.current
     val industriesByCode = remember(context) { Tse33IndustryMaster.industries(context) }
+    val stockClimateOverrides by viewModel.stockClimateOverrides.collectAsStateWithLifecycle()
 
     fun climateForHolding(holding: com.kurogane.dividend.model.Holding): IndustryClimate? {
         if (holding.category != com.kurogane.dividend.model.Category.JAPAN) return null
         val code = Tse33IndustryMaster.normalizeCode(holding.code) ?: return null
-        return classifyIndustry(industriesByCode[code])
+        return classifyStockClimate(stockClimateOverrides[code])
+            ?: classifyIndustry(industriesByCode[code])
     }
 
     LaunchedEffect(chartMode) {
@@ -916,22 +1154,24 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
     )
 
     // Build Donut Slice Objects
-    val compositionValues = mappedHoldings.map { if (chartMode == "dividend") it.second else it.third }
-    val donutSlices = com.kurogane.dividend.model.PortfolioMath.compositionGroups(compositionValues, compositionThreshold, compositionOtherEnabled)
-        .mapIndexed { index, group ->
-            val itemVal = group.sumOf { compositionValues[it] }
-            val ratio = if (totalChartValue > 0.0) itemVal / totalChartValue else 0.0
-            val isOther = compositionOtherEnabled && group.all { compositionValues[it] / totalChartValue * 100 < compositionThreshold }
-            val holding = mappedHoldings[group.first()].first
-            DonutSliceData(
-                code = if (isOther) "__other__" else holding.code,
-                name = if (isOther) context.getString(R.string.composition_other, group.size) else holding.name,
-                expectedDiv = itemVal,
-                sweepAngle = (ratio * 360).toFloat(),
-                percentage = String.format(Locale.JAPAN, "%.1f%%", ratio * 100),
-                color = if (isOther) OnSurfaceVariant else sliceColors[index % sliceColors.size]
-            )
-        }
+    val donutSlices = remember(mappedHoldings, chartMode, compositionThreshold, compositionOtherEnabled, totalChartValue, context) {
+        val compositionValues = mappedHoldings.map { if (chartMode == "dividend") it.second else it.third }
+        com.kurogane.dividend.model.PortfolioMath.compositionGroups(compositionValues, compositionThreshold, compositionOtherEnabled)
+            .mapIndexed { index, group ->
+                val itemVal = group.sumOf { compositionValues[it] }
+                val ratio = if (totalChartValue > 0.0) itemVal / totalChartValue else 0.0
+                val isOther = compositionOtherEnabled && totalChartValue > 0.0 && group.all { compositionValues[it] / totalChartValue * 100 < compositionThreshold }
+                val holding = mappedHoldings[group.first()].first
+                DonutSliceData(
+                    code = if (isOther) "__other__" else holding.code,
+                    name = if (isOther) context.getString(R.string.composition_other, group.size) else holding.name,
+                    expectedDiv = itemVal,
+                    sweepAngle = (ratio * 360).toFloat(),
+                    percentage = String.format(Locale.JAPAN, "%.1f%%", ratio * 100),
+                    color = if (isOther) sliceColors.last() else sliceColors[index % sliceColors.size]
+                )
+            }
+    }
 
     var activeStockCode by remember { mutableStateOf<String?>(null) }
 
@@ -1178,7 +1418,11 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                     fontWeight = FontWeight.ExtraBold,
                                     color = OnSurface,
                                     fontFamily = FontFamily.Monospace,
-                                    fontSize = AppTextSize.screenTitle
+                                    fontSize = AppTextSize.screenTitle,
+                                    shadow = Shadow(
+                                        color = Color.White.copy(alpha = 0.9f),
+                                        blurRadius = 7f
+                                    )
                                 )
                             )
                             Spacer(modifier = Modifier.height(2.dp))
@@ -1623,6 +1867,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(SurfaceContainer)
+                                            .clickable { onNavigateToDetail(h.code) }
                                             .padding(10.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
@@ -1778,18 +2023,8 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     )
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = if (portfolioDiagnosis.possibleCombinations == PortfolioDiagnosis.TOTAL_COMBINATIONS) {
-                        "文章パターン: ${NumberFormat.getNumberInstance(Locale.JAPAN).format(portfolioDiagnosis.possibleCombinations)}通り"
-                    } else {
-                        "評価対象の文章パターン: ${NumberFormat.getNumberInstance(Locale.JAPAN).format(portfolioDiagnosis.possibleCombinations)}通り（最大 ${NumberFormat.getNumberInstance(Locale.JAPAN).format(PortfolioDiagnosis.TOTAL_COMBINATIONS)}通り）"
-                    },
-                    color = cardColor,
-                    fontSize = AppTextSize.dense,
-                    fontWeight = FontWeight.SemiBold
-                )
                 if (portfolioDiagnosis.missingLabels.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = stringResource(R.string.annual_dividend_text_26 , portfolioDiagnosis.missingLabels.joinToString("、")),
                         color = AccentAmber,
@@ -1960,29 +2195,24 @@ private fun CompoundingSimulationSection(
     fun signedPercent(value: Double?): String = value?.let { String.format(Locale.JAPAN, "%+.2f%%", it) } ?: "未取得"
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Timeline, null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.annual_dividend_text_29), color = OnSurface, fontWeight = FontWeight.Bold)
-                }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Timeline, null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.annual_dividend_text_29), color = OnSurface, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(4.dp))
+                AnnualDividendHistoryInfo(stringResource(R.string.annual_dividend_text_32))
             }
             Surface(shape = RoundedCornerShape(8.dp), color = PrimaryEmerald.copy(alpha = .15f)) {
                 Text(stringResource(R.string.annual_dividend_text_31), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
             }
         }
-        Text(stringResource(R.string.annual_dividend_text_32), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(7.dp).clip(CircleShape).background(PrimaryEmerald))
                         Spacer(Modifier.width(5.dp))
                         Text(stringResource(R.string.annual_dividend_text_40), color = OnSurface, fontSize = AppTextSize.dense)
-                    }
-                    Surface(shape = RoundedCornerShape(12.dp), color = PrimaryEmerald.copy(alpha = .12f), border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = .3f))) {
-                        Text(stringResource(R.string.annual_dividend_text_41 , signedPercent(increaseRate)), modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                     }
                 }
                 val chartColor = PrimaryEmerald
@@ -2002,6 +2232,7 @@ private fun CompoundingSimulationSection(
                 Column(Modifier.fillMaxWidth()) {
                 BoxWithConstraints(Modifier.fillMaxWidth().height(136.dp)) {
                 val chartHeight = 136.dp
+                val labelTopOffset = 24.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale
                 val groupWidth = maxWidth / years.size
                 Canvas(Modifier.fillMaxWidth().height(chartHeight)) {
                     val plotBottom = size.height * barAreaBottomFraction
@@ -2040,7 +2271,7 @@ private fun CompoundingSimulationSection(
                                 modifier = Modifier
                                     .offset(
                                         x = groupWidth * (index + 0.5f) - 28.dp,
-                                        y = chartHeight * (barAreaBottomFraction - normalized * barAreaHeightFraction) - 18.dp
+                                        y = chartHeight * (barAreaBottomFraction - normalized * barAreaHeightFraction) - labelTopOffset
                                     )
                                     .width(56.dp),
                                 color = if (index == selectedIndex) PrimaryEmerald else OnSurfaceVariant,
@@ -2070,8 +2301,6 @@ private fun CompoundingSimulationSection(
                             Card(Modifier.weight(1f).clickable { selectedYearIndex = index }, shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = if (isSelected) SurfaceContainerHigh else BackgroundDark), border = BorderStroke(1.dp, if (isSelected) PrimaryEmerald else Color.Transparent)) {
                                 Column(Modifier.padding(horizontal = 6.dp, vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(stringResource(R.string.annual_dividend_1_s , point.year), color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                    Text(stringResource(R.string.annual_dividend_text_44), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-                                    Text(if (point.amount == null) stringResource(R.string.not_available) else if (isPrivacyActive) "••••" else "¥${format.format(point.amount.toLong())}", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                                     Text(stringResource(R.string.annual_dividend_text_45), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                                     Text(
                                         signedMoney(yearChange),
@@ -2161,12 +2390,16 @@ private fun AssetTrackingSection(
     val yearLabels = (currentYear - 4..currentYear).toList()
     val yearMonths = yearLabels.map { if (it == currentYear) YearMonth.now(ZoneId.of("Asia/Tokyo")).toString() else "$it-12" }
     val domesticHoldings = holdings.filter { it.category == Category.JAPAN && it.shares > 0 }
-    val codes = domesticHoldings.map { it.code }.distinct()
+    fun normalizedCode(code: String): String = code.trim().uppercase(Locale.ROOT).removeSuffix(".T").let {
+        if (it.length == 5 && it.endsWith('0')) it.dropLast(1) else it
+    }
+    val codes = domesticHoldings.map { normalizedCode(it.code) }.distinct()
+    val requestedYearMonths = (yearMonths + yearMonths.map { YearMonth.parse(it).minusMonths(1).toString() }).distinct()
     var annualPrices by remember(codes, yearMonths) { mutableStateOf<List<CloudflareMonthlyPriceSeries>>(emptyList()) }
     var annualHistoryFailed by remember(codes, yearMonths) { mutableStateOf(false) }
-    LaunchedEffect(codes, yearMonths, selectedPeriod) {
+    LaunchedEffect(codes, requestedYearMonths, selectedPeriod) {
         if (selectedPeriod == "5y" && codes.isNotEmpty()) {
-            com.kurogane.dividend.data.runCatchingCancellable { loadMonthlyPriceHistory(codes, yearMonths) }
+            com.kurogane.dividend.data.runCatchingCancellable { loadMonthlyPriceHistory(codes, requestedYearMonths) }
                 .onSuccess { annualPrices = it; annualHistoryFailed = false }
                 .onFailure { annualHistoryFailed = true }
         }
@@ -2174,9 +2407,19 @@ private fun AssetTrackingSection(
     val priceMap = annualPrices.associate { it.code to it.prices.associateBy { price -> price.month } }
     val domesticCost = domesticHoldings.sumOf { it.totalCost }
     val costs = List(5) { domesticCost }
+    fun priceForMonth(code: String, month: String): CloudflareMonthlyPrice? =
+        priceMap[normalizedCode(code)]?.let { prices ->
+            prices[month] ?: prices[YearMonth.parse(month).minusMonths(1).toString()]
+        }
     val assets = yearMonths.map { month ->
-        if (domesticHoldings.isEmpty() || domesticHoldings.any { priceMap[it.code]?.get(month) == null }) Double.NaN
-        else domesticHoldings.sumOf { it.shares * priceMap.getValue(it.code).getValue(month).close }
+        if (domesticHoldings.isEmpty() || domesticHoldings.any { priceForMonth(it.code, month) == null }) Double.NaN
+        else domesticHoldings.sumOf { it.shares * priceForMonth(it.code, month)!!.close }
+    }
+    val usedPreviousMonth = yearMonths.any { month ->
+        domesticHoldings.any { holding ->
+            val prices = priceMap[normalizedCode(holding.code)]
+            prices?.get(month) == null && prices?.get(YearMonth.parse(month).minusMonths(1).toString()) != null
+        }
     }
     val gains = assets.map { it - domesticCost }
     val gainsPct = gains.map { if (domesticCost > 0) it / domesticCost * 100 else Double.NaN }
@@ -2189,6 +2432,7 @@ private fun AssetTrackingSection(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         if (annualHistoryFailed) Text(stringResource(R.string.annual_dividend_text_53), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+        if (selectedPeriod == "5y" && usedPreviousMonth) Text("一部銘柄は前月末の株価を使用しています。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
         // A. Header Title row with switch pills
         AdaptiveRow(
             modifier = Modifier.fillMaxWidth(),
@@ -2205,8 +2449,11 @@ private fun AssetTrackingSection(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        stringResource(R.string.annual_dividend_text_54),
-                        style = MaterialTheme.typography.titleMedium.copy(
+                        stringResource(
+                            if (selectedPeriod == "5y") R.string.annual_dividend_text_62
+                            else R.string.annual_dividend_text_54
+                        ),
+                        style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = OnSurface
                         )
@@ -2255,6 +2502,14 @@ private fun AssetTrackingSection(
                     )
                 }
             }
+        }
+
+        if (selectedPeriod == "5y") {
+            Text(
+                stringResource(R.string.annual_dividend_text_52),
+                color = OnSurfaceVariant,
+                fontSize = AppTextSize.caption
+            )
         }
 
         // B. Dual Asset KPI Header Rows
@@ -2749,7 +3004,7 @@ private fun AssetTrackingTwelveMonthSection(
     val targetCodes = remember(targetHoldings) {
         targetHoldings.map { it.code.trim().uppercase(Locale.ROOT).removeSuffix(".T").let { code -> if (code.length == 5 && code.endsWith('0')) code.dropLast(1) else code } }.distinct()
     }
-    val monthKeys = remember(months) { months.map { it.toString() } }
+    val monthKeys = remember(months) { listOf(months.first().minusMonths(1).toString()) + months.map { it.toString() } }
     var monthlyPriceHistory by remember(targetCodes, monthKeys) { mutableStateOf<Map<String, Map<String, CloudflareMonthlyPrice>>>(emptyMap()) }
     var isHistoryLoading by remember(targetCodes, monthKeys) { mutableStateOf(false) }
     var historyLoadFailed by remember(targetCodes, monthKeys) { mutableStateOf(false) }
@@ -2768,13 +3023,16 @@ private fun AssetTrackingTwelveMonthSection(
         isHistoryLoading = false
     }
     val currentCost = targetHoldings.sumOf { it.totalCost }
+    var usedPreviousMonth = false
     val monthlySnapshots = remember(targetHoldings, months, monthlyPriceHistory) {
         months.map { month ->
             val prices = targetHoldings.mapNotNull { holding ->
                 val code = holding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T").let {
                     if (it.length == 5 && it.endsWith('0')) it.dropLast(1) else it
                 }
-                monthlyPriceHistory[code]?.get(month.toString())?.let { holding to it.close }
+                val series = monthlyPriceHistory[code]
+                val price = series?.get(month.toString()) ?: series?.get(month.minusMonths(1).toString())
+                price?.let { holding to it.close }
             }
             val value = if (targetHoldings.isNotEmpty() && prices.size == targetHoldings.size) {
                 prices.sumOf { (holding, close) -> holding.shares * close }
@@ -2786,6 +3044,15 @@ private fun AssetTrackingTwelveMonthSection(
                 value = value,
                 gain = value?.minus(currentCost)
             )
+        }
+    }
+    usedPreviousMonth = months.any { month ->
+        targetHoldings.any { holding ->
+            val code = holding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T").let {
+                if (it.length == 5 && it.endsWith('0')) it.dropLast(1) else it
+            }
+            monthlyPriceHistory[code]?.get(month.toString()) == null &&
+                monthlyPriceHistory[code]?.get(month.minusMonths(1).toString()) != null
         }
     }
     val latest = monthlySnapshots.last()
@@ -2985,6 +3252,7 @@ private fun AssetTrackingTwelveMonthSection(
                 text = buildString {
                     append(resources.getString(R.string.annual_dividend_label_56))
                     if (unsupportedCount > 0) append(resources.getString(R.string.annual_dividend_label_57, (unsupportedCount).toString()))
+                    if (usedPreviousMonth) append(" 一部銘柄は前月末の株価を使用しています。")
                     if (historyLoadFailed) append(resources.getString(R.string.annual_dividend_label_58))
                     else if (targetHoldings.isEmpty()) append(resources.getString(R.string.annual_dividend_label_59))
                     else if (!isHistoryLoading && monthlySnapshots.none { it.value != null }) append(resources.getString(R.string.annual_dividend_label_60))

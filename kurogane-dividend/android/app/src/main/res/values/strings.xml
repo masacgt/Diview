@@ -25,7 +25,7 @@
     <string name="draft_save_failed">下書きを保存できませんでした。もう一度保存してください。</string>
     <string name="draft_clear_failed">送信は完了しましたが、下書きを削除できませんでした。</string>
 
-    <string name="add_holding_text">"複数口座一括配分登録"</string>
+    <string name="add_holding_text">資産登録</string>
     <string name="add_holding_text_2">"マトリックス同時入力"</string>
     <string name="add_holding_text_3">"口座間の株数・取得単価を1画面でまとめて設定"</string>
     <string name="add_holding_text_4">"銘柄コード / 企業名"</string>
@@ -139,7 +139,7 @@
     <string name="annual_dividend_yield_on_cost">"Yield on Cost: "</string>
     <string name="annual_dividend_text_60">"評価額 (時価)"</string>
     <string name="annual_dividend_text_61">"累積投資元本 (簿価)"</string>
-    <string name="annual_dividend_text_62">"年次推移データグリッド (元本 vs 時価対比)"</string>
+    <string name="annual_dividend_text_62">"年次推移（元本VS評価額）"</string>
     <string name="annual_dividend_text_63">"元: "</string>
     <string name="annual_dividend_text_64">"時: "</string>
     <string name="annual_dividend_text_65">"%1$s 詳細"</string>
@@ -171,7 +171,7 @@
     <string name="asset_management_text_5">"年間配当目標: ¥%1$s"</string>
     <string name="asset_management_text_6">"%1$s件"</string>
     <string name="asset_management_text_7">"全件表示"</string>
-    <string name="asset_management_text_8">"銘柄コード・銘柄名・セクターでリアルタイム検索"</string>
+    <string name="asset_management_text_8">"銘柄コード・銘柄名・セクターで検索"</string>
     <string name="asset_management_text_9">"該当する保有銘柄はありません"</string>
     <string name="asset_management_1_s_2_s_3_s_4_s">"%1$s¥%2$s (%3$s%4$s%%)"</string>
     <string name="asset_management_text_10">"入金予定: %1$s月中旬予定"</string>
@@ -238,10 +238,14 @@
     <string name="dividend_change_analysis_cards_text_5">"増配プラス寄与"</string>
     <string name="dividend_change_analysis_cards_text_6">"減配マイナス影響"</string>
     <string name="dividend_change_analysis_cards_text_7">"履歴未取得・連続2期の記録がない%1$s銘柄は増減集計から除外しています。"</string>
+    <string name="dividend_change_analysis_cards_impact_info_title">"指標の見方"</string>
+    <string name="dividend_change_analysis_cards_impact_info_content_description">"年間配当総増減の説明"</string>
     <string name="dividend_change_analysis_cards_text_8">"%1$s 銘柄"</string>
     <string name="dividend_change_analysis_cards_text_9" formatted="false">"要監視：直近実績で減配、配当性向80%超、または赤字。比率は指標を取得できた銘柄が対象です。"</string>
     <string name="dividend_change_analysis_cards_text_10">"余力スコア %1$s"</string>
     <string name="dividend_change_analysis_cards_text_11" formatted="false">"スコアは取得済み銘柄のうち配当性向0〜70%の割合。配当性向だけで将来の減配を予測するものではありません。"</string>
+    <string name="dividend_change_analysis_cards_payout_info_title">"指標の見方"</string>
+    <string name="dividend_change_analysis_cards_payout_info_content_description">"配当性向健全度レーダーの説明"</string>
     <string name="dividend_change_analysis_cards_text_12">"配当性向の取得済み %1$s / %2$s 銘柄"</string>
     <string name="dividend_change_analysis_cards_1_s_2_s">"⚠ %1$s（%2$s）"</string>
     <string name="dividend_change_analysis_cards_text_13">"配当性向 %1$s・%2$s"</string>
@@ -548,6 +552,10 @@
     <string name="watchlist_text_10">"監視銘柄の一括シミュレーション"</string>
     <string name="watchlist_text_11">"権利落ち月マトリクス"</string>
     <string name="watchlist_text_12">"受取月別グラフ試算"</string>
+    <string name="watchlist_bulk_ex_dividend_month_button">"権利落ち月"</string>
+    <string name="watchlist_bulk_monthly_estimate_button">"受取月別試算"</string>
+    <string name="watchlist_payout_diagnosis_button">"配当性向診断"</string>
+    <string name="watchlist_payout_diagnosis_count">"日本株・%1$d銘柄"</string>
     <string name="watchlist_1_s_2_s">"%1$s (%2$s)"</string>
     <string name="watchlist_text_13">"銘柄追加"</string>
     <string name="watchlist_text_14">"監視銘柄コード・銘柄名・セクターで検索"</string>
@@ -557,9 +565,9 @@
     <string name="watchlist_a11y_3">"目標利回りを上げる"</string>
     <string name="watchlist_text_16">"買場目安: %1$s%2$s (%3$s)"</string>
     <string name="watchlist_text_17">"1株配当 %1$s%2$s"</string>
-    <string name="watchlist_text_18">"保有株に登録"</string>
+    <string name="watchlist_text_18">"保有登録"</string>
     <string name="watchlist_alert_toggle">"Alert Toggle"</string>
-    <string name="watchlist_alert_short">買場アラート</string>
+    <string name="watchlist_alert_short">アラート</string>
     <string name="watchlist_alert_enabled">買場アラートを鳴らす（タップで個別設定）</string>
     <string name="watchlist_alert_disabled">買場アラートを鳴らさない（タップで個別設定）</string>
     <string name="csv_guide_title">各証券会社のCSV出力方法ガイド</string>
@@ -616,7 +624,7 @@
     <string name="watchlist_text_63" formatted="false">"42.5%"</string>
     <string name="watchlist_text_64">"Q3 (7-9月)"</string>
     <string name="watchlist_text_65">"Q4 (10-12月) 🟢"</string>
-    <string name="watchlist_text_66">受取配当カレンダー</string>
+    <string name="watchlist_text_66">"受取配当カレンダー"</string>
     <string name="watchlist_calendar_info_content_description">受取配当カレンダーの説明</string>
     <string name="watchlist_heatmap_info_content_description">配当密度ヒートマップの説明</string>
     <string name="watchlist_calendar_info_title">受取配当カレンダーについて</string>
@@ -779,6 +787,17 @@
     <string name="notification_dividend_change_title">"増配・減配通知"</string>
     <string name="notification_dividend_change_summary">"保有している日本株の年間1株配当額の変化を朝・夕にお知らせ"</string>
     <string name="notification_dividend_change_description">"保有している日本株の年間1株配当額の増加・減少をお知らせします"</string>
+    <string name="notification_history_title">通知履歴・アクティビティ</string>
+    <string name="notification_history_subtitle">実際に送信された通知</string>
+    <string name="notification_history_mark_all_read">すべて既読</string>
+    <string name="notification_unread_count">通知、未読%1$d件</string>
+    <string name="notification_history_filter_all">すべて (%1$d)</string>
+    <string name="notification_history_kind_price">買場シグナル</string>
+    <string name="notification_history_kind_dividend_month">配当月リマインダー</string>
+    <string name="notification_history_kind_dividend_change">増配・減配</string>
+    <string name="notification_history_empty_title">通知履歴はまだありません</string>
+    <string name="notification_history_empty_message">通知が送信されると、ここに表示されます。</string>
+    <string name="notification_history_open_settings">通知設定を変更する</string>
     <string name="notification_permission_message">"通知が許可されていません。端末の通知設定で変更できます。"</string>
     <string name="notification_permission_message_2">"端末の通知設定でDiviewの通知を有効にしてください。"</string>
     <string name="dividend_view_model_message">"通知設定を保存できませんでした。もう一度お試しください。"</string>
@@ -1029,4 +1048,8 @@
     <string name="roadmap_all_complete">ALL QUESTS COMPLETE</string>
     <string name="roadmap_all_steps_complete">全30STEPを達成</string>
     <string name="yield_basis_cost_detail">取得単価比</string>
+    <string name="annual_dividend_text_84">開始期比</string>
+    <string name="annual_dividend_quarterly_cashflow_title">四半期キャッシュフロー対比</string>
+    <string name="annual_dividend_quarterly_max_month_share">最大月の構成比: %1$s</string>
+    <string name="annual_dividend_quarterly_quarter_label">Q%1$d (%2$d-%3$d月)</string>
 </resources>

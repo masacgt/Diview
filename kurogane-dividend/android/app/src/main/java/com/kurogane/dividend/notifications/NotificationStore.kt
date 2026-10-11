@@ -1,7 +1,18 @@
 package com.kurogane.dividend.notifications
 
 import android.content.Context
+import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
+
+data class NotificationHistoryEntry(
+    val id: String,
+    val kind: NotificationKind,
+    val title: String,
+    val message: String,
+    val createdAtMillis: Long,
+    val isRead: Boolean
+)
 
 /** Preferences contain opt-ins and delivery markers, not account quantities or API credentials. */
 class NotificationStore(context: Context) {
@@ -56,6 +67,72 @@ class NotificationStore(context: Context) {
     fun dividendMonth(): String? = delivery.getString("dividend_month", null)
     fun saveDividendMonth(month: String) {
         check(delivery.edit().putString("dividend_month", month).commit()) { "通知履歴を保存できませんでした" }
+    }
+
+    fun notificationHistory(): List<NotificationHistoryEntry> = synchronized(lock) {
+        readNotificationHistory()
+    }
+
+    fun unreadNotificationCount(): Int = notificationHistory().count { !it.isRead }
+
+    fun recordNotification(kind: NotificationKind, title: String, message: String, createdAtMillis: Long = System.currentTimeMillis()) = synchronized(lock) {
+        val entry = NotificationHistoryEntry(
+            id = UUID.randomUUID().toString(),
+            kind = kind,
+            title = title.take(160),
+            message = message.take(1000),
+            createdAtMillis = createdAtMillis,
+            isRead = false
+        )
+        writeNotificationHistory((listOf(entry) + readNotificationHistory()).take(MAX_NOTIFICATION_HISTORY))
+    }
+
+    fun markNotificationRead(id: String) = synchronized(lock) {
+        val history = readNotificationHistory()
+        if (history.none { it.id == id && !it.isRead }) return@synchronized
+        writeNotificationHistory(history.map { if (it.id == id) it.copy(isRead = true) else it })
+    }
+
+    fun markAllNotificationsRead() = synchronized(lock) {
+        val history = readNotificationHistory()
+        if (history.none { !it.isRead }) return@synchronized
+        writeNotificationHistory(history.map { it.copy(isRead = true) })
+    }
+
+    private fun readNotificationHistory(): List<NotificationHistoryEntry> {
+        val rows = JSONArray(delivery.getString(NOTIFICATION_HISTORY_KEY, "[]") ?: "[]")
+        return buildList {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val kind = runCatching { NotificationKind.valueOf(row.optString("kind")) }.getOrNull() ?: continue
+                val id = row.optString("id")
+                val title = row.optString("title")
+                if (id.isBlank() || title.isBlank()) continue
+                add(NotificationHistoryEntry(
+                    id = id,
+                    kind = kind,
+                    title = title,
+                    message = row.optString("message"),
+                    createdAtMillis = row.optLong("createdAtMillis"),
+                    isRead = row.optBoolean("isRead")
+                ))
+            }
+        }.sortedByDescending { it.createdAtMillis }
+    }
+
+    private fun writeNotificationHistory(entries: List<NotificationHistoryEntry>) {
+        val rows = JSONArray().apply {
+            entries.forEach { entry -> put(JSONObject()
+                .put("id", entry.id)
+                .put("kind", entry.kind.name)
+                .put("title", entry.title)
+                .put("message", entry.message)
+                .put("createdAtMillis", entry.createdAtMillis)
+                .put("isRead", entry.isRead))
+        } }
+        check(delivery.edit().putString(NOTIFICATION_HISTORY_KEY, rows.toString()).commit()) {
+            "通知履歴を保存できませんでした"
+        }
     }
 
     /** The first successful fetch establishes a baseline; later year/DPS changes become pending alerts. */
@@ -155,5 +232,9 @@ class NotificationStore(context: Context) {
         settings()
     }
 
-    companion object { private val lock = Any() }
+    companion object {
+        private val lock = Any()
+        private const val NOTIFICATION_HISTORY_KEY = "notification_history"
+        private const val MAX_NOTIFICATION_HISTORY = 100
+    }
 }

@@ -20,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.data.CloudflareSecurity
+import com.kurogane.dividend.data.CloudflareSearchHit
 import com.kurogane.dividend.data.runCatchingCancellable
 import com.kurogane.dividend.model.HoldingAllocation
 import com.kurogane.dividend.model.Holding
@@ -55,6 +58,7 @@ fun AddHoldingSheet(
     usdJpyRate: Double? = null,
     usWithholdingEnabled: Boolean = true,
     existingHoldings: List<Holding> = emptyList(),
+    onSearchSecurities: suspend (query: String) -> List<CloudflareSearchHit>,
     onResolveSecurity: suspend (code: String) -> CloudflareSecurity?,
     onRegisterCollective: suspend (code: String, allocations: List<HoldingAllocation>, replaceExisting: Boolean) -> Boolean
 ) {
@@ -73,7 +77,8 @@ fun AddHoldingSheet(
     var stockCodeInput by rememberSaveable { mutableStateOf(prefilledCode) }
     var selectedStock by remember {
         mutableStateOf(
-            presets.find { it.code == stockCodeInput } ?: presets[2]
+            presets.find { it.code == stockCodeInput }
+                ?: PresetStock("", "銘柄未選択", "銘柄未選択", 0.0, 0.0, 0.0, "¥")
         )
     }
     var isRegistering by remember { mutableStateOf(false) }
@@ -81,7 +86,10 @@ fun AddHoldingSheet(
     var registerErrorDetail by remember { mutableStateOf<String?>(null) }
     val resources = LocalContext.current.resources
     val resolveSecurity by rememberUpdatedState(onResolveSecurity)
+    val searchSecurities by rememberUpdatedState(onSearchSecurities)
     var resolvedSecurity by remember { mutableStateOf<CloudflareSecurity?>(null) }
+    var remoteSearchResults by remember { mutableStateOf<List<CloudflareSearchHit>>(emptyList()) }
+    var isSearchingSecurities by remember { mutableStateOf(false) }
     val registrationScope = rememberCoroutineScope()
 
     // Dynamic prefill when prefilledCode changes
@@ -95,7 +103,7 @@ fun AddHoldingSheet(
     }
 
     // Accounts Matrix States
-    var nisaShares by remember { mutableStateOf("100") }
+    var nisaShares by remember { mutableStateOf("0") }
     var nisaPrice by remember { mutableStateOf(selectedStock.price.toString()) }
 
     var tsumitateShares by remember { mutableStateOf("0") }
@@ -106,6 +114,57 @@ fun AddHoldingSheet(
 
     var generalShares by remember { mutableStateOf("0") }
     var generalPrice by remember { mutableStateOf(selectedStock.price.toString()) }
+    var downwardDragPx by remember { mutableFloatStateOf(0f) }
+    var isSwipeGesture by remember { mutableStateOf(false) }
+    val dismissDragThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) {
+        androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() / 2f
+    }
+    val touchSlopPx = androidx.compose.ui.platform.LocalViewConfiguration.current.touchSlop
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { targetValue ->
+            if (targetValue == SheetValue.Hidden) {
+                val allowed = !isRegistering &&
+                    (!isSwipeGesture || downwardDragPx >= dismissDragThresholdPx)
+                isSwipeGesture = false
+                allowed
+            } else {
+                true
+            }
+        }
+    )
+    val dismissSwipeObserver = Modifier.pointerInput(dismissDragThresholdPx, isRegistering) {
+        awaitPointerEventScope {
+            var trackedPointerId: androidx.compose.ui.input.pointer.PointerId? = null
+            var startY = 0f
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (trackedPointerId == null) {
+                    val down = event.changes.firstOrNull { it.pressed }
+                    if (down != null) {
+                        trackedPointerId = down.id
+                        startY = down.position.y
+                        downwardDragPx = 0f
+                        isSwipeGesture = false
+                    }
+                } else {
+                    val change = event.changes.firstOrNull { it.id == trackedPointerId }
+                    if (change != null) {
+                        if (change.pressed) {
+                            val verticalDistance = change.position.y - startY
+                            downwardDragPx = verticalDistance.coerceAtLeast(0f)
+                            if (kotlin.math.abs(verticalDistance) >= touchSlopPx) {
+                                isSwipeGesture = true
+                            }
+                        } else {
+                            trackedPointerId = null
+                            if (!isSwipeGesture) downwardDragPx = 0f
+                        }
+                    }
+                }
+            }
+        }
+    }
     val existingHolding = existingHoldings.firstOrNull { it.code.equals(stockCodeInput.trim(), ignoreCase = true) }
 
     LaunchedEffect(prefilledCode, existingHolding?.id) {
@@ -148,7 +207,20 @@ fun AddHoldingSheet(
 
     // Presets or custom stock changes
     LaunchedEffect(stockCodeInput) {
+        val query = stockCodeInput.trim()
         val normalizedCode = stockCodeInput.trim().uppercase()
+        remoteSearchResults = emptyList()
+        if (query.isNotEmpty()) {
+            kotlinx.coroutines.delay(300)
+            if (query == stockCodeInput.trim()) {
+                isSearchingSecurities = true
+                val results = runCatchingCancellable { searchSecurities(query) }.getOrDefault(emptyList())
+                if (query == stockCodeInput.trim()) remoteSearchResults = results
+                isSearchingSecurities = false
+            }
+        } else {
+            isSearchingSecurities = false
+        }
         val matched = presets.find { it.code.trim().uppercase() == normalizedCode }
         if (matched != null && matched != selectedStock) {
             resolvedSecurity = null
@@ -220,16 +292,12 @@ fun AddHoldingSheet(
     val nisaTaxBenefits = (nShares + tShares) * selectedStock.dps * 0.20315 * fxRate
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(
-            skipPartiallyExpanded = true,
-            confirmValueChange = { targetValue -> targetValue != SheetValue.Hidden }
-        ),
+        modifier = dismissSwipeObserver,
+        onDismissRequest = { if (!isRegistering) onDismiss() },
+        sheetState = sheetState,
         containerColor = SurfaceContainerLow,
         scrimColor = Color.Black.copy(alpha = 0.6f),
-        dragHandle = {
-            BottomSheetDefaults.DragHandle(color = SurfaceContainerHighest)
-        }
+        dragHandle = { BottomSheetDefaults.DragHandle(color = SurfaceContainerHighest) }
     ) {
         Column(
             modifier = Modifier
@@ -300,7 +368,7 @@ fun AddHoldingSheet(
 
                 // Close Button
                 IconButton(
-                    onClick = onDismiss,
+                    onClick = { if (!isRegistering) onDismiss() },
                     modifier = Modifier
                         .minimumInteractiveComponentSize()
                         .size(32.dp)
@@ -361,19 +429,36 @@ fun AddHoldingSheet(
                     )
                 }
 
-                // Display preset suggestions only after input begins.
+                // Show matching suggestions only after the user enters a code or name.
                 val suggestionQuery = stockCodeInput.trim()
                 val localSuggestions = if (suggestionQuery.isEmpty()) emptyList() else presets.filter { stock ->
                     stock.code.contains(suggestionQuery, ignoreCase = true) ||
                         stock.name.contains(suggestionQuery, ignoreCase = true)
                 }
-                if (localSuggestions.isNotEmpty()) Row(
+                val localCodes = localSuggestions.mapTo(mutableSetOf()) { it.code.uppercase() }
+                val suggestedStocks = localSuggestions + remoteSearchResults
+                    .filterNot { it.code.uppercase() in localCodes }
+                    .map { hit ->
+                        val price = hit.cachedPrice ?: 0.0
+                        val dps = hit.annualDividendPerShare ?: 0.0
+                        PresetStock(
+                            hit.code,
+                            hit.name,
+                            hit.industry?.let { "東証P • $it" } ?: "東証銘柄",
+                            price,
+                            if (price > 0.0) dps / price * 100 else 0.0,
+                            dps,
+                            "¥"
+                        )
+                    }
+                if (suggestedStocks.isNotEmpty()) Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    localSuggestions.forEach { stock ->
+                    suggestedStocks.take(8).forEach { stock ->
                         val active = selectedStock.code == stock.code
                         Box(
                             modifier = Modifier
@@ -392,6 +477,11 @@ fun AddHoldingSheet(
                             )
                         }
                     }
+                    if (isSearchingSecurities) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = PrimaryEmerald)
+                    }
+                } else if (isSearchingSecurities) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = PrimaryEmerald)
                 }
 
                 // Ticker detail preview tag
@@ -522,7 +612,7 @@ fun AddHoldingSheet(
                         colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
                         border = BorderStroke(1.dp, BorderColor)
                     ) {
-                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             AdaptiveRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -557,62 +647,7 @@ fun AddHoldingSheet(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                // Shares Input Field with Helper tags
-                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(stringResource(R.string.add_holding_text_12), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(SurfaceContainerHighest)
-                                                .heightIn(min = 36.dp)
-                                                .clickable {
-                                                    val curr = sharesVal.toIntOrNull() ?: 0
-                                                    onSharesChange((curr - 100).coerceAtLeast(0).toString())
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(stringResource(R.string.add_holding_text_13), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                        }
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(SurfaceContainerHighest)
-                                                .heightIn(min = 36.dp)
-                                                .clickable {
-                                                    val curr = sharesVal.toIntOrNull() ?: 0
-                                                    onSharesChange((curr + 100).toString())
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(stringResource(R.string.add_holding_text_14), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-
-                                    OutlinedTextField(
-                                        value = sharesVal,
-                                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = resources.getString(R.string.account_input_label, title, resources.getString(R.string.add_holding_text_12)) },
-                                        onValueChange = onSharesChange,
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedContainerColor = BackgroundDark,
-                                            unfocusedContainerColor = BackgroundDark,
-                                            focusedBorderColor = PrimaryEmerald,
-                                            unfocusedBorderColor = SurfaceContainerHighest,
-                                            focusedTextColor = OnSurface,
-                                            unfocusedTextColor = OnSurface
-                                        ),
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                }
-
-                                // Price Input Field
+                                // Price input on the left, share input on the right.
                                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(stringResource(R.string.add_holding_text_15), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     OutlinedTextField(
@@ -631,6 +666,59 @@ fun AddHoldingSheet(
                                         ),
                                         shape = RoundedCornerShape(8.dp)
                                     )
+                                }
+
+                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(stringResource(R.string.add_holding_text_12), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    OutlinedTextField(
+                                        value = sharesVal,
+                                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = resources.getString(R.string.account_input_label, title, resources.getString(R.string.add_holding_text_12)) },
+                                        onValueChange = onSharesChange,
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedContainerColor = BackgroundDark,
+                                            unfocusedContainerColor = BackgroundDark,
+                                            focusedBorderColor = PrimaryEmerald,
+                                            unfocusedBorderColor = SurfaceContainerHighest,
+                                            focusedTextColor = OnSurface,
+                                            unfocusedTextColor = OnSurface
+                                        ),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(SurfaceContainerHighest)
+                                                .heightIn(min = 30.dp)
+                                                .clickable {
+                                                    val curr = sharesVal.toIntOrNull() ?: 0
+                                                    onSharesChange((curr - 100).coerceAtLeast(0).toString())
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(stringResource(R.string.add_holding_text_13), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(SurfaceContainerHighest)
+                                                .heightIn(min = 30.dp)
+                                                .clickable {
+                                                    val curr = sharesVal.toIntOrNull() ?: 0
+                                                    onSharesChange((curr + 100).toString())
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(stringResource(R.string.add_holding_text_14), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -664,7 +752,7 @@ fun AddHoldingSheet(
                     AdaptiveRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         // Box 1
                         Card(
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).border(BorderStroke(0.5.dp, PrimaryEmeraldContainer.copy(alpha = 0.3f)), RoundedCornerShape(12.dp)),
                             colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
@@ -675,7 +763,7 @@ fun AddHoldingSheet(
                         }
                         // Box 2
                         Card(
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).border(BorderStroke(0.5.dp, PrimaryEmeraldContainer.copy(alpha = 0.3f)), RoundedCornerShape(12.dp)),
                             colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
@@ -700,7 +788,7 @@ fun AddHoldingSheet(
                         }
                         // Box 4
                         Card(
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).border(BorderStroke(0.5.dp, PrimaryEmeraldContainer.copy(alpha = 0.3f)), RoundedCornerShape(12.dp)),
                             colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {

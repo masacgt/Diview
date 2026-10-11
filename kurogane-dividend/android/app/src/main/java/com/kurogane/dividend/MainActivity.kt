@@ -5,6 +5,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.os.Bundle
 import android.content.Intent
 import com.kurogane.dividend.notifications.DiviewNotifications
+import com.kurogane.dividend.notifications.NotificationStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -34,6 +35,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -65,8 +67,10 @@ import com.kurogane.dividend.ui.theme.SurfaceContainer
 import com.kurogane.dividend.ui.theme.AppTextSize
 import com.kurogane.dividend.ui.components.SearchSheet
 import com.kurogane.dividend.ui.components.AddHoldingSheet
+import com.kurogane.dividend.ui.components.NotificationHistorySheet
 import com.kurogane.dividend.viewmodel.DividendViewModel
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 class MainActivity : androidx.fragment.app.FragmentActivity() {
 
     private val viewModel: DividendViewModel by viewModels()
@@ -174,6 +178,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
                 var showSearchSheet by remember { mutableStateOf(false) }
                 var showNotificationsDialog by remember { mutableStateOf(false) }
+                val appContext = LocalContext.current
+                var unreadNotificationCount by remember(appContext) {
+                    mutableIntStateOf(NotificationStore(appContext).unreadNotificationCount())
+                }
                 var showAddHoldingSheet by remember { mutableStateOf(false) }
                 var prefilledAddHoldingCode by remember { mutableStateOf("") }
                 val scrollToTopRequests = remember { mutableStateMapOf<String, Int>() }
@@ -315,16 +323,27 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
                                 // Notification Button with pulse badge
                                 Box(contentAlignment = Alignment.TopEnd) {
-                                    IconButton(onClick = { showNotificationsDialog = true }) {
-                                        Icon(Icons.Default.Notifications, contentDescription = stringResource(R.string.main_activity_a11y_2), tint = OnSurfaceVariant)
+                                    IconButton(onClick = {
+                                        unreadNotificationCount = NotificationStore(appContext).unreadNotificationCount()
+                                        showNotificationsDialog = true
+                                    }) {
+                                        Icon(
+                                            Icons.Default.Notifications,
+                                            contentDescription = if (unreadNotificationCount > 0) {
+                                                stringResource(R.string.notification_unread_count, unreadNotificationCount)
+                                            } else stringResource(R.string.main_activity_a11y_2),
+                                            tint = OnSurfaceVariant
+                                        )
                                     }
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(top = 8.dp, end = 8.dp)
-                                            .size(6.dp)
-                                            .clip(CircleShape)
-                                            .background(PrimaryEmerald)
-                                    )
+                                    if (unreadNotificationCount > 0) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(top = 8.dp, end = 8.dp)
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(PrimaryEmerald)
+                                        )
+                                    }
                                 }
 
                                 // Settings Button
@@ -556,6 +575,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             visible = showAddHoldingSheet,
                             prefilledCode = prefilledAddHoldingCode,
                             onDismiss = { showAddHoldingSheet = false },
+                            onSearchSecurities = { query -> viewModel.searchCloudflareSecurities(query) },
                             onResolveSecurity = { code -> viewModel.resolveCloudflareSecurity(code) },
                             onRegisterCollective = { code, allocations, replaceExisting ->
                                 val registered = viewModel.registerCloudflareAllocations(code, allocations, replaceExisting)
@@ -564,42 +584,15 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             }
                         )
 
-                        // Notification Dialog
+                        // Notification history modal
                         if (showNotificationsDialog) {
-                            val watched by viewModel.watchlist.collectAsStateWithLifecycle()
-                            val owned by viewModel.holdings.collectAsStateWithLifecycle()
-                            val taxMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
-                            val ready = watched.filter { it.alertEnabled && it.isReady }
-                            val monthlyIncome = owned.sumOf { it.getEffectiveAnnualDividend(taxMode) } / 12.0
-                            AlertDialog(
-                                onDismissRequest = { showNotificationsDialog = false },
-                                confirmButton = {
-                                    Button(
-                                        onClick = { showNotificationsDialog = false },
-                                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmeraldContainer)
-                                    ) {
-                                        Text(stringResource(R.string.main_activity_text_4), color = OnPrimary, fontWeight = FontWeight.Bold)
-                                    }
+                            NotificationHistorySheet(
+                                onDismiss = { showNotificationsDialog = false },
+                                onOpenSettings = {
+                                    showNotificationsDialog = false
+                                    navController.navigate("settings") { launchSingleTop = true }
                                 },
-                                title = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Notifications, contentDescription = null, tint = PrimaryEmerald)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(stringResource(R.string.main_activity_text_5), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section)
-                                    }
-                                },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        Text(stringResource(R.string.main_activity_text_6), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
-                                        Text(if (ready.isEmpty()) stringResource(R.string.main_activity_label_3) else ready.joinToString("\n") { resources.getString(R.string.main_activity_label_4, (it.name).toString(), (String.format(java.util.Locale.JAPAN, "%.2f", it.currentYield)).toString(), (String.format(java.util.Locale.JAPAN, "%.2f", it.targetYield)).toString()) }, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
-                                        HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
-                                        Text(stringResource(R.string.main_activity_text_7), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
-                                        Text(stringResource(R.string.main_activity_text_8 , java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN).format(monthlyIncome.toLong())), color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
-                                    }
-                                },
-                                containerColor = SurfaceContainer,
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.border(1.dp, BorderColor, RoundedCornerShape(16.dp))
+                                onUnreadCountChanged = { unreadNotificationCount = it }
                             )
                         }
                     }

@@ -1,6 +1,9 @@
 package com.kurogane.dividend.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.intl.Locale
+import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
@@ -18,7 +21,32 @@ object AppTextSize {
     val hero: TextUnit = 32.sp
 }
 
-private val materialTypography = Typography()
+private val JapaneseTextLocales = LocaleList(Locale("ja-JP"))
+
+private fun TextStyle.withJapaneseGlyphs(): TextStyle = copy(
+    localeList = JapaneseTextLocales,
+    fontFeatureSettings = APP_FONT_FEATURE_SETTINGS
+)
+
+private fun Typography.withJapaneseGlyphs(): Typography = copy(
+    displayLarge = displayLarge.withJapaneseGlyphs(),
+    displayMedium = displayMedium.withJapaneseGlyphs(),
+    displaySmall = displaySmall.withJapaneseGlyphs(),
+    headlineLarge = headlineLarge.withJapaneseGlyphs(),
+    headlineMedium = headlineMedium.withJapaneseGlyphs(),
+    headlineSmall = headlineSmall.withJapaneseGlyphs(),
+    titleLarge = titleLarge.withJapaneseGlyphs(),
+    titleMedium = titleMedium.withJapaneseGlyphs(),
+    titleSmall = titleSmall.withJapaneseGlyphs(),
+    bodyLarge = bodyLarge.withJapaneseGlyphs(),
+    bodyMedium = bodyMedium.withJapaneseGlyphs(),
+    bodySmall = bodySmall.withJapaneseGlyphs(),
+    labelLarge = labelLarge.withJapaneseGlyphs(),
+    labelMedium = labelMedium.withJapaneseGlyphs(),
+    labelSmall = labelSmall.withJapaneseGlyphs()
+)
+
+private val materialTypography = Typography().withJapaneseGlyphs()
 
 val AppTypography = materialTypography.copy(
     displayLarge = materialTypography.displayLarge.copy(fontSize = AppTextSize.hero, fontWeight = FontWeight.Bold),

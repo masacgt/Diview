@@ -1,6 +1,9 @@
 package com.kurogane.dividend.ui.screens
 
 import com.kurogane.dividend.ui.components.AdaptiveRow
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.res.stringResource
 import com.kurogane.dividend.R
 import androidx.compose.foundation.BorderStroke
@@ -25,7 +28,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -73,26 +78,196 @@ internal fun DividendPayoutHealthAndRiskCards(
         DividendChangeAnalysis.calculate(holdings, financialData, taxRateMode)
     }
     var riskSort by rememberSaveable { mutableStateOf("payout") }
-    val riskRows = remember(analysis, riskSort) {
-        when (riskSort) {
-            "years" -> analysis.securities.sortedByDescending { it.profile?.noCutYears?.takeIf { years -> years >= 0 } ?: -1 }
-            "growth" -> analysis.securities.sortedByDescending { it.profile?.consecutiveYears?.takeIf { years -> years >= 0 } ?: -1 }
-            else -> analysis.securities.sortedByDescending {
-                it.payoutRatio?.let { ratio -> if (ratio < 0) Double.POSITIVE_INFINITY else ratio }
-                    ?: Double.NEGATIVE_INFINITY
+    var sortAnimationRevision by remember { mutableStateOf(0) }
+    fun sortedRiskRows(sort: String) = when (sort) {
+        "years" -> analysis.securities.sortedByDescending { it.profile?.noCutYears?.takeIf { years -> years >= 0 } ?: -1 }
+        "growth" -> analysis.securities.sortedByDescending { it.profile?.consecutiveYears?.takeIf { years -> years >= 0 } ?: -1 }
+        else -> analysis.securities.sortedByDescending {
+            it.payoutRatio?.let { ratio -> if (ratio < 0) Double.POSITIVE_INFINITY else ratio }
+                ?: Double.NEGATIVE_INFINITY
+        }
+    }
+    val riskRowsState = remember(analysis) { mutableStateOf(sortedRiskRows(riskSort)) }
+    val riskRows = riskRowsState.value
+    val cardHeights = remember { mutableStateMapOf<String, Int>() }
+    val reorderOffsets = remember { mutableStateMapOf<String, Float>() }
+    val spacingPx = with(androidx.compose.ui.platform.LocalDensity.current) { 12.dp.toPx() }
+    fun selectRiskSort(sort: String) {
+        val nextRows = sortedRiskRows(sort)
+        val oldPositions = mutableMapOf<String, Float>()
+        var position = 0f
+        riskRowsState.value.forEach { row ->
+            oldPositions[row.code] = position
+            position += (cardHeights[row.code]?.toFloat() ?: 0f) + spacingPx
+        }
+        val newPositions = mutableMapOf<String, Float>()
+        position = 0f
+        nextRows.forEach { row ->
+            newPositions[row.code] = position
+            position += (cardHeights[row.code]?.toFloat() ?: 0f) + spacingPx
+        }
+        reorderOffsets.clear()
+        nextRows.forEach { row ->
+            val offset = (oldPositions[row.code] ?: 0f) - (newPositions[row.code] ?: 0f)
+            if (offset != 0f) {
+                reorderOffsets[row.code] = offset
             }
         }
+        riskRowsState.value = nextRows
+        riskSort = sort
+        sortAnimationRevision++
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         PayoutHealthCard(analysis)
         MonitorHeading("保有銘柄の減配リスク診断", Icons.Default.Shield)
-        MonitorSelectors("並び替え", listOf("payout" to stringResource(R.string.dividend_change_analysis_cards_label), "years" to stringResource(R.string.dividend_change_analysis_cards_label_2), "growth" to stringResource(R.string.dividend_change_analysis_cards_label_24)), riskSort) { riskSort = it }
+        MonitorSelectors("並び替え", listOf("payout" to stringResource(R.string.dividend_change_analysis_cards_label), "years" to stringResource(R.string.dividend_change_analysis_cards_label_2), "growth" to stringResource(R.string.dividend_change_analysis_cards_label_24)), riskSort, ::selectRiskSort)
         if (riskRows.isEmpty()) {
             MonitorEmptyCard("保有する国内株を追加すると、配当性向と非減配年数を表示します。")
         }
         riskRows.forEach { row ->
             key(row.code) {
-                DividendRiskCard(row, onClick = { onNavigateToDetail(row.code) })
+                val verticalOffset = remember(row.code) { Animatable(0f) }
+                val startOffset = reorderOffsets[row.code] ?: 0f
+                LaunchedEffect(riskSort, sortAnimationRevision) {
+                    if (startOffset != 0f) {
+                        verticalOffset.snapTo(startOffset)
+                        verticalOffset.animateTo(
+                            targetValue = 0f,
+                            animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
+                        )
+                    }
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .onSizeChanged { size ->
+                            if (cardHeights[row.code] != size.height) cardHeights[row.code] = size.height
+                        }
+                        .graphicsLayer { translationY = verticalOffset.value }
+                ) {
+                    DividendRiskCard(row, onClick = { onNavigateToDetail(row.code) })
+                }
+            }
+        }
+    }
+}
+
+/** Payout-risk list for Japanese stocks registered in the Watchlist. */
+@Composable
+internal fun WatchlistDividendPayoutRiskContent(
+    watchlist: List<WatchlistStock>,
+    financialData: Map<String, FinancialData>,
+    onNavigateToDetail: (String) -> Unit
+) {
+    val rows = remember(watchlist, financialData) {
+        watchlist.filter { it.category == "jp" }.map { stock ->
+            val normalizedCode = PortfolioMath.normalizeCode(stock.code).removeSuffix(".T")
+            val data = financialData[stock.code] ?: financialData[normalizedCode]
+            val consecutiveYears = data?.dividends.orEmpty()
+                .filter { it.dps.isFinite() && it.dps >= 0 }
+                .distinctBy { it.year }
+                .sortedBy { it.year }
+                .takeLast(2)
+                .takeIf { it.size == 2 && it[1].year == it[0].year + 1 }
+            val previous = consecutiveYears?.first()
+            val current = consecutiveYears?.last()
+            DividendChangeSecurity(
+                code = stock.code,
+                name = stock.name,
+                sector = stock.sector,
+                shares = stock.defaultShares.toLong(),
+                annualDividend = stock.dps * stock.defaultShares,
+                previousYear = previous?.year,
+                currentYear = current?.year,
+                previousDps = previous?.dps,
+                currentDps = current?.dps,
+                previousAnnualDividend = previous?.dps?.times(stock.defaultShares),
+                annualImpact = if (previous != null && current != null) {
+                    (current.dps - previous.dps) * stock.defaultShares
+                } else null,
+                profile = data?.profile,
+                dividendHistoryBasis = data?.dividendHistoryBasis ?: "fiscal_year_reported"
+            )
+        }
+    }
+    var sort by rememberSaveable { mutableStateOf("payout") }
+    var sortAnimationRevision by remember { mutableStateOf(0) }
+    fun sortedRiskRows(selectedSort: String) = when (selectedSort) {
+        "years" -> rows.sortedByDescending { it.profile?.noCutYears?.takeIf { years -> years >= 0 } ?: -1 }
+        "growth" -> rows.sortedByDescending { it.profile?.consecutiveYears?.takeIf { years -> years >= 0 } ?: -1 }
+        else -> rows.sortedByDescending {
+            it.payoutRatio?.let { ratio -> if (ratio < 0) Double.POSITIVE_INFINITY else ratio }
+                ?: Double.NEGATIVE_INFINITY
+        }
+    }
+    val riskRowsState = remember(rows) { mutableStateOf(sortedRiskRows(sort)) }
+    val riskRows = riskRowsState.value
+    val cardHeights = remember { mutableStateMapOf<String, Int>() }
+    val reorderOffsets = remember { mutableStateMapOf<String, Float>() }
+    val spacingPx = with(androidx.compose.ui.platform.LocalDensity.current) { 12.dp.toPx() }
+    fun selectRiskSort(selectedSort: String) {
+        val nextRows = sortedRiskRows(selectedSort)
+        val oldPositions = mutableMapOf<String, Float>()
+        var position = 0f
+        riskRowsState.value.forEach { row ->
+            oldPositions[row.code] = position
+            position += (cardHeights[row.code]?.toFloat() ?: 0f) + spacingPx
+        }
+        val newPositions = mutableMapOf<String, Float>()
+        position = 0f
+        nextRows.forEach { row ->
+            newPositions[row.code] = position
+            position += (cardHeights[row.code]?.toFloat() ?: 0f) + spacingPx
+        }
+        reorderOffsets.clear()
+        nextRows.forEach { row ->
+            val offset = (oldPositions[row.code] ?: 0f) - (newPositions[row.code] ?: 0f)
+            if (offset != 0f) {
+                reorderOffsets[row.code] = offset
+            }
+        }
+        riskRowsState.value = nextRows
+        sort = selectedSort
+        sortAnimationRevision++
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        MonitorSelectors(
+            "並び替え",
+            listOf(
+                "payout" to stringResource(R.string.dividend_change_analysis_cards_label),
+                "years" to stringResource(R.string.dividend_change_analysis_cards_label_2),
+                "growth" to stringResource(R.string.dividend_change_analysis_cards_label_24)
+            ),
+            sort,
+            ::selectRiskSort
+        )
+        if (riskRows.isEmpty()) {
+            MonitorEmptyCard("Watchlistに日本株を登録すると、配当性向と非減配年数を表示します。")
+        }
+        riskRows.forEach { row ->
+            key(row.code) {
+                val verticalOffset = remember(row.code) { Animatable(0f) }
+                val startOffset = reorderOffsets[row.code] ?: 0f
+                LaunchedEffect(sort, sortAnimationRevision) {
+                    if (startOffset != 0f) {
+                        verticalOffset.snapTo(startOffset)
+                        verticalOffset.animateTo(
+                            targetValue = 0f,
+                            animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
+                        )
+                    }
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .onSizeChanged { size ->
+                            if (cardHeights[row.code] != size.height) cardHeights[row.code] = size.height
+                        }
+                        .graphicsLayer { translationY = verticalOffset.value }
+                ) {
+                    DividendRiskCard(row, onClick = { onNavigateToDetail(row.code) })
+                }
             }
         }
     }
@@ -165,8 +340,12 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
     val maintained = compared.count { it.change == DividendChangeStatus.MAINTAIN }
     val decreased = compared.count { it.change == DividendChangeStatus.DECREASE }
     val impactColor = if ((analysis.impact ?: 0.0) < 0) ErrorRed else PrimaryEmerald
-    MonitorCard {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    MonitorCard(compact = true, tight = true) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Icon(Icons.AutoMirrored.Filled.TrendingUp, null, tint = impactColor, modifier = Modifier.size(18.dp))
             Row(
                 modifier = Modifier.weight(1f),
@@ -174,17 +353,21 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(stringResource(R.string.dividend_change_analysis_cards_text), color = OnSurface, fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp)
+                    fontSize = 12.sp)
                 AnnualImpactInfo()
             }
             MonitorBadge(percent(analysis.growthRate, signed = true), impactColor)
         }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(money(analysis.impact, privacy, signed = true), fontSize = 30.sp,
+            Text(money(analysis.impact, privacy, signed = true), fontSize = 24.sp,
                 fontWeight = FontWeight.ExtraBold, color = impactColor, modifier = Modifier.weight(1f, fill = false))
             Text(stringResource(R.string.annual_dividend_text_2), color = OnSurfaceVariant, fontSize = 12.sp, modifier = Modifier.padding(bottom = 5.dp))
         }
         Text(stringResource(R.string.dividend_change_analysis_cards_text_2 , if (taxRateMode == "net") resources.getString(R.string.dividend_change_analysis_cards_label_17) else resources.getString(R.string.stock_detail_text_5)), color = OnSurfaceVariant, fontSize = 11.sp)
+        if (analysis.compared.any { it.dividendHistoryBasis == "calendar_year_observed_distributions" }) {
+            Text("銘柄別履歴には、暦年の受取分配金（Yahoo Finance観測値）を含みます。決算期配当とは集計基準が異なります。",
+                color = OnSurfaceVariant, fontSize = 10.sp, lineHeight = 14.sp)
+        }
         AdaptiveRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(stringResource(R.string.dividend_change_analysis_cards_text_3 , total), color = OnSurfaceVariant, fontSize = 11.sp)
             Text(stringResource(R.string.dividend_change_analysis_cards_text_4 , compared.size, total), color = OnSurfaceVariant, fontSize = 11.sp)
@@ -197,9 +380,9 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
             if (unknown > 0) Box(Modifier.weight(unknown.toFloat()).fillMaxHeight().background(SurfaceContainerHighest))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
-            DistributionCell("増配", increased, compared.size, PrimaryEmerald, Modifier.weight(1f).fillMaxHeight())
-            DistributionCell("維持", maintained, compared.size, OnSurfaceVariant, Modifier.weight(1f).fillMaxHeight())
-            DistributionCell("減配", decreased, compared.size, ErrorRed, Modifier.weight(1f).fillMaxHeight())
+            DistributionCell("増配", increased, compared.size, PrimaryEmerald, Modifier.weight(1f).fillMaxHeight(), compact = true)
+            DistributionCell("維持", maintained, compared.size, OnSurfaceVariant, Modifier.weight(1f).fillMaxHeight(), compact = true)
+            DistributionCell("減配", decreased, compared.size, ErrorRed, Modifier.weight(1f).fillMaxHeight(), compact = true)
         }
         HorizontalDivider(color = BorderColor)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -223,8 +406,16 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
 private fun AnnualImpactInfo() {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = true }, modifier = Modifier.size(28.dp)) {
-            Icon(Icons.Default.Info, contentDescription = "年間配当総増減の説明", tint = OnSurfaceVariant, modifier = Modifier.size(18.dp))
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.size(28.dp)
+        ) {
+            Icon(
+                Icons.Default.Info,
+                contentDescription = stringResource(R.string.dividend_change_analysis_cards_impact_info_content_description),
+                tint = OnSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
         }
         DropdownMenu(
             expanded = expanded,
@@ -243,11 +434,21 @@ private fun AnnualImpactInfo() {
                         modifier = Modifier.size(30.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Info, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(17.dp))
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = null,
+                                tint = NeonGreen,
+                                modifier = Modifier.size(17.dp)
+                            )
                         }
                     }
                     Spacer(Modifier.width(10.dp))
-                    Text("指標の見方", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
+                    Text(
+                        stringResource(R.string.dividend_change_analysis_cards_impact_info_title),
+                        color = OnSurface,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = AppTextSize.body
+                    )
                 }
                 Spacer(Modifier.height(12.dp))
                 HorizontalDivider(color = BorderBlue, thickness = 0.75.dp)
@@ -264,16 +465,22 @@ private fun AnnualImpactInfo() {
 }
 
 @Composable
-private fun DistributionCell(label: String, count: Int, total: Int, color: Color, modifier: Modifier) {
-    Column(modifier.clip(RoundedCornerShape(12.dp)).background(SurfaceContainer).padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+private fun DistributionCell(label: String, count: Int, total: Int, color: Color, modifier: Modifier, compact: Boolean = false) {
+    Column(modifier.clip(RoundedCornerShape(12.dp)).background(SurfaceContainer).padding(if (compact) 1.dp else 10.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 1.dp else 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Box(Modifier.size(5.dp).background(color, CircleShape))
-            Text(label, fontSize = 11.sp, color = OnSurfaceVariant)
+            Text(label, fontSize = if (compact) 10.sp else 11.sp,
+                lineHeight = if (compact) 15.sp else TextUnit.Unspecified, color = OnSurfaceVariant)
         }
-        Text(stringResource(R.string.dividend_change_analysis_cards_text_8 , count), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = OnSurface)
+        Text(stringResource(R.string.dividend_change_analysis_cards_text_8 , count),
+            fontSize = if (compact) 14.sp else 17.sp,
+            lineHeight = if (compact) 19.sp else TextUnit.Unspecified,
+            fontWeight = FontWeight.Bold, color = OnSurface)
         Text(percent(if (total > 0) count.toDouble() / total * 100 else null),
-            fontSize = 10.sp, color = color)
+            fontSize = if (compact) 9.sp else 10.sp,
+            lineHeight = if (compact) 13.sp else TextUnit.Unspecified,
+            color = color)
     }
 }
 
@@ -290,18 +497,16 @@ private fun MonitorKpis(analysis: DividendChangeAnalysis, privacy: Boolean) {
         KpiCell("性向80%超・赤字", if (analysis.payoutCovered.isEmpty()) "未取得" else "${analysis.highPayout.size}銘柄", "配当比 ${percent(analysis.highPayoutDividendShare)}", AccentAmber,
             Modifier.weight(1f).fillMaxHeight())
     }
-    Text(stringResource(R.string.dividend_change_analysis_cards_text_9),
-        color = TextMuted, fontSize = 10.sp)
 }
 
 @Composable
 private fun KpiCell(title: String, value: String, detail: String, color: Color, modifier: Modifier) {
     Card(modifier, shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
         border = BorderStroke(1.dp, BorderColor)) {
-        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, color = OnSurfaceVariant, fontSize = 10.sp)
-            Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-            Text(detail, color = color, fontSize = 10.sp)
+        Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(title, color = OnSurfaceVariant, fontSize = 9.sp, lineHeight = 11.sp)
+            Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 17.sp)
+            Text(detail, color = color, fontSize = 9.sp, lineHeight = 11.sp)
         }
     }
 }
@@ -317,11 +522,16 @@ private fun PayoutHealthCard(analysis: DividendChangeAnalysis) {
         Triple(stringResource(R.string.dividend_change_analysis_cards_label_16), analysis.highPayout.size, ErrorRed)
     )
     MonitorCard {
-        MonitorHeading("配当性向健全度レーダー", Icons.Default.Shield)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            MonitorHeading("配当性向健全度レーダー", Icons.Default.Shield)
+            PayoutHealthInfo()
+        }
         Text(stringResource(R.string.dividend_change_analysis_cards_text_10 , analysis.headroomScore?.let { "$it/100" } ?: resources.getString(R.string.not_available)), color = PrimaryEmerald,
             fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        Text(stringResource(R.string.dividend_change_analysis_cards_text_11),
-            color = OnSurfaceVariant, fontSize = 11.sp)
         zones.forEach { (label, count, color) ->
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -341,6 +551,68 @@ private fun PayoutHealthCard(analysis: DividendChangeAnalysis) {
                     color = ErrorRed, fontSize = 11.sp)
                 Text(stringResource(R.string.dividend_change_analysis_cards_text_14 , row.profile?.fcfStatus?.takeUnless { it == "未取得" } ?: resources.getString(R.string.dividend_change_analysis_cards_label_21)),
                     color = OnSurfaceVariant, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PayoutHealthInfo() {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.size(28.dp)
+        ) {
+            Icon(
+                Icons.Default.Info,
+                contentDescription = stringResource(R.string.dividend_change_analysis_cards_payout_info_content_description),
+                tint = OnSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.widthIn(max = 300.dp),
+            shape = RoundedCornerShape(16.dp),
+            containerColor = CardDark,
+            tonalElevation = 0.dp,
+            shadowElevation = 12.dp
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = PrimaryEmerald.copy(alpha = 0.14f),
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = null,
+                                tint = NeonGreen,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        stringResource(R.string.dividend_change_analysis_cards_payout_info_title),
+                        color = OnSurface,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = AppTextSize.body
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = BorderBlue, thickness = 0.75.dp)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    stringResource(R.string.dividend_change_analysis_cards_text_11),
+                    color = OnSurfaceVariant,
+                    fontSize = AppTextSize.caption,
+                    lineHeight = 20.sp
+                )
             }
         }
     }
@@ -404,6 +676,9 @@ private fun DividendChangeCard(row: DividendChangeSecurity, privacy: Boolean, on
             MonitorBadge(label, color, compact = true)
             Icon(Icons.Default.ChevronRight, "銘柄詳細を開く", tint = TextMuted, modifier = Modifier.size(12.dp))
         }
+        if (row.dividendHistoryBasis == "calendar_year_observed_distributions") {
+            Text("暦年受取分配金・Yahoo Finance観測値", color = OnSurfaceVariant, fontSize = 10.sp)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             val streak = row.profile?.consecutiveYears?.takeIf { it > 0 }?.let { "・${it}年連続増配" }.orEmpty()
             Text(stringResource(R.string.dividend_change_analysis_cards_text_16 , row.sector, if (privacy) "•••" else number(row.shares.toDouble()), streak),
@@ -448,7 +723,7 @@ private fun MonitorSelectors(label: String?, options: List<Pair<String, String>>
             Surface(shape = RoundedCornerShape(6.dp), color = if (active) PrimaryEmerald.copy(alpha = 0.13f) else SurfaceContainer,
                 border = BorderStroke(1.dp, if (active) PrimaryEmerald.copy(alpha = 0.4f) else BorderColor)) {
                 Box(Modifier.selectable(selected = active, onClick = { onSelect(id) }, role = Role.Tab)
-                    .heightIn(min = 48.dp).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+                    .heightIn(min = 29.dp).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
                     Text(text, color = color, fontSize = 11.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Normal)
                 }
             }
@@ -457,13 +732,13 @@ private fun MonitorSelectors(label: String?, options: List<Pair<String, String>>
 }
 
 @Composable
-private fun MonitorCard(onClick: (() -> Unit)? = null, compact: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+private fun MonitorCard(onClick: (() -> Unit)? = null, compact: Boolean = false, tight: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)),
         shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
         border = BorderStroke(1.dp, BorderColor)) {
         Column(
-            Modifier.padding(horizontal = if (compact) 12.dp else 16.dp, vertical = if (compact) 6.dp else 16.dp),
-            verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 10.dp),
+            Modifier.padding(horizontal = if (compact) 12.dp else 16.dp, vertical = if (tight) 2.dp else if (compact) 6.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(if (tight) 0.dp else if (compact) 4.dp else 10.dp),
             content = content
         )
     }
