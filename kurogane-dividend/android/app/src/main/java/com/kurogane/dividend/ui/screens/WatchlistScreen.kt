@@ -313,10 +313,13 @@ fun WatchlistScreen(
         containerColor = BackgroundDark,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = {
-            SnackbarHost(snackbarHostState) { data ->
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(horizontal = 12.dp)
+            ) { data ->
                 Snackbar(
                     snackbarData = data,
-                    modifier = Modifier.padding(horizontal = 12.dp).border(
+                    modifier = Modifier.border(
                         BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.45f)),
                         RoundedCornerShape(12.dp)
                     ),
