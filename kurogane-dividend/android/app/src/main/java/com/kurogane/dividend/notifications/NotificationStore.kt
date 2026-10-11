@@ -3,6 +3,8 @@ package com.kurogane.dividend.notifications
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.Instant
+import java.time.LocalDate
 import java.util.UUID
 
 data class NotificationHistoryEntry(
@@ -62,6 +64,60 @@ class NotificationStore(context: Context) {
             put("notifiedDate", state.notifiedDate ?: JSONObject.NULL)
         }) } }
         check(delivery.edit().putString("prices", root.toString()).commit()) { "通知履歴を保存できませんでした" }
+    }
+
+    fun queuePendingPriceAlerts(alerts: List<PendingPriceAlert>) = synchronized(lock) {
+        if (alerts.isEmpty()) return@synchronized
+        val root = JSONObject(delivery.getString("price_pending", "{}") ?: "{}")
+        alerts.forEach { alert ->
+            val code = com.kurogane.dividend.model.PortfolioMath.normalizeCode(alert.code)
+            if (code.isBlank()) return@forEach
+            val previous = root.optJSONObject(code)
+            val deliverAt = previous?.optLong("deliverAtMillis")?.takeIf { it > 0L }
+                ?.let { minOf(it, alert.deliverAtMillis) } ?: alert.deliverAtMillis
+            root.put(code, JSONObject()
+                .put("name", alert.name)
+                .put("currency", alert.currency)
+                .put("price", alert.price)
+                .put("yield", alert.yield)
+                .put("targetYield", alert.targetYield)
+                .put("held", alert.held)
+                .put("deliverAtMillis", deliverAt))
+        }
+        check(delivery.edit().putString("price_pending", root.toString()).commit()) { "通知履歴を保存できませんでした" }
+    }
+
+    fun pendingPriceAlerts(nowMillis: Long? = null): List<PendingPriceAlert> = synchronized(lock) {
+        val root = JSONObject(delivery.getString("price_pending", "{}") ?: "{}")
+        buildList {
+            root.keys().forEach { code ->
+                val row = root.optJSONObject(code) ?: return@forEach
+                val event = PendingPriceAlert(
+                    code = code,
+                    name = row.optString("name"),
+                    currency = row.optString("currency", "¥"),
+                    price = row.optDouble("price", Double.NaN),
+                    yield = row.optDouble("yield", Double.NaN),
+                    targetYield = row.optDouble("targetYield", Double.NaN),
+                    held = row.optBoolean("held"),
+                    deliverAtMillis = row.optLong("deliverAtMillis")
+                )
+                if (event.name.isNotBlank() && event.price.isFinite() && event.yield.isFinite() &&
+                    event.targetYield.isFinite() && (nowMillis == null || event.deliverAtMillis <= nowMillis)) add(event)
+            }
+        }
+    }
+
+    fun removePendingPriceAlerts(alerts: List<PendingPriceAlert>) = synchronized(lock) {
+        if (alerts.isEmpty()) return@synchronized
+        val root = JSONObject(delivery.getString("price_pending", "{}") ?: "{}")
+        alerts.forEach { event ->
+            val row = root.optJSONObject(event.code) ?: return@forEach
+            if (row.optLong("deliverAtMillis") == event.deliverAtMillis &&
+                row.optDouble("price", Double.NaN) == event.price &&
+                row.optDouble("yield", Double.NaN) == event.yield) root.remove(event.code)
+        }
+        check(delivery.edit().putString("price_pending", root.toString()).commit()) { "通知履歴を保存できませんでした" }
     }
 
     fun dividendMonth(): String? = delivery.getString("dividend_month", null)
@@ -182,7 +238,8 @@ class NotificationStore(context: Context) {
                 .put("name", event.name)
                 .put("year", event.fiscalYear)
                 .put("previousDps", event.previousDps)
-                .put("currentDps", event.currentDps))
+                .put("currentDps", event.currentDps)
+                .put("deliverAtMillis", nextDeliveryAtMillis()))
         }
         check(delivery.edit()
             .putString("dividend_change_baselines", baselines.toString())
@@ -190,7 +247,7 @@ class NotificationStore(context: Context) {
             .commit()) { "通知履歴を保存できませんでした" }
     }
 
-    fun pendingDividendChanges(): List<DividendChangeEvent> = synchronized(lock) {
+    fun pendingDividendChanges(nowMillis: Long? = null): List<DividendChangeEvent> = synchronized(lock) {
         val pending = JSONObject(delivery.getString("dividend_change_pending", "{}") ?: "{}")
         buildList {
             pending.keys().forEach { code ->
@@ -199,8 +256,11 @@ class NotificationStore(context: Context) {
                 val previousDps = row.optDouble("previousDps", Double.NaN)
                 val currentDps = row.optDouble("currentDps", Double.NaN)
                 val name = row.optString("name")
+                val deliverAtMillis = row.optLong("deliverAtMillis")
                 if (year in 1900..2100 && name.isNotBlank() && previousDps.isFinite() && currentDps.isFinite()) {
-                    add(DividendChangeEvent(code, name, year, previousDps, currentDps))
+                    if (nowMillis == null || deliverAtMillis <= nowMillis) {
+                        add(DividendChangeEvent(code, name, year, previousDps, currentDps, deliverAtMillis))
+                    }
                 }
             }
         }
@@ -224,6 +284,63 @@ class NotificationStore(context: Context) {
         check(delivery.edit().remove("dividend_change_pending").commit()) { "通知履歴を保存できませんでした" }
     }
 
+    /** Records newly passed record dates once; the first scan seeds already-past events silently. */
+    fun observeDividendRightsEvents(events: List<DividendRightsEvent>, today: LocalDate, detectedAtMillis: Long) = synchronized(lock) {
+        if (events.isEmpty()) return@synchronized
+        val initialized = JSONObject(delivery.getString("rights_initialized", "{}") ?: "{}")
+        val seen = JSONObject(delivery.getString("rights_seen", "{}") ?: "{}")
+        val pending = JSONObject(delivery.getString("rights_pending", "{}") ?: "{}")
+        val byCode = events.groupBy { com.kurogane.dividend.model.PortfolioMath.normalizeCode(it.code) }
+        byCode.forEach { (code, rows) ->
+            if (code.isBlank()) return@forEach
+            if (!initialized.has(code)) {
+                rows.filter { it.recordDate.isBefore(today) }.forEach { seen.put(it.id, true) }
+                initialized.put(code, true)
+            }
+            rows.forEach { event ->
+                if (seen.has(event.id) || !event.recordDate.isBefore(today)) return@forEach
+                pending.put(event.id, event.toJson(nextDeliveryAtMillis(detectedAtMillis)))
+                seen.put(event.id, true)
+            }
+        }
+        check(delivery.edit()
+            .putString("rights_initialized", initialized.toString())
+            .putString("rights_seen", seen.toString())
+            .putString("rights_pending", pending.toString())
+            .commit()) { "通知履歴を保存できませんでした" }
+    }
+
+    fun pendingDividendRightsEvents(nowMillis: Long? = null): List<PendingDividendRightsEvent> = synchronized(lock) {
+        val pending = JSONObject(delivery.getString("rights_pending", "{}") ?: "{}")
+        buildList {
+            pending.keys().forEach { id ->
+                val row = pending.optJSONObject(id) ?: return@forEach
+                val deliverAt = row.optLong("deliverAtMillis")
+                if (nowMillis != null && deliverAt > nowMillis) return@forEach
+                val code = row.optString("code")
+                val name = row.optString("name")
+                val exDate = runCatching { LocalDate.parse(row.optString("exDividendDate")) }.getOrNull() ?: return@forEach
+                val recordDate = runCatching { LocalDate.parse(row.optString("recordDate")) }.getOrNull() ?: return@forEach
+                val finalRightsDate = runCatching { LocalDate.parse(row.optString("finalRightsDate")) }.getOrNull()
+                if (code.isNotBlank() && name.isNotBlank()) {
+                    add(PendingDividendRightsEvent(
+                        DividendRightsEvent(id, code, name, exDate, finalRightsDate, recordDate), deliverAt
+                    ))
+                }
+            }
+        }
+    }
+
+    fun removePendingDividendRightsEvents(events: List<PendingDividendRightsEvent>) = synchronized(lock) {
+        if (events.isEmpty()) return@synchronized
+        val pending = JSONObject(delivery.getString("rights_pending", "{}") ?: "{}")
+        events.forEach { event ->
+            val row = pending.optJSONObject(event.event.id) ?: return@forEach
+            if (row.optLong("deliverAtMillis") == event.deliverAtMillis) pending.remove(event.event.id)
+        }
+        check(delivery.edit().putString("rights_pending", pending.toString()).commit()) { "通知履歴を保存できませんでした" }
+    }
+
     fun clear(): NotificationSettings = synchronized(lock) {
         val before = settings()
         val revision = if (before.revision == Long.MAX_VALUE) 1L else before.revision + 1
@@ -231,6 +348,18 @@ class NotificationStore(context: Context) {
         check(delivery.edit().clear().commit()) { "通知履歴を初期化できませんでした" }
         settings()
     }
+
+    private fun DividendRightsEvent.toJson(deliverAtMillis: Long) = JSONObject()
+        .put("code", code)
+        .put("name", name)
+        .put("exDividendDate", exDividendDate.toString())
+        .put("finalRightsDate", finalRightsDate?.toString().orEmpty())
+        .put("recordDate", recordDate.toString())
+        .put("deliverAtMillis", deliverAtMillis)
+
+    private fun nextDeliveryAtMillis(detectedAtMillis: Long = System.currentTimeMillis()): Long =
+        NotificationPolicy.nextDeliveryAt(Instant.ofEpochMilli(detectedAtMillis).atZone(NotificationPolicy.japanZone))
+            .toInstant().toEpochMilli()
 
     companion object {
         private val lock = Any()
