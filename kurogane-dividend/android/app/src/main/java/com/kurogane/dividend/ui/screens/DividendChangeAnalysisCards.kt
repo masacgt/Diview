@@ -369,7 +369,6 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
                 fontWeight = FontWeight.ExtraBold, color = impactColor, modifier = Modifier.weight(1f, fill = false))
             Text(stringResource(R.string.annual_dividend_text_2), color = OnSurfaceVariant, fontSize = 12.sp, modifier = Modifier.padding(bottom = 5.dp))
         }
-        Text(stringResource(R.string.dividend_change_analysis_cards_text_2 , if (taxRateMode == "net") resources.getString(R.string.dividend_change_analysis_cards_label_17) else resources.getString(R.string.stock_detail_text_5)), color = OnSurfaceVariant, fontSize = 11.sp)
         if (analysis.compared.any { it.dividendHistoryBasis == "calendar_year_observed_distributions" }) {
             Text("銘柄別履歴には、暦年の受取分配金（Yahoo Finance観測値）を含みます。決算期配当とは集計基準が異なります。",
                 color = OnSurfaceVariant, fontSize = 10.sp, lineHeight = 14.sp)
