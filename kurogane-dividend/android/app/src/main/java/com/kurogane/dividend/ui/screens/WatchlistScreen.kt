@@ -387,11 +387,29 @@ fun WatchlistScreen(
                                                 shadowElevation = 12.dp
                                             ) {
                                                 Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-                                                    Text(
-                                                        stringResource(R.string.watchlist_projection_info_title),
-                                                        color = OnSurface,
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = AppTextSize.body
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Surface(
+                                                            shape = CircleShape,
+                                                            color = PrimaryEmerald.copy(alpha = 0.14f),
+                                                            modifier = Modifier.size(30.dp)
+                                                        ) {
+                                                            Box(contentAlignment = Alignment.Center) {
+                                                                Icon(
+                                                                    Icons.Default.Info,
+                                                                    contentDescription = null,
+                                                                    tint = PrimaryEmerald,
+                                                                    modifier = Modifier.size(17.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                        Spacer(Modifier.width(10.dp))
+                                                        Text(
+                                                            stringResource(R.string.watchlist_projection_info_title),
+                                                            color = OnSurface,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = AppTextSize.body
+                                                        )
+                                                    }
                                                     )
                                                     Spacer(Modifier.height(12.dp))
                                                     HorizontalDivider(color = BorderColor, thickness = 0.75.dp)
