@@ -244,7 +244,7 @@ fun AnnualDividendScreen(
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.Top
                         ) {
                             Text(
                                 stringResource(R.string.annual_dividend_text),
