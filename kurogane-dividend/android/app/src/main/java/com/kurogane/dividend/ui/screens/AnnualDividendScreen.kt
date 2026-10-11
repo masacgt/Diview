@@ -2306,7 +2306,20 @@ private fun CompoundingSimulationSection(
                 val chartHeight = 136.dp
                 val labelTopOffset = 24.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale
                 val groupWidth = maxWidth / years.size
-                Canvas(Modifier.fillMaxWidth().height(chartHeight)) {
+                Canvas(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(chartHeight)
+                        .pointerInput(years.size) {
+                            detectTapGestures { tap ->
+                                if (size.width > 0) {
+                                    selectedYearIndex = (tap.x / size.width * years.size)
+                                        .toInt()
+                                        .coerceIn(years.indices)
+                                }
+                            }
+                        }
+                ) {
                     val plotBottom = size.height * barAreaBottomFraction
                     val plotHeight = size.height * barAreaHeightFraction
                     (0..amountGuideCount).forEach { guideIndex ->
