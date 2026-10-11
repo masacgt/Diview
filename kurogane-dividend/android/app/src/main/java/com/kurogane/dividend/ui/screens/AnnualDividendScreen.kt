@@ -1056,8 +1056,9 @@ private fun QuarterlyCashFlowComparison(
 
                     Surface(
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        color = BackgroundDark
+                        shape = RoundedCornerShape(14.dp),
+                        color = BackgroundDark,
+                        border = BorderStroke(0.5.dp, BorderColor)
                     ) {
                         Column(
                             Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 12.dp),
