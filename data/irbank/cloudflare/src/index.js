@@ -1473,13 +1473,14 @@ export default {
       const object = await env.MARKET_DATA?.get('market/irbank/v1/catalog.json');
       if (!object) return json({ error: 'security_catalog_unavailable' }, 503);
       const catalog = await object.json();
-      const needle = query.toLocaleLowerCase();
+      const normalizeSearchText = value => String(value || '').normalize('NFKC').toLowerCase();
+      const needle = normalizeSearchText(query);
       const items = (catalog.securities || [])
-        .filter(row => String(row.code || '').toLocaleLowerCase().includes(needle)
-          || String(row.name || '').toLocaleLowerCase().includes(needle))
+        .filter(row => normalizeSearchText(row.code).includes(needle)
+          || normalizeSearchText(row.name).includes(needle))
         .sort((a, b) => {
-          const aCode = String(a.code || '').toLocaleLowerCase();
-          const bCode = String(b.code || '').toLocaleLowerCase();
+          const aCode = normalizeSearchText(a.code);
+          const bCode = normalizeSearchText(b.code);
           const rank = value => value === needle ? 0 : value.startsWith(needle) ? 1 : 2;
           return rank(aCode) - rank(bCode) || String(a.name || '').localeCompare(String(b.name || ''), 'ja');
         })
