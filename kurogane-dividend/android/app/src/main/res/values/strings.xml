@@ -69,16 +69,17 @@
     <string name="search_a11y">"入力を消去"</string>
     <string name="search_text_4">"注目の高配当・主力銘柄"</string>
     <string name="search_text_5">"タップで銘柄詳細を表示"</string>
-    <string name="annual_dividend_text">"税引前配当額"</string>
+    <string name="annual_dividend_text">"税引前配当見込み額"</string>
+    <string name="annual_dividend_gross_info_description">登録している保有銘柄全体について、現在の1株あたり年間配当と保有株数から計算した年間配当の見込みです。国内株のほか、米国株や投資信託も対象です。</string>
     <string name="annual_dividend_text_2">"/ 年"</string>
     <string name="annual_dividend_text_3">"取得額配当利回り"</string>
     <string name="annual_dividend_text_4" formatted="false">"%"</string>
     <string name="annual_dividend_text_5">"評価額配当利回り"</string>
-    <string name="annual_dividend_text_6">"月別の受取配当見込み額"</string>
+    <string name="annual_dividend_text_6">"月別の受取見込み額"</string>
     <string name="annual_dividend_text_7">配当月未取得：%1$d銘柄。</string>
     <string name="annual_dividend_info_content_description">配当グラフの説明</string>
     <string name="annual_dividend_info_title">グラフの見方</string>
-    <string name="annual_dividend_info_description">年間合計は現在の年間配当見込みです。棒グラフは過去365日の実際の配当支払額を、現在の保有株数で月別に集計しています。見込みと実績は一致しないことがあります。配当履歴がない銘柄はグラフに含みません。</string>
+    <string name="annual_dividend_info_description">年間合計は現在の年間配当見込みです。棒グラフは過去365日の配当支払実績をもとに、現在の保有株数で換算した税引き後の受取見込み額を月別に集計しています。表示額は税引き後に実際に受け取る金額の見込みです。見込みと実績は一致しないことがあります。配当履歴がない銘柄はグラフに含みません。</string>
     <string name="annual_dividend_1_s">"%1$s"</string>
     <string name="japanese_stocks">"日本株"</string>
     <string name="us_stocks">"米国株"</string>
@@ -113,7 +114,7 @@
     <string name="annual_dividend_text_31">"5期"</string>
     <string name="annual_dividend_text_32">"過年度は取得済みの国内株実績配当を現在の保有株数で換算し、最新年は国内株・米国株・投資信託を含む現在の年間配当見込みを表示します。最新年は予想額のため、過年度の実績とは集計対象・基準が異なります。実際の受取履歴ではありません。税引後は現在の口座区分を適用します。"</string>
     <string name="annual_dividend_text_34">"一部の履歴を更新できませんでした。取得済みの値を表示しています。"</string>
-    <string name="annual_dividend_text_35">"年間配当の増加額"</string>
+    <string name="annual_dividend_text_35">"年間配当増加額"</string>
     <string name="annual_dividend_text_36">"%1$s → %2$s・年額差"</string>
     <string name="annual_dividend_text_37">"年平均増配率"</string>
     <string name="annual_dividend_text_38"></string>
@@ -257,11 +258,11 @@
     <string name="dividend_change_analysis_cards_text_15">"非減配%1$s"</string>
     <string name="dividend_change_analysis_cards_text_16">"%1$s・保有%2$s株%3$s"</string>
     <string name="roadmap_text">"● LEVEL %1$s 進行中: STEP %2$s"</string>
-    <string name="roadmap_text_2">"🏆 クリア済み (%1$s/30)"</string>
-    <string name="roadmap_text_3">"LEVEL 1 完全制覇達成！ 👑"</string>
+    <string name="roadmap_text_2">"クリア済み (%1$s/30)"</string>
+    <string name="roadmap_text_3">"LEVEL 1 完全制覇達成！"</string>
     <string name="roadmap_text_4">"生活インフラ自給期 (STEP 1〜10) を踏破完了"</string>
     <string name="roadmap_all_clear">"ALL CLEAR"</string>
-    <string name="roadmap_level_achievement_title">"LEVEL %1$d 完全制覇達成！ 👑"</string>
+    <string name="roadmap_level_achievement_title">"LEVEL %1$d 完全制覇達成！"</string>
     <string name="roadmap_level_achievement_description">"%1$s (STEP %2$d〜%3$d)"</string>
     <string name="roadmap_level_clear">"LV.%1$d CLEAR"</string>
     <string name="roadmap_text_5">"現在の配当獲得ステータス"</string>
@@ -293,7 +294,7 @@
     <string name="roadmap_text_23">"¥%1$s /月"</string>
     <string name="roadmap_text_24">"年額 ¥%1$s"</string>
     <string name="roadmap_text_25">"攻略状況"</string>
-    <string name="roadmap_text_26">"達成済 ✨"</string>
+    <string name="roadmap_text_26">"達成済"</string>
     <string name="roadmap_text_27">"現在月額 ¥%1$s"</string>
     <string name="roadmap_text_28">"あと ¥%1$s /月"</string>
     <string name="roadmap_text_29">"年額 ¥%1$s 不足"</string>
@@ -317,7 +318,7 @@
     <string name="roadmap_text_46">"生活インフラ自給期 踏破認定証"</string>
     <string name="roadmap_text_47">"STEP 1〜10 (月2万円・年24万円) を完全達成"</string>
     <string name="roadmap_text_48">"獲得した生活権益"</string>
-    <string name="roadmap_text_49">"水道光熱費・通信費の全額自給権 ⚡ 📱"</string>
+    <string name="roadmap_text_49">"水道光熱費・通信費の全額自給権"</string>
     <string name="roadmap_text_50">"到達実績: "</string>
     <string name="roadmap_text_51">"認定ランク: LEVEL 1 MASTER"</string>
     <string name="roadmap_roadmap_quest">"Roadmap Quest"</string>
@@ -325,7 +326,7 @@
     <string name="roadmap_quest_1_s">"QUEST %1$s: "</string>
     <string name="roadmap_text_52">"目標額: 月 ¥%1$s 自給に向けて挑戦中"</string>
     <string name="roadmap_text_53">"現在のクエスト進捗状況"</string>
-    <string name="roadmap_text_54">"目標達成率: %1$s%% 🚀"</string>
+    <string name="roadmap_text_54">"目標達成率: %1$s%%"</string>
     <string name="roadmap_text_55">"現在実績: "</string>
     <string name="roadmap_text_56">"現在のステータス: LEVEL 2 CHALLENGER"</string>
     <string name="roadmap_text_57">"𝕏 𝕏 (Twitter) でクエスト進捗をシェア"</string>
@@ -586,6 +587,7 @@
     <string name="watchlist_text_19">"詳細"</string>
     <string name="watchlist_text_20">"新しい銘柄をウォッチリストに追加"</string>
     <string name="watchlist_text_21">"監視銘柄の並び替え条件"</string>
+    <string name="watchlist_sort_info_content_description">並び替え条件の説明</string>
     <string name="watchlist_text_22">"目標値を変更した後、最新の達成率順にするには「適用する」を押してください。"</string>
     <string name="watchlist_text_23">"順序"</string>
     <string name="watchlist_text_24">"ソート項目"</string>

@@ -33,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.layout.onGloballyPositioned
 import com.kurogane.dividend.R
 import com.kurogane.dividend.ui.components.StatusMessage
+import com.kurogane.dividend.ui.components.DiviewSnackbarHost
 import com.kurogane.dividend.ui.networkErrorMessage
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,11 +44,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
+import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.StockAnalysisNarrative
 import com.kurogane.dividend.model.StockAnalysisNarrativeGenerator
 import com.kurogane.dividend.viewmodel.DividendViewModel
@@ -64,7 +67,8 @@ fun StockDetailScreen(
     stockCode: String = "7203",
     viewModel: DividendViewModel,
     onBack: () -> Unit = {},
-    onOpenAddHolding: (String) -> Unit = {}
+    onOpenAddHolding: (String) -> Unit = {},
+    onHoldingRemoved: (Holding) -> Unit = { onBack() }
 ) {
     val resources = LocalContext.current.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
@@ -2633,7 +2637,7 @@ fun StockDetailScreen(
                 TextButton(
                     onClick = {
                         showDeleteHoldingConfirmation = false
-                        if (viewModel.removeHolding(currentHolding.id)) onBack()
+                        if (viewModel.removeHolding(currentHolding.id)) onHoldingRemoved(currentHolding)
                     }
                 ) {
                     Text("削除", color = ErrorRed, fontWeight = FontWeight.Bold)

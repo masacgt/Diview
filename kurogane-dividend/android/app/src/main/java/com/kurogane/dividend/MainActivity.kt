@@ -7,6 +7,7 @@ import android.content.Intent
 import com.kurogane.dividend.notifications.DiviewNotifications
 import com.kurogane.dividend.notifications.NotificationStore
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -68,7 +69,9 @@ import com.kurogane.dividend.ui.theme.AppTextSize
 import com.kurogane.dividend.ui.components.SearchSheet
 import com.kurogane.dividend.ui.components.AddHoldingSheet
 import com.kurogane.dividend.ui.components.NotificationHistorySheet
+import com.kurogane.dividend.ui.components.DiviewSnackbarHost
 import com.kurogane.dividend.viewmodel.DividendViewModel
+import com.kurogane.dividend.model.Holding
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 class MainActivity : androidx.fragment.app.FragmentActivity() {
@@ -184,17 +187,19 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 }
                 var showAddHoldingSheet by remember { mutableStateOf(false) }
                 var prefilledAddHoldingCode by remember { mutableStateOf("") }
+                var pendingRestoreHolding by remember { mutableStateOf<Holding?>(null) }
                 val scrollToTopRequests = remember { mutableStateMapOf<String, Int>() }
                 val saveError by viewModel.saveError.collectAsStateWithLifecycle()
                 val snackbarHostState = remember { SnackbarHostState() }
                 LaunchedEffect(saveError) {
                     saveError?.let { snackbarHostState.showSnackbar(it); viewModel.clearSaveError() }
                 }
+                val activityScope = rememberCoroutineScope()
 
                 val dynamicBg = BackgroundDark
 
                 Scaffold(
-                    snackbarHost = { SnackbarHost(snackbarHostState) },
+                    snackbarHost = { DiviewSnackbarHost(snackbarHostState) },
                     modifier = Modifier.fillMaxSize(),
                     contentWindowInsets = WindowInsets(0, 0, 0, 0),
                     containerColor = dynamicBg,
@@ -483,7 +488,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onOpenHoldingRegistration = { code ->
                                         prefilledAddHoldingCode = code
                                         showAddHoldingSheet = true
-                                    }
+                                    },
+                                    pendingRestoreHolding = pendingRestoreHolding,
+                                    onPendingRestoreHoldingConsumed = { pendingRestoreHolding = null },
+                                    sharedSnackbarHostState = snackbarHostState
                                 )
                             }
                             composable("annual") {
@@ -549,6 +557,24 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onOpenAddHolding = { selectedCode ->
                                         prefilledAddHoldingCode = selectedCode
                                         showAddHoldingSheet = true
+                                    },
+                                    onHoldingRemoved = { holding ->
+                                        navController.navigate("asset") {
+                                            popUpTo("asset") { inclusive = false }
+                                            launchSingleTop = true
+                                        }
+                                        activityScope.launch {
+                                            kotlinx.coroutines.delay(350)
+                                            val result = snackbarHostState.showSnackbar(
+                                                message = "${viewModel.japaneseDisplayName(holding.code, holding.name)}を保有銘柄から削除しました",
+                                                actionLabel = "元に戻す",
+                                                withDismissAction = true,
+                                                duration = SnackbarDuration.Short
+                                            )
+                                            if (result == SnackbarResult.ActionPerformed) {
+                                                pendingRestoreHolding = holding
+                                            }
+                                        }
                                     }
                                 )
                             }
