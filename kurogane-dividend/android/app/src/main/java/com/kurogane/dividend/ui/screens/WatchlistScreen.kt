@@ -1809,6 +1809,27 @@ fun WatchlistScreen(
                         val calendarEmptyMonthColor = BorderColor
                         val calendarDividendColor = PrimaryEmeraldContainer
                         val calendarUsColor = SecondaryIndigo
+                        // Monthly amounts are shown above the bars, aligned to each month.
+                        AdaptiveRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start
+                        ) {
+                            (1..12).forEach { m ->
+                                val amount = projection.monthlyTotals[m - 1]
+                                val amountLabel = if (amount > 0) yen(amount) else "—"
+                                Text(
+                                    text = amountLabel,
+                                    modifier = Modifier.weight(1f),
+                                    color = if (amount > 0) OnSurfaceVariant else OnSurfaceVariant.copy(alpha = 0.7f),
+                                    fontSize = 6.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+
                         Canvas(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1846,26 +1867,16 @@ fun WatchlistScreen(
                             }
                         }
 
-                        // Labels row under calendar
+                        // Month labels remain below the bars.
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                             horizontalArrangement = Arrangement.Start
                         ) {
                             (1..12).forEach { m ->
-                                val amount = projection.monthlyTotals[m - 1]
-                                val amountLabel = if (amount > 0) yen(amount) else "—"
-                                Column(
+                                Box(
                                     modifier = Modifier.weight(1f),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = amountLabel,
-                                        color = if (amount > 0) OnSurfaceVariant else OnSurfaceVariant.copy(alpha = 0.7f),
-                                        fontSize = 6.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
                                     Text(
                                         stringResource(R.string.annual_dividend_1_s, m),
                                         color = OnSurface,
