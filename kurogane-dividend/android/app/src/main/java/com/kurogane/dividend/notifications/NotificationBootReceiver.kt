@@ -11,5 +11,6 @@ class NotificationBootReceiver : BroadcastReceiver() {
         val settings = NotificationStore(context).settings()
         NotificationScheduler.sync(context, settings)
         if (settings.dividendChangeEnabled) NotificationScheduler.enqueueDividendChangeRefresh(context)
+        if (settings.dividendEnabled) NotificationScheduler.enqueueDividendRightsRefresh(context)
     }
 }

@@ -5,13 +5,14 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.kurogane.dividend.data.CloudflareMarketRepository
 import com.kurogane.dividend.data.LocalImportStore
+import com.kurogane.dividend.model.PortfolioMath
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.time.YearMonth
 import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 class DividendNotificationWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
@@ -32,7 +33,7 @@ class DividendNotificationWorker(context: Context, parameters: WorkerParameters)
     }
 }
 
-/** Kept separate from Worker so failures, permissions and duplicate delivery can be tested offline. */
+/** Delivery stays local; discovered events are held until the next 08:30 or 17:30 checkpoint. */
 class NotificationDeliveryEngine(
     context: Context,
     private val fetchPrices: suspend () -> Map<String, Double> = { CloudflareMarketRepository().fetchPriceCatalog() },
@@ -57,52 +58,101 @@ class NotificationDeliveryEngine(
         deliveryMutex.withLock {
             val settings = store.settings()
             if (!settings.enabled(kind) || !canPost(kind)) return@withLock
-            if (kind == NotificationKind.PRICE) {
-                // Reload after the network call so deleted/disabled securities cannot create late alerts.
-                val initial = portfolio.loadWatchlist().orEmpty()
-                if (initial.none { it.alertEnabled }) { store.ifCurrent(settings) { store.savePriceStates(emptyMap()) }; return@withLock }
-                val prices = fetchPrices()
-                val stocks = portfolio.loadWatchlist().orEmpty()
-                val date = now().withZoneSameInstant(NotificationPolicy.japanZone).toLocalDate()
-                val plan = NotificationPolicy.priceAlerts(stocks, prices, store.priceStates(), date)
-                if (store.settings() != settings || !canPost(kind)) return@withLock
-                if (plan.hits.isEmpty()) { store.ifCurrent(settings) { store.savePriceStates(plan.states) }; return@withLock }
-                val text = plan.hits.take(5).joinToString("\n") {
-                    "${it.stock.name.take(70)} (${it.stock.code})：取得株価 ${it.stock.currency}${String.format(Locale.JAPAN, "%.2f", it.price)} / 利回り ${String.format(Locale.JAPAN, "%.2f", it.yield)}% / 目標 ${String.format(Locale.JAPAN, "%.2f", it.stock.targetYield)}%"
-                } + if (plan.hits.size > 5) "\nほか${plan.hits.size - 5}銘柄。Watchlistで確認できます。" else ""
-                store.ifCurrent(settings) { if (canPost(kind) && post(kind, "${plan.hits.size}銘柄が目標利回りに到達", text)) {
-                    val sent = plan.hits.map { com.kurogane.dividend.model.PortfolioMath.normalizeCode(it.stock.code) }.toSet()
-                    store.savePriceStates(plan.states.mapValues { (code, state) ->
-                        if (code in sent) state.copy(notifiedDate = date.toString()) else state
-                    })
-                } }
-            } else if (kind == NotificationKind.DIVIDEND) {
-                val date = now().withZoneSameInstant(NotificationPolicy.japanZone).toLocalDate()
-                val month = YearMonth.from(date).toString()
-                if (store.dividendMonth() == month) return@withLock
-                val holdings = NotificationPolicy.dividendHoldings(portfolio.loadHoldings().orEmpty(), date)
-                if (holdings.isEmpty() || store.settings() != settings || !canPost(kind)) return@withLock
-                val names = holdings.take(5).joinToString("、") { it.name.take(50) }
-                val text = "$names${if (holdings.size > 5) "ほか" else ""}の登録上の配当受取月です。入金日と実際の入金は証券口座で確認してください。"
-                store.ifCurrent(settings) {
-                    if (canPost(kind) && post(kind, "${date.monthValue}月の配当予定：${holdings.size}銘柄", text)) store.saveDividendMonth(month)
+            val nowMillis = now().toInstant().toEpochMilli()
+            when (kind) {
+                NotificationKind.PRICE -> {
+                    val initialStocks = portfolio.loadWatchlist().orEmpty()
+                    if (initialStocks.none { it.alertEnabled }) {
+                        store.ifCurrent(settings) {
+                            store.savePriceStates(emptyMap())
+                            store.removePendingPriceAlerts(store.pendingPriceAlerts())
+                        }
+                        return@withLock
+                    }
+
+                    val prices = fetchPrices()
+                    val stocks = portfolio.loadWatchlist().orEmpty()
+                    val holdings = portfolio.loadHoldings().orEmpty()
+                    val plan = NotificationPolicy.priceAlerts(stocks, holdings, prices, store.priceStates())
+                    if (store.settings() != settings || !canPost(kind)) return@withLock
+                    store.ifCurrent(settings) {
+                        store.savePriceStates(plan.states)
+                        val enabledCodes = stocks.filter { it.alertEnabled }
+                            .map { PortfolioMath.normalizeCode(it.code) }.toSet()
+                        val cancelled = store.pendingPriceAlerts().filter { pending ->
+                            pending.code !in enabledCodes || plan.states[pending.code]?.ready != true
+                        }
+                        store.removePendingPriceAlerts(cancelled)
+                        val deliverAt = NotificationPolicy.nextDeliveryAt(now()).toInstant().toEpochMilli()
+                        store.queuePendingPriceAlerts(plan.hits.map { hit ->
+                            PendingPriceAlert(
+                                code = hit.stock.code,
+                                name = hit.stock.name,
+                                currency = hit.stock.currency,
+                                price = hit.price,
+                                yield = hit.yield,
+                                targetYield = hit.stock.targetYield,
+                                held = hit.held,
+                                deliverAtMillis = deliverAt
+                            )
+                        })
+                    }
+                    if (store.settings() == settings && canPost(kind)) {
+                        deliverPendingPriceAlerts(settings, nowMillis)
+                    }
                 }
-            } else {
-                val events = store.pendingDividendChanges().take(8)
-                if (events.isEmpty() || store.settings() != settings || !canPost(kind)) return@withLock
-                val increased = events.count { it.isIncrease }
-                val decreased = events.size - increased
-                val title = buildList {
-                    if (increased > 0) add("増配 ${increased}銘柄")
-                    if (decreased > 0) add("減配 ${decreased}銘柄")
-                }.joinToString("・") + "のお知らせ"
-                val text = events.joinToString("\n") { event ->
-                    val direction = if (event.isIncrease) "増配" else "減配"
-                    "${event.name.take(50)} (${event.code})：${event.fiscalYear}年度 $direction / 1株配当 ¥${String.format(Locale.JAPAN, "%.2f", event.previousDps)} → ¥${String.format(Locale.JAPAN, "%.2f", event.currentDps)}"
-                } + if (store.pendingDividendChanges().size > events.size) "\nほか${store.pendingDividendChanges().size - events.size}銘柄" else ""
-                store.ifCurrent(settings) {
-                    if (canPost(kind) && post(kind, title, text)) store.removeDividendChangeEvents(events)
-                }
+                NotificationKind.DIVIDEND -> deliverPendingDividendRights(settings, nowMillis)
+                NotificationKind.DIVIDEND_CHANGE -> deliverPendingDividendChanges(settings, nowMillis)
+            }
+        }
+    }
+
+    private fun deliverPendingPriceAlerts(settings: NotificationSettings, nowMillis: Long) {
+        val pending = store.pendingPriceAlerts(nowMillis)
+        if (pending.isEmpty()) return
+        val details = pending.take(5).joinToString("\n") { event ->
+            val held = if (event.held) "・保有中" else ""
+            "${event.name.take(70)} (${event.code})$held：取得株価 ${event.currency}${String.format(Locale.JAPAN, "%.2f", event.price)} / 利回り ${String.format(Locale.JAPAN, "%.2f", event.yield)}% / 目標 ${String.format(Locale.JAPAN, "%.2f", event.targetYield)}%"
+        } + if (pending.size > 5) "\nほか${pending.size - 5}銘柄" else ""
+        store.ifCurrent(settings) {
+            if (canPost(NotificationKind.PRICE) && post(NotificationKind.PRICE, "${pending.size}銘柄が目標利回りに到達", details)) {
+                store.removePendingPriceAlerts(pending)
+            }
+        }
+    }
+
+    private fun deliverPendingDividendRights(settings: NotificationSettings, nowMillis: Long) {
+        val pending = store.pendingDividendRightsEvents(nowMillis)
+        if (pending.isEmpty()) return
+        val dateFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.JAPAN)
+        val details = pending.take(5).joinToString("\n") { pendingEvent ->
+            val event = pendingEvent.event
+            "${event.name.take(50)} (${event.code})：取得済み日程の権利確定日 ${event.recordDate.format(dateFormat)} を経過しました。配当額・入金日は会社発表や証券口座で確認してください。"
+        } + if (pending.size > 5) "\nほか${pending.size - 5}銘柄" else ""
+        store.ifCurrent(settings) {
+            if (canPost(NotificationKind.DIVIDEND) && post(NotificationKind.DIVIDEND,
+                    "配当権利確定日を経過：${pending.size}銘柄", details)) {
+                store.removePendingDividendRightsEvents(pending)
+            }
+        }
+    }
+
+    private fun deliverPendingDividendChanges(settings: NotificationSettings, nowMillis: Long) {
+        val pending = store.pendingDividendChanges(nowMillis)
+        if (pending.isEmpty()) return
+        val increased = pending.count { it.isIncrease }
+        val decreased = pending.size - increased
+        val title = buildList {
+            if (increased > 0) add("増配 ${increased}銘柄")
+            if (decreased > 0) add("減配 ${decreased}銘柄")
+        }.joinToString("・") + "のお知らせ"
+        val details = pending.take(8).joinToString("\n") { event ->
+            val direction = if (event.isIncrease) "増配" else "減配"
+            "${event.name.take(50)} (${event.code})：${event.fiscalYear}年度 $direction / 1株配当 ¥${String.format(Locale.JAPAN, "%.2f", event.previousDps)} → ¥${String.format(Locale.JAPAN, "%.2f", event.currentDps)}"
+        } + if (pending.size > 8) "\nほか${pending.size - 8}銘柄" else ""
+        store.ifCurrent(settings) {
+            if (canPost(NotificationKind.DIVIDEND_CHANGE) && post(NotificationKind.DIVIDEND_CHANGE, title, details)) {
+                store.removeDividendChangeEvents(pending)
             }
         }
     }

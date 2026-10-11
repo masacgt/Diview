@@ -2042,6 +2042,9 @@ class DividendViewModel @JvmOverloads constructor(
                     if (enabled && kind == NotificationKind.DIVIDEND_CHANGE) {
                         launch { refreshFinancialDataIfDue(force = true) }
                     }
+                    if (enabled && kind == NotificationKind.DIVIDEND) {
+                        NotificationScheduler.enqueueDividendRightsRefresh(getApplication())
+                    }
                 }.onFailure { _saveError.value = getApplication<android.app.Application>().getString(R.string.dividend_view_model_message) }
             }
         }
@@ -2160,6 +2163,9 @@ class DividendViewModel @JvmOverloads constructor(
                 launch { refreshExchangeRate() }
                 runCatching { notificationScheduler(getApplication(), _notificationSettings.value) }.onFailure {
                     _saveError.value = getApplication<android.app.Application>().getString(R.string.dividend_view_model_message_5)
+                }
+                if (_notificationSettings.value.dividendEnabled) {
+                    NotificationScheduler.enqueueDividendRightsRefresh(getApplication())
                 }
                 refreshMarketPricesIfDue()
                 launch { refreshFinancialDataIfDue(force = _notificationSettings.value.dividendChangeEnabled) }
