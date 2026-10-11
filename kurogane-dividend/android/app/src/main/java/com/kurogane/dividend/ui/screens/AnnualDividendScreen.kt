@@ -635,8 +635,29 @@ private fun MonthlyDividendEstimateCard(
     val monthlyGridStep = monthlyGridMagnitude * monthlyGridStepMultiplier
     val monthlyGridCount = kotlin.math.floor(maxMonthlyAmount / monthlyGridStep).toInt()
     val monthlyGridColor = BorderColor
+    val monthlySelectionColor = PrimaryEmerald
+    val monthlyChartCanvasHeight = 136.dp
+    val monthlyBarAreaBottomFraction = .90f
+    val monthlyBarAreaHeightFraction = .62f
+    val monthlyPlotHeight = monthlyChartCanvasHeight * monthlyBarAreaHeightFraction
     val monthlyAmountLabelTopOffset = 24.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale
     val monthlyAmountLabelSlotHeight = 16.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale
+    val monthlyAxisGap = 3.dp
+    val monthlyAxisLabelHeight = monthlyAmountLabelSlotHeight
+    val monthlyAxisInset = monthlyAxisGap + monthlyAxisLabelHeight
+    val monthlyChartHeight = monthlyChartCanvasHeight + monthlyAxisInset
+    var monthlyBarsVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(monthlyDividends) {
+        monthlyBarsVisible = false
+        withFrameNanos { }
+        monthlyBarsVisible = true
+    }
+    val monthlyBarsProgress by animateFloatAsState(
+        targetValue = if (monthlyBarsVisible) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f),
+        label = "Monthly dividend bars"
+    )
+    val monthlyBarStaggerStep = if (monthlyDividends.size > 1) .32f / (monthlyDividends.size - 1) else 0f
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -725,80 +746,118 @@ private fun MonthlyDividendEstimateCard(
             Spacer(modifier = Modifier.height(18.dp))
 
             Row(
-                modifier = Modifier.fillMaxWidth().height(145.dp).drawBehind {
-                    val plotBottom = size.height - 20.dp.toPx()
-                    val plotHeight = 85.dp.toPx()
+                modifier = Modifier.fillMaxWidth().height(monthlyChartHeight).drawBehind {
+                    val plotBottom = monthlyChartCanvasHeight.toPx() * monthlyBarAreaBottomFraction
+                    val plotHeight = monthlyPlotHeight.toPx()
                     (0..monthlyGridCount).forEach { guideIndex ->
                         val guideAmount = guideIndex * monthlyGridStep
                         val y = plotBottom - plotHeight * (guideAmount / maxMonthlyAmount).toFloat()
                         drawLine(monthlyGridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
                     }
+                    selectedMonth?.let { month ->
+                        val selectedIndex = monthlyDividends.indexOfFirst { it.first == month }
+                        if (selectedIndex >= 0) {
+                            val groupWidth = size.width / monthlyDividends.size
+                            val highlightLeft = groupWidth * (selectedIndex + .05f)
+                            val highlightSize = Size(groupWidth * .9f, monthlyChartCanvasHeight.toPx())
+                            drawRoundRect(
+                                color = monthlySelectionColor.copy(alpha = .08f),
+                                topLeft = Offset(highlightLeft, 0f),
+                                size = highlightSize,
+                                cornerRadius = CornerRadius(6.dp.toPx())
+                            )
+                            drawRoundRect(
+                                color = monthlySelectionColor.copy(alpha = .35f),
+                                topLeft = Offset(highlightLeft, 0f),
+                                size = highlightSize,
+                                cornerRadius = CornerRadius(6.dp.toPx()),
+                                style = Stroke(1.dp.toPx())
+                            )
+                        }
+                    }
                 },
                 horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.Bottom
             ) {
-                monthlyDividends.forEach { (month, amount, label) ->
+                monthlyDividends.forEachIndexed { index, (month, amount, label) ->
                     val isSelected = selectedMonth == month
                     val heightFraction = (amount / maxMonthlyAmount).toFloat().coerceIn(0.0f, 1.0f)
+                    val stagger = index * monthlyBarStaggerStep
+                    val barProgress = ((monthlyBarsProgress - stagger) / (1f - stagger)).coerceAtLeast(0f)
+                    val animatedHeightFraction = heightFraction * barProgress
 
                     Column(
-                        modifier = Modifier.weight(1f).height(145.dp).clickable { viewModel.selectMonth(month) },
+                        modifier = Modifier.weight(1f).height(monthlyChartHeight).clickable { viewModel.selectMonth(month) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Bottom
                     ) {
-                        val barMaxHeight = 85.dp
-                        Box(modifier = Modifier.fillMaxWidth().height(barMaxHeight + monthlyAmountLabelTopOffset + monthlyAmountLabelSlotHeight)) {
-                            Box(modifier = Modifier.fillMaxWidth().height(barMaxHeight).align(Alignment.BottomCenter), contentAlignment = Alignment.BottomCenter) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(barMaxHeight * heightFraction)
-                                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                                        .then(if (isSelected) Modifier.border(1.5.dp, OnSurface, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)) else Modifier),
-                                    verticalArrangement = Arrangement.Bottom
-                                ) {
-                                    val categories = monthlyByCategory[month - 1]
-                                    listOf(2, 1, 0).forEach { categoryIndex ->
-                                        val categoryAmount = categories[categoryIndex]
-                                        if (categoryAmount > 0.0 && amount > 0.0) {
-                                            Box(
-                                                Modifier.fillMaxWidth()
-                                                    .weight((categoryAmount / amount).toFloat())
-                                                    .background(when (categoryIndex) {
-                                                        0 -> NeonGreenLight
-                                                        1 -> SkyBlue
-                                                        else -> Color(0xFF818CF8)
-                                                    })
-                                            )
+                        Box(modifier = Modifier.fillMaxWidth().height(monthlyChartCanvasHeight)) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(monthlyChartCanvasHeight * monthlyBarAreaBottomFraction)
+                                    .align(Alignment.TopCenter),
+                                contentAlignment = Alignment.BottomCenter
+                            ) {
+                                if (animatedHeightFraction > 0f) {
+                                    Column(
+                                        modifier = Modifier
+                                            .widthIn(max = 32.dp)
+                                            .fillMaxWidth()
+                                            .height(monthlyPlotHeight * animatedHeightFraction)
+                                            .clip(RoundedCornerShape(4.dp)),
+                                        verticalArrangement = Arrangement.Bottom
+                                    ) {
+                                        val categories = monthlyByCategory[month - 1]
+                                        listOf(2, 1, 0).forEach { categoryIndex ->
+                                            val categoryAmount = categories[categoryIndex]
+                                            if (categoryAmount > 0.0 && amount > 0.0) {
+                                                val categoryColor = when (categoryIndex) {
+                                                    0 -> NeonGreenLight
+                                                    1 -> SkyBlue
+                                                    else -> Color(0xFF818CF8)
+                                                }
+                                                Box(
+                                                    Modifier.fillMaxWidth()
+                                                        .weight((categoryAmount / amount).toFloat())
+                                                        .background(Brush.verticalGradient(listOf(categoryColor, categoryColor.copy(alpha = .45f))))
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                             Text(
                                 text = label,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
                                     .height(monthlyAmountLabelSlotHeight)
-                                    .align(Alignment.BottomCenter)
-                                    .offset(y = -(barMaxHeight * heightFraction + monthlyAmountLabelTopOffset - monthlyAmountLabelSlotHeight)),
+                                    .align(Alignment.TopCenter)
+                                    .offset(y = monthlyChartCanvasHeight * (monthlyBarAreaBottomFraction - animatedHeightFraction * monthlyBarAreaHeightFraction) - monthlyAmountLabelTopOffset),
                                 fontSize = 9.sp,
-                                fontWeight = FontWeight.Black,
-                                color = if (isSelected) NeonGreenLight else SkyBlue,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isSelected) PrimaryEmerald else OnSurfaceVariant,
                                 textAlign = TextAlign.Center,
                                 maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                                 softWrap = false
                             )
                         }
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(
-                            text = stringResource(R.string.annual_dividend_1_s , month),
-                            modifier = Modifier.fillMaxWidth(),
-                            fontSize = AppTextSize.dense,
-                            fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                            color = if (isSelected) NeonGreenLight else SoftGray,
-                            textAlign = TextAlign.Center,
-                            maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
-                            softWrap = false
-                        )
+                        Spacer(modifier = Modifier.height(monthlyAxisGap))
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(monthlyAxisLabelHeight),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.annual_dividend_1_s, month),
+                                modifier = Modifier.fillMaxWidth(),
+                                fontSize = AppTextSize.dense,
+                                fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                                color = if (isSelected) NeonGreenLight else SoftGray,
+                                textAlign = TextAlign.Center,
+                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
+                                softWrap = false
+                            )
+                        }
                     }
                 }
             }
@@ -929,7 +988,7 @@ private fun QuarterlyCashFlowComparison(
     isPrivacyActive: Boolean,
     currencyFormat: NumberFormat
 ) {
-    val quarterColors = listOf(SecondaryIndigo, PrimaryEmeraldContainer, SecondaryIndigo, PrimaryEmeraldContainer)
+    val quarterColors = listOf(PrimaryEmeraldContainer, SecondaryIndigo, SkyBlue, AccentAmber)
     val maxMonthShareText = if (isPrivacyActive) "•••%" else String.format(Locale.JAPAN, "%.1f%%", maxMonthSharePercent)
 
     Surface(
@@ -3200,22 +3259,27 @@ private fun AssetTrackingTwelveMonthSection(
                                 if (isLatest) PrimaryEmerald.copy(alpha = 0.5f) else Color.Transparent,
                                 RoundedCornerShape(12.dp)
                             )
-                            .padding(horizontal = 8.dp, vertical = 10.dp)
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                        text = if (isLatest) resources.getString(R.string.annual_dividend_label_48, (item.month).toString()) else resources.getString(R.string.ex_dividend_matrix_dialog_text_4, (item.month).toString()),
+                            text = if (isLatest) resources.getString(R.string.annual_dividend_label_48, (item.month).toString()) else resources.getString(R.string.ex_dividend_matrix_dialog_text_4, (item.month).toString()),
+                            modifier = Modifier.fillMaxWidth(),
                             color = if (isLatest) PrimaryEmerald else OnSurface,
                             fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold,
                             maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
+                            textAlign = TextAlign.Center,
                             softWrap = false
                         )
                         Spacer(Modifier.height(7.dp))
                         Text(
                             text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_50) else resources.getString(R.string.annual_dividend_label_51, (formatAssetWan(item.cost)).toString()),
+                            modifier = Modifier.fillMaxWidth(),
                             color = OnSurfaceVariant,
                             fontSize = AppTextSize.dense,
                             maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
+                            textAlign = TextAlign.Center,
                             softWrap = false
                         )
                         Text(
@@ -3224,10 +3288,12 @@ private fun AssetTrackingTwelveMonthSection(
                                 item.value == null -> resources.getString(R.string.annual_dividend_label_53)
                                 else -> resources.getString(R.string.annual_dividend_label_54, (formatAssetWan(item.value)).toString())
                             },
+                            modifier = Modifier.fillMaxWidth(),
                             color = if (isLatest) PrimaryEmerald else OnSurface,
                             fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold,
                             maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
+                            textAlign = TextAlign.Center,
                             softWrap = false
                         )
                         Spacer(Modifier.height(6.dp))
@@ -3237,10 +3303,12 @@ private fun AssetTrackingTwelveMonthSection(
                                 item.gain == null -> resources.getString(R.string.annual_dividend_label_55)
                                 else -> "${if (item.gain >= 0) "+" else "−"}${formatAssetWan(kotlin.math.abs(item.gain))}"
                             },
+                            modifier = Modifier.fillMaxWidth(),
                             color = gainColor,
                             fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.ExtraBold,
                             maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
+                            textAlign = TextAlign.Center,
                             softWrap = false
                         )
                     }
