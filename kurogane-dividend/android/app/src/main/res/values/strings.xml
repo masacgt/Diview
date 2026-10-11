@@ -120,7 +120,7 @@
     <string name="annual_dividend_text_39">"年平均増配額 %1$s /年"</string>
     <string name="annual_dividend_text_40">"年間配当額"</string>
     <string name="annual_dividend_text_41">"開始期比 %1$s"</string>
-    <string name="annual_dividend_text_42">"年次推移データグリッド（年間配当額と前年差）"</string>
+    <string name="annual_dividend_text_42">"前年差推移"</string>
     <string name="annual_dividend_text_43">"%1$s/%2$s銘柄"</string>
     <string name="annual_dividend_text_44">"年額"</string>
     <string name="annual_dividend_text_45">"前年差"</string>
