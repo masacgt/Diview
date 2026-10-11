@@ -633,6 +633,8 @@ private fun MonthlyDividendEstimateCard(
     val monthlyGridStep = monthlyGridMagnitude * monthlyGridStepMultiplier
     val monthlyGridCount = kotlin.math.floor(maxMonthlyAmount / monthlyGridStep).toInt()
     val monthlyGridColor = BorderColor
+    val monthlyAmountLabelTopOffset = 24.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale
+    val monthlyAmountLabelSlotHeight = 16.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -743,30 +745,34 @@ private fun MonthlyDividendEstimateCard(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Bottom
                     ) {
-                        Text(
-                            text = label,
-                            modifier = Modifier.fillMaxWidth(),
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Black,
-                            color = if (isSelected) NeonGreenLight else SkyBlue,
-                            textAlign = TextAlign.Center,
-                            maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
-                            softWrap = false
-                        )
-                        Spacer(modifier = Modifier.height(3.dp))
                         val barMaxHeight = 85.dp
-                        Box(modifier = Modifier.fillMaxWidth().height(barMaxHeight), contentAlignment = Alignment.BottomCenter) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(barMaxHeight * heightFraction)
-                                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                                    .background(
-                                        if (isSelected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
-                                        else if (isSpecialMonth) Brush.verticalGradient(listOf(NeonGreenLight, NeonGreen))
-                                        else Brush.verticalGradient(listOf(SkyBlue, Color(0xFF0077B6)))
-                                    )
-                                    .then(if (isSelected) Modifier.border(1.5.dp, OnSurface, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)) else Modifier)
+                        Box(modifier = Modifier.fillMaxWidth().height(barMaxHeight + monthlyAmountLabelTopOffset + monthlyAmountLabelSlotHeight)) {
+                            Box(modifier = Modifier.fillMaxWidth().height(barMaxHeight).align(Alignment.BottomCenter), contentAlignment = Alignment.BottomCenter) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(barMaxHeight * heightFraction)
+                                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                        .background(
+                                            if (isSelected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
+                                            else if (isSpecialMonth) Brush.verticalGradient(listOf(NeonGreenLight, NeonGreen))
+                                            else Brush.verticalGradient(listOf(SkyBlue, Color(0xFF0077B6)))
+                                        )
+                                        .then(if (isSelected) Modifier.border(1.5.dp, OnSurface, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)) else Modifier)
+                                )
+                            }
+                            Text(
+                                text = label,
+                                modifier = Modifier.fillMaxWidth()
+                                    .height(monthlyAmountLabelSlotHeight)
+                                    .align(Alignment.BottomCenter)
+                                    .offset(y = -(barMaxHeight * heightFraction + monthlyAmountLabelTopOffset - monthlyAmountLabelSlotHeight)),
+                                fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Black,
+                                color = if (isSelected) NeonGreenLight else SkyBlue,
+                                textAlign = TextAlign.Center,
+                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
+                                softWrap = false
                             )
                         }
                         Spacer(modifier = Modifier.height(3.dp))
