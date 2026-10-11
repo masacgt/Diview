@@ -2375,7 +2375,12 @@ private fun CompoundingSimulationSection(
                         }
                     }
                 }
-                Surface(shape = RoundedCornerShape(10.dp), color = BackgroundDark, modifier = Modifier.fillMaxWidth()) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = BackgroundDark,
+                    border = BorderStroke(0.5.dp, BorderColor),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(stringResource(R.string.annual_dividend_text_46 , selectedYear.year), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
