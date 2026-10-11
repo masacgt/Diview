@@ -534,6 +534,8 @@
     <string name="watchlist_text_7">"配当ポテンシャル"</string>
     <string name="watchlist_text_8">"/年"</string>
     <string name="watchlist_text_9">"各1単元保有試算 (%1$s銘柄保有済)"</string>
+    <string name="watchlist_projection_info_content_description">"配当ポテンシャルの説明"</string>
+    <string name="watchlist_projection_info_title">"配当ポテンシャルの見方"</string>
     <string name="watchlist_text_10">"監視銘柄の一括シミュレーション"</string>
     <string name="watchlist_text_11">"権利落ち月マトリクス"</string>
     <string name="watchlist_text_12">"受取月別グラフ試算"</string>

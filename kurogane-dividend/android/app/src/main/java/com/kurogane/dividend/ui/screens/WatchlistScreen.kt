@@ -192,6 +192,7 @@ fun WatchlistScreen(
     val heldCount = watchlist.filter { stock -> holdings.any { it.code == stock.code } }.size
 
     var filterState by remember { mutableStateOf("all") } // "all", "jp", "us", "ready"
+    var showProjectionInfo by remember { mutableStateOf(false) }
     var showSortBottomSheet by remember { mutableStateOf(false) }
     var sortCriteria by remember { mutableStateOf("ach") } // "ach", "yield", "price", "code"
     var sortDirection by remember { mutableStateOf("desc") } // "asc", "desc"
@@ -362,13 +363,61 @@ fun WatchlistScreen(
                                     .padding(10.dp)
                             ) {
                                 Column {
-                                    Text(stringResource(R.string.watchlist_text_7), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(stringResource(R.string.watchlist_text_7), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                        Box {
+                                            IconButton(
+                                                onClick = { showProjectionInfo = true },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Info,
+                                                    contentDescription = stringResource(R.string.watchlist_projection_info_content_description),
+                                                    tint = OnSurfaceVariant,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                            DropdownMenu(
+                                                expanded = showProjectionInfo,
+                                                onDismissRequest = { showProjectionInfo = false },
+                                                modifier = Modifier.widthIn(max = 300.dp),
+                                                shape = RoundedCornerShape(16.dp),
+                                                containerColor = SurfaceContainerLow,
+                                                tonalElevation = 0.dp,
+                                                shadowElevation = 12.dp
+                                            ) {
+                                                Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                                                    Text(
+                                                        stringResource(R.string.watchlist_projection_info_title),
+                                                        color = OnSurface,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = AppTextSize.body
+                                                    )
+                                                    Spacer(Modifier.height(12.dp))
+                                                    HorizontalDivider(color = BorderColor, thickness = 0.75.dp)
+                                                    Spacer(Modifier.height(12.dp))
+                                                    Text(
+                                                        stringResource(R.string.watchlist_text_9, heldCount),
+                                                        color = OnSurfaceVariant,
+                                                        fontSize = AppTextSize.caption,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Spacer(Modifier.height(8.dp))
+                                                    Text(
+                                                        projectionNote,
+                                                        color = OnSurfaceVariant,
+                                                        fontSize = AppTextSize.caption,
+                                                        lineHeight = 20.sp
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(stringResource(R.string.annual_dividend_text_70), fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, color = OnSurface)
                                         Text(currencyFormat.format(potentialDiv.toLong()), fontSize = AppTextSize.metric, fontWeight = FontWeight.Bold, color = OnSurface, fontFamily = FontFamily.Monospace)
                                         Text(stringResource(R.string.watchlist_text_8), fontSize = AppTextSize.dense, color = OnSurfaceVariant)
                                     }
-                                    Text(stringResource(R.string.watchlist_text_9 , heldCount), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
                         }
