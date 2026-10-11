@@ -620,6 +620,8 @@ fun StockDetailScreen(
                                 Icon(Icons.Default.Insights, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(stringResource(R.string.stock_detail_text_22), fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body)
+                                Spacer(modifier = Modifier.width(2.dp))
+                                StockAnalysisDisclaimerInfo()
                             }
                             Text(stringResource(R.string.stock_detail_text_23), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
@@ -2527,6 +2529,60 @@ private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative
                 fontSize = AppTextSize.dense,
                 lineHeight = 14.sp
             )
+        }
+    }
+}
+
+@Composable
+private fun StockAnalysisDisclaimerInfo() {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }, modifier = Modifier.size(28.dp)) {
+            Icon(
+                Icons.Default.Info,
+                contentDescription = stringResource(R.string.stock_detail_analysis_info_content_description),
+                tint = OnSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.widthIn(max = 320.dp),
+            shape = RoundedCornerShape(16.dp),
+            containerColor = CardDark,
+            tonalElevation = 0.dp,
+            shadowElevation = 12.dp
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = PrimaryEmerald.copy(alpha = 0.14f),
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Info, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(17.dp))
+                        }
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        stringResource(R.string.stock_detail_analysis_info_title),
+                        color = OnSurface,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = AppTextSize.body
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = BorderBlue, thickness = 0.75.dp)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    stringResource(R.string.stock_detail_analysis_info_description),
+                    color = OnSurfaceVariant,
+                    fontSize = AppTextSize.caption,
+                    lineHeight = 20.sp
+                )
+            }
         }
     }
 }

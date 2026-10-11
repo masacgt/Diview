@@ -413,6 +413,9 @@
     <string name="stock_detail_text_21">"-10"</string>
     <string name="stock_detail_a11y">"リセット"</string>
     <string name="stock_detail_text_22">"銘柄総合分析ステータス"</string>
+    <string name="stock_detail_analysis_info_content_description">銘柄総合分析の説明</string>
+    <string name="stock_detail_analysis_info_title">分析について</string>
+    <string name="stock_detail_analysis_info_description">銘柄総合分析は、画面に表示されている情報をもとに、配当や財務などの観点から銘柄の状態を整理したものです。情報の更新状況や取得できるデータによって、判定が不完全または実態と異なる場合があります。将来の株価や配当、投資成果を保証するものではありません。投資判断は、ご自身の状況や最新の情報を踏まえて行ってください。</string>
     <string name="stock_detail_text_23">"タップで切替"</string>
     <string name="stock_detail_text_24">"① 健全性"</string>
     <string name="stock_detail_text_25">"② 買場シグナル"</string>
