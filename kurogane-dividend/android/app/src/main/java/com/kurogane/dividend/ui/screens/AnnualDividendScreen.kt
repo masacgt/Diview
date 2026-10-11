@@ -2001,9 +2001,6 @@ private fun CompoundingSimulationSection(
                         Spacer(Modifier.width(5.dp))
                         Text(stringResource(R.string.annual_dividend_text_40), color = OnSurface, fontSize = AppTextSize.dense)
                     }
-                    Surface(shape = RoundedCornerShape(12.dp), color = PrimaryEmerald.copy(alpha = .12f), border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = .3f))) {
-                        Text(stringResource(R.string.annual_dividend_text_41 , signedPercent(increaseRate)), modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                    }
                 }
                 val chartColor = PrimaryEmerald
                 val chartGridColor = BorderColor
