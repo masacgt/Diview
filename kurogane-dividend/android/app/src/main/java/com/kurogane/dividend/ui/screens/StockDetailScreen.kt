@@ -115,6 +115,7 @@ fun StockDetailScreen(
     val stockBenefits = shareholderBenefits[currentHolding.code].orEmpty()
     val defaultClimate = remember(currentHolding.sector) { Tse33IndustryMaster.defaultClimate(currentHolding.sector) }
     val selectedClimate = stockClimateOverrides[currentHolding.code] ?: defaultClimate
+    val hasClimateOverride = stockClimateOverrides[currentHolding.code]?.let { it != defaultClimate } == true
     var climateMenuExpanded by remember(currentHolding.code) { mutableStateOf(false) }
     var climateSelectorWidthPx by remember(currentHolding.code) { mutableIntStateOf(0) }
     var showClimateInfo by remember(currentHolding.code) { mutableStateOf(false) }
@@ -1930,6 +1931,18 @@ fun StockDetailScreen(
                                         Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(6.dp))
                                         Text("景気特性", color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                        Surface(
+                                            shape = RoundedCornerShape(50),
+                                            color = if (hasClimateOverride) PrimaryEmerald.copy(alpha = 0.14f) else OnSurfaceVariant.copy(alpha = 0.12f)
+                                        ) {
+                                            Text(
+                                                if (hasClimateOverride) "手動" else "自動",
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                color = if (hasClimateOverride) PrimaryEmerald else OnSurfaceVariant,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
                                         Box {
                                             IconButton(onClick = { showClimateInfo = true }, modifier = Modifier.size(28.dp)) {
                                                 Icon(
@@ -1975,12 +1988,15 @@ fun StockDetailScreen(
                                             }
                                         }
                                         Spacer(Modifier.weight(1f))
-                                        Text(
-                                            if (stockClimateOverrides.containsKey(currentHolding.code)) "手動設定" else "${cleanSectorName}の標準分類",
-                                            color = OnSurfaceVariant,
-                                            fontSize = 12.sp,
-                                            textAlign = androidx.compose.ui.text.style.TextAlign.End
-                                        )
+                                        if (hasClimateOverride) {
+                                            TextButton(
+                                                onClick = { viewModel.setStockClimateOverride(currentHolding.code, null) },
+                                                modifier = Modifier.heightIn(min = 32.dp),
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                            ) { Text("業種の初期分類に戻す", color = OnSurfaceVariant, fontSize = AppTextSize.dense) }
+                                        } else {
+                                            Text("${cleanSectorName}の標準分類", color = OnSurfaceVariant, fontSize = 12.sp)
+                                        }
                                     }
                                     Box(
                                         modifier = Modifier.fillMaxWidth()
@@ -2048,7 +2064,10 @@ fun StockDetailScreen(
                                                         }
                                                     },
                                                     onClick = {
-                                                        viewModel.setStockClimateOverride(currentHolding.code, climate)
+                                                        viewModel.setStockClimateOverride(
+                                                            currentHolding.code,
+                                                            climate.takeUnless { it == defaultClimate }
+                                                        )
                                                         climateMenuExpanded = false
                                                     },
                                                     modifier = Modifier.padding(horizontal = 6.dp)
@@ -2058,13 +2077,6 @@ fun StockDetailScreen(
                                                 )
                                             }
                                         }
-                                    }
-                                    if (stockClimateOverrides.containsKey(currentHolding.code)) {
-                                        TextButton(
-                                            onClick = { viewModel.setStockClimateOverride(currentHolding.code, null) },
-                                            modifier = Modifier.align(Alignment.End).heightIn(min = 34.dp),
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                                        ) { Text("業種の初期分類に戻す", color = OnSurfaceVariant, fontSize = AppTextSize.dense) }
                                     }
                                 }
                             }
