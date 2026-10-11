@@ -28,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.layout.onGloballyPositioned
 import com.kurogane.dividend.R
@@ -116,6 +117,14 @@ fun StockDetailScreen(
             }
         }
         return
+    }
+
+    val uriHandler = LocalUriHandler.current
+    val researchSecurityCode = currentHolding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T")
+    val yahooFinanceCode = if (currentHolding.code.trim().endsWith(".T", ignoreCase = true)) {
+        currentHolding.code.trim()
+    } else {
+        "$researchSecurityCode.T"
     }
 
     var showDeleteHoldingConfirmation by remember(currentHolding.id) { mutableStateOf(false) }
@@ -498,6 +507,59 @@ fun StockDetailScreen(
                                     Text(stringResource(R.string.stock_detail_text_6), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     Text(String.format(Locale.JAPAN, "%.2f%% YOC", currentHolding.liveYoc), fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.caption, fontFamily = FontFamily.Monospace)
                                     Text(stringResource(R.string.stock_detail_text_7, currentHolding.currency, currentHolding.acqPrice.toLong()), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                }
+                            }
+                        }
+
+                        if (currentHolding.category == com.kurogane.dividend.model.Category.JAPAN) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(BorderColor)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1.5f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = PrimaryEmerald,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        "外部リサーチ:",
+                                        modifier = Modifier.weight(1f),
+                                        color = OnSurfaceVariant,
+                                        fontSize = AppTextSize.dense * 0.8f,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                                ExternalResearchLink(
+                                    label = "Y! ファイナンス",
+                                    indicatorColor = ErrorRed,
+                                    modifier = Modifier.weight(2f)
+                                ) {
+                                    uriHandler.openUri("https://finance.yahoo.co.jp/quote/$yahooFinanceCode")
+                                }
+                                ExternalResearchLink(
+                                    label = "IR BANK",
+                                    indicatorColor = PrimaryEmerald,
+                                    modifier = Modifier.weight(1.3f)
+                                ) {
+                                    uriHandler.openUri("https://irbank.net/$researchSecurityCode")
                                 }
                             }
                         }
@@ -2639,6 +2701,39 @@ private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative
                 lineHeight = 14.sp
             )
         }
+    }
+}
+
+@Composable
+private fun ExternalResearchLink(
+    label: String,
+    indicatorColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(CircleShape)
+            .background(BackgroundDark)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(7.dp).clip(CircleShape).background(indicatorColor))
+        Spacer(Modifier.width(4.dp))
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            color = OnSurface,
+            fontSize = AppTextSize.dense * 0.8f,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        )
+        Spacer(Modifier.width(4.dp))
+        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = OnSurfaceVariant, modifier = Modifier.size(12.dp))
     }
 }
 

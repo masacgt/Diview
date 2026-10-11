@@ -1303,14 +1303,20 @@ fun WatchlistScreen(
                                         color = PrimaryEmerald.copy(alpha = 0.12f),
                                         border = BorderStroke(0.5.dp, PrimaryEmerald.copy(alpha = 0.35f))
                                     ) {
-                                        Text(
-                                            stringResource(R.string.watchlist_text_17 , stock.currency, stock.dps.roundToInt()),
+                                        Row(
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                            color = PrimaryEmerald,
-                                            fontSize = AppTextSize.dense,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1
-                                        )
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                        ) {
+                                            Icon(Icons.Default.Savings, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(12.dp))
+                                            Text(
+                                                stringResource(R.string.watchlist_text_17 , stock.currency, stock.dps.roundToInt()),
+                                                color = PrimaryEmerald,
+                                                fontSize = AppTextSize.dense,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1
+                                            )
+                                        }
                                     }
                                 }
                             }
