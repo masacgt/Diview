@@ -460,12 +460,15 @@ internal fun RoadmapShareSheet(viewModel: DividendViewModel, achievement: Roadma
                                         fontWeight = FontWeight.Bold
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        stringResource(R.string.roadmap_text_54 , achievement.progressPercent),
-                                        color = PrimaryEmeraldContainer,
-                                        fontSize = AppTextSize.body,
-                                        fontWeight = FontWeight.Black
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Icon(Icons.Default.RocketLaunch, contentDescription = null, tint = PrimaryEmeraldContainer, modifier = Modifier.size(18.dp))
+                                        Text(
+                                            stringResource(R.string.roadmap_text_54, achievement.progressPercent),
+                                            color = PrimaryEmeraldContainer,
+                                            fontSize = AppTextSize.body,
+                                            fontWeight = FontWeight.Black
+                                        )
+                                    }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
                                         text = stringResource(R.string.roadmap_text_55) + if (isAmountMasked) resources.getString(R.string.roadmap_label_5) else resources.getString(R.string.roadmap_label_6, (currencyFormat.format(achievement.monthlyIncome)).toString()),

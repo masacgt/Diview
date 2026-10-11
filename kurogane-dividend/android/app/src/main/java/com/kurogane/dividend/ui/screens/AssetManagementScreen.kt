@@ -202,7 +202,10 @@ fun AssetManagementScreen(
     viewModel: DividendViewModel,
     onNavigateToDetail: (String) -> Unit = {},
     onOpenAddHolding: (String) -> Unit = {},
-    onOpenHoldingRegistration: (String) -> Unit = onOpenAddHolding
+    onOpenHoldingRegistration: (String) -> Unit = onOpenAddHolding,
+    pendingRestoreHolding: Holding? = null,
+    onPendingRestoreHoldingConsumed: () -> Unit = {},
+    sharedSnackbarHostState: SnackbarHostState? = null
 ) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     var holdingsRestored by remember(viewModel) { mutableStateOf(false) }
@@ -226,6 +229,8 @@ fun AssetManagementScreen(
     var sortCriteria by rememberSaveable { mutableStateOf("val") } // "val", "gain", "div", "div_amt", "code"
     var sortDirection by rememberSaveable { mutableStateOf("desc") } // "desc", "asc"
     var showSortModal by remember { mutableStateOf(false) }
+    var draftSortCriteria by remember { mutableStateOf("val") }
+    var draftSortDirection by remember { mutableStateOf("desc") }
 
     // Dialog / Modal State
     var showAddAssetModal by remember { mutableStateOf(false) }
@@ -237,7 +242,10 @@ fun AssetManagementScreen(
     var revealedHoldingId by remember { mutableStateOf<String?>(null) }
     var exitingHoldings by remember { mutableStateOf<List<Holding>>(emptyList()) }
     var exitingNextHoldingIds by remember { mutableStateOf<Map<String, String?>>(emptyMap()) }
-    val snackbarHostState = remember { SnackbarHostState() }
+    var restoringHoldingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var pendingRestoreScrollHoldingId by remember { mutableStateOf<String?>(null) }
+    val localSnackbarHostState = remember { SnackbarHostState() }
+    val snackbarHostState = sharedSnackbarHostState ?: localSnackbarHostState
     val screenScope = rememberCoroutineScope()
     val deleteActionWidth = 112.dp
     val deleteActionVisibleWidth = 80.dp
@@ -292,6 +300,30 @@ fun AssetManagementScreen(
         }
     }
 
+    fun restoreHoldingWithAnimation(holding: Holding): Boolean {
+        restoringHoldingIds = restoringHoldingIds + holding.id
+        if (viewModel.restoreHolding(holding)) {
+            pendingRestoreScrollHoldingId = holding.id
+            screenScope.launch {
+                kotlinx.coroutines.delay(600)
+                restoringHoldingIds = restoringHoldingIds - holding.id
+            }
+            return true
+        }
+        restoringHoldingIds = restoringHoldingIds - holding.id
+        return false
+    }
+
+    suspend fun showDeletionSnackbar(holding: Holding) {
+        val result = snackbarHostState.showSnackbar(
+            message = "${viewModel.japaneseDisplayName(holding.code, holding.name)}を保有銘柄から削除しました",
+            actionLabel = "元に戻す",
+            withDismissAction = true,
+            duration = SnackbarDuration.Short
+        )
+        if (result == SnackbarResult.ActionPerformed) restoreHoldingWithAnimation(holding)
+    }
+
     fun deleteHolding(holding: Holding) {
         revealedHoldingId = null
         val indexBeforeDeletion = displayedHoldings.indexOfFirst { it.id == holding.id }
@@ -306,14 +338,14 @@ fun AssetManagementScreen(
         }
         screenScope.launch {
             kotlinx.coroutines.delay(900)
-            val result = snackbarHostState.showSnackbar(
-            message = "${viewModel.japaneseDisplayName(holding.code, holding.name)}を保有銘柄から削除しました",
-                actionLabel = "元に戻す",
-                withDismissAction = true,
-                duration = SnackbarDuration.Short
-            )
-            if (result == SnackbarResult.ActionPerformed) viewModel.restoreHolding(holding)
+            showDeletionSnackbar(holding)
         }
+    }
+
+    LaunchedEffect(pendingRestoreHolding) {
+        val holding = pendingRestoreHolding ?: return@LaunchedEffect
+        restoreHoldingWithAnimation(holding)
+        onPendingRestoreHoldingConsumed()
     }
 
     fun getSortLabel(): String {
@@ -330,7 +362,7 @@ fun AssetManagementScreen(
 
     Scaffold(
         snackbarHost = {
-            SnackbarHost(snackbarHostState) { data ->
+            if (sharedSnackbarHostState == null) SnackbarHost(snackbarHostState) { data ->
                 Surface(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     shape = RoundedCornerShape(12.dp),
@@ -397,6 +429,15 @@ fun AssetManagementScreen(
                     viewModel.assetScrollIndex = index
                     viewModel.assetScrollOffset = offset
                 }
+        }
+        LaunchedEffect(pendingRestoreScrollHoldingId, animatedHoldingIds, hasMissingExchangeRate) {
+            val holdingId = pendingRestoreScrollHoldingId ?: return@LaunchedEffect
+            val restoredCardIndex = animatedHoldingIds.indexOf(holdingId)
+            if (restoredCardIndex < 0) return@LaunchedEffect
+
+            val fixedItemCountBeforeHoldings = 5 + if (hasMissingExchangeRate) 1 else 0
+            listState.animateScrollToItem(fixedItemCountBeforeHoldings + restoredCardIndex)
+            pendingRestoreScrollHoldingId = null
         }
 
         LazyColumn(
@@ -701,7 +742,11 @@ fun AssetManagementScreen(
                             shape = RoundedCornerShape(8.dp),
                             color = CardDarkLighter,
                             border = BorderStroke(0.5.dp, BorderBlue),
-                            modifier = Modifier.clickable { showSortModal = true }
+                            modifier = Modifier.clickable {
+                                draftSortCriteria = sortCriteria
+                                draftSortDirection = sortDirection
+                                showSortModal = true
+                            }
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -818,6 +863,7 @@ fun AssetManagementScreen(
                     )
                     val holding = holdingState ?: exitingHolding ?: return@items
                     val isExiting = exitingHolding != null
+                    val isRestoring = holding.id in restoringHoldingIds
                     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
                     val calculationBasis by viewModel.calculationBasis.collectAsStateWithLifecycle()
                     val exitOffset by animateIntOffsetAsState(
@@ -829,6 +875,16 @@ fun AssetManagementScreen(
                         targetValue = if (isExiting) 0f else 1f,
                         animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing),
                         label = "holding-exit-alpha-${holding.id}"
+                    )
+                    val restoreOffset by animateIntOffsetAsState(
+                        targetValue = if (isRestoring) IntOffset(-listState.layoutInfo.viewportSize.width, 0) else IntOffset.Zero,
+                        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+                        label = "holding-restore-${holding.id}"
+                    )
+                    val restoreAlpha by animateFloatAsState(
+                        targetValue = if (isRestoring) 0f else 1f,
+                        animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing),
+                        label = "holding-restore-alpha-${holding.id}"
                     )
                     val isUSD = holding.currency == "$"
                     val curVal = holding.totalValuation
@@ -870,8 +926,8 @@ fun AssetManagementScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .offset { exitOffset }
-                                .graphicsLayer { alpha = exitAlpha }
+                                .offset { if (isExiting) exitOffset else restoreOffset }
+                                .graphicsLayer { alpha = if (isExiting) exitAlpha else restoreAlpha }
                                 .clip(RoundedCornerShape(16.dp))
                         ) {
                         Row(
@@ -1170,76 +1226,193 @@ fun AssetManagementScreen(
 
     // ================= SORT MODAL BOTTOM SHEET =================
     if (showSortModal) {
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = { showSortModal = false },
-            confirmButton = {
-                Button(
-                    onClick = { showSortModal = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = NeonGreen),
-                    shape = RoundedCornerShape(10.dp)
+            containerColor = CardDark,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                AdaptiveRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(stringResource(R.string.apply), color = OnPrimaryContainer, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Tune,
+                            contentDescription = null,
+                            tint = PrimaryEmerald,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.asset_management_text_13),
+                            color = OnSurface,
+                            fontSize = AppTextSize.body,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    IconButton(
+                        onClick = { showSortModal = false },
+                        modifier = Modifier.minimumInteractiveComponentSize().size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = stringResource(R.string.close),
+                            tint = SoftGray,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSortModal = false }) {
-                    Text(stringResource(R.string.close), color = SoftGray, fontSize = AppTextSize.caption)
-                }
-            },
-            title = {
-                Text(stringResource(R.string.asset_management_text_13), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section)
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    val criteriaOptions = listOf(
-                        Pair("val", resources.getString(R.string.annual_dividend_label)),
-                        Pair("gain", resources.getString(R.string.asset_management_label_34)),
-                        Pair("div", resources.getString(R.string.asset_management_label_31)),
-                        Pair("div_amt", resources.getString(R.string.asset_management_label_35)),
-                        Pair("code", resources.getString(R.string.dividend_change_analysis_cards_label_12))
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        stringResource(R.string.watchlist_text_23),
+                        color = SoftGray,
+                        fontSize = AppTextSize.dense,
+                        fontWeight = FontWeight.Bold
                     )
-                    criteriaOptions.forEach { (key, label) ->
-                        AdaptiveRow(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (sortCriteria == key) CardDarkLighter else Color.Transparent)
-                                .clickable { sortCriteria = key }
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(label, color = if (sortCriteria == key) NeonGreenLight else OnSurface, fontSize = AppTextSize.body, fontWeight = if (sortCriteria == key) FontWeight.Bold else FontWeight.Normal)
-                            if (sortCriteria == key) {
-                                Icon(Icons.Default.Check, contentDescription = null, tint = NeonGreenLight, modifier = Modifier.size(16.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(BackgroundDark)
+                            .padding(4.dp)
+                    ) {
+                        listOf(
+                            "desc" to R.string.asset_management_text_14,
+                            "asc" to R.string.asset_management_text_15
+                        ).forEach { (direction, labelRes) ->
+                            val isSelected = draftSortDirection == direction
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) PrimaryEmerald else Color.Transparent)
+                                    .clickable { draftSortDirection = direction }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        if (direction == "desc") Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                                        contentDescription = null,
+                                        tint = if (isSelected) OnPrimary else SoftGray,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        stringResource(labelRes),
+                                        color = if (isSelected) OnPrimary else SoftGray,
+                                        fontSize = AppTextSize.dense,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
-                    HorizontalDivider(color = BorderBlue, thickness = 0.5.dp)
-                    AdaptiveRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = { sortDirection = "desc" },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = if (sortDirection == "desc") NeonGreen else CardDarkLighter),
-                            shape = RoundedCornerShape(8.dp)
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        stringResource(R.string.watchlist_text_24),
+                        color = SoftGray,
+                        fontSize = AppTextSize.dense,
+                        fontWeight = FontWeight.Bold
+                    )
+                    val criteriaOptions = listOf(
+                        Triple("val", resources.getString(R.string.annual_dividend_label), Icons.Default.AccountBalance),
+                        Triple("gain", resources.getString(R.string.asset_management_label_34), Icons.AutoMirrored.Filled.TrendingUp),
+                        Triple("div", resources.getString(R.string.asset_management_label_31), Icons.Default.Percent),
+                        Triple("div_amt", resources.getString(R.string.asset_management_label_35), Icons.Default.Payments),
+                        Triple("code", resources.getString(R.string.dividend_change_analysis_cards_label_12), Icons.Default.Bookmark)
+                    )
+                    criteriaOptions.forEach { (key, label, icon) ->
+                        val isSelected = draftSortCriteria == key
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isSelected) SurfaceContainerHigh else BackgroundDark)
+                                .border(
+                                    width = if (isSelected) 1.dp else 0.dp,
+                                    color = if (isSelected) PrimaryEmerald.copy(alpha = 0.5f) else Color.Transparent,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .clickable { draftSortCriteria = key }
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(stringResource(R.string.asset_management_text_14), color = if (sortDirection == "desc") OnPrimaryContainer else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                        }
-                        Button(
-                            onClick = { sortDirection = "asc" },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = if (sortDirection == "asc") NeonGreen else CardDarkLighter),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(stringResource(R.string.asset_management_text_15), color = if (sortDirection == "asc") OnPrimaryContainer else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    icon,
+                                    contentDescription = null,
+                                    tint = if (isSelected) PrimaryEmerald else SoftGray,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    label,
+                                    color = if (isSelected) OnSurface else SoftGray,
+                                    fontSize = AppTextSize.dense,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = PrimaryEmerald,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }
-            },
-            containerColor = CardDark,
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.border(1.dp, BorderBlue, RoundedCornerShape(16.dp))
-        )
+
+                AdaptiveRow(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = { showSortModal = false },
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f).height(44.dp)
+                    ) {
+                        Text(
+                            stringResource(R.string.cancel),
+                            color = OnSurface,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = AppTextSize.caption
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            sortCriteria = draftSortCriteria
+                            sortDirection = draftSortDirection
+                            showSortModal = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f).height(44.dp)
+                    ) {
+                        Text(
+                            stringResource(R.string.apply),
+                            color = OnPrimary,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = AppTextSize.caption
+                        )
+                    }
+                }
+            }
+        }
     }
 
     // ================= ADD ASSET MODAL DIALOG =================
