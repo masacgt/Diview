@@ -156,7 +156,7 @@ fun SearchSheet(
                 ) ?: CandidateStock(
                     code = hit.code,
                     name = hit.name,
-                    desc = hit.industry?.let { "東証 • $it" } ?: "日本株 • Cloudflare銘柄マスター",
+                    desc = hit.industry?.let { "東証 • $it" } ?: "日本株",
                     price = price ?: "株価未取得",
                     yieldRate = yieldRate ?: "--",
                     cat = "jp",
