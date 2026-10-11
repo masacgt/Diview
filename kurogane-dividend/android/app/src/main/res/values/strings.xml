@@ -985,7 +985,7 @@
     <string name="watchlist_label_21">"あと %1$s%2$s 下落"</string>
     <string name="watchlist_label_22">"目安価格を %1$s%2$s 下回り"</string>
     <string name="watchlist_label_23">"買場目安に到達"</string>
-    <string name="watchlist_badge">"絶好の買場到達 (利回り %1$s%%)"</string>
+    <string name="watchlist_badge">"絶好の買場到達"</string>
     <string name="watchlist_badge_2">"超高配当 (利回り %1$s%%)"</string>
     <string name="watchlist_badge_3">"買場目安近接"</string>
     <string name="watchlist_badge_4">"優良ディフェンシブ"</string>

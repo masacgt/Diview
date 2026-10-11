@@ -692,7 +692,7 @@ fun WatchlistScreen(
                 }
                 
                 val dynamicBadge = if (isReached) {
-                    resources.getString(R.string.watchlist_badge, String.format(java.util.Locale.JAPAN, "%.2f", currentYield))
+                    resources.getString(R.string.watchlist_badge)
                 } else if (isClose) {
                     resources.getString(R.string.watchlist_badge_3)
                 } else if (currentYield >= 4.0) {
