@@ -410,7 +410,6 @@ fun WatchlistScreen(
                                                             fontSize = AppTextSize.body
                                                         )
                                                     }
-                                                    )
                                                     Spacer(Modifier.height(12.dp))
                                                     HorizontalDivider(color = BorderColor, thickness = 0.75.dp)
                                                     Spacer(Modifier.height(12.dp))
