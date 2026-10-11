@@ -193,6 +193,7 @@ fun WatchlistScreen(
 
     var filterState by remember { mutableStateOf("all") } // "all", "jp", "us", "ready"
     var showProjectionInfo by remember { mutableStateOf(false) }
+    var showCalendarInfo by remember { mutableStateOf(false) }
     var showSortBottomSheet by remember { mutableStateOf(false) }
     var sortCriteria by remember { mutableStateOf("ach") } // "ach", "yield", "price", "code"
     var sortDirection by remember { mutableStateOf("desc") } // "asc", "desc"
@@ -1773,6 +1774,58 @@ fun WatchlistScreen(
                                 Icon(Icons.Default.GridOn, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(stringResource(R.string.watchlist_text_66), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Box {
+                                    IconButton(
+                                        onClick = { showCalendarInfo = true },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Info,
+                                            contentDescription = stringResource(R.string.watchlist_calendar_info_content_description),
+                                            tint = OnSurfaceVariant,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = showCalendarInfo,
+                                        onDismissRequest = { showCalendarInfo = false },
+                                        modifier = Modifier.widthIn(max = 300.dp),
+                                        shape = RoundedCornerShape(16.dp),
+                                        containerColor = SurfaceContainerLow,
+                                        tonalElevation = 0.dp,
+                                        shadowElevation = 12.dp
+                                    ) {
+                                        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Surface(
+                                                    shape = CircleShape,
+                                                    color = PrimaryEmerald.copy(alpha = 0.14f),
+                                                    modifier = Modifier.size(30.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Icon(Icons.Default.Info, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(17.dp))
+                                                    }
+                                                }
+                                                Spacer(Modifier.width(10.dp))
+                                                Text(
+                                                    stringResource(R.string.watchlist_calendar_info_title),
+                                                    color = OnSurface,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = AppTextSize.body
+                                                )
+                                            }
+                                            Spacer(Modifier.height(12.dp))
+                                            HorizontalDivider(color = BorderColor, thickness = 0.75.dp)
+                                            Spacer(Modifier.height(12.dp))
+                                            Text(
+                                                projectionNote,
+                                                color = OnSurfaceVariant,
+                                                fontSize = AppTextSize.caption,
+                                                lineHeight = 20.sp
+                                            )
+                                        }
+                                    }
+                                }
                             }
 
                             Row(
@@ -1853,11 +1906,7 @@ fun WatchlistScreen(
                         HorizontalDivider(color = BorderColor)
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(projectionNote, color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                             Text(stringResource(R.string.watchlist_empty_months, projection.emptyMonths.joinToString("・").ifEmpty { "—" }), color = ErrorRed, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }

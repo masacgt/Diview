@@ -616,7 +616,9 @@
     <string name="watchlist_text_63" formatted="false">"42.5%"</string>
     <string name="watchlist_text_64">"Q3 (7-9月)"</string>
     <string name="watchlist_text_65">"Q4 (10-12月) 🟢"</string>
-    <string name="watchlist_text_66">"12ヶ月 受取配当カレンダー棒グラフ"</string>
+    <string name="watchlist_text_66">受取配当カレンダー</string>
+    <string name="watchlist_calendar_info_content_description">受取配当カレンダーの説明</string>
+    <string name="watchlist_calendar_info_title">受取配当カレンダーについて</string>
     <string name="watchlist_text_67">"日株集中"</string>
     <string name="watchlist_text_68">"米株"</string>
     <string name="watchlist_text_69">"空白"</string>
