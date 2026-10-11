@@ -313,21 +313,45 @@ fun WatchlistScreen(
         containerColor = BackgroundDark,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = {
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.padding(horizontal = 12.dp)
-            ) { data ->
-                Snackbar(
-                    snackbarData = data,
-                    modifier = Modifier.border(
-                        BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.45f)),
-                        RoundedCornerShape(12.dp)
-                    ),
+            SnackbarHost(snackbarHostState) { data ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     shape = RoundedCornerShape(12.dp),
-                    containerColor = SurfaceContainerHigh,
+                    color = SurfaceContainerHigh,
                     contentColor = OnSurface,
-                    actionColor = PrimaryEmerald
-                )
+                    border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.45f)),
+                    tonalElevation = 6.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .padding(start = 16.dp, end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = data.visuals.message,
+                            modifier = Modifier.weight(1f),
+                            color = OnSurface,
+                            fontSize = 14.sp
+                        )
+                        data.visuals.actionLabel?.let { actionLabel ->
+                            TextButton(onClick = data::performAction) {
+                                Text(actionLabel, color = PrimaryEmerald)
+                            }
+                        }
+                        if (data.visuals.withDismissAction) {
+                            IconButton(onClick = data::dismiss, modifier = Modifier.size(40.dp)) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "通知を閉じる",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = OnSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     ) { innerPadding ->
