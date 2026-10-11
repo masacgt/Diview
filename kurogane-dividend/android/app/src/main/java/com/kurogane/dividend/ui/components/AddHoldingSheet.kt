@@ -340,12 +340,20 @@ fun AddHoldingSheet(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         AdaptiveRow(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                stringResource(R.string.add_holding_text),
-                                color = OnSurface,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = AppTextSize.body
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Icon(
+                                    imageVector = Icons.Default.EditNote,
+                                    contentDescription = null,
+                                    tint = PrimaryEmerald,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    stringResource(R.string.add_holding_text),
+                                    color = OnSurface,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = AppTextSize.body
+                                )
+                            }
                             Spacer(modifier = Modifier.width(6.dp))
                             Box(
                                 modifier = Modifier
