@@ -354,7 +354,13 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
             ) {
                 Text(stringResource(R.string.dividend_change_analysis_cards_text), color = OnSurface, fontWeight = FontWeight.Bold,
                     fontSize = 12.sp)
-                AnnualImpactInfo()
+                AnnualImpactInfo(
+                    stringResource(
+                        R.string.dividend_change_analysis_cards_text_2,
+                        if (taxRateMode == "net") resources.getString(R.string.dividend_change_analysis_cards_label_17)
+                        else resources.getString(R.string.stock_detail_text_5)
+                    )
+                )
             }
             MonitorBadge(percent(analysis.growthRate, signed = true), impactColor)
         }
@@ -403,7 +409,7 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
 }
 
 @Composable
-private fun AnnualImpactInfo() {
+private fun AnnualImpactInfo(comparisonDescription: String) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(
@@ -453,6 +459,13 @@ private fun AnnualImpactInfo() {
                 Spacer(Modifier.height(12.dp))
                 HorizontalDivider(color = BorderBlue, thickness = 0.75.dp)
                 Spacer(Modifier.height(12.dp))
+                Text(
+                    comparisonDescription,
+                    color = OnSurfaceVariant,
+                    fontSize = AppTextSize.caption,
+                    lineHeight = 20.sp
+                )
+                Spacer(Modifier.height(8.dp))
                 Text(
                     stringResource(R.string.dividend_change_analysis_cards_text_9),
                     color = OnSurfaceVariant,
