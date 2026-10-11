@@ -2215,8 +2215,13 @@ private fun CompoundingSimulationSection(
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
     LaunchedEffect(holdings.map { it.code }) { viewModel.refreshAnalysisFinancialDataIfDue() }
     val currentYear = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).year
-    val years = remember(holdings, financialData, taxRateMode, currentYear) {
-        com.kurogane.dividend.model.DividendHistory.calculate(holdings, financialData, (currentYear - 4)..currentYear, taxRateMode)
+    val comparisonYears = remember(holdings, financialData, taxRateMode, currentYear) {
+        com.kurogane.dividend.model.DividendHistory.calculate(holdings, financialData, (currentYear - 5)..currentYear, taxRateMode)
+    }
+    val years = remember(comparisonYears, totalAnnualDiv, currentYear) {
+        comparisonYears.drop(1).map { year ->
+            if (year.year == currentYear) year.copy(amount = totalAnnualDiv) else year
+        }
     }
     var annualBarsVisible by remember { mutableStateOf(false) }
     LaunchedEffect(years) {
@@ -2362,13 +2367,12 @@ private fun CompoundingSimulationSection(
                     Text(stringResource(R.string.annual_dividend_text_42), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                     AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         years.forEachIndexed { index, point ->
-                            val previousAmount = years.getOrNull(index - 1)?.amount
+                            val previousAmount = comparisonYears.getOrNull(index)?.amount
                             val yearChange = if (point.amount != null && previousAmount != null) point.amount - previousAmount else null
                             val isSelected = index == selectedIndex
                             Card(Modifier.weight(1f).clickable { selectedYearIndex = index }, shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = if (isSelected) SurfaceContainerHigh else BackgroundDark), border = BorderStroke(1.dp, if (isSelected) PrimaryEmerald else Color.Transparent)) {
                                 Column(Modifier.padding(horizontal = 6.dp, vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(stringResource(R.string.annual_dividend_1_s , point.year), color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                    Text(stringResource(R.string.annual_dividend_text_45), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                                     Text(
                                         signedMoney(yearChange),
                                         color = if ((yearChange ?: 0.0) >= 0.0) PrimaryEmerald else ErrorRed,
@@ -2391,7 +2395,15 @@ private fun CompoundingSimulationSection(
                 ) {
                     Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(stringResource(R.string.annual_dividend_text_46 , selectedYear.year), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Text(
+                                text = if (selectedYear.year == currentYear) {
+                                    stringResource(R.string.annual_dividend_text_87, selectedYear.year)
+                                } else {
+                                    stringResource(R.string.annual_dividend_text_46, selectedYear.year)
+                                },
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense
+                            )
                             AnimatedContent(targetState = money(selectedYear.amount),
                                 transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(180)) },
                                 label = "Selected year dividend") { amount ->
@@ -2399,7 +2411,15 @@ private fun CompoundingSimulationSection(
                             }
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(stringResource(R.string.annual_dividend_text_48 , selectedYear.covered, selectedYear.expected), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Text(
+                                text = if (selectedYear.year == currentYear) {
+                                    stringResource(R.string.annual_dividend_text_86)
+                                } else {
+                                    stringResource(R.string.annual_dividend_text_48, selectedYear.covered, selectedYear.expected)
+                                },
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense
+                            )
                             Text(stringResource(R.string.annual_dividend_text_49 , money(selectedYear.amount?.div(12))), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
