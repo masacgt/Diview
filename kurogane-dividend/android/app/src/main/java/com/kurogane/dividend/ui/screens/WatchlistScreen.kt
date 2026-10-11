@@ -99,14 +99,20 @@ fun WatchlistScreen(
     val watchlistCodes = remember(watchlist.map { it.code }) { watchlist.map { it.code } }
     val snackbarHostState = remember { SnackbarHostState() }
     val screenScope = rememberCoroutineScope()
+    var alertSnackbarJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    fun showAlertSnackbar(message: String) {
+        alertSnackbarJob?.cancel()
+        snackbarHostState.currentSnackbarData?.dismiss()
+        alertSnackbarJob = screenScope.launch {
+            snackbarHostState.showSnackbar(message)
+        }
+    }
     val context = androidx.compose.ui.platform.LocalContext.current
     val notificationAccess = rememberNotificationAccess { action ->
         val code = action.substringAfter(':', "")
         if (viewModel.watchlist.value.any { it.code == code && !it.alertEnabled }) {
             viewModel.toggleWatchlistStock(code)
-            screenScope.launch {
-                snackbarHostState.showSnackbar(resources.getString(R.string.watchlist_alert_registered))
-            }
+            showAlertSnackbar(resources.getString(R.string.watchlist_alert_registered))
         }
         viewModel.setNotificationEnabled(NotificationKind.PRICE, true)
     }
@@ -916,9 +922,7 @@ fun WatchlistScreen(
                             onClick = {
                                 if (stock.alertEnabled) {
                                     viewModel.toggleWatchlistStock(stock.code)
-                                    screenScope.launch {
-                                        snackbarHostState.showSnackbar(resources.getString(R.string.watchlist_alert_removed))
-                                    }
+                                    showAlertSnackbar(resources.getString(R.string.watchlist_alert_removed))
                                 }
                                 else notificationAccess.request("price:${stock.code}")
                             },
