@@ -32,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.Offset
@@ -621,6 +622,29 @@ private fun MonthlyDividendEstimateCard(
     val maxMonthlyAmount = remember(monthlyDividends) {
         monthlyDividends.maxOfOrNull { it.second }?.coerceAtLeast(1.0) ?: 1.0
     }
+    val quarterlyCashFlowAmounts = remember(monthlyDividends) {
+        (0..3).map { quarterIndex ->
+            monthlyDividends.drop(quarterIndex * 3).take(3).sumOf { it.second }
+        }
+    }
+    val monthlyCashFlowTotal = quarterlyCashFlowAmounts.sum()
+    val maxMonthSharePercent = remember(monthlyDividends, monthlyCashFlowTotal) {
+        val maxMonthAmount = monthlyDividends.maxOfOrNull { it.second } ?: 0.0
+        if (monthlyCashFlowTotal > 0.0) maxMonthAmount / monthlyCashFlowTotal * 100.0 else 0.0
+    }
+    val monthlyGridTargetStep = maxMonthlyAmount / 3.0
+    val monthlyGridMagnitude = 10.0.pow(kotlin.math.floor(kotlin.math.log10(monthlyGridTargetStep)))
+    val monthlyNormalizedGridStep = monthlyGridTargetStep / monthlyGridMagnitude
+    val monthlyGridStepMultiplier = when {
+        monthlyNormalizedGridStep >= 5.0 -> 5.0
+        monthlyNormalizedGridStep >= 2.0 -> 2.0
+        else -> 1.0
+    }
+    val monthlyGridStep = monthlyGridMagnitude * monthlyGridStepMultiplier
+    val monthlyGridCount = kotlin.math.floor(maxMonthlyAmount / monthlyGridStep).toInt()
+    val monthlyGridColor = BorderColor
+    val monthlyAmountLabelTopOffset = 24.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale
+    val monthlyAmountLabelSlotHeight = 16.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -709,7 +733,15 @@ private fun MonthlyDividendEstimateCard(
             Spacer(modifier = Modifier.height(18.dp))
 
             Row(
-                modifier = Modifier.fillMaxWidth().height(145.dp),
+                modifier = Modifier.fillMaxWidth().height(145.dp).drawBehind {
+                    val plotBottom = size.height - 20.dp.toPx()
+                    val plotHeight = 85.dp.toPx()
+                    (0..monthlyGridCount).forEach { guideIndex ->
+                        val guideAmount = guideIndex * monthlyGridStep
+                        val y = plotBottom - plotHeight * (guideAmount / maxMonthlyAmount).toFloat()
+                        drawLine(monthlyGridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+                    }
+                },
                 horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.Bottom
             ) {
@@ -723,30 +755,34 @@ private fun MonthlyDividendEstimateCard(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Bottom
                     ) {
-                        Text(
-                            text = label,
-                            modifier = Modifier.fillMaxWidth(),
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.Black,
-                            color = if (isSelected) NeonGreenLight else SkyBlue,
-                            textAlign = TextAlign.Center,
-                            maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
-                            softWrap = false
-                        )
-                        Spacer(modifier = Modifier.height(3.dp))
                         val barMaxHeight = 85.dp
-                        Box(modifier = Modifier.fillMaxWidth().height(barMaxHeight), contentAlignment = Alignment.BottomCenter) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(barMaxHeight * heightFraction)
-                                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                                    .background(
-                                        if (isSelected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
-                                        else if (isSpecialMonth) Brush.verticalGradient(listOf(NeonGreenLight, NeonGreen))
-                                        else Brush.verticalGradient(listOf(SkyBlue, Color(0xFF0077B6)))
-                                    )
-                                    .then(if (isSelected) Modifier.border(1.5.dp, OnSurface, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)) else Modifier)
+                        Box(modifier = Modifier.fillMaxWidth().height(barMaxHeight + monthlyAmountLabelTopOffset + monthlyAmountLabelSlotHeight)) {
+                            Box(modifier = Modifier.fillMaxWidth().height(barMaxHeight).align(Alignment.BottomCenter), contentAlignment = Alignment.BottomCenter) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(barMaxHeight * heightFraction)
+                                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                        .background(
+                                            if (isSelected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
+                                            else if (isSpecialMonth) Brush.verticalGradient(listOf(NeonGreenLight, NeonGreen))
+                                            else Brush.verticalGradient(listOf(SkyBlue, Color(0xFF0077B6)))
+                                        )
+                                        .then(if (isSelected) Modifier.border(1.5.dp, OnSurface, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)) else Modifier)
+                                )
+                            }
+                            Text(
+                                text = label,
+                                modifier = Modifier.fillMaxWidth()
+                                    .height(monthlyAmountLabelSlotHeight)
+                                    .align(Alignment.BottomCenter)
+                                    .offset(y = -(barMaxHeight * heightFraction + monthlyAmountLabelTopOffset - monthlyAmountLabelSlotHeight)),
+                                fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Black,
+                                color = if (isSelected) NeonGreenLight else SkyBlue,
+                                textAlign = TextAlign.Center,
+                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
+                                softWrap = false
                             )
                         }
                         Spacer(modifier = Modifier.height(3.dp))
@@ -804,6 +840,132 @@ private fun MonthlyDividendEstimateCard(
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            QuarterlyCashFlowComparison(
+                quarterlyAmounts = quarterlyCashFlowAmounts,
+                totalMonthlyAmount = monthlyCashFlowTotal,
+                maxMonthSharePercent = maxMonthSharePercent,
+                isPrivacyActive = isPrivacyActive,
+                currencyFormat = currencyFormat
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuarterlyCashFlowComparison(
+    quarterlyAmounts: List<Double>,
+    totalMonthlyAmount: Double,
+    maxMonthSharePercent: Double,
+    isPrivacyActive: Boolean,
+    currencyFormat: NumberFormat
+) {
+    val quarterColors = listOf(SecondaryIndigo, PrimaryEmeraldContainer, SecondaryIndigo, PrimaryEmeraldContainer)
+    val maxMonthShareText = if (isPrivacyActive) "•••%" else String.format(Locale.JAPAN, "%.1f%%", maxMonthSharePercent)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = SurfaceContainer,
+        border = BorderStroke(1.dp, BorderBlue)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Icon(Icons.Default.PieChart, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
+                Text(
+                    stringResource(R.string.annual_dividend_quarterly_cashflow_title),
+                    modifier = Modifier.weight(1f),
+                    color = OnSurface,
+                    fontSize = AppTextSize.dense,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = SecondaryIndigo.copy(alpha = 0.14f)
+                ) {
+                    Text(
+                        stringResource(R.string.annual_dividend_quarterly_max_month_share, maxMonthShareText),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        color = SecondaryIndigo,
+                        fontSize = AppTextSize.dense,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Box(
+                Modifier.fillMaxWidth()
+                    .height(9.dp)
+                    .clip(CircleShape)
+                    .background(BorderBlue)
+            ) {
+                if (totalMonthlyAmount > 0.0) {
+                    Row(Modifier.fillMaxSize()) {
+                        quarterlyAmounts.forEachIndexed { index, amount ->
+                            if (amount > 0.0) {
+                                Box(
+                                    Modifier.weight((amount / totalMonthlyAmount).toFloat())
+                                        .fillMaxHeight()
+                                        .background(quarterColors[index])
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                quarterlyAmounts.forEachIndexed { index, amount ->
+                    val firstMonth = index * 3 + 1
+                    val lastMonth = firstMonth + 2
+                    val sharePercent = if (totalMonthlyAmount > 0.0) amount / totalMonthlyAmount * 100.0 else 0.0
+                    val amountText = if (isPrivacyActive) "¥••••" else "¥${currencyFormat.format(amount.roundToLong())}"
+                    val percentageText = if (isPrivacyActive) "•••%" else String.format(Locale.JAPAN, "%.1f%%", sharePercent)
+
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        color = BackgroundDark
+                    ) {
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                stringResource(R.string.annual_dividend_quarterly_quarter_label, index + 1, firstMonth, lastMonth),
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                amountText,
+                                color = OnSurface,
+                                fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                percentageText,
+                                color = quarterColors[index],
+                                fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1981,9 +2143,6 @@ private fun CompoundingSimulationSection(
                         Spacer(Modifier.width(5.dp))
                         Text(stringResource(R.string.annual_dividend_text_40), color = OnSurface, fontSize = AppTextSize.dense)
                     }
-                    Surface(shape = RoundedCornerShape(12.dp), color = PrimaryEmerald.copy(alpha = .12f), border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = .3f))) {
-                        Text(stringResource(R.string.annual_dividend_text_41 , signedPercent(increaseRate)), modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                    }
                 }
                 val chartColor = PrimaryEmerald
                 val chartGridColor = BorderColor
@@ -2103,35 +2262,34 @@ private fun CompoundingSimulationSection(
                         }
                     }
                 }
-            }
-        }
-
-        AdaptiveRow(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
-                Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.AutoMirrored.Filled.TrendingUp, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(stringResource(R.string.annual_dividend_text_35), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                        }
-                        Surface(shape = RoundedCornerShape(4.dp), color = PrimaryEmerald.copy(alpha = .15f)) {
-                            Text(signedPercent(increaseRate), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
+                AdaptiveRow(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh)) {
+                        Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.AutoMirrored.Filled.TrendingUp, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(stringResource(R.string.annual_dividend_text_35), color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = 2)
+                                }
+                                Surface(shape = RoundedCornerShape(4.dp), color = PrimaryEmerald.copy(alpha = .15f)) {
+                                    Text(signedPercent(increaseRate), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
+                                }
+                            }
+                            Text(signedMoney(increaseAmount), color = if ((increaseAmount ?: 0.0) >= 0.0) PrimaryEmerald else ErrorRed, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            Text(stringResource(R.string.annual_dividend_text_36, firstPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, it.toString()) } ?: resources.getString(R.string.annual_dividend_label_20), latestPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, it.toString()) } ?: resources.getString(R.string.annual_dividend_label_21)), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
                     }
-                    Text(signedMoney(increaseAmount), color = if ((increaseAmount ?: 0.0) >= 0.0) PrimaryEmerald else ErrorRed, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                    Text(stringResource(R.string.annual_dividend_text_36 , firstPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, (it).toString()) } ?: resources.getString(R.string.annual_dividend_label_20), latestPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, (it).toString()) } ?: resources.getString(R.string.annual_dividend_label_21)), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                }
-            }
-            Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
-                Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.AutoMirrored.Filled.ShowChart, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(stringResource(R.string.annual_dividend_text_37), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                    Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh)) {
+                        Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.AutoMirrored.Filled.ShowChart, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(stringResource(R.string.annual_dividend_text_37), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            }
+                            Text(cagr?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: resources.getString(R.string.not_available), color = PrimaryEmerald, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            Text(stringResource(R.string.annual_dividend_text_39, signedMoney(averageAnnualIncrease)), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                        }
                     }
-                    Text(cagr?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: resources.getString(R.string.not_available), color = PrimaryEmerald, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                    Text(stringResource(R.string.annual_dividend_text_39 , signedMoney(averageAnnualIncrease)), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                 }
             }
         }
