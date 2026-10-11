@@ -370,7 +370,7 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
             Text(stringResource(R.string.annual_dividend_text_2), color = OnSurfaceVariant, fontSize = 12.sp, modifier = Modifier.padding(bottom = 5.dp))
         }
         if (analysis.compared.any { it.dividendHistoryBasis == "calendar_year_observed_distributions" }) {
-            Text("銘柄別履歴には、暦年の受取分配金（Yahoo Finance観測値）を含みます。決算期配当とは集計基準が異なります。",
+            Text("銘柄別履歴には、暦年の受取分配金を含みます。決算期配当とは集計基準が異なります。",
                 color = OnSurfaceVariant, fontSize = 10.sp, lineHeight = 14.sp)
         }
         AdaptiveRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -689,7 +689,7 @@ private fun DividendChangeCard(row: DividendChangeSecurity, privacy: Boolean, on
             Icon(Icons.Default.ChevronRight, "銘柄詳細を開く", tint = TextMuted, modifier = Modifier.size(12.dp))
         }
         if (row.dividendHistoryBasis == "calendar_year_observed_distributions") {
-            Text("暦年受取分配金・Yahoo Finance観測値", color = OnSurfaceVariant, fontSize = 10.sp)
+            Text("暦年受取分配金", color = OnSurfaceVariant, fontSize = 10.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             val streak = row.profile?.consecutiveYears?.takeIf { it > 0 }?.let { "・${it}年連続増配" }.orEmpty()
