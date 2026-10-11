@@ -1006,7 +1006,8 @@ private fun RoadmapGrowthSimulatorSheet(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.HourglassBottom, contentDescription = null, tint = PrimaryEmerald)
                 Spacer(Modifier.width(8.dp))
-                Text("福利シミュレーター", modifier = Modifier.weight(1f), fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("福利シミュレーター", fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
                 Box {
                     IconButton(onClick = { showSimulatorInfo = true }, modifier = Modifier.size(28.dp)) {
                         Icon(Icons.Default.Info, contentDescription = "福利シミュレーターの説明", tint = OnSurfaceVariant, modifier = Modifier.size(18.dp))
@@ -1036,6 +1037,7 @@ private fun RoadmapGrowthSimulatorSheet(
                             Text(simulatorDescription, color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                         }
                     }
+                }
                 }
                 IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close)) }
             }
