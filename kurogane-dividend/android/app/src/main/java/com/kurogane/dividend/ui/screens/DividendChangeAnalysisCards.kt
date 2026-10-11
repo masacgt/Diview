@@ -21,11 +21,16 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -73,26 +78,73 @@ internal fun DividendPayoutHealthAndRiskCards(
         DividendChangeAnalysis.calculate(holdings, financialData, taxRateMode)
     }
     var riskSort by rememberSaveable { mutableStateOf("payout") }
-    val riskRows = remember(analysis, riskSort) {
-        when (riskSort) {
-            "years" -> analysis.securities.sortedByDescending { it.profile?.noCutYears?.takeIf { years -> years >= 0 } ?: -1 }
-            "growth" -> analysis.securities.sortedByDescending { it.profile?.consecutiveYears?.takeIf { years -> years >= 0 } ?: -1 }
-            else -> analysis.securities.sortedByDescending {
-                it.payoutRatio?.let { ratio -> if (ratio < 0) Double.POSITIVE_INFINITY else ratio }
-                    ?: Double.NEGATIVE_INFINITY
-            }
+    var sortAnimationRevision by remember { mutableStateOf(0) }
+    fun sortedRiskRows(sort: String) = when (sort) {
+        "years" -> analysis.securities.sortedByDescending { it.profile?.noCutYears?.takeIf { years -> years >= 0 } ?: -1 }
+        "growth" -> analysis.securities.sortedByDescending { it.profile?.consecutiveYears?.takeIf { years -> years >= 0 } ?: -1 }
+        else -> analysis.securities.sortedByDescending {
+            it.payoutRatio?.let { ratio -> if (ratio < 0) Double.POSITIVE_INFINITY else ratio }
+                ?: Double.NEGATIVE_INFINITY
         }
+    }
+    val riskRowsState = remember(analysis) { mutableStateOf(sortedRiskRows(riskSort)) }
+    val riskRows = riskRowsState.value
+    val cardHeights = remember { mutableStateMapOf<String, Int>() }
+    val reorderOffsets = remember { mutableStateMapOf<String, Float>() }
+    val spacingPx = with(androidx.compose.ui.platform.LocalDensity.current) { 12.dp.toPx() }
+    fun selectRiskSort(sort: String) {
+        val nextRows = sortedRiskRows(sort)
+        val oldPositions = mutableMapOf<String, Float>()
+        var position = 0f
+        riskRowsState.value.forEach { row ->
+            oldPositions[row.code] = position
+            position += (cardHeights[row.code]?.toFloat() ?: 0f) + spacingPx
+        }
+        val newPositions = mutableMapOf<String, Float>()
+        position = 0f
+        nextRows.forEach { row ->
+            newPositions[row.code] = position
+            position += (cardHeights[row.code]?.toFloat() ?: 0f) + spacingPx
+        }
+        reorderOffsets.clear()
+        nextRows.forEach { row ->
+            val offset = (oldPositions[row.code] ?: 0f) - (newPositions[row.code] ?: 0f)
+            if (offset != 0f) reorderOffsets[row.code] = offset
+        }
+        riskRowsState.value = nextRows
+        riskSort = sort
+        sortAnimationRevision++
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         PayoutHealthCard(analysis)
         MonitorHeading("保有銘柄の減配リスク診断", Icons.Default.Shield)
-        MonitorSelectors("並び替え", listOf("payout" to stringResource(R.string.dividend_change_analysis_cards_label), "years" to stringResource(R.string.dividend_change_analysis_cards_label_2), "growth" to stringResource(R.string.dividend_change_analysis_cards_label_24)), riskSort) { riskSort = it }
+        MonitorSelectors("並び替え", listOf("payout" to stringResource(R.string.dividend_change_analysis_cards_label), "years" to stringResource(R.string.dividend_change_analysis_cards_label_2), "growth" to stringResource(R.string.dividend_change_analysis_cards_label_24)), riskSort, ::selectRiskSort)
         if (riskRows.isEmpty()) {
             MonitorEmptyCard("保有する国内株を追加すると、配当性向と非減配年数を表示します。")
         }
         riskRows.forEach { row ->
             key(row.code) {
-                DividendRiskCard(row, onClick = { onNavigateToDetail(row.code) })
+                val verticalOffset = remember(row.code) { Animatable(0f) }
+                val startOffset = reorderOffsets[row.code] ?: 0f
+                LaunchedEffect(riskSort, sortAnimationRevision) {
+                    if (startOffset != 0f) {
+                        verticalOffset.snapTo(startOffset)
+                        verticalOffset.animateTo(
+                            targetValue = 0f,
+                            animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
+                        )
+                    }
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .onSizeChanged { size ->
+                            if (cardHeights[row.code] != size.height) cardHeights[row.code] = size.height
+                        }
+                        .graphicsLayer { translationY = verticalOffset.value }
+                ) {
+                    DividendRiskCard(row, onClick = { onNavigateToDetail(row.code) })
+                }
             }
         }
     }
