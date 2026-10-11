@@ -14,6 +14,7 @@ import com.kurogane.dividend.model.WatchlistStock
 import com.kurogane.dividend.model.ShareholderBenefit
 import com.kurogane.dividend.model.StockClimate
 import com.kurogane.dividend.data.CloudflareMarketRepository
+import com.kurogane.dividend.data.CloudflareDividendEvent
 import com.kurogane.dividend.data.CloudflareSecurity
 import com.kurogane.dividend.data.CloudflareStockAnalysis
 import com.kurogane.dividend.data.CloudflareSearchHit
@@ -257,6 +258,8 @@ class DividendViewModel @JvmOverloads constructor(
     private fun refreshRuntimeValues() {
         val cachedPrices = readCachedPrices()
         val cachedDividendsPerShare = readCachedDividendsPerShare()
+    private val dividendEventCacheLock = Any()
+    private val dividendEventCache = mutableMapOf<String, List<CloudflareDividendEvent>>()
         _holdings.update { it.map { holding -> runtimeHolding(holding, cachedPrices, cachedDividendsPerShare) } }
         _watchlist.update { list -> list.map { stock ->
             val code = stock.code.uppercase(java.util.Locale.ROOT)
@@ -447,18 +450,26 @@ class DividendViewModel @JvmOverloads constructor(
         } }
     }
 
-    fun dividendEventsFor(code: String): List<com.kurogane.dividend.data.CloudflareDividendEvent> = runCatching {
-        val normalized = yahooSymbol(Category.JAPAN, code) ?: yahooSymbol(Category.US, code) ?: return@runCatching emptyList()
-        val rows = marketPreferences.getString("dividend_events_$normalized", null)?.let(::JSONArray)
-            ?: return@runCatching emptyList()
-        (0 until rows.length()).mapNotNull { index ->
-            val row = rows.optJSONObject(index) ?: return@mapNotNull null
-            val date = runCatching { LocalDate.parse(row.optString("date")) }.getOrNull() ?: return@mapNotNull null
-            val amount = row.optDouble("amount", Double.NaN).takeIf { it.isFinite() && it > 0.0 } ?: return@mapNotNull null
-            val finalRightsDate = runCatching { LocalDate.parse(row.optString("final_rights_date")) }.getOrNull()
-            com.kurogane.dividend.data.CloudflareDividendEvent(date, amount, finalRightsDate)
-        }.sortedBy { it.date }
-    }.getOrDefault(emptyList())
+    fun dividendEventsFor(code: String): List<CloudflareDividendEvent> {
+        val normalized = yahooSymbol(Category.JAPAN, code) ?: yahooSymbol(Category.US, code) ?: return emptyList()
+        synchronized(dividendEventCacheLock) { dividendEventCache[normalized] }?.let { return it }
+
+        val parsed: List<CloudflareDividendEvent> = runCatching {
+            val rows = marketPreferences.getString("dividend_events_$normalized", null)?.let(::JSONArray)
+                ?: return@runCatching emptyList()
+            (0 until rows.length()).mapNotNull { index ->
+                val row = rows.optJSONObject(index) ?: return@mapNotNull null
+                val date = runCatching { LocalDate.parse(row.optString("date")) }.getOrNull() ?: return@mapNotNull null
+                val amount = row.optDouble("amount", Double.NaN).takeIf { it.isFinite() && it > 0.0 } ?: return@mapNotNull null
+                val finalRightsDate = runCatching { LocalDate.parse(row.optString("final_rights_date")) }.getOrNull()
+                CloudflareDividendEvent(date, amount, finalRightsDate)
+            }.sortedBy { it.date }
+        }.getOrDefault(emptyList())
+
+        return synchronized(dividendEventCacheLock) {
+            dividendEventCache.getOrPut(normalized) { parsed }
+        }
+    }
 
     private fun storeDividendEvents(symbol: String, events: List<com.kurogane.dividend.data.CloudflareDividendEvent>) {
         val rows = JSONArray()
@@ -522,6 +533,9 @@ class DividendViewModel @JvmOverloads constructor(
     private fun updatePortfolio(next: List<Holding>) {
         if (next == _holdings.value) return
         hasRestoredLocalHoldings = true
+        synchronized(dividendEventCacheLock) {
+            dividendEventCache[symbol.uppercase(java.util.Locale.ROOT)] = events.sortedBy { it.date }
+        }
         val prices = readCachedPrices()
         val dividends = readCachedDividendsPerShare()
         _holdings.value = next.map { runtimeHolding(it, prices, dividends) }
@@ -1944,3 +1958,5 @@ class DividendViewModel @JvmOverloads constructor(
         val SAMPLE_HOLDING_IDS = setOf("h-7203", "h-2914", "h-8306", "h-8316", "h-8058", "h-9432", "h-9433", "h-8766", "h-8031", "h-4502", "h-apple", "h-emaxis")
     }
 }
+                synchronized(dividendEventCacheLock) { dividendEventCache.clear() }
+            _dividendEventRevision.update { it + 1 }
