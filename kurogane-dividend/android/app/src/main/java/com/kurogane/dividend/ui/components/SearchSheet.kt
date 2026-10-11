@@ -133,7 +133,7 @@ fun SearchSheet(
         remoteCandidates = null
         isSearching = false
         searchError = null
-        val query = searchQuery.trim()
+        val query = normalizeStockSearchText(searchQuery.trim())
         if (!visible || query.isEmpty()) {
             remoteCandidates = null
             isSearching = false
@@ -170,12 +170,13 @@ fun SearchSheet(
     }
 
     val filteredCandidates = remember(searchQuery, selectedCategory, remoteCandidates, recentCandidates) {
-        val query = searchQuery.trim()
+        val query = normalizeStockSearchText(searchQuery.trim())
         val source = remoteCandidates ?: if (query.isEmpty()) {
             recentCandidates
         } else candidates.filter { item ->
-            val q = query.lowercase()
-            val matchesQuery = q.isEmpty() || item.code.lowercase().contains(q) || item.name.lowercase().contains(q)
+            val matchesQuery = query.isEmpty() ||
+                normalizeStockSearchText(item.code).contains(query) ||
+                normalizeStockSearchText(item.name).contains(query)
             matchesQuery
         }
         source.filter { item ->

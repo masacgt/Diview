@@ -210,15 +210,16 @@ fun AddHoldingSheet(
 
     // Presets or custom stock changes
     LaunchedEffect(stockCodeInput) {
-        val query = stockCodeInput.trim()
-        val normalizedCode = stockCodeInput.trim().uppercase()
+        val rawQuery = stockCodeInput.trim()
+        val query = normalizeStockSearchText(rawQuery)
+        val normalizedCode = query.uppercase(Locale.ROOT)
         remoteSearchResults = emptyList()
         if (query.isNotEmpty()) {
             kotlinx.coroutines.delay(300)
-            if (query == stockCodeInput.trim()) {
+            if (rawQuery == stockCodeInput.trim()) {
                 isSearchingSecurities = true
                 val results = runCatchingCancellable { searchSecurities(query) }.getOrDefault(emptyList())
-                if (query == stockCodeInput.trim()) remoteSearchResults = results
+                if (rawQuery == stockCodeInput.trim()) remoteSearchResults = results
                 isSearchingSecurities = false
             }
         } else {
@@ -433,10 +434,10 @@ fun AddHoldingSheet(
                 }
 
                 // Show matching suggestions only after the user enters a code or name.
-                val suggestionQuery = stockCodeInput.trim()
+                val suggestionQuery = normalizeStockSearchText(stockCodeInput.trim())
                 val localSuggestions = if (suggestionQuery.isEmpty()) emptyList() else presets.filter { stock ->
-                    stock.code.contains(suggestionQuery, ignoreCase = true) ||
-                        stock.name.contains(suggestionQuery, ignoreCase = true)
+                    normalizeStockSearchText(stock.code).contains(suggestionQuery) ||
+                        normalizeStockSearchText(stock.name).contains(suggestionQuery)
                 }
                 val localCodes = localSuggestions.mapTo(mutableSetOf()) { it.code.uppercase() }
                 val suggestedStocks = localSuggestions + remoteSearchResults
