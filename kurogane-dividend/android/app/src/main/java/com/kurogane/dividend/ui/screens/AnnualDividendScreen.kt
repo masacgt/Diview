@@ -2136,7 +2136,7 @@ private fun CompoundingSimulationSection(
         Text(stringResource(R.string.annual_dividend_text_32), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
 
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(7.dp).clip(CircleShape).background(PrimaryEmerald))
@@ -2146,8 +2146,8 @@ private fun CompoundingSimulationSection(
                 }
                 val chartColor = PrimaryEmerald
                 val chartGridColor = BorderColor
-                val barAreaBottomFraction = .90f
-                val barAreaHeightFraction = .62f
+                val barAreaBottomFraction = .94f
+                val barAreaHeightFraction = .76f
                 val targetGridStep = maxValue / 3.0
                 val gridMagnitude = 10.0.pow(kotlin.math.floor(kotlin.math.log10(targetGridStep)))
                 val normalizedGridStep = targetGridStep / gridMagnitude
@@ -2159,8 +2159,8 @@ private fun CompoundingSimulationSection(
                 val amountGuideStep = gridMagnitude * gridStepMultiplier
                 val amountGuideCount = kotlin.math.floor(maxValue / amountGuideStep).toInt()
                 Column(Modifier.fillMaxWidth()) {
-                BoxWithConstraints(Modifier.fillMaxWidth().height(136.dp)) {
-                val chartHeight = 136.dp
+                BoxWithConstraints(Modifier.fillMaxWidth().height(128.dp)) {
+                val chartHeight = 128.dp
                 val groupWidth = maxWidth / years.size
                 Canvas(Modifier.fillMaxWidth().height(chartHeight)) {
                     val plotBottom = size.height * barAreaBottomFraction
@@ -2229,8 +2229,6 @@ private fun CompoundingSimulationSection(
                             Card(Modifier.weight(1f).clickable { selectedYearIndex = index }, shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = if (isSelected) SurfaceContainerHigh else BackgroundDark), border = BorderStroke(1.dp, if (isSelected) PrimaryEmerald else Color.Transparent)) {
                                 Column(Modifier.padding(horizontal = 6.dp, vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(stringResource(R.string.annual_dividend_1_s , point.year), color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                    Text(stringResource(R.string.annual_dividend_text_44), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-                                    Text(if (point.amount == null) stringResource(R.string.not_available) else if (isPrivacyActive) "••••" else "¥${format.format(point.amount.toLong())}", color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                                     Text(stringResource(R.string.annual_dividend_text_45), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                                     Text(
                                         signedMoney(yearChange),
