@@ -75,13 +75,21 @@ data class CloudflareMonthlyPriceSeries(
 data class CloudflareDividendMonths(
     val asOf: LocalDate,
     val monthsBySymbol: Map<String, List<Int>>,
-    val eventsBySymbol: Map<String, List<CloudflareDividendEvent>> = emptyMap()
+    val eventsBySymbol: Map<String, List<CloudflareDividendEvent>> = emptyMap(),
+    val upcomingEventsBySymbol: Map<String, CloudflareUpcomingDividendEvent> = emptyMap()
 )
 
 data class CloudflareDividendEvent(
     val date: LocalDate,
     val amountPerShare: Double,
-    val finalRightsDate: LocalDate? = null
+    val finalRightsDate: LocalDate? = null,
+    val recordDate: LocalDate? = null
+)
+
+data class CloudflareUpcomingDividendEvent(
+    val exDividendDate: LocalDate,
+    val finalRightsDate: LocalDate? = null,
+    val recordDate: LocalDate? = null
 )
 
 /** Public, read-only access to the app's Cloudflare D1/R2 data. No credentials belong in the APK. */
@@ -292,8 +300,22 @@ class CloudflareMarketRepository(
                     val amount = event.numberOrNull("amount")?.takeIf { it > 0.0 }
                         ?: return@mapNotNull null
                     val finalRightsDate = runCatching { LocalDate.parse(event.optString("final_rights_date")) }.getOrNull()
-                    CloudflareDividendEvent(date, amount, finalRightsDate)
+                    val recordDate = runCatching { LocalDate.parse(event.optString("record_date")) }.getOrNull()
+                    CloudflareDividendEvent(date, amount, finalRightsDate, recordDate)
                 }.distinctBy { it.date to it.amountPerShare }.sortedBy { it.date })
+            }
+        }
+        val upcomingEventsBySymbol = buildMap {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val symbol = row.optString("symbol").trim().uppercase(java.util.Locale.ROOT)
+                if (symbol !in requested) continue
+                val event = row.optJSONObject("upcoming_event") ?: continue
+                val exDividendDate = runCatching { LocalDate.parse(event.optString("ex_dividend_date")) }.getOrNull()
+                    ?: continue
+                val finalRightsDate = runCatching { LocalDate.parse(event.optString("final_rights_date")) }.getOrNull()
+                val recordDate = runCatching { LocalDate.parse(event.optString("record_date")) }.getOrNull()
+                put(symbol, CloudflareUpcomingDividendEvent(exDividendDate, finalRightsDate, recordDate))
             }
         }
         val monthsBySymbol = buildMap {
@@ -310,7 +332,7 @@ class CloudflareMarketRepository(
                 put(symbol, validMonths)
             }
         }
-        CloudflareDividendMonths(asOf, monthsBySymbol, eventsBySymbol)
+        CloudflareDividendMonths(asOf, monthsBySymbol, eventsBySymbol, upcomingEventsBySymbol)
     }
 
     suspend fun financialDocument(code: String): JSONObject? = withContext(ioDispatcher) {
