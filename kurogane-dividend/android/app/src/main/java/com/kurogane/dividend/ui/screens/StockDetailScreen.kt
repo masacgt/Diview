@@ -2571,7 +2571,11 @@ private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.stock_detail_text_79), color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.stock_detail_text_79), color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(2.dp))
+                        StockAnalysisDisclaimerInfo()
+                    }
                     Text(stringResource(R.string.stock_detail_text_80), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 }
                 if (analysisNarrative.score != null) {
