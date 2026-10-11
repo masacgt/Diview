@@ -155,7 +155,7 @@ export const TermsPrivacyScreen: React.FC = () => {
               <div className="p-2 rounded-xl bg-[#0b1326] border border-slate-800">
                 <span className="text-[10px] text-[#4edea3] font-bold block">保護規格</span>
                 <span className="font-mono text-lg font-bold text-white">AES-256</span>
-                <span className="text-[9px] text-[#bbcabf] block">SQLite端末暗号化</span>
+                <span className="text-[9px] text-[#bbcabf] block">端末内データを暗号化</span>
               </div>
             </div>
           </div>
@@ -164,14 +164,14 @@ export const TermsPrivacyScreen: React.FC = () => {
           <div className="p-3.5 rounded-2xl bg-[#131b2e] border border-slate-800 space-y-1.5">
             <h4 className="font-bold text-xs text-white">1. 取得する情報とその範囲</h4>
             <p className="text-[11px] text-[#bbcabf] leading-relaxed">
-              当社がアプリの安定運用および技術的改善のためにのみ取得する情報は、匿名化クラッシュログ（スタックトレース・OSモデル）および匿名の利用統計情報（Firebase Analytics等の標準基盤）に限られます。個人を特定できる情報は含まれません。
+              当社がアプリの安定運用および技術的改善のために取得する情報は、個人を特定しないクラッシュ情報（エラー内容・端末の種類）と、匿名の利用統計情報に限られます。個人を特定できる情報は含まれません。
             </p>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-[#131b2e] border border-slate-800 space-y-1.5">
             <h4 className="font-bold text-xs text-white">2. セキュリティ管理体制</h4>
             <p className="text-[11px] text-[#bbcabf] leading-relaxed">
-              ポートフォリオデータは、端末固有のセキュアキーストア（iOS Keychain / Android Keystore）から導出されたマスターキーにより、ローカルデータベース（SQLite）レベルで暗号化されています。
+              ポートフォリオデータは端末内に保存し、端末の安全な保存領域で管理する暗号鍵を使って暗号化しています。
             </p>
           </div>
         </div>
