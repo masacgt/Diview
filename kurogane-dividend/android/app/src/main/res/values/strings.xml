@@ -237,7 +237,7 @@
     <string name="dividend_change_analysis_cards_text_2">"%1$s・現在の保有株数で最新2期の実績を比較"</string>
     <string name="dividend_change_analysis_cards_text_3">"国内株 %1$s 銘柄"</string>
     <string name="dividend_change_analysis_cards_text_4">"比較可能 %1$s / %2$s 銘柄"</string>
-    <string name="dividend_change_analysis_cards_text_5">"増配プラス寄与"</string>
+    <string name="dividend_change_analysis_cards_text_5">"増配寄与"</string>
     <string name="dividend_change_analysis_cards_text_6">"減配影響"</string>
     <string name="dividend_change_analysis_cards_text_7">"履歴未取得・連続2期の記録がない%1$s銘柄は増減集計から除外しています。"</string>
     <string name="dividend_change_analysis_cards_impact_info_title">"指標の見方"</string>
