@@ -373,12 +373,12 @@
     <string name="settings_label_25" formatted="false">"5% (推奨)"</string>
     <string name="settings_label_26" formatted="false">"10% (簡易)"</string>
     <string name="settings_text_9">"通知・リマインダー設定"</string>
-    <string name="settings_text_10">"配当月のリマインダー"</string>
+    <string name="settings_text_10">"配当権利通知"</string>
     <string name="settings_text_11">"買場シグナル・株価アラート"</string>
     <string name="settings_label_27">"通知時間帯"</string>
     <string name="settings_label_28">"日本時間・端末の状態により遅れることがあります"</string>
     <string name="settings_label_29">"朝 08:30 / 夕 17:30 頃"</string>
-    <string name="settings_label_30">"配当月は朝のみ確認します。通知が届くには、アプリ設定と端末の通知許可が必要です。"</string>
+    <string name="settings_label_30">"配当権利・株価・増配減配を朝夕に確認します。端末状態や通信状況により遅れる場合があります。通知には端末の許可が必要です。"</string>
     <string name="settings_label_31">"端末の許可：配当 %1$s / 株価 %2$s / 増配・減配 %3$s"</string>
     <string name="settings_label_32">"テスト通知"</string>
     <string name="settings_label_33">"端末の通知設定"</string>
@@ -480,7 +480,7 @@
     <string name="stock_detail_text_73">"配当月・通知設定"</string>
     <string name="stock_detail_text_74">"配当月"</string>
     <string name="stock_detail_text_75">"入金日は証券口座で確認"</string>
-    <string name="stock_detail_text_76">"配当月リマインダー（保有銘柄共通）"</string>
+    <string name="stock_detail_text_76">"配当権利通知（保有銘柄共通）"</string>
     <string name="stock_detail_text_77">"保有情報を編集"</string>
     <string name="stock_detail_text_78">"保有解除"</string>
     <string name="stock_detail_text_79">"銘柄総合分析の詳細判定"</string>
@@ -682,7 +682,7 @@
     <string name="contact_feedback_message_4">"保有株数や取得価格を変更したい場合はどうすればよいですか？"</string>
     <string name="contact_feedback_message_5">"資産管理画面の銘柄一覧カードをタップすると、取得価格と保有株数の編集フォームが立ち上がります。数値を変更して「更新」をタップすると、即座にポートフォリオの全値、円グラフ、および配当ロードマップが自動再計算されます。"</string>
     <string name="contact_feedback_message_6">"買場目安アラートとはどのような機能ですか？"</string>
-    <string name="contact_feedback_message_7">"ウォッチリスト（監視銘柄）の各カードで右側の通知アイコンをONにすると、株価が設定した目標利回り（ターゲット）に到達した際に、ブラウザまたはスマホのプッシュ通知でお知らせします。通知をONにするとリアルタイムに買場目安価格（逆算株価）が自動計算されます。"</string>
+    <string name="contact_feedback_message_7">"ウォッチリスト（監視銘柄）の各カードで右側の通知アイコンをONにすると、株価が設定した目標利回り（ターゲット）に到達した際に端末内の通知でお知らせします。ウォッチリストで目標利回りを設定した保有銘柄にも適用します。通知をONにするとリアルタイムに買場目安価格（逆算株価）が自動計算されます。"</string>
     <string name="contact_feedback_message_8">"ロードマップ達成率はどのように計算されていますか？"</string>
     <string name="contact_feedback_message_9">"登録したすべての保有銘柄から得られる年間予想配当金を算出し、その12分の1（月換算額）を計算します。ロードマップの各STEP（電気代、水道代、食費、FIREなど）の目標月額に対する、あなたの現在の月間配当額の割合が％としてリアルタイムに反映されます。"</string>
     <string name="contact_feedback_message_10">"送信を受け付けました。受付番号：%1$s"</string>
@@ -737,8 +737,8 @@
     <string name="settings_label_51" formatted="false">"3.50% (堅実)"</string>
     <string name="settings_label_52" formatted="false">"4.00% (標準)"</string>
     <string name="settings_label_53" formatted="false">"4.50% (積極)"</string>
-    <string name="settings_label_54">"配当月を月1回お知らせ（入金確認ではありません）"</string>
-    <string name="settings_label_55">"通知ONの監視銘柄が目標利回りに到達したときに通知"</string>
+    <string name="settings_label_54">"取得済みの権利確定日（推定）を過ぎた次の通知時刻にお知らせ"</string>
+    <string name="settings_label_55">"ウォッチリストで通知ONの銘柄を対象にし、保有中の同一銘柄にも適用"</string>
     <string name="settings_label_56">"起動時とバックグラウンドからの復帰時に認証"</string>
     <string name="settings_message_7">"この画面では認証を開始できません"</string>
     <string name="settings_label_57">"電車内など外出時の画面閲覧用"</string>
@@ -784,8 +784,8 @@
     <string name="app_authentication_message_4">"Diviewをロック解除"</string>
     <string name="app_authentication_message_5">"指紋・顔認証または端末の画面ロックで確認"</string>
     <string name="diview_notifications_message_2">"取得株価から目標利回りへの到達をお知らせします"</string>
-    <string name="diview_notifications_message_3">"配当月リマインダー"</string>
-    <string name="diview_notifications_message_4">"配当月の到来をお知らせします"</string>
+    <string name="diview_notifications_message_3">"配当権利通知"</string>
+    <string name="diview_notifications_message_4">"取得済みの権利確定日を過ぎた銘柄をお知らせします"</string>
     <string name="diview_notifications_message_6">"通知が受信できるか確認します"</string>
     <string name="diview_notifications_message_7">"新しいお知らせがあります"</string>
     <string name="diview_notifications_message_8">"Diviewのテスト通知"</string>
@@ -799,7 +799,7 @@
     <string name="notification_unread_count">通知、未読%1$d件</string>
     <string name="notification_history_filter_all">すべて (%1$d)</string>
     <string name="notification_history_kind_price">買場シグナル</string>
-    <string name="notification_history_kind_dividend_month">配当月リマインダー</string>
+    <string name="notification_history_kind_dividend_month">配当権利通知</string>
     <string name="notification_history_kind_dividend_change">増配・減配</string>
     <string name="notification_history_empty_title">通知履歴はまだありません</string>
     <string name="notification_history_empty_message">通知が送信されると、ここに表示されます。</string>
