@@ -622,6 +622,16 @@ private fun MonthlyDividendEstimateCard(
     val maxMonthlyAmount = remember(monthlyDividends) {
         monthlyDividends.maxOfOrNull { it.second }?.coerceAtLeast(1.0) ?: 1.0
     }
+    val quarterlyCashFlowAmounts = remember(monthlyDividends) {
+        (0..3).map { quarterIndex ->
+            monthlyDividends.drop(quarterIndex * 3).take(3).sumOf { it.second }
+        }
+    }
+    val monthlyCashFlowTotal = quarterlyCashFlowAmounts.sum()
+    val maxMonthSharePercent = remember(monthlyDividends, monthlyCashFlowTotal) {
+        val maxMonthAmount = monthlyDividends.maxOfOrNull { it.second } ?: 0.0
+        if (monthlyCashFlowTotal > 0.0) maxMonthAmount / monthlyCashFlowTotal * 100.0 else 0.0
+    }
     val monthlyGridTargetStep = maxMonthlyAmount / 3.0
     val monthlyGridMagnitude = 10.0.pow(kotlin.math.floor(kotlin.math.log10(monthlyGridTargetStep)))
     val monthlyNormalizedGridStep = monthlyGridTargetStep / monthlyGridMagnitude
@@ -830,6 +840,132 @@ private fun MonthlyDividendEstimateCard(
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            QuarterlyCashFlowComparison(
+                quarterlyAmounts = quarterlyCashFlowAmounts,
+                totalMonthlyAmount = monthlyCashFlowTotal,
+                maxMonthSharePercent = maxMonthSharePercent,
+                isPrivacyActive = isPrivacyActive,
+                currencyFormat = currencyFormat
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuarterlyCashFlowComparison(
+    quarterlyAmounts: List<Double>,
+    totalMonthlyAmount: Double,
+    maxMonthSharePercent: Double,
+    isPrivacyActive: Boolean,
+    currencyFormat: NumberFormat
+) {
+    val quarterColors = listOf(SecondaryIndigo, PrimaryEmeraldContainer, SecondaryIndigo, PrimaryEmeraldContainer)
+    val maxMonthShareText = if (isPrivacyActive) "•••%" else String.format(Locale.JAPAN, "%.1f%%", maxMonthSharePercent)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = SurfaceContainer,
+        border = BorderStroke(1.dp, BorderBlue)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Icon(Icons.Default.PieChart, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
+                Text(
+                    stringResource(R.string.annual_dividend_quarterly_cashflow_title),
+                    modifier = Modifier.weight(1f),
+                    color = OnSurface,
+                    fontSize = AppTextSize.dense,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = SecondaryIndigo.copy(alpha = 0.14f)
+                ) {
+                    Text(
+                        stringResource(R.string.annual_dividend_quarterly_max_month_share, maxMonthShareText),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        color = SecondaryIndigo,
+                        fontSize = AppTextSize.dense,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Box(
+                Modifier.fillMaxWidth()
+                    .height(9.dp)
+                    .clip(CircleShape)
+                    .background(BorderBlue)
+            ) {
+                if (totalMonthlyAmount > 0.0) {
+                    Row(Modifier.fillMaxSize()) {
+                        quarterlyAmounts.forEachIndexed { index, amount ->
+                            if (amount > 0.0) {
+                                Box(
+                                    Modifier.weight((amount / totalMonthlyAmount).toFloat())
+                                        .fillMaxHeight()
+                                        .background(quarterColors[index])
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                quarterlyAmounts.forEachIndexed { index, amount ->
+                    val firstMonth = index * 3 + 1
+                    val lastMonth = firstMonth + 2
+                    val sharePercent = if (totalMonthlyAmount > 0.0) amount / totalMonthlyAmount * 100.0 else 0.0
+                    val amountText = if (isPrivacyActive) "¥••••" else "¥${currencyFormat.format(amount.roundToLong())}"
+                    val percentageText = if (isPrivacyActive) "•••%" else String.format(Locale.JAPAN, "%.1f%%", sharePercent)
+
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        color = BackgroundDark
+                    ) {
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                stringResource(R.string.annual_dividend_quarterly_quarter_label, index + 1, firstMonth, lastMonth),
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                amountText,
+                                color = OnSurface,
+                                fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                percentageText,
+                                color = quarterColors[index],
+                                fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
                 }
             }
         }
