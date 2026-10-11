@@ -1816,11 +1816,11 @@ fun WatchlistScreen(
                         ) {
                             val maxBarVal = projection.monthlyTotals.maxOrNull()?.toFloat()?.coerceAtLeast(1f) ?: 1f
                             val numMonths = 12
-                            val barWidth = 14.dp.toPx()
-                            val spacing = (size.width - (barWidth * numMonths)) / (numMonths + 1)
+                            val monthCellWidth = size.width / numMonths
+                            val barWidth = minOf(14.dp.toPx(), monthCellWidth * 0.58f)
 
                             for (m in 1..12) {
-                                val monthLeft = spacing + (m - 1) * (barWidth + spacing)
+                                val monthLeft = (m - 1) * monthCellWidth + (monthCellWidth - barWidth) / 2f
                                 val barVal = projection.monthlyTotals[m - 1].toFloat()
                                 val color = if (watchlist.any { it.category != "us" && projection.monthly(it, m) > 0 }) calendarDividendColor else calendarUsColor
 
@@ -1849,17 +1849,29 @@ fun WatchlistScreen(
                         // Labels row under calendar
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.Start
                         ) {
                             (1..12).forEach { m ->
-                                val count = watchlist.count { m in projection.months(it) }
-                                val label = if (count > 0) "${count}銘柄" else "—"
+                                val amount = projection.monthlyTotals[m - 1]
+                                val amountLabel = if (amount > 0) yen(amount) else "—"
                                 Column(
                                     modifier = Modifier.weight(1f),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Text(stringResource(R.string.annual_dividend_1_s , m), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                    Text(label, color = if (label.startsWith("日")) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Medium)
+                                    Text(
+                                        text = amountLabel,
+                                        color = if (amount > 0) OnSurfaceVariant else OnSurfaceVariant.copy(alpha = 0.7f),
+                                        fontSize = 6.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                    Text(
+                                        stringResource(R.string.annual_dividend_1_s, m),
+                                        color = OnSurface,
+                                        fontSize = AppTextSize.dense,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                         }
