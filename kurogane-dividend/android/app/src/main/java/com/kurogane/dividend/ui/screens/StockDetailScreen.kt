@@ -76,6 +76,14 @@ fun StockDetailScreen(
     val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarScope = rememberCoroutineScope()
+    var watchlistSnackbarJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    fun showWatchlistSnackbar(message: String) {
+        watchlistSnackbarJob?.cancel()
+        snackbarHostState.currentSnackbarData?.dismiss()
+        watchlistSnackbarJob = snackbarScope.launch {
+            snackbarHostState.showSnackbar(message)
+        }
+    }
     
     var resolvedSecurity by remember(stockCode) { mutableStateOf<com.kurogane.dividend.data.CloudflareSecurity?>(null) }
     var lookupFinished by remember(stockCode) { mutableStateOf(false) }
@@ -393,9 +401,7 @@ fun StockDetailScreen(
                                 onClick = {
                                     if (isBookmarked) viewModel.removeWatchlistStock(currentHolding.code)
                                     else viewModel.addHoldingToWatchlist(currentHolding)
-                                    snackbarScope.launch {
-                                        snackbarHostState.showSnackbar(if (isBookmarked) "Watchlistから解除しました" else "Watchlistに登録しました")
-                                    }
+                                    showWatchlistSnackbar(if (isBookmarked) "Watchlistから解除しました" else "Watchlistに登録しました")
                                 },
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
