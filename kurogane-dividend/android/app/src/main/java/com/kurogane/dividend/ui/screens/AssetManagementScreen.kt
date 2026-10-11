@@ -6,6 +6,7 @@ import com.kurogane.dividend.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -35,14 +36,19 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.Role
@@ -68,6 +74,14 @@ val NeonGreenLight: Color @Composable get() = PrimaryEmerald
 val SoftGray: Color @Composable get() = OnSurfaceVariant
 val BorderBlue: Color @Composable get() = BorderColor
 
+private data class OdometerGlyph(val character: Char, val layout: TextLayoutResult)
+
+private const val ODOMETER_STEP_COUNT = 8
+private const val ODOMETER_STEP_INTERVAL_MS = 38f
+private const val ODOMETER_TRANSITION_DURATION_MS = 49f
+private const val ODOMETER_ANIMATION_DURATION_MS =
+    ODOMETER_STEP_COUNT * ODOMETER_STEP_INTERVAL_MS + ODOMETER_TRANSITION_DURATION_MS
+
 @Composable
 private fun OdometerAmount(
     targetValue: Long,
@@ -76,6 +90,7 @@ private fun OdometerAmount(
     modifier: Modifier = Modifier
 ) {
     val targetNumber = numberFormat.format(targetValue)
+    val textMeasurer = rememberTextMeasurer()
     val textStyle = TextStyle(
         fontSize = AppTextSize.hero,
         fontWeight = FontWeight.ExtraBold,
@@ -84,6 +99,50 @@ private fun OdometerAmount(
         fontFeatureSettings = "\"tnum\" 1, \"kern\" 1, \"palt\" 1",
         letterSpacing = (-0.5).sp
     )
+    val glyphs = remember(targetNumber, textStyle, textMeasurer) {
+        targetNumber.map { character ->
+            OdometerGlyph(
+                character = character,
+                layout = textMeasurer.measure(
+                    text = AnnotatedString(character.toString()),
+                    style = textStyle,
+                    softWrap = false,
+                    maxLines = 1
+                )
+            )
+        }
+    }
+    val digitLayouts = remember(textStyle, textMeasurer) {
+        (0..9).map { digit ->
+            textMeasurer.measure(
+                text = AnnotatedString(digit.toString()),
+                style = textStyle,
+                softWrap = false,
+                maxLines = 1
+            )
+        }
+    }
+    val numberWidthPx = glyphs.sumOf { it.layout.size.width }
+    val numberHeightPx = glyphs.maxOfOrNull { it.layout.size.height } ?: 0
+    val density = LocalDensity.current
+    val numberWidth = with(density) { numberWidthPx.toDp() }
+    val numberHeight = with(density) { numberHeightPx.toDp() }
+    val elapsedMillis = remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(animate, targetValue) {
+        if (!animate) {
+            elapsedMillis.floatValue = ODOMETER_ANIMATION_DURATION_MS
+            return@LaunchedEffect
+        }
+
+        elapsedMillis.floatValue = 0f
+        val animationStartNanos = withFrameNanos { it }
+        do {
+            val frameNanos = withFrameNanos { it }
+            val elapsed = (frameNanos - animationStartNanos) / 1_000_000f
+            elapsedMillis.floatValue = elapsed.coerceAtMost(ODOMETER_ANIMATION_DURATION_MS)
+        } while (elapsed < ODOMETER_ANIMATION_DURATION_MS)
+    }
 
     Row(
         modifier = modifier.clearAndSetSemantics {
@@ -92,44 +151,46 @@ private fun OdometerAmount(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(text = "¥", style = textStyle)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            targetNumber.forEachIndexed { index, character ->
-                val place = targetNumber.length - index - 1
-                key("odometer-place-$place") {
-                    if (character.isDigit()) {
-                        val finalDigit = character.digitToInt()
-                        var rollingDigit by remember(place) {
-                            mutableIntStateOf(if (animate) (finalDigit + 2) % 10 else finalDigit)
+        Canvas(modifier = Modifier.size(width = numberWidth, height = numberHeight)) {
+            val elapsed = elapsedMillis.floatValue
+            var x = 0f
+
+            glyphs.forEach { glyph ->
+                if (!animate || elapsed >= ODOMETER_ANIMATION_DURATION_MS || !glyph.character.isDigit()) {
+                    drawText(glyph.layout, topLeft = Offset(x, 0f))
+                } else {
+                    val finalDigit = glyph.character.digitToInt()
+                    for (step in 0..ODOMETER_STEP_COUNT) {
+                        val enterStart = step * ODOMETER_STEP_INTERVAL_MS
+                        val exitStart = (step + 1) * ODOMETER_STEP_INTERVAL_MS
+
+                        if (step > 0 && elapsed < enterStart) continue
+                        if (step < ODOMETER_STEP_COUNT && elapsed >= exitStart + ODOMETER_TRANSITION_DURATION_MS) continue
+
+                        val enterProgress = if (step == 0) {
+                            1f
+                        } else {
+                            ((elapsed - enterStart) / ODOMETER_TRANSITION_DURATION_MS).coerceIn(0f, 1f)
                         }
-                        LaunchedEffect(animate, targetValue, place) {
-                            if (animate) {
-                                rollingDigit = (finalDigit + 2) % 10
-                                repeat(8) {
-                                    kotlinx.coroutines.delay(38)
-                                    rollingDigit = (rollingDigit + 1) % 10
-                                }
-                            } else {
-                                rollingDigit = finalDigit
-                            }
+                        val exitProgress = if (step == ODOMETER_STEP_COUNT) {
+                            0f
+                        } else {
+                            ((elapsed - exitStart) / ODOMETER_TRANSITION_DURATION_MS).coerceIn(0f, 1f)
                         }
-                        AnimatedContent(
-                            targetState = rollingDigit,
-                            transitionSpec = {
-                                if (animate) {
-                                    (slideInVertically(tween(49, easing = LinearOutSlowInEasing)) { it } + fadeIn(tween(49)))
-                                        .togetherWith(slideOutVertically(tween(49, easing = LinearOutSlowInEasing)) { -it } + fadeOut(tween(49)))
-                                } else {
-                                    EnterTransition.None togetherWith ExitTransition.None
-                                }
-                            },
-                            label = "asset-value-rolling-digit-$place"
-                        ) { digit ->
-                            Text(text = digit.toString(), style = textStyle)
-                        }
-                    } else {
-                        Text(text = character.toString(), style = textStyle)
+                        val enterAlpha = if (step == 0) 1f else FastOutSlowInEasing.transform(enterProgress)
+                        val exitAlpha = if (step == ODOMETER_STEP_COUNT) 1f else 1f - FastOutSlowInEasing.transform(exitProgress)
+                        val enterOffset = if (step == 0) 0f else size.height * (1f - LinearOutSlowInEasing.transform(enterProgress))
+                        val exitOffset = if (step == ODOMETER_STEP_COUNT) 0f else -size.height * LinearOutSlowInEasing.transform(exitProgress)
+                        val digit = (finalDigit + 2 + step) % 10
+                        drawText(
+                            textLayoutResult = digitLayouts[digit],
+                            topLeft = Offset(x, enterOffset + exitOffset),
+                            alpha = enterAlpha * exitAlpha
+                        )
                     }
                 }
+
+                x += glyph.layout.size.width
             }
         }
     }
@@ -144,7 +205,6 @@ fun AssetManagementScreen(
     onOpenHoldingRegistration: (String) -> Unit = onOpenAddHolding
 ) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
-    val holdings by viewModel.holdings.collectAsStateWithLifecycle()
     var holdingsRestored by remember(viewModel) { mutableStateOf(false) }
     var hasAnimatedTotalAssets by remember(viewModel) { mutableStateOf(false) }
     val animateTotalAssets = holdingsRestored && !hasAnimatedTotalAssets
@@ -158,14 +218,9 @@ fun AssetManagementScreen(
             hasAnimatedTotalAssets = true
         }
     }
-    val japaneseNames = remember(holdings) {
-        holdings.associate { holding -> holding.code to viewModel.japaneseDisplayName(holding.code, holding.name) }
-    }
-    val financialData by viewModel.financialData.collectAsStateWithLifecycle()
     val isPrivacyActive by viewModel.isPrivacyActive.collectAsStateWithLifecycle()
     val selectedMonth by viewModel.selectedMonth.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
-    val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
 
     // Sorting state
     var sortCriteria by rememberSaveable { mutableStateOf("val") } // "val", "gain", "div", "div_amt", "code"
@@ -189,64 +244,51 @@ fun AssetManagementScreen(
     val deleteActionVisibleWidthPx = with(LocalDensity.current) { deleteActionVisibleWidth.toPx() }
 
     val javaCurrencyFormat = remember { NumberFormat.getNumberInstance(Locale.JAPAN) }
-    val categoryCounts = remember(holdings) { holdings.groupingBy { it.category }.eachCount() }
-    val hasMissingExchangeRate = remember(holdings) {
-        holdings.any { it.currency == "$" && it.usdJpyRate == null }
+    val listItemsFlow = remember(viewModel, sortCriteria) {
+        viewModel.assetManagementListItems(sortCriteria)
     }
+    val listItems by listItemsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val categoryCounts = remember(listItems) { listItems.groupingBy { it.category }.eachCount() }
+    val hasMissingExchangeRate = remember(listItems) { listItems.any { it.missingExchangeRate } }
 
-    // Dynamic calculations from holdings optimized using remember to prevent recomposition overhead
-    val totalAssetsVal = remember(holdings) { holdings.sumOf { it.totalValuation } }
-    val totalCostVal = remember(holdings) { holdings.sumOf { it.totalCost } }
-    val totalGainVal = remember(totalAssetsVal, totalCostVal) { totalAssetsVal - totalCostVal }
-    val gainPctVal = remember(totalGainVal, totalCostVal) { if (totalCostVal > 0.0) (totalGainVal / totalCostVal) * 100.0 else 0.0 }
-    val totalAnnualDivVal = remember(holdings, taxRateMode) { holdings.sumOf { it.getEffectiveAnnualDividend(taxRateMode) } }
-    val netAnnualDivVal = remember(holdings) { holdings.sumOf { it.getEffectiveAnnualDividend("net") } }
-    val calculationBasis by viewModel.calculationBasis.collectAsStateWithLifecycle()
-    val avgYield = com.kurogane.dividend.model.PortfolioMath.portfolioYield(totalAnnualDivVal, totalAssetsVal, totalCostVal, calculationBasis)
-
-    // Dynamic Annual Dividend Target based on currently active roadmap step optimized with remember
-    val totalAnnualExpectedDividendForRoadmap = remember(holdings, taxRateMode) {
-        holdings.sumOf { it.getEffectiveAnnualDividend(taxRateMode).toLong() }
-    }
-    val monthlyIncomeForRoadmap = remember(totalAnnualExpectedDividendForRoadmap) { totalAnnualExpectedDividendForRoadmap / 12 }
-
-    val roadmapMonthlyTargets = remember {
-        listOf(
-            1_000, 2_000, 3_000, 4_000, 5_000, 6_000, 8_000, 10_000, 15_000, 20_000,
-            25_000, 30_000, 35_000, 40_000, 45_000, 50_000, 60_000, 70_000, 80_000, 100_000,
-            120_000, 150_000, 180_000, 200_000, 250_000, 300_000, 350_000, 400_000, 500_000, 600_000
-        )
-    }
-    val currentMonthlyTarget = remember(monthlyIncomeForRoadmap, roadmapMonthlyTargets) {
-        roadmapMonthlyTargets.firstOrNull { monthlyIncomeForRoadmap < it } ?: roadmapMonthlyTargets.last()
-    }
-    val currentAnnualTarget = currentMonthlyTarget * 12
-
-    // Category and month filtering optimized with remember and search filtering
-    val filteredHoldings = remember(holdings, selectedMonth, selectedCategory, searchQuery) {
-        holdings.filter { h ->
-            val monthMatch = selectedMonth == null || h.dividendMonths.contains(selectedMonth)
-            val catMatch = selectedCategory == null || h.category == selectedCategory
+    val filteredHoldings = remember(listItems, selectedMonth, selectedCategory, searchQuery) {
+        listItems.filter { holding ->
+            val monthMatch = selectedMonth == null || holding.dividendMonths.contains(selectedMonth)
+            val catMatch = selectedCategory == null || holding.category == selectedCategory
             val queryMatch = searchQuery.isEmpty() ||
-                    h.code.contains(searchQuery, ignoreCase = true) ||
-                    japaneseNames[h.code].orEmpty().contains(searchQuery, ignoreCase = true) ||
-                    h.sector.contains(searchQuery, ignoreCase = true)
+                    holding.code.contains(searchQuery, ignoreCase = true) ||
+                    holding.displayName.contains(searchQuery, ignoreCase = true) ||
+                    holding.sector.contains(searchQuery, ignoreCase = true)
             monthMatch && catMatch && queryMatch
         }
     }
 
-    // Sorted holdings optimized with remember
-    val displayedHoldings = remember(filteredHoldings, sortCriteria, sortDirection, taxRateMode, calculationBasis) {
+    val displayedHoldings = remember(filteredHoldings, sortCriteria, sortDirection) {
         filteredHoldings.sortedWith { a, b ->
-            val comp = when (sortCriteria) {
-                "val" -> a.totalValuation.compareTo(b.totalValuation)
-                "gain" -> a.gainLossPercent.compareTo(b.gainLossPercent)
-                "div" -> (if (calculationBasis == "cost") a.liveYoc else a.liveYield).compareTo(if (calculationBasis == "cost") b.liveYoc else b.liveYield)
-                "div_amt" -> a.getEffectiveAnnualDividend(taxRateMode).compareTo(b.getEffectiveAnnualDividend(taxRateMode))
-                "code" -> a.code.compareTo(b.code)
-                else -> a.totalValuation.compareTo(b.totalValuation)
-            }
+            val comp = if (sortCriteria == "code") a.code.compareTo(b.code) else a.sortValue.compareTo(b.sortValue)
             if (sortDirection == "desc") -comp else comp
+        }
+    }
+    val activeHoldings = remember(displayedHoldings, exitingHoldings) {
+        displayedHoldings.filterNot { candidate -> exitingHoldings.any { it.id == candidate.id } }
+    }
+    val animatedHoldingIds = remember(activeHoldings, exitingHoldings, exitingNextHoldingIds) {
+        buildList {
+            val insertions = exitingHoldings.associate { exiting ->
+                exiting.id to exitingNextHoldingIds[exiting.id]
+            }
+            var insertedNextIds = emptySet<String>()
+            activeHoldings.forEach { candidate ->
+                val exiting = exitingHoldings.firstOrNull { insertions[it.id] == candidate.id }
+                if (exiting != null) {
+                    add(exiting.id)
+                    add(candidate.id)
+                    insertedNextIds = insertedNextIds + candidate.id
+                } else if (candidate.id !in insertedNextIds) {
+                    add(candidate.id)
+                }
+            }
+            addAll(exitingHoldings.filter { exiting -> activeHoldings.none { candidate -> insertions[exiting.id] == candidate.id } }.map { it.id })
         }
     }
 
@@ -265,36 +307,13 @@ fun AssetManagementScreen(
         screenScope.launch {
             kotlinx.coroutines.delay(900)
             val result = snackbarHostState.showSnackbar(
-                message = "${japaneseNames[holding.code] ?: holding.name}を保有銘柄から削除しました",
+            message = "${viewModel.japaneseDisplayName(holding.code, holding.name)}を保有銘柄から削除しました",
                 actionLabel = "元に戻す",
                 withDismissAction = true,
                 duration = SnackbarDuration.Short
             )
             if (result == SnackbarResult.ActionPerformed) viewModel.restoreHolding(holding)
         }
-    }
-
-    val badgeText = when {
-        avgYield >= 4.0 -> resources.getString(R.string.asset_management_label_5)
-        avgYield >= 3.0 -> resources.getString(R.string.asset_management_label_20)
-        avgYield >= 2.0 -> resources.getString(R.string.asset_management_label_21)
-        avgYield >= 0.5 -> resources.getString(R.string.asset_management_label_22)
-        else -> resources.getString(R.string.asset_management_label_23)
-    }
-
-    val badgeIcon = when {
-        avgYield >= 4.0 -> Icons.Default.Bolt
-        avgYield >= 3.0 -> Icons.Default.CheckCircle
-        avgYield >= 2.0 -> Icons.Default.Star
-        else -> Icons.Default.Info
-    }
-
-    val badgeColor = when {
-        avgYield >= 4.0 -> SecondaryIndigo // Purple
-        avgYield >= 3.0 -> NeonGreen // Emerald
-        avgYield >= 2.0 -> if (BackgroundDark == LightAppPalette.background) Color(0xFF1D4ED8) else Color(0xFF60A5FA) // Blue
-        avgYield >= 0.5 -> AccentAmber // Amber
-        else -> SoftGray // Slate
     }
 
     fun getSortLabel(): String {
@@ -396,6 +415,34 @@ fun AssetManagementScreen(
             }
             // ================= TOTAL ASSET HERO CARD =================
             item(key = "asset_summary", contentType = "summary") {
+                val summary by viewModel.assetManagementSummary.collectAsStateWithLifecycle()
+                val totalAssetsVal = summary.totalAssets
+                val totalCostVal = summary.totalCost
+                val totalGainVal = summary.totalGain
+                val gainPctVal = summary.gainPercent
+                val totalAnnualDivVal = summary.annualDividend
+                val netAnnualDivVal = summary.netAnnualDividend
+                val avgYield = summary.averageYield
+                val badgeText = when {
+                    avgYield >= 4.0 -> resources.getString(R.string.asset_management_label_5)
+                    avgYield >= 3.0 -> resources.getString(R.string.asset_management_label_20)
+                    avgYield >= 2.0 -> resources.getString(R.string.asset_management_label_21)
+                    avgYield >= 0.5 -> resources.getString(R.string.asset_management_label_22)
+                    else -> resources.getString(R.string.asset_management_label_23)
+                }
+                val badgeIcon = when {
+                    avgYield >= 4.0 -> Icons.Default.Bolt
+                    avgYield >= 3.0 -> Icons.Default.CheckCircle
+                    avgYield >= 2.0 -> Icons.Default.Star
+                    else -> Icons.Default.Info
+                }
+                val badgeColor = when {
+                    avgYield >= 4.0 -> SecondaryIndigo
+                    avgYield >= 3.0 -> NeonGreen
+                    avgYield >= 2.0 -> if (BackgroundDark == LightAppPalette.background) Color(0xFF1D4ED8) else Color(0xFF60A5FA)
+                    avgYield >= 0.5 -> AccentAmber
+                    else -> SoftGray
+                }
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -541,6 +588,17 @@ fun AssetManagementScreen(
 
             // ================= GOAL PROGRESS CARD =================
             item(key = "dividend_goal", contentType = "goal") {
+                val summary by viewModel.assetManagementSummary.collectAsStateWithLifecycle()
+                val totalAnnualDivVal = summary.annualDividend
+                val monthlyIncomeForRoadmap = summary.roadmapDividend / 12
+                val roadmapMonthlyTargets = listOf(
+                    1_000, 2_000, 3_000, 4_000, 5_000, 6_000, 8_000, 10_000, 15_000, 20_000,
+                    25_000, 30_000, 35_000, 40_000, 45_000, 50_000, 60_000, 70_000, 80_000, 100_000,
+                    120_000, 150_000, 180_000, 200_000, 250_000, 300_000, 350_000, 400_000, 500_000, 600_000
+                )
+                val currentMonthlyTarget = roadmapMonthlyTargets.firstOrNull { monthlyIncomeForRoadmap < it }
+                    ?: roadmapMonthlyTargets.last()
+                val currentAnnualTarget = currentMonthlyTarget * 12
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -697,7 +755,7 @@ fun AssetManagementScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     val chips = listOf(
-                        Pair(null, "すべて (${holdings.size})"),
+                        Pair(null, "すべて (${listItems.size})"),
                         Pair(Category.JAPAN, "日本株 (${categoryCounts[Category.JAPAN] ?: 0})"),
                         Pair(Category.US, "米国株 (${categoryCounts[Category.US] ?: 0})"),
                         Pair(Category.FUND, "投信 (${categoryCounts[Category.FUND] ?: 0})")
@@ -723,26 +781,6 @@ fun AssetManagementScreen(
 
             }
             // ================= HOLDING STOCK CARDS LIST =================
-            val activeHoldings = displayedHoldings.filterNot { candidate ->
-                exitingHoldings.any { it.id == candidate.id }
-            }
-            val animatedHoldings = buildList {
-                val insertions = exitingHoldings.associate { exiting ->
-                    exiting.id to exitingNextHoldingIds[exiting.id]
-                }
-                var insertedNextIds = emptySet<String>()
-                activeHoldings.forEach { candidate ->
-                    val exiting = exitingHoldings.firstOrNull { insertions[it.id] == candidate.id }
-                    if (exiting != null) {
-                        add(exiting)
-                        add(candidate)
-                        insertedNextIds = insertedNextIds + candidate.id
-                    } else if (candidate.id !in insertedNextIds) {
-                        add(candidate)
-                    }
-                }
-                addAll(exitingHoldings.filter { exiting -> activeHoldings.none { candidate -> insertions[exiting.id] == candidate.id } })
-            }
             if (activeHoldings.isEmpty() && exitingHoldings.isEmpty()) {
                 item(key = "empty_holdings", contentType = "empty") {
                     Card(
@@ -772,8 +810,16 @@ fun AssetManagementScreen(
                     }
                 }
             } else {
-                items(animatedHoldings, key = { "holding:${it.id}" }, contentType = { "holding" }) { holding ->
-                    val isExiting = exitingHoldings.any { it.id == holding.id }
+                items(animatedHoldingIds, key = { "holding:$it" }, contentType = { "holding" }) { holdingId ->
+                    val exitingHolding = exitingHoldings.firstOrNull { it.id == holdingId }
+                    val holdingFlow = remember(viewModel, holdingId) { viewModel.holdingForId(holdingId) }
+                    val holdingState by holdingFlow.collectAsStateWithLifecycle(
+                        initialValue = viewModel.holdingSnapshot(holdingId) ?: exitingHolding
+                    )
+                    val holding = holdingState ?: exitingHolding ?: return@items
+                    val isExiting = exitingHolding != null
+                    val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
+                    val calculationBasis by viewModel.calculationBasis.collectAsStateWithLifecycle()
                     val exitOffset by animateIntOffsetAsState(
                         targetValue = if (isExiting) IntOffset(-listState.layoutInfo.viewportSize.width, 0) else IntOffset.Zero,
                         animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
@@ -790,7 +836,11 @@ fun AssetManagementScreen(
                     val diff = holding.gainLoss
                     val diffPct = holding.gainLossPercent
                     val annualDiv = holding.getEffectiveAnnualDividend(taxRateMode)
-                    val dividends = financialData[holding.code]?.dividends
+                    val financialDataFlow = remember(viewModel, holding.code) { viewModel.financialDataFor(holding.code) }
+                    val financialData by financialDataFlow.collectAsStateWithLifecycle(
+                        initialValue = viewModel.financialDataSnapshot(holding.code)
+                    )
+                    val dividends = financialData?.dividends
                     val latestDividendPeriod = remember(dividends) {
                         dividends?.zipWithNext()
                             ?.lastOrNull { (previous, current) -> current.year == previous.year + 1 }
@@ -907,7 +957,7 @@ fun AssetManagementScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            japaneseNames[holding.code] ?: holding.name,
+                                            viewModel.japaneseDisplayName(holding.code, holding.name),
                                             fontWeight = FontWeight.Bold,
                                             color = OnSurface,
                                             fontSize = AppTextSize.body,
@@ -1074,27 +1124,8 @@ fun AssetManagementScreen(
 
             // ================= NEXT DIVIDEND PAYOUT STRIP (100% DYNAMIC) =================
             item(key = "next_dividend", contentType = "payout") {
-                val currentMonthNum = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1
-                val validHoldings = holdings.filter { it.dividendMonths.isNotEmpty() && it.shares > 0 }
-                var nextStock = validHoldings.firstOrNull()
-                var nextMonth = 12
-                var minDiff = 999
-                validHoldings.forEach { h ->
-                    h.dividendMonths.forEach { m ->
-                        var diff = m - currentMonthNum
-                        if (diff < 0) diff += 12
-                        if (diff < minDiff) {
-                            minDiff = diff
-                            nextStock = h
-                            nextMonth = m
-                        }
-                    }
-                }
-                val nextDivAmt = if (nextStock != null) {
-                    val rate = nextStock.currencyFactor
-                    val monthsCount = if (nextStock.dividendMonths.isNotEmpty()) nextStock.dividendMonths.size else 2
-                    ((nextStock.shares * nextStock.dps * rate) / monthsCount).toLong()
-                } else 0L
+                val upcomingDividend by viewModel.assetManagementUpcomingDividend.collectAsStateWithLifecycle()
+                val nextStockName = upcomingDividend.name
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -1120,12 +1151,12 @@ fun AssetManagementScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(stringResource(R.string.asset_management_text_11), color = SoftGray, fontSize = AppTextSize.dense)
-                                Text(if (nextStock != null) stringResource(R.string.asset_management_label, (nextMonth).toString(), (nextStock!!.name).toString()) else stringResource(R.string.asset_management_label_2), fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.caption)
+                                Text(if (nextStockName != null) stringResource(R.string.asset_management_label, (upcomingDividend.month).toString(), nextStockName) else stringResource(R.string.asset_management_label_2), fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.caption)
                             }
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(stringResource(R.string.add_holding_1_s , javaCurrencyFormat.format(nextDivAmt)), fontWeight = FontWeight.Bold, color = NeonGreenLight, fontSize = AppTextSize.body, fontFamily = FontFamily.Monospace)
-                            Text(stringResource(R.string.asset_management_text_12 , nextStock?.dividendType ?: resources.getString(R.string.asset_management_label_19), nextStock?.shares ?: 0), color = SoftGray, fontSize = AppTextSize.dense)
+                            Text(stringResource(R.string.add_holding_1_s , javaCurrencyFormat.format(upcomingDividend.amount)), fontWeight = FontWeight.Bold, color = NeonGreenLight, fontSize = AppTextSize.body, fontFamily = FontFamily.Monospace)
+                            Text(stringResource(R.string.asset_management_text_12 , upcomingDividend.dividendType ?: resources.getString(R.string.asset_management_label_19), upcomingDividend.shares), color = SoftGray, fontSize = AppTextSize.dense)
                         }
                     }
                 }

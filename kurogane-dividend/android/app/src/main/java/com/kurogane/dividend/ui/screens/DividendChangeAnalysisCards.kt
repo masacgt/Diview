@@ -287,21 +287,51 @@ internal fun DividendChangeSecuritiesList(
     }
     var filter by rememberSaveable { mutableStateOf("all") }
     var changeSort by rememberSaveable { mutableStateOf("impact") }
-    val rows = remember(analysis, filter, changeSort) {
-        val filtered = analysis.securities.filter {
-            when (filter) {
+    var sortAnimationRevision by remember { mutableStateOf(0) }
+    fun sortedChangeRows(selectedFilter: String, selectedSort: String) = analysis.securities
+        .filter {
+            when (selectedFilter) {
                 "increase" -> it.change == DividendChangeStatus.INCREASE
                 "monitor" -> it.requiresMonitoring
                 "maintain" -> it.change == DividendChangeStatus.MAINTAIN
                 else -> true
             }
         }
-        when (changeSort) {
-            "growth" -> filtered.sortedByDescending { it.growthRate ?: Double.NEGATIVE_INFINITY }
-            "years" -> filtered.sortedByDescending { it.profile?.consecutiveYears ?: -1 }
-            "code" -> filtered.sortedBy { it.code }
-            else -> filtered.sortedByDescending { it.annualImpact ?: Double.NEGATIVE_INFINITY }
+        .let { filtered ->
+            when (selectedSort) {
+                "growth" -> filtered.sortedByDescending { it.growthRate ?: Double.NEGATIVE_INFINITY }
+                "years" -> filtered.sortedByDescending { it.profile?.consecutiveYears ?: -1 }
+                "code" -> filtered.sortedBy { it.code }
+                else -> filtered.sortedByDescending { it.annualImpact ?: Double.NEGATIVE_INFINITY }
+            }
         }
+    val rowsState = remember(analysis, filter) { mutableStateOf(sortedChangeRows(filter, changeSort)) }
+    val rows = rowsState.value
+    val cardHeights = remember { mutableStateMapOf<String, Int>() }
+    val reorderOffsets = remember { mutableStateMapOf<String, Float>() }
+    val spacingPx = with(androidx.compose.ui.platform.LocalDensity.current) { 12.dp.toPx() }
+    fun selectChangeSort(selectedSort: String) {
+        val nextRows = sortedChangeRows(filter, selectedSort)
+        val oldPositions = mutableMapOf<String, Float>()
+        var position = 0f
+        rowsState.value.forEach { row ->
+            oldPositions[row.code] = position
+            position += (cardHeights[row.code]?.toFloat() ?: 0f) + spacingPx
+        }
+        val newPositions = mutableMapOf<String, Float>()
+        position = 0f
+        nextRows.forEach { row ->
+            newPositions[row.code] = position
+            position += (cardHeights[row.code]?.toFloat() ?: 0f) + spacingPx
+        }
+        reorderOffsets.clear()
+        nextRows.forEach { row ->
+            val offset = (oldPositions[row.code] ?: 0f) - (newPositions[row.code] ?: 0f)
+            if (offset != 0f) reorderOffsets[row.code] = offset
+        }
+        rowsState.value = nextRows
+        changeSort = selectedSort
+        sortAnimationRevision++
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         MonitorHeading("銘柄別の増配・減配", Icons.Default.QueryStats)
@@ -321,11 +351,31 @@ internal fun DividendChangeSecuritiesList(
             "並び替え",
             listOf("impact" to stringResource(R.string.dividend_change_analysis_cards_label_9), "growth" to stringResource(R.string.dividend_change_analysis_cards_label_10), "years" to stringResource(R.string.dividend_change_analysis_cards_label_11), "code" to stringResource(R.string.dividend_change_analysis_cards_label_12)),
             changeSort
-        ) { changeSort = it }
+        ) { selectChangeSort(it) }
         if (rows.isEmpty()) MonitorEmptyCard("該当する銘柄はありません。")
         rows.forEach { row ->
             key(row.code) {
-                DividendChangeCard(row, isPrivacyActive, onClick = { onNavigateToDetail(row.code) })
+                val verticalOffset = remember(row.code) { Animatable(0f) }
+                val startOffset = reorderOffsets[row.code] ?: 0f
+                LaunchedEffect(changeSort, sortAnimationRevision) {
+                    if (startOffset != 0f) {
+                        verticalOffset.snapTo(startOffset)
+                        verticalOffset.animateTo(
+                            targetValue = 0f,
+                            animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
+                        )
+                    }
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .onSizeChanged { size ->
+                            if (cardHeights[row.code] != size.height) cardHeights[row.code] = size.height
+                        }
+                        .graphicsLayer { translationY = verticalOffset.value }
+                ) {
+                    DividendChangeCard(row, isPrivacyActive, onClick = { onNavigateToDetail(row.code) })
+                }
             }
         }
     }
