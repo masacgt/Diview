@@ -137,7 +137,7 @@ fun SearchSheet(
         if (!visible || query.isEmpty()) {
             remoteCandidates = null
             isSearching = false
-        } else if (query.length >= 2 || query.any(Char::isDigit)) {
+        } else {
             delay(350)
             isSearching = true
             val result = runCatchingCancellable { search(query) }
@@ -164,8 +164,6 @@ fun SearchSheet(
                 )
             }
             isSearching = false
-        } else {
-            remoteCandidates = null
         }
     }
 
