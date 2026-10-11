@@ -1951,8 +1951,8 @@ export const notificationsList = [
   },
   {
     id: 'notif-2',
-    title: '📈 配当データ同期完了 (Cloudflare R2)',
-    body: '最新の東証・NASDAQ市場終値および増配データが Cloudflare R2 ストレージから取得され、ポートフォリオへ反映されました。',
+    title: '📈 配当データの更新完了',
+    body: '最新の東証・NASDAQ市場終値および増配データを取得し、ポートフォリオへ反映しました。',
     time: '本日 09:00',
     unread: false,
     category: 'sync',

@@ -32,7 +32,7 @@
     <string name="add_holding_text_3">"口座間の株数・取得単価を1画面でまとめて設定"</string>
     <string name="add_holding_text_4">"銘柄コード / 企業名"</string>
     <string name="add_holding_text_5">"%1$s (利回り %2$s%%)"</string>
-    <string name="add_holding_text_6">"Cloudflareの銘柄マスターを確認できませんでした。通信状態と銘柄コードを確認してください。"</string>
+    <string name="add_holding_text_6">"銘柄情報を取得できませんでした。通信状態と銘柄コードを確認してください。"</string>
     <string name="add_holding_1_s_2_s">"%1$s %2$s"</string>
     <string name="add_holding_1_s_2_s_2">"%1$s%2$s"</string>
     <string name="add_holding_text_7">"配当利回り %1$s%%"</string>
@@ -232,7 +232,7 @@
     <string name="csv_import_text_7">"4種類のDVMファイルを個別に選択できます。復号と確認は端末内で行います。"</string>
     <string name="csv_import_text_8">"%1$s　%2$s件"</string>
     <string name="csv_import_text_9">"%1$s  %2$s  %3$s株"</string>
-    <string name="csv_import_text_10">"ファイルの解析・銘柄照合・保存は端末内で行われ、Cloudflareへ送信されません。"</string>
+    <string name="csv_import_text_10">"CSVファイルの解析・銘柄照合・保存は端末内で行われ、ファイルの内容は外部サービスへ送信されません。"</string>
     <string name="dividend_change_analysis_cards_text">"年間配当総増減"</string>
     <string name="dividend_change_analysis_cards_text_2">"%1$s・現在の保有株数で最新2期の実績を比較"</string>
     <string name="dividend_change_analysis_cards_text_3">"国内株 %1$s 銘柄"</string>
@@ -486,7 +486,7 @@
     <string name="stock_detail_text_81">"%1$s %2$s点"</string>
     <string name="stock_detail_text_82">"総合判定: %1$s。評価できた%2$s指標を重み付けして算出しています。"</string>
     <string name="stock_detail_text_83">"全7指標の文章パターン: 45^7 = %1$s通り。今回の入力で選択可能な組合せ: %2$s通り。"</string>
-    <string name="stock_detail_text_84">"市場指標はCloudflare API、財務指標は取得した決算実績を使用します。未取得の値は未評価です。"</string>
+    <string name="stock_detail_text_84">"市場指標は最新の市場データ、財務指標は取得済みの決算実績を使用します。未取得の値は未評価です。"</string>
     <string name="stock_detail_text_85">"判定パターン %1$s / %2$s"</string>
     <string name="stock_detail_text_86">"未取得の指標: %1$s。データがない項目は評価に含めません。"</string>
     <string name="stock_detail_text_87">"%1$s  %2$s・%3$s（%4$s）"</string>
@@ -531,11 +531,11 @@
     <string name="terms_privacy_text_26">"1. 外部へ送信する情報"</string>
     <string name="terms_privacy_text_27">"本アプリの通常利用では、保有数量、取得単価、資産額などのポートフォリオ情報をアプリ提供者のサーバーへ送信しません。銘柄検索や市場データ取得では、検索語・銘柄コード・対象年月などのリクエスト情報が市場データ提供先へ送られます。為替レート取得では通貨ペアを外部の為替データ提供先へ送信します。お問い合わせ機能を利用した場合は、送信操作により本文、任意の連絡先、任意の診断情報が問い合わせ受付サーバーへ送られます。お問い合わせは受付後90日を経過したものから、受付サーバーで次回に受付情報を参照する際に削除されます。通信先のサーバーでは、通信の処理・保護のためIPアドレス、アクセス日時、リクエスト情報等が記録される場合があります。"</string>
     <string name="terms_privacy_text_28">"2. データの端末内ストレージ保管"</string>
-    <string name="terms_privacy_text_29">"保有銘柄、監視銘柄、取り込みデータ、問い合わせの下書きは、アプリ専用の端末内保存領域に保存します。主要なポートフォリオデータはAndroid Keystoreで管理する鍵を使い、AES-256-GCMで暗号化して保存します。一方、アプリはデータ復元用の自動バックアップファイルも端末内に作成します。このファイルはアプリ内データと同じ暗号化方式ではありません。市場データ等のキャッシュや表示設定なども、すべてが同じ方式で暗号化されるわけではありません。端末のロック設定とOSを最新に保ち、第三者が端末を操作できないよう管理してください。Androidのバックアップ機能が有効な場合は、除外対象でないアプリデータがOSの設定に従ってバックアップまたは端末間転送されることがあります。CSV・JSONの書き出しファイルは選択した保存先に平文で作成されるため、保存先を適切に管理してください。アプリ内の「ローカルデータ完全消去」を実行すると、アプリ内データと自動バックアップファイルを削除し、Androidバックアップに変更を通知します。すでに書き出したファイルや、OS・クラウド側で保持中のバックアップは、この操作だけで直ちに削除できるとは限りません。"</string>
+    <string name="terms_privacy_text_29">"保有銘柄、監視銘柄、取り込みデータ、問い合わせの下書きは、アプリ専用の端末内保存領域に保存します。主要なポートフォリオデータは、Androidの安全な鍵管理機能で保護された暗号鍵を使い、AES-256-GCM方式で暗号化して保存します。一方、アプリはデータ復元用の自動バックアップファイルも端末内に作成します。このファイルはアプリ内データと同じ暗号化方式ではありません。市場データ等のキャッシュや表示設定なども、すべてが同じ方式で暗号化されるわけではありません。端末のロック設定とOSを最新に保ち、第三者が端末を操作できないよう管理してください。Androidのバックアップ機能が有効な場合は、除外対象でないアプリデータがOSの設定に従ってバックアップまたは端末間転送されることがあります。CSV・JSONの書き出しファイルは選択した保存先に平文で作成されるため、保存先を適切に管理してください。アプリ内の「ローカルデータ完全消去」を実行すると、アプリ内データと自動バックアップファイルを削除し、Androidバックアップに変更を通知します。すでに書き出したファイルや、OS・クラウド側で保持中のバックアップは、この操作だけで直ちに削除できるとは限りません。"</string>
     <string name="terms_privacy_text_38">"3. 保存期間と削除"</string>
     <string name="terms_privacy_text_39">"ポートフォリオ等の端末内データは、利用者がアプリ内で編集・削除するか、「ローカルデータ完全消去」を実行するまで保存されます。問い合わせ内容は受付サーバーに保存し、作成から90日を経過したデータをサーバーの定期処理または受付情報の参照時に削除します。送信前の問い合わせ下書きは端末内に保存され、送信に成功すると削除されます。"</string>
     <string name="terms_privacy_text_40">"4. 外部サービスと第三者"</string>
-    <string name="terms_privacy_text_41">"市場データと問い合わせ受付には、Cloudflare Workers上で稼働するDiviewのAPIを使用します。米ドル・円の為替レート取得にはFrankfurter APIを使用します。検索語、銘柄コード、対象年月、通貨ペアなど、各機能の要求に必要な情報が通信先へ送られます。各サービスの運営者は、それぞれの規約・プライバシーポリシーに基づいて情報を取り扱います。アプリには広告配信・行動分析用SDKを組み込んでいません。"</string>
+    <string name="terms_privacy_text_41">"市場データの取得とお問い合わせの受付には、Cloudflareのクラウド基盤を利用したDiviewのオンラインサービスを使用します。米ドル・円の為替レートはFrankfurterの為替情報サービスから取得します。検索語、銘柄コード、対象年月、通貨ペアなど、各機能の利用に必要な情報が通信先へ送られます。各サービスの運営者は、それぞれの規約・プライバシーポリシーに基づいて情報を取り扱います。アプリには広告配信・行動分析用SDKを組み込んでいません。"</string>
     <string name="terms_privacy_text_42">"5. 利用者による管理"</string>
     <string name="terms_privacy_text_43">"利用者は、アプリ内のデータ消去機能を使って端末内データを削除できます。問い合わせ内容の確認や削除を希望する場合は、アプリ内のお問い合わせ画面から受付IDなど分かる情報を添えてご連絡ください。端末内の削除は、すでに書き出したファイルや端末・クラウドのバックアップ、外部提供先の通信記録には及びません。"</string>
     <string name="terms_privacy_text_44">"6. 本ポリシーの変更"</string>
