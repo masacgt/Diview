@@ -1026,4 +1026,7 @@
     <string name="roadmap_all_complete">ALL QUESTS COMPLETE</string>
     <string name="roadmap_all_steps_complete">全30STEPを達成</string>
     <string name="yield_basis_cost_detail">取得単価比</string>
+    <string name="annual_dividend_quarterly_cashflow_title">四半期キャッシュフロー対比</string>
+    <string name="annual_dividend_quarterly_max_month_share">最大月の構成比: %1$s</string>
+    <string name="annual_dividend_quarterly_quarter_label">Q%1$d (%2$d-%3$d月)</string>
 </resources>
