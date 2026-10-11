@@ -1,6 +1,7 @@
 package com.kurogane.dividend.ui.screens
 
 import com.kurogane.dividend.ui.components.AdaptiveRow
+import com.kurogane.dividend.ui.components.DiviewSnackbarHost
 import androidx.compose.ui.res.stringResource
 import com.kurogane.dividend.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -343,6 +344,7 @@ fun WatchlistScreen(
     var filterState by remember { mutableStateOf("all") } // "all", "jp", "us", "ready"
     var showProjectionInfo by remember { mutableStateOf(false) }
     var showSortBottomSheet by remember { mutableStateOf(false) }
+    var showSortInfo by remember { mutableStateOf(false) }
     var sortCriteria by remember { mutableStateOf("ach") } // "ach", "yield", "price", "code"
     var sortDirection by remember { mutableStateOf("desc") } // "asc", "desc"
     var draftSortCriteria by remember { mutableStateOf("ach") }
@@ -453,7 +455,17 @@ fun WatchlistScreen(
                 withDismissAction = true,
                 duration = SnackbarDuration.Short
             )
-            if (result == SnackbarResult.ActionPerformed) viewModel.restoreWatchlistStock(removed)
+            if (result == SnackbarResult.ActionPerformed && viewModel.restoreWatchlistStock(removed)) {
+                appliedOrderCodes?.let { currentOrder ->
+                    val restoredOrder = currentOrder.filterNot { it == removed.code }.toMutableList()
+                    val insertionIndex = nextStockCode
+                        ?.let(restoredOrder::indexOf)
+                        ?.takeIf { it >= 0 }
+                        ?: restoredOrder.size
+                    restoredOrder.add(insertionIndex, removed.code)
+                    appliedOrderCodes = restoredOrder
+                }
+            }
         }
     }
 
@@ -485,48 +497,7 @@ fun WatchlistScreen(
     Scaffold(
         containerColor = BackgroundDark,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = {
-            SnackbarHost(snackbarHostState) { data ->
-                Surface(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    color = SurfaceContainerHigh,
-                    contentColor = OnSurface,
-                    border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.45f)),
-                    tonalElevation = 6.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .defaultMinSize(minHeight = 48.dp)
-                            .padding(start = 16.dp, end = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = data.visuals.message,
-                            modifier = Modifier.weight(1f),
-                            color = OnSurface,
-                            fontSize = 14.sp
-                        )
-                        data.visuals.actionLabel?.let { actionLabel ->
-                            TextButton(onClick = data::performAction) {
-                                Text(actionLabel, color = PrimaryEmerald)
-                            }
-                        }
-                        if (data.visuals.withDismissAction) {
-                            IconButton(onClick = data::dismiss, modifier = Modifier.size(40.dp)) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "通知を閉じる",
-                                    modifier = Modifier.size(18.dp),
-                                    tint = OnSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        snackbarHost = { DiviewSnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         LazyColumn(
             state = listState,
@@ -1072,7 +1043,7 @@ fun WatchlistScreen(
                         Surface(
                             shape = CircleShape,
                             color = badgeColor.copy(alpha = 0.15f),
-                            border = BorderStroke(0.5.dp, badgeColor.copy(alpha = 0.5f)),
+                            border = BorderStroke(0.5.dp, BorderBlue),
                             modifier = Modifier.padding(end = 6.dp).width(badgeWidth)
                         ) {
                             Row(
@@ -1400,9 +1371,12 @@ fun WatchlistScreen(
 
     if (showSortBottomSheet) {
         ModalBottomSheet(
-            onDismissRequest = { showSortBottomSheet = false },
+            onDismissRequest = {
+                showSortInfo = false
+                showSortBottomSheet = false
+            },
             containerColor = CardDark,
-            sheetState = rememberModalBottomSheetState()
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ) {
             Column(
                 modifier = Modifier
@@ -1430,9 +1404,69 @@ fun WatchlistScreen(
                             fontSize = AppTextSize.body,
                             fontWeight = FontWeight.Bold
                         )
+                        Box {
+                            IconButton(
+                                onClick = { showSortInfo = true },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Info,
+                                    contentDescription = stringResource(R.string.watchlist_sort_info_content_description),
+                                    tint = OnSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showSortInfo,
+                                onDismissRequest = { showSortInfo = false },
+                                modifier = Modifier.widthIn(max = 300.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                containerColor = SurfaceContainerLow,
+                                tonalElevation = 0.dp,
+                                shadowElevation = 12.dp
+                            ) {
+                                Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = PrimaryEmerald.copy(alpha = 0.14f),
+                                            modifier = Modifier.size(30.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    Icons.Default.Info,
+                                                    contentDescription = null,
+                                                    tint = PrimaryEmerald,
+                                                    modifier = Modifier.size(17.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(Modifier.width(10.dp))
+                                        Text(
+                                            stringResource(R.string.watchlist_text_21),
+                                            color = OnSurface,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = AppTextSize.body
+                                        )
+                                    }
+                                    Spacer(Modifier.height(12.dp))
+                                    HorizontalDivider(color = BorderColor, thickness = 0.75.dp)
+                                    Spacer(Modifier.height(12.dp))
+                                    Text(
+                                        stringResource(R.string.watchlist_text_22),
+                                        color = OnSurfaceVariant,
+                                        fontSize = AppTextSize.caption,
+                                        lineHeight = 20.sp
+                                    )
+                                }
+                            }
+                        }
                     }
                     IconButton(
-                        onClick = { showSortBottomSheet = false },
+                        onClick = {
+                            showSortInfo = false
+                            showSortBottomSheet = false
+                        },
                         modifier = Modifier.minimumInteractiveComponentSize().size(24.dp)
                     ) {
                         Icon(
@@ -1443,12 +1477,6 @@ fun WatchlistScreen(
                         )
                     }
                 }
-
-                Text(
-                    stringResource(R.string.watchlist_text_22),
-                    color = SoftGray,
-                    fontSize = AppTextSize.dense
-                )
 
                 // Direction Switcher
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1552,7 +1580,7 @@ fun WatchlistScreen(
                                     Icons.Default.CheckCircle,
                                     contentDescription = null,
                                     tint = PrimaryEmerald,
-                                    modifier = Modifier.minimumInteractiveComponentSize().size(18.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
@@ -1566,7 +1594,10 @@ fun WatchlistScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Button(
-                        onClick = { showSortBottomSheet = false },
+                        onClick = {
+                            showSortInfo = false
+                            showSortBottomSheet = false
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f).height(44.dp)
@@ -1591,6 +1622,7 @@ fun WatchlistScreen(
                             appliedOrderCodes = newlySortedCodes + previousOrder.filterNot { it in visibleCodes }
                             sortCriteria = draftSortCriteria
                             sortDirection = draftSortDirection
+                            showSortInfo = false
                             showSortBottomSheet = false
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),

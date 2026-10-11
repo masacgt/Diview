@@ -247,12 +247,23 @@ fun AnnualDividendScreen(
                             verticalAlignment = Alignment.Top
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    stringResource(R.string.annual_dividend_text),
-                                    fontSize = AppTextSize.caption,
-                                    fontWeight = FontWeight.Bold,
-                                    color = OnSurfaceVariant
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Savings,
+                                        contentDescription = null,
+                                        tint = OnSurfaceVariant,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        stringResource(R.string.annual_dividend_text),
+                                        fontSize = AppTextSize.caption,
+                                        fontWeight = FontWeight.Bold,
+                                        color = OnSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    AnnualDividendHistoryInfo(stringResource(R.string.annual_dividend_gross_info_description))
+                                }
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     RollingMoney(
@@ -1063,7 +1074,7 @@ private fun QuarterlyCashFlowComparison(
                         border = BorderStroke(0.5.dp, BorderColor)
                     ) {
                         Column(
-                            Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 12.dp),
+                            Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 2.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
@@ -1073,7 +1084,7 @@ private fun QuarterlyCashFlowComparison(
                                 maxLines = 1,
                                 softWrap = false
                             )
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(2.dp))
                             Text(
                                 amountText,
                                 color = OnSurface,
@@ -1084,7 +1095,7 @@ private fun QuarterlyCashFlowComparison(
                                 maxLines = 1,
                                 softWrap = false
                             )
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(2.dp))
                             Text(
                                 percentageText,
                                 color = quarterColors[index],
@@ -1332,13 +1343,22 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        stringResource(R.string.annual_dividend_text_8),
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = OnSurface
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(
+                            imageVector = Icons.Default.DonutLarge,
+                            contentDescription = null,
+                            tint = PrimaryEmerald,
+                            modifier = Modifier.size(18.dp)
                         )
-                    )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.annual_dividend_text_8),
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = OnSurface
+                            )
+                        )
+                    }
 
                     // Pill Toggle Switch: 構成比率 vs 配当比率
                     Row(
@@ -1599,13 +1619,22 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        stringResource(R.string.annual_dividend_text_12),
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = OnSurface
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(
+                            imageVector = Icons.Default.Category,
+                            contentDescription = null,
+                            tint = PrimaryEmerald,
+                            modifier = Modifier.size(18.dp)
                         )
-                    )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.annual_dividend_text_12),
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = OnSurface
+                            )
+                        )
+                    }
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
@@ -1816,11 +1845,20 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    stringResource(R.string.annual_dividend_text_20),
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = OnSurface),
-                    modifier = Modifier.weight(1f)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ViewList,
+                        contentDescription = null,
+                        tint = PrimaryEmerald,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        stringResource(R.string.annual_dividend_text_20),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = OnSurface),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
                 Row(
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(SurfaceContainerHigh).padding(2.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -2215,9 +2253,10 @@ private fun CompoundingSimulationSection(
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
     LaunchedEffect(holdings.map { it.code }) { viewModel.refreshAnalysisFinancialDataIfDue() }
     val currentYear = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).year
-    val years = remember(holdings, financialData, taxRateMode, currentYear) {
-        com.kurogane.dividend.model.DividendHistory.calculate(holdings, financialData, (currentYear - 4)..currentYear, taxRateMode)
+    val comparisonYears = remember(holdings, financialData, taxRateMode, currentYear) {
+        com.kurogane.dividend.model.DividendHistory.calculate(holdings, financialData, (currentYear - 5)..currentYear, taxRateMode)
     }
+    val years = comparisonYears.drop(1)
     var annualBarsVisible by remember { mutableStateOf(false) }
     LaunchedEffect(years) {
         annualBarsVisible = false
@@ -2256,18 +2295,6 @@ private fun CompoundingSimulationSection(
     }
     fun signedPercent(value: Double?): String = value?.let { String.format(Locale.JAPAN, "%+.2f%%", it) } ?: "未取得"
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Timeline, null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.annual_dividend_text_29), color = OnSurface, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(4.dp))
-                AnnualDividendHistoryInfo(stringResource(R.string.annual_dividend_text_32))
-            }
-            Surface(shape = RoundedCornerShape(8.dp), color = PrimaryEmerald.copy(alpha = .15f)) {
-                Text(stringResource(R.string.annual_dividend_text_31), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
-            }
-        }
         Card(
             Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
@@ -2275,6 +2302,18 @@ private fun CompoundingSimulationSection(
             border = BorderStroke(1.dp, BorderColor)
         ) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Timeline, null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.annual_dividend_text_29), color = OnSurface, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(4.dp))
+                        AnnualDividendHistoryInfo(stringResource(R.string.annual_dividend_text_32))
+                    }
+                    Surface(shape = RoundedCornerShape(8.dp), color = PrimaryEmerald.copy(alpha = .15f)) {
+                        Text(stringResource(R.string.annual_dividend_text_31), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+                    }
+                }
                 AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(7.dp).clip(CircleShape).background(PrimaryEmerald))
@@ -2301,7 +2340,20 @@ private fun CompoundingSimulationSection(
                 val chartHeight = 136.dp
                 val labelTopOffset = 24.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale
                 val groupWidth = maxWidth / years.size
-                Canvas(Modifier.fillMaxWidth().height(chartHeight)) {
+                Canvas(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(chartHeight)
+                        .pointerInput(years.size) {
+                            detectTapGestures { tap ->
+                                if (size.width > 0) {
+                                    selectedYearIndex = (tap.x / size.width * years.size)
+                                        .toInt()
+                                        .coerceIn(years.indices)
+                                }
+                            }
+                        }
+                ) {
                     val plotBottom = size.height * barAreaBottomFraction
                     val plotHeight = size.height * barAreaHeightFraction
                     (0..amountGuideCount).forEach { guideIndex ->
@@ -2362,13 +2414,12 @@ private fun CompoundingSimulationSection(
                     Text(stringResource(R.string.annual_dividend_text_42), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                     AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         years.forEachIndexed { index, point ->
-                            val previousAmount = years.getOrNull(index - 1)?.amount
+                            val previousAmount = comparisonYears.getOrNull(index)?.amount
                             val yearChange = if (point.amount != null && previousAmount != null) point.amount - previousAmount else null
                             val isSelected = index == selectedIndex
                             Card(Modifier.weight(1f).clickable { selectedYearIndex = index }, shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = if (isSelected) SurfaceContainerHigh else BackgroundDark), border = BorderStroke(1.dp, if (isSelected) PrimaryEmerald else Color.Transparent)) {
-                                Column(Modifier.padding(horizontal = 6.dp, vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(stringResource(R.string.annual_dividend_1_s , point.year), color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                    Text(stringResource(R.string.annual_dividend_text_45), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                                     Text(
                                         signedMoney(yearChange),
                                         color = if ((yearChange ?: 0.0) >= 0.0) PrimaryEmerald else ErrorRed,

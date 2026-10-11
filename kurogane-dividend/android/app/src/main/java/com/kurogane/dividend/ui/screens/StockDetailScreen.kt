@@ -32,6 +32,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.layout.onGloballyPositioned
 import com.kurogane.dividend.R
 import com.kurogane.dividend.ui.components.StatusMessage
+import com.kurogane.dividend.ui.components.DiviewSnackbarHost
 import com.kurogane.dividend.ui.networkErrorMessage
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,11 +43,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
+import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.StockAnalysisNarrative
 import com.kurogane.dividend.model.StockAnalysisNarrativeGenerator
 import com.kurogane.dividend.viewmodel.DividendViewModel
@@ -63,7 +66,8 @@ fun StockDetailScreen(
     stockCode: String = "7203",
     viewModel: DividendViewModel,
     onBack: () -> Unit = {},
-    onOpenAddHolding: (String) -> Unit = {}
+    onOpenAddHolding: (String) -> Unit = {},
+    onHoldingRemoved: (Holding) -> Unit = { onBack() }
 ) {
     val resources = LocalContext.current.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
@@ -287,7 +291,7 @@ fun StockDetailScreen(
     )
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { DiviewSnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = BackgroundDark
     ) { innerPadding ->
@@ -630,16 +634,29 @@ fun StockDetailScreen(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         modifier = Modifier.weight(1f).fillMaxHeight()
                                     ) {
-                                        Text(dpsVal, color = if (isProjected) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
-                                        Spacer(modifier = Modifier.height(4.dp))
                                         BoxWithConstraints(
                                             modifier = Modifier.weight(1f).fillMaxWidth(),
                                             contentAlignment = Alignment.BottomCenter
                                         ) {
+                                            val barHeight = maxHeight * animatedRatio.coerceIn(0f, 0.95f) * 0.72f
+                                            Text(
+                                                dpsVal,
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomCenter)
+                                                    .offset(y = -(barHeight + 2.dp))
+                                                    .fillMaxWidth(),
+                                                color = if (isProjected) PrimaryEmerald else OnSurfaceVariant,
+                                                fontSize = if (dpsVal.length >= 6) AppTextSize.dense * 0.8f else AppTextSize.dense,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                textAlign = TextAlign.Center,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
                                             Box(
                                                 modifier = Modifier
                                                     .width(26.dp)
-                                                    .height(maxHeight * animatedRatio)
+                                                    .height(barHeight)
                                                     .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                                                     .background(
                                                         if (isProjected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
@@ -2613,7 +2630,7 @@ fun StockDetailScreen(
                 TextButton(
                     onClick = {
                         showDeleteHoldingConfirmation = false
-                        if (viewModel.removeHolding(currentHolding.id)) onBack()
+                        if (viewModel.removeHolding(currentHolding.id)) onHoldingRemoved(currentHolding)
                     }
                 ) {
                     Text("削除", color = ErrorRed, fontWeight = FontWeight.Bold)
