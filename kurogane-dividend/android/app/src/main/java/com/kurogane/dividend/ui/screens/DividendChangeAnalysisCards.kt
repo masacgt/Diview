@@ -168,8 +168,15 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
     MonitorCard {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(Icons.AutoMirrored.Filled.TrendingUp, null, tint = impactColor, modifier = Modifier.size(18.dp))
-            Text(stringResource(R.string.dividend_change_analysis_cards_text), color = OnSurface, fontWeight = FontWeight.Bold,
-                fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(stringResource(R.string.dividend_change_analysis_cards_text), color = OnSurface, fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp)
+                AnnualImpactInfo()
+            }
             MonitorBadge(percent(analysis.growthRate, signed = true), impactColor)
         }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -209,6 +216,50 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
         }
         if (total > compared.size) Text(stringResource(R.string.dividend_change_analysis_cards_text_7 , total - compared.size),
             color = TextMuted, fontSize = 10.sp)
+    }
+}
+
+@Composable
+private fun AnnualImpactInfo() {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }, modifier = Modifier.size(28.dp)) {
+            Icon(Icons.Default.Info, contentDescription = "年間配当総増減の説明", tint = OnSurfaceVariant, modifier = Modifier.size(18.dp))
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.widthIn(max = 300.dp),
+            shape = RoundedCornerShape(16.dp),
+            containerColor = CardDark,
+            tonalElevation = 0.dp,
+            shadowElevation = 12.dp
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = PrimaryEmerald.copy(alpha = 0.14f),
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Info, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(17.dp))
+                        }
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text("指標の見方", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
+                }
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = BorderBlue, thickness = 0.75.dp)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    stringResource(R.string.dividend_change_analysis_cards_text_9),
+                    color = OnSurfaceVariant,
+                    fontSize = AppTextSize.caption,
+                    lineHeight = 20.sp
+                )
+            }
+        }
     }
 }
 
