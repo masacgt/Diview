@@ -111,7 +111,7 @@
     <string name="annual_dividend_text_29">"年間配当推移"</string>
     <string name="annual_dividend_text_30">"%1$s年〜%2$s年・現在株数で換算した参考推移"</string>
     <string name="annual_dividend_text_31">"5期"</string>
-    <string name="annual_dividend_text_32">"年間配当額は、取得済みの国内株実績配当を現在の保有株数に換算しています。各期配当は分割調整済みです。実際の受取履歴ではありません。米国株・投資信託は対象外です。"</string>
+    <string name="annual_dividend_text_32">"過年度は取得済みの国内株実績配当を現在の保有株数で換算し、最新年は国内株・米国株・投資信託を含む現在の年間配当見込みを表示します。最新年は予想額のため、過年度の実績とは集計対象・基準が異なります。実際の受取履歴ではありません。税引後は現在の口座区分を適用します。"</string>
     <string name="annual_dividend_text_34">"一部の履歴を更新できませんでした。取得済みの値を表示しています。"</string>
     <string name="annual_dividend_text_35">"年間配当の増加額"</string>
     <string name="annual_dividend_text_36">"%1$s → %2$s・年額差"</string>
@@ -120,7 +120,7 @@
     <string name="annual_dividend_text_39">"年平均増配額 %1$s /年"</string>
     <string name="annual_dividend_text_40">"年間配当額"</string>
     <string name="annual_dividend_text_41">"開始期比 %1$s"</string>
-    <string name="annual_dividend_text_42">"年次推移データグリッド（年間配当額と前年差）"</string>
+    <string name="annual_dividend_text_42">"前年差推移"</string>
     <string name="annual_dividend_text_43">"%1$s/%2$s銘柄"</string>
     <string name="annual_dividend_text_44">"年額"</string>
     <string name="annual_dividend_text_45">"前年差"</string>
@@ -128,6 +128,8 @@
     <string name="annual_dividend_text_47">"年間配当額 %1$s"</string>
     <string name="annual_dividend_text_48">"取得済み %1$s/%2$s銘柄"</string>
     <string name="annual_dividend_text_49">"月換算 %1$s"</string>
+    <string name="annual_dividend_text_86">"年換算予想額"</string>
+    <string name="annual_dividend_text_87">"%1$s年・年換算予想額"</string>
     <string name="annual_dividend_text_50">"表示額は取得できた銘柄分の小計です。履歴がない銘柄は除外し、実績0円の記録は0円として含めます。税引後では現在の口座区分を適用します。"</string>
     <string name="annual_dividend_text_51">"履歴を更新"</string>
     <string name="annual_dividend_text_52">"国内株の現在株数 × 各年末の実際の終値（今年は直近月）。取得額は現在の取得額を比較基準とします。過去の保有資産額ではありません。"</string>
