@@ -568,16 +568,29 @@ fun StockDetailScreen(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         modifier = Modifier.weight(1f).fillMaxHeight()
                                     ) {
-                                        Text(dpsVal, color = if (isProjected) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
-                                        Spacer(modifier = Modifier.height(4.dp))
                                         BoxWithConstraints(
                                             modifier = Modifier.weight(1f).fillMaxWidth(),
                                             contentAlignment = Alignment.BottomCenter
                                         ) {
+                                            val barHeight = maxHeight * animatedRatio.coerceIn(0f, 0.95f) * 0.72f
+                                            Text(
+                                                dpsVal,
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomCenter)
+                                                    .offset(y = -(barHeight + 2.dp))
+                                                    .fillMaxWidth(),
+                                                color = if (isProjected) PrimaryEmerald else OnSurfaceVariant,
+                                                fontSize = if (dpsVal.length >= 6) AppTextSize.dense * 0.8f else AppTextSize.dense,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
                                             Box(
                                                 modifier = Modifier
                                                     .width(26.dp)
-                                                    .height(maxHeight * animatedRatio)
+                                                    .height(barHeight)
                                                     .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                                                     .background(
                                                         if (isProjected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
