@@ -149,6 +149,15 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
         highestCompletedStep >= 10 -> 2
         else -> 1
     }
+    val completedLevel = (highestCompletedStep / 10).coerceIn(0, 3)
+    val completedLevelTitleRes = when (completedLevel) {
+        1 -> R.string.roadmap_text_18
+        2 -> R.string.roadmap_text_19
+        3 -> R.string.roadmap_text_20
+        else -> R.string.roadmap_text_18
+    }
+    val completedLevelStartStep = (completedLevel - 1) * 10 + 1
+    val completedLevelEndStep = completedLevel * 10
     val activeStage = ((activeStep.step - 1) / 10) + 1
 
     LaunchedEffect(activeStep.step) {
@@ -200,7 +209,11 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                                 border = BorderStroke(0.5.dp, PrimaryEmerald.copy(alpha = 0.4f))
                             ) {
                                 Text(
-                                    text = stringResource(R.string.roadmap_text , currentLevel, activeStep.step),
+                                    text = if (highestCompletedStep >= milestoneSteps.size) {
+                                        stringResource(R.string.roadmap_all_complete)
+                                    } else {
+                                        stringResource(R.string.roadmap_text, currentLevel, activeStep.step)
+                                    },
                                     color = PrimaryEmerald,
                                     fontWeight = FontWeight.ExtraBold,
                                     fontSize = AppTextSize.dense,
@@ -224,7 +237,7 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Trophy banner appears after all ten Level 1 steps are cleared.
+                        // Show the highest fully completed level in the trophy banner.
                         if (highestCompletedStep >= 10) Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = PrimaryEmerald.copy(alpha = 0.1f),
@@ -254,13 +267,18 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Column {
                                         Text(
-                                            stringResource(R.string.roadmap_text_3),
+                                            stringResource(R.string.roadmap_level_achievement_title, completedLevel),
                                             color = OnSurface,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = AppTextSize.dense
                                         )
                                         Text(
-                                            stringResource(R.string.roadmap_text_4),
+                                            stringResource(
+                                                R.string.roadmap_level_achievement_description,
+                                                stringResource(completedLevelTitleRes),
+                                                completedLevelStartStep,
+                                                completedLevelEndStep
+                                            ),
                                             color = OnSurfaceVariant,
                                             fontSize = AppTextSize.dense
                                         )
@@ -271,7 +289,11 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                                     color = PrimaryEmerald.copy(alpha = 0.2f)
                                 ) {
                                     Text(
-                                        stringResource(R.string.roadmap_all_clear),
+                                        if (completedLevel == 3) {
+                                            stringResource(R.string.roadmap_all_clear)
+                                        } else {
+                                            stringResource(R.string.roadmap_level_clear, completedLevel)
+                                        },
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                         color = PrimaryEmerald,
                                         fontSize = AppTextSize.dense,
