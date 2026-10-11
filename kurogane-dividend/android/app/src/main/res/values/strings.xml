@@ -813,7 +813,7 @@
 
     <string name="add_holding_label">"銘柄情報を確認中…"</string>
     <string name="add_holding_label_2">"すべての口座にまとめて登録する"</string>
-    <string name="search_label">"Cloudflare銘柄マスターを検索中…"</string>
+    <string name="search_label">銘柄を検索しています…</string>
     <string name="search_label_2">"候補銘柄 (%1$s件)"</string>
     <string name="search_label_3">"再投資型"</string>
     <string name="search_label_4">"利回り %1$s"</string>
