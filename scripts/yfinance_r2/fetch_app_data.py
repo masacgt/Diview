@@ -22,7 +22,7 @@ PREFIX = os.environ.get("R2_PREFIX", "market/yfinance").strip("/")
 UNIVERSE = Path(os.environ.get("MARKET_UNIVERSE_CSV", "data/irbank/organized/d1/securities.csv"))
 
 APP_FIELDS = (
-    "currency", "exchange", "market", "quoteType", "shortName", "longName",
+    "currency", "exchange", "market", "quoteType",
     "regularMarketChange", "regularMarketChangePercent", "trailingPE", "priceToBook",
     "dividendRate", "dividendYield",
 )
@@ -79,6 +79,12 @@ def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any
         stats.update({key: collector.json_safe(info[key]) for key in APP_FIELDS if key in info and info[key] is not None})
         document["profile"] = {key: stats[key] for key in APP_FIELDS if key in stats}
         document["statistics_current"] = stats
+    stats.pop("shortName", None)
+    stats.pop("longName", None)
+    profile = dict(document.get("profile", {}))
+    profile.pop("shortName", None)
+    profile.pop("longName", None)
+    document["profile"] = profile
     profile = dict(document.get("profile", {}))
     profile.pop("sector", None)
     profile.pop("industry", None)
@@ -116,6 +122,8 @@ def publish_search_catalog(client: Any, bucket: str, summaries: list[dict[str, A
             row["security_code_display"].strip().upper(): row["name"].strip()
             for row in csv.DictReader(source)
         }
+    with Path("kurogane-dividend/android/app/src/main/assets/jpx_security_name_master.tsv").open(encoding="utf-8", newline="") as source:
+        old_names.update({row["code"].strip().upper(): row["name"].strip() for row in csv.DictReader(source, delimiter="\t")})
 
     items = []
     with UNIVERSE.open(encoding="utf-8-sig", newline="") as source:
@@ -133,7 +141,7 @@ def publish_search_catalog(client: Any, bucket: str, summaries: list[dict[str, A
             )
             items.append({
                 "code": code,
-                "name": market.get("shortName") or market.get("longName") or old_names.get(code) or code,
+                "name": old_names.get(code) or code,
                 "category": "jp",
                 "sector": security.get("sector_name") or None,
                 "estimated_average_trading_value_20d": market.get("estimated_average_trading_value_20d"),

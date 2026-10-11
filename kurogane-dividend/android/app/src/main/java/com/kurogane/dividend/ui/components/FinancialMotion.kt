@@ -12,6 +12,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,6 +24,7 @@ import java.util.Locale
 /** Rolls only changed digits; separators and the currency prefix remain still. */
 @Composable
 fun RollingMoney(amount: String, style: TextStyle, modifier: Modifier = Modifier) {
+    val mergedStyle = LocalTextStyle.current.merge(style)
     Row(modifier = modifier) {
         amount.forEachIndexed { index, char ->
             if (char.isDigit()) {
@@ -33,9 +35,9 @@ fun RollingMoney(amount: String, style: TextStyle, modifier: Modifier = Modifier
                             (slideOutVertically(tween(420)) { height -> if (targetState > initialState) -height else height } + fadeOut(tween(240)))
                     },
                     label = "Digit $index"
-                ) { digit -> Text(digit.toString(), style = style, maxLines = 1) }
+                ) { digit -> Text(digit.toString(), style = mergedStyle, maxLines = 1) }
             } else {
-                Text(char.toString(), style = style, maxLines = 1)
+                Text(char.toString(), style = mergedStyle, maxLines = 1)
             }
         }
     }
@@ -43,6 +45,7 @@ fun RollingMoney(amount: String, style: TextStyle, modifier: Modifier = Modifier
 
 @Composable
 fun SmoothMoney(value: Double, suffix: String = "", style: TextStyle, modifier: Modifier = Modifier, inTenThousands: Boolean = false) {
+    val mergedStyle = LocalTextStyle.current.merge(style)
     val doubleConverter = androidx.compose.runtime.remember {
         TwoWayConverter<Double, AnimationVector1D>(
             convertToVector = { AnimationVector1D(it.toFloat()) },
@@ -52,5 +55,5 @@ fun SmoothMoney(value: Double, suffix: String = "", style: TextStyle, modifier: 
     val animated by animateValueAsState(value, doubleConverter, tween(400), label = "Simulation amount")
     val formatted = if (inTenThousands) "¥${kotlin.math.round(animated / 10000).toLong()}万"
         else "¥${NumberFormat.getNumberInstance(Locale.JAPAN).format(kotlin.math.round(animated).toLong())}"
-    Text(formatted + suffix, modifier = modifier, style = style, maxLines = 1)
+    Text(formatted + suffix, modifier = modifier, style = mergedStyle, maxLines = 1)
 }

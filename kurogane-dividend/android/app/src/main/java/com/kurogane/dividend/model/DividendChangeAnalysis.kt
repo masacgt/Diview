@@ -15,7 +15,8 @@ data class DividendChangeSecurity(
     val currentDps: Double?,
     val previousAnnualDividend: Double?,
     val annualImpact: Double?,
-    val profile: StockFinancialProfile?
+    val profile: StockFinancialProfile?,
+    val dividendHistoryBasis: String = "fiscal_year_reported"
 ) {
     val change: DividendChangeStatus get() = when {
         previousDps == null || currentDps == null -> DividendChangeStatus.UNKNOWN
@@ -84,7 +85,8 @@ data class DividendChangeAnalysis(val securities: List<DividendChangeSecurity>) 
                         currentDps = current?.dps,
                         previousAnnualDividend = previousAmount,
                         annualImpact = currentAmount?.let { it - previousAmount!! },
-                        profile = data?.profile ?: lots.firstNotNullOfOrNull { it.financialProfile }
+                        profile = data?.profile ?: lots.firstNotNullOfOrNull { it.financialProfile },
+                        dividendHistoryBasis = data?.dividendHistoryBasis ?: "fiscal_year_reported"
                     )
                 }
         )

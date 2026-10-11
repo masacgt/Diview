@@ -58,6 +58,9 @@ class DiviewNotifications(private val context: Context) {
             .setCategory(NotificationCompat.CATEGORY_REMINDER).build()
         return try {
             NotificationManagerCompat.from(context).notify(id, notification)
+            historyKind(channel)?.let { kind ->
+                runCatching { NotificationStore(context).recordNotification(kind, title, text) }
+            }
             true
         } catch (_: SecurityException) { false }
     }
@@ -86,6 +89,13 @@ class DiviewNotifications(private val context: Context) {
             NotificationKind.PRICE -> PRICE_CHANNEL
             NotificationKind.DIVIDEND -> DIVIDEND_CHANNEL
             NotificationKind.DIVIDEND_CHANGE -> DIVIDEND_CHANGE_CHANNEL
+        }
+
+        private fun historyKind(channel: String): NotificationKind? = when (channel) {
+            PRICE_CHANNEL -> NotificationKind.PRICE
+            DIVIDEND_CHANNEL -> NotificationKind.DIVIDEND
+            DIVIDEND_CHANGE_CHANNEL -> NotificationKind.DIVIDEND_CHANGE
+            else -> null
         }
 
         fun destination(intent: Intent?): String? {

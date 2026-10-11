@@ -373,9 +373,9 @@ def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any
 
     info = call_yfinance("profile_and_current_statistics", lambda: yf.Ticker(symbol).get_info(), warnings, upgrade_state)
     if isinstance(info, dict) and info:
-        document["profile"] = json_safe({key: value for key, value in info.items() if key not in {"sector", "industry"}})
+        document["profile"] = json_safe({key: value for key, value in info.items() if key not in {"sector", "industry", "shortName", "longName"}})
         current_fields = (
-            "currency", "exchange", "market", "quoteType", "shortName", "longName",
+            "currency", "exchange", "market", "quoteType",
             "marketCap", "regularMarketPrice", "currentPrice", "regularMarketChange", "regularMarketChangePercent",
             "regularMarketTime", "fiftyTwoWeekHigh", "fiftyTwoWeekLow", "fiftyDayAverage", "twoHundredDayAverage",
             "trailingPE", "forwardPE", "priceToBook", "enterpriseValue", "trailingEps", "forwardEps", "bookValue",
@@ -390,8 +390,12 @@ def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any
     # Yahoo sector labels are omitted because the IRBANK listed-security master has no sector field.
     document.get("profile", {}).pop("sector", None)
     document.get("profile", {}).pop("industry", None)
+    document.get("profile", {}).pop("shortName", None)
+    document.get("profile", {}).pop("longName", None)
     document.get("statistics_current", {}).pop("sector", None)
     document.get("statistics_current", {}).pop("industry", None)
+    document.get("statistics_current", {}).pop("shortName", None)
+    document.get("statistics_current", {}).pop("longName", None)
 
     if refresh_fundamentals:
         for frequency in ("monthly", "quarterly", "yearly"):
@@ -495,6 +499,8 @@ def publish_search_catalog(client: Any, bucket: str, summaries: list[dict[str, A
     old_names = {}
     with Path("data/irbank/organized/d1/securities.csv").open(encoding="utf-8-sig", newline="") as source:
         old_names = {row["security_code_display"].strip().upper(): row["name"].strip() for row in csv.DictReader(source)}
+    with Path("kurogane-dividend/android/app/src/main/assets/jpx_security_name_master.tsv").open(encoding="utf-8", newline="") as source:
+        old_names.update({row["code"].strip().upper(): row["name"].strip() for row in csv.DictReader(source, delimiter="\t")})
     catalog = []
     universe_csv = Path(os.environ.get("MARKET_UNIVERSE_CSV", "data/irbank/organized/d1/securities.csv"))
     with universe_csv.open(encoding="utf-8-sig", newline="") as source:
@@ -512,7 +518,7 @@ def publish_search_catalog(client: Any, bucket: str, summaries: list[dict[str, A
             )
             catalog.append({
                 "code": code,
-                "name": market.get("shortName") or market.get("longName") or old_names.get(code) or code,
+                "name": old_names.get(code) or code,
                 "category": "jp",
                 "sector": security.get("sector_name") or None,
                 "estimated_average_trading_value_20d": market.get("estimated_average_trading_value_20d"),

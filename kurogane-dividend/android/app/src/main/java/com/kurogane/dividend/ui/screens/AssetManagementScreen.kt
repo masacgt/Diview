@@ -7,6 +7,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -56,7 +58,6 @@ import com.kurogane.dividend.viewmodel.DividendViewModel
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
-import kotlin.math.roundToLong
 
 // Local High-Fidelity Color Theme matching React Web App CSS
 val SpaceNavy: Color @Composable get() = BackgroundDark
@@ -80,7 +81,7 @@ private fun OdometerAmount(
         fontWeight = FontWeight.ExtraBold,
         color = OnSurface,
         fontFamily = FontFamily.SansSerif,
-        fontFeatureSettings = "tnum",
+        fontFeatureSettings = "\"tnum\" 1, \"kern\" 1, \"palt\" 1",
         letterSpacing = (-0.5).sp
     )
 
@@ -97,7 +98,7 @@ private fun OdometerAmount(
                 key("odometer-place-$place") {
                     if (character.isDigit()) {
                         val finalDigit = character.digitToInt()
-                        var rollingDigit by remember(place, targetValue) {
+                        var rollingDigit by remember(place) {
                             mutableIntStateOf(if (animate) (finalDigit + 2) % 10 else finalDigit)
                         }
                         LaunchedEffect(animate, targetValue, place) {
@@ -114,8 +115,12 @@ private fun OdometerAmount(
                         AnimatedContent(
                             targetState = rollingDigit,
                             transitionSpec = {
-                                (slideInVertically(tween(49, easing = LinearOutSlowInEasing)) { it } + fadeIn(tween(49)))
-                                    .togetherWith(slideOutVertically(tween(49, easing = LinearOutSlowInEasing)) { -it } + fadeOut(tween(49)))
+                                if (animate) {
+                                    (slideInVertically(tween(49, easing = LinearOutSlowInEasing)) { it } + fadeIn(tween(49)))
+                                        .togetherWith(slideOutVertically(tween(49, easing = LinearOutSlowInEasing)) { -it } + fadeOut(tween(49)))
+                                } else {
+                                    EnterTransition.None togetherWith ExitTransition.None
+                                }
                             },
                             label = "asset-value-rolling-digit-$place"
                         ) { digit ->
@@ -130,7 +135,7 @@ private fun OdometerAmount(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun AssetManagementScreen(
     viewModel: DividendViewModel,
@@ -140,6 +145,22 @@ fun AssetManagementScreen(
 ) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
+    var holdingsRestored by remember(viewModel) { mutableStateOf(false) }
+    var hasAnimatedTotalAssets by remember(viewModel) { mutableStateOf(false) }
+    val animateTotalAssets = holdingsRestored && !hasAnimatedTotalAssets
+    LaunchedEffect(viewModel) {
+        viewModel.awaitRestoration()
+        holdingsRestored = true
+    }
+    LaunchedEffect(holdingsRestored) {
+        if (holdingsRestored) {
+            kotlinx.coroutines.delay(400)
+            hasAnimatedTotalAssets = true
+        }
+    }
+    val japaneseNames = remember(holdings) {
+        holdings.associate { holding -> holding.code to viewModel.japaneseDisplayName(holding.code, holding.name) }
+    }
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
     val isPrivacyActive by viewModel.isPrivacyActive.collectAsStateWithLifecycle()
     val selectedMonth by viewModel.selectedMonth.collectAsStateWithLifecycle()
@@ -159,24 +180,13 @@ fun AssetManagementScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var quickEditHolding by remember { mutableStateOf<Holding?>(null) }
     var revealedHoldingId by remember { mutableStateOf<String?>(null) }
+    var exitingHoldings by remember { mutableStateOf<List<Holding>>(emptyList()) }
+    var exitingNextHoldingIds by remember { mutableStateOf<Map<String, String?>>(emptyMap()) }
     val snackbarHostState = remember { SnackbarHostState() }
     val screenScope = rememberCoroutineScope()
-    val deleteActionWidth = 80.dp
-    val deleteActionWidthPx = with(LocalDensity.current) { deleteActionWidth.toPx() }
-
-    fun deleteHolding(holding: Holding) {
-        revealedHoldingId = null
-        if (!viewModel.removeHolding(holding.id)) return
-        screenScope.launch {
-            val result = snackbarHostState.showSnackbar(
-                message = "${holding.name}を保有銘柄から削除しました",
-                actionLabel = "元に戻す",
-                withDismissAction = true,
-                duration = SnackbarDuration.Short
-            )
-            if (result == SnackbarResult.ActionPerformed) viewModel.restoreHolding(holding)
-        }
-    }
+    val deleteActionWidth = 112.dp
+    val deleteActionVisibleWidth = 80.dp
+    val deleteActionVisibleWidthPx = with(LocalDensity.current) { deleteActionVisibleWidth.toPx() }
 
     val javaCurrencyFormat = remember { NumberFormat.getNumberInstance(Locale.JAPAN) }
     val categoryCounts = remember(holdings) { holdings.groupingBy { it.category }.eachCount() }
@@ -219,7 +229,7 @@ fun AssetManagementScreen(
             val catMatch = selectedCategory == null || h.category == selectedCategory
             val queryMatch = searchQuery.isEmpty() ||
                     h.code.contains(searchQuery, ignoreCase = true) ||
-                    h.name.contains(searchQuery, ignoreCase = true) ||
+                    japaneseNames[h.code].orEmpty().contains(searchQuery, ignoreCase = true) ||
                     h.sector.contains(searchQuery, ignoreCase = true)
             monthMatch && catMatch && queryMatch
         }
@@ -237,6 +247,30 @@ fun AssetManagementScreen(
                 else -> a.totalValuation.compareTo(b.totalValuation)
             }
             if (sortDirection == "desc") -comp else comp
+        }
+    }
+
+    fun deleteHolding(holding: Holding) {
+        revealedHoldingId = null
+        val indexBeforeDeletion = displayedHoldings.indexOfFirst { it.id == holding.id }
+        val nextHoldingId = displayedHoldings.getOrNull(indexBeforeDeletion + 1)?.id
+        if (!viewModel.removeHolding(holding.id)) return
+        exitingNextHoldingIds = exitingNextHoldingIds + (holding.id to nextHoldingId)
+        exitingHoldings = exitingHoldings + holding
+        screenScope.launch {
+            kotlinx.coroutines.delay(420)
+            exitingHoldings = exitingHoldings.filterNot { it.id == holding.id }
+            exitingNextHoldingIds = exitingNextHoldingIds - holding.id
+        }
+        screenScope.launch {
+            kotlinx.coroutines.delay(900)
+            val result = snackbarHostState.showSnackbar(
+                message = "${japaneseNames[holding.code] ?: holding.name}を保有銘柄から削除しました",
+                actionLabel = "元に戻す",
+                withDismissAction = true,
+                duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.restoreHolding(holding)
         }
     }
 
@@ -328,7 +362,7 @@ fun AssetManagementScreen(
                     colors = CardDefaults.cardColors(containerColor = CardDark),
                     border = BorderStroke(1.dp, BorderBlue)
                 ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
+                    Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -364,7 +398,7 @@ fun AssetManagementScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         if (isPrivacyActive) {
                             Text(
                                 text = "¥ •,•••,•••,•••",
@@ -377,10 +411,11 @@ fun AssetManagementScreen(
                         } else {
                             OdometerAmount(
                                 targetValue = totalAssetsVal.toLong(),
+                                animate = animateTotalAssets,
                                 numberFormat = javaCurrencyFormat
                             )
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_3) else resources.getString(R.string.annual_dividend_label_25, (javaCurrencyFormat.format(totalCostVal.toLong())).toString()),
                             fontSize = AppTextSize.caption,
@@ -388,9 +423,9 @@ fun AssetManagementScreen(
                             color = SoftGray
                         )
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         HorizontalDivider(color = BorderBlue, thickness = 0.5.dp)
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         // Sub-Grid 2 Columns
                         AdaptiveRow(
@@ -405,18 +440,18 @@ fun AssetManagementScreen(
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(SurfaceContainer)
                                     .border(0.5.dp, BorderBlue, RoundedCornerShape(14.dp))
-                                    .padding(12.dp)
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
                             ) {
                                 Column {
                                     Text(stringResource(R.string.asset_management_text_3), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_4) else resources.getString(R.string.add_holding_text_22, (javaCurrencyFormat.format(totalAnnualDivVal.toLong())).toString()),
                                         fontSize = AppTextSize.headline,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = NeonGreen
                                     )
-                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Spacer(modifier = Modifier.height(1.dp))
                                     Text(
                                         text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_6) else resources.getString(R.string.asset_management_label_7, (javaCurrencyFormat.format(netAnnualDivVal.toLong())).toString()),
                                         fontSize = AppTextSize.dense,
@@ -433,11 +468,11 @@ fun AssetManagementScreen(
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(SurfaceContainer)
                                     .border(0.5.dp, BorderBlue, RoundedCornerShape(14.dp))
-                                    .padding(12.dp)
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
                             ) {
                                 Column {
                                     Text(stringResource(R.string.asset_management_text_4), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Row(verticalAlignment = Alignment.Bottom) {
                                         Text(
                                             text = if (isPrivacyActive) "•••" else String.format(java.util.Locale.JAPAN, "%.2f", avgYield),
@@ -451,7 +486,7 @@ fun AssetManagementScreen(
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(badgeColor.copy(alpha = 0.15f)).padding(horizontal = 4.dp, vertical = 2.dp)
+                                        modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(badgeColor.copy(alpha = 0.15f)).padding(horizontal = 4.dp, vertical = 1.dp)
                                     ) {
                                         Icon(badgeIcon, contentDescription = null, tint = badgeColor, modifier = Modifier.size(10.dp))
                                         Spacer(modifier = Modifier.width(2.dp))
@@ -472,7 +507,7 @@ fun AssetManagementScreen(
                     colors = CardDefaults.cardColors(containerColor = CardDark),
                     border = BorderStroke(1.dp, BorderBlue)
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)) {
                         val progressPct = ((totalAnnualDivVal / currentAnnualTarget.toDouble()) * 100).coerceAtLeast(0.0)
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
@@ -487,7 +522,7 @@ fun AssetManagementScreen(
                             Text(String.format(java.util.Locale.JAPAN, "%.1f%%", progressPct), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = NeonGreen)
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(5.dp))
                         LinearProgressIndicator(
                             progress = { (progressPct / 100f).toFloat().coerceIn(0f, 1f) },
                             modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
@@ -495,7 +530,7 @@ fun AssetManagementScreen(
                             trackColor = BorderColor
                         )
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(5.dp))
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -648,7 +683,27 @@ fun AssetManagementScreen(
 
             }
             // ================= HOLDING STOCK CARDS LIST =================
-            if (displayedHoldings.isEmpty()) {
+            val activeHoldings = displayedHoldings.filterNot { candidate ->
+                exitingHoldings.any { it.id == candidate.id }
+            }
+            val animatedHoldings = buildList {
+                val insertions = exitingHoldings.associate { exiting ->
+                    exiting.id to exitingNextHoldingIds[exiting.id]
+                }
+                var insertedNextIds = emptySet<String>()
+                activeHoldings.forEach { candidate ->
+                    val exiting = exitingHoldings.firstOrNull { insertions[it.id] == candidate.id }
+                    if (exiting != null) {
+                        add(exiting)
+                        add(candidate)
+                        insertedNextIds = insertedNextIds + candidate.id
+                    } else if (candidate.id !in insertedNextIds) {
+                        add(candidate)
+                    }
+                }
+                addAll(exitingHoldings.filter { exiting -> activeHoldings.none { candidate -> insertions[exiting.id] == candidate.id } })
+            }
+            if (activeHoldings.isEmpty() && exitingHoldings.isEmpty()) {
                 item(key = "empty_holdings", contentType = "empty") {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -677,7 +732,18 @@ fun AssetManagementScreen(
                     }
                 }
             } else {
-                items(displayedHoldings, key = { "holding:${it.id}" }, contentType = { "holding" }) { holding ->
+                items(animatedHoldings, key = { "holding:${it.id}" }, contentType = { "holding" }) { holding ->
+                    val isExiting = exitingHoldings.any { it.id == holding.id }
+                    val exitOffset by animateIntOffsetAsState(
+                        targetValue = if (isExiting) IntOffset(-listState.layoutInfo.viewportSize.width, 0) else IntOffset.Zero,
+                        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+                        label = "holding-exit-${holding.id}"
+                    )
+                    val exitAlpha by animateFloatAsState(
+                        targetValue = if (isExiting) 0f else 1f,
+                        animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing),
+                        label = "holding-exit-alpha-${holding.id}"
+                    )
                     val isUSD = holding.currency == "$"
                     val curVal = holding.totalValuation
                     val curCost = holding.totalCost
@@ -709,24 +775,37 @@ fun AssetManagementScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
+                            .animateItemPlacement(animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing))
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .offset { exitOffset }
+                                .graphicsLayer { alpha = exitAlpha }
+                                .clip(RoundedCornerShape(16.dp))
+                        ) {
                         Row(
                             modifier = Modifier.matchParentSize(),
                             horizontalArrangement = Arrangement.End
                         ) {
-                            Surface(
-                                onClick = { deleteHolding(holding) },
+                            Box(
                                 modifier = Modifier.width(deleteActionWidth).fillMaxHeight(),
-                                shape = RoundedCornerShape(0.dp),
-                                color = ErrorRed
+                                contentAlignment = Alignment.CenterEnd
                             ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
+                                Surface(
+                                    onClick = { deleteHolding(holding) },
+                                    modifier = Modifier.width(deleteActionWidth).fillMaxHeight(),
+                                    shape = RoundedCornerShape(0.dp),
+                                    color = ErrorRed
                                 ) {
-                                    Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White)
-                                    Text("削除", color = Color.White, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                    Column(
+                                        modifier = Modifier.offset(x = (deleteActionWidth - deleteActionVisibleWidth) / 2),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White)
+                                        Text("削除", color = Color.White, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
@@ -735,7 +814,7 @@ fun AssetManagementScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .offset { IntOffset(swipeOffset.value.toInt(), 0) }
-                                .pointerInput(holding.id, deleteActionWidthPx) {
+                                .pointerInput(holding.id, deleteActionVisibleWidthPx) {
                                     detectHorizontalDragGestures(
                                         onDragStart = {
                                             if (revealedHoldingId != holding.id) {
@@ -747,14 +826,14 @@ fun AssetManagementScreen(
                                             change.consume()
                                             screenScope.launch {
                                                 swipeOffset.snapTo(
-                                                    (swipeOffset.value + dragAmount).coerceIn(-deleteActionWidthPx, 0f)
+                                                    (swipeOffset.value + dragAmount).coerceIn(-deleteActionVisibleWidthPx, 0f)
                                                 )
                                             }
                                         },
                                         onDragEnd = {
-                                            val shouldReveal = swipeOffset.value <= -deleteActionWidthPx / 2f
+                                            val shouldReveal = swipeOffset.value <= -deleteActionVisibleWidthPx / 2f
                                             screenScope.launch {
-                                                swipeOffset.animateTo(if (shouldReveal) -deleteActionWidthPx else 0f)
+                                                swipeOffset.animateTo(if (shouldReveal) -deleteActionVisibleWidthPx else 0f)
                                                 revealedHoldingId = if (shouldReveal) holding.id else null
                                             }
                                         },
@@ -765,7 +844,11 @@ fun AssetManagementScreen(
                                     )
                                 }
                                 .clickable { onNavigateToDetail(holding.code) },
-                            shape = RoundedCornerShape(16.dp),
+                            shape = if (swipeOffset.value < 0f) {
+                                RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = 16.dp, bottomEnd = 16.dp)
+                            } else {
+                                RoundedCornerShape(16.dp)
+                            },
                             colors = CardDefaults.cardColors(containerColor = CardDark),
                             border = BorderStroke(
                                 1.dp,
@@ -784,7 +867,7 @@ fun AssetManagementScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            holding.name,
+                                            japaneseNames[holding.code] ?: holding.name,
                                             fontWeight = FontWeight.Bold,
                                             color = OnSurface,
                                             fontSize = AppTextSize.body,
@@ -802,13 +885,13 @@ fun AssetManagementScreen(
                                             ) {
                                                 Text(
                                                     holding.code,
-                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.6.dp),
+                                                    modifier = Modifier.padding(start = 5.dp, top = 0.dp, end = 5.dp, bottom = 1.6.dp),
                                                     color = when (holding.category) {
                                                         Category.US -> SecondaryIndigo
                                                         Category.FUND -> ErrorRed
                                                         else -> OnSurface
                                                     },
-                                                    fontSize = AppTextSize.dense,
+                                                    fontSize = AppTextSize.dense * 0.8f,
                                                     fontWeight = FontWeight.Bold,
                                                     fontFamily = FontFamily.Monospace,
                                                     maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1
@@ -819,7 +902,7 @@ fun AssetManagementScreen(
                                                 Surface(shape = RoundedCornerShape(4.dp), color = BorderColor) {
                                                     Text(
                                                         compactAccountLabel(holding.accountType),
-                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.6.dp),
+                                                        modifier = Modifier.padding(start = 5.dp, top = 0.dp, end = 5.dp, bottom = 1.6.dp),
                                                         color = SecondaryIndigo,
                                                         fontSize = 8.sp,
                                                         fontWeight = FontWeight.Medium,
@@ -942,6 +1025,7 @@ fun AssetManagementScreen(
                                 }
                             }
 
+                        }
                         }
                         }
                     }
@@ -1269,7 +1353,7 @@ fun HoldingQuickEditModal(
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.asset_management_text_22), color = OnSurface, fontSize = AppTextSize.headline, fontWeight = FontWeight.ExtraBold, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
-                    Text(stringResource(R.string.asset_management_1_s_2_s_3_s , holding.code, holding.name, holding.market), color = SoftGray, fontSize = AppTextSize.caption, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
+                    Text(stringResource(R.string.asset_management_1_s_2_s_3_s , holding.code, viewModel.japaneseDisplayName(holding.code, holding.name), holding.market), color = SoftGray, fontSize = AppTextSize.caption, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
                 }
                 IconButton(onClick = { onDismiss() }) {
                     Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close), tint = SoftGray)

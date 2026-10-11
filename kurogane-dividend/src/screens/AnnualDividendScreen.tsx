@@ -149,16 +149,21 @@ export const AnnualDividendScreen: React.FC = () => {
     let investedAssets = Math.max(0, liveTotalValuation);
     let cashDividends = 0;
     const monthlyRate = simYield / 100 / 12;
+    let accruedDividends = 0;
     for (let month = 0; month < years * 12; month++) {
-      const dividend = investedAssets * monthlyRate;
-      if (simReinvest) investedAssets += dividend;
-      else cashDividends += dividend;
+      accruedDividends += investedAssets * monthlyRate;
+      if ((month + 1) % 12 === 0) {
+        if (simReinvest) investedAssets += accruedDividends;
+        else cashDividends += accruedDividends;
+        accruedDividends = 0;
+      }
       investedAssets += simMonthlyDeposit;
     }
     return {
       assets: Math.round(investedAssets + cashDividends),
       invested: Math.max(0, liveTotalCost) + simMonthlyDeposit * 12 * years,
-      monthlyPassive: Math.round(investedAssets * monthlyRate)
+      annualDividend: Math.round(investedAssets * simYield / 100),
+      monthlyAverage: Math.round(investedAssets * monthlyRate)
     };
   };
 
@@ -1264,7 +1269,7 @@ export const AnnualDividendScreen: React.FC = () => {
                     <span className="material-symbols-outlined text-accent text-[20px] animate-pulse">hourglass_empty</span>
                     <div className="text-left">
                       <h4 className="font-bold text-xs text-white">福利シミュレーター</h4>
-                      <span className="text-[9.5px] text-[#bbcabf] block">毎月の積立額と配当再投資による複利試算</span>
+                      <span className="text-[9.5px] text-[#bbcabf] block">毎月の追加額と配当の再投資による試算</span>
                     </div>
                   </div>
                   <span className="text-[9px] bg-accent/25 text-accent border border-accent/30 px-2 py-0.5 rounded-full font-bold">
@@ -1277,7 +1282,7 @@ export const AnnualDividendScreen: React.FC = () => {
                   {/* Monthly Deposit Slider & Input */}
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[#bbcabf] font-semibold">毎月の新規積立額:</span>
+                      <span className="text-[#bbcabf] font-semibold">毎月追加する金額:</span>
                       <strong className="text-white font-mono">¥{(simMonthlyDeposit).toLocaleString()}</strong>
                     </div>
                     <input
@@ -1311,7 +1316,7 @@ export const AnnualDividendScreen: React.FC = () => {
                   {/* Expected Yield Slider */}
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[#bbcabf] font-semibold">想定配当利回り:</span>
+                      <span className="text-[#bbcabf] font-semibold">想定年間配当利回り:</span>
                       <strong className="text-accent font-mono">{simYield}%</strong>
                     </div>
                     <input
@@ -1347,7 +1352,7 @@ export const AnnualDividendScreen: React.FC = () => {
                 <div className="p-2.5 rounded-xl bg-[#0b1326]/60 border border-slate-800/80 flex items-center justify-between text-left">
                   <div>
                     <span className="text-xs font-bold text-white block">配当金を自動で再投資する (複利効果)</span>
-                    <span className="text-[10px] text-[#bbcabf] mt-0.5 block">税引後(20.315%控除)の配当金を元本に自動組み入れ</span>
+                    <span className="text-[10px] text-[#bbcabf] mt-0.5 block">受取配当を受取時に資産へ組み入れ</span>
                   </div>
                   <button
                     type="button"
@@ -1368,13 +1373,11 @@ export const AnnualDividendScreen: React.FC = () => {
                       <span className="font-mono text-[13px] font-extrabold text-white mt-1">
                         ¥{(proj10.assets / 10000).toFixed(0)}万
                       </span>
-                      <span className="text-[8.5px] text-[#bbcabf] mt-0.5">元本: ¥{(proj10.invested / 10000).toFixed(0)}万</span>
+                      <span className="text-[8.5px] text-[#bbcabf] mt-0.5">累計投資額: ¥{(proj10.invested / 10000).toFixed(0)}万</span>
                       <div className="w-full border-t border-slate-800/60 mt-1.5 pt-1">
-                        <span className="text-[8px] text-accent block font-medium">月配当(目安)</span>
-                        <span className="font-mono text-xs text-accent font-bold">
-                          ¥{proj10.monthlyPassive.toLocaleString()}
-                        </span>
-                        <span className="text-[8px] text-[#bbcabf]">/月</span>
+                        <span className="text-[8px] text-accent block font-medium">年間配当額</span>
+                        <span className="font-mono text-xs text-accent font-bold">¥{proj10.annualDividend.toLocaleString()}/年</span>
+                        <span className="text-[8px] text-[#bbcabf] block">月平均 ¥{proj10.monthlyAverage.toLocaleString()}/月</span>
                       </div>
                     </div>
 
@@ -1385,13 +1388,11 @@ export const AnnualDividendScreen: React.FC = () => {
                       <span className="font-mono text-[13px] font-extrabold text-white mt-1">
                         ¥{(proj20.assets / 10000).toFixed(0)}万
                       </span>
-                      <span className="text-[8.5px] text-[#bbcabf] mt-0.5">元本: ¥{(proj20.invested / 10000).toFixed(0)}万</span>
+                      <span className="text-[8.5px] text-[#bbcabf] mt-0.5">累計投資額: ¥{(proj20.invested / 10000).toFixed(0)}万</span>
                       <div className="w-full border-t border-slate-800/60 mt-1.5 pt-1">
-                        <span className="text-[8px] text-accent block font-medium">月配当(目安)</span>
-                        <span className="font-mono text-xs text-accent font-bold">
-                          ¥{proj20.monthlyPassive.toLocaleString()}
-                        </span>
-                        <span className="text-[8px] text-[#bbcabf]">/月</span>
+                        <span className="text-[8px] text-accent block font-medium">年間配当額</span>
+                        <span className="font-mono text-xs text-accent font-bold">¥{proj20.annualDividend.toLocaleString()}/年</span>
+                        <span className="text-[8px] text-[#bbcabf] block">月平均 ¥{proj20.monthlyAverage.toLocaleString()}/月</span>
                       </div>
                     </div>
 
@@ -1401,13 +1402,11 @@ export const AnnualDividendScreen: React.FC = () => {
                       <span className="font-mono text-sm font-black text-white mt-1">
                         ¥{(proj30.assets / 10000).toFixed(0)}万
                       </span>
-                      <span className="text-[8.5px] text-[#bbcabf] mt-0.5">元本: ¥{(proj30.invested / 10000).toFixed(0)}万</span>
+                      <span className="text-[8.5px] text-[#bbcabf] mt-0.5">累計投資額: ¥{(proj30.invested / 10000).toFixed(0)}万</span>
                       <div className="w-full border-t border-accent/20 mt-1.5 pt-1">
-                        <span className="text-[8px] text-accent block font-medium">月配当(目安)</span>
-                        <span className="font-mono text-xs text-accent font-extrabold">
-                          ¥{proj30.monthlyPassive.toLocaleString()}
-                        </span>
-                        <span className="text-[8px] text-[#bbcabf]">/月</span>
+                        <span className="text-[8px] text-accent block font-medium">年間配当額</span>
+                        <span className="font-mono text-xs text-accent font-extrabold">¥{proj30.annualDividend.toLocaleString()}/年</span>
+                        <span className="text-[8px] text-[#bbcabf] block">月平均 ¥{proj30.monthlyAverage.toLocaleString()}/月</span>
                       </div>
                     </div>
                   </div>
@@ -1417,7 +1416,7 @@ export const AnnualDividendScreen: React.FC = () => {
                 <div className="p-2 rounded-xl bg-[#171f33]/40 border border-slate-800/60 text-[10px] text-[#bbcabf] leading-relaxed flex gap-1.5 items-start text-left">
                   <span className="material-symbols-outlined text-[13px] text-accent shrink-0 mt-0.5">info</span>
                   <p>
-                    現在の資産評価額 ¥{Math.round(liveTotalValuation / 10000).toLocaleString()}万から、毎月 <strong className="text-white">¥{simMonthlyDeposit.toLocaleString()}</strong> を月末に積立、利回り <strong className="text-accent">{simYield}%</strong> の配当を毎月受け取る想定です。{simReinvest ? '配当金を再投資します。' : '配当金は現金で保有します。'}資産額には累計受取配当を含み、月配当は投資資産のみを基に計算します。株価変動・税金・手数料は含みません。
+                    現在の評価額を起点に、毎月 <strong className="text-white">¥{simMonthlyDeposit.toLocaleString()}</strong> を追加し、想定年間配当利回り <strong className="text-accent">{simYield}%</strong> から試算します。累計投資額は現在保有分の取得額と今後の追加額の合計です。配当は年1回受け取る想定で、{simReinvest ? '受取時に再投資します。' : '現金で保有します。'}表示額は年間配当の月平均で、実際の支払時期・金額とは異なります。株価変動・税金・手数料は含みません。
                   </p>
                 </div>
               </div>
