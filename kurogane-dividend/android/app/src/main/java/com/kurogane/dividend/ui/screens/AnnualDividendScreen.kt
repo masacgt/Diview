@@ -2362,7 +2362,6 @@ private fun CompoundingSimulationSection(
                             Card(Modifier.weight(1f).clickable { selectedYearIndex = index }, shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = if (isSelected) SurfaceContainerHigh else BackgroundDark), border = BorderStroke(1.dp, if (isSelected) PrimaryEmerald else Color.Transparent)) {
                                 Column(Modifier.padding(horizontal = 6.dp, vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(stringResource(R.string.annual_dividend_1_s , point.year), color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                    Text(stringResource(R.string.annual_dividend_text_45), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                                     Text(
                                         signedMoney(yearChange),
                                         color = if ((yearChange ?: 0.0) >= 0.0) PrimaryEmerald else ErrorRed,
