@@ -310,7 +310,48 @@ fun AssetManagementScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = {
+            SnackbarHost(snackbarHostState) { data ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = SurfaceContainerHigh,
+                    contentColor = OnSurface,
+                    border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.45f)),
+                    tonalElevation = 6.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .padding(start = 16.dp, end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = data.visuals.message,
+                            modifier = Modifier.weight(1f),
+                            color = OnSurface,
+                            fontSize = 14.sp
+                        )
+                        data.visuals.actionLabel?.let { actionLabel ->
+                            TextButton(onClick = data::performAction) {
+                                Text(actionLabel, color = PrimaryEmerald)
+                            }
+                        }
+                        if (data.visuals.withDismissAction) {
+                            IconButton(onClick = data::dismiss, modifier = Modifier.size(40.dp)) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "通知を閉じる",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = OnSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         floatingActionButton = {
             Box(
