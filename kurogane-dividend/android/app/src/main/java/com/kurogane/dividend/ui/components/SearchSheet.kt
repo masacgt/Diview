@@ -1,5 +1,6 @@
 package com.kurogane.dividend.ui.components
 
+import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.selection.selectable
@@ -30,6 +31,8 @@ import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.data.CloudflareSearchHit
 import kotlinx.coroutines.delay
 import com.kurogane.dividend.data.runCatchingCancellable
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class CandidateStock(
     val code: String,
@@ -41,6 +44,49 @@ data class CandidateStock(
     val isHigh: Boolean
 )
 
+private const val RECENT_SEARCHES_PREFERENCES = "stock_search_history"
+private const val RECENT_SEARCHES_KEY = "recent_candidates"
+private const val MAX_RECENT_SEARCHES = 10
+
+private fun loadRecentSearches(context: Context): List<CandidateStock> = runCatching {
+    val rows = JSONArray(
+        context.getSharedPreferences(RECENT_SEARCHES_PREFERENCES, Context.MODE_PRIVATE)
+            .getString(RECENT_SEARCHES_KEY, "[]")
+    )
+    (0 until rows.length()).mapNotNull { index ->
+        val row = rows.optJSONObject(index) ?: return@mapNotNull null
+        CandidateStock(
+            code = row.optString("code"),
+            name = row.optString("name"),
+            desc = row.optString("desc"),
+            price = row.optString("price"),
+            yieldRate = row.optString("yieldRate"),
+            cat = row.optString("cat", "jp"),
+            isHigh = row.optBoolean("isHigh")
+        ).takeIf { it.code.isNotBlank() && it.name.isNotBlank() }
+    }
+}.getOrDefault(emptyList())
+
+private fun saveRecentSearches(context: Context, candidates: List<CandidateStock>) {
+    val rows = JSONArray()
+    candidates.forEach { candidate ->
+        rows.put(
+            JSONObject()
+                .put("code", candidate.code)
+                .put("name", candidate.name)
+                .put("desc", candidate.desc)
+                .put("price", candidate.price)
+                .put("yieldRate", candidate.yieldRate)
+                .put("cat", candidate.cat)
+                .put("isHigh", candidate.isHigh)
+        )
+    }
+    context.getSharedPreferences(RECENT_SEARCHES_PREFERENCES, Context.MODE_PRIVATE)
+        .edit()
+        .putString(RECENT_SEARCHES_KEY, rows.toString())
+        .apply()
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchSheet(
@@ -51,6 +97,7 @@ fun SearchSheet(
 ) {
     if (!visible) return
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val context = LocalContext.current
 
     val candidates = remember {
         listOf(
@@ -70,8 +117,17 @@ fun SearchSheet(
     var isSearching by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
     var retryCount by remember { mutableIntStateOf(0) }
-    val resources = LocalContext.current.resources
+    var recentCandidates by remember { mutableStateOf(loadRecentSearches(context)) }
+    val resources = context.resources
     val search by rememberUpdatedState(onSearch)
+
+    LaunchedEffect(visible) {
+        if (visible) {
+            searchQuery = ""
+            selectedCategory = "all"
+            recentCandidates = loadRecentSearches(context)
+        }
+    }
 
     LaunchedEffect(searchQuery, visible, retryCount) {
         remoteCandidates = null
@@ -113,9 +169,12 @@ fun SearchSheet(
         }
     }
 
-    val filteredCandidates = remember(searchQuery, selectedCategory, remoteCandidates) {
-        val source = remoteCandidates ?: candidates.filter { item ->
-            val q = searchQuery.trim().lowercase()
+    val filteredCandidates = remember(searchQuery, selectedCategory, remoteCandidates, recentCandidates) {
+        val query = searchQuery.trim()
+        val source = remoteCandidates ?: if (query.isEmpty()) {
+            recentCandidates
+        } else candidates.filter { item ->
+            val q = query.lowercase()
             val matchesQuery = q.isEmpty() || item.code.lowercase().contains(q) || item.name.lowercase().contains(q)
             matchesQuery
         }
@@ -336,7 +395,12 @@ fun SearchSheet(
                             color = ErrorRed, actionLabel = resources.getString(R.string.retry), onAction = { retryCount++ })
                     }
                     if (!isSearching && filteredCandidates.isEmpty()) item(key = "search_empty") {
-                        StatusMessage(resources.getString(R.string.search_empty))
+                        val emptyMessage = if (searchQuery.isBlank() && recentCandidates.isEmpty()) {
+                            resources.getString(R.string.search_recent_empty)
+                        } else {
+                            resources.getString(R.string.search_empty)
+                        }
+                        StatusMessage(emptyMessage)
                     }
                     items(filteredCandidates, key = { it.code }) { stock ->
                         Row(
@@ -345,7 +409,14 @@ fun SearchSheet(
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(SurfaceContainer)
                                 .border(BorderStroke(0.5.dp, BorderColor), RoundedCornerShape(12.dp))
-                                .clickable { onSelectStock(stock.code) }
+                                .clickable {
+                                    val updatedRecent = (listOf(stock) + recentCandidates.filterNot {
+                                        it.code.equals(stock.code, ignoreCase = true)
+                                    }).take(MAX_RECENT_SEARCHES)
+                                    recentCandidates = updatedRecent
+                                    saveRecentSearches(context, updatedRecent)
+                                    onSelectStock(stock.code)
+                                }
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
