@@ -396,7 +396,7 @@
     <string name="settings_2025_diview">"© 2025 Diview"</string>
     <string name="settings_text_16">"データを初期化"</string>
     <string name="settings_text_17">"端末内の保有・設定データを初期化しますか？"</string>
-    <string name="stock_detail_text">"財務・配当履歴：金融庁EDINET / JPX TDnet、IRBANK加工。分割調整済み実績を使用し、未取得項目は補完しません。"</string>
+    <string name="stock_detail_text">"財務・配当履歴：公表資料に基づく分割調整済み実績を表示します。未取得項目は補完しません。"</string>
     <string name="stock_detail_text_2">"決算期：%1$s%2$s"</string>
     <string name="stock_detail_text_3">"株価（最新取得値）"</string>
     <string name="stock_detail_text_4">"現在利回り"</string>
@@ -521,7 +521,7 @@
     <string name="terms_privacy_text_37">"本アプリの提供者への連絡は、アプリ内のお問い合わせ画面から行えます。本規約に定めのない事項や本アプリの利用に関して疑義が生じた場合は、利用者と提供者が誠実に協議して解決を図ります。"</string>
     <string name="terms_privacy_zero_knowledge_architecture">"Zero Knowledge Architecture"</string>
     <string name="terms_privacy_text_19">"金融データ端末内完結宣言"</string>
-    <string name="terms_privacy_text_20">"保有数量、取得単価、資産額などのポートフォリオ情報は、アプリ内での計算と表示に使用します。市場データの検索・取得では、検索語、銘柄コード、対象年月など、要求に必要な情報を当アプリの市場データAPIへ送信します。為替レートの取得時は、USD/JPYの通貨ペアをFrankfurter APIへ問い合わせます。お問い合わせを送信すると、入力した問い合わせ本文、任意で入力した名前・返信先、受付ID、選択した場合のアプリ・OS情報がサーバーへ送信されます。保有銘柄一覧や保有数量を問い合わせに自動添付することはありません。送信する文章に個人情報や資産情報を含める場合は、内容を確認してください。"</string>
+    <string name="terms_privacy_text_20">"保有数量、取得単価、資産額などのポートフォリオ情報は、アプリ内での計算と表示に使用します。市場データの検索・取得では、検索語、銘柄コード、対象年月など、要求に必要な情報を市場データの提供先へ送信します。為替レートの取得時は、USD/JPYの通貨ペアを外部の為替情報サービスへ問い合わせます。お問い合わせを送信すると、入力した問い合わせ本文、任意で入力した名前・返信先、受付ID、選択した場合のアプリ・OS情報がサーバーへ送信されます。保有銘柄一覧や保有数量を問い合わせに自動添付することはありません。送信する文章に個人情報や資産情報を含める場合は、内容を確認してください。"</string>
     <string name="terms_privacy_text_21">"外部通信"</string>
     <string name="terms_privacy_text_22">"用途に必要な情報"</string>
     <string name="terms_privacy_text_23">"検索語・銘柄コード・年月等"</string>
@@ -535,7 +535,7 @@
     <string name="terms_privacy_text_38">"3. 保存期間と削除"</string>
     <string name="terms_privacy_text_39">"ポートフォリオ等の端末内データは、利用者がアプリ内で編集・削除するか、「ローカルデータ完全消去」を実行するまで保存されます。問い合わせ内容は受付サーバーに保存し、作成から90日を経過したデータをサーバーの定期処理または受付情報の参照時に削除します。送信前の問い合わせ下書きは端末内に保存され、送信に成功すると削除されます。"</string>
     <string name="terms_privacy_text_40">"4. 外部サービスと第三者"</string>
-    <string name="terms_privacy_text_41">"市場データの取得とお問い合わせの受付には、Cloudflareのクラウド基盤を利用したDiviewのオンラインサービスを使用します。米ドル・円の為替レートはFrankfurterの為替情報サービスから取得します。検索語、銘柄コード、対象年月、通貨ペアなど、各機能の利用に必要な情報が通信先へ送られます。各サービスの運営者は、それぞれの規約・プライバシーポリシーに基づいて情報を取り扱います。アプリには広告配信・行動分析用SDKを組み込んでいません。"</string>
+    <string name="terms_privacy_text_41">"市場データの取得とお問い合わせの受付にはDiviewのオンラインサービスを使用し、為替レートは外部の為替情報サービスから取得します。検索語、銘柄コード、対象年月、通貨ペアなど、各機能の利用に必要な情報が通信先へ送られます。通信先の運営者は、それぞれの規約・プライバシーポリシーに基づいて情報を取り扱います。アプリには広告配信や行動分析のための仕組みを組み込んでいません。"</string>
     <string name="terms_privacy_text_42">"5. 利用者による管理"</string>
     <string name="terms_privacy_text_43">"利用者は、アプリ内のデータ消去機能を使って端末内データを削除できます。問い合わせ内容の確認や削除を希望する場合は、アプリ内のお問い合わせ画面から受付IDなど分かる情報を添えてご連絡ください。端末内の削除は、すでに書き出したファイルや端末・クラウドのバックアップ、外部提供先の通信記録には及びません。"</string>
     <string name="terms_privacy_text_44">"6. 本ポリシーの変更"</string>
@@ -906,7 +906,7 @@
     <string name="settings_dark_active">"ダーク適用中"</string>
     <string name="settings_label_59">"ライト"</string>
     <string name="settings_label_60">"システム連動"</string>
-    <string name="settings_label_61">"為替：1 USD = %1$s円（%2$s / Frankfurter）"</string>
+    <string name="settings_label_61">"為替：1 USD = %1$s円（%2$s）"</string>
     <string name="settings_label_62">"為替未取得：米ドル資産は円換算合計の対象外"</string>
     <string name="stock_detail_label_14">"（更新失敗・保存済みデータを表示）"</string>
     <string name="stock_detail_label_15">"税引後概算・現在の非課税割合で試算"</string>

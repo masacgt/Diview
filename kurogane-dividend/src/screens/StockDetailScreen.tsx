@@ -194,35 +194,6 @@ export const StockDetailScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* External Research Pills */}
-        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
-          <span className="text-[10px] text-[#bbcabf] font-semibold flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px] text-[#4edea3]">travel_explore</span>
-            外部リサーチ:
-          </span>
-          <div className="flex items-center gap-1.5">
-            <a
-              href={`https://finance.yahoo.co.jp/quote/${currentHolding.code}.T`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-2.5 py-1 rounded-full bg-[#0b1326] hover:bg-slate-800 border border-slate-700 text-white text-[10px] font-bold flex items-center gap-1 transition-colors"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-              <span>Y! ファイナンス</span>
-              <span className="material-symbols-outlined text-[12px] text-[#bbcabf]">open_in_new</span>
-            </a>
-            <a
-              href={`https://irbank.net/${currentHolding.code}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-2.5 py-1 rounded-full bg-[#0b1326] hover:bg-slate-800 border border-slate-700 text-white text-[10px] font-bold flex items-center gap-1 transition-colors"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3]" />
-              <span>IR BANK</span>
-              <span className="material-symbols-outlined text-[12px] text-[#bbcabf]">open_in_new</span>
-            </a>
-          </div>
-        </div>
       </section>
 
       {/* 2. 年間配当シミュレーション */}
