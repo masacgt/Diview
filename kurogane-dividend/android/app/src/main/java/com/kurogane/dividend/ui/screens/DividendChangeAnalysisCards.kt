@@ -10,6 +10,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -28,7 +29,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.Role
@@ -443,16 +451,50 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
         HorizontalDivider(color = BorderColor)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.dividend_change_analysis_cards_text_5), color = OnSurfaceVariant, fontSize = 11.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Default.Savings, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
+                    Text(stringResource(R.string.dividend_change_analysis_cards_text_5), color = OnSurfaceVariant, fontSize = 11.sp)
+                }
                 Text(money(analysis.positiveImpact.takeIf { compared.isNotEmpty() }, privacy, signed = true),
                     color = PrimaryEmerald, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
             Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.dividend_change_analysis_cards_text_6), color = OnSurfaceVariant, fontSize = 11.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    DecreasingBanknoteIcon(tint = ErrorRed, modifier = Modifier.size(18.dp))
+                    Text(stringResource(R.string.dividend_change_analysis_cards_text_6), color = OnSurfaceVariant, fontSize = 11.sp)
+                }
                 Text(money(analysis.negativeImpact.takeIf { compared.isNotEmpty() }, privacy, signed = true),
                     color = ErrorRed, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
+    }
+}
+
+@Composable
+private fun DecreasingBanknoteIcon(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val downwardArrow = Path().apply {
+            moveTo(size.width * 0.84f, size.height * 0.12f)
+            lineTo(size.width * 0.84f, size.height * 0.78f)
+            moveTo(size.width * 0.66f, size.height * 0.60f)
+            lineTo(size.width * 0.84f, size.height * 0.80f)
+            lineTo(size.width * 0.99f, size.height * 0.61f)
+        }
+        val outline = Stroke(width = size.width * 0.075f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(size.width * 0.03f, size.height * 0.21f),
+            size = Size(size.width * 0.68f, size.height * 0.58f),
+            cornerRadius = CornerRadius(size.width * 0.06f),
+            style = outline
+        )
+        drawCircle(
+            color = tint,
+            radius = size.width * 0.11f,
+            center = Offset(size.width * 0.37f, size.height * 0.50f),
+            style = outline
+        )
+        drawPath(downwardArrow, tint, style = outline)
     }
 }
 
