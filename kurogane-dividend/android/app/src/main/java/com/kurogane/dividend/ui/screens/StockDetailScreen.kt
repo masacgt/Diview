@@ -117,6 +117,7 @@ fun StockDetailScreen(
     val selectedClimate = stockClimateOverrides[currentHolding.code] ?: defaultClimate
     var climateMenuExpanded by remember(currentHolding.code) { mutableStateOf(false) }
     var climateSelectorWidthPx by remember(currentHolding.code) { mutableIntStateOf(0) }
+    var showClimateInfo by remember(currentHolding.code) { mutableStateOf(false) }
     val density = LocalDensity.current
     var editingBenefitIndex by rememberSaveable(currentHolding.code) { mutableIntStateOf(-1) }
     var newBenefitName by rememberSaveable(currentHolding.code) { mutableStateOf("") }
@@ -1929,6 +1930,50 @@ fun StockDetailScreen(
                                         Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(6.dp))
                                         Text("景気特性", color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                        Box {
+                                            IconButton(onClick = { showClimateInfo = true }, modifier = Modifier.size(28.dp)) {
+                                                Icon(
+                                                    Icons.Default.Info,
+                                                    contentDescription = stringResource(R.string.stock_climate_info_content_description),
+                                                    tint = OnSurfaceVariant,
+                                                    modifier = Modifier.size(17.dp)
+                                                )
+                                            }
+                                            DropdownMenu(
+                                                expanded = showClimateInfo,
+                                                onDismissRequest = { showClimateInfo = false },
+                                                modifier = Modifier.widthIn(max = 300.dp),
+                                                shape = RoundedCornerShape(16.dp),
+                                                containerColor = SurfaceContainerLow,
+                                                tonalElevation = 0.dp,
+                                                shadowElevation = 12.dp
+                                            ) {
+                                                Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Surface(
+                                                            shape = CircleShape,
+                                                            color = PrimaryEmerald.copy(alpha = 0.14f),
+                                                            modifier = Modifier.size(30.dp)
+                                                        ) {
+                                                            Box(contentAlignment = Alignment.Center) {
+                                                                Icon(Icons.Default.Info, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(17.dp))
+                                                            }
+                                                        }
+                                                        Spacer(Modifier.width(10.dp))
+                                                        Text(
+                                                            "景気特性：${selectedClimate?.label ?: "未設定"}",
+                                                            color = OnSurface,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = AppTextSize.body
+                                                        )
+                                                    }
+                                                    Spacer(Modifier.height(12.dp))
+                                                    HorizontalDivider(color = BorderColor, thickness = 0.75.dp)
+                                                    Spacer(Modifier.height(12.dp))
+                                                    Text(climateDescription, color = OnSurfaceVariant, fontSize = AppTextSize.caption, lineHeight = 20.sp)
+                                                }
+                                            }
+                                        }
                                         Spacer(Modifier.weight(1f))
                                         Text(
                                             if (stockClimateOverrides.containsKey(currentHolding.code)) "手動設定" else "${cleanSectorName}の標準分類",
@@ -2014,7 +2059,6 @@ fun StockDetailScreen(
                                             }
                                         }
                                     }
-                                    Text(climateDescription, color = OnSurfaceVariant, fontSize = 12.sp, lineHeight = 18.sp)
                                     if (stockClimateOverrides.containsKey(currentHolding.code)) {
                                         TextButton(
                                             onClick = { viewModel.setStockClimateOverride(currentHolding.code, null) },
