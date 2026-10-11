@@ -246,12 +246,30 @@ fun AnnualDividendScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.Top
                         ) {
-                            Text(
-                                stringResource(R.string.annual_dividend_text),
-                                fontSize = AppTextSize.caption,
-                                fontWeight = FontWeight.Bold,
-                                color = OnSurfaceVariant
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    stringResource(R.string.annual_dividend_text),
+                                    fontSize = AppTextSize.caption,
+                                    fontWeight = FontWeight.Bold,
+                                    color = OnSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(verticalAlignment = Alignment.Bottom) {
+                                    RollingMoney(
+                                        amount = if (isPrivacyActive) "¥••••••••" else "¥${currencyFormat.format(grossAnnualDividend.toLong())}",
+                                        modifier = Modifier.weight(1f, fill = false),
+                                        style = MaterialTheme.typography.headlineLarge.copy(
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = OnSurface,
+                                                fontFamily = FontFamily.SansSerif,
+                                                fontSize = AppTextSize.hero,
+                                                letterSpacing = (-0.5).sp
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(stringResource(R.string.annual_dividend_text_2), color = OnSurfaceVariant, fontSize = AppTextSize.caption, modifier = Modifier.padding(bottom = 4.dp))
+                                }
+                            }
                             Column(horizontalAlignment = Alignment.End) {
                                 Box(
                                     modifier = Modifier
@@ -280,22 +298,6 @@ fun AnnualDividendScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            RollingMoney(
-                                amount = if (isPrivacyActive) "¥••••••••" else "¥${currencyFormat.format(grossAnnualDividend.toLong())}",
-                                modifier = Modifier.weight(1f, fill = false),
-                                style = MaterialTheme.typography.headlineLarge.copy(
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = OnSurface,
-                                        fontFamily = FontFamily.SansSerif,
-                                        fontSize = AppTextSize.hero,
-                                        letterSpacing = (-0.5).sp
-                                )
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.annual_dividend_text_2), color = OnSurfaceVariant, fontSize = AppTextSize.caption, modifier = Modifier.padding(bottom = 4.dp))
-                        }
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_9) else resources.getString(R.string.annual_dividend_label_10, (currencyFormat.format(netAnnualDividend.toLong())).toString()),
