@@ -225,13 +225,24 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                                 color = SecondaryIndigo.copy(alpha = 0.15f),
                                 border = BorderStroke(0.5.dp, SecondaryIndigo.copy(alpha = 0.4f))
                             ) {
-                                Text(
-                                    text = stringResource(R.string.roadmap_text_2 , highestCompletedStep),
-                                    color = SecondaryIndigo,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Black,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.WorkspacePremium,
+                                        contentDescription = null,
+                                        tint = SecondaryIndigo,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.roadmap_text_2, highestCompletedStep),
+                                        color = SecondaryIndigo,
+                                        fontSize = AppTextSize.dense,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
                             }
                         }
 
@@ -848,7 +859,10 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                                     Column {
                                         Text(stringResource(R.string.roadmap_text_25), fontSize = AppTextSize.dense, color = OnSurfaceVariant)
                                         if (isCleared) {
-                                            Text(stringResource(R.string.roadmap_text_26), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
+                                                Text(stringResource(R.string.roadmap_text_26), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
+                                            }
                                             Text(stringResource(R.string.roadmap_text_27 , currencyFormat.format(monthlyIncome)), fontSize = AppTextSize.dense, color = PrimaryEmerald)
                                         } else {
                                             Text(stringResource(R.string.roadmap_text_28 , currencyFormat.format(shortageAmt)), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = ErrorRed)
