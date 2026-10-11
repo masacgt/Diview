@@ -950,6 +950,8 @@ private fun RoadmapGrowthSimulatorSheet(
     onDismiss: () -> Unit
 ) {
     var reinvest by rememberSaveable { mutableStateOf(true) }
+    var showSimulatorInfo by remember { mutableStateOf(false) }
+    val simulatorDescription = "現在の評価額を起点に、毎月追加する金額と年間配当利回りから試算します。累計投資額は現在保有分の取得額と今後の追加額の合計です。配当は年1回受け取る想定で、再投資を選ぶと受取時に資産へ加算します。表示する月額は年間配当の月平均で、実際の支払時期・金額とは異なります。株価変動・税金・手数料は含みません。"
     // Monthly deposits are made at month-end. Dividends are calculated on the
     // invested balance before each deposit; cash dividends earn no return.
     fun projection(years: Int): Triple<Double, Double, Double> {
@@ -983,6 +985,36 @@ private fun RoadmapGrowthSimulatorSheet(
                 Icon(Icons.Default.HourglassBottom, contentDescription = null, tint = PrimaryEmerald)
                 Spacer(Modifier.width(8.dp))
                 Text("福利シミュレーター", modifier = Modifier.weight(1f), fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
+                Box {
+                    IconButton(onClick = { showSimulatorInfo = true }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.Info, contentDescription = "福利シミュレーターの説明", tint = OnSurfaceVariant, modifier = Modifier.size(18.dp))
+                    }
+                    DropdownMenu(
+                        expanded = showSimulatorInfo,
+                        onDismissRequest = { showSimulatorInfo = false },
+                        modifier = Modifier.widthIn(max = 320.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = SurfaceContainerLow,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 12.dp
+                    ) {
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.14f), modifier = Modifier.size(30.dp)) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Info, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(17.dp))
+                                    }
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Text("福利シミュレーターの見方", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            HorizontalDivider(color = BorderColor, thickness = 0.75.dp)
+                            Spacer(Modifier.height(12.dp))
+                            Text(simulatorDescription, color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                        }
+                    }
+                }
                 IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close)) }
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1032,10 +1064,6 @@ private fun RoadmapGrowthSimulatorSheet(
                     }
                 }
             }
-            Text(
-                "資産額は投資評価額と累計受取配当の合計です。配当は毎月末に発生し、積立は月末に行う想定です。株価変動・税金・手数料は含みません。月配当は投資中の資産のみから計算します。",
-                color = OnSurfaceVariant, fontSize = AppTextSize.dense
-            )
             GrowthSimulatorStepper(
                 label = "毎月の積立額",
                 value = "¥${numberFormat.format(monthlyContribution)}",
