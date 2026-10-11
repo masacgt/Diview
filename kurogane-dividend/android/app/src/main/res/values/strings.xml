@@ -14,6 +14,7 @@
     <string name="network_http_error">データを取得できませんでした（HTTP %1$d）。再試行してください。</string>
     <string name="network_unavailable">通信できませんでした。通信環境を確認して再試行してください。</string>
     <string name="search_empty">条件に一致する銘柄がありません。銘柄名・コードや絞り込み条件を変更してください。</string>
+    <string name="search_recent_empty">最近検索した銘柄がありません</string>
     <string name="search_local_fallback">保存済みの候補を表示しています。</string>
     <string name="data_loading">データを取得中…</string>
     <string name="financial_empty">この銘柄の財務データはまだありません。</string>
