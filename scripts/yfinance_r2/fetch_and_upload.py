@@ -373,9 +373,9 @@ def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any
 
     info = call_yfinance("profile_and_current_statistics", lambda: yf.Ticker(symbol).get_info(), warnings, upgrade_state)
     if isinstance(info, dict) and info:
-        document["profile"] = json_safe(info)
+        document["profile"] = json_safe({key: value for key, value in info.items() if key not in {"sector", "industry"}})
         current_fields = (
-            "currency", "exchange", "market", "quoteType", "shortName", "longName", "sector", "industry",
+            "currency", "exchange", "market", "quoteType", "shortName", "longName",
             "marketCap", "regularMarketPrice", "currentPrice", "regularMarketChange", "regularMarketChangePercent",
             "regularMarketTime", "fiftyTwoWeekHigh", "fiftyTwoWeekLow", "fiftyDayAverage", "twoHundredDayAverage",
             "trailingPE", "forwardPE", "priceToBook", "enterpriseValue", "trailingEps", "forwardEps", "bookValue",
@@ -386,6 +386,12 @@ def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any
         document["statistics_current"] = {k: json_safe(info[k]) for k in current_fields if k in info}
     elif info == {}:
         warnings.append(f"profile: Yahoo returned no company information for {symbol}")
+
+    # Yahoo sector labels are omitted because the IRBANK listed-security master has no sector field.
+    document.get("profile", {}).pop("sector", None)
+    document.get("profile", {}).pop("industry", None)
+    document.get("statistics_current", {}).pop("sector", None)
+    document.get("statistics_current", {}).pop("industry", None)
 
     if refresh_fundamentals:
         for frequency in ("monthly", "quarterly", "yearly"):
@@ -462,6 +468,28 @@ def collect_symbol(client: Any, bucket: str, symbol: str) -> tuple[dict[str, Any
     return document, summary, warnings, object_changed
 
 
+def publish_yfinance_dividends(client: Any, bucket: str, symbol: str, document: dict[str, Any]) -> None:
+    """Keep dividend actions in a compact object so cross-source aggregation avoids downloading price history."""
+    safe = symbol.replace("^", "_").replace("=", "_").replace("/", "_")
+    value = {
+        "schema_version": 1,
+        "source": "Yahoo Finance via yfinance",
+        "symbol": symbol,
+        "updated_at": document.get("updated_at"),
+        "records": document.get("actions", {}).get("dividends", []),
+    }
+    key = f"{PREFIX}/dividends/{safe}.json"
+    previous = read_object(client, bucket, key)
+    previous_doc = json.loads(previous) if previous else None
+    if previous_doc:
+        previous_doc.pop("updated_at", None)
+        comparable = dict(value)
+        comparable.pop("updated_at", None)
+        if previous_doc == comparable:
+            value["updated_at"] = json.loads(previous).get("updated_at")
+    put_json_if_changed(client, bucket, key, value, previous)
+
+
 def publish_search_catalog(client: Any, bucket: str, summaries: list[dict[str, Any]]) -> int:
     summary_by_symbol = {item["symbol"].upper(): item for item in summaries}
     old_names = {}
@@ -486,8 +514,11 @@ def publish_search_catalog(client: Any, bucket: str, summaries: list[dict[str, A
                 "code": code,
                 "name": market.get("shortName") or market.get("longName") or old_names.get(code) or code,
                 "category": "jp",
+                "sector": security.get("sector_name") or None,
                 "estimated_average_trading_value_20d": market.get("estimated_average_trading_value_20d"),
                 "price": price if isinstance(price, (int, float)) and price > 0 else None,
+                "annual_dividend_per_share": annual_dividend
+                    if isinstance(annual_dividend, (int, float)) and annual_dividend >= 0 else None,
                 "yield_rate": dividend_yield,
             })
     if len(catalog) != len({item["code"] for item in catalog}):
@@ -579,6 +610,7 @@ def main() -> int:
                 updated_count += 1
             else:
                 unchanged_count += 1
+            publish_yfinance_dividends(client, bucket, symbol, document)
             summaries.append(summary)
             if warnings:
                 warning_count += len(warnings)

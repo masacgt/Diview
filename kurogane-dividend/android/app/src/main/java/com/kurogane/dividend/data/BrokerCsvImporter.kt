@@ -1,6 +1,6 @@
 package com.kurogane.dividend.data
 
-import java.io.ByteArrayOutputStream
+import com.kurogane.dividend.model.PortfolioMath
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
@@ -31,7 +31,35 @@ object BrokerCsvImporter {
         "account" to listOf("預り区分", "口座", "口座区分", "預り", "勘定")
     )
 
+    /** Returns a broker only when the file name or its header contains a distinctive marker. */
+    fun detectBroker(bytes: ByteArray, fileName: String): CsvBroker? {
+        val name = normalizeDetectionText(fileName)
+        val fileMatches = listOf(
+            CsvBroker.SBI to listOf("sbi", "sbi証券", "sbisec"),
+            CsvBroker.RAKUTEN to listOf("楽天証券", "rakuten", "rakutensec"),
+            CsvBroker.MONEX to listOf("マネックス", "monex"),
+            CsvBroker.MATSUI to listOf("松井証券", "matsui")
+        ).filter { (_, markers) -> markers.any(name::contains) }.map { it.first }.distinct()
+        if (fileMatches.isNotEmpty()) return fileMatches.singleOrNull()
+        val text = runCatching { decode(bytes, CsvBroker.SBI).first }.getOrDefault("")
+        val headerText = runCatching {
+            CsvTokenizer.parse(text.removePrefix("\uFEFF")).take(8).flatten()
+                .joinToString(" ", transform = ::normalizeDetectionText)
+        }.getOrDefault("")
+        val matches = buildList {
+            if (listOf("預り区分", "預り残高").any(headerText::contains)) add(CsvBroker.SBI)
+            if ("平均取得額" in headerText) add(CsvBroker.RAKUTEN)
+            if ("保有残高一覧" in headerText) add(CsvBroker.MONEX)
+            if (listOf("取得平均", "銘柄名称").any(headerText::contains)) add(CsvBroker.MATSUI)
+        }.distinct()
+        return matches.singleOrNull()
+    }
+
+    private fun normalizeDetectionText(value: String): String =
+        Normalizer.normalize(value, Normalizer.Form.NFKC).lowercase(Locale.ROOT).replace(Regex("[\\s　\"'「」『』]"), "")
+
     fun parse(bytes: ByteArray, broker: CsvBroker, securityNames: Map<String, String> = emptyMap(), fundNames: Collection<String> = emptyList()): CsvImportResult {
+        require(bytes.size <= 10 * 1024 * 1024) { "CSVは10MB以下のファイルを選択してください" }
         val (text, encoding) = decode(bytes, broker)
         val records = CsvTokenizer.parse(text.removePrefix("\uFEFF"))
         if (records.isEmpty()) return CsvImportResult(broker, encoding, emptyList(), emptyList(), listOf("CSVにデータがありません"))
@@ -45,14 +73,22 @@ object BrokerCsvImporter {
         val ci = index("code"); val ni = index("name"); val si = index("shares"); val ai = index("cost"); val pi = index("price"); val aci = index("account")
         val result = mutableListOf<CsvHoldingRow>()
         val unmatched = mutableListOf<UnmatchedFund>()
+        val errors = mutableListOf<String>()
         records.drop(headerAt + 1).forEach { cells ->
             val name = cells.getOrNull(ni)?.trim().orEmpty()
             if (name.isBlank() || name.startsWith("合計") || name.startsWith("総計")) return@forEach
             val rawCode = cells.getOrNull(ci)?.trim().orEmpty()
-            val code = rawCode.replace(Regex("[^A-Za-z0-9]"), "").uppercase(Locale.ROOT)
+            val code = Normalizer.normalize(rawCode, Normalizer.Form.NFKC).uppercase(Locale.ROOT)
             val shares = cells.getOrNull(si)?.toNumber()
             val cost = cells.getOrNull(ai)?.toNumber()
             val price = cells.getOrNull(pi)?.toNumber()
+            if (PortfolioMath.wholeShares(shares) == null ||
+                (ai >= 0 && !cells.getOrNull(ai).isNullOrBlank() && (cost == null || !PortfolioMath.validMoney(cost))) ||
+                (pi >= 0 && !cells.getOrNull(pi).isNullOrBlank() && (price == null || !PortfolioMath.validMoney(price))) ||
+                (code.isNotBlank() && !code.matches(Regex("[A-Z0-9.\\-]{1,16}")))) {
+                errors += "$name：数量・単価・銘柄コードが正しくありません"
+                return@forEach
+            }
             val likelyFund = code.matches(Regex("[A-Z]{2}\\d{6}")) || name.contains("投資信託") || name.contains("ファンド") || name.contains("インデックス")
             val isFund = code.isBlank() || likelyFund
             if (isFund) {
@@ -64,7 +100,7 @@ object BrokerCsvImporter {
                 result += CsvHoldingRow(code, masterName ?: name, shares, cost, price, cells.getOrNull(aci), false, matchedName = masterName)
             }
         }
-        val errors = if (result.isEmpty() && unmatched.isEmpty()) listOf("取込可能な銘柄行がありません") else emptyList()
+        if (result.isEmpty() && unmatched.isEmpty() && errors.isEmpty()) errors += "取込可能な銘柄行がありません"
         return CsvImportResult(broker, encoding, result, unmatched, errors)
     }
 
@@ -74,7 +110,6 @@ object BrokerCsvImporter {
         if (bytes.size >= 2 && ((bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte()) || (bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte())))
             return String(bytes, if (bytes[0] == 0xFF.toByte()) StandardCharsets.UTF_16LE else StandardCharsets.UTF_16BE) to CsvEncoding.UTF8
         val preferred = Charset.forName(broker.legacyCharset)
-        if (broker == CsvBroker.MONEX) strictDecode(bytes, preferred)?.let { return it to CsvEncoding.SHIFT_JIS }
         strictDecode(bytes, StandardCharsets.UTF_8)?.let { return it to CsvEncoding.UTF8 }
         strictDecode(bytes, preferred)?.let { return it to CsvEncoding.SHIFT_JIS }
         strictDecode(bytes, Charset.forName("EUC-JP"))?.let { return it to CsvEncoding.EUC_JP }
@@ -84,7 +119,9 @@ object BrokerCsvImporter {
     private fun strictDecode(bytes: ByteArray, charset: Charset): String? = runCatching {
         charset.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString()
     }.getOrNull()
-    private fun String.toNumber(): Double? = replace(",", "").replace("円", "").replace("株", "").replace("口", "").replace("株式", "").replace("−", "-").trim().toDoubleOrNull()
+    private fun String.toNumber(): Double? = Normalizer.normalize(this, Normalizer.Form.NFKC)
+        .replace(",", "").replace("円", "").replace("株式", "").replace("株", "").replace("口", "")
+        .replace("−", "-").trim().toDoubleOrNull()?.takeIf(Double::isFinite)
     private fun normHeader(s: String) = Normalizer.normalize(s, Normalizer.Form.NFKC).replace(" ", "").replace("　", "").lowercase(Locale.ROOT)
     private fun hasAlias(header: String, field: String) = aliases[field]!!.any { a ->
         val normalized = normHeader(a)
@@ -112,6 +149,7 @@ object CsvTokenizer {
             }
             i++
         }
+        require(!quoted) { "CSVの引用符が閉じられていません" }
         if (cell.isNotEmpty() || row.isNotEmpty()) { row += cell.toString(); if (row.any { it.isNotBlank() }) rows += row.toList() }
         return rows
     }
@@ -126,13 +164,16 @@ object FundNameMatcher {
             .replace(Regex("為替[ＨH](有|あり)"), "為替ヘッジあり")
         text = text.replace(Regex("毎月$"), "毎月決算型").replace(Regex("隔月$"), "隔月決算型")
             .replace(Regex("予想分配金?$"), "予想分配金提示型")
-        return text.uppercase(Locale.ROOT).replace(Regex("(投資信託|追加型投信|ファンド|投信|\\s|[・･.,，（）()「」『』【】\\[\\]_-ー])"), "")
+        return text.uppercase(Locale.ROOT).replace(Regex("(投資信託|追加型投信|ファンド|投信|\\s|[・･.,，（）()「」『』【】\\[\\]_\\-ー])"), "")
     }
 
     fun match(source: String, candidates: Collection<String>, threshold: Double = 0.78): Pair<String, String>? {
         if (candidates.isEmpty()) return null
         val needle = normalize(source)
-        return candidates.asSequence().map { candidate -> candidate to similarity(needle, normalize(candidate)) }
+        if (needle.isBlank()) return null
+        fun hedge(value: String) = when { value.contains("ヘッジなし") -> 0; value.contains("ヘッジあり") -> 1; else -> 2 }
+        return candidates.asSequence().filter { normalize(it).isNotBlank() && hedge(normalize(it)) == hedge(needle) }
+            .map { candidate -> candidate to similarity(needle, normalize(candidate)) }
             .maxByOrNull { it.second }?.takeIf { it.second >= threshold }?.let { it.first to it.first }
     }
 

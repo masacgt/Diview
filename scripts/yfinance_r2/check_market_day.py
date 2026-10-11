@@ -15,6 +15,9 @@ def main() -> int:
     today_jst = datetime.now(ZoneInfo("Asia/Tokyo")).date()
     calendar = xcals.get_calendar("XTKS")
     is_open = bool(calendar.is_session(pd.Timestamp(today_jst)))
+    if os.environ.get("ALLOW_CLOSED_MARKET", "false").lower() in {"1", "true", "yes"}:
+        print("Manual run requested; allowing collection outside a Tokyo trading session.")
+        is_open = True
     state = "OPEN" if is_open else "CLOSED"
     print(f"Tokyo Stock Exchange session for {today_jst}: {state}")
 

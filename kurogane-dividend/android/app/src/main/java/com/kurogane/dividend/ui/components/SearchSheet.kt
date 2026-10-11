@@ -2,7 +2,7 @@ package com.kurogane.dividend.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,17 +12,24 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.kurogane.dividend.R
+import com.kurogane.dividend.ui.networkErrorMessage
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.data.CloudflareSearchHit
 import kotlinx.coroutines.delay
+import com.kurogane.dividend.data.runCatchingCancellable
 
 data class CandidateStock(
     val code: String,
@@ -34,6 +41,7 @@ data class CandidateStock(
     val isHigh: Boolean
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchSheet(
     visible: Boolean,
@@ -42,25 +50,33 @@ fun SearchSheet(
     onSearch: suspend (String) -> List<CloudflareSearchHit> = { emptyList() }
 ) {
     if (!visible) return
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val candidates = remember {
         listOf(
             CandidateStock("7203", "トヨタ自動車", "東証P • 輸送用機器", "¥2,600", "2.80%", "jp", false),
             CandidateStock("8316", "三井住友FG", "東証P • 銀行業", "¥3,150", "4.13%", "jp", true),
-            CandidateStock("9432", "日本電信電話 (NTT)", "東証P • 情報通信", "¥154.2", "3.37%", "jp", true),
+            CandidateStock("9432", "日本電信電話 (NTT)", "東証P • 情報・通信業", "¥154.2", "3.37%", "jp", true),
             CandidateStock("8058", "三菱商事", "東証P • 卸売業", "¥3,240", "3.52%", "jp", true),
-            CandidateStock("AAPL", "Apple Inc.", "NASDAQ • 米国株", "$220.00", "0.52%", "us", false),
-            CandidateStock("MSFT", "Microsoft Corp.", "NASDAQ • ソフトウェア", "$440.00", "0.76%", "us", false),
+            CandidateStock("AAPL", "アップル", "NASDAQ • 米国株", "$220.00", "0.52%", "us", false),
+            CandidateStock("MSFT", "マイクロソフト", "NASDAQ • ソフトウェア", "$440.00", "0.76%", "us", false),
             CandidateStock("eMAXIS", "eMAXIS Slim 全世界株式", "オルカン • 全世界株", "¥24,460", "再投資型", "fund", false)
         )
     }
 
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf("all") } // "all", "jp", "us", "fund", "high-div"
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var selectedCategory by rememberSaveable { mutableStateOf("all") } // "all", "jp", "us", "fund", "high-div"
     var remoteCandidates by remember { mutableStateOf<List<CandidateStock>?>(null) }
     var isSearching by remember { mutableStateOf(false) }
+    var searchError by remember { mutableStateOf<String?>(null) }
+    var retryCount by remember { mutableIntStateOf(0) }
+    val resources = LocalContext.current.resources
+    val search by rememberUpdatedState(onSearch)
 
-    LaunchedEffect(searchQuery, visible) {
+    LaunchedEffect(searchQuery, visible, retryCount) {
+        remoteCandidates = null
+        isSearching = false
+        searchError = null
         val query = searchQuery.trim()
         if (!visible || query.isEmpty()) {
             remoteCandidates = null
@@ -68,27 +84,32 @@ fun SearchSheet(
         } else if (query.length >= 2 || query.any(Char::isDigit)) {
             delay(350)
             isSearching = true
-            val result = runCatching { onSearch(query) }
+            val result = runCatchingCancellable { search(query) }
+            searchError = result.exceptionOrNull()?.let { networkErrorMessage(resources, it) }
             remoteCandidates = result.getOrNull()?.map { hit ->
                 val local = candidates.firstOrNull { it.code.equals(hit.code, ignoreCase = true) }
                 val price = hit.cachedPrice?.let { "¥${java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN).format(it.toLong())}" }
+                val yieldRate = hit.cachedPrice?.takeIf { it > 0.0 }?.let { currentPrice ->
+                    hit.annualDividendPerShare?.let { dps -> "%.2f%%".format(java.util.Locale.JAPAN, dps / currentPrice * 100.0) }
+                }
                 local?.copy(
                     name = hit.name,
                     desc = hit.industry?.let { "東証 • $it" } ?: local.desc,
-                    price = price ?: local.price
+                    price = price ?: local.price,
+                    yieldRate = yieldRate ?: local.yieldRate
                 ) ?: CandidateStock(
                     code = hit.code,
                     name = hit.name,
                     desc = hit.industry?.let { "東証 • $it" } ?: "日本株 • Cloudflare銘柄マスター",
                     price = price ?: "株価未取得",
-                    yieldRate = "--",
+                    yieldRate = yieldRate ?: "--",
                     cat = "jp",
                     isHigh = false
                 )
             }
             isSearching = false
         } else {
-            remoteCandidates = emptyList()
+            remoteCandidates = null
         }
     }
 
@@ -108,37 +129,30 @@ fun SearchSheet(
         }
     }
 
-    // Scrim + Slide Up animated container
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.75f))
-            .clickable(
-                onClick = onDismiss,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ),
-        contentAlignment = Alignment.BottomCenter
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        containerColor = SurfaceContainerLow,
+        scrimColor = Color.Black.copy(alpha = 0.75f),
+        dragHandle = null
     ) {
-        // Prevent click propagation to scrim
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.85f)
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                 .background(SurfaceContainerLow)
                 .border(BorderStroke(1.dp, BorderColor), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                .clickable(
-                    onClick = {},
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                )
                 .padding(16.dp)
         ) {
+            val headerMaxHeight = maxHeight * 0.65f
             Column(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                Column(Modifier.fillMaxWidth().heightIn(max = headerMaxHeight).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // Grab Handle
                 Box(
                     modifier = Modifier
@@ -150,7 +164,7 @@ fun SearchSheet(
                 )
 
                 // Header
-                Row(
+                AdaptiveRow(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
@@ -159,7 +173,8 @@ fun SearchSheet(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
                     ) {
                         Box(
                             modifier = Modifier
@@ -178,13 +193,13 @@ fun SearchSheet(
                         }
                         Column {
                             Text(
-                                "銘柄検索・絞り込み",
+                                stringResource(R.string.search_text),
                                 color = OnSurface,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = AppTextSize.body
                             )
                             Text(
-                                "保有銘柄の絞り込みまたは詳細分析を開く",
+                                stringResource(R.string.search_text_2),
                                 color = OnSurfaceVariant,
                                 fontSize = AppTextSize.dense
                             )
@@ -195,13 +210,13 @@ fun SearchSheet(
                     IconButton(
                         onClick = onDismiss,
                         modifier = Modifier
-                            .size(32.dp)
+                            .minimumInteractiveComponentSize().size(32.dp)
                             .clip(CircleShape)
                             .background(SurfaceContainer)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
+                            contentDescription = stringResource(R.string.close),
                             tint = OnSurfaceVariant,
                             modifier = Modifier.size(16.dp)
                         )
@@ -216,7 +231,7 @@ fun SearchSheet(
                     onValueChange = { searchQuery = it },
                     placeholder = {
                         Text(
-                            "銘柄名・コード・ティッカー (例: 7203, トヨタ, AAPL)",
+                            stringResource(R.string.search_text_3),
                             color = OnSurfaceVariant,
                             fontSize = AppTextSize.dense
                         )
@@ -234,7 +249,7 @@ fun SearchSheet(
                             IconButton(onClick = { searchQuery = "" }) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "Clear",
+                                    contentDescription = stringResource(R.string.search_a11y),
                                     tint = OnSurfaceVariant,
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -262,11 +277,11 @@ fun SearchSheet(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     val categories = listOf(
-                        "all" to "すべて",
-                        "jp" to "日本株",
-                        "us" to "米国株",
-                        "fund" to "投信",
-                        "high-div" to "高配当 (3%以上)"
+                        "all" to stringResource(R.string.all),
+                        "jp" to stringResource(R.string.japanese_stocks),
+                        "us" to stringResource(R.string.us_stocks),
+                        "fund" to stringResource(R.string.funds),
+                        "high-div" to stringResource(R.string.search_high_dividend)
                     )
                     categories.forEach { (catId, catLabel) ->
                         val active = selectedCategory == catId
@@ -274,7 +289,7 @@ fun SearchSheet(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(if (active) PrimaryEmeraldContainer else SurfaceContainer)
-                                .clickable { selectedCategory = catId }
+                                .minimumInteractiveComponentSize().selectable(selected = active, role = androidx.compose.ui.semantics.Role.Tab) { selectedCategory = catId }
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(
@@ -287,83 +302,43 @@ fun SearchSheet(
                     }
                 }
 
-                // Quick hot search tags
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Whatshot,
-                            contentDescription = null,
-                            tint = PrimaryEmerald,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            "注目の高配当・主力銘柄",
-                            color = OnSurfaceVariant,
-                            fontSize = AppTextSize.dense,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        val hotTags = listOf("7203 トヨタ", "8316 三井住友FG", "9432 NTT", "8058 三菱商事", "AAPL Apple")
-                        hotTags.forEach { tag ->
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(SurfaceContainer)
-                                    .clickable {
-                                        val codeOnly = tag.split(" ").first()
-                                        searchQuery = codeOnly
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    tag,
-                                    color = PrimaryEmerald,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
-                }
-
                 // Candidate Count and List Header
-                Row(
+                AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        if (isSearching) "Cloudflare銘柄マスターを検索中…" else "候補銘柄 (${filteredCandidates.size}件)",
+                        if (isSearching) resources.getString(R.string.search_label) else resources.getString(R.string.search_label_2, (filteredCandidates.size).toString()),
                         color = OnSurface,
                         fontSize = AppTextSize.caption,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "タップで銘柄詳細を表示",
+                        stringResource(R.string.search_text_5),
                         color = PrimaryEmerald,
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
 
+                }
                 // Candidates scrollable list
                 LazyColumn(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .testTag("stock_search_results"),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(filteredCandidates) { stock ->
+                    if (searchError != null) item(key = "search_error") {
+                        StatusMessage(resources.getString(R.string.search_error_with_fallback, searchError!!),
+                            color = ErrorRed, actionLabel = resources.getString(R.string.retry), onAction = { retryCount++ })
+                    }
+                    if (!isSearching && filteredCandidates.isEmpty()) item(key = "search_empty") {
+                        StatusMessage(resources.getString(R.string.search_empty))
+                    }
+                    items(filteredCandidates, key = { it.code }) { stock ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -377,7 +352,7 @@ fun SearchSheet(
                             // Code box
                             Box(
                                 modifier = Modifier
-                                    .size(width = 54.dp, height = 28.dp)
+                                    .widthIn(min = 54.dp).heightIn(min = 28.dp).padding(4.dp)
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(BackgroundDark),
                                 contentAlignment = Alignment.Center
@@ -418,7 +393,7 @@ fun SearchSheet(
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
-                                    if (stock.yieldRate == "再投資型") "再投資型" else "利回り ${stock.yieldRate}",
+                                    if (stock.yieldRate == "再投資型") resources.getString(R.string.search_label_3) else resources.getString(R.string.search_label_4, (stock.yieldRate).toString()),
                                     color = if (stock.yieldRate == "再投資型") OnSurfaceVariant else PrimaryEmerald,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = AppTextSize.dense
@@ -428,22 +403,6 @@ fun SearchSheet(
                     }
                 }
 
-                // Close Button
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainer),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        "閉じる",
-                        color = OnSurface,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = AppTextSize.body
-                    )
-                }
             }
         }
     }

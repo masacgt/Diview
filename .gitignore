@@ -56,6 +56,7 @@ app.*.map.json
 
 # Local build/runtime toolchains and caches
 /.gradle-home/
+/.gradle-user-home-task/
 /gradle-dist/
 /jdk17/
 /gradle-*-bin.zip
@@ -85,8 +86,16 @@ app.*.map.json
 **/.gradle/
 **/.kotlin/
 **/local.properties
+*.jks
+*.keystore
+**/keystore.properties
 
 
 # Large generated IRBank export (local source remains authoritative)
 /data/irbank/organized/d1/financial_periods.csv
+/data/irbank/cloudflare/import/financial_periods_annual_*.sql
+/data/irbank/cloudflare/.wrangler-market-dry-run/
+/data/irbank/cloudflare/fixtures/
+/data/market/yfinance/*.csv
+/data/market/yfinance/*.json
 
