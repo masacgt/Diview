@@ -250,6 +250,9 @@
     <string name="roadmap_text_3">"LEVEL 1 完全制覇達成！ 👑"</string>
     <string name="roadmap_text_4">"生活インフラ自給期 (STEP 1〜10) を踏破完了"</string>
     <string name="roadmap_all_clear">"ALL CLEAR"</string>
+    <string name="roadmap_level_achievement_title">"LEVEL %1$d 完全制覇達成！ 👑"</string>
+    <string name="roadmap_level_achievement_description">"%1$s (STEP %2$d〜%3$d)"</string>
+    <string name="roadmap_level_clear">"LV.%1$d CLEAR"</string>
     <string name="roadmap_text_5">"現在の配当獲得ステータス"</string>
     <string name="roadmap_text_6">"¥%1$s / 年"</string>
     <string name="roadmap_text_7">"月間換算不労所得: 約 ¥%1$s / 月"</string>
