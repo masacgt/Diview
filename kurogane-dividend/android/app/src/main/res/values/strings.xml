@@ -1019,9 +1019,9 @@
     <string name="watchlist_peak_share">最大月の構成比: %1$s</string>
     <string name="watchlist_jp_projection">日本株 年間: %1$s</string>
     <string name="watchlist_us_projection">米国株 年間: %1$s</string>
-    <string name="watchlist_annual_estimate">年間配当試算 (税引前)</string>
-    <string name="watchlist_monthly_estimate">月平均試算 (税引前)</string>
-    <string name="watchlist_empty_month_count">%1$d ヶ月 (既知データ内)</string>
+    <string name="watchlist_annual_estimate">年間配当試算</string>
+    <string name="watchlist_monthly_estimate">月平均試算</string>
+    <string name="watchlist_empty_month_count">%1$d ヶ月</string>
     <string name="watchlist_empty_months">配当を確認できない月: %1$s</string>
     <string name="watchlist_suggestion_note">候補を監視銘柄に追加して、取得できた配当月を比較できます。権利落ち日や実際の入金日は銘柄の開示情報で確認してください。</string>
     <string name="watchlist_months_missing">配当月未取得</string>
