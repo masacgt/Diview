@@ -32,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.Offset
@@ -621,6 +622,17 @@ private fun MonthlyDividendEstimateCard(
     val maxMonthlyAmount = remember(monthlyDividends) {
         monthlyDividends.maxOfOrNull { it.second }?.coerceAtLeast(1.0) ?: 1.0
     }
+    val monthlyGridTargetStep = maxMonthlyAmount / 3.0
+    val monthlyGridMagnitude = 10.0.pow(kotlin.math.floor(kotlin.math.log10(monthlyGridTargetStep)))
+    val monthlyNormalizedGridStep = monthlyGridTargetStep / monthlyGridMagnitude
+    val monthlyGridStepMultiplier = when {
+        monthlyNormalizedGridStep >= 5.0 -> 5.0
+        monthlyNormalizedGridStep >= 2.0 -> 2.0
+        else -> 1.0
+    }
+    val monthlyGridStep = monthlyGridMagnitude * monthlyGridStepMultiplier
+    val monthlyGridCount = kotlin.math.floor(maxMonthlyAmount / monthlyGridStep).toInt()
+    val monthlyGridColor = BorderColor
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -709,7 +721,15 @@ private fun MonthlyDividendEstimateCard(
             Spacer(modifier = Modifier.height(18.dp))
 
             Row(
-                modifier = Modifier.fillMaxWidth().height(145.dp),
+                modifier = Modifier.fillMaxWidth().height(145.dp).drawBehind {
+                    val plotBottom = size.height - 20.dp.toPx()
+                    val plotHeight = 85.dp.toPx()
+                    (0..monthlyGridCount).forEach { guideIndex ->
+                        val guideAmount = guideIndex * monthlyGridStep
+                        val y = plotBottom - plotHeight * (guideAmount / maxMonthlyAmount).toFloat()
+                        drawLine(monthlyGridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+                    }
+                },
                 horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.Bottom
             ) {
