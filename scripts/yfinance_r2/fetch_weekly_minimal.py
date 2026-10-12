@@ -251,15 +251,18 @@ def publish_minimal_snapshot(client: Any, bucket: str, run_id: str, shard_count:
         item = items_by_code.get(code)
         if item is None:
             continue
-        dividend = numeric(update.get("statistics", {}).get("dividendRate"))
-        if dividend is None or dividend < 0:
+        statistics = update.get("statistics")
+        if not isinstance(statistics, dict) or "dividendRate" not in statistics:
             continue
+        dividend = numeric(statistics.get("dividendRate"))
+        if dividend is not None and dividend < 0:
+            dividend = None
         if item.get("annual_dividend_per_share") != dividend:
             item["annual_dividend_per_share"] = dividend
             catalog_changed = True
         price = numeric(item.get("price"))
-        yield_rate = round(dividend / price * 100, 2) if price is not None and price > 0 else None
-        if yield_rate is not None and item.get("yield_rate") != yield_rate:
+        yield_rate = round(dividend / price * 100, 2) if dividend is not None and price is not None and price > 0 else None
+        if item.get("yield_rate") != yield_rate:
             item["yield_rate"] = yield_rate
             catalog_changed = True
     if catalog_changed:

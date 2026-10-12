@@ -146,6 +146,8 @@ def publish_search_catalog(client: Any, bucket: str, summaries: list[dict[str, A
                 "sector": security.get("sector_name") or None,
                 "estimated_average_trading_value_20d": market.get("estimated_average_trading_value_20d"),
                 "price": price if isinstance(price, (int, float)) and price > 0 else None,
+                "annual_dividend_per_share": dividend
+                    if isinstance(dividend, (int, float)) and dividend >= 0 else None,
                 "yield_rate": yield_rate,
             })
 

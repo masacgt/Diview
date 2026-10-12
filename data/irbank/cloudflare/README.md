@@ -43,7 +43,7 @@ npx wrangler d1 execute diview-irbank --remote --file ..\organized\d1\seed_app_d
 
 D1には銘柄マスター、API・分析・Watchlistなどの運用データ、株式分析に使う年次財務を保持します。四半期・半期財務はアプリとWorkerの現在の処理では参照されないため、R2の `market/irbank/v1/` 配下を配信元とし、D1の原本は `market/irbank/v1/archive/d1-financial-periods-qs-20261009.json` に全32,442行を退避しています。退避オブジェクトは取得ファイルのSHA-256と行数を照合済みです。
 
-D1の財務インポートは年次だけを生成します。銘柄検索は部分一致SQLを使うため、銘柄マスターはD1に残します。配当イベントはD1では現在0行ですがAPIがテーブルを参照するためスキーマを維持し、価格・配当履歴など大量の市場スナップショットはR2から配信します。
+D1の財務インポートは年次だけを生成します。D1には銘柄マスターを保持しますが、現在の `/api/v1/security-search` はD1の部分一致SQLを使わず、R2の `market/irbank/v1/catalog.json` を検索します。D1の `dividend_events` と年次 `financial_periods` は分析APIが参照し、価格・配当履歴など大量の市場スナップショットはR2から配信します。
 
 ## 銘柄・財務・配当データのインポート
 

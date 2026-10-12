@@ -60,7 +60,7 @@ data class CloudflarePopularStock(
     val currentPrice: Double,
     val acquisitionPrice: Double,
     val acquisitionDate: String,
-    val annualDividendPerShare: Double,
+    val annualDividendPerShare: Double?,
     val dividendYield: Double?,
     val tradingValue20d: Double
 )
@@ -133,6 +133,7 @@ class CloudflareMarketRepository(
                     code = code,
                     name = name,
                     cachedPrice = quote?.price,
+                    annualDividendPerShare = quote?.annualDividendPerShare,
                     marketYieldRate = quote?.yieldRate
                 )
             }
@@ -159,7 +160,7 @@ class CloudflareMarketRepository(
                 ?.let { return@withLock it.quotesByCode }
 
             val root = getJson("/api/v1/search-catalog")
-            val rows = root.optJSONArray("items") ?: throw IOException("Cloudflareの株価カタログにitemsがありません")
+            val rows = root.optJSONArray("items") ?: throw IOException("Cloudflareの銘柄カタログにitemsがありません")
             val catalogDate = root.optString("market_data_date").takeIf(String::isNotBlank)
             val quotes = buildMap {
                 for (index in 0 until rows.length()) {
@@ -170,10 +171,12 @@ class CloudflareMarketRepository(
                     if (catalogDate != null && quoteDate != null && quoteDate > catalogDate) continue
                     val price = row.numberOrNull("price")
                         ?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }
+                    val annualDividend = row.numberOrNull("annual_dividend_per_share")
+                        ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) }
                     val yieldRate = row.numberOrNull("yield_rate")
                         ?.takeIf { it in 0.0..100.0 }
-                    if (price != null || yieldRate != null) {
-                        put(code, CloudflareSearchQuote(price, yieldRate))
+                    if (price != null || annualDividend != null || yieldRate != null) {
+                        put(code, CloudflareSearchQuote(price, yieldRate, annualDividend))
                     }
                 }
             }
@@ -230,7 +233,6 @@ class CloudflareMarketRepository(
                 if (isSecurityCode(code) && price != null && PortfolioMath.validMoney(price) && price > 0.0) {
                     val annualDividend = row.numberOrNull("annual_dividend_per_share")
                         ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) }
-                        ?: row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 }?.let { price * it / 100.0 }
                     put(code, CloudflareMarketQuote(price, annualDividend))
                 }
             }
@@ -292,6 +294,11 @@ class CloudflareMarketRepository(
             val acquisitionPrice = row.numberOrNull("acquisition_price") ?: return@mapNotNull null
             val tradingValue = row.numberOrNull("estimated_average_trading_value_20d") ?: return@mapNotNull null
             if (!isSecurityCode(code) || name.isBlank() || !PortfolioMath.validMoney(currentPrice) || !PortfolioMath.validMoney(acquisitionPrice) || currentPrice <= 0.0 || acquisitionPrice <= 0.0 || tradingValue <= 0.0) return@mapNotNull null
+            val annualDividend = row.numberOrNull("annual_dividend_per_share")
+                ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) }
+            val dividendYield = annualDividend?.let { dividend ->
+                (dividend / currentPrice * 100.0).takeIf { it.isFinite() && it in 0.0..100.0 }
+            }
             CloudflarePopularStock(
                 code = code,
                 name = name,
@@ -299,8 +306,8 @@ class CloudflareMarketRepository(
                 currentPrice = currentPrice,
                 acquisitionPrice = acquisitionPrice,
                 acquisitionDate = row.optString("acquisition_date").ifBlank { date },
-                annualDividendPerShare = row.numberOrNull("annual_dividend_per_share")?.takeIf(PortfolioMath::validMoney) ?: 0.0,
-                dividendYield = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 },
+                annualDividendPerShare = annualDividend,
+                dividendYield = dividendYield,
                 tradingValue20d = tradingValue
             )
         }
