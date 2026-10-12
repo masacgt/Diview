@@ -1511,16 +1511,21 @@ class DividendViewModel @JvmOverloads constructor(
     suspend fun searchCloudflareSecurities(query: String): List<CloudflareSearchHit> {
         val hits = marketRepository.searchSecurities(query)
         val cachedPrices = readCachedPrices()
+        val cachedDividends = readCachedDividendsPerShare()
         val industries = withContext(Dispatchers.IO) { runCatching { Tse33IndustryMaster.industries(getApplication()) }.getOrDefault(emptyMap()) }
         return hits.map { hit ->
+            val normalizedCode = hit.code.uppercase(java.util.Locale.ROOT)
             hit.copy(
                 name = japaneseDisplayName(hit.code, hit.name),
-                cachedPrice = cachedPrices[hit.code.uppercase(java.util.Locale.ROOT)],
-                annualDividendPerShare = readCachedDividendsPerShare()[hit.code.uppercase(java.util.Locale.ROOT)],
+                cachedPrice = hit.cachedPrice ?: cachedPrices[normalizedCode],
+                annualDividendPerShare = cachedDividends[normalizedCode],
                 industry = industries[hit.code.take(4).uppercase(java.util.Locale.ROOT)]
             )
         }
     }
+
+    suspend fun loadCloudflareSearchQuotes(codes: List<String>) =
+        marketRepository.fetchSearchQuotes(codes)
 
     suspend fun registerCloudflareHolding(
         code: String,
