@@ -1098,6 +1098,7 @@ fun AssetManagementScreen(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(CardDarkLighter)
+                                    .border(0.5.dp, BorderBlue, RoundedCornerShape(10.dp))
                                     .padding(horizontal = 4.dp, vertical = 0.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {

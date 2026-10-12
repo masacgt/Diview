@@ -42,12 +42,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -76,18 +79,36 @@ import java.time.ZoneId
 import java.util.Locale
 import kotlinx.coroutines.launch
 
+@Composable
+private fun Modifier.reportViewportVisibility(
+    viewportBounds: Rect?,
+    onVisibilityChanged: (Boolean) -> Unit
+): Modifier {
+    return onGloballyPositioned { coordinates ->
+        val bounds = coordinates.boundsInRoot()
+        val viewport = viewportBounds
+        onVisibilityChanged(
+            viewport != null &&
+                bounds.right > viewport.left && bounds.bottom > viewport.top &&
+                bounds.left < viewport.right && bounds.top < viewport.bottom
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnnualDividendScreen(
     viewModel: DividendViewModel,
     onNavigateToDetail: (String) -> Unit = {},
-    scrollToTopRequest: Int = 0
+    scrollToTopRequest: Int = 0,
+    isTabSelected: Boolean = true
 ) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
     val isPrivacyActive by viewModel.isPrivacyActive.collectAsStateWithLifecycle()
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
     val selectedMonth by viewModel.selectedMonth.collectAsStateWithLifecycle()
+    var chartViewportBounds by remember { mutableStateOf<Rect?>(null) }
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
 
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
@@ -200,7 +221,9 @@ fun AnnualDividendScreen(
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
           HorizontalPager(
               state = pagerState,
-              modifier = Modifier.fillMaxSize(),
+              modifier = Modifier.fillMaxSize().onGloballyPositioned {
+                  chartViewportBounds = it.boundsInRoot()
+              },
               beyondViewportPageCount = 0,
               key = { it }
           ) { page ->
@@ -413,7 +436,9 @@ fun AnnualDividendScreen(
                         taxRateMode = taxRateMode,
                         totalAnnualDiv = totalAnnualDiv,
                         totalCost = totalCost,
-                        isPrivacyActive = isPrivacyActive
+                        isPrivacyActive = isPrivacyActive,
+                        chartViewportBounds = chartViewportBounds,
+                        isTabSelected = isTabSelected
                     )
                 }
                 item {
@@ -423,7 +448,9 @@ fun AnnualDividendScreen(
                         taxRateMode = taxRateMode,
                         totalAnnualDividend = totalAnnualDiv,
                         selectedMonth = selectedMonth,
-                        isPrivacyActive = isPrivacyActive
+                        isPrivacyActive = isPrivacyActive,
+                        chartViewportBounds = chartViewportBounds,
+                        isTabSelected = isTabSelected
                     )
                 }
                 item {
@@ -594,11 +621,14 @@ private fun MonthlyDividendEstimateCard(
     taxRateMode: String,
     totalAnnualDividend: Double,
     selectedMonth: Int?,
-    isPrivacyActive: Boolean
+    isPrivacyActive: Boolean,
+    chartViewportBounds: Rect?,
+    isTabSelected: Boolean
 ) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
     var showDividendInfo by remember { mutableStateOf(false) }
+    var selectedQuarterIndex by remember { mutableStateOf<Int?>(null) }
     val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
     val monthlyByCategory = remember(holdings, taxRateMode, dividendEventRevision) {
         (1..12).map { month ->
@@ -622,6 +652,24 @@ private fun MonthlyDividendEstimateCard(
                 else -> "0"
             }
             Triple(month, amount, label)
+        }
+    }
+    var monthlyChartVisible by remember { mutableStateOf(false) }
+    val monthlyBarsProgress = remember { Animatable(1f) }
+    LaunchedEffect(isTabSelected) {
+        if (!isTabSelected) {
+            monthlyBarsProgress.snapTo(1f)
+            return@LaunchedEffect
+        }
+        monthlyBarsProgress.snapTo(0f)
+        withFrameNanos { }
+        if (monthlyChartVisible) {
+            monthlyBarsProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f)
+            )
+        } else {
+            monthlyBarsProgress.snapTo(1f)
         }
     }
     val maxMonthlyAmount = remember(monthlyDividends) {
@@ -659,17 +707,6 @@ private fun MonthlyDividendEstimateCard(
     val monthlyAxisLabelHeight = monthlyAmountLabelSlotHeight
     val monthlyAxisInset = monthlyAxisGap + monthlyAxisLabelHeight
     val monthlyChartHeight = monthlyChartCanvasHeight + monthlyAxisInset
-    var monthlyBarsVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(monthlyDividends) {
-        monthlyBarsVisible = false
-        withFrameNanos { }
-        monthlyBarsVisible = true
-    }
-    val monthlyBarsProgress by animateFloatAsState(
-        targetValue = if (monthlyBarsVisible) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f),
-        label = "Monthly dividend bars"
-    )
     val monthlyBarStaggerStep = if (monthlyDividends.size > 1) .32f / (monthlyDividends.size - 1) else 0f
 
     Card(
@@ -759,7 +796,9 @@ private fun MonthlyDividendEstimateCard(
             Spacer(modifier = Modifier.height(18.dp))
 
             Row(
-                modifier = Modifier.fillMaxWidth().height(monthlyChartHeight).drawBehind {
+                modifier = Modifier.fillMaxWidth().height(monthlyChartHeight)
+                    .reportViewportVisibility(chartViewportBounds) { monthlyChartVisible = it }
+                    .drawBehind {
                     val plotBottom = monthlyChartCanvasHeight.toPx() * monthlyBarAreaBottomFraction
                     val plotHeight = monthlyPlotHeight.toPx()
                     (0..monthlyGridCount).forEach { guideIndex ->
@@ -767,7 +806,7 @@ private fun MonthlyDividendEstimateCard(
                         val y = plotBottom - plotHeight * (guideAmount / maxMonthlyAmount).toFloat()
                         drawLine(monthlyGridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
                     }
-                    selectedMonth?.let { month ->
+                    selectedMonth?.takeIf { selectedQuarterIndex == null }?.let { month ->
                         val selectedIndex = monthlyDividends.indexOfFirst { it.first == month }
                         if (selectedIndex >= 0) {
                             val groupWidth = size.width / monthlyDividends.size
@@ -796,11 +835,14 @@ private fun MonthlyDividendEstimateCard(
                     val isSelected = selectedMonth == month
                     val heightFraction = (amount / maxMonthlyAmount).toFloat().coerceIn(0.0f, 1.0f)
                     val stagger = index * monthlyBarStaggerStep
-                    val barProgress = ((monthlyBarsProgress - stagger) / (1f - stagger)).coerceAtLeast(0f)
+                    val barProgress = ((monthlyBarsProgress.value - stagger) / (1f - stagger)).coerceAtLeast(0f)
                     val animatedHeightFraction = heightFraction * barProgress
 
                     Column(
-                        modifier = Modifier.weight(1f).height(monthlyChartHeight).clickable { viewModel.selectMonth(month) },
+                        modifier = Modifier.weight(1f).height(monthlyChartHeight).clickable {
+                            selectedQuarterIndex = null
+                            viewModel.selectMonth(month)
+                        },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Bottom
                     ) {
@@ -923,7 +965,9 @@ private fun MonthlyDividendEstimateCard(
                 totalMonthlyAmount = monthlyCashFlowTotal,
                 maxMonthSharePercent = maxMonthSharePercent,
                 isPrivacyActive = isPrivacyActive,
-                currencyFormat = currencyFormat
+                currencyFormat = currencyFormat,
+                selectedQuarterIndex = selectedQuarterIndex,
+                onQuarterSelected = { selectedQuarterIndex = it }
             )
         }
     }
@@ -999,7 +1043,9 @@ private fun QuarterlyCashFlowComparison(
     totalMonthlyAmount: Double,
     maxMonthSharePercent: Double,
     isPrivacyActive: Boolean,
-    currencyFormat: NumberFormat
+    currencyFormat: NumberFormat,
+    selectedQuarterIndex: Int?,
+    onQuarterSelected: (Int?) -> Unit
 ) {
     val quarterColors = listOf(PrimaryEmeraldContainer, SecondaryIndigo, SkyBlue, AccentAmber)
     val maxMonthShareText = if (isPrivacyActive) "•••%" else String.format(Locale.JAPAN, "%.1f%%", maxMonthSharePercent)
@@ -1040,7 +1086,7 @@ private fun QuarterlyCashFlowComparison(
             Spacer(Modifier.height(12.dp))
             Box(
                 Modifier.fillMaxWidth()
-                    .height(9.dp)
+                    .height(15.dp)
                     .clip(CircleShape)
                     .background(BorderBlue)
             ) {
@@ -1048,11 +1094,24 @@ private fun QuarterlyCashFlowComparison(
                     Row(Modifier.fillMaxSize()) {
                         quarterlyAmounts.forEachIndexed { index, amount ->
                             if (amount > 0.0) {
+                                val isSelected = selectedQuarterIndex == index
+                                val emphasisProgress by animateFloatAsState(
+                                    targetValue = if (isSelected) 1f else 0f,
+                                    label = "Quarterly cash flow emphasis $index"
+                                )
                                 Box(
                                     Modifier.weight((amount / totalMonthlyAmount).toFloat())
                                         .fillMaxHeight()
-                                        .background(quarterColors[index])
-                                )
+                                        .padding(horizontal = 0.5.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        Modifier.fillMaxWidth()
+                                            .height((9f + 6f * emphasisProgress).dp)
+                                            .clip(CircleShape)
+                                            .background(quarterColors[index])
+                                    )
+                                }
                             }
                         }
                     }
@@ -1068,7 +1127,9 @@ private fun QuarterlyCashFlowComparison(
                     val percentageText = if (isPrivacyActive) "•••%" else String.format(Locale.JAPAN, "%.1f%%", sharePercent)
 
                     Surface(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).clickable {
+                            onQuarterSelected(if (selectedQuarterIndex == index) null else index)
+                        },
                         shape = RoundedCornerShape(14.dp),
                         color = BackgroundDark,
                         border = BorderStroke(0.5.dp, BorderColor)
@@ -1967,6 +2028,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(SurfaceContainer)
+                                            .border(0.5.dp, BorderBlue, RoundedCornerShape(8.dp))
                                             .clickable { onNavigateToDetail(h.code) }
                                             .padding(10.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -2247,7 +2309,9 @@ private fun CompoundingSimulationSection(
     taxRateMode: String,
     totalAnnualDiv: Double,
     totalCost: Double,
-    isPrivacyActive: Boolean
+    isPrivacyActive: Boolean,
+    chartViewportBounds: Rect?,
+    isTabSelected: Boolean
 ) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
@@ -2257,17 +2321,24 @@ private fun CompoundingSimulationSection(
         com.kurogane.dividend.model.DividendHistory.calculate(holdings, financialData, (currentYear - 5)..currentYear, taxRateMode)
     }
     val years = comparisonYears.drop(1)
-    var annualBarsVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(years) {
-        annualBarsVisible = false
+    var annualChartVisible by remember { mutableStateOf(false) }
+    val annualBarsProgress = remember { Animatable(1f) }
+    LaunchedEffect(isTabSelected) {
+        if (!isTabSelected) {
+            annualBarsProgress.snapTo(1f)
+            return@LaunchedEffect
+        }
+        annualBarsProgress.snapTo(0f)
         withFrameNanos { }
-        annualBarsVisible = true
+        if (annualChartVisible) {
+            annualBarsProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f)
+            )
+        } else {
+            annualBarsProgress.snapTo(1f)
+        }
     }
-    val annualBarsProgress by animateFloatAsState(
-        targetValue = if (annualBarsVisible) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f),
-        label = "Annual dividend bars"
-    )
     val format = NumberFormat.getNumberInstance(Locale.JAPAN)
     fun money(value: Double?): String = if (value == null) "未取得" else if (isPrivacyActive) "¥••••" else "¥${format.format(value.toLong())}"
     var selectedYearIndex by remember { mutableIntStateOf(4) }
@@ -2336,7 +2407,10 @@ private fun CompoundingSimulationSection(
                 val amountGuideStep = gridMagnitude * gridStepMultiplier
                 val amountGuideCount = kotlin.math.floor(maxValue / amountGuideStep).toInt()
                 Column(Modifier.fillMaxWidth()) {
-                BoxWithConstraints(Modifier.fillMaxWidth().height(136.dp)) {
+                BoxWithConstraints(
+                    Modifier.fillMaxWidth().height(136.dp)
+                        .reportViewportVisibility(chartViewportBounds) { annualChartVisible = it }
+                ) {
                 val chartHeight = 136.dp
                 val labelTopOffset = 24.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale
                 val groupWidth = maxWidth / years.size
@@ -2366,7 +2440,7 @@ private fun CompoundingSimulationSection(
                     years.forEachIndexed { index, point ->
                         val centerX = canvasGroupWidth * (index + .5f)
                         val stagger = index * 0.08f
-                        val barProgress = ((annualBarsProgress - stagger) / (1f - stagger)).coerceAtLeast(0f)
+                        val barProgress = ((annualBarsProgress.value - stagger) / (1f - stagger)).coerceAtLeast(0f)
                         val normalizedHeight = point.amount?.let { (it / maxValue).toFloat().coerceIn(0f, 1f) } ?: 0f
                         val barHeight = normalizedHeight * plotHeight * barProgress
                         if (index == selectedIndex) {
@@ -2382,7 +2456,7 @@ private fun CompoundingSimulationSection(
                     years.forEachIndexed { index, point ->
                         point.amount?.let { amount ->
                             val stagger = index * 0.08f
-                            val barProgress = ((annualBarsProgress - stagger) / (1f - stagger)).coerceAtLeast(0f)
+                            val barProgress = ((annualBarsProgress.value - stagger) / (1f - stagger)).coerceAtLeast(0f)
                             val normalized = (amount / maxValue).toFloat().coerceIn(0f, 1f) * barProgress
                             val roundedTenThousands = kotlin.math.round(amount / 1_000.0) / 10.0
                             Text(
@@ -2417,7 +2491,7 @@ private fun CompoundingSimulationSection(
                             val previousAmount = comparisonYears.getOrNull(index)?.amount
                             val yearChange = if (point.amount != null && previousAmount != null) point.amount - previousAmount else null
                             val isSelected = index == selectedIndex
-                            Card(Modifier.weight(1f).clickable { selectedYearIndex = index }, shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = if (isSelected) SurfaceContainerHigh else BackgroundDark), border = BorderStroke(1.dp, if (isSelected) PrimaryEmerald else Color.Transparent)) {
+                            Card(Modifier.weight(1f).clickable { selectedYearIndex = index }, shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = if (isSelected) SurfaceContainerHigh else BackgroundDark), border = BorderStroke(0.5.dp, BorderBlue)) {
                                 Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(stringResource(R.string.annual_dividend_1_s , point.year), color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                     Text(
@@ -2456,7 +2530,7 @@ private fun CompoundingSimulationSection(
                     }
                 }
                 AdaptiveRow(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh)) {
+                    Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh), border = BorderStroke(0.5.dp, BorderBlue)) {
                         Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
@@ -2472,7 +2546,7 @@ private fun CompoundingSimulationSection(
                             Text(stringResource(R.string.annual_dividend_text_36, firstPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, it.toString()) } ?: resources.getString(R.string.annual_dividend_label_20), latestPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, it.toString()) } ?: resources.getString(R.string.annual_dividend_label_21)), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
                     }
-                    Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh)) {
+                    Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh), border = BorderStroke(0.5.dp, BorderBlue)) {
                         Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.AutoMirrored.Filled.ShowChart, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))

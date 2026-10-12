@@ -58,7 +58,8 @@ class NotificationDeliveryEngine(
         deliveryMutex.withLock {
             val settings = store.settings()
             if (!settings.enabled(kind) || !canPost(kind)) return@withLock
-            val nowMillis = now().toInstant().toEpochMilli()
+            val currentTime = now()
+            val nowMillis = currentTime.toInstant().toEpochMilli()
             when (kind) {
                 NotificationKind.PRICE -> {
                     val initialStocks = portfolio.loadWatchlist().orEmpty()
@@ -73,10 +74,16 @@ class NotificationDeliveryEngine(
                     val prices = fetchPrices()
                     val stocks = portfolio.loadWatchlist().orEmpty()
                     val holdings = portfolio.loadHoldings().orEmpty()
-                    val plan = NotificationPolicy.priceAlerts(stocks, holdings, prices, store.priceStates())
+                    val previousStates = store.priceStates()
+                    val plan = NotificationPolicy.priceAlerts(stocks, holdings, prices, previousStates, currentTime.toLocalDate())
                     if (store.settings() != settings || !canPost(kind)) return@withLock
                     store.ifCurrent(settings) {
-                        store.savePriceStates(plan.states)
+                        val hitCodes = plan.hits.mapTo(mutableSetOf()) { PortfolioMath.normalizeCode(it.stock.code) }
+                        val statesToPersist = plan.states.toMutableMap()
+                        hitCodes.forEach { code ->
+                            previousStates[code]?.let { statesToPersist[code] = it } ?: statesToPersist.remove(code)
+                        }
+                        store.savePriceStates(statesToPersist)
                         val enabledCodes = stocks.filter { it.alertEnabled }
                             .map { PortfolioMath.normalizeCode(it.code) }.toSet()
                         val cancelled = store.pendingPriceAlerts().filter { pending ->
@@ -98,7 +105,7 @@ class NotificationDeliveryEngine(
                         })
                     }
                     if (store.settings() == settings && canPost(kind)) {
-                        deliverPendingPriceAlerts(settings, nowMillis)
+                        deliverPendingPriceAlerts(settings, nowMillis, plan.states)
                     }
                 }
                 NotificationKind.DIVIDEND -> deliverPendingDividendRights(settings, nowMillis)
@@ -107,7 +114,11 @@ class NotificationDeliveryEngine(
         }
     }
 
-    private fun deliverPendingPriceAlerts(settings: NotificationSettings, nowMillis: Long) {
+    private fun deliverPendingPriceAlerts(
+        settings: NotificationSettings,
+        nowMillis: Long,
+        currentStates: Map<String, PriceAlertState>
+    ) {
         val pending = store.pendingPriceAlerts(nowMillis)
         if (pending.isEmpty()) return
         val details = pending.take(5).joinToString("\n") { event ->
@@ -116,6 +127,17 @@ class NotificationDeliveryEngine(
         } + if (pending.size > 5) "\nほか${pending.size - 5}銘柄" else ""
         store.ifCurrent(settings) {
             if (canPost(NotificationKind.PRICE) && post(NotificationKind.PRICE, "${pending.size}銘柄が目標利回りに到達", details)) {
+                val notifiedDate = java.time.Instant.ofEpochMilli(nowMillis)
+                    .atZone(NotificationPolicy.japanZone)
+                    .toLocalDate()
+                    .toString()
+                val states = store.priceStates().toMutableMap()
+                pending.forEach { event ->
+                    val code = PortfolioMath.normalizeCode(event.code)
+                    val state = currentStates[code] ?: states[code]
+                    if (state != null) states[code] = state.copy(notifiedDate = notifiedDate)
+                }
+                store.savePriceStates(states)
                 store.removePendingPriceAlerts(pending)
             }
         }

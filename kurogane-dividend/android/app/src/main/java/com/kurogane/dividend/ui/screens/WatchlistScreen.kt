@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +44,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -300,6 +302,20 @@ private fun sortWatchlist(
     if (direction == "desc") -comparison else comparison
 }
 
+private fun applyWatchlistOrder(
+    stocks: List<WatchlistStock>,
+    orderCodes: List<String>?
+): List<WatchlistStock> {
+    if (orderCodes == null) return stocks
+
+    val stocksByCode = stocks.associateBy { it.code }
+    val orderedCodeSet = orderCodes.toHashSet()
+    return buildList(stocks.size) {
+        orderCodes.forEach { code -> stocksByCode[code]?.let(::add) }
+        stocks.forEach { stock -> if (stock.code !in orderedCodeSet) add(stock) }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun WatchlistScreen(
@@ -409,11 +425,11 @@ fun WatchlistScreen(
     var showProjectionInfo by remember { mutableStateOf(false) }
     var showSortBottomSheet by remember { mutableStateOf(false) }
     var showSortInfo by remember { mutableStateOf(false) }
-    var sortCriteria by remember { mutableStateOf("ach") } // "ach", "yield", "price", "code"
-    var sortDirection by remember { mutableStateOf("desc") } // "asc", "desc"
+    var sortCriteria by rememberSaveable(viewModel) { mutableStateOf("ach") } // "ach", "yield", "price", "code"
+    var sortDirection by rememberSaveable(viewModel) { mutableStateOf("desc") } // "asc", "desc"
     var draftSortCriteria by remember { mutableStateOf("ach") }
     var draftSortDirection by remember { mutableStateOf("desc") }
-    var appliedOrderCodes by remember { mutableStateOf<List<String>?>(null) }
+    var appliedOrderCodes by rememberSaveable(viewModel) { mutableStateOf<List<String>?>(null) }
     var searchQuery by remember { mutableStateOf("") }
 
     // Bottom Sheet States for ex-dividend matrix and payout calendar
@@ -466,41 +482,30 @@ fun WatchlistScreen(
     }
 
     val appliedCodes = appliedOrderCodes
+    val immediateFilteredStocks = remember(watchlist, searchQuery, filterState, watchlistMetrics) {
+        filterWatchlistStocks(
+            stocks = watchlist,
+            query = searchQuery,
+            filter = filterState,
+            currentYields = watchlistMetrics.currentYields
+        )
+    }
+    val immediateSortedStocks = remember(immediateFilteredStocks, appliedCodes) {
+        applyWatchlistOrder(immediateFilteredStocks, appliedCodes)
+    }
     var watchlistListSnapshot by remember(viewModel) { mutableStateOf<WatchlistListSnapshot?>(null) }
     LaunchedEffect(watchlist, searchQuery, filterState, appliedCodes, sortCriteria, sortDirection, watchlistMetrics) {
         val sourceStocks = watchlist
         val sourceMetrics = watchlistMetrics
+        val sourceFilteredStocks = immediateFilteredStocks
         val query = searchQuery
         val filter = filterState
         val orderCodes = appliedCodes
         val criteria = sortCriteria
         val direction = sortDirection
         val prepared = withContext(Dispatchers.Default) {
-            val filtered = sourceStocks.filter { stock ->
-                val currentYield = sourceMetrics.currentYields[stock.code]
-                    ?: com.kurogane.dividend.model.PortfolioMath.yieldPercent(stock.dps, stock.price)
-                val queryMatch = query.isEmpty() ||
-                    stock.code.contains(query, ignoreCase = true) ||
-                    stock.name.contains(query, ignoreCase = true) ||
-                    stock.sector.contains(query, ignoreCase = true)
-                val categoryMatches = when (filter) {
-                    "jp" -> stock.category == "jp"
-                    "us" -> stock.category == "us"
-                    "ready" -> currentYield >= stock.targetYield
-                    else -> true
-                }
-                categoryMatches && queryMatch
-            }
-            val sorted = if (orderCodes == null) {
-                filtered
-            } else {
-                val visibleByCode = filtered.associateBy { it.code }
-                buildList {
-                    orderCodes.forEach { code -> visibleByCode[code]?.let(::add) }
-                    val placedCodes = orderCodes.toHashSet()
-                    filtered.forEach { stock -> if (stock.code !in placedCodes) add(stock) }
-                }
-            }
+            val filtered = sourceFilteredStocks
+            val sorted = applyWatchlistOrder(filtered, orderCodes)
             WatchlistListSnapshot(
                 sourceStocks = sourceStocks,
                 searchQuery = query,
@@ -518,8 +523,8 @@ fun WatchlistScreen(
     val currentListSnapshot = watchlistListSnapshot?.takeIf {
         it.matches(watchlist, searchQuery, filterState, appliedCodes, sortCriteria, sortDirection, watchlistMetrics)
     }
-    val filteredList = currentListSnapshot?.filteredStocks ?: watchlist
-    val sortedList = currentListSnapshot?.sortedStocks ?: watchlist
+    val filteredList = currentListSnapshot?.filteredStocks ?: immediateFilteredStocks
+    val sortedList = currentListSnapshot?.sortedStocks ?: immediateSortedStocks
     val activeWatchlistStocks = remember(sortedList, exitingWatchlistStocks) {
         sortedList.filterNot { stock -> exitingWatchlistStocks.any { it.code == stock.code } }
     }
@@ -639,7 +644,8 @@ fun WatchlistScreen(
                         ) {
                             Surface(
                                 shape = CircleShape,
-                                color = SurfaceContainerHigh
+                                color = SurfaceContainerHigh,
+                                border = BorderStroke(0.5.dp, BorderBlue)
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -670,6 +676,7 @@ fun WatchlistScreen(
                                 modifier = Modifier
                                     .clip(CircleShape)
                                     .background(BackgroundDark)
+                                    .border(0.5.dp, BorderBlue, CircleShape)
                                     .padding(horizontal = 8.dp, vertical = 2.dp)
                             ) {
                                 Text(stringResource(R.string.watchlist_text_3), fontSize = AppTextSize.dense, color = OnSurfaceVariant)
@@ -714,6 +721,7 @@ fun WatchlistScreen(
                                     .fillMaxHeight()
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(BackgroundDark.copy(alpha = 0.7f))
+                                    .border(0.5.dp, BorderBlue, RoundedCornerShape(12.dp))
                                     .padding(10.dp)
                             ) {
                                 Column {
@@ -738,6 +746,7 @@ fun WatchlistScreen(
                                     .fillMaxHeight()
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(BackgroundDark.copy(alpha = 0.7f))
+                                    .border(0.5.dp, BorderBlue, RoundedCornerShape(12.dp))
                                     .padding(10.dp)
                             ) {
                                 Column {
@@ -1099,6 +1108,7 @@ fun WatchlistScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .testTag("watchlist_card_${stock.code}")
                         .animateItemPlacement(animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing))
                 ) {
                 Box(
@@ -1245,11 +1255,7 @@ fun WatchlistScreen(
                                 disabledContentColor = OnSurfaceVariant
                             ),
                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                            border = if (stock.alertEnabled) {
-                                BorderStroke(2.dp, PrimaryEmerald.copy(alpha = 0.7f))
-                            } else {
-                                BorderStroke(1.dp, BorderColor)
-                            }
+                            border = BorderStroke(0.5.dp, BorderBlue)
                         ) {
                             if (stock.alertEnabled) {
                                 Icon(
@@ -1337,6 +1343,7 @@ fun WatchlistScreen(
                         Surface(
                             shape = RoundedCornerShape(10.dp),
                             color = BackgroundDark.copy(alpha = 0.85f),
+                            border = BorderStroke(0.5.dp, BorderBlue),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {

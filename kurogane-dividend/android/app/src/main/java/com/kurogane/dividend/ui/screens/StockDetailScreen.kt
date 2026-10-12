@@ -476,6 +476,7 @@ fun StockDetailScreen(
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
                                 color = SurfaceContainer,
+                                border = BorderStroke(0.5.dp, BorderBlue),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
@@ -487,6 +488,7 @@ fun StockDetailScreen(
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
                                 color = SurfaceContainer,
+                                border = BorderStroke(0.5.dp, BorderBlue),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
@@ -498,6 +500,7 @@ fun StockDetailScreen(
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
                                 color = SurfaceContainer,
+                                border = BorderStroke(0.5.dp, BorderBlue),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
@@ -1851,6 +1854,7 @@ fun StockDetailScreen(
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = BackgroundDark.copy(alpha = 0.8f),
+                            border = BorderStroke(0.5.dp, BorderBlue),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1882,7 +1886,8 @@ fun StockDetailScreen(
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
-                            color = SurfaceContainer
+                            color = SurfaceContainer,
+                            border = BorderStroke(0.5.dp, BorderBlue)
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                                 listOf(
@@ -2290,7 +2295,8 @@ fun StockDetailScreen(
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                                     enabled = newBenefitName.isNotBlank(),
                                     shape = RoundedCornerShape(14.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh, contentColor = PrimaryEmerald)
+                                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh, contentColor = PrimaryEmerald),
+                                    border = BorderStroke(0.5.dp, BorderBlue)
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = null)
                                     Spacer(Modifier.width(6.dp))
@@ -2300,7 +2306,8 @@ fun StockDetailScreen(
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(14.dp),
-                                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLowest)
+                                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLowest),
+                                    border = BorderStroke(0.5.dp, BorderBlue)
                                 ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -2343,7 +2350,8 @@ fun StockDetailScreen(
                         onClick = { onOpenAddHolding(currentHolding.code) },
                         modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(0.5.dp, BorderBlue)
                     ) {
                         Icon(
                             imageVector = if (isOwnedHolding) Icons.Default.Edit else Icons.Default.Add,
@@ -2364,7 +2372,8 @@ fun StockDetailScreen(
                         enabled = isOwnedHolding,
                         modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(0.5.dp, BorderBlue)
                     ) {
                         Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp), tint = ErrorRed)
                         Spacer(modifier = Modifier.width(6.dp))

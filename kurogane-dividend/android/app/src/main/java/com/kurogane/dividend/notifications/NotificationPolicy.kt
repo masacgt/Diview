@@ -105,7 +105,7 @@ object NotificationPolicy {
         prices: Map<String, Double>,
         previous: Map<String, PriceAlertState>,
         date: LocalDate
-    ): PriceAlertPlan = priceAlerts(stocks, emptyList(), prices, previous)
+    ): PriceAlertPlan = priceAlerts(stocks, emptyList(), prices, previous, date)
 
     /** Holdings reuse the matching watchlist stock's target yield. */
     fun priceAlerts(
@@ -113,12 +113,21 @@ object NotificationPolicy {
         holdings: List<Holding>,
         prices: Map<String, Double>,
         previous: Map<String, PriceAlertState>
+    ): PriceAlertPlan = priceAlerts(stocks, holdings, prices, previous, LocalDate.now(japanZone))
+
+    fun priceAlerts(
+        stocks: List<WatchlistStock>,
+        holdings: List<Holding>,
+        prices: Map<String, Double>,
+        previous: Map<String, PriceAlertState>,
+        date: LocalDate
     ): PriceAlertPlan {
         val hits = mutableListOf<PriceAlertHit>()
         val next = mutableMapOf<String, PriceAlertState>()
         val normalizedPrices = prices.entries.associate { PortfolioMath.normalizeCode(it.key) to it.value }
         val heldByCode = holdings.asSequence().filter { it.shares > 0 }
             .associateBy { PortfolioMath.normalizeCode(it.code) }
+        val currentDate = date.toString()
         stocks.distinctBy { PortfolioMath.normalizeCode(it.code) }.forEach { configuredStock ->
             val code = PortfolioMath.normalizeCode(configuredStock.code)
             val holding = heldByCode[code]?.takeIf { holding ->
@@ -143,7 +152,12 @@ object NotificationPolicy {
             val signature = "${stock.targetYield}:${stock.dps}"
             val yield = PortfolioMath.yieldPercent(stock.dps, price)
             val ready = yield >= stock.targetYield
-            if (ready && (old?.ready != true || old.signature != signature)) {
+            val newlyReady = ready && (old?.ready != true || old.signature != signature)
+            if (newlyReady && old?.notifiedDate == currentDate) {
+                next[code] = old
+                return@forEach
+            }
+            if (newlyReady) {
                 hits += PriceAlertHit(stock, price, yield, held = holding != null)
             }
             next[code] = PriceAlertState(signature, ready, old?.notifiedDate)
