@@ -20,6 +20,7 @@ import com.kurogane.dividend.data.CloudflareUpcomingDividendEvent
 import com.kurogane.dividend.data.CloudflareSecurity
 import com.kurogane.dividend.data.CloudflareStockAnalysis
 import com.kurogane.dividend.data.CloudflareSearchHit
+import com.kurogane.dividend.data.CloudflareSearchQuote
 import com.kurogane.dividend.data.CloudflareMonthlyPriceSeries
 import com.kurogane.dividend.data.PriceRefreshPolicy
 import com.kurogane.dividend.data.Tse33IndustryMaster
@@ -100,6 +101,13 @@ data class AssetManagementUpcomingDividend(
     val shares: Int = 0,
     val amount: Long = 0L
 )
+
+private data class SearchDividendCacheEntry(
+    val annualDividendPerShare: Double?,
+    val loadedAtMillis: Long
+)
+
+private const val SEARCH_DIVIDEND_CACHE_TTL_MILLIS = 10 * 60 * 1000L
 
 class DividendViewModel @JvmOverloads constructor(
     application: Application,
@@ -267,6 +275,9 @@ class DividendViewModel @JvmOverloads constructor(
     private val financialMutex = Mutex()
     private val financialLoading = mutableSetOf<String>()
     private val financialSlots = Semaphore(4)
+    private val searchDividendCache = java.util.concurrent.ConcurrentHashMap<String, SearchDividendCacheEntry>()
+    private val searchDividendLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
+    private val searchDividendSlots = Semaphore(4)
     private val dataGeneration = java.util.concurrent.atomic.AtomicLong(0L)
 
     fun japaneseDisplayName(code: String, fallback: String): String =
@@ -1511,21 +1522,61 @@ class DividendViewModel @JvmOverloads constructor(
     suspend fun searchCloudflareSecurities(query: String): List<CloudflareSearchHit> {
         val hits = marketRepository.searchSecurities(query)
         val cachedPrices = readCachedPrices()
-        val cachedDividends = readCachedDividendsPerShare()
         val industries = withContext(Dispatchers.IO) { runCatching { Tse33IndustryMaster.industries(getApplication()) }.getOrDefault(emptyMap()) }
+        val dividendsByCode = coroutineScope {
+            hits.map { hit ->
+                async { hit.code.uppercase(java.util.Locale.ROOT) to searchDividendPerShare(hit.code) }
+            }.awaitAll().toMap()
+        }
         return hits.map { hit ->
             val normalizedCode = hit.code.uppercase(java.util.Locale.ROOT)
             hit.copy(
                 name = japaneseDisplayName(hit.code, hit.name),
                 cachedPrice = hit.cachedPrice ?: cachedPrices[normalizedCode],
-                annualDividendPerShare = cachedDividends[normalizedCode],
+                annualDividendPerShare = dividendsByCode[normalizedCode],
                 industry = industries[hit.code.take(4).uppercase(java.util.Locale.ROOT)]
             )
         }
     }
 
-    suspend fun loadCloudflareSearchQuotes(codes: List<String>) =
-        marketRepository.fetchSearchQuotes(codes)
+    suspend fun loadCloudflareSearchQuotes(codes: List<String>): Map<String, CloudflareSearchQuote> = coroutineScope {
+        marketRepository.fetchSearchQuotes(codes).map { (code, quote) ->
+            async { code to quote.copy(annualDividendPerShare = searchDividendPerShare(code)) }
+        }.awaitAll().toMap()
+    }
+
+    private suspend fun searchDividendPerShare(code: String): Double? {
+        val normalizedCode = PortfolioMath.normalizeCode(code).removeSuffix(".T")
+            .uppercase(java.util.Locale.ROOT)
+        _financialData.value[normalizedCode]?.dividends?.lastOrNull()?.dps
+            ?.takeIf { it.isFinite() && it >= 0.0 }
+            ?.let { return it }
+
+        val now = System.currentTimeMillis()
+        searchDividendCache[normalizedCode]
+            ?.takeIf { now - it.loadedAtMillis < SEARCH_DIVIDEND_CACHE_TTL_MILLIS }
+            ?.let { return it.annualDividendPerShare }
+
+        val lock = searchDividendLocks.computeIfAbsent(normalizedCode) { Mutex() }
+        return lock.withLock {
+            _financialData.value[normalizedCode]?.dividends?.lastOrNull()?.dps
+                ?.takeIf { it.isFinite() && it >= 0.0 }
+                ?.let { return@withLock it }
+
+            val loadedAt = System.currentTimeMillis()
+            searchDividendCache[normalizedCode]
+                ?.takeIf { loadedAt - it.loadedAtMillis < SEARCH_DIVIDEND_CACHE_TTL_MILLIS }
+                ?.let { return@withLock it.annualDividendPerShare }
+
+            val annualDividendPerShare = searchDividendSlots.withPermit {
+                runCatchingCancellable { marketRepository.getSecurity(normalizedCode)?.annualDividendPerShare }
+                    .getOrNull()
+                    ?.takeIf { it.isFinite() && it >= 0.0 }
+            }
+            searchDividendCache[normalizedCode] = SearchDividendCacheEntry(annualDividendPerShare, loadedAt)
+            annualDividendPerShare
+        }
+    }
 
     suspend fun registerCloudflareHolding(
         code: String,

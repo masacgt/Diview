@@ -24,7 +24,11 @@ data class CloudflareSearchHit(
     val marketYieldRate: Double? = null
 )
 
-data class CloudflareSearchQuote(val price: Double?, val yieldRate: Double?)
+data class CloudflareSearchQuote(
+    val price: Double?,
+    val yieldRate: Double?,
+    val annualDividendPerShare: Double? = null
+)
 
 data class CloudflareSecurity(
     val code: String,
