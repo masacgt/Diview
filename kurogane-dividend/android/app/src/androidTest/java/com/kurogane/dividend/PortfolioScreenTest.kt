@@ -104,7 +104,14 @@ class PortfolioScreenTest {
         var requests = 0
         val pending = CompletableDeferred<Boolean>()
         compose.setContent { KuroganeDividendTheme {
-            AddHoldingSheet(true, "8316", {}, onResolveSecurity = { null }, onRegisterCollective = { _, _ -> requests++; pending.await() })
+            AddHoldingSheet(
+                true,
+                "8316",
+                {},
+                onSearchSecurities = { emptyList() },
+                onResolveSecurity = { null },
+                onRegisterCollective = { _, _, _ -> requests++; pending.await() }
+            )
         } }
         compose.onNodeWithText("すべての口座にまとめて登録する").performScrollTo().performClick()
         compose.onNodeWithText("銘柄情報を確認中…").assertIsDisplayed()
