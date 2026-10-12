@@ -13,3 +13,27 @@
 - Keep app source, scripts, documentation, and required bundled data in Git.
 - Do not commit local environment files, signing credentials, Gradle caches, IDE state, or generated build outputs/APKs.
 - Refresh the bundled TSE 33-industry mapping with `python scripts/sync_tse33_industry_master.py` from `kurogane-dividend/` and review the data changes before committing.
+
+## AI-maintained project notes
+
+- Keep project-level notes in `ai_docs/` at the repository root. Create the directory and files when needed; preserve useful existing content when updating them.
+- `ai_docs/todo.md` tracks active work, completed work, and next steps. Mark an item complete (`[x]`) only after its implementation runs/builds successfully, relevant existing behavior has been checked for regressions, and the stated requirements are met. Add one concise evidence sentence beside each completed item describing the files or checks that support completion. If any relevant case remains unverified or uncertain, leave the item open and add a separate `[ ]` follow-up for that verification.
+- `ai_docs/architecture.md` records the current technology stack, source and directory layout, data/storage design, and important project rules. Update it when those facts or rules change; do not speculate about unverified behavior.
+- `ai_docs/trouble.md` records significant errors, bugs, environment setup pitfalls, and their confirmed resolutions. Add an entry when it is likely to prevent the same investigation from recurring.
+- Update the relevant note when code or documentation changes materially affect it, or when a task reaches a meaningful milestone. Keep notes concise and factual; do not create routine entries that add no lasting project information.
+
+## Safe changes and reporting
+
+- Preserve existing behavior, configuration, and unrelated working-tree changes. Before editing, inspect the relevant files and current changes; after editing, report the changed files and summarize the diff. Do not stage, commit, or revert unrelated work.
+- Do not make unrequested product, behavior, or design changes based on personal preference. Follow the user's explicit requirements and existing project rules; raise a concrete proposal when a genuine ambiguity or conflict prevents a safe implementation.
+- If the same error remains unresolved after three consecutive focused attempts, or an implementation decision cannot be resolved from the requirements and current code, pause that dependent work and report the observed state and viable options with trade-offs. Continue independent work where possible.
+- For ambiguous requests, identify the plausible interpretations and ask a concise clarifying question before taking an irreversible or materially different path. When the ambiguity does not prevent safe progress, proceed on the narrowest reasonable interpretation and state the assumption.
+
+## Build, device, and publication guidance
+
+- For Diview Android build, install, or emulator instructions, explicitly select JDK 17 (for example, set `JAVA_HOME` to the configured JDK 17 installation before invoking Gradle or `adb`). Use `kurogane-dividend/android/` as the Android build root.
+- Run builds, device installs, emulator checks, deployments, or other external side effects when they are requested or clearly necessary and the required target and access are available. Do not claim that a change was installed, deployed, or verified unless that action actually succeeded.
+- When the user asks for publication or a push is otherwise explicitly authorized, provide or perform the appropriate commit and push steps with a change-specific commit message. Inspect the branch, remote, and diff first; stage only the intended files. Do not push automatically merely because a local edit was made.
+- After a code change, provide the relevant build and device-install commands when applicable. For Android, include JDK 17 selection and the correct project paths; tailor the device command to the available device and build variant. Clearly label commands that require the user to choose a device, credentials, or deployment target.
+- Do not treat documentation-only changes as requiring an Android build or device install. For documentation changes, report the diff and provide publication steps only when requested or authorized.
+- Group related, ready-to-run commands in one code block when practical. Never present a commit or push command that could accidentally include unrelated modifications.
