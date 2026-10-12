@@ -498,6 +498,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 AnnualDividendScreen(
                                     viewModel = viewModel,
                                     scrollToTopRequest = scrollToTopRequests["annual"] ?: 0,
+                                    isTabSelected = currentRoute == "annual",
                                     onNavigateToDetail = { code -> navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true } }
                                 )
                             }
