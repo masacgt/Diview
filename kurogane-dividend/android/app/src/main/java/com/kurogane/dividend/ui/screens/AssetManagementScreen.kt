@@ -2,6 +2,8 @@ package com.kurogane.dividend.ui.screens
 
 import com.kurogane.dividend.ui.components.AdaptiveRow
 import com.kurogane.dividend.ui.components.DiviewSnackbarHost
+import com.kurogane.dividend.ui.components.DiviewSnackbarTone
+import com.kurogane.dividend.ui.components.showDiviewSnackbar
 import androidx.compose.ui.res.stringResource
 import com.kurogane.dividend.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -316,11 +318,12 @@ fun AssetManagementScreen(
     }
 
     suspend fun showDeletionSnackbar(holding: Holding) {
-        val result = snackbarHostState.showSnackbar(
+        val result = snackbarHostState.showDiviewSnackbar(
             message = "${viewModel.japaneseDisplayName(holding.code, holding.name)}を保有銘柄から削除しました",
             actionLabel = "元に戻す",
             withDismissAction = true,
-            duration = SnackbarDuration.Short
+            duration = SnackbarDuration.Short,
+            tone = DiviewSnackbarTone.Success
         )
         if (result == SnackbarResult.ActionPerformed) restoreHoldingWithAnimation(holding)
     }
@@ -442,9 +445,9 @@ fun AssetManagementScreen(
                 }
                 val badgeColor = when {
                     avgYield >= 4.0 -> SecondaryIndigo
-                    avgYield >= 3.0 -> NeonGreen
-                    avgYield >= 2.0 -> if (BackgroundDark == LightAppPalette.background) Color(0xFF1D4ED8) else Color(0xFF60A5FA)
-                    avgYield >= 0.5 -> AccentAmber
+                    avgYield >= 3.0 -> StatusSuccess
+                    avgYield >= 2.0 -> ChartBlue
+                    avgYield >= 0.5 -> StatusWarning
                     else -> SoftGray
                 }
                 Card(
@@ -473,18 +476,18 @@ fun AssetManagementScreen(
                             Box(
                                 modifier = Modifier
                                     .clip(CircleShape)
-                                    .background(Color(0x1F10B981))
-                                    .border(0.5.dp, Color(0x3310B981), CircleShape)
+                                    .background((if (totalGainVal >= 0) StatusSuccess else ErrorRed).copy(alpha = 0.12f))
+                                    .border(0.5.dp, (if (totalGainVal >= 0) StatusSuccess else ErrorRed).copy(alpha = 0.45f), CircleShape)
                                     .padding(horizontal = 8.dp, vertical = 4.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.AutoMirrored.Filled.TrendingUp, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(12.dp))
+                                    Icon(Icons.AutoMirrored.Filled.TrendingUp, contentDescription = null, tint = if (totalGainVal >= 0) StatusSuccess else ErrorRed, modifier = Modifier.size(12.dp))
                                     Spacer(modifier = Modifier.width(3.dp))
                                     val gainText = if (isPrivacyActive) "+¥••••••" else {
                                         val sign = if (totalGainVal >= 0) "+" else ""
                                         "$sign¥${javaCurrencyFormat.format(totalGainVal.toLong())} ($sign${String.format(java.util.Locale.JAPAN, "%.1f", gainPctVal)}%)"
                                     }
-                                    Text(gainText, fontSize = AppTextSize.dense, fontWeight = FontWeight.ExtraBold, color = if (totalGainVal >= 0) NeonGreen else ErrorRed)
+                                    Text(gainText, fontSize = AppTextSize.dense, fontWeight = FontWeight.ExtraBold, color = if (totalGainVal >= 0) StatusSuccess else ErrorRed)
                                 }
                             }
                         }
@@ -655,7 +658,7 @@ fun AssetManagementScreen(
                                 } else resources.getString(R.string.asset_management_label_14),
                                 fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold,
-                                color = if (shortage > 0) ErrorRed else NeonGreen
+                                color = if (shortage > 0) ErrorRed else StatusSuccess
                             )
                         }
                     }
@@ -746,8 +749,8 @@ fun AssetManagementScreen(
                         .padding(vertical = 4.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NeonGreen.copy(alpha = 0.5f),
-                        unfocusedBorderColor = BorderBlue,
+                        focusedBorderColor = FocusRingColor,
+                        unfocusedBorderColor = ControlOutline,
                         focusedContainerColor = CardDark,
                         unfocusedContainerColor = CardDark,
                         focusedTextColor = OnSurface,
@@ -1044,7 +1047,7 @@ fun AssetManagementScreen(
                                     Text(
                                         stringResource(R.string.asset_management_1_s_2_s_3_s_4_s , sign, javaCurrencyFormat.format(diff.toLong()), sign, String.format(java.util.Locale.JAPAN, "%.1f", diffPct)),
                                         fontWeight = FontWeight.Bold,
-                                        color = if (diff >= 0) NeonGreenLight else ErrorRed,
+                                        color = if (diff >= 0) StatusSuccess else ErrorRed,
                                         fontSize = AppTextSize.dense,
                                         fontFamily = FontFamily.Monospace
                                     )
@@ -1130,7 +1133,7 @@ fun AssetManagementScreen(
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text(stringResource(R.string.asset_management_text_10, selectedMonth.toString()), color = SoftGray, fontSize = AppTextSize.dense)
                                         }
-                                        Text(holding.nextPayoutAmount, color = NeonGreenLight, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                        Text(holding.nextPayoutAmount, color = NeonGreenLight, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
                                     }
                                 }
                             }
@@ -1175,7 +1178,7 @@ fun AssetManagementScreen(
                             }
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(stringResource(R.string.add_holding_1_s , javaCurrencyFormat.format(upcomingDividend.amount)), fontWeight = FontWeight.Bold, color = NeonGreenLight, fontSize = AppTextSize.body, fontFamily = FontFamily.Monospace)
+                            Text(stringResource(R.string.add_holding_1_s , javaCurrencyFormat.format(upcomingDividend.amount)), fontWeight = FontWeight.Bold, color = NeonGreenLight, fontSize = AppTextSize.body, fontFamily = AppNumericFontFamily)
                             Text(stringResource(R.string.asset_management_text_12 , upcomingDividend.dividendType ?: resources.getString(R.string.asset_management_label_19), upcomingDividend.shares), color = SoftGray, fontSize = AppTextSize.dense)
                         }
                     }
@@ -1431,8 +1434,8 @@ fun AssetManagementScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NeonGreen,
-                            unfocusedBorderColor = BorderBlue,
+                            focusedBorderColor = FocusRingColor,
+                            unfocusedBorderColor = ControlOutline,
                             focusedLabelColor = NeonGreen,
                             unfocusedLabelColor = SoftGray,
                             focusedTextColor = OnSurface,
@@ -1454,8 +1457,8 @@ fun AssetManagementScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NeonGreen,
-                            unfocusedBorderColor = BorderBlue,
+                            focusedBorderColor = FocusRingColor,
+                            unfocusedBorderColor = ControlOutline,
                             focusedLabelColor = NeonGreen,
                             unfocusedLabelColor = SoftGray,
                             focusedTextColor = OnSurface,
@@ -1477,8 +1480,8 @@ fun AssetManagementScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NeonGreen,
-                            unfocusedBorderColor = BorderBlue,
+                            focusedBorderColor = FocusRingColor,
+                            unfocusedBorderColor = ControlOutline,
                             focusedLabelColor = NeonGreen,
                             unfocusedLabelColor = SoftGray,
                             focusedTextColor = OnSurface,
@@ -1576,13 +1579,13 @@ fun HoldingQuickEditModal(
             ) {
                 Column {
                     Text(stringResource(R.string.asset_management_text_23), color = SoftGray, fontSize = AppTextSize.dense)
-                    Text(stringResource(R.string.add_holding_1_s_2_s_2 , modalCurrency, javaCurrencyFormat.format(currentPrice)), color = OnSurface, fontSize = AppTextSize.screenTitle, fontWeight = FontWeight.ExtraBold, fontFamily = FontFamily.Monospace)
+                    Text(stringResource(R.string.add_holding_1_s_2_s_2 , modalCurrency, javaCurrencyFormat.format(currentPrice)), color = OnSurface, fontSize = AppTextSize.screenTitle, fontWeight = FontWeight.ExtraBold, fontFamily = AppNumericFontFamily)
                 }
                 Surface(shape = CircleShape, color = NeonGreen.copy(alpha = 0.18f)) {
                     Text(
                         stringResource(R.string.asset_management_text_24 , holding.dailyChange),
                         Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                        color = if (holding.isPositive) NeonGreenLight else ErrorRed,
+                        color = if (holding.isPositive) StatusSuccess else ErrorRed,
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
@@ -1625,17 +1628,17 @@ fun HoldingQuickEditModal(
                         onValueChange = { quickEditShares = it.filter(Char::isDigit).ifEmpty { "1" } },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        textStyle = MaterialTheme.typography.titleLarge.copy(color = OnSurface, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center),
+                        textStyle = MaterialTheme.typography.titleLarge.copy(color = OnSurface, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily, textAlign = TextAlign.Center),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         suffix = { Text(stringResource(R.string.asset_management_text_29), color = SoftGray) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NeonGreenLight, unfocusedBorderColor = BorderBlue, focusedContainerColor = BackgroundDark, unfocusedContainerColor = BackgroundDark)
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FocusRingColor, unfocusedBorderColor = ControlOutline, focusedContainerColor = BackgroundDark, unfocusedContainerColor = BackgroundDark)
                     )
                     QuickEditStepButton("＋") { quickEditShares = com.kurogane.dividend.model.PortfolioMath.addShares(shares, 10).toString() }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     listOf("1単元 (100株)" to { quickEditShares = "100" }, "+10" to { quickEditShares = com.kurogane.dividend.model.PortfolioMath.addShares(shares, 10).toString() }, "+100" to { quickEditShares = com.kurogane.dividend.model.PortfolioMath.addShares(shares, 100).toString() }, "+500" to { quickEditShares = com.kurogane.dividend.model.PortfolioMath.addShares(shares, 500).toString() }).forEach { (label, action) ->
                         Surface(Modifier.clickable(onClick = action), shape = RoundedCornerShape(10.dp), color = CardDarkLighter, border = BorderStroke(1.dp, BorderBlue)) {
-                            Text(label, Modifier.padding(horizontal = 10.dp, vertical = 9.dp), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            Text(label, Modifier.padding(horizontal = 10.dp, vertical = 9.dp), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
                         }
                     }
                 }
@@ -1659,10 +1662,10 @@ fun HoldingQuickEditModal(
                         onValueChange = { quickEditAcqPrice = it.filter { ch -> ch.isDigit() || ch == '.' }.ifEmpty { "1" } },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        textStyle = MaterialTheme.typography.titleLarge.copy(color = OnSurface, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center),
+                        textStyle = MaterialTheme.typography.titleLarge.copy(color = OnSurface, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily, textAlign = TextAlign.Center),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         prefix = { Text(modalCurrency, color = SoftGray) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NeonGreenLight, unfocusedBorderColor = BorderBlue, focusedContainerColor = BackgroundDark, unfocusedContainerColor = BackgroundDark)
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FocusRingColor, unfocusedBorderColor = ControlOutline, focusedContainerColor = BackgroundDark, unfocusedContainerColor = BackgroundDark)
                     )
                     QuickEditStepButton("＋") { quickEditAcqPrice = (averagePrice + 10).toString().removeSuffix(".0") }
                 }
@@ -1686,7 +1689,7 @@ fun HoldingQuickEditModal(
                 HorizontalDivider(color = BorderBlue)
                 AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     QuickEditSummary("投資元本", "$modalCurrency${javaCurrencyFormat.format(cost.toLong())}", OnSurface, Modifier.weight(1f))
-                    QuickEditSummary("評価損益", "${if (gain >= 0) "+" else "−"}$modalCurrency${javaCurrencyFormat.format(kotlin.math.abs(gain).toLong())}\n(${String.format(Locale.JAPAN, "%+.1f%%", gainPct)})", if (gain >= 0) NeonGreenLight else ErrorRed, Modifier.weight(1f), Alignment.CenterHorizontally)
+                    QuickEditSummary("評価損益", "${if (gain >= 0) "+" else "−"}$modalCurrency${javaCurrencyFormat.format(kotlin.math.abs(gain).toLong())}\n(${String.format(Locale.JAPAN, "%+.1f%%", gainPct)})", if (gain >= 0) StatusSuccess else ErrorRed, Modifier.weight(1f), Alignment.CenterHorizontally)
                     QuickEditSummary("年間予想配当金", "$modalCurrency${javaCurrencyFormat.format(projectedDividend.toLong())}/年", NeonGreenLight, Modifier.weight(1f), Alignment.End)
                 }
             }
@@ -1697,7 +1700,7 @@ fun HoldingQuickEditModal(
                     modifier = Modifier.weight(0.8f).heightIn(min = 52.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.outlinedButtonColors(containerColor = CardDarkLighter, contentColor = OnSurface),
-                    border = BorderStroke(1.dp, BorderBlue)
+                    border = BorderStroke(1.dp, ControlOutline)
                 ) { Text(stringResource(R.string.cancel), fontWeight = FontWeight.Bold) }
                 Button(
                     onClick = {
@@ -1723,7 +1726,7 @@ private fun QuickEditStepButton(label: String, enabled: Boolean = true, onClick:
         modifier = Modifier.size(50.dp).clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(14.dp),
         color = CardDarkLighter,
-        border = BorderStroke(1.dp, BorderBlue)
+        border = BorderStroke(1.dp, ControlOutline)
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(label, color = if (enabled) OnSurface else SoftGray, fontSize = AppTextSize.metric, fontWeight = FontWeight.Bold)
@@ -1735,7 +1738,7 @@ private fun QuickEditStepButton(label: String, enabled: Boolean = true, onClick:
 private fun QuickEditSummary(label: String, value: String, valueColor: Color, modifier: Modifier, alignment: Alignment.Horizontal = Alignment.Start) {
     Column(modifier, horizontalAlignment = alignment, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, color = SoftGray, fontSize = AppTextSize.dense, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
-        Text(value, color = valueColor, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = 2)
+        Text(value, color = valueColor, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily, maxLines = 2)
     }
 }
 

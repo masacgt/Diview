@@ -125,11 +125,9 @@ fun SettingsScreen(
             }
         }
     }
-    val accents = listOf(
-        "emerald" to Color(0xFF10B981), "cyan" to Color(0xFF06B6D4),
-        "blue" to Color(0xFF3B82F6), "amber" to AccentAmber,
-        "purple" to Color(0xFF8B5CF6)
-    )
+    val accents = listOf("emerald", "cyan", "blue", "amber", "purple").map { accent ->
+        accent to accentColorForMode(accent, oledBlackAvailable)
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(BackgroundDark),

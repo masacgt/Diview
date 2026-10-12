@@ -297,7 +297,7 @@ internal fun RoadmapAllocationSheet(viewModel: DividendViewModel, onDismiss: () 
                             Column(horizontalAlignment = Alignment.End) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
-                                    color = Color(0x1F10B981)
+                                    color = PrimaryEmerald.copy(alpha = 0.12f)
                                 ) {
                                     Text(
                                         stringResource(if (selectedHolding == null) R.string.roadmap_security_unselected else R.string.roadmap_security_selected),
@@ -330,7 +330,7 @@ internal fun RoadmapAllocationSheet(viewModel: DividendViewModel, onDismiss: () 
                                 color = OnSurface,
                                 fontSize = AppTextSize.caption,
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = AppNumericFontFamily
                             )
                             Text(
                                 stringResource(R.string.roadmap_text_38) + String.format(java.util.Locale.JAPAN, "%.2f%%", activeStockYield),
@@ -533,7 +533,7 @@ private fun AccountMatrixCard(
                     Spacer(modifier = Modifier.width(4.dp))
                     Surface(
                         shape = RoundedCornerShape(4.dp),
-                        color = if (isTaxFree) PrimaryEmerald.copy(alpha = 0.15f) else Color(0x1F94A3B8)
+                        color = if (isTaxFree) PrimaryEmerald.copy(alpha = 0.15f) else OnSurfaceVariant.copy(alpha = 0.12f)
                     ) {
                         Text(
                             text = if (isTaxFree) (if (usTax) resources.getString(R.string.roadmap_label_7) else resources.getString(R.string.roadmap_label_8)) else (if (usTax) resources.getString(R.string.roadmap_label_9) else resources.getString(R.string.roadmap_label_10)),
@@ -599,7 +599,7 @@ private fun AccountMatrixCard(
                                 .padding(horizontal = 1.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(stringResource(R.string.add_holding_text_13), color = OnSurface, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text(stringResource(R.string.add_holding_text_13), color = OnSurface, fontSize = AppTextSize.compact, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
                         Box(
                             modifier = Modifier
@@ -611,7 +611,7 @@ private fun AccountMatrixCard(
                                 .padding(horizontal = 1.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(stringResource(R.string.add_holding_text_14), color = OnSurface, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text(stringResource(R.string.add_holding_text_14), color = OnSurface, fontSize = AppTextSize.compact, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
                     }
                 }

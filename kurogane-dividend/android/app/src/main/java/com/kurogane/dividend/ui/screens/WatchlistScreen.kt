@@ -2,6 +2,8 @@ package com.kurogane.dividend.ui.screens
 
 import com.kurogane.dividend.ui.components.AdaptiveRow
 import com.kurogane.dividend.ui.components.DiviewSnackbarHost
+import com.kurogane.dividend.ui.components.DiviewSnackbarTone
+import com.kurogane.dividend.ui.components.showDiviewSnackbar
 import androidx.compose.ui.res.stringResource
 import com.kurogane.dividend.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -351,7 +353,7 @@ fun WatchlistScreen(
         alertSnackbarJob?.cancel()
         snackbarHostState.currentSnackbarData?.dismiss()
         alertSnackbarJob = screenScope.launch {
-            snackbarHostState.showSnackbar(message)
+            snackbarHostState.showDiviewSnackbar(message, tone = DiviewSnackbarTone.Success)
         }
     }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -565,11 +567,12 @@ fun WatchlistScreen(
         }
         screenScope.launch {
             kotlinx.coroutines.delay(900)
-            val result = snackbarHostState.showSnackbar(
+            val result = snackbarHostState.showDiviewSnackbar(
                 message = "${removed.name}をWatchlistから削除しました",
                 actionLabel = "元に戻す",
                 withDismissAction = true,
-                duration = SnackbarDuration.Short
+                duration = SnackbarDuration.Short,
+                tone = DiviewSnackbarTone.Success
             )
             if (result == SnackbarResult.ActionPerformed && viewModel.restoreWatchlistStock(removed)) {
                 appliedOrderCodes?.let { currentOrder ->
@@ -1054,8 +1057,8 @@ fun WatchlistScreen(
                         .padding(bottom = 6.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrimaryEmerald.copy(alpha = 0.5f),
-                        unfocusedBorderColor = BorderBlue,
+                        focusedBorderColor = FocusRingColor,
+                        unfocusedBorderColor = ControlOutline,
                         focusedContainerColor = SurfaceContainerLow,
                         unfocusedContainerColor = SurfaceContainerLow,
                         focusedTextColor = OnSurface,
@@ -1092,11 +1095,11 @@ fun WatchlistScreen(
                 val dynamicBadge = badgeTextFor(stock)
 
                 val badgeColor = if (isReached) {
-                    PrimaryEmerald
+                    StatusSuccess
                 } else if (isClose) {
-                    AccentAmber // Amber
+                    StatusWarning
                 } else if (currentYield >= 4.0) {
-                    Color(0xFF8B5CF6) // Purple
+                    ChartPurple
                 } else {
                     OnSurfaceVariant // Slate
                 }
@@ -1331,7 +1334,7 @@ fun WatchlistScreen(
                                 Text(
                                     stock.dailyChange,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (stock.isPositive) PrimaryEmerald else ErrorRed,
+                                    color = if (stock.isPositive) StatusSuccess else ErrorRed,
                                     fontSize = AppTextSize.dense,
                                     maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1
                                 )
@@ -2297,7 +2300,7 @@ fun WatchlistScreen(
                                 Text(stringResource(R.string.watchlist_text_67), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(SecondaryIndigo))
                                 Text(stringResource(R.string.watchlist_text_68), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF475569)))
+                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(ChartNeutral))
                                 Text(stringResource(R.string.watchlist_text_69), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                             }
                         }
@@ -2537,7 +2540,7 @@ fun WatchlistScreen(
                             }
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
-                                color = Color(0x1FF59E0B)
+                                color = StatusWarning.copy(alpha = 0.12f)
                             ) {
                                 Text(
                                     stringResource(R.string.watchlist_text_73),

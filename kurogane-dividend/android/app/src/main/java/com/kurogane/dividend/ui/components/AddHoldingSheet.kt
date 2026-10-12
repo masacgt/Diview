@@ -425,8 +425,8 @@ fun AddHoldingSheet(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = BackgroundDark,
                         unfocusedContainerColor = BackgroundDark,
-                        focusedBorderColor = PrimaryEmerald,
-                        unfocusedBorderColor = SurfaceContainerHighest,
+                        focusedBorderColor = FocusRingColor,
+                        unfocusedBorderColor = ControlOutline,
                         focusedTextColor = OnSurface,
                         unfocusedTextColor = OnSurface
                     ),
@@ -517,7 +517,7 @@ fun AddHoldingSheet(
                             color = OnSurface,
                             fontWeight = FontWeight.Bold,
                             fontSize = AppTextSize.dense,
-                            fontFamily = FontFamily.Monospace
+                            fontFamily = AppNumericFontFamily
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
@@ -531,7 +531,7 @@ fun AddHoldingSheet(
                             color = OnSurface,
                             fontWeight = FontWeight.Bold,
                             fontSize = AppTextSize.caption,
-                            fontFamily = FontFamily.Monospace
+                            fontFamily = AppNumericFontFamily
                         )
                         Text(stringResource(R.string.add_holding_text_7 , String.format(java.util.Locale.JAPAN, "%.2f", selectedStock.yieldRate)), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                     }
@@ -635,7 +635,7 @@ fun AddHoldingSheet(
                                         modifier = Modifier
                                             .size(6.dp)
                                             .clip(CircleShape)
-                                            .background(if (title.contains("NISA")) PrimaryEmerald else Color(0xFF818CF8))
+                                            .background(if (title.contains("NISA")) PrimaryEmerald else ChartPurple)
                                     )
                                     Text(title, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
                                     Box(
@@ -876,8 +876,8 @@ private fun CompactAccountTextField(
     val colors = OutlinedTextFieldDefaults.colors(
         focusedContainerColor = BackgroundDark,
         unfocusedContainerColor = BackgroundDark,
-        focusedBorderColor = PrimaryEmerald,
-        unfocusedBorderColor = SurfaceContainerHighest,
+        focusedBorderColor = FocusRingColor,
+        unfocusedBorderColor = ControlOutline,
         focusedTextColor = OnSurface,
         unfocusedTextColor = OnSurface
     )
