@@ -1,6 +1,7 @@
 package com.kurogane.dividend.ui.screens
 
 import com.kurogane.dividend.ui.components.AdaptiveRow
+import com.kurogane.dividend.ui.components.DiviewSnackbarHost
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kurogane.dividend.data.financialText
 import com.kurogane.dividend.data.financialYears
@@ -81,6 +82,14 @@ fun StockDetailScreen(
     val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarScope = rememberCoroutineScope()
+    var watchlistSnackbarJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    fun showWatchlistSnackbar(message: String) {
+        watchlistSnackbarJob?.cancel()
+        snackbarHostState.currentSnackbarData?.dismiss()
+        watchlistSnackbarJob = snackbarScope.launch {
+            snackbarHostState.showSnackbar(message)
+        }
+    }
     
     var resolvedSecurity by remember(stockCode) { mutableStateOf<com.kurogane.dividend.data.CloudflareSecurity?>(null) }
     var lookupFinished by remember(stockCode) { mutableStateOf(false) }
@@ -412,9 +421,7 @@ fun StockDetailScreen(
                                 onClick = {
                                     if (isBookmarked) viewModel.removeWatchlistStock(currentHolding.code)
                                     else viewModel.addHoldingToWatchlist(currentHolding)
-                                    snackbarScope.launch {
-                                        snackbarHostState.showSnackbar(if (isBookmarked) "Watchlistから解除しました" else "Watchlistに登録しました")
-                                    }
+                                    showWatchlistSnackbar(if (isBookmarked) "Watchlistから解除しました" else "Watchlistに登録しました")
                                 },
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
@@ -658,7 +665,7 @@ fun StockDetailScreen(
                                                 fontSize = if (dpsVal.length >= 6) AppTextSize.dense * 0.8f else AppTextSize.dense,
                                                 fontWeight = FontWeight.Bold,
                                                 fontFamily = FontFamily.Monospace,
-                                                textAlign = TextAlign.Center,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                                 maxLines = 1,
                                                 softWrap = false
                                             )

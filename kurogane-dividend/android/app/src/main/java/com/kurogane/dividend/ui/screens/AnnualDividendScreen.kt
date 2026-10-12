@@ -35,14 +35,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -83,16 +85,14 @@ import kotlinx.coroutines.launch
 private fun Modifier.reportViewportVisibility(
     viewportBounds: Rect?,
     onVisibilityChanged: (Boolean) -> Unit
-): Modifier {
-    return onGloballyPositioned { coordinates ->
-        val bounds = coordinates.boundsInRoot()
-        val viewport = viewportBounds
-        onVisibilityChanged(
-            viewport != null &&
-                bounds.right > viewport.left && bounds.bottom > viewport.top &&
-                bounds.left < viewport.right && bounds.top < viewport.bottom
-        )
-    }
+): Modifier = onGloballyPositioned { coordinates ->
+    val bounds = coordinates.boundsInRoot()
+    val viewport = viewportBounds
+    onVisibilityChanged(
+        viewport != null &&
+            bounds.right > viewport.left && bounds.bottom > viewport.top &&
+            bounds.left < viewport.right && bounds.top < viewport.bottom
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -2320,7 +2320,11 @@ private fun CompoundingSimulationSection(
     val comparisonYears = remember(holdings, financialData, taxRateMode, currentYear) {
         com.kurogane.dividend.model.DividendHistory.calculate(holdings, financialData, (currentYear - 5)..currentYear, taxRateMode)
     }
-    val years = comparisonYears.drop(1)
+    val years = remember(comparisonYears, totalAnnualDiv, currentYear) {
+        comparisonYears.drop(1).map { year ->
+            if (year.year == currentYear) year.copy(amount = totalAnnualDiv) else year
+        }
+    }
     var annualChartVisible by remember { mutableStateOf(false) }
     val annualBarsProgress = remember { Animatable(1f) }
     LaunchedEffect(isTabSelected) {
@@ -2516,7 +2520,15 @@ private fun CompoundingSimulationSection(
                 ) {
                     Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(stringResource(R.string.annual_dividend_text_46 , selectedYear.year), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Text(
+                                text = if (selectedYear.year == currentYear) {
+                                    stringResource(R.string.annual_dividend_text_87, selectedYear.year)
+                                } else {
+                                    stringResource(R.string.annual_dividend_text_46, selectedYear.year)
+                                },
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense
+                            )
                             AnimatedContent(targetState = money(selectedYear.amount),
                                 transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(180)) },
                                 label = "Selected year dividend") { amount ->
@@ -2524,7 +2536,15 @@ private fun CompoundingSimulationSection(
                             }
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(stringResource(R.string.annual_dividend_text_48 , selectedYear.covered, selectedYear.expected), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            Text(
+                                text = if (selectedYear.year == currentYear) {
+                                    stringResource(R.string.annual_dividend_text_86)
+                                } else {
+                                    stringResource(R.string.annual_dividend_text_48, selectedYear.covered, selectedYear.expected)
+                                },
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense
+                            )
                             Text(stringResource(R.string.annual_dividend_text_49 , money(selectedYear.amount?.div(12))), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
