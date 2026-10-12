@@ -1582,6 +1582,10 @@ class DividendViewModel @JvmOverloads constructor(
 
     suspend fun resolveCloudflareSecurity(code: String): CloudflareSecurity? {
         val security = marketRepository.getSecurity(code) ?: return null
+        val normalizedCode = security.code.uppercase(java.util.Locale.ROOT)
+        val marketQuote = runCatchingCancellable {
+            marketRepository.fetchSearchQuotes(listOf(security.code))[normalizedCode]
+        }.getOrNull()
         val financialData = if ((security.annualDividendPerShare ?: 0.0) <= 0.0) {
             runCatchingCancellable { fetchFinancialData(security.code) }.getOrNull()
         } else {
@@ -1594,12 +1598,13 @@ class DividendViewModel @JvmOverloads constructor(
         val industry = withContext(Dispatchers.IO) { runCatching {
             Tse33IndustryMaster.industries(getApplication())[security.code.take(4).uppercase(java.util.Locale.ROOT)]
         }.getOrNull() }
-        val cachedPrice = readCachedPrices()[security.code.uppercase(java.util.Locale.ROOT)]
+        val cachedPrice = readCachedPrices()[normalizedCode]
         return security.copy(
             name = japaneseDisplayName(security.code, security.name),
             annualDividendPerShare = annualDividendPerShare,
-            marketPrice = security.marketPrice ?: cachedPrice,
-            industry = industry
+            marketPrice = marketQuote?.price ?: security.marketPrice ?: cachedPrice,
+            industry = industry,
+            marketYieldRate = marketQuote?.yieldRate
         )
     }
 

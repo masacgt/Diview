@@ -95,8 +95,14 @@ fun StockDetailScreen(
         lookupFinished = true
     }
     val currentHolding = com.kurogane.dividend.model.StockDetailResolver.resolve(stockCode, holdings, watchlist, resolvedSecurity)?.let { holding ->
-        val dps = financialData[holding.code]?.dividends?.lastOrNull()?.dps ?: holding.dps
-        holding.copy(dps = dps, yieldRate = com.kurogane.dividend.model.PortfolioMath.yieldPercent(dps, holding.price),
+        val price = resolvedSecurity?.marketPrice?.takeIf { it.isFinite() && it > 0.0 } ?: holding.price
+        val dps = financialData[holding.code]?.dividends?.lastOrNull()?.dps
+            ?: resolvedSecurity?.annualDividendPerShare
+            ?: holding.dps
+        val calculatedYield = com.kurogane.dividend.model.PortfolioMath.yieldPercent(dps, price)
+        val quoteYield = resolvedSecurity?.marketYieldRate?.takeIf { it.isFinite() && it in 0.0..100.0 }
+        val displayYield = if (dps > 0.0) calculatedYield else quoteYield ?: calculatedYield
+        holding.copy(price = price, dps = dps, yieldRate = displayYield,
             yoc = com.kurogane.dividend.model.PortfolioMath.yieldPercent(dps, holding.acqPrice),
             usdJpyRate = exchangeRate?.usdJpy, usWithholdingEnabled = usTaxDeduction)
     }
@@ -234,7 +240,7 @@ fun StockDetailScreen(
         },
         "財務面の支え：自己資本比率${profile.equityRatio.financialText(1, "%")}、営業利益率${profile.operatingMargin.financialText(1, "%")}、${profile.fcfStatus}です。未取得の指標は評価に含めていません。"
     )
-    val liveYield = if (currentPrice > 0) (dps / currentPrice) * 100.0 else 0.0
+    val liveYield = if (currentPrice > 0 && dps > 0.0) (dps / currentPrice) * 100.0 else currentHolding.yieldRate
     val liveYoc = if (currentHolding.acqPrice > 0) (dps / currentHolding.acqPrice) * 100.0 else liveYield
 
     val totalSimShares = baseShares.toLong() + simAddedShares
@@ -493,7 +499,7 @@ fun StockDetailScreen(
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text(stringResource(R.string.stock_detail_text_4), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    Text(String.format(Locale.JAPAN, "%.2f%%", currentHolding.liveYield), fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.caption, fontFamily = FontFamily.Monospace)
+                                    Text(String.format(Locale.JAPAN, "%.2f%%", liveYield), fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.caption, fontFamily = FontFamily.Monospace)
                                     Text(stringResource(R.string.stock_detail_text_5), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }

@@ -31,7 +31,8 @@ data class CloudflareSecurity(
     val name: String,
     val annualDividendPerShare: Double?,
     val marketPrice: Double?,
-    val industry: String? = null
+    val industry: String? = null,
+    val marketYieldRate: Double? = null
 )
 
 data class CloudflareStockAnalysis(
