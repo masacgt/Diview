@@ -58,6 +58,12 @@ private fun formatCandidateYield(yieldRate: Double?): String? = yieldRate
     ?.takeIf { it.isFinite() && it in 0.0..100.0 }
     ?.let { "%.2f%%".format(java.util.Locale.JAPAN, it) }
 
+private fun calculateCandidateYield(annualDividendPerShare: Double?, price: Double?): Double? {
+    val dividend = annualDividendPerShare?.takeIf { it.isFinite() && it >= 0.0 } ?: return null
+    val currentPrice = price?.takeIf { it.isFinite() && it > 0.0 } ?: return null
+    return (dividend / currentPrice * 100.0).takeIf { it.isFinite() && it in 0.0..100.0 }
+}
+
 private const val RECENT_SEARCHES_PREFERENCES = "stock_search_history"
 private const val RECENT_SEARCHES_KEY = "recent_candidates"
 private const val MAX_RECENT_SEARCHES = 10
@@ -137,6 +143,7 @@ fun SearchSheet(
     val resources = context.resources
     val search by rememberUpdatedState(onSearch)
     val loadQuotes by rememberUpdatedState(onLoadQuotes)
+    val quoteCandidates = if (recentCandidates.isNotEmpty()) recentCandidates else candidates.filter { it.cat == "jp" }
 
     LaunchedEffect(visible) {
         if (visible) {
@@ -147,10 +154,10 @@ fun SearchSheet(
         }
     }
 
-    LaunchedEffect(searchQuery, visible, recentCandidates, retryCount) {
-        if (visible && normalizeStockSearchText(searchQuery.trim()).isEmpty() && recentCandidates.isNotEmpty()) {
+    LaunchedEffect(searchQuery, visible, quoteCandidates, retryCount) {
+        if (visible && normalizeStockSearchText(searchQuery.trim()).isEmpty() && quoteCandidates.isNotEmpty()) {
             recentQuotes = runCatchingCancellable {
-                loadQuotes(recentCandidates.map { it.code })
+                loadQuotes(quoteCandidates.map { it.code })
             }.getOrDefault(emptyMap())
         } else {
             recentQuotes = emptyMap()
@@ -173,15 +180,14 @@ fun SearchSheet(
             remoteCandidates = result.getOrNull()?.map { hit ->
                 val local = candidates.firstOrNull { it.code.equals(hit.code, ignoreCase = true) }
                 val price = formatCandidatePrice(hit.cachedPrice)
-                val yieldRate = formatCandidateYield(hit.marketYieldRate)
-                    ?: hit.cachedPrice?.takeIf { it > 0.0 }?.let { currentPrice ->
-                    hit.annualDividendPerShare?.let { dps -> "%.2f%%".format(java.util.Locale.JAPAN, dps / currentPrice * 100.0) }
-                }
+                val calculatedYield = calculateCandidateYield(hit.annualDividendPerShare, hit.cachedPrice)
+                val yieldRate = formatCandidateYield(calculatedYield)
                 local?.copy(
                     name = hit.name,
                     desc = hit.industry?.let { "東証 • $it" } ?: local.desc,
                     price = price ?: "株価未取得",
-                    yieldRate = yieldRate ?: "--"
+                    yieldRate = yieldRate ?: "--",
+                    isHigh = calculatedYield?.let { it >= 3.0 } ?: false
                 ) ?: CandidateStock(
                     code = hit.code,
                     name = hit.name,
@@ -189,7 +195,7 @@ fun SearchSheet(
                     price = price ?: "株価未取得",
                     yieldRate = yieldRate ?: "--",
                     cat = "jp",
-                    isHigh = false
+                    isHigh = calculatedYield?.let { it >= 3.0 } ?: false
                 )
             }
             isSearching = false
@@ -199,12 +205,17 @@ fun SearchSheet(
     val filteredCandidates = remember(searchQuery, selectedCategory, remoteCandidates, recentCandidates, recentQuotes) {
         val query = normalizeStockSearchText(searchQuery.trim())
         val source = remoteCandidates ?: if (query.isEmpty()) {
-            recentCandidates.map { candidate ->
+            (if (recentCandidates.isNotEmpty()) recentCandidates else candidates).map { candidate ->
                 val quote = recentQuotes[candidate.code.uppercase(java.util.Locale.ROOT)]
-                candidate.copy(
-                    price = formatCandidatePrice(quote?.price) ?: "株価未取得",
-                    yieldRate = formatCandidateYield(quote?.yieldRate) ?: "--"
-                )
+                val shouldRefreshQuote = recentCandidates.isNotEmpty() || candidate.cat == "jp"
+                if (!shouldRefreshQuote) candidate else {
+                    val calculatedYield = calculateCandidateYield(quote?.annualDividendPerShare, quote?.price)
+                    candidate.copy(
+                        price = formatCandidatePrice(quote?.price) ?: "株価未取得",
+                        yieldRate = formatCandidateYield(calculatedYield) ?: "--",
+                        isHigh = calculatedYield?.let { it >= 3.0 } ?: false
+                    )
+                }
             }
         } else candidates.filter { item ->
             val matchesQuery = query.isEmpty() ||
