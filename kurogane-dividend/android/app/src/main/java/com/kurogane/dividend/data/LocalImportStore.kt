@@ -8,6 +8,8 @@ import android.util.Base64
 import com.kurogane.dividend.model.Category
 import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.PortfolioMath
+import com.kurogane.dividend.model.ShareholderBenefit
+import com.kurogane.dividend.model.StockClimate
 import com.kurogane.dividend.model.WatchlistStock
 import org.json.JSONArray
 import org.json.JSONObject
@@ -49,6 +51,52 @@ class LocalImportStore(context: Context) {
         }
     fun saveFeedbackDraft(draft: JSONObject) = save("feedback_draft", draft.toString().toByteArray(Charsets.UTF_8))
     fun loadFeedbackDraft(): JSONObject? = load("feedback_draft")?.let { JSONObject(it.toString(Charsets.UTF_8)) }
+
+    fun saveShareholderBenefits(benefitsByCode: Map<String, List<ShareholderBenefit>>) {
+        val json = JSONObject().apply {
+            benefitsByCode.forEach { (code, benefits) ->
+                put(code, JSONArray().apply {
+                    benefits.forEach { benefit ->
+                        put(JSONObject().put("name", benefit.name).put("marketValue", benefit.marketValue))
+                    }
+                })
+            }
+        }
+        save("shareholder_benefits", json.toString().toByteArray(Charsets.UTF_8))
+    }
+
+    fun loadShareholderBenefits(): Map<String, List<ShareholderBenefit>> =
+        load("shareholder_benefits")?.let { bytes ->
+            val json = JSONObject(bytes.toString(Charsets.UTF_8))
+            buildMap {
+                val codes = json.keys()
+                while (codes.hasNext()) {
+                    val code = codes.next()
+                    val entries = json.optJSONArray(code) ?: continue
+                    put(code, (0 until entries.length()).map { index ->
+                        val item = entries.getJSONObject(index)
+                        ShareholderBenefit(item.optString("name"), item.optString("marketValue"))
+                    })
+                }
+            }
+        }.orEmpty()
+
+    fun saveStockClimateOverrides(overrides: Map<String, StockClimate>) {
+        val json = JSONObject().apply { overrides.forEach { (code, climate) -> put(code, climate.name) } }
+        save("stock_climate_overrides", json.toString().toByteArray(Charsets.UTF_8))
+    }
+
+    fun loadStockClimateOverrides(): Map<String, StockClimate> =
+        load("stock_climate_overrides")?.let { bytes ->
+            val json = JSONObject(bytes.toString(Charsets.UTF_8))
+            buildMap {
+                val codes = json.keys()
+                while (codes.hasNext()) {
+                    val code = codes.next()
+                    runCatching { StockClimate.valueOf(json.getString(code)) }.getOrNull()?.let { put(code, it) }
+                }
+            }
+        }.orEmpty()
 
     fun clearFeedbackDraft() { check(prefs.edit().remove("feedback_draft").commit()) }
 
