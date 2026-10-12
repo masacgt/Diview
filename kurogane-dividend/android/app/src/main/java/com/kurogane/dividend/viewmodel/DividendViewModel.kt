@@ -1769,18 +1769,20 @@ class DividendViewModel @JvmOverloads constructor(
             val code = holding.code.uppercase(java.util.Locale.ROOT)
             val price = prices[code] ?: holding.price
             val dps = dividendsPerShare[code] ?: _financialData.value[holding.code]?.dividends?.lastOrNull()?.dps ?: holding.dps
-            holding.copy(price = price, dps = dps, yieldRate = PortfolioMath.yieldPercent(dps, price)).refreshPayout()
+            if (price == holding.price && dps == holding.dps) holding
+            else holding.copy(price = price, dps = dps, yieldRate = PortfolioMath.yieldPercent(dps, price)).refreshPayout()
         } }
         _watchlist.update { list -> list.map { stock ->
             val code = stock.code.uppercase(java.util.Locale.ROOT)
             val price = prices[code] ?: stock.price
             val dps = dividendsPerShare[code] ?: _financialData.value[stock.code]?.dividends?.lastOrNull()?.dps ?: stock.dps
-            stock.copy(
-                price = price,
-                dps = dps,
-                currentYield = PortfolioMath.yieldPercent(dps, price),
-                targetPrice = if (stock.targetYield > 0) dps / (stock.targetYield / 100) else stock.targetPrice
-            )
+            if (price == stock.price && dps == stock.dps) stock
+            else stock.copy(
+                    price = price,
+                    dps = dps,
+                    currentYield = PortfolioMath.yieldPercent(dps, price),
+                    targetPrice = if (stock.targetYield > 0) dps / (stock.targetYield / 100) else stock.targetPrice
+                )
         } }
     }
 
