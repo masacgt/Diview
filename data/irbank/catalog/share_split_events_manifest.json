@@ -1,0 +1,12 @@
+{
+  "source": "IRBANK Connect R2 catalog and IRBANK dividend history note: 株式分割・併合等",
+  "catalog_url": "https://diview-irbank.omasa.workers.dev/api/v1/irbank/catalog",
+  "retrieved_at": "2026-10-12T15:53:35.621637+00:00",
+  "catalog_total": 3963,
+  "companies_attempted": 3744,
+  "event_rows": 3279,
+  "unique_event_securities": 2142,
+  "request_errors": 0,
+  "request_pacing_seconds": 0.5,
+  "errors_file": "share_split_events_errors.json"
+}
