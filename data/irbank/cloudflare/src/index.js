@@ -1319,10 +1319,14 @@ export default {
         const currentPrice = finiteNumber(liveQuote?.close) || catalogPrice;
         if (!(currentPrice > 0)) return null;
         const statistics = document.statistics_current || {};
-        const dps = finiteNumber(statistics.dividendRate);
+        const reportedDps = finiteNumber(statistics.dividendRate);
+        const catalogDps = finiteNumber(row.annual_dividend_per_share);
+        const dps = reportedDps !== null && reportedDps >= 0
+          ? reportedDps
+          : catalogDps !== null && catalogDps >= 0 ? catalogDps : null;
         const yieldRate = dps !== null && dps >= 0
           ? (dps / currentPrice) * 100
-          : finiteNumber(row.yield_rate);
+          : null;
         return {
           code,
           name: String(row.name || code),
