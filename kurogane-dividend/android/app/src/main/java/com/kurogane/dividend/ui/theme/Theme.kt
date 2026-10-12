@@ -11,12 +11,16 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.core.view.WindowCompat
 
 internal const val APP_FONT_FEATURE_SETTINGS = "\"kern\" 1, \"palt\" 1"
+internal const val APP_NUMERIC_FONT_FEATURE_SETTINGS = "\"tnum\" 1, \"kern\" 1, \"palt\" 1"
 
 @Composable
 fun KuroganeDividendTheme(
@@ -34,19 +38,45 @@ fun KuroganeDividendTheme(
     val palette = remember(darkTheme, isOledBlack, selectedAccent) {
         createPalette(darkTheme, isOledBlack, selectedAccent)
     }
+    val accentSet = remember(selectedAccent) { accentSetFor(selectedAccent) }
     val colorScheme = if (darkTheme) {
         darkColorScheme(
             primary = palette.primary,
             onPrimary = palette.onPrimary,
             primaryContainer = palette.primaryContainer,
             onPrimaryContainer = palette.onPrimaryContainer,
+            inversePrimary = accentSet.lightPrimary,
+            secondary = palette.secondary,
+            onSecondary = contentColorFor(palette.secondary),
+            secondaryContainer = palette.secondary.copy(alpha = 0.16f).compositeOver(palette.surface),
+            onSecondaryContainer = palette.secondary,
+            tertiary = palette.info,
+            onTertiary = contentColorFor(palette.info),
+            tertiaryContainer = palette.info.copy(alpha = 0.16f).compositeOver(palette.surface),
+            onTertiaryContainer = palette.info,
             background = palette.background,
+            onBackground = palette.onSurface,
             surface = palette.surface,
             onSurface = palette.onSurface,
             surfaceVariant = palette.surfaceHigh,
             onSurfaceVariant = palette.onSurfaceVariant,
-            secondary = palette.secondary,
-            error = palette.error
+            surfaceTint = palette.primary,
+            inverseSurface = LightAppPalette.surface,
+            inverseOnSurface = LightAppPalette.onSurface,
+            error = palette.error,
+            onError = contentColorFor(palette.error),
+            errorContainer = palette.error.copy(alpha = 0.16f).compositeOver(palette.surface),
+            onErrorContainer = palette.error,
+            outline = palette.controlOutline,
+            outlineVariant = palette.border,
+            scrim = Color.Black,
+            surfaceBright = palette.surfaceHighest,
+            surfaceDim = palette.surfaceLowest,
+            surfaceContainerLowest = palette.surfaceLowest,
+            surfaceContainerLow = palette.surfaceLow,
+            surfaceContainer = palette.surface,
+            surfaceContainerHigh = palette.surfaceHigh,
+            surfaceContainerHighest = palette.surfaceHighest
         )
     } else {
         lightColorScheme(
@@ -54,13 +84,38 @@ fun KuroganeDividendTheme(
             onPrimary = palette.onPrimary,
             primaryContainer = palette.primaryContainer,
             onPrimaryContainer = palette.onPrimaryContainer,
+            inversePrimary = accentSet.darkPrimary,
+            secondary = palette.secondary,
+            onSecondary = contentColorFor(palette.secondary),
+            secondaryContainer = palette.secondary.copy(alpha = 0.12f).compositeOver(palette.surface),
+            onSecondaryContainer = palette.secondary,
+            tertiary = palette.info,
+            onTertiary = contentColorFor(palette.info),
+            tertiaryContainer = palette.info.copy(alpha = 0.12f).compositeOver(palette.surface),
+            onTertiaryContainer = palette.info,
             background = palette.background,
+            onBackground = palette.onSurface,
             surface = palette.surface,
             onSurface = palette.onSurface,
             surfaceVariant = palette.surfaceHigh,
             onSurfaceVariant = palette.onSurfaceVariant,
-            secondary = palette.secondary,
-            error = palette.error
+            surfaceTint = palette.primary,
+            inverseSurface = DarkAppPalette.surface,
+            inverseOnSurface = DarkAppPalette.onSurface,
+            error = palette.error,
+            onError = contentColorFor(palette.error),
+            errorContainer = palette.error.copy(alpha = 0.12f).compositeOver(palette.surface),
+            onErrorContainer = palette.error,
+            outline = palette.controlOutline,
+            outlineVariant = palette.border,
+            scrim = Color.Black,
+            surfaceBright = palette.surfaceLowest,
+            surfaceDim = palette.surfaceHighest,
+            surfaceContainerLowest = palette.surfaceLowest,
+            surfaceContainerLow = palette.surfaceLow,
+            surfaceContainer = palette.surface,
+            surfaceContainerHigh = palette.surfaceHigh,
+            surfaceContainerHighest = palette.surfaceHighest
         )
     }
 
@@ -80,6 +135,8 @@ fun KuroganeDividendTheme(
         MaterialTheme(colorScheme = colorScheme, typography = AppTypography) {
             CompositionLocalProvider(
                 LocalTextStyle provides LocalTextStyle.current.copy(
+                    fontFamily = FontFamily.SansSerif,
+                    fontWeight = FontWeight.Normal,
                     fontFeatureSettings = APP_FONT_FEATURE_SETTINGS
                 ),
                 content = content
@@ -88,14 +145,19 @@ fun KuroganeDividendTheme(
     }
 }
 
+internal fun accentColorForMode(accent: String, dark: Boolean): Color =
+    accentSetFor(accent).let { if (dark) it.darkPrimary else it.lightPrimary }
+
+private fun accentSetFor(accent: String): AccentSet = when (accent) {
+    "cyan" -> AccentSet(Color(0xFF67E8F9), Color(0xFF0891B2), Color(0xFF0B6577))
+    "blue" -> AccentSet(Color(0xFF60A5FA), Color(0xFF2563EB), Color(0xFF1D4ED8))
+    "amber" -> AccentSet(Color(0xFFFCD34D), Color(0xFFD97706), Color(0xFF92400E))
+    "purple" -> AccentSet(Color(0xFFC4B5FD), Color(0xFF7C3AED), Color(0xFF6D28D9))
+    else -> AccentSet(Color(0xFF4EDEA3), Color(0xFF10B981), Color(0xFF065F46))
+}
+
 private fun createPalette(dark: Boolean, oled: Boolean, accent: String): AppColorPalette {
-    val accentSet = when (accent) {
-        "cyan" -> AccentSet(Color(0xFF67E8F9), Color(0xFF0891B2), Color(0xFF0E7490))
-        "blue" -> AccentSet(Color(0xFF60A5FA), Color(0xFF2563EB), Color(0xFF1D4ED8))
-        "amber" -> AccentSet(Color(0xFFFCD34D), Color(0xFFD97706), Color(0xFFB45309))
-        "purple" -> AccentSet(Color(0xFFC4B5FD), Color(0xFF7C3AED), Color(0xFF6D28D9))
-        else -> AccentSet(Color(0xFF4EDEA3), Color(0xFF10B981), Color(0xFF047857))
-    }
+    val accentSet = accentSetFor(accent)
     val base = if (dark) DarkAppPalette else LightAppPalette
     return base.copy(
         background = if (dark && oled) Color.Black else base.background,

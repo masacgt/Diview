@@ -209,7 +209,7 @@ private fun MatrixRow(
             style = MaterialTheme.typography.bodySmall.copy(
                 color = PrimaryEmerald,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace
+                fontFamily = AppNumericFontFamily
             )
         )
     }

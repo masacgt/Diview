@@ -70,6 +70,8 @@ import com.kurogane.dividend.ui.components.SearchSheet
 import com.kurogane.dividend.ui.components.AddHoldingSheet
 import com.kurogane.dividend.ui.components.NotificationHistorySheet
 import com.kurogane.dividend.ui.components.DiviewSnackbarHost
+import com.kurogane.dividend.ui.components.DiviewSnackbarTone
+import com.kurogane.dividend.ui.components.showDiviewSnackbar
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import com.kurogane.dividend.model.Holding
 
@@ -186,13 +188,18 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                     mutableIntStateOf(NotificationStore(appContext).unreadNotificationCount())
                 }
                 var showAddHoldingSheet by remember { mutableStateOf(false) }
+                var addHoldingOpenedFromStockDetail by remember { mutableStateOf(false) }
                 var prefilledAddHoldingCode by remember { mutableStateOf("") }
+                val stockDetailSnackbarHostState = remember { SnackbarHostState() }
                 var pendingRestoreHolding by remember { mutableStateOf<Holding?>(null) }
                 val scrollToTopRequests = remember { mutableStateMapOf<String, Int>() }
                 val saveError by viewModel.saveError.collectAsStateWithLifecycle()
                 val snackbarHostState = remember { SnackbarHostState() }
                 LaunchedEffect(saveError) {
-                    saveError?.let { snackbarHostState.showSnackbar(it); viewModel.clearSaveError() }
+                    saveError?.let {
+                        snackbarHostState.showDiviewSnackbar(it, tone = DiviewSnackbarTone.Error)
+                        viewModel.clearSaveError()
+                    }
                 }
                 val activityScope = rememberCoroutineScope()
 
@@ -234,7 +241,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             .size(36.dp)
                                             .clip(RoundedCornerShape(10.dp))
                                             .background(SurfaceContainer)
-                                            .border(1.dp, Color(0x3310B981), RoundedCornerShape(10.dp)),
+                                            .border(1.dp, PrimaryEmerald.copy(alpha = 0.3f), RoundedCornerShape(10.dp)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
@@ -275,7 +282,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             .size(36.dp)
                                             .clip(RoundedCornerShape(10.dp))
                                             .background(SurfaceContainer)
-                                            .border(1.dp, Color(0x3310B981), RoundedCornerShape(10.dp)),
+                                            .border(1.dp, PrimaryEmerald.copy(alpha = 0.3f), RoundedCornerShape(10.dp)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
@@ -482,10 +489,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     viewModel = viewModel,
                                     onNavigateToDetail = { code -> navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true } },
                                     onOpenAddHolding = { code ->
+                                        addHoldingOpenedFromStockDetail = false
                                         prefilledAddHoldingCode = code
                                         showAddHoldingSheet = true
                                     },
                                     onOpenHoldingRegistration = { code ->
+                                        addHoldingOpenedFromStockDetail = false
                                         prefilledAddHoldingCode = code
                                         showAddHoldingSheet = true
                                     },
@@ -511,6 +520,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     scrollToTopRequest = scrollToTopRequests["watchlist"] ?: 0,
                                     onNavigateToDetail = { code -> navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true } },
                                     onOpenAddHolding = { code ->
+                                        addHoldingOpenedFromStockDetail = false
                                         prefilledAddHoldingCode = code
                                         showAddHoldingSheet = true
                                     }
@@ -554,8 +564,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 StockDetailScreen(
                                     stockCode = code,
                                     viewModel = viewModel,
+                                    sharedSnackbarHostState = stockDetailSnackbarHostState,
                                     onBack = { navController.popBackStack() },
                                     onOpenAddHolding = { selectedCode ->
+                                        addHoldingOpenedFromStockDetail = true
                                         prefilledAddHoldingCode = selectedCode
                                         showAddHoldingSheet = true
                                     },
@@ -566,11 +578,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         }
                                         activityScope.launch {
                                             kotlinx.coroutines.delay(350)
-                                            val result = snackbarHostState.showSnackbar(
+                                            val result = snackbarHostState.showDiviewSnackbar(
                                                 message = "${viewModel.japaneseDisplayName(holding.code, holding.name)}を保有銘柄から削除しました",
                                                 actionLabel = "元に戻す",
                                                 withDismissAction = true,
-                                                duration = SnackbarDuration.Short
+                                                duration = SnackbarDuration.Short,
+                                                tone = DiviewSnackbarTone.Success
                                             )
                                             if (result == SnackbarResult.ActionPerformed) {
                                                 pendingRestoreHolding = holding
@@ -602,12 +615,35 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             existingHoldings = viewModel.holdings.value,
                             visible = showAddHoldingSheet,
                             prefilledCode = prefilledAddHoldingCode,
-                            onDismiss = { showAddHoldingSheet = false },
+                            onDismiss = {
+                                showAddHoldingSheet = false
+                                addHoldingOpenedFromStockDetail = false
+                            },
                             onSearchSecurities = { query -> viewModel.searchCloudflareSecurities(query) },
                             onResolveSecurity = { code -> viewModel.resolveCloudflareSecurity(code) },
                             onRegisterCollective = { code, allocations, replaceExisting ->
                                 val registered = viewModel.registerCloudflareAllocations(code, allocations, replaceExisting)
-                                if (registered) showAddHoldingSheet = false
+                                if (registered) {
+                                    showAddHoldingSheet = false
+                                    if (addHoldingOpenedFromStockDetail) {
+                                        addHoldingOpenedFromStockDetail = false
+                                        val stockName = viewModel.japaneseDisplayName(code, code)
+                                        val message = if (replaceExisting) {
+                                            "${stockName}の保有株数を更新しました"
+                                        } else {
+                                            "${stockName}を保有銘柄に追加しました"
+                                        }
+                                        activityScope.launch {
+                                            kotlinx.coroutines.delay(350)
+                                            stockDetailSnackbarHostState.showDiviewSnackbar(
+                                                message = message,
+                                                withDismissAction = true,
+                                                duration = SnackbarDuration.Short,
+                                                tone = DiviewSnackbarTone.Success
+                                            )
+                                        }
+                                    }
+                                }
                                 registered
                             }
                         )

@@ -241,7 +241,7 @@ fun TermsPrivacyScreen(
                                 stringResource(R.string.terms_privacy_text_11),
                                 color = SoftGray,
                                 fontSize = AppTextSize.caption,
-                                lineHeight = 18.sp
+                                lineHeight = AppTextLineHeight.body
                             )
                         }
                     }
@@ -281,7 +281,7 @@ fun TermsPrivacyScreen(
                                         stringResource(R.string.terms_privacy_text_13),
                                         color = SoftGray,
                                         fontSize = AppTextSize.caption,
-                                        lineHeight = 18.sp
+                                        lineHeight = AppTextLineHeight.body
                                     )
                                 }
                             }
@@ -293,7 +293,7 @@ fun TermsPrivacyScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-                        border = BorderStroke(1.dp, Color(0xFF991B1B).copy(alpha = 0.3f))
+                        border = BorderStroke(1.dp, BorderColor)
                     ) {
                         Column {
                             AdaptiveRow(
@@ -324,13 +324,13 @@ fun TermsPrivacyScreen(
                                         stringResource(R.string.terms_privacy_text_15),
                                         color = SoftGray,
                                         fontSize = AppTextSize.caption,
-                                        lineHeight = 18.sp
+                                        lineHeight = AppTextLineHeight.body
                                     )
                                     Text(
                                         stringResource(R.string.terms_privacy_text_16),
                                         color = SoftGray,
                                         fontSize = AppTextSize.caption,
-                                        lineHeight = 18.sp
+                                        lineHeight = AppTextLineHeight.body
                                     )
                                 }
                             }
@@ -350,20 +350,20 @@ fun TermsPrivacyScreen(
                                 stringResource(R.string.terms_privacy_text_18),
                                 color = SoftGray,
                                 fontSize = AppTextSize.caption,
-                                lineHeight = 18.sp
+                                lineHeight = AppTextLineHeight.body
                             )
                             HorizontalDivider(color = BorderColor)
                             Text(stringResource(R.string.terms_privacy_text_30), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text(stringResource(R.string.terms_privacy_text_31), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = 18.sp)
+                            Text(stringResource(R.string.terms_privacy_text_31), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = AppTextLineHeight.body)
                             HorizontalDivider(color = BorderColor)
                             Text(stringResource(R.string.terms_privacy_text_32), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text(stringResource(R.string.terms_privacy_text_33), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = 18.sp)
+                            Text(stringResource(R.string.terms_privacy_text_33), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = AppTextLineHeight.body)
                             HorizontalDivider(color = BorderColor)
                             Text(stringResource(R.string.terms_privacy_text_34), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text(stringResource(R.string.terms_privacy_text_35), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = 18.sp)
+                            Text(stringResource(R.string.terms_privacy_text_35), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = AppTextLineHeight.body)
                             HorizontalDivider(color = BorderColor)
                             Text(stringResource(R.string.terms_privacy_text_36), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text(stringResource(R.string.terms_privacy_text_37), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = 18.sp)
+                            Text(stringResource(R.string.terms_privacy_text_37), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = AppTextLineHeight.body)
                         }
                     }
                 }
@@ -398,7 +398,7 @@ fun TermsPrivacyScreen(
                                 stringResource(R.string.terms_privacy_text_20),
                                 color = SoftGray,
                                 fontSize = AppTextSize.caption,
-                                lineHeight = 18.sp
+                                lineHeight = AppTextLineHeight.body
                             )
 
                             // 2x2 Grid details
@@ -445,7 +445,7 @@ fun TermsPrivacyScreen(
                                 stringResource(R.string.terms_privacy_text_27),
                                 color = SoftGray,
                                 fontSize = AppTextSize.caption,
-                                lineHeight = 18.sp
+                                lineHeight = AppTextLineHeight.body
                             )
                         }
                     }
@@ -462,7 +462,7 @@ fun TermsPrivacyScreen(
                                 stringResource(R.string.terms_privacy_text_29),
                                 color = SoftGray,
                                 fontSize = AppTextSize.caption,
-                                lineHeight = 18.sp
+                                lineHeight = AppTextLineHeight.body
                             )
                         }
                     }
@@ -475,16 +475,16 @@ fun TermsPrivacyScreen(
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(stringResource(R.string.terms_privacy_text_38), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text(stringResource(R.string.terms_privacy_text_39), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = 18.sp)
+                            Text(stringResource(R.string.terms_privacy_text_39), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = AppTextLineHeight.body)
                             HorizontalDivider(color = BorderColor)
                             Text(stringResource(R.string.terms_privacy_text_40), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text(stringResource(R.string.terms_privacy_text_41), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = 18.sp)
+                            Text(stringResource(R.string.terms_privacy_text_41), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = AppTextLineHeight.body)
                             HorizontalDivider(color = BorderColor)
                             Text(stringResource(R.string.terms_privacy_text_42), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text(stringResource(R.string.terms_privacy_text_43), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = 18.sp)
+                            Text(stringResource(R.string.terms_privacy_text_43), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = AppTextLineHeight.body)
                             HorizontalDivider(color = BorderColor)
                             Text(stringResource(R.string.terms_privacy_text_44), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text(stringResource(R.string.terms_privacy_text_45), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = 18.sp)
+                            Text(stringResource(R.string.terms_privacy_text_45), color = SoftGray, fontSize = AppTextSize.caption, lineHeight = AppTextLineHeight.body)
                         }
                     }
                 }

@@ -400,7 +400,7 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
     val increased = compared.count { it.change == DividendChangeStatus.INCREASE }
     val maintained = compared.count { it.change == DividendChangeStatus.MAINTAIN }
     val decreased = compared.count { it.change == DividendChangeStatus.DECREASE }
-    val impactColor = if ((analysis.impact ?: 0.0) < 0) ErrorRed else PrimaryEmerald
+    val impactColor = if ((analysis.impact ?: 0.0) < 0) ErrorRed else StatusSuccess
     val impactCellHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
         maxOf(18.dp, 15.sp.toDp()) + 19.sp.toDp() + 16.dp
     }
@@ -656,7 +656,7 @@ private fun MonitorKpis(analysis: DividendChangeAnalysis, privacy: Boolean) {
     val riskRatio = known.takeIf { it.isNotEmpty() }?.let { analysis.monitoring.size.toDouble() / it.size * 100 }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
         KpiCell("加重平均増配率", percent(analysis.growthRate, signed = true),
-            money(analysis.impact, privacy, signed = true), if ((analysis.growthRate ?: 0.0) < 0) ErrorRed else PrimaryEmerald,
+            money(analysis.impact, privacy, signed = true), if ((analysis.growthRate ?: 0.0) < 0) ErrorRed else StatusSuccess,
             Modifier.weight(1f).fillMaxHeight())
         KpiCell("減配リスク比率", percent(riskRatio), if (known.isEmpty()) "指標未取得" else "${analysis.monitoring.size}銘柄 要監視", ErrorRed,
             Modifier.weight(1f).fillMaxHeight())

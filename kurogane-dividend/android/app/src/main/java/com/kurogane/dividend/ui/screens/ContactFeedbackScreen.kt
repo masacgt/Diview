@@ -356,8 +356,8 @@ fun ContactFeedbackScreen(
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = BackgroundDark,
                                 unfocusedContainerColor = BackgroundDark,
-                                focusedBorderColor = PrimaryEmerald,
-                                unfocusedBorderColor = BorderColor,
+                                focusedBorderColor = FocusRingColor,
+                                unfocusedBorderColor = ControlOutline,
                                 focusedTextColor = OnSurface,
                                 unfocusedTextColor = OnSurface
                             ),
@@ -380,8 +380,8 @@ fun ContactFeedbackScreen(
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = BackgroundDark,
                                 unfocusedContainerColor = BackgroundDark,
-                                focusedBorderColor = PrimaryEmerald,
-                                unfocusedBorderColor = BorderColor,
+                                focusedBorderColor = FocusRingColor,
+                                unfocusedBorderColor = ControlOutline,
                                 focusedTextColor = OnSurface,
                                 unfocusedTextColor = OnSurface
                             ),
@@ -401,8 +401,8 @@ fun ContactFeedbackScreen(
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = BackgroundDark,
                                 unfocusedContainerColor = BackgroundDark,
-                                focusedBorderColor = PrimaryEmerald,
-                                unfocusedBorderColor = BorderColor,
+                                focusedBorderColor = FocusRingColor,
+                                unfocusedBorderColor = ControlOutline,
                                 focusedTextColor = OnSurface,
                                 unfocusedTextColor = OnSurface
                             ),

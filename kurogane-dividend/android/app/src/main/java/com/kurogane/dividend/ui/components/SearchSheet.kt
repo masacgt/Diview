@@ -365,8 +365,8 @@ fun SearchSheet(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = BackgroundDark,
                         unfocusedContainerColor = BackgroundDark,
-                        focusedBorderColor = PrimaryEmerald,
-                        unfocusedBorderColor = SurfaceContainerHighest,
+                        focusedBorderColor = FocusRingColor,
+                        unfocusedBorderColor = ControlOutline,
                         focusedTextColor = OnSurface,
                         unfocusedTextColor = OnSurface
                     ),
@@ -478,7 +478,7 @@ fun SearchSheet(
                                     color = OnSurface,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = AppTextSize.dense,
-                                    fontFamily = FontFamily.Monospace
+                                    fontFamily = AppNumericFontFamily
                                 )
                             }
 
@@ -506,7 +506,7 @@ fun SearchSheet(
                                     color = OnSurface,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = AppTextSize.body,
-                                    fontFamily = FontFamily.Monospace
+                                    fontFamily = AppNumericFontFamily
                                 )
                                 Text(
                                     if (stock.yieldRate == "再投資型") resources.getString(R.string.search_label_3) else resources.getString(R.string.search_label_4, (stock.yieldRate).toString()),

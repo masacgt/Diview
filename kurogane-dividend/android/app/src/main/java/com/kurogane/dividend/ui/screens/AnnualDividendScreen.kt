@@ -870,7 +870,7 @@ private fun MonthlyDividendEstimateCard(
                                                 val categoryColor = when (categoryIndex) {
                                                     0 -> NeonGreenLight
                                                     1 -> SkyBlue
-                                                    else -> Color(0xFF818CF8)
+                                                    else -> ChartBlue
                                                 }
                                                 Box(
                                                     Modifier.fillMaxWidth()
@@ -937,7 +937,7 @@ private fun MonthlyDividendEstimateCard(
                         Text(stringResource(R.string.us_stocks), fontSize = AppTextSize.dense, color = SoftGray)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF818CF8)))
+                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(ChartBlue))
                         Spacer(modifier = Modifier.width(3.dp))
                         Text(stringResource(R.string.funds), fontSize = AppTextSize.dense, color = SoftGray)
                     }
@@ -1281,8 +1281,8 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
         SecondaryIndigo, // Indigo
         ErrorRed, // Rose
         AccentAmber, // Amber
-        Color(0xFFA78BFA), // Purple
-        Color(0xFF22D3EE), // Cyan
+        ChartPurple,
+        ChartCyan,
         ErrorRed, // Pink
         OnSurfaceVariant  // Gray
     )
@@ -2109,7 +2109,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
         val power = portfolioDiagnosis.dividendGrowthLabel
         val risk = portfolioDiagnosis.dividendRiskLabel
         val cardColor = when (grade) {
-            "S" -> PrimaryEmeraldContainer
+            "S" -> StatusSuccess
             "A" -> PrimaryEmerald
             "B" -> SkyBlue
             "C" -> AccentAmber
@@ -2500,7 +2500,7 @@ private fun CompoundingSimulationSection(
                                     Text(stringResource(R.string.annual_dividend_1_s , point.year), color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                     Text(
                                         signedMoney(yearChange),
-                                        color = if ((yearChange ?: 0.0) >= 0.0) PrimaryEmerald else ErrorRed,
+                                        color = if ((yearChange ?: 0.0) >= 0.0) StatusSuccess else ErrorRed,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
@@ -2562,7 +2562,7 @@ private fun CompoundingSimulationSection(
                                     Text(signedPercent(increaseRate), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
                                 }
                             }
-                            Text(signedMoney(increaseAmount), color = if ((increaseAmount ?: 0.0) >= 0.0) PrimaryEmerald else ErrorRed, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            Text(signedMoney(increaseAmount), color = if ((increaseAmount ?: 0.0) >= 0.0) StatusSuccess else ErrorRed, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                             Text(stringResource(R.string.annual_dividend_text_36, firstPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, it.toString()) } ?: resources.getString(R.string.annual_dividend_label_20), latestPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, it.toString()) } ?: resources.getString(R.string.annual_dividend_label_21)), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
                     }
@@ -2846,7 +2846,7 @@ private fun AssetTrackingSection(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(stringResource(R.string.annual_dividend_text_60), color = OnSurface, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.width(10.dp))
-                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF64748B)))
+                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(ChartNeutral))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(stringResource(R.string.annual_dividend_text_61), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
@@ -2873,6 +2873,7 @@ private fun AssetTrackingSection(
                 val assetChartGridColor = BorderColor
                 val assetChartAccent = PrimaryEmerald
                 val assetChartBarColor = PrimaryEmeraldContainer
+                val assetChartNeutralColor = ChartNeutral
                 var assetBarsVisible by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) { assetBarsVisible = true }
                 val assetBarProgress by animateFloatAsState(
@@ -2930,7 +2931,7 @@ private fun AssetTrackingSection(
                         val costBarLeft = groupLeft + 4.dp.toPx()
                         val costBarTop = size.height - costBarHeight
                         drawRoundRect(
-                            brush = Brush.verticalGradient(listOf(Color(0xFF64748B), Color(0xFF475569))),
+                            brush = Brush.verticalGradient(listOf(assetChartNeutralColor, assetChartNeutralColor.copy(alpha = 0.82f))),
                             topLeft = Offset(costBarLeft, costBarTop),
                             size = Size(barWidth, costBarHeight),
                             cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
@@ -3006,7 +3007,7 @@ private fun AssetTrackingSection(
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = historicalWan(gains[idx]),
-                                    color = if (gains[idx] >= 0) PrimaryEmeraldContainer else ErrorRed,
+                                    color = if (gains[idx] >= 0) StatusSuccess else ErrorRed,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Black
                                 )
@@ -3050,7 +3051,7 @@ private fun AssetTrackingSection(
                             )
                             Text(
                                 text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_31) else resources.getString(R.string.annual_dividend_label_32, (historicalMoney(gains[selectedYearIndex])).toString(), (historicalPercent(gainsPct[selectedYearIndex])).toString()),
-                                color = if (gains[selectedYearIndex] >= 0) PrimaryEmeraldContainer else ErrorRed,
+                                color = if (gains[selectedYearIndex] >= 0) StatusSuccess else ErrorRed,
                                 fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace
@@ -3169,14 +3170,14 @@ private fun AssetTrackingSection(
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
                                     text = if (isPrivacyActive) "••••" else String.format(java.util.Locale.JAPAN, "%s¥%s", prefix, historicalMoney(gains[index])),
-                                    color = if (isGain) PrimaryEmeraldContainer else ErrorRed,
+                                    color = if (isGain) StatusSuccess else ErrorRed,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
                                     text = if (index == 0) resources.getString(R.string.annual_dividend_label_43) else historicalPercent(gainsPct[index]),
-                                    color = if (index == 0) OnSurfaceVariant else if (isGain) PrimaryEmeraldContainer else ErrorRed,
+                                    color = if (index == 0) OnSurfaceVariant else if (isGain) StatusSuccess else ErrorRed,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -3280,6 +3281,7 @@ private fun AssetTrackingTwelveMonthSection(
     val chartGridColor = BorderColor
     val chartHighlightColor = PrimaryEmerald
     val chartAssetColor = PrimaryEmeraldContainer
+    val chartNeutralColor = ChartNeutral
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
@@ -3297,7 +3299,7 @@ private fun AssetTrackingTwelveMonthSection(
                     Spacer(Modifier.width(5.dp))
                     Text(stringResource(R.string.annual_dividend_text_81), color = OnSurface, fontSize = AppTextSize.dense)
                     Spacer(Modifier.width(10.dp))
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF64748B)))
+                        Box(Modifier.size(6.dp).clip(CircleShape).background(ChartNeutral))
                     Spacer(Modifier.width(5.dp))
                     Text(stringResource(R.string.annual_dividend_text_82), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 }
@@ -3313,7 +3315,7 @@ private fun AssetTrackingTwelveMonthSection(
                             else -> resources.getString(R.string.annual_dividend_label_47, (if (latest.gain >= 0) "+" else "−").toString(), (currencyFormat.format(kotlin.math.abs(latest.gain).toLong())).toString())
                         },
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                        color = if ((latest.gain ?: 0.0) >= 0) PrimaryEmerald else ErrorRed,
+                        color = if ((latest.gain ?: 0.0) >= 0) StatusSuccess else ErrorRed,
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
@@ -3356,7 +3358,7 @@ private fun AssetTrackingTwelveMonthSection(
                     val barsWidth = barWidth * 2 + innerGap
                     val barsLeft = groupLeft + (groupWidth - barsWidth) / 2f
                     drawRoundRect(
-                        brush = Brush.verticalGradient(listOf(Color(0xFF64748B), Color(0xFF475569))),
+                        brush = Brush.verticalGradient(listOf(chartNeutralColor, chartNeutralColor.copy(alpha = 0.82f))),
                         topLeft = Offset(barsLeft, chartBottom - costHeight),
                         size = Size(barWidth, costHeight),
                         cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
@@ -3406,7 +3408,7 @@ private fun AssetTrackingTwelveMonthSection(
             ) {
                 monthlySnapshots.filterIndexed { index, _ -> (index + 1) % 3 == 0 }.forEach { item ->
                     val isLatest = item == latest
-                    val gainColor = if ((item.gain ?: 0.0) >= 0) PrimaryEmerald else ErrorRed
+                    val gainColor = if ((item.gain ?: 0.0) >= 0) StatusSuccess else ErrorRed
                     Column(
                         modifier = Modifier
                             .weight(1f)

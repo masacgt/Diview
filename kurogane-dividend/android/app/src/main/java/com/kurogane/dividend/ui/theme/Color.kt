@@ -22,7 +22,14 @@ data class AppColorPalette(
     val skyBlue: Color,
     val accentAmber: Color,
     val error: Color,
-    val border: Color
+    val border: Color,
+    val controlOutline: Color,
+    val success: Color,
+    val info: Color,
+    val chartBlue: Color,
+    val chartPurple: Color,
+    val chartCyan: Color,
+    val chartNeutral: Color
 )
 
 internal val DarkAppPalette = AppColorPalette(
@@ -41,9 +48,16 @@ internal val DarkAppPalette = AppColorPalette(
     textMuted = Color(0xFF94A299),
     secondary = Color(0xFFC0C1FF),
     skyBlue = Color(0xFF38BDF8),
-    accentAmber = Color(0xFFF59E0B),
+    accentAmber = Color(0xFFFCD34D),
     error = Color(0xFFFFB4AB),
-    border = Color(0xFF1E293B)
+    border = Color(0xFF334155),
+    controlOutline = Color(0xFF8491A6),
+    success = Color(0xFF4ADE80),
+    info = Color(0xFF7DD3FC),
+    chartBlue = Color(0xFF60A5FA),
+    chartPurple = Color(0xFFC4B5FD),
+    chartCyan = Color(0xFF67E8F9),
+    chartNeutral = Color(0xFF94A3B8)
 )
 
 internal val LightAppPalette = AppColorPalette(
@@ -53,18 +67,25 @@ internal val LightAppPalette = AppColorPalette(
     surface = Color(0xFFF8FAFC),
     surfaceHigh = Color(0xFFEFF3F8),
     surfaceHighest = Color(0xFFE2E8F0),
-    primary = Color(0xFF047857),
-    primaryContainer = Color(0xFF059669),
+    primary = Color(0xFF065F46),
+    primaryContainer = Color(0xFF065F46),
     onPrimary = Color(0xFFFFFFFF),
     onPrimaryContainer = Color(0xFFFFFFFF),
     onSurface = Color(0xFF172033),
     onSurfaceVariant = Color(0xFF475569),
     textMuted = Color(0xFF58677D),
-    secondary = Color(0xFF5B5FC7),
+    secondary = Color(0xFF4F46B8),
     skyBlue = Color(0xFF0369A1),
-    accentAmber = Color(0xFFB45309),
+    accentAmber = Color(0xFF92400E),
     error = Color(0xFFB42318),
-    border = Color(0xFFCBD5E1)
+    border = Color(0xFFCBD5E1),
+    controlOutline = Color(0xFF64748B),
+    success = Color(0xFF166534),
+    info = Color(0xFF075985),
+    chartBlue = Color(0xFF1D4ED8),
+    chartPurple = Color(0xFF6D28D9),
+    chartCyan = Color(0xFF0B6577),
+    chartNeutral = Color(0xFF475569)
 )
 
 internal val LocalAppPalette = staticCompositionLocalOf { DarkAppPalette }
@@ -87,3 +108,12 @@ val SkyBlue: Color @Composable get() = LocalAppPalette.current.skyBlue
 val AccentAmber: Color @Composable get() = LocalAppPalette.current.accentAmber
 val ErrorRed: Color @Composable get() = LocalAppPalette.current.error
 val BorderColor: Color @Composable get() = LocalAppPalette.current.border
+val ControlOutline: Color @Composable get() = LocalAppPalette.current.controlOutline
+val FocusRingColor: Color @Composable get() = LocalAppPalette.current.primary
+val StatusSuccess: Color @Composable get() = LocalAppPalette.current.success
+val StatusWarning: Color @Composable get() = LocalAppPalette.current.accentAmber
+val StatusInfo: Color @Composable get() = LocalAppPalette.current.info
+val ChartBlue: Color @Composable get() = LocalAppPalette.current.chartBlue
+val ChartPurple: Color @Composable get() = LocalAppPalette.current.chartPurple
+val ChartCyan: Color @Composable get() = LocalAppPalette.current.chartCyan
+val ChartNeutral: Color @Composable get() = LocalAppPalette.current.chartNeutral

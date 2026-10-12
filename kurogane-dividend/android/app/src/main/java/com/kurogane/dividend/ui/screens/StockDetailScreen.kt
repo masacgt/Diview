@@ -34,6 +34,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import com.kurogane.dividend.R
 import com.kurogane.dividend.ui.components.StatusMessage
 import com.kurogane.dividend.ui.components.DiviewSnackbarHost
+import com.kurogane.dividend.ui.components.DiviewSnackbarTone
+import com.kurogane.dividend.ui.components.showDiviewSnackbar
 import com.kurogane.dividend.ui.networkErrorMessage
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,7 +70,8 @@ fun StockDetailScreen(
     viewModel: DividendViewModel,
     onBack: () -> Unit = {},
     onOpenAddHolding: (String) -> Unit = {},
-    onHoldingRemoved: (Holding) -> Unit = { onBack() }
+    onHoldingRemoved: (Holding) -> Unit = { onBack() },
+    sharedSnackbarHostState: SnackbarHostState? = null
 ) {
     val resources = LocalContext.current.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
@@ -80,14 +83,18 @@ fun StockDetailScreen(
     val stockAnalysisData by viewModel.stockAnalysisData.collectAsStateWithLifecycle()
     val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
     val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val localSnackbarHostState = remember { SnackbarHostState() }
+    val snackbarHostState = sharedSnackbarHostState ?: localSnackbarHostState
     val snackbarScope = rememberCoroutineScope()
     var watchlistSnackbarJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     fun showWatchlistSnackbar(message: String) {
         watchlistSnackbarJob?.cancel()
         snackbarHostState.currentSnackbarData?.dismiss()
         watchlistSnackbarJob = snackbarScope.launch {
-            snackbarHostState.showSnackbar(message)
+            snackbarHostState.showDiviewSnackbar(
+                message = message,
+                tone = DiviewSnackbarTone.Success
+            )
         }
     }
     
@@ -466,13 +473,13 @@ fun StockDetailScreen(
                             }
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (currentHolding.isPositive) PrimaryEmerald.copy(alpha = 0.15f) else ErrorRed.copy(alpha = 0.15f),
-                                border = BorderStroke(0.5.dp, if (currentHolding.isPositive) PrimaryEmerald.copy(alpha = 0.4f) else ErrorRed.copy(alpha = 0.4f))
+                                color = if (currentHolding.isPositive) StatusSuccess.copy(alpha = 0.14f) else ErrorRed.copy(alpha = 0.14f),
+                                border = BorderStroke(0.5.dp, if (currentHolding.isPositive) StatusSuccess.copy(alpha = 0.45f) else ErrorRed.copy(alpha = 0.45f))
                             ) {
                                 Text(
                                     currentHolding.dailyChange,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    color = if (currentHolding.isPositive) PrimaryEmerald else ErrorRed,
+                                    color = if (currentHolding.isPositive) StatusSuccess else ErrorRed,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = AppTextSize.dense
                                 )
@@ -676,7 +683,7 @@ fun StockDetailScreen(
                                                     .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                                                     .background(
                                                         if (isProjected) Brush.verticalGradient(listOf(PrimaryEmerald, PrimaryEmeraldContainer))
-                                                        else Brush.verticalGradient(listOf(Color(0xFF818CF8), Color(0xFF4F46E5)))
+                                                        else Brush.verticalGradient(listOf(ChartBlue, ChartBlue.copy(alpha = 0.78f)))
                                                     )
                                             )
                                         }
@@ -1205,7 +1212,7 @@ fun StockDetailScreen(
                                                             .clip(RoundedCornerShape(4.dp))
                                                             .background(
                                                                 Brush.horizontalGradient(
-                                                                    listOf(Color(0xFF818CF8), SkyBlue, PrimaryEmerald)
+                                                                    listOf(ChartPurple, SkyBlue, PrimaryEmerald)
                                                                 )
                                                             )
                                                     )
@@ -1983,7 +1990,7 @@ fun StockDetailScreen(
                                 Icon(Icons.Default.Tune, contentDescription = null, tint = PrimaryEmerald)
                             }
                             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text("銘柄属性・特典設定", color = OnSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                Text("銘柄属性・特典設定", color = OnSurface, fontSize = AppTextSize.emphasizedBody, fontWeight = FontWeight.Bold)
                                 Text(
                                     "景気サイクル耐性・株主優待の記録と利回り換算",
                                     color = OnSurfaceVariant,
@@ -2028,7 +2035,7 @@ fun StockDetailScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(6.dp))
-                                        Text("景気特性", color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                        Text("景気特性", color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold)
                                         Surface(
                                             shape = RoundedCornerShape(50),
                                             color = if (hasClimateOverride) PrimaryEmerald.copy(alpha = 0.14f) else OnSurfaceVariant.copy(alpha = 0.12f)
@@ -2193,7 +2200,7 @@ fun StockDetailScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(6.dp))
-                                    Text("株主優待", color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    Text("株主優待", color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold)
                                     Spacer(Modifier.weight(1f))
                                     Text(
                                         "優待利回り ${benefitYield?.let { "+${String.format(Locale.JAPAN, "%.2f", it)}%" } ?: "—"}",
