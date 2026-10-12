@@ -67,6 +67,8 @@ import com.kurogane.dividend.ui.components.rememberNotificationAccess
 import com.kurogane.dividend.notifications.NotificationKind
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 private class WatchlistDerivedMetrics(
@@ -216,6 +218,57 @@ private class WatchlistDerivedMetricsCache {
     }
 }
 
+private data class WatchlistMetricsSnapshot(
+    val stocks: List<WatchlistStock>,
+    val metrics: WatchlistDerivedMetrics
+)
+
+private data class WatchlistProjectionSnapshot(
+    val stocks: List<WatchlistStock>,
+    val projection: com.kurogane.dividend.model.WatchlistProjection
+)
+
+private data class WatchlistListSnapshot(
+    val sourceStocks: List<WatchlistStock>,
+    val searchQuery: String,
+    val filterState: String,
+    val appliedOrderCodes: List<String>?,
+    val sortCriteria: String,
+    val sortDirection: String,
+    val metrics: WatchlistDerivedMetrics,
+    val filteredStocks: List<WatchlistStock>,
+    val sortedStocks: List<WatchlistStock>
+) {
+    fun matches(
+        stocks: List<WatchlistStock>,
+        query: String,
+        filter: String,
+        orderCodes: List<String>?,
+        criteria: String,
+        direction: String,
+        currentMetrics: WatchlistDerivedMetrics
+    ): Boolean {
+        return sourceStocks === stocks &&
+            searchQuery == query &&
+            filterState == filter &&
+            appliedOrderCodes == orderCodes &&
+            sortCriteria == criteria &&
+            sortDirection == direction &&
+            metrics === currentMetrics
+    }
+}
+
+private val EmptyWatchlistDerivedMetrics = WatchlistDerivedMetrics(
+    currentYields = emptyMap(),
+    averageYield = 0.0,
+    currentUnitInvestment = 0.0,
+    potentialDiv = 0.0,
+    readyCount = 0,
+    japaneseCount = 0,
+    usCount = 0,
+    badgeWidthCandidates = emptyList()
+)
+
 private object WatchlistDerivedMetricsCacheStore {
     private val caches = WeakHashMap<DividendViewModel, WatchlistDerivedMetricsCache>()
 
@@ -259,8 +312,22 @@ fun WatchlistScreen(
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
     val watchlistMetricsCache = WatchlistDerivedMetricsCacheStore.forViewModel(viewModel)
-    val watchlistMetrics = watchlistMetricsCache.get(watchlist, resources)
-    val watchlistCodes = remember(watchlistMetrics) { watchlist.map { it.code } }
+    var watchlistMetricsSnapshot by remember(viewModel) { mutableStateOf<WatchlistMetricsSnapshot?>(null) }
+    LaunchedEffect(watchlist, resources) {
+        val sourceStocks = watchlist
+        val metrics = withContext(Dispatchers.Default) {
+            watchlistMetricsCache.get(sourceStocks, resources)
+        }
+        if (viewModel.watchlist.value === sourceStocks) {
+            watchlistMetricsSnapshot = WatchlistMetricsSnapshot(sourceStocks, metrics)
+        }
+    }
+    val hasWatchlistMetrics = watchlistMetricsSnapshot?.stocks === watchlist
+    val watchlistMetrics = watchlistMetricsSnapshot
+        ?.takeIf { it.stocks === watchlist }
+        ?.metrics
+        ?: EmptyWatchlistDerivedMetrics
+    val watchlistCodes = remember(watchlist) { watchlist.map { it.code } }
     val snackbarHostState = remember { SnackbarHostState() }
     val screenScope = rememberCoroutineScope()
     var alertSnackbarJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
@@ -336,9 +403,6 @@ fun WatchlistScreen(
     val currentUnitInvestment = watchlistMetrics.currentUnitInvestment
     val potentialDiv = watchlistMetrics.potentialDiv
 
-    val projection = viewModel.watchlistProjectionFor(watchlist)
-    val projectionNote = resources.getString(R.string.watchlist_projection_note, projection.unallocatedCount) +
-        if (projection.missingExchangeRate) resources.getString(R.string.watchlist_projection_fx_missing) else ""
     fun yen(value: Double) = "¥${currencyFormat.format(value.toLong())}"
     fun percent(value: Double) = String.format(Locale.JAPAN, "%.1f%%", value)
     var filterState by remember { mutableStateOf("all") } // "all", "jp", "us", "ready"
@@ -364,52 +428,98 @@ fun WatchlistScreen(
     var showPayoutRiskBottomSheet by remember { mutableStateOf(false) }
     val payoutRiskSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // Process filters
-    val filteredList = remember(watchlistMetrics, searchQuery, filterState) {
-        watchlist.filter { stock ->
-            val currentYield = watchlistMetrics.currentYields[stock.code] ?: 0.0
-            val isReady = currentYield >= stock.targetYield
-            val queryMatch = searchQuery.isEmpty() ||
-                    stock.code.contains(searchQuery, ignoreCase = true) ||
-                    stock.name.contains(searchQuery, ignoreCase = true) ||
-                    stock.sector.contains(searchQuery, ignoreCase = true)
-
-            val catMatch = when (filterState) {
-                "jp" -> stock.category == "jp"
-                "us" -> stock.category == "us"
-                "ready" -> isReady
-                else -> true
-            }
-            catMatch && queryMatch
+    var watchlistProjectionSnapshot by remember(viewModel) { mutableStateOf<WatchlistProjectionSnapshot?>(null) }
+    val shouldPrepareProjection = showProjectionInfo || showMatrixBottomSheet || showGraphBottomSheet || showPayoutRiskBottomSheet
+    LaunchedEffect(watchlist, shouldPrepareProjection) {
+        if (!shouldPrepareProjection) return@LaunchedEffect
+        val sourceStocks = watchlist
+        val projection = withContext(Dispatchers.Default) {
+            viewModel.watchlistProjectionFor(sourceStocks)
+        }
+        if (viewModel.watchlist.value === sourceStocks) {
+            watchlistProjectionSnapshot = WatchlistProjectionSnapshot(sourceStocks, projection)
         }
     }
+    val hasWatchlistProjection = watchlistProjectionSnapshot?.stocks === watchlist
+    val projection = watchlistProjectionSnapshot
+        ?.takeIf { it.stocks === watchlist }
+        ?.projection
+        ?: remember { com.kurogane.dividend.model.WatchlistProjection(emptyList()) }
+    val projectionNote = resources.getString(R.string.watchlist_projection_note, projection.unallocatedCount) +
+        if (projection.missingExchangeRate) resources.getString(R.string.watchlist_projection_fx_missing) else ""
 
     // Capture the default order once, then preserve it while stock values change.
     LaunchedEffect(watchlistCodes) {
+        val sourceStocks = watchlist
         val existingOrder = appliedOrderCodes
-        appliedOrderCodes = if (existingOrder == null) {
-            if (watchlist.isEmpty()) null
-            else sortWatchlist(watchlist, sortCriteria, sortDirection, watchlistMetrics.currentYields).map { it.code }
-        } else {
-            val currentCodes = watchlist.mapTo(mutableSetOf()) { it.code }
-            existingOrder.filter { it in currentCodes } +
-                watchlist.map { it.code }.filterNot { it in existingOrder }
+        val nextOrder = withContext(Dispatchers.Default) {
+            if (existingOrder == null) {
+                if (sourceStocks.isEmpty()) null
+                else sortWatchlist(sourceStocks, sortCriteria, sortDirection, emptyMap()).map { it.code }
+            } else {
+                val currentCodes = sourceStocks.mapTo(mutableSetOf()) { it.code }
+                existingOrder.filter { it in currentCodes } +
+                    sourceStocks.map { it.code }.filterNot { it in existingOrder }
+            }
         }
+        if (viewModel.watchlist.value === sourceStocks) appliedOrderCodes = nextOrder
     }
 
     val appliedCodes = appliedOrderCodes
-    val visibleByCode = remember(filteredList) { filteredList.associateBy { it.code } }
-    val sortedList = remember(filteredList, appliedCodes, sortCriteria, sortDirection, watchlistMetrics) {
-        if (appliedCodes == null) {
-            sortWatchlist(filteredList, sortCriteria, sortDirection, watchlistMetrics.currentYields)
-        } else {
-            buildList {
-                appliedCodes.forEach { code -> visibleByCode[code]?.let { add(it) } }
-                val placedCodes = appliedCodes.toHashSet()
-                filteredList.forEach { stock -> if (stock.code !in placedCodes) add(stock) }
+    var watchlistListSnapshot by remember(viewModel) { mutableStateOf<WatchlistListSnapshot?>(null) }
+    LaunchedEffect(watchlist, searchQuery, filterState, appliedCodes, sortCriteria, sortDirection, watchlistMetrics) {
+        val sourceStocks = watchlist
+        val sourceMetrics = watchlistMetrics
+        val query = searchQuery
+        val filter = filterState
+        val orderCodes = appliedCodes
+        val criteria = sortCriteria
+        val direction = sortDirection
+        val prepared = withContext(Dispatchers.Default) {
+            val filtered = sourceStocks.filter { stock ->
+                val currentYield = sourceMetrics.currentYields[stock.code]
+                    ?: com.kurogane.dividend.model.PortfolioMath.yieldPercent(stock.dps, stock.price)
+                val queryMatch = query.isEmpty() ||
+                    stock.code.contains(query, ignoreCase = true) ||
+                    stock.name.contains(query, ignoreCase = true) ||
+                    stock.sector.contains(query, ignoreCase = true)
+                val categoryMatches = when (filter) {
+                    "jp" -> stock.category == "jp"
+                    "us" -> stock.category == "us"
+                    "ready" -> currentYield >= stock.targetYield
+                    else -> true
+                }
+                categoryMatches && queryMatch
             }
+            val sorted = if (orderCodes == null) {
+                filtered
+            } else {
+                val visibleByCode = filtered.associateBy { it.code }
+                buildList {
+                    orderCodes.forEach { code -> visibleByCode[code]?.let(::add) }
+                    val placedCodes = orderCodes.toHashSet()
+                    filtered.forEach { stock -> if (stock.code !in placedCodes) add(stock) }
+                }
+            }
+            WatchlistListSnapshot(
+                sourceStocks = sourceStocks,
+                searchQuery = query,
+                filterState = filter,
+                appliedOrderCodes = orderCodes,
+                sortCriteria = criteria,
+                sortDirection = direction,
+                metrics = sourceMetrics,
+                filteredStocks = filtered,
+                sortedStocks = sorted
+            )
         }
+        if (viewModel.watchlist.value === sourceStocks) watchlistListSnapshot = prepared
     }
+    val currentListSnapshot = watchlistListSnapshot?.takeIf {
+        it.matches(watchlist, searchQuery, filterState, appliedCodes, sortCriteria, sortDirection, watchlistMetrics)
+    }
+    val filteredList = currentListSnapshot?.filteredStocks ?: watchlist
+    val sortedList = currentListSnapshot?.sortedStocks ?: watchlist
     val activeWatchlistStocks = remember(sortedList, exitingWatchlistStocks) {
         sortedList.filterNot { stock -> exitingWatchlistStocks.any { it.code == stock.code } }
     }
@@ -542,7 +652,15 @@ fun WatchlistScreen(
                                             .background(PrimaryEmerald)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text(stringResource(R.string.watchlist_text , readyCount), color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
+                                    Text(
+                                        stringResource(
+                                            R.string.watchlist_text,
+                                            if (hasWatchlistMetrics) readyCount.toString() else "—"
+                                        ),
+                                        color = PrimaryEmerald,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = AppTextSize.dense
+                                    )
                                     Text(stringResource(R.string.watchlist_text_2 , watchlist.size), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
@@ -574,7 +692,13 @@ fun WatchlistScreen(
                             Text(stringResource(R.string.watchlist_text_4), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(stringResource(R.string.annual_dividend_text_70), fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, color = OnSurface)
-                                Text(currencyFormat.format(currentUnitInvestment.toLong()), fontSize = AppTextSize.metric, fontWeight = FontWeight.Bold, color = OnSurface, fontFamily = FontFamily.Monospace)
+                                Text(
+                                    if (hasWatchlistMetrics) currencyFormat.format(currentUnitInvestment.toLong()) else "—",
+                                    fontSize = AppTextSize.metric,
+                                    fontWeight = FontWeight.Bold,
+                                    color = OnSurface,
+                                    fontFamily = FontFamily.Monospace
+                                )
                             }
                         }
 
@@ -595,7 +719,13 @@ fun WatchlistScreen(
                                 Column {
                                     Text(stringResource(R.string.watchlist_text_5), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(String.format(java.util.Locale.JAPAN, "%.2f", averageYield), fontSize = AppTextSize.metric, fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontFamily = FontFamily.Monospace)
+                                        Text(
+                                            if (hasWatchlistMetrics) String.format(java.util.Locale.JAPAN, "%.2f", averageYield) else "—",
+                                            fontSize = AppTextSize.metric,
+                                            fontWeight = FontWeight.Bold,
+                                            color = PrimaryEmerald,
+                                            fontFamily = FontFamily.Monospace
+                                        )
                                         Text(stringResource(R.string.annual_dividend_text_4), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
                                     }
                                     Text(stringResource(R.string.watchlist_text_6), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
@@ -680,7 +810,13 @@ fun WatchlistScreen(
                                     }
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(stringResource(R.string.annual_dividend_text_70), fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, color = OnSurface)
-                                        Text(currencyFormat.format(potentialDiv.toLong()), fontSize = AppTextSize.metric, fontWeight = FontWeight.Bold, color = OnSurface, fontFamily = FontFamily.Monospace)
+                                        Text(
+                                            if (hasWatchlistMetrics) currencyFormat.format(potentialDiv.toLong()) else "—",
+                                            fontSize = AppTextSize.metric,
+                                            fontWeight = FontWeight.Bold,
+                                            color = OnSurface,
+                                            fontFamily = FontFamily.Monospace
+                                        )
                                         Text(stringResource(R.string.watchlist_text_8), fontSize = AppTextSize.dense, color = OnSurfaceVariant)
                                     }
                                 }
@@ -787,9 +923,9 @@ fun WatchlistScreen(
                     ) {
                         val filters = listOf(
                             Pair("all", resources.getString(R.string.watchlist_label_9, (watchlist.size).toString())),
-                            Pair("jp", resources.getString(R.string.watchlist_label_10, watchlistMetrics.japaneseCount.toString())),
-                            Pair("us", resources.getString(R.string.watchlist_label_11, watchlistMetrics.usCount.toString())),
-                            Pair("ready", resources.getString(R.string.watchlist_label_12, (readyCount).toString()))
+                            Pair("jp", resources.getString(R.string.watchlist_label_10, if (hasWatchlistMetrics) watchlistMetrics.japaneseCount.toString() else "—")),
+                            Pair("us", resources.getString(R.string.watchlist_label_11, if (hasWatchlistMetrics) watchlistMetrics.usCount.toString() else "—")),
+                            Pair("ready", resources.getString(R.string.watchlist_label_12, if (hasWatchlistMetrics) readyCount.toString() else "—"))
                         )
                         filters.forEach { (id, label) ->
                             val isSelected = filterState == id
@@ -1611,19 +1747,24 @@ fun WatchlistScreen(
                     }
                     Button(
                         onClick = {
-                            val newlySortedCodes = sortWatchlist(
-                                filteredList,
-                                draftSortCriteria,
-                                draftSortDirection,
-                                watchlistMetrics.currentYields
-                            ).map { it.code }
-                            val visibleCodes = newlySortedCodes.toHashSet()
-                            val previousOrder = appliedOrderCodes ?: watchlist.map { it.code }
-                            appliedOrderCodes = newlySortedCodes + previousOrder.filterNot { it in visibleCodes }
-                            sortCriteria = draftSortCriteria
-                            sortDirection = draftSortDirection
-                            showSortInfo = false
-                            showSortBottomSheet = false
+                            val sourceStocks = watchlist
+                            val sourceFilteredStocks = filteredList
+                            val criteria = draftSortCriteria
+                            val direction = draftSortDirection
+                            val currentYields = watchlistMetrics.currentYields
+                            screenScope.launch {
+                                val newlySortedCodes = withContext(Dispatchers.Default) {
+                                    sortWatchlist(sourceFilteredStocks, criteria, direction, currentYields).map { it.code }
+                                }
+                                if (viewModel.watchlist.value !== sourceStocks) return@launch
+                                val visibleCodes = newlySortedCodes.toHashSet()
+                                val previousOrder = appliedOrderCodes ?: sourceStocks.map { it.code }
+                                appliedOrderCodes = newlySortedCodes + previousOrder.filterNot { it in visibleCodes }
+                                sortCriteria = criteria
+                                sortDirection = direction
+                                showSortInfo = false
+                                showSortBottomSheet = false
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
                         shape = RoundedCornerShape(12.dp),
@@ -1642,7 +1783,7 @@ fun WatchlistScreen(
     }
 
     // Modal Bottom Sheet 1: 権利落ち月マトリクス (Image 2)
-    if (showMatrixBottomSheet) {
+    if (showMatrixBottomSheet && hasWatchlistProjection) {
         ModalBottomSheet(
             onDismissRequest = { showMatrixBottomSheet = false },
             sheetState = matrixSheetState,
@@ -1994,7 +2135,7 @@ fun WatchlistScreen(
     }
 
     // Modal Bottom Sheet 2: 受取月別グラフ試算 (Image 3)
-    if (showGraphBottomSheet) {
+    if (showGraphBottomSheet && hasWatchlistProjection) {
         ModalBottomSheet(
             onDismissRequest = { showGraphBottomSheet = false },
             sheetState = graphSheetState,
@@ -2501,7 +2642,7 @@ fun WatchlistScreen(
         }
     }
 
-    if (showPayoutRiskBottomSheet) {
+    if (showPayoutRiskBottomSheet && hasWatchlistProjection) {
         ModalBottomSheet(
             onDismissRequest = { showPayoutRiskBottomSheet = false },
             sheetState = payoutRiskSheetState,
