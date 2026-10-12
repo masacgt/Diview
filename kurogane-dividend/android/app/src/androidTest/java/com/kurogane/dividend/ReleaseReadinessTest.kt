@@ -2,18 +2,24 @@ package com.kurogane.dividend
 
 import android.content.Context
 import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.lifecycle.ViewModelStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.kurogane.dividend.data.CloudflareMarketRepository
 import com.kurogane.dividend.data.CloudflareSearchHit
+import com.kurogane.dividend.model.WatchlistStock
 import com.kurogane.dividend.ui.components.SearchSheet
 import com.kurogane.dividend.ui.components.AddHoldingSheet
 import com.kurogane.dividend.ui.components.ExDividendMatrixDialog
@@ -105,6 +111,98 @@ class ReleaseReadinessTest {
         return model
     }
 
+    @Test fun watchlistSearchImmediatelyHidesNonmatchingStocks() {
+        val vm = model()
+        assertTrue(vm.restoreWatchlistStock(watchlistStock("TEST-WATCHLIST-JP", "Toyota")))
+        assertTrue(vm.restoreWatchlistStock(watchlistStock("TEST-WATCHLIST-US", "Apple", "us")))
+
+        compose.setContent { KuroganeDividendTheme { WatchlistScreen(vm) } }
+        compose.onNodeWithText("Toyota", substring = true).performScrollTo().assertIsDisplayed()
+
+        compose.onNode(hasSetTextAction()).performScrollTo().performTextInput("TEST-WATCHLIST-US")
+
+        compose.onNodeWithText("Apple", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Toyota", substring = true).assertDoesNotExist()
+    }
+
+    @Test fun watchlistSortOrderSurvivesLeavingAndReturningToTab() {
+        val vm = model()
+        vm.watchlist.value.toList().forEach { vm.removeWatchlistStock(it.code) }
+        val higherYield = watchlistStock("3000", "Higher yield").copy(dps = 10.0, targetYield = 5.0)
+        val lowerYield = watchlistStock("1000", "Lower yield").copy(dps = 1.0, targetYield = 5.0)
+        assertTrue(vm.restoreWatchlistStock(higherYield))
+        assertTrue(vm.restoreWatchlistStock(lowerYield))
+        vm.watchlistScrollIndex = 0
+        vm.watchlistScrollOffset = 0
+
+        compose.setContent {
+            KuroganeDividendTheme {
+                val stateHolder = rememberSaveableStateHolder()
+                var showWatchlist by remember { mutableStateOf(true) }
+                Column(Modifier.fillMaxSize()) {
+                    Button(onClick = { showWatchlist = !showWatchlist }) { Text("タブ切替") }
+                    val route = if (showWatchlist) "watchlist" else "asset"
+                    stateHolder.SaveableStateProvider(route) {
+                        if (showWatchlist) WatchlistScreen(vm) else Box(Modifier.fillMaxSize())
+                    }
+                }
+            }
+        }
+
+        val defaultSortLabel = app.getString(
+            R.string.watchlist_1_s_2_s,
+            app.getString(R.string.watchlist_label_15),
+            app.getString(R.string.watchlist_label_19)
+        )
+        compose.onNodeWithText(defaultSortLabel).performClick()
+        compose.onNodeWithText(app.getString(R.string.watchlist_label_4)).performClick()
+        compose.onNodeWithText(app.getString(R.string.watchlist_label_14)).performClick()
+        compose.onNodeWithText(app.getString(R.string.apply)).performClick()
+
+        val codeAscendingLabel = app.getString(
+            R.string.watchlist_1_s_2_s,
+            app.getString(R.string.watchlist_label_18),
+            app.getString(R.string.watchlist_label_20)
+        )
+        compose.onNodeWithText(codeAscendingLabel).assertIsDisplayed()
+        compose.waitUntil(10_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
+
+        compose.onNodeWithText("タブ切替").performClick()
+        compose.onNodeWithText("タブ切替").performClick()
+
+        compose.onNodeWithText(codeAscendingLabel).assertIsDisplayed()
+        compose.waitUntil(10_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
+    }
+
+    private fun firstVisibleWatchlistCardCode(compose: androidx.compose.ui.test.junit4.ComposeTestRule): String? =
+        compose.onAllNodes(
+            SemanticsMatcher("watchlist card") { node ->
+                node.config.contains(SemanticsProperties.TestTag) &&
+                    node.config[SemanticsProperties.TestTag].startsWith("watchlist_card_")
+            },
+            useUnmergedTree = true
+        ).fetchSemanticsNodes().firstOrNull()?.let { node ->
+            node.config[SemanticsProperties.TestTag].removePrefix("watchlist_card_")
+        }
+
+    private fun watchlistStock(code: String, name: String, category: String = "jp") = WatchlistStock(
+        code = code,
+        name = name,
+        market = "Market",
+        sector = "Industry",
+        category = category,
+        price = 100.0,
+        dps = 5.0,
+        currentYield = 5.0,
+        targetYield = 5.0,
+        targetPrice = 100.0,
+        dailyChange = "—",
+        isPositive = true,
+        payoutMonths = emptyList(),
+        payoutTiming = "",
+        desc = ""
+    )
+
     @Test fun settingsExposeSwitchSelectionAndAccessibleSliderActions() {
         val vm = model()
         compose.setContent { KuroganeDividendTheme { SettingsScreen(vm) } }
@@ -136,7 +234,14 @@ class ReleaseReadinessTest {
                         7 -> ContactFeedbackScreen({}, vm)
                         8 -> TermsPrivacyScreen({})
                         9 -> SearchSheet(true, {}, {}, { emptyList() })
-                        10 -> AddHoldingSheet(true, "8316", {}, onResolveSecurity = { null }, onRegisterCollective = { _, _ -> false })
+                        10 -> AddHoldingSheet(
+                            true,
+                            "8316",
+                            {},
+                            onSearchSecurities = { emptyList() },
+                            onResolveSecurity = { null },
+                            onRegisterCollective = { _, _, _ -> false }
+                        )
                         11 -> ExDividendMatrixDialog(true, {})
                         12 -> RoadmapShareSheet(vm, com.kurogane.dividend.model.RoadmapAchievement(
                             11, "STEP 11: 月25,000円", 25000, 22000, 10, "インフラ自給期", "週末の外食や趣味にかかる費用を自給", 20000

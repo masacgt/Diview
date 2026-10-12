@@ -8,6 +8,7 @@ import androidx.compose.ui.res.stringResource
 import com.kurogane.dividend.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.Canvas
@@ -39,8 +40,10 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
@@ -53,6 +56,7 @@ import com.kurogane.dividend.ui.theme.*
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 /** Summary of dividend changes shown on the dividend-change subtab. */
@@ -68,7 +72,6 @@ internal fun DividendChangeAnalysisCards(
         DividendChangeAnalysis.calculate(holdings, financialData, taxRateMode)
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        MonitorHeading("増配・減配＆減配リスク診断", Icons.AutoMirrored.Filled.TrendingUp)
         AnnualImpactCard(analysis, isPrivacyActive, taxRateMode)
         MonitorKpis(analysis, isPrivacyActive)
     }
@@ -398,6 +401,9 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
     val maintained = compared.count { it.change == DividendChangeStatus.MAINTAIN }
     val decreased = compared.count { it.change == DividendChangeStatus.DECREASE }
     val impactColor = if ((analysis.impact ?: 0.0) < 0) ErrorRed else PrimaryEmerald
+    val impactCellHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
+        maxOf(18.dp, 15.sp.toDp()) + 19.sp.toDp() + 16.dp
+    }
     MonitorCard(compact = true, tight = true) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -443,30 +449,31 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
             val unknown = total - compared.size
             if (unknown > 0) Box(Modifier.weight(unknown.toFloat()).fillMaxHeight().background(SurfaceContainerHighest))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(52.dp)) {
             DistributionCell("増配", increased, compared.size, PrimaryEmerald, Modifier.weight(1f).fillMaxHeight(), compact = true)
             DistributionCell("維持", maintained, compared.size, OnSurfaceVariant, Modifier.weight(1f).fillMaxHeight(), compact = true)
             DistributionCell("減配", decreased, compared.size, ErrorRed, Modifier.weight(1f).fillMaxHeight(), compact = true)
         }
         HorizontalDivider(color = BorderColor)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(Icons.Default.Savings, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
-                    Text(stringResource(R.string.dividend_change_analysis_cards_text_5), color = OnSurfaceVariant, fontSize = 11.sp)
-                }
-                Text(money(analysis.positiveImpact.takeIf { compared.isNotEmpty() }, privacy, signed = true),
-                    color = PrimaryEmerald, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(impactCellHeight)) {
+            ImpactCell(
+                stringResource(R.string.dividend_change_analysis_cards_text_5),
+                money(analysis.positiveImpact.takeIf { compared.isNotEmpty() }, privacy, signed = true),
+                PrimaryEmerald,
+                Modifier.weight(1f).fillMaxHeight()
+            ) {
+                Icon(Icons.Default.Savings, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
             }
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    DecreasingBanknoteIcon(tint = ErrorRed, modifier = Modifier.size(18.dp))
-                    Text(stringResource(R.string.dividend_change_analysis_cards_text_6), color = OnSurfaceVariant, fontSize = 11.sp)
-                }
-                Text(money(analysis.negativeImpact.takeIf { compared.isNotEmpty() }, privacy, signed = true),
-                    color = ErrorRed, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            ImpactCell(
+                stringResource(R.string.dividend_change_analysis_cards_text_6),
+                money(analysis.negativeImpact.takeIf { compared.isNotEmpty() }, privacy, signed = true),
+                ErrorRed,
+                Modifier.weight(1f).fillMaxHeight()
+            ) {
+                DecreasingBanknoteIcon(tint = ErrorRed, modifier = Modifier.size(18.dp))
             }
         }
+        Spacer(Modifier.height(8.dp))
     }
 }
 
@@ -578,8 +585,10 @@ private fun AnnualImpactInfo(comparisonDescription: String, excludedHistoryCount
 
 @Composable
 private fun DistributionCell(label: String, count: Int, total: Int, color: Color, modifier: Modifier, compact: Boolean = false) {
-    Column(modifier.clip(RoundedCornerShape(12.dp)).background(SurfaceContainer).padding(if (compact) 1.dp else 10.dp),
-        verticalArrangement = Arrangement.spacedBy(if (compact) 1.dp else 4.dp)) {
+    Column(modifier.clip(RoundedCornerShape(12.dp)).background(SurfaceContainer)
+        .border(0.5.dp, BorderBlue, RoundedCornerShape(12.dp))
+        .padding(horizontal = if (compact) 4.dp else 10.dp, vertical = if (compact) 4.dp else 10.dp),
+        verticalArrangement = if (compact) Arrangement.SpaceEvenly else Arrangement.spacedBy(4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -598,7 +607,46 @@ private fun DistributionCell(label: String, count: Int, total: Int, color: Color
         Text(stringResource(R.string.dividend_change_analysis_cards_text_8 , count),
             fontSize = if (compact) 14.sp else 17.sp,
             lineHeight = if (compact) 19.sp else TextUnit.Unspecified,
-            fontWeight = FontWeight.Bold, color = OnSurface)
+            fontWeight = FontWeight.Bold, color = OnSurface,
+            modifier = if (compact) Modifier.fillMaxWidth() else Modifier,
+            textAlign = if (compact) TextAlign.Center else TextAlign.Start)
+    }
+}
+
+@Composable
+private fun ImpactCell(
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier,
+    icon: @Composable () -> Unit
+) {
+    Column(
+        modifier.clip(RoundedCornerShape(12.dp))
+            .background(SurfaceContainer)
+            .border(0.5.dp, BorderBlue, RoundedCornerShape(12.dp))
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.SpaceEvenly
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            icon()
+            Spacer(Modifier.width(4.dp))
+            Text(label, color = OnSurfaceVariant, fontSize = 10.sp, lineHeight = 15.sp, maxLines = 1)
+        }
+        Text(
+            value,
+            modifier = Modifier.fillMaxWidth(),
+            color = color,
+            fontSize = 14.sp,
+            lineHeight = 19.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            maxLines = 1
+        )
     }
 }
 
@@ -662,7 +710,8 @@ private fun PayoutHealthCard(analysis: DividendChangeAnalysis) {
         }
         Text(stringResource(R.string.dividend_change_analysis_cards_text_12 , covered.size, analysis.securities.size), color = TextMuted, fontSize = 10.sp)
         analysis.highPayout.maxByOrNull { it.payoutRatio?.let { ratio -> if (ratio < 0) Double.POSITIVE_INFINITY else ratio } ?: 0.0 }?.let { row ->
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ErrorRed.copy(alpha = 0.08f)).padding(12.dp),
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ErrorRed.copy(alpha = 0.08f))
+                .border(0.5.dp, BorderBlue, RoundedCornerShape(10.dp)).padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(stringResource(R.string.dividend_change_analysis_cards_1_s_2_s , row.name, row.code), color = ErrorRed, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 Text(stringResource(R.string.dividend_change_analysis_cards_text_13 , percent(row.payoutRatio), if (row.payoutRatio!! < 0) resources.getString(R.string.dividend_change_analysis_cards_label_19) else resources.getString(R.string.dividend_change_analysis_cards_label_20)),
@@ -850,13 +899,26 @@ private fun MonitorSelectors(label: String?, options: List<Pair<String, String>>
 }
 
 @Composable
-private fun MonitorCard(onClick: (() -> Unit)? = null, compact: Boolean = false, tight: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)),
+private fun MonitorCard(onClick: (() -> Unit)? = null, compact: Boolean = false, tight: Boolean = false, heightScale: Float = 1f, content: @Composable ColumnScope.() -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()
+        .then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)),
         shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
         border = BorderStroke(1.dp, BorderColor)) {
         Column(
-            Modifier.padding(horizontal = if (compact) 12.dp else 16.dp, vertical = if (tight) 2.dp else if (compact) 6.dp else 16.dp),
-            verticalArrangement = Arrangement.spacedBy(if (tight) 0.dp else if (compact) 4.dp else 10.dp),
+            Modifier
+                .then(if (heightScale == 1f) Modifier else Modifier.layout { measurable, constraints ->
+                    val naturalHeight = measurable.minIntrinsicHeight(constraints.maxWidth)
+                    val scaledHeight = (naturalHeight * heightScale).roundToInt()
+                        .coerceAtMost(constraints.maxHeight)
+                    val placeable = measurable.measure(
+                        constraints.copy(minHeight = scaledHeight, maxHeight = scaledHeight)
+                    )
+                    layout(placeable.width, scaledHeight) {
+                        placeable.placeRelative(0, 0)
+                    }
+                })
+                .padding(horizontal = if (compact) 12.dp else 16.dp, vertical = if (tight) 2.dp else if (compact) 6.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(if (tight || compact) 4.dp else 10.dp),
             content = content
         )
     }

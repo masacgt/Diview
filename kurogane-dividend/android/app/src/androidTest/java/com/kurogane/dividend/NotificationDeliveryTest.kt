@@ -15,6 +15,7 @@ import org.junit.Test
 import org.junit.Assert.*
 import org.junit.runner.RunWith
 import java.io.IOException
+import java.time.LocalDate
 import java.time.ZonedDateTime
 
 @RunWith(AndroidJUnit4::class)
@@ -22,12 +23,36 @@ class NotificationDeliveryTest {
     private val app = ReviewApplication()
     private val store = NotificationStore(app)
     private val local = LocalImportStore(app)
-    private val clock = { ZonedDateTime.parse("2026-10-05T08:30:00+09:00[Asia/Tokyo]") }
+    private var currentTime = ZonedDateTime.parse("2026-10-05T08:30:00+09:00[Asia/Tokyo]")
+    private val clock = { currentTime }
     private var fetches = 0
     private var posted = 0
     private val names = listOf("local_import_store", "notification_preferences", "notification_delivery")
 
+    private fun queueDueDividendRightsEvent() {
+        val event = DividendRightsEvent(
+            id = "rights-event-7203-2026-10-30",
+            code = "7203",
+            name = "トヨタ",
+            exDividendDate = LocalDate.of(2026, 10, 29),
+            finalRightsDate = LocalDate.of(2026, 10, 28),
+            recordDate = LocalDate.of(2026, 10, 30)
+        )
+        store.observeDividendRightsEvents(
+            listOf(event),
+            LocalDate.of(2026, 10, 30),
+            ZonedDateTime.parse("2026-10-30T08:30:00+09:00[Asia/Tokyo]").toInstant().toEpochMilli()
+        )
+        store.observeDividendRightsEvents(
+            listOf(event),
+            LocalDate.of(2026, 10, 31),
+            ZonedDateTime.parse("2026-10-31T08:30:00+09:00[Asia/Tokyo]").toInstant().toEpochMilli()
+        )
+        currentTime = ZonedDateTime.parse("2026-10-31T17:30:00+09:00[Asia/Tokyo]")
+    }
+
     @Before fun prepare() {
+        currentTime = ZonedDateTime.parse("2026-10-05T08:30:00+09:00[Asia/Tokyo]")
         names.forEach { app.getSharedPreferences(it, Context.MODE_PRIVATE).edit().clear().commit() }
         local.saveWatchlist(listOf(WatchlistStock("7203", "トヨタ", "東証", "輸送用機器", "jp", 3000.0,
             dps = 100.0, currentYield = 3.33, targetYield = 4.0, targetPrice = 2500.0, dailyChange = "", isPositive = true,
@@ -55,6 +80,9 @@ class NotificationDeliveryTest {
     @Test fun deliveryMarkersSurviveRecreationAndPreventDuplicates() = runBlocking {
         store.setEnabled(NotificationKind.PRICE, true)
         engine().run(NotificationKind.PRICE)
+        assertEquals(0, posted)
+        currentTime = ZonedDateTime.parse("2026-10-05T17:30:00+09:00[Asia/Tokyo]")
+        engine().run(NotificationKind.PRICE)
         engine().run(NotificationKind.PRICE)
         assertEquals(1, posted)
         assertEquals("2026-10-05", NotificationStore(app).priceStates().getValue("7203").notifiedDate)
@@ -62,6 +90,9 @@ class NotificationDeliveryTest {
 
     @Test fun blockedPublicationDoesNotConsumeTheArrival() = runBlocking {
         store.setEnabled(NotificationKind.PRICE, true)
+        engine(publish = false).run(NotificationKind.PRICE)
+        assertTrue(store.priceStates().isEmpty())
+        currentTime = ZonedDateTime.parse("2026-10-05T17:30:00+09:00[Asia/Tokyo]")
         engine(publish = false).run(NotificationKind.PRICE)
         assertTrue(store.priceStates().isEmpty())
         engine().run(NotificationKind.PRICE)
@@ -107,22 +138,24 @@ class NotificationDeliveryTest {
         assertEquals(0, posted)
     }
 
-    @Test fun dividendMonthSendsOnceWithoutNetworkAccess() = runBlocking {
+    @Test fun passedDividendRightsDateSendsOnceWithoutNetworkAccess() = runBlocking {
         store.setEnabled(NotificationKind.DIVIDEND, true)
+        queueDueDividendRightsEvent()
         engine().run(NotificationKind.DIVIDEND)
         engine().run(NotificationKind.DIVIDEND)
         assertEquals(1, posted)
         assertEquals(0, fetches)
-        assertEquals("2026-10", store.dividendMonth())
+        assertTrue(store.pendingDividendRightsEvents().isEmpty())
     }
 
-    @Test fun corruptEncryptedPortfolioCannotProduceANotification() = runBlocking {
+    @Test fun corruptPortfolioDoesNotBlockConfirmedDividendRightsNotification() = runBlocking {
         store.setEnabled(NotificationKind.DIVIDEND, true)
+        queueDueDividendRightsEvent()
         app.getSharedPreferences("local_import_store", Context.MODE_PRIVATE).edit().putString("holdings", "invalid").commit()
-        try { engine().run(NotificationKind.DIVIDEND); fail("Expected corrupt data to fail") }
-        catch (_: IllegalArgumentException) { }
-        assertEquals(0, posted)
-        assertNull(store.dividendMonth())
+        engine().run(NotificationKind.DIVIDEND)
+        assertEquals(1, posted)
+        assertEquals(0, fetches)
+        assertTrue(store.pendingDividendRightsEvents().isEmpty())
     }
 
     @Test fun notificationDestinationsAreRestricted() {

@@ -45,12 +45,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -626,6 +629,7 @@ private fun MonthlyDividendEstimateCard(
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
     var showDividendInfo by remember { mutableStateOf(false) }
+    var selectedQuarterIndex by remember { mutableStateOf<Int?>(null) }
     val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
     val monthlyByCategory = remember(holdings, taxRateMode, dividendEventRevision) {
         (1..12).map { month ->
@@ -653,7 +657,7 @@ private fun MonthlyDividendEstimateCard(
     }
     var monthlyChartVisible by remember { mutableStateOf(false) }
     val monthlyBarsProgress = remember { Animatable(1f) }
-    LaunchedEffect(isTabSelected, monthlyDividends) {
+    LaunchedEffect(isTabSelected) {
         if (!isTabSelected) {
             monthlyBarsProgress.snapTo(1f)
             return@LaunchedEffect
@@ -803,7 +807,7 @@ private fun MonthlyDividendEstimateCard(
                         val y = plotBottom - plotHeight * (guideAmount / maxMonthlyAmount).toFloat()
                         drawLine(monthlyGridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
                     }
-                    selectedMonth?.let { month ->
+                    selectedMonth?.takeIf { selectedQuarterIndex == null }?.let { month ->
                         val selectedIndex = monthlyDividends.indexOfFirst { it.first == month }
                         if (selectedIndex >= 0) {
                             val groupWidth = size.width / monthlyDividends.size
@@ -836,7 +840,10 @@ private fun MonthlyDividendEstimateCard(
                     val animatedHeightFraction = heightFraction * barProgress
 
                     Column(
-                        modifier = Modifier.weight(1f).height(monthlyChartHeight).clickable { viewModel.selectMonth(month) },
+                        modifier = Modifier.weight(1f).height(monthlyChartHeight).clickable {
+                            selectedQuarterIndex = null
+                            viewModel.selectMonth(month)
+                        },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Bottom
                     ) {
@@ -959,7 +966,9 @@ private fun MonthlyDividendEstimateCard(
                 totalMonthlyAmount = monthlyCashFlowTotal,
                 maxMonthSharePercent = maxMonthSharePercent,
                 isPrivacyActive = isPrivacyActive,
-                currencyFormat = currencyFormat
+                currencyFormat = currencyFormat,
+                selectedQuarterIndex = selectedQuarterIndex,
+                onQuarterSelected = { selectedQuarterIndex = it }
             )
         }
     }
@@ -1035,7 +1044,9 @@ private fun QuarterlyCashFlowComparison(
     totalMonthlyAmount: Double,
     maxMonthSharePercent: Double,
     isPrivacyActive: Boolean,
-    currencyFormat: NumberFormat
+    currencyFormat: NumberFormat,
+    selectedQuarterIndex: Int?,
+    onQuarterSelected: (Int?) -> Unit
 ) {
     val quarterColors = listOf(PrimaryEmeraldContainer, SecondaryIndigo, SkyBlue, AccentAmber)
     val maxMonthShareText = if (isPrivacyActive) "•••%" else String.format(Locale.JAPAN, "%.1f%%", maxMonthSharePercent)
@@ -1076,7 +1087,7 @@ private fun QuarterlyCashFlowComparison(
             Spacer(Modifier.height(12.dp))
             Box(
                 Modifier.fillMaxWidth()
-                    .height(9.dp)
+                    .height(15.dp)
                     .clip(CircleShape)
                     .background(BorderBlue)
             ) {
@@ -1084,11 +1095,24 @@ private fun QuarterlyCashFlowComparison(
                     Row(Modifier.fillMaxSize()) {
                         quarterlyAmounts.forEachIndexed { index, amount ->
                             if (amount > 0.0) {
+                                val isSelected = selectedQuarterIndex == index
+                                val emphasisProgress by animateFloatAsState(
+                                    targetValue = if (isSelected) 1f else 0f,
+                                    label = "Quarterly cash flow emphasis $index"
+                                )
                                 Box(
                                     Modifier.weight((amount / totalMonthlyAmount).toFloat())
                                         .fillMaxHeight()
-                                        .background(quarterColors[index])
-                                )
+                                        .padding(horizontal = 0.5.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        Modifier.fillMaxWidth()
+                                            .height((9f + 6f * emphasisProgress).dp)
+                                            .clip(CircleShape)
+                                            .background(quarterColors[index])
+                                    )
+                                }
                             }
                         }
                     }
@@ -1104,7 +1128,9 @@ private fun QuarterlyCashFlowComparison(
                     val percentageText = if (isPrivacyActive) "•••%" else String.format(Locale.JAPAN, "%.1f%%", sharePercent)
 
                     Surface(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).clickable {
+                            onQuarterSelected(if (selectedQuarterIndex == index) null else index)
+                        },
                         shape = RoundedCornerShape(14.dp),
                         color = BackgroundDark,
                         border = BorderStroke(0.5.dp, BorderColor)
@@ -2003,6 +2029,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(SurfaceContainer)
+                                            .border(0.5.dp, BorderBlue, RoundedCornerShape(8.dp))
                                             .clickable { onNavigateToDetail(h.code) }
                                             .padding(10.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -2301,7 +2328,7 @@ private fun CompoundingSimulationSection(
     }
     var annualChartVisible by remember { mutableStateOf(false) }
     val annualBarsProgress = remember { Animatable(1f) }
-    LaunchedEffect(years, isTabSelected) {
+    LaunchedEffect(isTabSelected) {
         if (!isTabSelected) {
             annualBarsProgress.snapTo(1f)
             return@LaunchedEffect
@@ -2469,7 +2496,7 @@ private fun CompoundingSimulationSection(
                             val previousAmount = comparisonYears.getOrNull(index)?.amount
                             val yearChange = if (point.amount != null && previousAmount != null) point.amount - previousAmount else null
                             val isSelected = index == selectedIndex
-                            Card(Modifier.weight(1f).clickable { selectedYearIndex = index }, shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = if (isSelected) SurfaceContainerHigh else BackgroundDark), border = BorderStroke(1.dp, if (isSelected) PrimaryEmerald else Color.Transparent)) {
+                            Card(Modifier.weight(1f).clickable { selectedYearIndex = index }, shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = if (isSelected) SurfaceContainerHigh else BackgroundDark), border = BorderStroke(0.5.dp, BorderBlue)) {
                                 Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(stringResource(R.string.annual_dividend_1_s , point.year), color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                     Text(
@@ -2524,7 +2551,7 @@ private fun CompoundingSimulationSection(
                     }
                 }
                 AdaptiveRow(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh)) {
+                    Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh), border = BorderStroke(0.5.dp, BorderBlue)) {
                         Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
@@ -2540,7 +2567,7 @@ private fun CompoundingSimulationSection(
                             Text(stringResource(R.string.annual_dividend_text_36, firstPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, it.toString()) } ?: resources.getString(R.string.annual_dividend_label_20), latestPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, it.toString()) } ?: resources.getString(R.string.annual_dividend_label_21)), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
                     }
-                    Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh)) {
+                    Card(Modifier.weight(1f).fillMaxHeight(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerHigh), border = BorderStroke(0.5.dp, BorderBlue)) {
                         Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.AutoMirrored.Filled.ShowChart, null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
