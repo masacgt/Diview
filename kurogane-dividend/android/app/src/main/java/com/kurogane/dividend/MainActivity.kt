@@ -586,6 +586,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             visible = showSearchSheet,
                             onDismiss = { showSearchSheet = false },
                             onSearch = { query -> viewModel.searchCloudflareSecurities(query) },
+                            onLoadQuotes = viewModel::loadCloudflareSearchQuotes,
                             onSelectStock = { code ->
                                 showSearchSheet = false
                                 navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true }

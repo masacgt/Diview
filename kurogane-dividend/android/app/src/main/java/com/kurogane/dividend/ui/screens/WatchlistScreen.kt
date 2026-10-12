@@ -393,7 +393,8 @@ fun WatchlistScreen(
         visible = showAddWatchlist,
         onDismiss = { if (!isAddingWatchlist) showAddWatchlist = false },
         onSelectStock = { addWatchlist(it) },
-        onSearch = viewModel::searchCloudflareSecurities
+        onSearch = viewModel::searchCloudflareSecurities,
+        onLoadQuotes = viewModel::loadCloudflareSearchQuotes
     )
     val deleteActionWidth = 112.dp
     val deleteActionVisibleWidth = 80.dp

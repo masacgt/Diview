@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.data.CloudflareSearchHit
+import com.kurogane.dividend.data.CloudflareSearchQuote
 import kotlinx.coroutines.delay
 import com.kurogane.dividend.data.runCatchingCancellable
 import org.json.JSONArray
@@ -43,6 +44,19 @@ data class CandidateStock(
     val cat: String,
     val isHigh: Boolean
 )
+
+private fun formatCandidatePrice(price: Double?): String? = price
+    ?.takeIf { it.isFinite() && it > 0.0 }
+    ?.let {
+        val formatter = java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN).apply {
+            maximumFractionDigits = 2
+        }
+        "¥${formatter.format(it)}"
+    }
+
+private fun formatCandidateYield(yieldRate: Double?): String? = yieldRate
+    ?.takeIf { it.isFinite() && it in 0.0..100.0 }
+    ?.let { "%.2f%%".format(java.util.Locale.JAPAN, it) }
 
 private const val RECENT_SEARCHES_PREFERENCES = "stock_search_history"
 private const val RECENT_SEARCHES_KEY = "recent_candidates"
@@ -93,7 +107,8 @@ fun SearchSheet(
     visible: Boolean,
     onDismiss: () -> Unit,
     onSelectStock: (String) -> Unit,
-    onSearch: suspend (String) -> List<CloudflareSearchHit> = { emptyList() }
+    onSearch: suspend (String) -> List<CloudflareSearchHit> = { emptyList() },
+    onLoadQuotes: suspend (List<String>) -> Map<String, CloudflareSearchQuote> = { emptyMap() }
 ) {
     if (!visible) return
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -118,14 +133,27 @@ fun SearchSheet(
     var searchError by remember { mutableStateOf<String?>(null) }
     var retryCount by remember { mutableIntStateOf(0) }
     var recentCandidates by remember { mutableStateOf(loadRecentSearches(context)) }
+    var recentQuotes by remember { mutableStateOf<Map<String, CloudflareSearchQuote>>(emptyMap()) }
     val resources = context.resources
     val search by rememberUpdatedState(onSearch)
+    val loadQuotes by rememberUpdatedState(onLoadQuotes)
 
     LaunchedEffect(visible) {
         if (visible) {
             searchQuery = ""
             selectedCategory = "all"
             recentCandidates = loadRecentSearches(context)
+            recentQuotes = emptyMap()
+        }
+    }
+
+    LaunchedEffect(searchQuery, visible, recentCandidates, retryCount) {
+        if (visible && normalizeStockSearchText(searchQuery.trim()).isEmpty() && recentCandidates.isNotEmpty()) {
+            recentQuotes = runCatchingCancellable {
+                loadQuotes(recentCandidates.map { it.code })
+            }.getOrDefault(emptyMap())
+        } else {
+            recentQuotes = emptyMap()
         }
     }
 
@@ -144,15 +172,16 @@ fun SearchSheet(
             searchError = result.exceptionOrNull()?.let { networkErrorMessage(resources, it) }
             remoteCandidates = result.getOrNull()?.map { hit ->
                 val local = candidates.firstOrNull { it.code.equals(hit.code, ignoreCase = true) }
-                val price = hit.cachedPrice?.let { "¥${java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN).format(it.toLong())}" }
-                val yieldRate = hit.cachedPrice?.takeIf { it > 0.0 }?.let { currentPrice ->
+                val price = formatCandidatePrice(hit.cachedPrice)
+                val yieldRate = formatCandidateYield(hit.marketYieldRate)
+                    ?: hit.cachedPrice?.takeIf { it > 0.0 }?.let { currentPrice ->
                     hit.annualDividendPerShare?.let { dps -> "%.2f%%".format(java.util.Locale.JAPAN, dps / currentPrice * 100.0) }
                 }
                 local?.copy(
                     name = hit.name,
                     desc = hit.industry?.let { "東証 • $it" } ?: local.desc,
-                    price = price ?: local.price,
-                    yieldRate = yieldRate ?: local.yieldRate
+                    price = price ?: "株価未取得",
+                    yieldRate = yieldRate ?: "--"
                 ) ?: CandidateStock(
                     code = hit.code,
                     name = hit.name,
@@ -167,10 +196,16 @@ fun SearchSheet(
         }
     }
 
-    val filteredCandidates = remember(searchQuery, selectedCategory, remoteCandidates, recentCandidates) {
+    val filteredCandidates = remember(searchQuery, selectedCategory, remoteCandidates, recentCandidates, recentQuotes) {
         val query = normalizeStockSearchText(searchQuery.trim())
         val source = remoteCandidates ?: if (query.isEmpty()) {
-            recentCandidates
+            recentCandidates.map { candidate ->
+                val quote = recentQuotes[candidate.code.uppercase(java.util.Locale.ROOT)]
+                candidate.copy(
+                    price = formatCandidatePrice(quote?.price) ?: "株価未取得",
+                    yieldRate = formatCandidateYield(quote?.yieldRate) ?: "--"
+                )
+            }
         } else candidates.filter { item ->
             val matchesQuery = query.isEmpty() ||
                 normalizeStockSearchText(item.code).contains(query) ||
