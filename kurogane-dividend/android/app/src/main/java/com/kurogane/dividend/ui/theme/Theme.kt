@@ -2,6 +2,7 @@ package com.kurogane.dividend.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -14,6 +15,8 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+
+internal const val APP_FONT_FEATURE_SETTINGS = "\"kern\" 1, \"palt\" 1"
 
 @Composable
 fun KuroganeDividendTheme(
@@ -74,7 +77,14 @@ fun KuroganeDividendTheme(
     }
 
     CompositionLocalProvider(LocalAppPalette provides palette) {
-        MaterialTheme(colorScheme = colorScheme, typography = AppTypography, content = content)
+        MaterialTheme(colorScheme = colorScheme, typography = AppTypography) {
+            CompositionLocalProvider(
+                LocalTextStyle provides LocalTextStyle.current.copy(
+                    fontFeatureSettings = APP_FONT_FEATURE_SETTINGS
+                ),
+                content = content
+            )
+        }
     }
 }
 

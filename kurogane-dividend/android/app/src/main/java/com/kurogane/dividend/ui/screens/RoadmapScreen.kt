@@ -410,78 +410,80 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
+                        if (highestCompletedStep < milestoneSteps.size) {
+                            Spacer(modifier = Modifier.height(14.dp))
 
-                        // Dynamic simulation tip card
-                        val shortage = maxOf(0L, activeStep.targetMonthly - monthlyIncome)
-                        val shortageAnnual = shortage * 12
-                        val neededPrincipalAt4 = Math.round(shortageAnnual / (targetYield / 100.0) / 10000.0)
-                        val summaryMetrics = listOf(
-                            Triple(
-                                R.string.roadmap_summary_annual_shortfall,
-                                stringResource(R.string.roadmap_summary_yen, currencyFormat.format(shortageAnnual)),
-                                ErrorRed
-                            ),
-                            Triple(
-                                R.string.roadmap_summary_yield,
-                                "${String.format(Locale.JAPAN, "%.2f", targetYield)}%",
-                                PrimaryEmerald
-                            ),
-                            Triple(
-                                R.string.roadmap_summary_required_principal,
-                                stringResource(R.string.roadmap_summary_principal, NumberFormat.getNumberInstance(Locale.JAPAN).format(neededPrincipalAt4)),
-                                OnSurface
-                            )
-                        )
-
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = BackgroundDark,
-                            border = BorderStroke(1.dp, BorderBlue),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.roadmap_text_13, activeStep.step),
-                                    color = PrimaryEmerald,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold
+                            // Dynamic simulation tip card
+                            val shortage = maxOf(0L, activeStep.targetMonthly - monthlyIncome)
+                            val shortageAnnual = shortage * 12
+                            val neededPrincipalAt4 = Math.round(shortageAnnual / (targetYield / 100.0) / 10000.0)
+                            val summaryMetrics = listOf(
+                                Triple(
+                                    R.string.roadmap_summary_annual_shortfall,
+                                    stringResource(R.string.roadmap_summary_yen, currencyFormat.format(shortageAnnual)),
+                                    ErrorRed
+                                ),
+                                Triple(
+                                    R.string.roadmap_summary_yield,
+                                    "${String.format(Locale.JAPAN, "%.2f", targetYield)}%",
+                                    PrimaryEmerald
+                                ),
+                                Triple(
+                                    R.string.roadmap_summary_required_principal,
+                                    stringResource(R.string.roadmap_summary_principal, NumberFormat.getNumberInstance(Locale.JAPAN).format(neededPrincipalAt4)),
+                                    OnSurface
                                 )
-                                AdaptiveRow(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                            )
+
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = BackgroundDark,
+                                border = BorderStroke(1.dp, BorderBlue),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    summaryMetrics.forEach { (labelRes, value, valueColor) ->
-                                        Surface(
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = SurfaceContainer,
-                                            border = BorderStroke(0.5.dp, BorderBlue.copy(alpha = 0.6f))
-                                        ) {
-                                            Column(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(horizontal = 6.dp, vertical = 8.dp),
-                                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                                                horizontalAlignment = Alignment.CenterHorizontally
+                                    Text(
+                                        text = stringResource(R.string.roadmap_text_13, activeStep.step),
+                                        color = PrimaryEmerald,
+                                        fontSize = AppTextSize.dense,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    AdaptiveRow(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        summaryMetrics.forEach { (labelRes, value, valueColor) ->
+                                            Surface(
+                                                modifier = Modifier.weight(1f),
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = SurfaceContainer,
+                                                border = BorderStroke(0.5.dp, BorderBlue.copy(alpha = 0.6f))
                                             ) {
-                                                Text(
-                                                    text = stringResource(labelRes),
-                                                    color = OnSurfaceVariant,
-                                                    fontSize = AppTextSize.dense,
-                                                    maxLines = 1
-                                                )
-                                                Text(
-                                                    text = value,
-                                                    color = valueColor,
-                                                    fontSize = AppTextSize.caption,
-                                                    fontWeight = FontWeight.Bold,
-                                                    maxLines = 1
-                                                )
+                                                Column(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(horizontal = 6.dp, vertical = 8.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                                    horizontalAlignment = Alignment.CenterHorizontally
+                                                ) {
+                                                    Text(
+                                                        text = stringResource(labelRes),
+                                                        color = OnSurfaceVariant,
+                                                        fontSize = AppTextSize.dense,
+                                                        maxLines = 1
+                                                    )
+                                                    Text(
+                                                        text = value,
+                                                        color = valueColor,
+                                                        fontSize = AppTextSize.caption,
+                                                        fontWeight = FontWeight.Bold,
+                                                        maxLines = 1
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -974,15 +976,19 @@ private fun RoadmapGrowthSimulatorSheet(
     var reinvest by rememberSaveable { mutableStateOf(true) }
     var showSimulatorInfo by remember { mutableStateOf(false) }
     val simulatorDescription = "現在の評価額を起点に、毎月追加する金額と年間配当利回りから試算します。累計投資額は現在保有分の取得額と今後の追加額の合計です。配当は年1回受け取る想定で、再投資を選ぶと受取時に資産へ加算します。表示する月額は年間配当の月平均で、実際の支払時期・金額とは異なります。株価変動・税金・手数料は含みません。"
-    // Monthly deposits are made at month-end. Dividends are calculated on the
-    // invested balance before each deposit; cash dividends earn no return.
+    // Estimate dividend accrual monthly, but pay and reinvest it once yearly.
+    // Deposits are made at month-end.
     fun projection(years: Int): Triple<Double, Double, Double> {
         val monthlyRate = dividendYield.coerceIn(0.0, 30.0) / 100.0 / 12.0
         var investedAssets = currentAssets.coerceAtLeast(0.0)
         var cashDividends = 0.0
-        repeat(years * 12) {
-            val dividend = investedAssets * monthlyRate
-            if (reinvest) investedAssets += dividend else cashDividends += dividend
+        var accruedDividends = 0.0
+        repeat(years * 12) { monthIndex ->
+            accruedDividends += investedAssets * monthlyRate
+            if ((monthIndex + 1) % 12 == 0) {
+                if (reinvest) investedAssets += accruedDividends else cashDividends += accruedDividends
+                accruedDividends = 0.0
+            }
             investedAssets += monthlyContribution.coerceAtLeast(0L)
         }
         return Triple(investedAssets + cashDividends, investedAssets * monthlyRate, cashDividends)
@@ -1006,34 +1012,66 @@ private fun RoadmapGrowthSimulatorSheet(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.HourglassBottom, contentDescription = null, tint = PrimaryEmerald)
                 Spacer(Modifier.width(8.dp))
-                Text("福利シミュレーター", modifier = Modifier.weight(1f), fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
-                Box {
-                    IconButton(onClick = { showSimulatorInfo = true }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Info, contentDescription = "福利シミュレーターの説明", tint = OnSurfaceVariant, modifier = Modifier.size(18.dp))
-                    }
-                    DropdownMenu(
-                        expanded = showSimulatorInfo,
-                        onDismissRequest = { showSimulatorInfo = false },
-                        modifier = Modifier.widthIn(max = 320.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        containerColor = SurfaceContainerLow,
-                        tonalElevation = 0.dp,
-                        shadowElevation = 12.dp
-                    ) {
-                        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.14f), modifier = Modifier.size(30.dp)) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Default.Info, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(17.dp))
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text("福利シミュレーター", fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
+                    Box {
+                        IconButton(
+                            onClick = { showSimulatorInfo = true },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = "福利シミュレーターの説明",
+                                tint = OnSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showSimulatorInfo,
+                            onDismissRequest = { showSimulatorInfo = false },
+                            modifier = Modifier.widthIn(max = 320.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            containerColor = SurfaceContainerLow,
+                            tonalElevation = 0.dp,
+                            shadowElevation = 12.dp
+                        ) {
+                            Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = PrimaryEmerald.copy(alpha = 0.14f),
+                                        modifier = Modifier.size(30.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                Icons.Default.Info,
+                                                contentDescription = null,
+                                                tint = PrimaryEmerald,
+                                                modifier = Modifier.size(17.dp)
+                                            )
+                                        }
                                     }
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(
+                                        "福利シミュレーターの見方",
+                                        color = OnSurface,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = AppTextSize.body
+                                    )
                                 }
-                                Spacer(Modifier.width(10.dp))
-                                Text("福利シミュレーターの見方", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
+                                Spacer(Modifier.height(12.dp))
+                                HorizontalDivider(color = BorderColor, thickness = 0.75.dp)
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    simulatorDescription,
+                                    color = OnSurfaceVariant,
+                                    fontSize = AppTextSize.caption
+                                )
                             }
-                            Spacer(Modifier.height(12.dp))
-                            HorizontalDivider(color = BorderColor, thickness = 0.75.dp)
-                            Spacer(Modifier.height(12.dp))
-                            Text(simulatorDescription, color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                         }
                     }
                 }
@@ -1053,6 +1091,7 @@ private fun RoadmapGrowthSimulatorSheet(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(10, 20, 30).forEach { years ->
                     val (value, estimatedMonthlyDividend, _) = projection(years)
+                    val estimatedAnnualDividend = estimatedMonthlyDividend * 12.0
                     val principal = currentCost.coerceAtLeast(0.0) + monthlyContribution * 12.0 * years
                     Column(
                         Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(SurfaceContainerHigh)
@@ -1072,22 +1111,23 @@ private fun RoadmapGrowthSimulatorSheet(
                             style = androidx.compose.ui.text.TextStyle(color = OnSurface, fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Black, textAlign = TextAlign.Center))
                         Text(
-                            "元本: ¥${kotlin.math.round(principal / 10_000.0).toLong()}万",
+                            "累計投資額: ¥${kotlin.math.round(principal / 10_000.0).toLong()}万",
                             color = OnSurfaceVariant,
                             fontSize = AppTextSize.dense,
                             textAlign = TextAlign.Center,
                             maxLines = 1
                         )
                         HorizontalDivider(color = BorderColor)
-                        Text("月配当(目安)", color = OnSurfaceVariant, fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
-                        SmoothMoney(estimatedMonthlyDividend, suffix = "/月",
+                        Text("年間配当額", color = OnSurfaceVariant, fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
+                        SmoothMoney(estimatedAnnualDividend, suffix = "/年",
                             style = androidx.compose.ui.text.TextStyle(color = PrimaryEmerald, fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold, textAlign = TextAlign.Center))
+                        Text("月平均 ¥${numberFormat.format(kotlin.math.round(estimatedMonthlyDividend).toLong())}/月", color = PrimaryEmerald, fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
                     }
                 }
             }
             GrowthSimulatorStepper(
-                label = "毎月の積立額",
+                label = "毎月追加する金額",
                 value = "¥${numberFormat.format(monthlyContribution)}",
                 onDecrease = {
                     val step = if (monthlyContribution <= 20_000L) 1_000L else 5_000L
@@ -1099,7 +1139,7 @@ private fun RoadmapGrowthSimulatorSheet(
                 }
             )
             GrowthSimulatorStepper(
-                label = "想定配当利回り",
+                label = "想定年間配当利回り",
                 value = String.format(Locale.JAPAN, "%.2f%%", dividendYield),
                 onDecrease = { onDividendYieldChange((dividendYield - 0.10).coerceAtLeast(0.0)) },
                 onIncrease = { onDividendYieldChange((dividendYield + 0.10).coerceAtMost(30.0)) }

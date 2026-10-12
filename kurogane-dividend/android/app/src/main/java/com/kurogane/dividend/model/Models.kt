@@ -52,6 +52,17 @@ data class Holding(
     }
 }
 
+data class ShareholderBenefit(
+    val name: String = "",
+    val marketValue: String = ""
+)
+
+enum class StockClimate(val label: String) {
+    CYCLICAL("景気敏感株"),
+    DEFENSIVE("ディフェンシブ株"),
+    NEUTRAL("景気中立株")
+}
+
 data class StockFinancialProfile(
     val payoutRatio: Double = Double.NaN,
     val equityRatio: Double = Double.NaN,

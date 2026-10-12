@@ -45,8 +45,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.semantics
@@ -94,6 +96,7 @@ fun WatchlistScreen(
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
     val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
+    val financialData by viewModel.financialData.collectAsStateWithLifecycle()
     val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
     val latestCalculatedRightsDate = remember(watchlist, dividendEventRevision) {
         watchlist.asSequence()
@@ -206,7 +209,11 @@ fun WatchlistScreen(
     val matrixSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var showGraphBottomSheet by remember { mutableStateOf(false) }
+    var showCalendarInfo by remember { mutableStateOf(false) }
     val graphSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+
+    var showPayoutRiskBottomSheet by remember { mutableStateOf(false) }
+    val payoutRiskSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Process filters
     val filteredList = watchlist.filter { stock ->
@@ -490,7 +497,7 @@ fun WatchlistScreen(
                             ) {
                                 Icon(Icons.Default.CalendarToday, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(13.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(R.string.watchlist_text_11), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.watchlist_bulk_ex_dividend_month_button), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
 
                             Button(
@@ -505,7 +512,22 @@ fun WatchlistScreen(
                             ) {
                                 Icon(Icons.Default.BarChart, contentDescription = null, tint = SkyBlue, modifier = Modifier.size(13.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(R.string.watchlist_text_12), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.watchlist_bulk_monthly_estimate_button), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            }
+
+                            Button(
+                                onClick = { showPayoutRiskBottomSheet = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = BackgroundDark),
+                                border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.4f)),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 48.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Icon(Icons.Default.Shield, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(13.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.watchlist_payout_diagnosis_button), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -713,6 +735,7 @@ fun WatchlistScreen(
                     }
 
                     Card(
+                        onClick = { onNavigateToDetail(stock.code) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .offset { IntOffset(swipeOffset.value.toInt(), 0) }
@@ -746,15 +769,19 @@ fun WatchlistScreen(
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow)
                     ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                        AdaptiveRow(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                         Surface(
                             shape = CircleShape,
                             color = badgeColor.copy(alpha = 0.15f),
                             border = BorderStroke(0.5.dp, badgeColor.copy(alpha = 0.5f)),
-                            modifier = Modifier.padding(bottom = 8.dp)
+                            modifier = Modifier.weight(1f).padding(end = 6.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 1.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -768,9 +795,71 @@ fun WatchlistScreen(
                                     dynamicBadge,
                                     color = badgeColor,
                                     fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
+                        }
+                        Button(
+                            onClick = { onOpenAddHolding(stock.code) },
+                            modifier = Modifier.widthIn(min = 82.dp).height(32.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald, contentColor = OnPrimary),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                        ) {
+                            Icon(Icons.Default.AddCircle, contentDescription = null, modifier = Modifier.size(13.dp), tint = OnPrimary)
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(stringResource(R.string.watchlist_text_18), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = OnPrimary, maxLines = 1, softWrap = false)
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Button(
+                            onClick = {
+                                if (stock.alertEnabled) viewModel.toggleWatchlistStock(stock.code)
+                                else notificationAccess.request("price:${stock.code}")
+                            },
+                            modifier = Modifier
+                                .widthIn(min = 72.dp)
+                                .height(32.dp)
+                                .semantics {
+                                    stateDescription = resources.getString(
+                                        if (stock.alertEnabled) R.string.watchlist_alert_enabled
+                                        else R.string.watchlist_alert_disabled
+                                    )
+                                },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = SurfaceContainer,
+                                contentColor = OnSurface
+                            ),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                            border = BorderStroke(1.5.dp, PrimaryEmerald.copy(alpha = 0.4f))
+                        ) {
+                            if (stock.alertEnabled) {
+                                Icon(
+                                    imageVector = Icons.Default.NotificationsActive,
+                                    contentDescription = null,
+                                    tint = PrimaryEmerald,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.NotificationsNone,
+                                    contentDescription = null,
+                                    tint = OnSurface,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                stringResource(R.string.watchlist_alert_short),
+                                color = if (stock.alertEnabled) PrimaryEmerald else OnSurfaceVariant,
+                                fontSize = 9.sp,
+                                fontWeight = if (stock.alertEnabled) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                         }
 
                         AdaptiveRow(
@@ -825,7 +914,7 @@ fun WatchlistScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(5.dp))
 
                         // Stepper Box
                         Surface(
@@ -833,7 +922,7 @@ fun WatchlistScreen(
                             color = BackgroundDark.copy(alpha = 0.85f),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
+                            Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
                                 AdaptiveRow(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -865,9 +954,9 @@ fun WatchlistScreen(
                                         modifier = Modifier
                                             .clip(CircleShape)
                                             .background(SurfaceContainer)
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            .padding(horizontal = 6.dp, vertical = 0.dp)
                                     ) {
-                                        Text(stringResource(R.string.watchlist_text_15), color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
+                                        Text(stringResource(R.string.watchlist_text_15), color = OnSurfaceVariant, fontSize = AppTextSize.section, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
                                         Spacer(modifier = Modifier.width(4.dp))
                                         TargetYieldAdjustButton(
                                             icon = Icons.Default.Remove,
@@ -879,7 +968,7 @@ fun WatchlistScreen(
                                             stringResource(R.string.settings_1_s , String.format(Locale.JAPAN, "%.2f", stock.targetYield)),
                                             color = PrimaryEmerald,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = AppTextSize.caption,
+                                            fontSize = AppTextSize.section,
                                             fontFamily = FontFamily.Monospace,
                                             modifier = Modifier.padding(horizontal = 4.dp)
                                         )
@@ -892,7 +981,7 @@ fun WatchlistScreen(
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
 
                                 AdaptiveRow(
                                     modifier = Modifier.fillMaxWidth(),
@@ -913,7 +1002,7 @@ fun WatchlistScreen(
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.height(5.dp))
+                                Spacer(modifier = Modifier.height(3.dp))
 
                                 LinearProgressIndicator(
                                     progress = { (yieldAchievement / 100.0).toFloat() },
@@ -922,7 +1011,7 @@ fun WatchlistScreen(
                                     trackColor = SurfaceContainerHighest
                                 )
 
-                                Spacer(modifier = Modifier.height(6.dp))
+                                Spacer(modifier = Modifier.height(3.dp))
 
                                 AdaptiveRow(
                                     modifier = Modifier.fillMaxWidth(),
@@ -957,73 +1046,7 @@ fun WatchlistScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Action Buttons
-                        AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Button(
-                                onClick = { onOpenAddHolding(stock.code) },
-                                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald, contentColor = OnPrimary),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                            ) {
-                                Icon(Icons.Default.AddCircle, contentDescription = null, modifier = Modifier.size(14.dp), tint = OnPrimary)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(stringResource(R.string.watchlist_text_18), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = OnPrimary)
-                            }
-
-                            Button(
-                                onClick = {
-                                    if (stock.alertEnabled) viewModel.toggleWatchlistStock(stock.code)
-                                    else notificationAccess.request("price:${stock.code}")
-                                },
-                                modifier = Modifier
-                                    .widthIn(min = 116.dp)
-                                    .heightIn(min = 48.dp)
-                                    .semantics {
-                                        stateDescription = resources.getString(
-                                            if (stock.alertEnabled) R.string.watchlist_alert_enabled
-                                            else R.string.watchlist_alert_disabled
-                                        )
-                                    },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainer, contentColor = OnSurface),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                border = if (stock.alertEnabled) BorderStroke(0.5.dp, PrimaryEmerald.copy(alpha = 0.4f)) else null
-                            ) {
-                                Icon(
-                                    imageVector = if (stock.alertEnabled) Icons.Default.NotificationsActive else Icons.Default.Notifications,
-                                    contentDescription = null,
-                                    tint = if (stock.alertEnabled) PrimaryEmerald else SoftGray,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    stringResource(R.string.watchlist_alert_short),
-                                    color = OnSurfaceVariant,
-                                    fontSize = 9.sp,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                            }
-
-                            Button(
-                                onClick = { onNavigateToDetail(stock.code) },
-                                modifier = Modifier.widthIn(min = 72.dp).heightIn(min = 48.dp),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainer, contentColor = OnSurface),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
-                            ) {
-                                Text(stringResource(R.string.watchlist_text_19), fontSize = AppTextSize.dense, color = OnSurface)
-                                Spacer(modifier = Modifier.width(2.dp))
-                                Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(14.dp), tint = OnSurface)
-                            }
-                        }
+                        Spacer(modifier = Modifier.height(2.dp))
                     }
                     }
                 }
@@ -1277,6 +1300,9 @@ fun WatchlistScreen(
             tonalElevation = 8.dp,
             scrimColor = Color.Black.copy(alpha = 0.6f)
         ) {
+            val totalAmountTextMeasurer = rememberTextMeasurer()
+            val totalAmountCellWidthPx = with(LocalDensity.current) { 52.dp.roundToPx() }
+            val totalAmountTextStyle = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1459,7 +1485,7 @@ fun WatchlistScreen(
                         // Row 1: 三井住友
                         watchlist.forEach { stock ->
                             HeatmapRow(stock.code, stock.name, projection.months(stock).associateWith { month ->
-                                "配当\n${yen(projection.monthly(stock, month))}" to
+                                "配当 ${yen(projection.monthly(stock, month))}" to
                                     (if (stock.category == "us") SecondaryIndigo.copy(alpha = 0.18f) else PrimaryEmerald.copy(alpha = 0.25f))
                             })
                         }
@@ -1472,13 +1498,26 @@ fun WatchlistScreen(
                             Text(stringResource(R.string.watchlist_text_41), modifier = Modifier.width(80.dp).padding(start = 8.dp), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             (1..12).forEach { m ->
                                 val sumText = if (projection.monthlyTotals[m - 1] > 0) yen(projection.monthlyTotals[m - 1]) else "—"
+                                val amountFontSize = remember(sumText, totalAmountCellWidthPx, totalAmountTextStyle) {
+                                    (AppTextSize.dense.value.toInt() downTo 6).firstOrNull { sizeSp ->
+                                        !totalAmountTextMeasurer.measure(
+                                            text = sumText,
+                                            style = totalAmountTextStyle.copy(fontSize = sizeSp.sp),
+                                            softWrap = false,
+                                            maxLines = 1,
+                                            constraints = Constraints(maxWidth = totalAmountCellWidthPx)
+                                        ).didOverflowWidth
+                                    }?.sp ?: 6.sp
+                                }
                                 Text(
                                     text = sumText,
                                     modifier = Modifier.width(52.dp),
                                     color = if (sumText != "-") OnSurface else OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
+                                    style = totalAmountTextStyle.copy(fontSize = amountFontSize),
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Clip
                                 )
                             }
                         }
@@ -1637,6 +1676,164 @@ fun WatchlistScreen(
 
                 HorizontalDivider(color = BorderColor)
 
+                // Card 2: 12-month calendar bar graph Card
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                        .heightIn(max = 320.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
+                    border = BorderStroke(1.dp, BorderColor)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        AdaptiveRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.GridOn, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.watchlist_text_66), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Box {
+                                    IconButton(
+                                        onClick = { showCalendarInfo = true },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Info,
+                                            contentDescription = stringResource(R.string.watchlist_calendar_info_content_description),
+                                            tint = OnSurfaceVariant,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = showCalendarInfo,
+                                        onDismissRequest = { showCalendarInfo = false },
+                                        modifier = Modifier.widthIn(max = 300.dp),
+                                        shape = RoundedCornerShape(16.dp),
+                                        containerColor = SurfaceContainerLow,
+                                        tonalElevation = 0.dp,
+                                        shadowElevation = 12.dp
+                                    ) {
+                                        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Surface(
+                                                    shape = CircleShape,
+                                                    color = PrimaryEmerald.copy(alpha = 0.14f),
+                                                    modifier = Modifier.size(30.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Icon(Icons.Default.Info, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(17.dp))
+                                                    }
+                                                }
+                                                Spacer(Modifier.width(10.dp))
+                                                Text(
+                                                    stringResource(R.string.watchlist_calendar_info_title),
+                                                    color = OnSurface,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = AppTextSize.body
+                                                )
+                                            }
+                                            Spacer(Modifier.height(12.dp))
+                                            HorizontalDivider(color = BorderColor, thickness = 0.75.dp)
+                                            Spacer(Modifier.height(12.dp))
+                                            Text(
+                                                projectionNote,
+                                                color = OnSurfaceVariant,
+                                                fontSize = AppTextSize.caption,
+                                                lineHeight = 20.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmeraldContainer))
+                                Text(stringResource(R.string.watchlist_text_67), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(SecondaryIndigo))
+                                Text(stringResource(R.string.watchlist_text_68), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF475569)))
+                                Text(stringResource(R.string.watchlist_text_69), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Canvas Graph Custom drawing exactly as shown in Image 3
+                        val calendarEmptyMonthColor = BorderColor
+                        val calendarDividendColor = PrimaryEmeraldContainer
+                        val calendarUsColor = SecondaryIndigo
+                        Canvas(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp)
+                        ) {
+                            val maxBarVal = projection.monthlyTotals.maxOrNull()?.toFloat()?.coerceAtLeast(1f) ?: 1f
+                            val numMonths = 12
+                            val barWidth = 14.dp.toPx()
+                            val spacing = (size.width - (barWidth * numMonths)) / (numMonths + 1)
+
+                            for (m in 1..12) {
+                                val monthLeft = spacing + (m - 1) * (barWidth + spacing)
+                                val barVal = projection.monthlyTotals[m - 1].toFloat()
+                                val color = if (watchlist.any { it.category != "us" && projection.monthly(it, m) > 0 }) calendarDividendColor else calendarUsColor
+
+                                if (barVal > 0f) {
+                                    val barHeight = size.height * (barVal / maxBarVal) * 0.85f
+                                    val barTop = size.height - barHeight
+                                    drawRoundRect(
+                                        color = color,
+                                        topLeft = Offset(monthLeft, barTop),
+                                        size = Size(barWidth, barHeight),
+                                        cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+                                    )
+                                } else {
+                                    // Empty month box
+                                    drawRoundRect(
+                                        color = calendarEmptyMonthColor,
+                                        topLeft = Offset(monthLeft, size.height - 12.dp.toPx()),
+                                        size = Size(barWidth, 12.dp.toPx()),
+                                        style = Stroke(width = 1.dp.toPx()),
+                                        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                                    )
+                                }
+                            }
+                        }
+
+                        // Labels row under calendar
+                        AdaptiveRow(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            (1..12).forEach { m ->
+                                val count = watchlist.count { m in projection.months(it) }
+                                val label = if (count > 0) "${count}銘柄" else "—"
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(stringResource(R.string.annual_dividend_1_s , m), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                    Text(label, color = if (label.startsWith("日")) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Medium)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = BorderColor)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                            Text(stringResource(R.string.watchlist_empty_months, projection.emptyMonths.joinToString("・").ifEmpty { "—" }), color = ErrorRed, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
                 // KPI Row (3 cards side-by-side)
                 AdaptiveRow(
                     modifier = Modifier.fillMaxWidth(),
@@ -1749,116 +1946,6 @@ fun WatchlistScreen(
                                     Text(percent(if (projection.scheduledTotal > 0) amount / projection.scheduledTotal * 100 else 0.0), color = PrimaryEmerald, fontSize = AppTextSize.dense)
                                 }
                             }
-                        }
-                    }
-                }
-
-                // Card 2: 12-month calendar bar graph Card
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .wrapContentHeight()
-                        .heightIn(max = 320.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-                    border = BorderStroke(1.dp, BorderColor)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.GridOn, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(R.string.watchlist_text_66), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            }
-
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmeraldContainer))
-                                Text(stringResource(R.string.watchlist_text_67), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(SecondaryIndigo))
-                                Text(stringResource(R.string.watchlist_text_68), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF475569)))
-                                Text(stringResource(R.string.watchlist_text_69), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Canvas Graph Custom drawing exactly as shown in Image 3
-                        val calendarEmptyMonthColor = BorderColor
-                        val calendarDividendColor = PrimaryEmeraldContainer
-                        val calendarUsColor = SecondaryIndigo
-                        Canvas(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(100.dp)
-                        ) {
-                            val maxBarVal = projection.monthlyTotals.maxOrNull()?.toFloat()?.coerceAtLeast(1f) ?: 1f
-                            val numMonths = 12
-                            val barWidth = 14.dp.toPx()
-                            val spacing = (size.width - (barWidth * numMonths)) / (numMonths + 1)
-
-                            for (m in 1..12) {
-                                val monthLeft = spacing + (m - 1) * (barWidth + spacing)
-                                val barVal = projection.monthlyTotals[m - 1].toFloat()
-                                val color = if (watchlist.any { it.category != "us" && projection.monthly(it, m) > 0 }) calendarDividendColor else calendarUsColor
-
-                                if (barVal > 0f) {
-                                    val barHeight = size.height * (barVal / maxBarVal) * 0.85f
-                                    val barTop = size.height - barHeight
-                                    drawRoundRect(
-                                        color = color,
-                                        topLeft = Offset(monthLeft, barTop),
-                                        size = Size(barWidth, barHeight),
-                                        cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
-                                    )
-                                } else {
-                                    // Empty month box
-                                    drawRoundRect(
-                                        color = calendarEmptyMonthColor,
-                                        topLeft = Offset(monthLeft, size.height - 12.dp.toPx()),
-                                        size = Size(barWidth, 12.dp.toPx()),
-                                        style = Stroke(width = 1.dp.toPx()),
-                                        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
-                                    )
-                                }
-                            }
-                        }
-
-                        // Labels row under calendar
-                        AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            (1..12).forEach { m ->
-                                val count = watchlist.count { m in projection.months(it) }
-                                val label = if (count > 0) "${count}銘柄" else "—"
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(stringResource(R.string.annual_dividend_1_s , m), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                    Text(label, color = if (label.startsWith("日")) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Medium)
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-                        HorizontalDivider(color = BorderColor)
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(projectionNote, color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                            Text(stringResource(R.string.watchlist_empty_months, projection.emptyMonths.joinToString("・").ifEmpty { "—" }), color = ErrorRed, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -2000,6 +2087,81 @@ fun WatchlistScreen(
             }
         }
     }
+
+    if (showPayoutRiskBottomSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showPayoutRiskBottomSheet = false },
+            sheetState = payoutRiskSheetState,
+            containerColor = BackgroundDark,
+            tonalElevation = 8.dp,
+            scrimColor = Color.Black.copy(alpha = 0.6f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                AdaptiveRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(PrimaryEmerald.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Shield, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(stringResource(R.string.watchlist_payout_diagnosis_button), color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
+                            Text(
+                                stringResource(R.string.watchlist_payout_diagnosis_count, watchlist.count { it.category == "jp" }),
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(SurfaceContainerHigh)
+                            .clickable { showPayoutRiskBottomSheet = false },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close), tint = OnSurfaceVariant, modifier = Modifier.size(16.dp))
+                    }
+                }
+
+                HorizontalDivider(color = BorderColor)
+
+                WatchlistDividendPayoutRiskContent(
+                    watchlist = watchlist,
+                    financialData = financialData,
+                    onNavigateToDetail = onNavigateToDetail
+                )
+
+                Button(
+                    onClick = { showPayoutRiskBottomSheet = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().height(44.dp)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = null, tint = OnSurface, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(stringResource(R.string.close), color = OnSurface, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -2093,10 +2255,11 @@ private fun HeatmapRow(
                     Text(
                         text = cellData.first,
                         color = OnSurface,
-                        fontSize = AppTextSize.dense,
+                        fontSize = 8.sp,
                         fontWeight = FontWeight.Bold,
-                        lineHeight = 11.sp,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 } else {
                     Text("—", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
