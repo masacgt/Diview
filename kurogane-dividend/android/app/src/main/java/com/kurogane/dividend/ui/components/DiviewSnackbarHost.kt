@@ -1,6 +1,5 @@
 package com.kurogane.dividend.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,11 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kurogane.dividend.ui.theme.BorderColor
-import com.kurogane.dividend.ui.theme.OnSurface
-import com.kurogane.dividend.ui.theme.OnSurfaceVariant
+import com.kurogane.dividend.ui.theme.OnPrimary
 import com.kurogane.dividend.ui.theme.PrimaryEmerald
-import com.kurogane.dividend.ui.theme.SurfaceContainerHigh
 
 @Composable
 fun DiviewSnackbarHost(hostState: SnackbarHostState) {
@@ -40,9 +36,8 @@ private fun DiviewSnackbar(data: SnackbarData) {
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
         shape = RoundedCornerShape(12.dp),
-        color = SurfaceContainerHigh,
-        contentColor = OnSurface,
-        border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.45f)),
+        color = PrimaryEmerald,
+        contentColor = OnPrimary,
         tonalElevation = 6.dp
     ) {
         Row(
@@ -55,12 +50,12 @@ private fun DiviewSnackbar(data: SnackbarData) {
             Text(
                 text = data.visuals.message,
                 modifier = Modifier.weight(1f),
-                color = OnSurface,
+                color = OnPrimary,
                 fontSize = 14.sp
             )
             data.visuals.actionLabel?.let { actionLabel ->
                 TextButton(onClick = data::performAction) {
-                    Text(actionLabel, color = PrimaryEmerald)
+                    Text(actionLabel, color = OnPrimary)
                 }
             }
             if (data.visuals.withDismissAction) {
@@ -69,7 +64,7 @@ private fun DiviewSnackbar(data: SnackbarData) {
                         Icons.Default.Close,
                         contentDescription = "通知を閉じる",
                         modifier = Modifier.size(18.dp),
-                        tint = OnSurfaceVariant
+                        tint = OnPrimary
                     )
                 }
             }
