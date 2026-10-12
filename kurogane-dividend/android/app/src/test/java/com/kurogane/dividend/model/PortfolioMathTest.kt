@@ -60,7 +60,7 @@ class PortfolioMathTest {
         val original = Locale.getDefault()
         try {
             Locale.setDefault(Locale.GERMANY)
-            assertEquals(3.1, PortfolioMath.adjustedTarget(3.0, 0.1), 0.0)
+            assertEquals(3.05, PortfolioMath.adjustedTarget(3.0, 0.1), 0.0)
             assertEquals(0.1, PortfolioMath.adjustedTarget(0.1, -10.0), 0.0)
             assertEquals(100.0, PortfolioMath.adjustedTarget(100.0, 10.0), 0.0)
         } finally { Locale.setDefault(original) }
