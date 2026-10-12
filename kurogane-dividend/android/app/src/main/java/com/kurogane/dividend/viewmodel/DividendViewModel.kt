@@ -1533,7 +1533,7 @@ class DividendViewModel @JvmOverloads constructor(
             hit.copy(
                 name = japaneseDisplayName(hit.code, hit.name),
                 cachedPrice = hit.cachedPrice ?: cachedPrices[normalizedCode],
-                annualDividendPerShare = dividendsByCode[normalizedCode],
+                annualDividendPerShare = dividendsByCode[normalizedCode] ?: hit.annualDividendPerShare,
                 industry = industries[hit.code.take(4).uppercase(java.util.Locale.ROOT)]
             )
         }
@@ -1541,13 +1541,16 @@ class DividendViewModel @JvmOverloads constructor(
 
     suspend fun loadCloudflareSearchQuotes(codes: List<String>): Map<String, CloudflareSearchQuote> = coroutineScope {
         marketRepository.fetchSearchQuotes(codes).map { (code, quote) ->
-            async { code to quote.copy(annualDividendPerShare = searchDividendPerShare(code)) }
+            async {
+                code to quote.copy(
+                    annualDividendPerShare = searchDividendPerShare(code) ?: quote.annualDividendPerShare
+                )
+            }
         }.awaitAll().toMap()
     }
 
     private suspend fun searchDividendPerShare(code: String): Double? {
-        val normalizedCode = PortfolioMath.normalizeCode(code).removeSuffix(".T")
-            .uppercase(java.util.Locale.ROOT)
+        val normalizedCode = normalizedSecurityCode(code)
         _financialData.value[normalizedCode]?.dividends?.lastOrNull()?.dps
             ?.takeIf { it.isFinite() && it >= 0.0 }
             ?.let { return it }
@@ -1568,12 +1571,15 @@ class DividendViewModel @JvmOverloads constructor(
                 ?.takeIf { loadedAt - it.loadedAtMillis < SEARCH_DIVIDEND_CACHE_TTL_MILLIS }
                 ?.let { return@withLock it.annualDividendPerShare }
 
-            val annualDividendPerShare = searchDividendSlots.withPermit {
-                runCatchingCancellable { marketRepository.getSecurity(normalizedCode)?.annualDividendPerShare }
-                    .getOrNull()
-                    ?.takeIf { it.isFinite() && it >= 0.0 }
+            val security = searchDividendSlots.withPermit {
+                runCatchingCancellable { marketRepository.getSecurity(normalizedCode) }.getOrNull()
             }
-            searchDividendCache[normalizedCode] = SearchDividendCacheEntry(annualDividendPerShare, loadedAt)
+            val annualDividendPerShare = security?.annualDividendPerShare
+                ?.takeIf { it.isFinite() && it >= 0.0 }
+            // Do not cache network failures or not-found responses; a later search can retry.
+            if (security != null) {
+                searchDividendCache[normalizedCode] = SearchDividendCacheEntry(annualDividendPerShare, loadedAt)
+            }
             annualDividendPerShare
         }
     }
