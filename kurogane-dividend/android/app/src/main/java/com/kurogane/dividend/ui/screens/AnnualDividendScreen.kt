@@ -2345,6 +2345,15 @@ private fun CompoundingSimulationSection(
     }
     val format = NumberFormat.getNumberInstance(Locale.JAPAN)
     fun money(value: Double?): String = if (value == null) "未取得" else if (isPrivacyActive) "¥••••" else "¥${format.format(value.toLong())}"
+    fun compactMoney(value: Double): String {
+        val absoluteValue = kotlin.math.abs(value)
+        return when {
+            absoluteValue >= 1_000_000_000_000.0 -> String.format(Locale.JAPAN, "%.1f兆", value / 1_000_000_000_000.0)
+            absoluteValue >= 100_000_000.0 -> String.format(Locale.JAPAN, "%.1f億", value / 100_000_000.0)
+            absoluteValue >= 10_000.0 -> String.format(Locale.JAPAN, "%.1f万", value / 10_000.0)
+            else -> "¥${format.format(value.toLong())}"
+        }
+    }
     var selectedYearIndex by remember { mutableIntStateOf(4) }
     val knownYears = years.filter { it.amount != null }
     val firstPoint = knownYears.firstOrNull()
@@ -2366,6 +2375,13 @@ private fun CompoundingSimulationSection(
         isPrivacyActive -> "••••"
         value > 0 -> "+¥${format.format(value.toLong())}"
         value < 0 -> "−¥${format.format(kotlin.math.abs(value).toLong())}"
+        else -> "¥0"
+    }
+    fun compactSignedMoney(value: Double?): String = when {
+        value == null -> "未取得"
+        isPrivacyActive -> "••••"
+        value > 0 -> "+${compactMoney(value)}"
+        value < 0 -> "−${compactMoney(kotlin.math.abs(value))}"
         else -> "¥0"
     }
     fun signedPercent(value: Double?): String = value?.let { String.format(Locale.JAPAN, "%+.2f%%", it) } ?: "未取得"
@@ -2462,9 +2478,8 @@ private fun CompoundingSimulationSection(
                             val stagger = index * 0.08f
                             val barProgress = ((annualBarsProgress.value - stagger) / (1f - stagger)).coerceAtLeast(0f)
                             val normalized = (amount / maxValue).toFloat().coerceIn(0f, 1f) * barProgress
-                            val roundedTenThousands = kotlin.math.round(amount / 1_000.0) / 10.0
                             Text(
-                                text = String.format(Locale.JAPAN, "%.1f万", roundedTenThousands),
+                                text = compactMoney(amount),
                                 modifier = Modifier
                                     .offset(
                                         x = groupWidth * (index + 0.5f) - 28.dp,
@@ -2499,7 +2514,7 @@ private fun CompoundingSimulationSection(
                                 Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(stringResource(R.string.annual_dividend_1_s , point.year), color = if (isSelected) PrimaryEmerald else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                     Text(
-                                        signedMoney(yearChange),
+                                        compactSignedMoney(yearChange),
                                         color = if ((yearChange ?: 0.0) >= 0.0) StatusSuccess else ErrorRed,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
@@ -2562,7 +2577,7 @@ private fun CompoundingSimulationSection(
                                     Text(signedPercent(increaseRate), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
                                 }
                             }
-                            Text(signedMoney(increaseAmount), color = if ((increaseAmount ?: 0.0) >= 0.0) StatusSuccess else ErrorRed, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            Text(signedMoney(increaseAmount), color = if ((increaseAmount ?: 0.0) >= 0.0) StatusSuccess else ErrorRed, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
                             Text(stringResource(R.string.annual_dividend_text_36, firstPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, it.toString()) } ?: resources.getString(R.string.annual_dividend_label_20), latestPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, it.toString()) } ?: resources.getString(R.string.annual_dividend_label_21)), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
                     }
