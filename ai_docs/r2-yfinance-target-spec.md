@@ -1,8 +1,8 @@
 # R2市場データ構造とアプリ取得仕様
 
-更新日: 2026-10-13
+更新日: 2026-10-14
 
-状態: 合意済み仕様。ローカル実装中。R2への初回公開・読戻しとWorker公開は未実施。
+状態: 合意済み仕様。ローカル実装を更新済み。R2への初回公開・読戻しとWorker公開は未実施。
 
 ## 目的と範囲
 
@@ -53,7 +53,7 @@ Androidの年間資産推移画面は直近12か月と前月を使う。5年間�
 
 ### 配当月・権利日
 
-Androidの `/api/v1/dividend-months` 呼び出しは、配当日、1株当たり金額、直近365日の配当月、今後の権利関連日を使う。現在Workerは銘柄JSONの配当アクションと `statistics_current.exDividendDate` を読み、別オブジェクト `market/yfinance/rights_dates.json` の計算済み権利日を結合する。
+Androidの `/api/v1/dividend-months` 呼び出しは、配当日、1株当たり金額、直近365日の配当月、今後の権利関連日を使う。Workerはv2配当イベントと `current.json` のex-dividend dateを読み、`derived/rights_dates/current.json` の計算済み権利日を結合する。計算値はXTKS営業日カレンダーに基づく推定として扱い、会社が公表した権利確定日とは区別する。
 
 新構造では配当イベントを正本として10年分保存する。権利付き最終日や推定権利確定日は配当イベントそのものと区別し、XTKSカレンダーから得た計算値として管理する。Yahooのex-dividend dateを会社確定のrecord dateとして扱わない。
 
@@ -79,6 +79,7 @@ market/yfinance/v2/
   catalog/current.json
   catalog/generations/{session-date}.json
   publications/current.json
+  derived/rights_dates/current.json
   securities/{symbol}/
     profile.json
     current.json
@@ -144,7 +145,7 @@ R2バケットは非公開のままにし、AndroidアプリはWorker APIを通�
 
 ## API移行方針
 
-既存Androidクライアントとの互換性を保つため、初期移行ではAPIの応答形式を維持し、Worker内部のR2キー参照を段階的に新構造へ切り替える。
+既存Androidクライアントとの互換性を保つため、APIの応答形式を維持し、Worker内部のR2キー参照を新構造へ切り替える。検索、銘柄詳細、日次価格、配当イベント、月次価格はv2だけを参照する。財務APIの旧値参照は、項目ごとの移行確認が済むまで互換層として残し、確認後に削除する。
 
 検索カタログと銘柄検索はv2カタログだけを参照する。v2カタログ公開前は検索APIを利用不可として返し、旧IRBANKカタログや旧yfinanceカタログへフォールバックしない。銘柄登録APIもv2カタログに掲載され、プロフィールと現在値を保存済みの銘柄だけを返す。これにより初回yfinance取得に成功する前の銘柄は検索・登録できない。既存保有銘柄の表示には端末に保存した値を使う。
 
@@ -165,9 +166,11 @@ R2バケットは非公開のままにし、AndroidアプリはWorker APIを通�
 - 年次財務データのアプリ内計算: `kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/data/FinancialData.kt`
 - 5年・12か月の月次価格要求: `kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/ui/screens/AnnualDividendScreen.kt`
 - R2参照、Yahoo Chart API取得、財務分析入力: `data/irbank/cloudflare/src/index.js`
-- 現行yfinanceデータ取得: `scripts/yfinance_r2/fetch_and_upload.py`、`scripts/yfinance_r2/README.md`
+- v2 yfinance取得・移行: `scripts/yfinance_r2/sync_v2.py`、`scripts/yfinance_r2/fetch_jquants_universe.py`、`scripts/yfinance_r2/README.md`
+- XTKS権利日派生データ: `scripts/yfinance_r2/calculate_rights_dates.py`、`.github/workflows/rights-dates-monthly.yml`
 
 ## 実装状況
 
-- `scripts/yfinance_r2/sync_v2.py` と `.github/workflows/yfinance-r2.yml` にJ-Quantsユニバース、営業日ゲート、21時JST起動、yfinance取得、v2公開のローカル実装を追加した。
-- Workerの市場APIとAndroidの一覧取得をv2/日次カタログ優先へ変更した。Worker公開、Androidビルド、実R2移行の読戻しは完了後に記録する。
+- v2同期はJ-Quantsの商品区分を保持し、ETF・REITを含む銘柄を21時JSTの営業日ゲート後に取得する。yfinance日本語ロケール名の優先順位、v2権利日派生データ、Workerの配当・月次価格のv2限定参照を実装した。旧形式へ書き込む取得モードは本番Workflowから除いた。
+- `/api/v1/search-catalog`、`/api/v1/security-search`、`/api/v1/securities/{code}`、`/api/v1/live-quotes` はv2カタログのみを参照する。Workerの財務APIに残る旧データ互換層は項目単位の移行後に削除する。
+- 初回のR2公開・移行読戻しとWorker本番デプロイは未完了。現在の作業環境にR2 S3認証情報がなく、ローカルv2データもないため、本番切替は実施していない。

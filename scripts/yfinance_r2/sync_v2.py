@@ -12,8 +12,6 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
-from functools import lru_cache
-from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -27,8 +25,6 @@ UTC = timezone.utc
 JST = ZoneInfo("Asia/Tokyo")
 ROOT = "market/yfinance/v2"
 OLD_ROOT = "market/yfinance"
-APP_ASSETS = Path("kurogane-dividend/android/app/src/main/assets")
-NAME_MASTER = APP_ASSETS / "jpx_security_name_master.tsv"
 RETRY_DELAYS = (15 * 60, 60 * 60, 4 * 60 * 60)
 PROFILE_FIELDS = (
     "quoteType", "exchange", "fullExchangeName", "market", "currency", "country",
@@ -126,31 +122,23 @@ def years_before(day: date, years: int) -> date:
         return day.replace(year=day.year - years, day=28)
 
 
-def display_name(info: dict[str, Any]) -> str:
-    for key in ("shortName", "longName", "name", "displayName"):
-        value = str(info.get(key) or "").strip()
-        if value:
-            return value
-    return ""
-
-
 def contains_japanese(value: str) -> bool:
     return bool(re.search(r"[\u3040-\u30ff\u3400-\u9fff]", value))
 
 
-def japanese_names(code: str, info: dict[str, Any]) -> dict[str, str]:
+def japanese_names(info: dict[str, Any]) -> dict[str, str | None]:
     short_name = str(info.get("shortName") or "").strip()
     long_name = str(info.get("longName") or "").strip()
-    english_name = next((str(info.get(key) or "").strip() for key in ("displayName", "name", "shortName", "longName")
-                         if str(info.get(key) or "").strip()), "")
     localized_short = short_name if contains_japanese(short_name) else ""
     localized_long = long_name if contains_japanese(long_name) else ""
-    bundled_name = read_name_master().get(code, "")
+    english_name = next((str(info.get(key) or "").strip()
+                         for key in ("shortName", "longName", "displayName", "name")
+                         if str(info.get(key) or "").strip() and not contains_japanese(str(info.get(key)).strip())), "")
     return {
-        "short_name": localized_short or bundled_name or short_name,
-        "long_name": localized_long or long_name,
-        "english_name": english_name,
-        "display_name": localized_short or localized_long or bundled_name or short_name or long_name or english_name or code,
+        "short_name": localized_short or None,
+        "long_name": localized_long or None,
+        "english_name": english_name or None,
+        "display_name": localized_short or localized_long or english_name or None,
     }
 
 
@@ -719,7 +707,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         point["currency"] = str(info.get("currency") or "JPY")
 
     statements, valuation, financial_status = collect_financials(ticker, old, client, bucket, symbol)
-    names = japanese_names(code, info)
+    names = japanese_names(info)
     profile = {
         "schema_version": 1,
         "code": code,
@@ -908,17 +896,6 @@ def record_attempt_start(client: Any, bucket: str, code: str, symbol: str,
     put_json_if_changed(client, bucket, object_key("securities", safe, "sync.json"), prior)
 
 
-@lru_cache(maxsize=1)
-def read_name_master() -> dict[str, str]:
-    import csv
-
-    if not NAME_MASTER.exists():
-        return {}
-    with NAME_MASTER.open(encoding="utf-8", newline="") as source:
-        return {str(row.get("code") or "").strip().upper(): str(row.get("name") or "").strip()
-                for row in csv.DictReader(source, delimiter="\t")}
-
-
 def publish_catalog(client: Any, bucket: str, universe: list[dict[str, str]], session_date: date,
                     previous_catalog: dict[str, Any] | None) -> dict[str, Any]:
     old_items = {str(row.get("code")): row for row in (previous_catalog or {}).get("items", []) if isinstance(row, dict)}
@@ -937,6 +914,8 @@ def publish_catalog(client: Any, bucket: str, universe: list[dict[str, str]], se
             "code": code,
             "name": profile.get("display_name") or old_items.get(code, {}).get("name") or code,
             "category": "jp",
+            "security_type": security.get("security_type", "listed_security"),
+            "jquants_product_category": security.get("jquants_product_category") or None,
             "price": current["price"].get("close"),
             "quote_date": current["price"].get("date"),
             "currency": current["price"].get("currency"),
@@ -969,7 +948,8 @@ def active_universe(client: Any, bucket: str, fetched: list[dict[str, str]], ses
         rows.append({
             "code": code,
             "symbol": market_symbol(code),
-            "security_type": "listed_security",
+            "security_type": entry.get("security_type", "listed_security"),
+            "jquants_product_category": entry.get("jquants_product_category") or None,
             "status": "active",
             "first_seen": previous.get("first_seen") or session_date.isoformat(),
             "last_seen": session_date.isoformat(),

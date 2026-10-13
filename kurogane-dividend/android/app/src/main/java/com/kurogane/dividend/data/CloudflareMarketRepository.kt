@@ -4,8 +4,6 @@ import com.kurogane.dividend.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import com.kurogane.dividend.model.PortfolioMath
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -108,11 +106,6 @@ class CloudflareMarketRepository(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection }
 ) {
-    private data class SearchCatalogCache(val loadedAtMillis: Long, val quotesByCode: Map<String, CloudflareSearchQuote>)
-
-    private val searchCatalogMutex = Mutex()
-    @Volatile private var searchCatalogCache: SearchCatalogCache? = null
-
     suspend fun searchSecurities(query: String): List<CloudflareSearchHit> = withContext(ioDispatcher) {
         if (query.isBlank()) return@withContext emptyList()
         require(query.length <= 256) { "検索文字列が長すぎます" }
@@ -144,43 +137,24 @@ class CloudflareMarketRepository(
             .filter(::isSecurityCode)
             .distinct()
         if (requestedCodes.isEmpty()) return@withContext emptyMap()
-        val quotesByCode = searchCatalogQuotesByCode()
-        requestedCodes.mapNotNull { code -> quotesByCode[code]?.let { code to it } }.toMap()
-    }
-
-    private suspend fun searchCatalogQuotesByCode(): Map<String, CloudflareSearchQuote> {
-        fun elapsedMillis() = System.nanoTime() / 1_000_000L
-        searchCatalogCache?.takeIf { elapsedMillis() - it.loadedAtMillis < SEARCH_CATALOG_CACHE_TTL_MILLIS }
-            ?.let { return it.quotesByCode }
-
-        return searchCatalogMutex.withLock {
-            val now = elapsedMillis()
-            searchCatalogCache?.takeIf { now - it.loadedAtMillis < SEARCH_CATALOG_CACHE_TTL_MILLIS }
-                ?.let { return@withLock it.quotesByCode }
-
-            val root = getJson("/api/v1/search-catalog")
-            val rows = root.optJSONArray("items") ?: throw IOException("Cloudflareの銘柄カタログにitemsがありません")
-            val catalogDate = root.optString("market_data_date").takeIf(String::isNotBlank)
-            val quotes = buildMap {
-                for (index in 0 until rows.length()) {
-                    val row = rows.optJSONObject(index) ?: continue
-                    val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT)
-                    if (!isSecurityCode(code)) continue
-                    val quoteDate = row.optString("quote_date").takeIf(String::isNotBlank)
-                    if (catalogDate != null && quoteDate != null && quoteDate > catalogDate) continue
-                    val price = row.numberOrNull("price")
-                        ?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }
-                    val annualDividend = row.numberOrNull("annual_dividend_per_share")
+        val encodedCodes = URLEncoder.encode(requestedCodes.joinToString(","), Charsets.UTF_8.name())
+        val root = getJson("/api/v1/live-quotes?codes=$encodedCodes")
+        val rows = root.optJSONArray("items") ?: throw IOException("Cloudflareの価格一覧にitemsがありません")
+        buildMap {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT)
+                if (code !in requestedCodes) continue
+                val quote = CloudflareSearchQuote(
+                    price = row.numberOrNull("price")?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 },
+                    yieldRate = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 },
+                    annualDividendPerShare = row.numberOrNull("annual_dividend_per_share")
                         ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) }
-                    val yieldRate = row.numberOrNull("yield_rate")
-                        ?.takeIf { it in 0.0..100.0 }
-                    if (price != null || annualDividend != null || yieldRate != null) {
-                        put(code, CloudflareSearchQuote(price, yieldRate, annualDividend))
-                    }
+                )
+                if (quote.price != null || quote.yieldRate != null || quote.annualDividendPerShare != null) {
+                    put(code, quote)
                 }
             }
-            searchCatalogCache = SearchCatalogCache(elapsedMillis(), quotes)
-            quotes
         }
     }
 
@@ -410,9 +384,6 @@ class CloudflareMarketRepository(
 
     private fun isSecurityCode(code: String) = code.matches(Regex("[A-Z0-9.\\-]{1,16}"))
 
-    private companion object {
-        const val SEARCH_CATALOG_CACHE_TTL_MILLIS = 5 * 60 * 1000L
-    }
 }
 
 class MarketHttpException(val status: Int) : IOException("Cloudflare API HTTP $status")

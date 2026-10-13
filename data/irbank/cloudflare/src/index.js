@@ -1517,7 +1517,7 @@ export default {
       const cutoff = new Date(Date.parse(`${asOf}T00:00:00.000Z`) - 365 * 24 * 60 * 60 * 1000)
         .toISOString().slice(0, 10);
       try {
-        const rightsDatesObject = await env.MARKET_DATA.get('market/yfinance/rights_dates.json');
+        const rightsDatesObject = await env.MARKET_DATA.get(`${YFINANCE_V2_ROOT}/derived/rights_dates/current.json`);
         const rightsDatesDocument = rightsDatesObject ? await rightsDatesObject.json() : null;
         const rightsDatesByEvent = new Map((rightsDatesDocument?.records || [])
           .map(event => [`${String(event.symbol || '').toUpperCase()}|${String(event.ex_dividend_date || '')}`, {
@@ -1531,6 +1531,8 @@ export default {
             readV2DividendEvents(env, symbol, years),
             v2Symbol ? readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${v2Symbol}/current.json`) : Promise.resolve(null),
           ]);
+          const historyStatus = current?.field_status?.dividend_history
+            || (v2Events ? (v2Events.length > 0 ? 'available' : 'empty') : 'not_fetched');
           if (v2Events) {
             const rawUpcoming = finiteNumber(current?.statistics?.exDividendDate);
             const upcomingExDate = rawUpcoming ? new Date(rawUpcoming * 1000).toISOString().slice(0, 10) : null;
@@ -1549,6 +1551,7 @@ export default {
             }).sort((a, b) => a.date.localeCompare(b.date));
             return {
               symbol,
+              history_status: historyStatus,
               months: [...new Set(events.map(event => Number(event.date.slice(5, 7))))].sort((a, b) => a - b),
               events,
               upcoming_event: upcomingRightsDates ? {
@@ -1558,50 +1561,7 @@ export default {
               } : null,
             };
           }
-          const safeSymbol = symbol.replaceAll('^', '_').replaceAll('=', '_').replaceAll('/', '_');
-          const object = await env.MARKET_DATA.get(`market/yfinance/securities/${safeSymbol}.json`);
-          if (!object) return { symbol, months: [] };
-          const document = await object.json();
-          const rawUpcomingExDate = finiteNumber(document.statistics_current?.exDividendDate);
-          const upcomingExDate = rawUpcomingExDate
-            ? new Date(rawUpcomingExDate * 1000).toISOString().slice(0, 10)
-            : null;
-          const upcomingRightsDates = upcomingExDate && upcomingExDate > asOf
-            ? rightsDatesByEvent.get(`${symbol}|${upcomingExDate}`) || null
-            : null;
-          const dividendEvents = Array.isArray(document.actions?.dividends) ? document.actions.dividends : [];
-          const events = dividendEvents
-            .filter(event => {
-              const date = String(event?.date || '');
-              const amount = finiteNumber(event?.amount);
-              if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < cutoff || date > asOf || !(amount > 0)) return false;
-              const parsedDate = new Date(`${date}T00:00:00.000Z`);
-              return Number.isFinite(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === date;
-            })
-            .map(event => {
-              const rightsDates = rightsDatesByEvent.get(`${symbol}|${String(event.date)}`) || {};
-              return {
-                date: String(event.date),
-                amount: finiteNumber(event.amount),
-                final_rights_date: rightsDates.finalRightsDate || null,
-                record_date: rightsDates.recordDate || null,
-              };
-            })
-            .sort((a, b) => a.date.localeCompare(b.date));
-          const months = [...new Set(events
-            .map(event => Number(event.date.slice(5, 7))))]
-            .filter(month => month >= 1 && month <= 12)
-            .sort((a, b) => a - b);
-          return {
-            symbol,
-            months,
-            events,
-            upcoming_event: upcomingRightsDates ? {
-              ex_dividend_date: upcomingExDate,
-              final_rights_date: upcomingRightsDates.finalRightsDate || null,
-              record_date: upcomingRightsDates.recordDate || null,
-            } : null,
-          };
+          return { symbol, history_status: historyStatus, months: [], events: [], upcoming_event: null };
         }));
         return json({ as_of: asOf, lookback_days: 365,
           rights_dates_generated_at: rightsDatesDocument?.generated_at || null, items });
@@ -1712,17 +1672,11 @@ export default {
         timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit'
       }).formatToParts(new Date()).map(part => [part.type, part.value]));
       const today = `${todayParts.year}-${todayParts.month}-${todayParts.day}`;
-      const [completionObject, catalogObject] = await Promise.all([
-        env.MARKET_DATA.get('market/yfinance/live_quotes_completion.json'),
-        env.MARKET_DATA.get('market/yfinance/search_catalog.json'),
-      ]);
-      const completion = completionObject ? await completionObject.json() : {};
-      const catalog = catalogObject ? await catalogObject.json() : {};
-      const stableMarketDate = completion.last_completed_run_id
-        ? String(completion.last_completed_date || '')
-        : completion.last_completed_date
-          ? '0000-00-00'
-          : String(catalog.market_data_date || today);
+      const catalog = await readV2Catalog(env);
+      const stableMarketDate = String(catalog?.market_data_date || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(stableMarketDate)) {
+        return json({ error: 'market_data_unavailable' }, 503);
+      }
       const currentMonth = today.slice(0, 7);
       const cutoffs = months.map(month => {
         if (month >= currentMonth) return [month, stableMarketDate];
@@ -1733,42 +1687,7 @@ export default {
       });
       const items = (await Promise.all(codes.map(async code => {
         const v2Prices = await readV2MonthlyPrices(env, code, months);
-        if (v2Prices) return { code, prices: v2Prices };
-        const [object, dailyObjects] = await Promise.all([
-          env.MARKET_DATA.get(`market/yfinance/securities/${code}.T.json`),
-          Promise.all(months.map(month => env.MARKET_DATA.get(`market/yfinance/daily_prices/${code}/${month}.json`))),
-        ]);
-        if (!object && dailyObjects.every(item => !item)) return null;
-        const document = object ? JSON.parse(await object.text()) : {};
-        const prices = new Map((Array.isArray(document.price_history?.['1d']) ? document.price_history['1d'] : [])
-          .map(item => [String(item?.date || ''), item]));
-        for (const dailyObject of dailyObjects.filter(Boolean)) {
-          const dailyDocument = await dailyObject.json();
-          for (const point of dailyDocument.prices || []) {
-            const date = String(point?.date || '');
-            if (date) prices.set(date, point);
-          }
-        }
-        const splits = (document.actions?.stock_splits || [])
-          .map(item => ({ date: String(item?.date || ''), ratio: finiteNumber(item?.ratio) }))
-          .filter(item => item.date && item.ratio > 0);
-        const monthlyPrices = cutoffs.map(([month, cutoff]) => {
-          const point = [...prices.values()].reduce((best, item) => {
-            const date = String(item?.date || '');
-            const close = finiteNumber(item?.close);
-            return date && date <= cutoff && close > 0 && (!best || date > best.date)
-              ? { date, close }
-              : best;
-          }, null);
-          if (!point) return null;
-          const splitFactor = splits
-            .filter(item => item.date > point.date && item.date <= today)
-            .reduce((factor, item) => factor * item.ratio, 1);
-          const close = point.close / splitFactor;
-          if (!(close > 0) || !Number.isFinite(close)) return null;
-          return { month, date: point.date, close };
-        }).filter(Boolean);
-        return { code, prices: monthlyPrices };
+        return { code, prices: v2Prices || [] };
       }))).filter(Boolean);
       const response = json({ items, requested_months: months });
       response.headers.set('cache-control', 'public, max-age=300');
@@ -1781,9 +1700,14 @@ export default {
       const requestedRunId = String(url.searchParams.get('run_id') || '');
       const requestedDate = String(url.searchParams.get('market_data_date') || '');
       const cursor = String(url.searchParams.get('cursor') || '');
+      const codesParam = url.searchParams.get('codes');
+      const requestedCodes = codesParam == null ? null : [...new Set(codesParam.split(',').map(value => irbankR2Code(value.trim().toUpperCase())))];
       if ((requestedRunId && !/^\d{4}-\d{2}-\d{2}$/.test(requestedRunId))
         || (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate))
-        || (cursor && !/^\d{1,8}$/.test(cursor))) return json({ error: 'invalid_request' }, 400);
+        || (cursor && !/^\d{1,8}$/.test(cursor))
+        || (codesParam != null && (!requestedCodes.length || requestedCodes.length > 50 || requestedCodes.some(code => !code)))) {
+        return json({ error: 'invalid_request' }, 400);
+      }
 
       try {
         const catalog = await readV2Catalog(env, requestedRunId);
@@ -1792,15 +1716,21 @@ export default {
         const marketDataDate = String(catalog.market_data_date || '');
         if (!/^\d{4}-\d{2}-\d{2}$/.test(generation) || !marketDataDate) return json({ error: 'catalog_invalid' }, 503);
         if (requestedDate && requestedDate !== marketDataDate) return json({ error: 'catalog_generation_mismatch' }, 409);
-        const offset = Math.min((catalog.items || []).length, Number.parseInt(cursor || '0', 10));
-        const items = (catalog.items || []).slice(offset, offset + limit).map(row => ({
+        const catalogItems = catalog.items || [];
+        const offset = Math.min(catalogItems.length, Number.parseInt(cursor || '0', 10));
+        const requestedItems = requestedCodes
+          ? requestedCodes.map(code => catalogItems.find(row => String(row.code || '').toUpperCase() === code)).filter(Boolean)
+          : catalogItems.slice(offset, offset + limit);
+        const items = requestedItems.map(row => ({
           code: row.code,
           price: row.price,
           quote_date: row.quote_date,
+          annual_dividend_per_share: row.annual_dividend_per_share,
+          yield_rate: row.yield_rate,
         }));
         const nextOffset = offset + items.length;
         const response = json({ run_id: generation, market_data_date: marketDataDate, complete: true,
-          items, next_cursor: nextOffset < (catalog.items || []).length ? String(nextOffset) : null });
+          items, next_cursor: requestedCodes ? null : nextOffset < catalogItems.length ? String(nextOffset) : null });
         response.headers.set('cache-control', 'public, max-age=300');
         return response;
       } catch {
@@ -1833,10 +1763,47 @@ export default {
           return rank(aCode) - rank(bCode) || String(a.name || '').localeCompare(String(b.name || ''), 'ja');
         })
         .slice(0, 30)
-        .map(({ code, name, price, annual_dividend_per_share, yield_rate }) => ({
-          code, name, price, annual_dividend_per_share, yield_rate,
+        .map(({ code, name, price, annual_dividend_per_share, yield_rate, security_type }) => ({
+          code, name, price, annual_dividend_per_share, yield_rate, security_type,
         }));
       return json({ items, generation: v2Catalog.generation || null });
+    }
+
+    const securityMatch = url.pathname.match(/^\/api\/v1\/securities\/([A-Z0-9]{4})$/);
+    if (securityMatch) {
+      if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+      const code = securityMatch[1];
+      const catalog = await readV2Catalog(env);
+      if (!catalog) return json({ error: 'security_catalog_unavailable' }, 503);
+      const item = (catalog.items || []).find(row => String(row.code || '').toUpperCase() === code);
+      if (!item) return json({ error: 'not_found' }, 404);
+      const symbol = yfinanceV2Symbol(code);
+      if (!symbol) return json({ error: 'invalid_security_code' }, 400);
+      const base = `${YFINANCE_V2_ROOT}/securities/${symbol}`;
+      const [profile, current] = await Promise.all([
+        readV2Json(env, `${base}/profile.json`),
+        readV2Json(env, `${base}/current.json`),
+      ]);
+      if (!profile || !current) return json({ error: 'security_data_unavailable' }, 503);
+      const dividend = current.dividend || {};
+      const selectedDps = dividend.yield_basis === 'next_fiscal_year_forecast'
+        ? finiteNumber(dividend.next_fiscal_year_forecast_per_share)
+        : dividend.yield_basis === 'current_fiscal_year'
+          ? finiteNumber(dividend.current_fiscal_year_per_share)
+          : null;
+      return json({
+        code,
+        name: profile.display_name || profile.short_name || profile.long_name || profile.english_name || code,
+        dividend: {
+          annual_dps: selectedDps,
+          annual_dps_adjusted: selectedDps,
+          trailing_12_month_per_share: finiteNumber(dividend.trailing_12_month_per_share),
+          yield_basis: dividend.yield_basis || null,
+          field_status: current.field_status || {},
+        },
+        market_price: current.price || null,
+        market_yield_rate: finiteNumber(dividend.yield_rate),
+      });
     }
 
     if (url.pathname === '/api/v1/irbank/manifest') {

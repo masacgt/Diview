@@ -15,6 +15,12 @@ from urllib.request import Request, urlopen
 
 
 ENDPOINT = "https://api.jquants.com/v2/equities/master"
+SECURITY_TYPES = {
+    "011": "equity",
+    "012": "equity",
+    "013": "reit",
+    "014": "etf",
+}
 
 
 def display_code(value: object) -> str:
@@ -26,7 +32,7 @@ def display_code(value: object) -> str:
 
 
 def fetch_securities(api_key: str) -> list[dict[str, str]]:
-    securities: dict[str, str] = {}
+    securities: dict[str, tuple[str, str]] = {}
     cursor: str | None = None
     seen_cursors: set[str] = set()
     while True:
@@ -53,7 +59,8 @@ def fetch_securities(api_key: str) -> list[dict[str, str]]:
             if code in securities:
                 raise RuntimeError(f"Duplicate issue code in J-Quants master: {code}")
             industry = str(row.get("S33Nm") or "").strip()
-            securities[code] = industry
+            product_category = str(row.get("ProdCat") or "").strip()
+            securities[code] = (industry, product_category)
         cursor = payload.get("pagination_key")
         if not cursor:
             break
@@ -62,7 +69,12 @@ def fetch_securities(api_key: str) -> list[dict[str, str]]:
         seen_cursors.add(cursor)
     if len(securities) < 1000:
         raise RuntimeError(f"J-Quants master returned only {len(securities)} issues; refusing partial universe")
-    return [{"security_code_display": code, "sector_name": securities[code]} for code in sorted(securities)]
+    return [{
+        "security_code_display": code,
+        "sector_name": securities[code][0],
+        "jquants_product_category": securities[code][1],
+        "security_type": SECURITY_TYPES.get(securities[code][1], "listed_security"),
+    } for code in sorted(securities)]
 
 
 def fetch_codes(api_key: str) -> list[str]:
@@ -82,8 +94,9 @@ def main() -> None:
     temporary = args.output.with_suffix(args.output.suffix + ".tmp")
     with temporary.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.writer(stream)
-        writer.writerow(["security_code_display", "sector_name"])
-        writer.writerows((row["security_code_display"], row["sector_name"]) for row in securities)
+        writer.writerow(["security_code_display", "sector_name", "jquants_product_category", "security_type"])
+        writer.writerows((row["security_code_display"], row["sector_name"],
+                          row["jquants_product_category"], row["security_type"]) for row in securities)
     temporary.replace(args.output)
     print(f"Saved {len(securities)} J-Quants listed issues to {args.output}")
 
