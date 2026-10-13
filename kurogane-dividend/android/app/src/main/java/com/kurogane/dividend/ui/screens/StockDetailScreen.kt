@@ -468,7 +468,7 @@ fun StockDetailScreen(
                                     fontSize = AppTextSize.largeMetric,
                                     fontWeight = FontWeight.Black,
                                     color = OnSurface,
-                                    fontFamily = FontFamily.Monospace
+                                    fontFamily = AppNumericFontFamily
                                 )
                             }
                             Surface(
@@ -501,7 +501,7 @@ fun StockDetailScreen(
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text(if (currentHolding.category == com.kurogane.dividend.model.Category.FUND) stringResource(R.string.stock_detail_label) else stringResource(R.string.stock_detail_label_2), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    Text(stringResource(R.string.add_holding_1_s_2_s_2 , currentHolding.currency, currentHolding.dps), fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.caption, fontFamily = FontFamily.Monospace)
+                                    Text(stringResource(R.string.add_holding_1_s_2_s_2 , currentHolding.currency, currentHolding.dps), fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.caption, fontFamily = AppNumericFontFamily)
                                     Text(stringResource(R.string.annual_dividend_text_44), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
@@ -513,7 +513,7 @@ fun StockDetailScreen(
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text(stringResource(R.string.stock_detail_text_4), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    Text(String.format(Locale.JAPAN, "%.2f%%", liveYield), fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.caption, fontFamily = FontFamily.Monospace)
+                                    Text(String.format(Locale.JAPAN, "%.2f%%", liveYield), fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.caption, fontFamily = AppNumericFontFamily)
                                     Text(stringResource(R.string.stock_detail_text_5), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
@@ -525,7 +525,7 @@ fun StockDetailScreen(
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text(stringResource(R.string.stock_detail_text_6), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    Text(String.format(Locale.JAPAN, "%.2f%% YOC", currentHolding.liveYoc), fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.caption, fontFamily = FontFamily.Monospace)
+                                    Text(String.format(Locale.JAPAN, "%.2f%% YOC", currentHolding.liveYoc), fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.caption, fontFamily = AppNumericFontFamily)
                                     Text(stringResource(R.string.stock_detail_text_7, currentHolding.currency, currentHolding.acqPrice.toLong()), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
@@ -1011,7 +1011,7 @@ fun StockDetailScreen(
                                             Column(modifier = Modifier.padding(10.dp)) {
                                                 Text(stringResource(R.string.stock_detail_text_37), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                 Spacer(modifier = Modifier.height(2.dp))
-                                                Text(stringResource(R.string.stock_detail_1_s , currencyFormat.format(cutImpact)), color = ErrorRed, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = FontFamily.Monospace)
+                                                Text(stringResource(R.string.stock_detail_1_s , currencyFormat.format(cutImpact)), color = ErrorRed, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = AppNumericFontFamily)
                                                 Spacer(modifier = Modifier.height(2.dp))
                                                 Text(stringResource(R.string.stock_detail_text_38 , if (cutImpact > 8000) resources.getString(R.string.stock_detail_label_25) else if (cutImpact > 3000) resources.getString(R.string.stock_detail_label_26) else resources.getString(R.string.stock_detail_label_27)), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                             }
@@ -1191,7 +1191,7 @@ fun StockDetailScreen(
                                                         color = PrimaryEmerald,
                                                         fontWeight = FontWeight.ExtraBold,
                                                         fontSize = AppTextSize.metric,
-                                                        fontFamily = FontFamily.Monospace
+                                                        fontFamily = AppNumericFontFamily
                                                     )
                                                 }
 
@@ -1251,7 +1251,7 @@ fun StockDetailScreen(
                                                         Icon(Icons.Default.Tune, contentDescription = null, tint = OnSurfaceVariant, modifier = Modifier.size(13.dp))
                                                     }
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(profile.getPer(currentHolding.price), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = FontFamily.Monospace)
+                                                    Text(profile.getPer(currentHolding.price), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = AppNumericFontFamily)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(profile.perEvaluation, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
                                                 }
@@ -1274,7 +1274,7 @@ fun StockDetailScreen(
                                                         Icon(Icons.Default.Tune, contentDescription = null, tint = OnSurfaceVariant, modifier = Modifier.size(13.dp))
                                                     }
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(profile.getPbr(currentHolding.price), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = FontFamily.Monospace)
+                                                    Text(profile.getPbr(currentHolding.price), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = AppNumericFontFamily)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(profile.pbrEvaluation, color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                 }
@@ -1468,7 +1468,7 @@ fun StockDetailScreen(
                                                         color = PrimaryEmerald,
                                                         fontWeight = FontWeight.ExtraBold,
                                                         fontSize = AppTextSize.metric,
-                                                        fontFamily = FontFamily.Monospace
+                                                        fontFamily = AppNumericFontFamily
                                                     )
                                                 }
 
@@ -1520,7 +1520,7 @@ fun StockDetailScreen(
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     Text(stringResource(R.string.stock_detail_text_57), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(stringResource(R.string.annual_dividend_1_s , profile.equityRatio.financialText(1, "%")), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = FontFamily.Monospace)
+                                                    Text(stringResource(R.string.annual_dividend_1_s , profile.equityRatio.financialText(1, "%")), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = AppNumericFontFamily)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(profile.equityRatioSub, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
                                                 }
@@ -1573,7 +1573,7 @@ fun StockDetailScreen(
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     Text(stringResource(R.string.stock_detail_text_61), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(stringResource(R.string.annual_dividend_1_s , profile.operatingMargin.financialText(1, "%")), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = FontFamily.Monospace)
+                                                    Text(stringResource(R.string.annual_dividend_1_s , profile.operatingMargin.financialText(1, "%")), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = AppNumericFontFamily)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(stringResource(R.string.stock_detail_text_62), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                 }
@@ -1724,7 +1724,7 @@ fun StockDetailScreen(
                                                 Column(Modifier.padding(12.dp)) {
                                                     Text(stringResource(R.string.stock_detail_text_67), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                     Spacer(Modifier.height(4.dp))
-                                                    Text(stringResource(R.string.annual_dividend_1_s , if (profile.consecutiveYears >= 0) resources.getString(R.string.stock_detail_label_5, (profile.consecutiveYears).toString()) else resources.getString(R.string.not_available)), color = PrimaryEmerald, fontWeight = FontWeight.ExtraBold, fontSize = AppTextSize.metric, fontFamily = FontFamily.Monospace)
+                                                    Text(stringResource(R.string.annual_dividend_1_s , if (profile.consecutiveYears >= 0) resources.getString(R.string.stock_detail_label_5, (profile.consecutiveYears).toString()) else resources.getString(R.string.not_available)), color = PrimaryEmerald, fontWeight = FontWeight.ExtraBold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
                                                     Text(stringResource(R.string.stock_detail_text_68 , profile.growthRate.financialText(1, "%")), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                                 }
                                             }
@@ -1737,7 +1737,7 @@ fun StockDetailScreen(
                                                 Column(Modifier.padding(12.dp)) {
                                                     Text(stringResource(R.string.stock_detail_text_69), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                     Spacer(Modifier.height(4.dp))
-                                                    Text(stringResource(R.string.annual_dividend_1_s , profile.noCutYears.financialYears()), color = OnSurface, fontWeight = FontWeight.ExtraBold, fontSize = AppTextSize.metric, fontFamily = FontFamily.Monospace)
+                                                    Text(stringResource(R.string.annual_dividend_1_s , profile.noCutYears.financialYears()), color = OnSurface, fontWeight = FontWeight.ExtraBold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
                                                     Text(stringResource(R.string.stock_detail_text_70), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                 }
                                             }
@@ -2497,14 +2497,14 @@ fun StockDetailScreen(
                                     Surface(shape = RoundedCornerShape(10.dp), color = BackgroundDark, modifier = Modifier.weight(1f)) {
                                         Column(modifier = Modifier.padding(8.dp)) {
                                             Text(stringResource(R.string.stock_detail_text_16 , baseShares), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                            Text(stringResource(R.string.add_holding_text_11 , currencyFormat.format(currentStockAnnualDiv)), fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body, fontFamily = FontFamily.Monospace)
+                                            Text(stringResource(R.string.add_holding_text_11 , currencyFormat.format(currentStockAnnualDiv)), fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body, fontFamily = AppNumericFontFamily)
                                             Text(stringResource(R.string.stock_detail_text_17 , currencyFormat.format(currentStockAnnualDiv / 12)), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                         }
                                     }
                                     Surface(shape = RoundedCornerShape(10.dp), color = PrimaryEmerald.copy(alpha = 0.1f), border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.4f)), modifier = Modifier.weight(1f)) {
                                         Column(modifier = Modifier.padding(8.dp)) {
                                             Text(stringResource(R.string.stock_detail_text_18 , totalSimShares), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                            Text(stringResource(R.string.add_holding_text_11 , currencyFormat.format(newTotalAnnualDiv)), fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.body, fontFamily = FontFamily.Monospace)
+                                            Text(stringResource(R.string.add_holding_text_11 , currencyFormat.format(newTotalAnnualDiv)), fontWeight = FontWeight.Bold, color = PrimaryEmerald, fontSize = AppTextSize.body, fontFamily = AppNumericFontFamily)
                                             Text(stringResource(R.string.stock_detail_text_19 , currencyFormat.format(newMonthlyDiv)), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                         }
                                     }
@@ -2531,7 +2531,7 @@ fun StockDetailScreen(
                                     } else {
                                         "¥${currencyFormat.format(simPurchaseAmount.toLong())}"
                                     }
-                                    Text(nativeAmount, color = PrimaryEmerald, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                    Text(nativeAmount, color = PrimaryEmerald, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
                                     if (currentHolding.currency == "$") {
                                         val yenAmount = exchangeRate?.usdJpy?.takeIf { it.isFinite() && it > 0.0 }
                                             ?.let { "約¥${currencyFormat.format((simPurchaseAmount * it).toLong())}" }

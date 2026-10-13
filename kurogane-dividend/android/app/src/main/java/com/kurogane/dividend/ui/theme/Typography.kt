@@ -68,6 +68,7 @@ val AppNumericFontFamily: FontFamily = AppNumericTextStyle.fontFamily!!
 
 /** Add tabular figures and the app's Japanese spacing features to an existing style. */
 fun TextStyle.withAppNumericFigures(): TextStyle = copy(
+    fontFamily = AppNumericFontFamily,
     fontFeatureSettings = APP_NUMERIC_FONT_FEATURE_SETTINGS
 )
 
@@ -103,7 +104,25 @@ private fun Typography.withJapaneseGlyphs(): Typography = copy(
 
 private val materialTypography = Typography().withJapaneseGlyphs()
 
-val AppTypography = materialTypography.copy(
+private fun Typography.withAppRoleWeights(): Typography = copy(
+    displayLarge = displayLarge.copy(fontWeight = AppTextWeight.strongHeading),
+    displayMedium = displayMedium.copy(fontWeight = AppTextWeight.strongHeading),
+    displaySmall = displaySmall.copy(fontWeight = AppTextWeight.strongHeading),
+    headlineLarge = headlineLarge.copy(fontWeight = AppTextWeight.strongHeading),
+    headlineMedium = headlineMedium.copy(fontWeight = AppTextWeight.strongHeading),
+    headlineSmall = headlineSmall.copy(fontWeight = AppTextWeight.heading),
+    titleLarge = titleLarge.copy(fontWeight = AppTextWeight.strongHeading),
+    titleMedium = titleMedium.copy(fontWeight = AppTextWeight.heading),
+    titleSmall = titleSmall.copy(fontWeight = AppTextWeight.heading),
+    bodyLarge = bodyLarge.copy(fontWeight = AppTextWeight.body),
+    bodyMedium = bodyMedium.copy(fontWeight = AppTextWeight.body),
+    bodySmall = bodySmall.copy(fontWeight = AppTextWeight.supporting),
+    labelLarge = labelLarge.copy(fontWeight = AppTextWeight.supporting),
+    labelMedium = labelMedium.copy(fontWeight = AppTextWeight.supporting),
+    labelSmall = labelSmall.copy(fontWeight = AppTextWeight.supporting)
+)
+
+val AppTypography = materialTypography.withAppRoleWeights().copy(
     displayLarge = materialTypography.displayLarge.copy(fontSize = AppTextSize.hero, fontWeight = AppTextWeight.strongHeading).withAppTextRhythm(40.sp),
     displayMedium = materialTypography.displayMedium.copy(fontSize = AppTextSize.largeMetric, fontWeight = AppTextWeight.strongHeading).withAppTextRhythm(36.sp),
     displaySmall = materialTypography.displaySmall.copy(fontSize = AppTextSize.metric, fontWeight = AppTextWeight.strongHeading).withAppTextRhythm(32.sp),

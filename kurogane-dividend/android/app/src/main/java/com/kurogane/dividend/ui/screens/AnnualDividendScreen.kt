@@ -365,7 +365,7 @@ fun AnnualDividendScreen(
                                         fontSize = AppTextSize.headline,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = PrimaryEmerald,
-                                        fontFamily = FontFamily.Monospace,
+                                        fontFamily = AppNumericFontFamily,
                                         maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                                         softWrap = false
                                     )
@@ -400,7 +400,7 @@ fun AnnualDividendScreen(
                                         fontSize = AppTextSize.headline,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = PrimaryEmerald,
-                                        fontFamily = FontFamily.Monospace,
+                                        fontFamily = AppNumericFontFamily,
                                         maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
                                         softWrap = false
                                     )
@@ -1151,7 +1151,7 @@ private fun QuarterlyCashFlowComparison(
                                 color = OnSurface,
                                 fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = AppNumericFontFamily,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
                                 softWrap = false
@@ -1560,7 +1560,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 style = MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.ExtraBold,
                                     color = OnSurface,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = AppNumericFontFamily,
                                     fontSize = AppTextSize.screenTitle,
                                     shadow = Shadow(
                                         color = Color.White.copy(alpha = 0.9f),
@@ -1650,7 +1650,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                                 slice.percentage,
                                                 style = MaterialTheme.typography.labelSmall.copy(
                                                     color = OnSurfaceVariant,
-                                                    fontFamily = FontFamily.Monospace,
+                                                    fontFamily = AppNumericFontFamily,
                                                     fontWeight = FontWeight.Bold
                                                 )
                                             )
@@ -1807,7 +1807,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                  style = MaterialTheme.typography.bodyMedium.copy(
                                      color = ErrorRed,
                                      fontWeight = FontWeight.Black,
-                                     fontFamily = FontFamily.Monospace
+                                     fontFamily = AppNumericFontFamily
                                  )
                              )
                              Text(
@@ -1843,7 +1843,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = SkyBlue,
                                     fontWeight = FontWeight.Black,
-                                    fontFamily = FontFamily.Monospace
+                                    fontFamily = AppNumericFontFamily
                                 )
                             )
                             Text(
@@ -1879,7 +1879,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = PrimaryEmeraldContainer,
                                     fontWeight = FontWeight.Black,
-                                    fontFamily = FontFamily.Monospace
+                                    fontFamily = AppNumericFontFamily
                                 )
                             )
                             Text(
@@ -1995,7 +1995,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = sec.color,
                                         fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
+                                        fontFamily = AppNumericFontFamily,
                                         fontSize = AppTextSize.dense
                                     )
                                 )
@@ -2079,7 +2079,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                                 style = MaterialTheme.typography.bodySmall.copy(
                                                     color = OnSurface,
                                                     fontWeight = FontWeight.SemiBold,
-                                                    fontFamily = FontFamily.Monospace
+                                                    fontFamily = AppNumericFontFamily
                                                 )
                                             )
                                             Text(
@@ -2573,7 +2573,7 @@ private fun CompoundingSimulationSection(
                                 Spacer(Modifier.width(4.dp))
                                 Text(stringResource(R.string.annual_dividend_text_37), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                             }
-                            Text(cagr?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: resources.getString(R.string.not_available), color = PrimaryEmerald, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            Text(cagr?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: resources.getString(R.string.not_available), color = PrimaryEmerald, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
                             Text(stringResource(R.string.annual_dividend_text_39, signedMoney(averageAnnualIncrease)), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -2769,7 +2769,7 @@ private fun AssetTrackingSection(
                         color = OnSurface,
                         fontSize = AppTextSize.section,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = AppNumericFontFamily
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -2816,7 +2816,7 @@ private fun AssetTrackingSection(
                         color = PrimaryEmerald,
                         fontSize = AppTextSize.section,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = AppNumericFontFamily
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -3039,7 +3039,7 @@ private fun AssetTrackingSection(
                                 color = OnSurface,
                                 fontSize = AppTextSize.body,
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = AppNumericFontFamily
                             )
                         }
 
@@ -3054,7 +3054,7 @@ private fun AssetTrackingSection(
                                 color = if (gains[selectedYearIndex] >= 0) StatusSuccess else ErrorRed,
                                 fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = AppNumericFontFamily
                             )
                         }
                     }
@@ -3173,7 +3173,7 @@ private fun AssetTrackingSection(
                                     color = if (isGain) StatusSuccess else ErrorRed,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
+                                    fontFamily = AppNumericFontFamily
                                 )
                                 Text(
                                     text = if (index == 0) resources.getString(R.string.annual_dividend_label_43) else historicalPercent(gainsPct[index]),
