@@ -36,8 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
@@ -369,20 +367,6 @@ fun AssetManagementScreen(
             if (sharedSnackbarHostState == null) DiviewSnackbarHost(snackbarHostState)
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        floatingActionButton = {
-            Box(
-                modifier = Modifier
-                    .padding(bottom = 12.dp, end = 4.dp)
-                    .size(56.dp)
-                    .shadow(16.dp, CircleShape, spotColor = NeonGreen, ambientColor = NeonGreen)
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(NeonGreenLight, NeonGreen)))
-                    .clickable { onOpenAddHolding("") },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.asset_management_add_asset), tint = OnPrimaryContainer, modifier = Modifier.size(28.dp))
-            }
-        },
         containerColor = SpaceNavy
     ) { innerPadding ->
         val listState = rememberLazyListState(
@@ -703,6 +687,21 @@ fun AssetManagementScreen(
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.clickable { viewModel.selectMonth(selectedMonth!!) }
                             )
+                        }
+                        Surface(
+                            onClick = { onOpenAddHolding("") },
+                            shape = CircleShape,
+                            color = NeonGreen,
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = stringResource(R.string.asset_management_add_asset),
+                                    tint = OnPrimaryContainer,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                         Surface(
                             shape = RoundedCornerShape(8.dp),
