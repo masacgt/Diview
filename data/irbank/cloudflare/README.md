@@ -45,6 +45,15 @@ D1には銘柄マスター、API・分析・Watchlistなどの運用データ、
 
 D1の財務インポートは年次だけを生成します。D1には銘柄マスターを保持しますが、現在の `/api/v1/security-search` はD1の部分一致SQLを使わず、R2の `market/irbank/v1/catalog.json` を検索します。D1の `dividend_events` と年次 `financial_periods` は分析APIが参照し、価格・配当履歴など大量の市場スナップショットはR2から配信します。
 
+## J-Quants調整済み日足API
+
+`GET /api/v1/jquants/daily-quotes` はR2の `debug/jquants/v1/adjusted_daily_quotes.csv` をCSVストリームで返します。対象期間は2024-07-22〜2026-07-17、2,146,603行、4,736銘柄です。列は `Date,Code,AdjFactor,AdjO,AdjH,AdjL,AdjC,AdjVo` です。取得済みスナップショットを返すため、自動更新はありません。`HEAD` と単一バイト範囲の `Range` 要求に対応し、IPごとに60秒5回までです。R2の公開URLは無効のまま、Worker API経由で配信します。
+
+```powershell
+curl.exe -fL "https://diview-irbank.omasa.workers.dev/api/v1/jquants/daily-quotes" -o adjusted_daily_quotes.csv
+curl.exe -fL -r 0-1023 "https://diview-irbank.omasa.workers.dev/api/v1/jquants/daily-quotes" -o adjusted_daily_quotes_part.csv
+```
+
 ## 銘柄・財務・配当データのインポート
 
 ```powershell
