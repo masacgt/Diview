@@ -9,8 +9,9 @@ function json(data, status = 200) {
       'content-type': 'application/json; charset=utf-8',
       'cache-control': 'private, no-store',
       'access-control-allow-origin': '*',
-      'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'access-control-allow-headers': 'Content-Type, X-Client-Id, X-Client-Secret, X-Admin-Secret',
+      'access-control-allow-methods': 'GET, HEAD, POST, PUT, DELETE, OPTIONS',
+      'access-control-allow-headers': 'Content-Type, Range, X-Client-Id, X-Client-Secret, X-Admin-Secret',
+      'access-control-expose-headers': 'Accept-Ranges, Content-Length, Content-Range, ETag, Last-Modified',
       'access-control-max-age': '86400'
     }
   });
@@ -1217,6 +1218,93 @@ async function irbankR2Object(env, key) {
   });
 }
 
+function parseJQuantsByteRange(header, size) {
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(String(header || '').trim());
+  if (!match || (!match[1] && !match[2]) || size <= 0) return null;
+
+  let start;
+  let end;
+  if (!match[1]) {
+    const suffixLength = Number(match[2]);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return null;
+    start = Math.max(0, size - suffixLength);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] ? Number(match[2]) : size - 1;
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start >= size || end < start) return null;
+    end = Math.min(end, size - 1);
+  }
+
+  return { start, end, length: end - start + 1 };
+}
+
+async function jquantsDailyQuotesResponse(request, env, config) {
+  if (!['GET', 'HEAD'].includes(request.method)) {
+    const response = json({ error: 'method_not_allowed' }, 405);
+    response.headers.set('allow', 'GET, HEAD, OPTIONS');
+    return response;
+  }
+  if (!await enforceRateLimit(request, env, 'public:jquants-daily-quotes', 5, '', config)) {
+    return rateLimitedResponse(config);
+  }
+  if (!env.MARKET_DATA) return json({ error: 'r2_unavailable' }, 503);
+
+  const key = 'debug/jquants/v1/adjusted_daily_quotes.csv';
+  const rangeHeader = request.headers.get('range');
+  let object;
+  let byteRange = null;
+  if (rangeHeader) {
+    const metadata = await env.MARKET_DATA.head(key);
+    if (!metadata) return json({ error: 'not_found' }, 404);
+    byteRange = parseJQuantsByteRange(rangeHeader, metadata.size);
+    if (!byteRange) {
+      return new Response(null, {
+        status: 416,
+        headers: {
+          'content-range': `bytes */${metadata.size}`,
+          'accept-ranges': 'bytes',
+          'access-control-allow-origin': '*',
+          'access-control-allow-methods': 'GET, HEAD, OPTIONS',
+          'access-control-allow-headers': 'Range',
+          'access-control-expose-headers': 'Accept-Ranges, Content-Range, ETag, Last-Modified',
+          'cache-control': 'private, no-store',
+        },
+      });
+    }
+    object = request.method === 'HEAD'
+      ? metadata
+      : await env.MARKET_DATA.get(key, { range: { offset: byteRange.start, length: byteRange.length } });
+  } else {
+    object = request.method === 'HEAD'
+      ? await env.MARKET_DATA.head(key)
+      : await env.MARKET_DATA.get(key);
+  }
+  if (!object) return json({ error: 'not_found' }, 404);
+
+  const headers = new Headers({
+    'content-type': 'text/csv; charset=utf-8',
+    'content-disposition': 'attachment; filename="adjusted_daily_quotes.csv"',
+    'cache-control': 'public, max-age=300, s-maxage=300',
+    'access-control-allow-origin': '*',
+    'access-control-allow-methods': 'GET, HEAD, OPTIONS',
+    'access-control-allow-headers': 'Range',
+    'access-control-expose-headers': 'Accept-Ranges, Content-Length, Content-Range, ETag, Last-Modified',
+    'access-control-max-age': '86400',
+    'accept-ranges': 'bytes',
+    'content-length': String(byteRange ? byteRange.length : object.size),
+    'etag': object.httpEtag,
+    'x-content-type-options': 'nosniff',
+  });
+  if (object.uploaded) headers.set('last-modified', object.uploaded.toUTCString());
+  if (byteRange) headers.set('content-range', `bytes ${byteRange.start}-${byteRange.end}/${object.size}`);
+
+  return new Response(request.method === 'HEAD' ? null : object.body, {
+    status: byteRange ? 206 : 200,
+    headers,
+  });
+}
+
 function irbankR2Code(value) {
   const code = value.toUpperCase();
   if (/^[A-Z0-9]{4}$/.test(code)) return code;
@@ -1243,6 +1331,10 @@ export default {
       } catch {
         return json({ error: 'feedback_storage_unavailable' }, 503);
       }
+    }
+
+    if (url.pathname === '/api/v1/jquants/daily-quotes') {
+      return jquantsDailyQuotesResponse(request, env, config);
     }
 
     if (url.pathname === '/api/v1/admin/feedback') {
