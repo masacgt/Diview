@@ -708,7 +708,7 @@ fun WatchlistScreen(
                                     fontSize = AppTextSize.metric,
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
-                                    fontFamily = FontFamily.Monospace
+                                    fontFamily = AppNumericFontFamily
                                 )
                             }
                         }
@@ -736,7 +736,7 @@ fun WatchlistScreen(
                                             fontSize = AppTextSize.metric,
                                             fontWeight = FontWeight.Bold,
                                             color = PrimaryEmerald,
-                                            fontFamily = FontFamily.Monospace
+                                            fontFamily = AppNumericFontFamily
                                         )
                                         Text(stringResource(R.string.annual_dividend_text_4), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
                                     }
@@ -828,7 +828,7 @@ fun WatchlistScreen(
                                             fontSize = AppTextSize.metric,
                                             fontWeight = FontWeight.Bold,
                                             color = OnSurface,
-                                            fontFamily = FontFamily.Monospace
+                                            fontFamily = AppNumericFontFamily
                                         )
                                         Text(stringResource(R.string.watchlist_text_8), fontSize = AppTextSize.dense, color = OnSurfaceVariant)
                                     }
@@ -1328,7 +1328,7 @@ fun WatchlistScreen(
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
                                     fontSize = AppTextSize.section,
-                                    fontFamily = FontFamily.Monospace
+                                    fontFamily = AppNumericFontFamily
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
@@ -1893,7 +1893,7 @@ fun WatchlistScreen(
                         Text(stringResource(R.string.watchlist_text_27), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(projection.paymentCount.toString(), color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            Text(projection.paymentCount.toString(), color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
                             Text(stringResource(R.string.watchlist_text_29), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                         Text(stringResource(R.string.watchlist_known_months), color = PrimaryEmerald, fontSize = AppTextSize.dense)
@@ -1936,7 +1936,7 @@ fun WatchlistScreen(
                     ) {
                         Text(stringResource(R.string.watchlist_text_34), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(yen(projection.annualTotal), color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        Text(yen(projection.annualTotal), color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
                         Text(percent(com.kurogane.dividend.model.PortfolioMath.portfolioYield(projection.annualTotal, projection.investment, 0.0, "eval")), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                     }
                 }
@@ -2415,7 +2415,7 @@ fun WatchlistScreen(
                     ) {
                         Text(stringResource(R.string.watchlist_annual_estimate), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(yen(projection.annualTotal), color = PrimaryEmerald, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        Text(yen(projection.annualTotal), color = PrimaryEmerald, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
                     }
 
                     // Card 2
@@ -2429,7 +2429,7 @@ fun WatchlistScreen(
                     ) {
                         Text(stringResource(R.string.watchlist_monthly_estimate), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(yen(projection.annualTotal / 12), color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        Text(yen(projection.annualTotal / 12), color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
                     }
 
                     // Card 3

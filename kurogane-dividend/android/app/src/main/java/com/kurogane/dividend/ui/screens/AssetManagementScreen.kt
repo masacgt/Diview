@@ -1041,7 +1041,7 @@ fun AssetManagementScreen(
                                         fontWeight = FontWeight.Bold,
                                         color = OnSurface,
                                         fontSize = AppTextSize.body,
-                                        fontFamily = FontFamily.Monospace
+                                        fontFamily = AppNumericFontFamily
                                     )
                                     val sign = if (diff >= 0) "+" else ""
                                     Text(
@@ -1049,7 +1049,7 @@ fun AssetManagementScreen(
                                         fontWeight = FontWeight.Bold,
                                         color = if (diff >= 0) StatusSuccess else ErrorRed,
                                         fontSize = AppTextSize.dense,
-                                        fontFamily = FontFamily.Monospace
+                                        fontFamily = AppNumericFontFamily
                                     )
                                 }
                             }
@@ -1776,7 +1776,7 @@ private fun HoldingMetricTile(
                 )
             }
         }
-        Text(value, color = valueColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
+        Text(value, color = valueColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
         Text(detail, color = detailColor, fontSize = 8.sp, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
     }
 }
