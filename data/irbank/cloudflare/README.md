@@ -115,6 +115,12 @@ React の検索画面はこの一覧を1日端末にキャッシュし、銘柄�
 `GET /api/v1/dividend-months?symbols=7203.T,AAPL` は、R2 の `market/yfinance/securities/{symbol}.json` にある配当イベントから、直近365日（日本時間の当日を基準）に記録された月を銘柄ごとに返します。1回に最大50銘柄を指定できます。アプリは銘柄コードと取得日を端末内に保存し、日本時間の日付が変わるまで同じ配当月を再取得しません。保有数や取得単価は送信しません。履歴のない銘柄は空の月一覧を返します。
 
 
+## yfinance v2市場データ移行（ローカル実装）
+
+`.github/workflows/yfinance-r2.yml` の定期実行は日本時間21時に起動し、`XTKS` 営業日を確認してからJ-Quants v2の銘柄一覧とyfinanceデータをR2の `market/yfinance/v2/` へ保存します。検索カタログと銘柄登録APIは公開済みのv2カタログだけを使い、初回yfinance取得に成功する前は旧カタログへフォールバックしません。旧Workerの価格取得キューは、新しい価格を取得せず既存メッセージを処理終了します。
+
+この移行のローカルコードはまだWorkerへデプロイされておらず、v2初回データのR2読戻しも未実施です。GitHub Actionsには `JQUANTS_API_KEY`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` が必要です。移行仕様とR2キー構造はリポジトリ直下の `ai_docs/r2-yfinance-target-spec.md` を参照してください。
+
 ## バックエンド運用（分析・通知）
 
 匿名クライアント登録は `POST /api/v1/clients/register` です。返却される `client_id` と `client_secret` は端末内に保存し、Watchlist条件・通知履歴・Push端末登録では `X-Client-Id` / `X-Client-Secret` ヘッダーを送ります。`GET /api/v1/watchlist-targets` はそのクライアントの監視条件だけを返します。保有数量、取得単価、保有金額などのポートフォリオ情報はバックエンドへ送信しません。

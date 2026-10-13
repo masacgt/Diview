@@ -42,7 +42,7 @@ data class FinancialData(
             val cf = financial?.number("operating_cf")?.let { a -> financial.number("investing_cf")?.let { a + it } }
             val fcfMargin = percent(cf, sales)
             val equity = financial?.number("equity_ratio_computed")
-            val payout = dividend?.number("payout_ratio")
+            val payout = dividend?.number("payout_ratio") ?: root.optJSONObject("dividends")?.number("payout_ratio")
             var noCut = 0
             for (i in dividends.lastIndex downTo 1) {
                 if (dividends[i].year != dividends[i - 1].year + 1 || dividends[i].dps < dividends[i - 1].dps) break
