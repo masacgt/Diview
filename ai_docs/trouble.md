@@ -1,3 +1,5 @@
 # Trouble
 
+- `/api/v1/monthly-price-history` divided legacy yfinance `Close` values by later split ratios even though Yahoo Finance had already split-adjusted those closes. Keep the stored close as-is and change the Android cache key when publishing the correction so previously cached understated months are fetched again.
+- Do not assume imported `annual_dps_adjusted` makes every split-transition year correct. Toyota FY2022 is 52.245 yen in the current data, while Toyota's issuer report states 52.00 yen after its five-for-one split; verify transition-year records against issuer reports and trace the source before broad dividend corrections.
 - Wrangler can fail with `Invalid access token [code: 9109]` when a stale `CLOUDFLARE_API_TOKEN` environment variable overrides an existing Wrangler OAuth session. Remove that variable only from the current PowerShell process before invoking Wrangler; `wrangler whoami` then confirms whether the saved browser OAuth session works. Do not print or paste token values.

@@ -19,8 +19,8 @@ import exchange_calendars as xcals
 
 
 UTC = timezone.utc
-PREFIX = os.environ.get("R2_PREFIX", "market/yfinance").strip("/")
-OUTPUT_KEY = f"{PREFIX}/rights_dates.json"
+PREFIX = os.environ.get("R2_PREFIX", "market/yfinance/v2").strip("/")
+OUTPUT_KEY = f"{PREFIX}/derived/rights_dates/current.json"
 
 
 def previous_session(calendar: Any, ex_date: date) -> date:
@@ -127,35 +127,36 @@ def make_client() -> Any:
 
 def rows_from_r2(client: Any, bucket: str) -> tuple[list[dict[str, Any]], int]:
     paginator = client.get_paginator("list_objects_v2")
-    keys = [item["Key"] for page in paginator.paginate(Bucket=bucket, Prefix=f"{PREFIX}/dividends/")
-            for item in page.get("Contents", []) if item["Key"].endswith(".json")]
+    keys: list[str] = []
+    current_year = datetime.now(UTC).year
+    recent_years = {current_year, current_year - 1}
+    for page in paginator.paginate(Bucket=bucket, Prefix=f"{PREFIX}/securities/"):
+        for item in page.get("Contents", []):
+            key = str(item.get("Key") or "")
+            match = re.search(r"/dividends/(\d{4})\.json$", key)
+            if key.endswith("/current.json") or (match and int(match.group(1)) in recent_years):
+                keys.append(key)
 
     def load(key: str) -> list[dict[str, Any]]:
         response = client.get_object(Bucket=bucket, Key=key)
         document = json.loads(response["Body"].read())
-        symbol = str(document.get("symbol") or Path(key).stem).upper()
-        rows = [{"symbol": symbol, **row} for row in document.get("records", []) if isinstance(row, dict)]
-        safe_symbol = symbol.replace("^", "_").replace("=", "_").replace("/", "_")
-        try:
-            security_response = client.get_object(
-                Bucket=bucket, Key=f"{PREFIX}/securities/{safe_symbol}.json")
-        except client.exceptions.NoSuchKey:
-            return rows
-        security_document = json.loads(security_response["Body"].read())
-        raw_ex_date = security_document.get("statistics_current", {}).get("exDividendDate")
-        if raw_ex_date is not None:
-            ex_timestamp = float(raw_ex_date)
-            ex_date = datetime.fromtimestamp(ex_timestamp, UTC).date()
+        symbol = str(document.get("symbol") or "").upper()
+        if key.endswith("/current.json"):
+            raw_ex_date = (document.get("statistics") or {}).get("exDividendDate")
+            if raw_ex_date is None or not symbol:
+                return []
+            ex_date = datetime.fromtimestamp(float(raw_ex_date), UTC).date()
             if ex_date > datetime.now(UTC).date():
-                rows.append({"symbol": symbol, "date": ex_date.isoformat(), "upcoming": True})
-        return rows
+                return [{"symbol": symbol, "date": ex_date.isoformat(), "upcoming": True}]
+            return []
+        return [{"symbol": symbol, **row} for row in document.get("records", []) if isinstance(row, dict)]
 
     rows: list[dict[str, Any]] = []
     workers = max(1, min(int(os.environ.get("RIGHTS_DATE_WORKERS", "16")), 32))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         for batch in pool.map(load, keys):
             rows.extend(batch)
-    return rows, len(keys)
+    return rows, len({str(row.get("symbol") or "").upper() for row in rows if row.get("symbol")})
 
 
 def main() -> int:
@@ -198,15 +199,18 @@ def main() -> int:
         args.output_json.parent.mkdir(parents=True, exist_ok=True)
         args.output_json.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if args.upload:
+        payload = json.dumps(document, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         client.put_object(Bucket=args.bucket, Key=OUTPUT_KEY,
-                          Body=json.dumps(document, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+                          Body=payload,
                           ContentType="application/json; charset=utf-8",
-                          CacheControl="public, max-age=300")
+                          CacheControl="private, max-age=300")
         uploaded = client.head_object(Bucket=args.bucket, Key=OUTPUT_KEY)
-        expected_bytes = len(json.dumps(document, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-        if uploaded.get("ContentLength") != expected_bytes:
+        if uploaded.get("ContentLength") != len(payload):
             raise IOError("R2 object size verification failed")
-    print(json.dumps({"source": "local_csv" if args.input_csv else "r2_dividends_prefix",
+        saved = client.get_object(Bucket=args.bucket, Key=OUTPUT_KEY)["Body"].read()
+        if saved != payload:
+            raise IOError("R2 object read-back verification failed")
+    print(json.dumps({"source": "local_csv" if args.input_csv else "r2_yfinance_v2",
                       "source_symbols": source_symbols, "input_events": len(input_rows),
                       "calculated_events": len(records), "skipped_events": skipped_events,
                       "output_key": OUTPUT_KEY if args.upload else None,
