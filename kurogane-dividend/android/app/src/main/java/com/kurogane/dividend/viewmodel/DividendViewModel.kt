@@ -1521,19 +1521,10 @@ class DividendViewModel @JvmOverloads constructor(
 
     suspend fun searchCloudflareSecurities(query: String): List<CloudflareSearchHit> {
         val hits = marketRepository.searchSecurities(query)
-        val cachedPrices = readCachedPrices()
         val industries = withContext(Dispatchers.IO) { runCatching { Tse33IndustryMaster.industries(getApplication()) }.getOrDefault(emptyMap()) }
-        val dividendsByCode = coroutineScope {
-            hits.map { hit ->
-                async { hit.code.uppercase(java.util.Locale.ROOT) to searchDividendPerShare(hit.code) }
-            }.awaitAll().toMap()
-        }
         return hits.map { hit ->
-            val normalizedCode = hit.code.uppercase(java.util.Locale.ROOT)
             hit.copy(
                 name = japaneseDisplayName(hit.code, hit.name),
-                cachedPrice = hit.cachedPrice ?: cachedPrices[normalizedCode],
-                annualDividendPerShare = dividendsByCode[normalizedCode] ?: hit.annualDividendPerShare,
                 industry = industries[hit.code.take(4).uppercase(java.util.Locale.ROOT)]
             )
         }
@@ -1630,7 +1621,7 @@ class DividendViewModel @JvmOverloads constructor(
         hasRestoredLocalHoldings = true
         refreshAllocationMonths(registered)
         viewModelScope.launch {
-            refreshMarketPricesIfDue(force = true)
+            refreshMarketPricesIfDue()
             runCatchingCancellable { fetchFinancialData(registered.code, force = true) }
             runCatchingCancellable { fetchStockAnalysis(registered.code, force = true) }
         }
@@ -1639,10 +1630,6 @@ class DividendViewModel @JvmOverloads constructor(
 
     suspend fun resolveCloudflareSecurity(code: String): CloudflareSecurity? {
         val security = marketRepository.getSecurity(code) ?: return null
-        val normalizedCode = security.code.uppercase(java.util.Locale.ROOT)
-        val marketQuote = runCatchingCancellable {
-            marketRepository.fetchSearchQuotes(listOf(security.code))[normalizedCode]
-        }.getOrNull()
         val financialData = if ((security.annualDividendPerShare ?: 0.0) <= 0.0) {
             runCatchingCancellable { fetchFinancialData(security.code) }.getOrNull()
         } else {
@@ -1655,13 +1642,12 @@ class DividendViewModel @JvmOverloads constructor(
         val industry = withContext(Dispatchers.IO) { runCatching {
             Tse33IndustryMaster.industries(getApplication())[security.code.take(4).uppercase(java.util.Locale.ROOT)]
         }.getOrNull() }
-        val cachedPrice = readCachedPrices()[normalizedCode]
         return security.copy(
             name = japaneseDisplayName(security.code, security.name),
             annualDividendPerShare = annualDividendPerShare,
-            marketPrice = marketQuote?.price ?: security.marketPrice ?: cachedPrice,
+            marketPrice = security.marketPrice,
             industry = industry,
-            marketYieldRate = marketQuote?.yieldRate
+            marketYieldRate = security.marketYieldRate
         )
     }
 
@@ -1754,23 +1740,16 @@ class DividendViewModel @JvmOverloads constructor(
         marketPreferences.edit().putString("monthly_prices_$code", rows.toString()).apply()
     }
 
-    private suspend fun refreshMarketPricesIfDue(force: Boolean = false) {
+    private suspend fun refreshMarketPricesIfDue() {
         val generation = dataGeneration.get()
         val now = System.currentTimeMillis()
         val lastFetchAt = marketPreferences.getLong("last_price_fetch_at", 0L)
         val lastFetchJstDate = marketPreferences.getString("last_price_fetch_jst_date", null)
-        val lastPostCloseProbeAt = marketPreferences.getLong("last_price_post_close_probe_at", 0L)
-        val lastPostCloseFetchJstDate = marketPreferences.getString("last_price_post_close_fetch_jst_date", null)
-        if (!force && !PriceRefreshPolicy.shouldFetch(now, lastFetchAt, lastFetchJstDate, lastPostCloseProbeAt, lastPostCloseFetchJstDate)) return
+        if (!PriceRefreshPolicy.shouldFetch(now, lastFetchAt, lastFetchJstDate)) return
 
         runCatchingCancellable { marketRepository.fetchPriceCatalogSnapshot() }
             .onSuccess { snapshot ->
                 if (generation != dataGeneration.get()) return@onSuccess
-                val afterClose = PriceRefreshPolicy.isAfterClose(now)
-                if (afterClose && !PriceRefreshPolicy.isCatalogCurrentForJapanDate(now, snapshot.marketDataDate)) {
-                    marketPreferences.edit().putLong("last_price_post_close_probe_at", now).apply()
-                    return@onSuccess
-                }
                 val fetchedQuotes = snapshot.quotes
                 val fetchedPrices = fetchedQuotes.mapValues { it.value.price }
                 val cachedDividendsPerShare = readCachedDividendsPerShare().toMutableMap()
@@ -1786,12 +1765,6 @@ class DividendViewModel @JvmOverloads constructor(
                     .putString("dividend_per_share", dividendJson.toString())
                     .putLong("last_price_fetch_at", now)
                     .putString("last_price_fetch_jst_date", PriceRefreshPolicy.japanDate(now))
-                    .also { editor ->
-                        if (afterClose) {
-                            editor.putLong("last_price_post_close_probe_at", now)
-                                .putString("last_price_post_close_fetch_jst_date", PriceRefreshPolicy.japanDate(now))
-                        }
-                    }
                     .apply()
                 applyPrices(mergedPrices, cachedDividendsPerShare)
             }
@@ -2023,7 +1996,7 @@ class DividendViewModel @JvmOverloads constructor(
         updatePortfolio(if (before.any { it.id == merged.id }) before.map { if (it.id == merged.id) merged else it } else before + merged)
         refreshAllocationMonths(merged)
         viewModelScope.launch {
-            refreshMarketPricesIfDue(force = true)
+            refreshMarketPricesIfDue()
             runCatchingCancellable { fetchFinancialData(merged.code, force = true) }
             runCatchingCancellable { fetchStockAnalysis(merged.code, force = true) }
         }

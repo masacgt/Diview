@@ -232,6 +232,34 @@ async function loadMarketIndex(env) {
 
 async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
   if (!env.MARKET_DATA) return null;
+  const normalizedCode = irbankR2Code(String(displayCode || '').toUpperCase());
+  if (normalizedCode) {
+    const symbol = `${normalizedCode}.T`;
+    const [currentObject, profileObject] = await Promise.all([
+      env.MARKET_DATA.get(`${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`),
+      env.MARKET_DATA.get(`${YFINANCE_V2_ROOT}/securities/${symbol}/profile.json`),
+    ]);
+    if (currentObject) {
+      const current = await currentObject.json();
+      const profile = profileObject ? await profileObject.json() : {};
+      const price = current.price || {};
+      const summary = { ...(current.statistics || {}), symbol, shortName: profile.display_name || profile.short_name || null };
+      return { summary, dividend: current.dividend || null, price: {
+        symbol,
+        date: price.date ?? null,
+        open: null,
+        high: null,
+        low: null,
+        close: price.close ?? null,
+        adjusted_close: price.close ?? null,
+        volume: null,
+        change: current.statistics?.regularMarketChange ?? null,
+        change_percent: current.statistics?.regularMarketChangePercent ?? null,
+        source: current.source || 'Yahoo Finance via yfinance',
+        generated_at: current.updated_at ?? null,
+      }};
+    }
+  }
   const symbol = `${displayCode}.T`.toUpperCase();
   let indexed = marketIndex?.get(symbol);
   if (!marketIndex) {
@@ -269,6 +297,171 @@ async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
     source: snapshot.source ?? null,
     generated_at: quote.generated_at ?? snapshot.generated_at ?? null
   }};
+}
+
+const YFINANCE_V2_ROOT = 'market/yfinance/v2';
+
+function yfinanceV2Symbol(code) {
+  const normalized = irbankR2Code(String(code || '').toUpperCase());
+  return normalized ? `${normalized}.T` : null;
+}
+
+async function readV2Json(env, key) {
+  const object = await env.MARKET_DATA?.get(key);
+  return object ? object.json() : null;
+}
+
+async function listV2Documents(env, prefix) {
+  const documents = [];
+  let cursor;
+  do {
+    const page = await env.MARKET_DATA.list({ prefix, limit: 1000, cursor });
+    for (const item of page.objects || []) {
+      const document = await readV2Json(env, item.key);
+      if (document) documents.push(document);
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  return documents;
+}
+
+async function readV2Catalog(env, generation = '') {
+  const key = generation
+    ? `${YFINANCE_V2_ROOT}/catalog/generations/${generation}.json`
+    : `${YFINANCE_V2_ROOT}/catalog/current.json`;
+  return readV2Json(env, key);
+}
+
+async function readV2FinancialPayload(env, code) {
+  const symbol = yfinanceV2Symbol(code);
+  if (!symbol || !env.MARKET_DATA) return null;
+  const base = `${YFINANCE_V2_ROOT}/securities/${symbol}`;
+  const [profile, current, financialDocuments, dividendDocuments, legacyOverview] = await Promise.all([
+    readV2Json(env, `${base}/profile.json`),
+    readV2Json(env, `${base}/current.json`),
+    listV2Documents(env, `${base}/financials/`),
+    listV2Documents(env, `${base}/dividends/`),
+    readV2Json(env, `market/irbank/v1/securities/${irbankR2Code(String(code || '').toUpperCase())}/overview.json`),
+  ]);
+  if (!profile && !current && financialDocuments.length === 0 && dividendDocuments.length === 0) return null;
+  financialDocuments.sort((a, b) => String(a.year || '').localeCompare(String(b.year || '')));
+  let annual = financialDocuments.map(document => document.annual).filter(Boolean)
+    .sort((a, b) => String(a.fiscal_year || '').localeCompare(String(b.fiscal_year || '')));
+  let valuation = financialDocuments.map(document => document.valuation).filter(Boolean)
+    .sort((a, b) => String(a.fiscal_year || '').localeCompare(String(b.fiscal_year || '')));
+  const retrievalStatus = financialDocuments.at(-1)?.retrieval_status || {};
+  const financialFieldStatus = retrievalStatus.fields || current?.field_status?.financial_fields || {};
+  const annualByPeriod = new Map(annual.map(row => [String(row.fiscal_year || ''), row]));
+  for (const legacyRow of legacyOverview?.financials?.annual || []) {
+    const period = String(legacyRow?.fiscal_year || '');
+    if (!/^\d{4}\/\d{2}$/.test(period)) continue;
+    const row = annualByPeriod.get(period) || { fiscal_year: period, field_status: {} };
+    const statuses = { ...(row.field_status || {}) };
+    for (const [field, value] of Object.entries(legacyRow)) {
+      if (field === 'fiscal_year' || field === 'field_status' || value == null || row[field] != null) continue;
+      const state = statuses[field] || financialFieldStatus[field];
+      if (state === 'empty') continue;
+      row[field] = value;
+      statuses[field] = 'legacy_retained';
+    }
+    row.field_status = statuses;
+    annualByPeriod.set(period, row);
+  }
+  annual = [...annualByPeriod.values()].sort((a, b) => String(a.fiscal_year || '').localeCompare(String(b.fiscal_year || '')));
+  const valuationByPeriod = new Map(valuation.map(row => [String(row.fiscal_year || ''), row]));
+  const valuationSourceStatus = retrievalStatus.valuation ?? current?.field_status?.financial_valuation;
+  for (const legacyRow of legacyOverview?.valuation?.history || []) {
+    const period = String(legacyRow?.fiscal_year || '');
+    if (!/^\d{4}\/\d{2}$/.test(period)) continue;
+    const row = valuationByPeriod.get(period) || { fiscal_year: period, field_status: {} };
+    const statuses = { ...(row.field_status || {}) };
+    for (const [field, value] of Object.entries(legacyRow)) {
+      if (field === 'fiscal_year' || field === 'field_status' || value == null || row[field] != null) continue;
+      const state = statuses[field] || (field === 'dividend_yield_adjusted'
+        ? current?.field_status?.statistics_dividendYield
+        : field === 'eps_adjusted' ? current?.field_status?.financial_valuation : undefined);
+      if (state === 'empty' || (!state && valuationSourceStatus === 'empty')) continue;
+      row[field] = value;
+      statuses[field] = 'legacy_retained';
+    }
+    row.field_status = statuses;
+    valuationByPeriod.set(period, row);
+  }
+  valuation = [...valuationByPeriod.values()].sort((a, b) => String(a.fiscal_year || '').localeCompare(String(b.fiscal_year || '')));
+  const yearTotals = new Map();
+  const tokyoYear = Number(new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Tokyo', year: 'numeric'
+  }).format(new Date()));
+  for (const document of dividendDocuments) {
+    for (const event of document.records || []) {
+      const eventDate = String(event.date || '');
+      const amount = finiteNumber(event.amount);
+      const year = Number(eventDate.slice(0, 4));
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || amount == null || amount <= 0 || year < 1900 || year >= tokyoYear) continue;
+      yearTotals.set(year, (yearTotals.get(year) || 0) + amount);
+    }
+  }
+  let dividends = [...yearTotals.entries()].sort(([a], [b]) => a - b)
+    .map(([fiscal_year, annual_dps_adjusted]) => ({ fiscal_year, annual_dps_adjusted }));
+  const dividendHistoryStatus = current?.field_status?.dividend_history;
+  let dividendHistoryBasis = 'calendar_year_observed_distributions';
+  let legacyPayoutRatio = null;
+  if (dividends.length === 0 && (dividendHistoryStatus === 'failed' || dividendHistoryStatus == null)
+    && Array.isArray(legacyOverview?.dividends?.records)) {
+    dividends = legacyOverview.dividends.records;
+    dividendHistoryBasis = legacyOverview.dividends.history_basis || 'fiscal_year_reported';
+    legacyPayoutRatio = finiteNumber(dividends.at(-1)?.payout_ratio);
+  }
+  const payoutRatio = finiteNumber(current?.statistics?.payoutRatio);
+  return {
+    security: {
+      code: irbankR2Code(String(code || '').toUpperCase()),
+      canonical_code: String(code || '').length === 4 ? `${code}0` : String(code || ''),
+      name: profile?.display_name || profile?.short_name || profile?.long_name || profile?.english_name || String(code || ''),
+      metrics: [],
+    },
+    financials: { annual, field_status: retrievalStatus },
+    dividends: {
+      records: dividends,
+      history_basis: dividendHistoryBasis,
+      source: 'Yahoo Finance via yfinance',
+      current: current?.dividend || null,
+      payout_ratio: payoutRatio ?? legacyPayoutRatio,
+      field_status: {
+        ...(current?.field_status || {}),
+        payout_ratio: payoutRatio != null ? 'available' : legacyPayoutRatio != null ? 'legacy_retained' : 'empty',
+      },
+    },
+    valuation: { history: valuation, field_status: retrievalStatus.valuation || current?.field_status?.financial_valuation || 'empty' },
+    market: current ? { price: current.price || null, summary: current.statistics || {} } : null,
+    sources: { market: 'Yahoo Finance via yfinance' },
+  };
+}
+
+async function readV2DividendEvents(env, code, years) {
+  const symbol = yfinanceV2Symbol(code);
+  if (!symbol || !env.MARKET_DATA) return null;
+  const documents = await Promise.all(years.map(async year => {
+    const key = `${YFINANCE_V2_ROOT}/securities/${symbol}/dividends/${year}.json`;
+    return readV2Json(env, key);
+  }));
+  if (documents.every(document => !document)) return null;
+  return documents.flatMap(document => Array.isArray(document?.records) ? document.records : []);
+}
+
+async function readV2MonthlyPrices(env, code, months) {
+  const symbol = yfinanceV2Symbol(code);
+  if (!symbol || !env.MARKET_DATA) return null;
+  const years = [...new Set(months.map(month => month.slice(0, 4)))];
+  const documents = await Promise.all(years.flatMap(year => [
+    readV2Json(env, `${YFINANCE_V2_ROOT}/archive/prices/monthly/${symbol}/${year}.json`),
+    readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/prices/monthly/${year}.json`),
+  ]));
+  if (documents.every(document => !document)) return null;
+  const points = new Map(documents.flatMap(document => Array.isArray(document?.points) ? document.points : [])
+    .map(point => [String(point.month || ''), point]));
+  return months.map(month => points.get(month)).filter(point => point && finiteNumber(point.close) > 0)
+    .map(point => ({ month: point.month, date: point.date, close: point.close }));
 }
 
 const LIVE_MARKET_BATCH_SIZE = 2;
@@ -628,33 +821,59 @@ async function splitLegacyMarketQueueMessage(env, body) {
 }
 
 async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
-  const [dividend, financial, marketData] = await Promise.all([
-    env.DB.prepare(
-      `SELECT fiscal_year, annual_dps, annual_dps_adjusted, record_date, final_rights_date, date_status, data_json
-       FROM dividend_events WHERE security_code = ? ORDER BY fiscal_year DESC LIMIT 1`
-    ).bind(security.security_code).first(),
-    env.DB.prepare(
-      `SELECT fiscal_year, accounting_standard, is_consolidated, data_json
-       FROM financial_periods WHERE security_code = ? AND period_type = 'annual' ORDER BY fiscal_year DESC LIMIT 1`
-    ).bind(security.security_code).first(),
+  const [marketData, v2Payload] = await Promise.all([
     latestMarketForSecurity(env, security.security_code_display, marketIndex),
+    readV2FinancialPayload(env, security.security_code_display),
   ]);
-  const metrics = JSON.parse(security.metrics_json || '[]');
+  let legacyDividend = null;
+  let legacyFinancial = null;
+  if (!v2Payload) {
+    [legacyDividend, legacyFinancial] = await Promise.all([
+      env.DB.prepare(
+        `SELECT fiscal_year, annual_dps, annual_dps_adjusted, record_date, final_rights_date, date_status, data_json
+         FROM dividend_events WHERE security_code = ? ORDER BY fiscal_year DESC LIMIT 1`
+      ).bind(security.security_code).first(),
+      env.DB.prepare(
+        `SELECT fiscal_year, accounting_standard, is_consolidated, data_json
+         FROM financial_periods WHERE security_code = ? AND period_type = 'annual' ORDER BY fiscal_year DESC LIMIT 1`
+      ).bind(security.security_code).first(),
+    ]);
+  }
+  const latestV2Dividend = v2Payload?.dividends?.records?.at(-1) || null;
+  const dividend = v2Payload ? {
+    fiscal_year: latestV2Dividend?.fiscal_year ?? null,
+    annual_dps: latestV2Dividend?.annual_dps_adjusted ?? null,
+    annual_dps_adjusted: latestV2Dividend?.annual_dps_adjusted ?? null,
+    data_json: JSON.stringify({ payout_ratio: v2Payload.dividends.payout_ratio }),
+  } : legacyDividend;
+  const financial = v2Payload
+    ? v2Payload.financials.annual.at(-1) || null
+    : legacyFinancial;
+  const metrics = v2Payload ? [] : JSON.parse(security.metrics_json || '[]');
   const dividendData = dividend ? JSON.parse(dividend.data_json || '{}') : null;
-  const financialData = financial ? JSON.parse(financial.data_json || '{}') : null;
+  const financialData = financial
+    ? (typeof financial.data_json === 'string' ? JSON.parse(financial.data_json || '{}') : financial)
+    : null;
   const summary = marketData?.summary || null;
   const price = finiteNumber(marketData?.price?.close);
   const annualDps = finiteNumber(dividend?.annual_dps_adjusted ?? dividend?.annual_dps);
+  const sales = finiteNumber(financialData?.sales);
+  const operatingProfit = finiteNumber(financialData?.operating_profit);
+  const operatingMargin = finiteNumber(financialData?.operating_margin)
+    ?? (sales > 0 && operatingProfit != null ? operatingProfit / sales * 100 : null);
+  const fcf = finiteNumber(financialData?.operating_cf) != null && finiteNumber(financialData?.investing_cf) != null
+    ? finiteNumber(financialData.operating_cf) + finiteNumber(financialData.investing_cf)
+    : null;
   const values = {
     per: finiteNumber(summary?.trailingPE),
     pbr: finiteNumber(summary?.priceToBook),
     payout_ratio: finiteNumber(dividendData?.payout_ratio),
-    equity_ratio: finiteNumber(financialData?.equity_ratio) ?? firstMetricValue(metrics, ['equity_ratio', '自己資本比率']),
-    operating_margin: finiteNumber(financialData?.operating_margin) ?? firstMetricValue(metrics, ['operating_margin', '営業利益率']),
-    fcf_margin: finiteNumber(financialData?.fcf_margin) ?? firstMetricValue(metrics, ['fcf_margin', 'fcf余力']),
+    equity_ratio: finiteNumber(financialData?.equity_ratio_computed ?? financialData?.equity_ratio) ?? firstMetricValue(metrics, ['equity_ratio', '自己資本比率']),
+    operating_margin: operatingMargin ?? firstMetricValue(metrics, ['operating_margin', '営業利益率']),
+    fcf_margin: finiteNumber(financialData?.fcf_margin) ?? (fcf != null && sales > 0 ? fcf / sales * 100 : null) ?? firstMetricValue(metrics, ['fcf_margin', 'fcf余力']),
     dividend_growth_years: finiteNumber(dividendData?.consecutive_dividend_increase_years),
   };
-  const currentYield = price && annualDps ? annualDps / price * 100 : null;
+  const currentYield = finiteNumber(marketData?.dividend?.yield_rate) ?? (price && annualDps ? annualDps / price * 100 : null);
   return { dividend, financial, dividendData, financialData, marketData, values, currentYield };
 }
 
@@ -1214,6 +1433,39 @@ export default {
             recordDate: event.record_date || null,
           }]));
         const items = await Promise.all(symbols.map(async symbol => {
+          const years = [Number(asOf.slice(0, 4)), Number(asOf.slice(0, 4)) - 1];
+          const v2Symbol = yfinanceV2Symbol(symbol);
+          const [v2Events, current] = await Promise.all([
+            readV2DividendEvents(env, symbol, years),
+            v2Symbol ? readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${v2Symbol}/current.json`) : Promise.resolve(null),
+          ]);
+          if (v2Events) {
+            const rawUpcoming = finiteNumber(current?.statistics?.exDividendDate);
+            const upcomingExDate = rawUpcoming ? new Date(rawUpcoming * 1000).toISOString().slice(0, 10) : null;
+            const upcomingRightsDates = upcomingExDate && upcomingExDate > asOf
+              ? rightsDatesByEvent.get(`${symbol}|${upcomingExDate}`) || null
+              : null;
+            const events = v2Events.filter(event => {
+              const date = String(event?.date || '');
+              const amount = finiteNumber(event?.amount);
+              return /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= cutoff && date <= asOf && amount > 0;
+            }).map(event => {
+              const eventDate = String(event.date);
+              const rightsDates = rightsDatesByEvent.get(`${symbol}|${eventDate}`) || {};
+              return { date: eventDate, amount: finiteNumber(event.amount),
+                final_rights_date: rightsDates.finalRightsDate || null, record_date: rightsDates.recordDate || null };
+            }).sort((a, b) => a.date.localeCompare(b.date));
+            return {
+              symbol,
+              months: [...new Set(events.map(event => Number(event.date.slice(5, 7))))].sort((a, b) => a - b),
+              events,
+              upcoming_event: upcomingRightsDates ? {
+                ex_dividend_date: upcomingExDate,
+                final_rights_date: upcomingRightsDates.finalRightsDate || null,
+                record_date: upcomingRightsDates.recordDate || null,
+              } : null,
+            };
+          }
           const safeSymbol = symbol.replaceAll('^', '_').replaceAll('=', '_').replaceAll('/', '_');
           const object = await env.MARKET_DATA.get(`market/yfinance/securities/${safeSymbol}.json`);
           if (!object) return { symbol, months: [] };
@@ -1388,6 +1640,8 @@ export default {
         return [month, nextMonth.toISOString().slice(0, 10)];
       });
       const items = (await Promise.all(codes.map(async code => {
+        const v2Prices = await readV2MonthlyPrices(env, code, months);
+        if (v2Prices) return { code, prices: v2Prices };
         const [object, dailyObjects] = await Promise.all([
           env.MARKET_DATA.get(`market/yfinance/securities/${code}.T.json`),
           Promise.all(months.map(month => env.MARKET_DATA.get(`market/yfinance/daily_prices/${code}/${month}.json`))),
@@ -1437,43 +1691,24 @@ export default {
       const cursor = String(url.searchParams.get('cursor') || '');
       if ((requestedRunId && !/^\d{4}-\d{2}-\d{2}$/.test(requestedRunId))
         || (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate))
-        || cursor.length > 2048) return json({ error: 'invalid_request' }, 400);
+        || (cursor && !/^\d{1,8}$/.test(cursor))) return json({ error: 'invalid_request' }, 400);
 
       try {
-        const completionObject = await env.MARKET_DATA.get('market/yfinance/live_quotes_completion.json');
-        const completion = completionObject ? await completionObject.json() : {};
-        const runId = requestedRunId || String(completion.last_completed_run_id || '');
-        const marketDataDate = requestedDate || (runId === completion.last_completed_run_id
-          ? String(completion.last_completed_date || '')
-          : '');
-        if (!runId) return json({
-          run_id: null,
-          market_data_date: null,
-          complete: false,
-          legacy_unpublished: !!completion.last_completed_date,
-          items: [],
-          next_cursor: null,
-        });
-        if (!marketDataDate) return json({ error: 'market_data_date_required' }, 400);
-        const result = await env.MARKET_DATA.list({
-          prefix: `${LIVE_QUOTE_RUN_PREFIX}${runId}/`,
-          limit,
-          cursor: cursor || undefined,
-          include: ['customMetadata'],
-        });
-        const items = (result.objects || []).map(object => {
-          const code = object.key.slice(`${LIVE_QUOTE_RUN_PREFIX}${runId}/`.length).replace(/\.json$/, '').toUpperCase();
-          const price = Number(object.customMetadata?.close);
-          if (!/^[A-Z0-9]{4,5}$/.test(code) || !Number.isFinite(price) || price <= 0) return null;
-          return { code, price, quote_date: String(object.customMetadata?.quoteDate || marketDataDate) };
-        }).filter(Boolean);
-        const response = json({
-          run_id: runId,
-          market_data_date: marketDataDate,
-          complete: true,
-          items,
-          next_cursor: result.truncated ? result.cursor : null,
-        });
+        const catalog = await readV2Catalog(env, requestedRunId);
+        if (!catalog) return json({ error: 'catalog_unavailable' }, 503);
+        const generation = String(catalog.generation || catalog.market_data_date || '');
+        const marketDataDate = String(catalog.market_data_date || '');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(generation) || !marketDataDate) return json({ error: 'catalog_invalid' }, 503);
+        if (requestedDate && requestedDate !== marketDataDate) return json({ error: 'catalog_generation_mismatch' }, 409);
+        const offset = Math.min((catalog.items || []).length, Number.parseInt(cursor || '0', 10));
+        const items = (catalog.items || []).slice(offset, offset + limit).map(row => ({
+          code: row.code,
+          price: row.price,
+          quote_date: row.quote_date,
+        }));
+        const nextOffset = offset + items.length;
+        const response = json({ run_id: generation, market_data_date: marketDataDate, complete: true,
+          items, next_cursor: nextOffset < (catalog.items || []).length ? String(nextOffset) : null });
         response.headers.set('cache-control', 'public, max-age=300');
         return response;
       } catch {
@@ -1482,27 +1717,21 @@ export default {
     }
 
     if (url.pathname === '/api/v1/search-catalog') {
-      const object = await env.MARKET_DATA?.get('market/yfinance/search_catalog.json');
-      if (!object) return json({ error: 'search_catalog_unavailable' }, 503);
-      return new Response(object.body, {
-        headers: {
-          'content-type': 'application/json; charset=utf-8',
-          'cache-control': 'public, max-age=300',
-          'access-control-allow-origin': '*',
-          'etag': object.httpEtag,
-        }
-      });
+      const v2Catalog = await readV2Catalog(env);
+      if (!v2Catalog) return json({ error: 'search_catalog_unavailable' }, 503);
+      const response = json(v2Catalog);
+      response.headers.set('cache-control', 'public, max-age=300');
+      return response;
     }
 
     if (url.pathname === '/api/v1/security-search') {
       const query = String(url.searchParams.get('q') || '').trim().slice(0, 100);
       if (!query) return json({ items: [] });
-      const object = await env.MARKET_DATA?.get('market/irbank/v1/catalog.json');
-      if (!object) return json({ error: 'security_catalog_unavailable' }, 503);
-      const catalog = await object.json();
+      const v2Catalog = await readV2Catalog(env);
+      if (!v2Catalog) return json({ error: 'security_catalog_unavailable' }, 503);
       const normalizeSearchText = value => String(value || '').normalize('NFKC').toLowerCase();
       const needle = normalizeSearchText(query);
-      const items = (catalog.securities || [])
+      const items = (v2Catalog.items || [])
         .filter(row => normalizeSearchText(row.code).includes(needle)
           || normalizeSearchText(row.name).includes(needle))
         .sort((a, b) => {
@@ -1512,8 +1741,10 @@ export default {
           return rank(aCode) - rank(bCode) || String(a.name || '').localeCompare(String(b.name || ''), 'ja');
         })
         .slice(0, 30)
-        .map(({ code, name }) => ({ code, name }));
-      return json({ items });
+        .map(({ code, name, price, annual_dividend_per_share, yield_rate }) => ({
+          code, name, price, annual_dividend_per_share, yield_rate,
+        }));
+      return json({ items, generation: v2Catalog.generation || null });
     }
 
     if (url.pathname === '/api/v1/irbank/manifest') {
@@ -1528,6 +1759,8 @@ export default {
     if (financialMatch) {
       if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
       const code = financialMatch[1];
+      const v2Payload = await readV2FinancialPayload(env, code);
+      if (v2Payload) return json(v2Payload);
       const object = await env.MARKET_DATA.get(`market/irbank/v1/securities/${code}/overview.json`);
       let document = null;
       if (object) {
@@ -1660,10 +1893,25 @@ export default {
     if (analysisMatch) {
       const requested = decodeURIComponent(analysisMatch[1]);
       const code = normalizeCode(requested);
-      const security = await env.DB.prepare(
+      let security = await env.DB.prepare(
         'SELECT security_code, security_code_display, name, metrics_json FROM securities WHERE security_code = ? OR security_code_display = ? LIMIT 1'
       ).bind(code, requested).first();
-      if (!security) return json({ error: 'not_found' }, 404);
+      const displayCode = irbankR2Code(requested);
+      const currentProfile = displayCode
+        ? await readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${yfinanceV2Symbol(displayCode)}/profile.json`)
+        : null;
+      if (security && currentProfile) {
+        security = { ...security, name: currentProfile.display_name || currentProfile.short_name || currentProfile.long_name || security.name };
+      }
+      if (!security) {
+        if (!currentProfile) return json({ error: 'not_found' }, 404);
+        security = {
+          security_code: `${displayCode}0`,
+          security_code_display: displayCode,
+          name: currentProfile.display_name || currentProfile.short_name || currentProfile.long_name || displayCode,
+          metrics_json: '[]',
+        };
+      }
       const targetYield = url.searchParams.get('target_yield');
       return json(await buildAnalysisSnapshot(env, security, targetYield === null ? null : Number(targetYield)));
     }
@@ -1673,37 +1921,35 @@ export default {
       const requested = decodeURIComponent(match[1]);
       const code = irbankR2Code(requested);
       if (!code) return json({ error: 'invalid_security_code' }, 400);
-      const object = await env.MARKET_DATA?.get(`market/irbank/v1/securities/${code}/overview.json`);
-      if (!object) return json({ error: 'not_found' }, 404);
-      const overview = await object.json();
-      const security = overview.security;
-      if (!security) return json({ error: 'not_found' }, 404);
-      const dividend = [...(overview.dividends?.records || [])]
-        .sort((a, b) => Number(b.fiscal_year || 0) - Number(a.fiscal_year || 0))[0] || null;
-      const financial = [...(overview.financials?.annual || [])]
-        .sort((a, b) => String(b.fiscal_year || '').localeCompare(String(a.fiscal_year || '')))[0] || null;
-      const marketData = url.searchParams.get('include_market') === 'false'
-        ? null
-        : await latestMarketForSecurity(env, security.code);
-      const marketPrice = marketData?.price ?? null;
-      const marketSummary = marketData?.summary;
+      const symbol = yfinanceV2Symbol(code);
+      const publishedCatalog = await readV2Catalog(env);
+      if (!publishedCatalog || !(publishedCatalog.items || []).some(row => String(row.code || '').toUpperCase() === code)) {
+        return json({ error: 'not_found' }, 404);
+      }
+      const [v2Profile, v2Current] = await Promise.all([
+        readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/profile.json`),
+        readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`),
+      ]);
+      if (!v2Profile || !v2Current) return json({ error: 'not_found' }, 404);
+      const includeMarket = url.searchParams.get('include_market') !== 'false';
+      const stats = v2Current.statistics || {};
       return json({
-        code: security.code,
-        canonical_code: security.canonical_code,
-        name: security.name,
-        metrics: security.metrics || [],
-        dividend,
-        financial: financial ? {
-          fiscal_year: financial.fiscal_year,
-          accounting_standard: financial.accounting_standard,
-          is_consolidated: financial.is_consolidated,
-          data: financial,
+        code,
+        canonical_code: `${code}0`,
+        name: v2Profile.display_name || v2Profile.short_name || v2Profile.long_name || v2Profile.english_name || code,
+        metrics: [],
+        dividend: v2Current.dividend ? {
+          fiscal_year: null,
+          annual_dps: v2Current.dividend.trailing_12_month_per_share ?? null,
+          annual_dps_adjusted: v2Current.dividend.trailing_12_month_per_share ?? null,
+          payout_ratio: stats.payoutRatio ?? null,
+          source: 'Yahoo Finance via yfinance',
         } : null,
-        market_price: marketPrice,
-        valuation: marketSummary ? {
-          per: marketSummary.trailingPE ?? null,
-          pbr: marketSummary.priceToBook ?? null
-        } : null
+        market_yield_rate: v2Current.dividend?.yield_rate ?? null,
+        financial: null,
+        market_price: includeMarket ? v2Current.price || null : null,
+        valuation: includeMarket ? { per: stats.trailingPE ?? null, pbr: stats.priceToBook ?? null } : null,
+        field_status: v2Current.field_status || {},
       });
     }
 
@@ -1711,53 +1957,12 @@ export default {
   },
 
   async scheduled(_controller, env, ctx) {
-    ctx.waitUntil(enqueueDailyMarketQuotes(env, _controller.scheduledTime).catch(error => console.error('Live market queue enqueue failed', error)));
     ctx.waitUntil(env.DB.prepare("DELETE FROM support_feedback WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-90 days')").run());
     ctx.waitUntil(runScheduledAnalysis(env));
   },
 
-  async queue(batch, env) {
-    const deadLetter = batch.queue === MARKET_PRICE_DLQ;
-    for (const message of batch.messages) {
-      const body = message.body || {};
-      try {
-        const symbols = Array.isArray(body.symbols) ? body.symbols : [];
-        if (!body.run_id && symbols.length > LIVE_MARKET_BATCH_SIZE) {
-          await splitLegacyMarketQueueMessage(env, body);
-          message.ack();
-          continue;
-        }
-        const runId = String(body.run_id || body.run_date || '');
-        const runDate = String(body.run_date || runId);
-        const batchIndex = Number(body.batch_index);
-        const previousResult = await env.DB.prepare(`SELECT status FROM market_price_refresh_batches
-          WHERE run_id = ? AND batch_index = ?`).bind(runId, batchIndex).first();
-        if (previousResult) {
-          const completedRun = await env.DB.prepare(`SELECT run_id, run_date, total_batches, completed_batches,
-            failed_batches, processed_symbols, market_data_date, status, completed_at
-            FROM market_price_refresh_runs WHERE run_id = ?`).bind(runId).first();
-          if (completedRun?.status === 'complete') await publishCompletedQuoteRun(env, completedRun);
-          message.ack();
-          continue;
-        }
-        if (deadLetter) {
-          await recordMarketBatchResult(env, { ...body, run_id: runId, run_date: runDate }, 'failed');
-          message.ack();
-          continue;
-        }
-        const result = await refreshLiveMarketQuotes(env, symbols, runId);
-        if (result.failed > 0) throw new Error(`Yahoo quote fetch failed for ${result.failed} symbols`);
-        await recordMarketBatchResult(env, { ...body, run_id: runId, run_date: runDate }, 'complete', result.processed, result.marketDataDate);
-        message.ack();
-      } catch (error) {
-        if (deadLetter) {
-          console.error('Unable to record failed market-price batch', error);
-          message.retry({ delaySeconds: 300 });
-        } else {
-          console.error('Market-price batch failed', error);
-          message.retry({ delaySeconds: 60 });
-        }
-      }
-    }
+  async queue(batch) {
+    // Retire any queued requests from the former live Yahoo quote collector.
+    for (const message of batch.messages) message.ack();
   }
 };

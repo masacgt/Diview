@@ -120,7 +120,6 @@ class CloudflareMarketRepository(
         val root = getJson("/api/v1/security-search?q=$encoded")
         val rows = root.optJSONArray("items") ?: return@withContext emptyList()
         if (rows.length() == 0) return@withContext emptyList()
-        val quotesByCode = runCatchingCancellable { searchCatalogQuotesByCode() }.getOrDefault(emptyMap())
         (0 until rows.length()).mapNotNull { index ->
             val row = rows.optJSONObject(index) ?: return@mapNotNull null
             val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT)
@@ -128,13 +127,13 @@ class CloudflareMarketRepository(
             if (!isSecurityCode(code) || name.isEmpty()) {
                 null
             } else {
-                val quote = quotesByCode[code]
                 CloudflareSearchHit(
                     code = code,
                     name = name,
-                    cachedPrice = quote?.price,
-                    annualDividendPerShare = quote?.annualDividendPerShare,
-                    marketYieldRate = quote?.yieldRate
+                    cachedPrice = row.numberOrNull("price")?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 },
+                    annualDividendPerShare = row.numberOrNull("annual_dividend_per_share")
+                        ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) },
+                    marketYieldRate = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 }
                 )
             }
         }
@@ -189,7 +188,7 @@ class CloudflareMarketRepository(
         val normalized = PortfolioMath.normalizeCode(code)
         require(isSecurityCode(normalized)) { "銘柄コードが正しくありません" }
         val safeCode = URLEncoder.encode(normalized, Charsets.UTF_8.name())
-        val root = try { getJson("/api/v1/securities/$safeCode?include_market=false") }
+        val root = try { getJson("/api/v1/securities/$safeCode") }
             catch (error: MarketHttpException) { if (error.status == 404) return@withContext null else throw error }
         val dividend = root.optJSONObject("dividend")
         CloudflareSecurity(
@@ -199,7 +198,8 @@ class CloudflareMarketRepository(
             name = root.optString("name").takeIf(String::isNotBlank) ?: return@withContext null,
             annualDividendPerShare = (dividend?.numberOrNull("annual_dps_adjusted")
                 ?: dividend?.numberOrNull("annual_dps"))?.takeIf(PortfolioMath::validMoney),
-            marketPrice = root.optJSONObject("market_price")?.numberOrNull("close")?.takeIf { PortfolioMath.validMoney(it) && it > 0 }
+            marketPrice = root.optJSONObject("market_price")?.numberOrNull("close")?.takeIf { PortfolioMath.validMoney(it) && it > 0 },
+            marketYieldRate = root.numberOrNull("market_yield_rate")?.takeIf { it in 0.0..100.0 }
         )
     }
 
@@ -218,7 +218,7 @@ class CloudflareMarketRepository(
         )
     }
 
-    /** Fetches prices together with the server timestamp used to confirm the daily refresh completed. */
+    /** Fetches the published end-of-day catalog. Prices are never refreshed live by the app. */
     suspend fun fetchPriceCatalogSnapshot(): CloudflarePriceCatalogSnapshot = withContext(ioDispatcher) {
         val root = getJson("/api/v1/search-catalog")
         val rows = root.optJSONArray("items") ?: error("Cloudflareの銘柄カタログにitemsがありません")
@@ -237,40 +237,7 @@ class CloudflareMarketRepository(
                 }
             }
         }.toMutableMap()
-
-        var page = getJson("/api/v1/live-quotes?limit=200")
-        var liveDate: String? = null
-        var runId: String? = null
-        val legacyUnpublished = page.optBoolean("legacy_unpublished")
-        if (legacyUnpublished) quotes.clear()
-        while (true) {
-            val pageRunId = page.optString("run_id").takeIf(String::isNotBlank)
-            val pageDate = page.optString("market_data_date").takeIf(String::isNotBlank)
-            if (page.optBoolean("complete") && pageRunId != null && pageDate != null) {
-                if (runId == null) {
-                    runId = pageRunId
-                    liveDate = pageDate
-                }
-                if (pageRunId != runId || pageDate != liveDate) error("Cloudflareの価格ページが同じ更新回を指していません")
-                val liveRows = page.optJSONArray("items") ?: org.json.JSONArray()
-                for (index in 0 until liveRows.length()) {
-                    val row = liveRows.optJSONObject(index) ?: continue
-                    val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT)
-                    val price = row.numberOrNull("price")
-                        ?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }
-                    if (isSecurityCode(code) && price != null) {
-                        val annualDividend = quotes[code]?.annualDividendPerShare
-                        quotes[code] = CloudflareMarketQuote(price, annualDividend)
-                    }
-                }
-            }
-            val cursor = page.optString("next_cursor").takeIf(String::isNotBlank) ?: break
-            val encodedRunId = URLEncoder.encode(runId ?: error("価格ページのrun_idがありません"), Charsets.UTF_8.name())
-            val encodedDate = URLEncoder.encode(liveDate ?: error("価格ページの日付がありません"), Charsets.UTF_8.name())
-            val encodedCursor = URLEncoder.encode(cursor, Charsets.UTF_8.name())
-            page = getJson("/api/v1/live-quotes?limit=200&run_id=$encodedRunId&market_data_date=$encodedDate&cursor=$encodedCursor")
-        }
-        CloudflarePriceCatalogSnapshot(quotes, if (legacyUnpublished) null else liveDate ?: catalogDate)
+        CloudflarePriceCatalogSnapshot(quotes, catalogDate)
     }
 
     suspend fun fetchPriceQuotes(): Map<String, CloudflareMarketQuote> = fetchPriceCatalogSnapshot().quotes
@@ -450,43 +417,21 @@ class CloudflareMarketRepository(
 
 class MarketHttpException(val status: Int) : IOException("Cloudflare API HTTP $status")
 
-/** Refreshes once per Japan-local date, with a throttled after-close retry until the day's catalog is published. */
+/** Refreshes at most once per Japan-local date and never more often than every twelve hours. */
 object PriceRefreshPolicy {
     private const val MINIMUM_INTERVAL_MILLIS = 12L * 60L * 60L * 1_000L
-    private const val POST_CLOSE_PROBE_INTERVAL_MILLIS = 30L * 60L * 1_000L
     private val japanZone = java.time.ZoneId.of("Asia/Tokyo")
 
     fun shouldFetch(
         nowEpochMillis: Long,
         lastFetchEpochMillis: Long,
-        lastFetchJapanDate: String?,
-        lastPostCloseProbeEpochMillis: Long = 0L,
-        lastPostCloseFetchJapanDate: String? = null
+        lastFetchJapanDate: String?
     ): Boolean {
         val todayInJapan = java.time.Instant.ofEpochMilli(nowEpochMillis).atZone(japanZone).toLocalDate().toString()
-        if (lastFetchEpochMillis <= 0L) {
-            return lastPostCloseProbeEpochMillis <= 0L || nowEpochMillis - lastPostCloseProbeEpochMillis >= POST_CLOSE_PROBE_INTERVAL_MILLIS
-        }
-        if (lastFetchJapanDate == todayInJapan) {
-            if (!isAfterClose(nowEpochMillis) || lastPostCloseFetchJapanDate == todayInJapan) return false
-            return lastPostCloseProbeEpochMillis <= 0L || nowEpochMillis - lastPostCloseProbeEpochMillis >= POST_CLOSE_PROBE_INTERVAL_MILLIS
-        }
-        return nowEpochMillis - lastFetchEpochMillis >= MINIMUM_INTERVAL_MILLIS
-    }
-
-    fun isAfterClose(epochMillis: Long): Boolean =
-        java.time.Instant.ofEpochMilli(epochMillis).atZone(japanZone).hour >= 18
-
-    fun isCatalogCurrentForJapanDate(nowEpochMillis: Long, catalogDate: String?): Boolean {
-        val catalogMarketDate = catalogDate?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() } ?: return false
-        val todayInJapan = java.time.Instant.ofEpochMilli(nowEpochMillis).atZone(japanZone).toLocalDate()
-        val dayOfWeek = todayInJapan.dayOfWeek
-        val latestWeekday = when (dayOfWeek) {
-            java.time.DayOfWeek.SATURDAY -> todayInJapan.minusDays(1)
-            java.time.DayOfWeek.SUNDAY -> todayInJapan.minusDays(2)
-            else -> todayInJapan
-        }
-        return catalogMarketDate >= latestWeekday
+        if (lastFetchEpochMillis <= 0L) return true
+        if (lastFetchJapanDate == todayInJapan) return false
+        return nowEpochMillis >= lastFetchEpochMillis &&
+            nowEpochMillis - lastFetchEpochMillis >= MINIMUM_INTERVAL_MILLIS
     }
 
     fun japanDate(epochMillis: Long): String =
