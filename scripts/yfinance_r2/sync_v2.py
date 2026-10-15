@@ -38,6 +38,47 @@ FINANCIAL_REFRESH_MAX_AGE_DAYS = 45
 FINANCIAL_GROUPS = ("income_statement", "balance_sheet", "cash_flow", "valuation")
 _YF_CALL_LOCK = threading.Lock()
 _YF_CALLS: dict[str, int] = {}
+
+
+class GlobalHttpRateLimiter:
+    """Limit request starts across all yfinance worker threads in this process."""
+
+    def __init__(self, requests_per_second: float):
+        if requests_per_second <= 0:
+            raise ValueError("YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND must be positive")
+        self.requests_per_second = requests_per_second
+        self.interval = 1.0 / requests_per_second
+        self.lock = threading.Lock()
+        self.next_start = 0.0
+        self.request_count = 0
+        self.http_429_count = 0
+        self.original_request = None
+
+    def __enter__(self):
+        from curl_cffi.requests import Session
+
+        self.session_class = Session
+        self.original_request = Session.request
+
+        def limited_request(session, *args, **kwargs):
+            with self.lock:
+                now = time.monotonic()
+                if now < self.next_start:
+                    time.sleep(self.next_start - now)
+                self.next_start = time.monotonic() + self.interval
+                self.request_count += 1
+            response = self.original_request(session, *args, **kwargs)
+            if getattr(response, "status_code", None) == 429:
+                with self.lock:
+                    self.http_429_count += 1
+            return response
+
+        Session.request = limited_request
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self.original_request is not None:
+            self.session_class.request = self.original_request
 # J-Quants is the source for the supported Japanese-market universe and product
 # category. Keep only names/IDs in profile.json; price currency remains on the
 # current quote, where app calculations and display consume it.
@@ -1632,25 +1673,29 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
             raise
 
     completed_count = 0
-    with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
-        futures = {pool.submit(process, code): code for code in securities}
-        for future in as_completed(futures):
-            completed_count += 1
-            code = futures[future]
-            try:
-                results[code] = future.result()
-            except Exception as exc:
-                failures[code] = f"{type(exc).__name__}: {exc}"
-                print(f"FAILED {code}: {failures[code]}", file=sys.stderr, flush=True)
-            if completed_count % 100 == 0 or completed_count == len(futures):
-                with _YF_CALL_LOCK:
-                    partial_call_count = sum(_YF_CALLS.values())
-                print(
-                    f"Progress {completed_count}/{len(futures)}: success={len(results)}, "
-                    f"failed={len(failures)}, elapsed={time.perf_counter() - started_at:.1f}s, "
-                    f"yfinance_calls={partial_call_count}",
-                    flush=True,
-                )
+    rate_limiter = GlobalHttpRateLimiter(
+        float(os.environ.get("YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND", "8"))
+    )
+    with rate_limiter:
+        with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
+            futures = {pool.submit(process, code): code for code in securities}
+            for future in as_completed(futures):
+                completed_count += 1
+                code = futures[future]
+                try:
+                    results[code] = future.result()
+                except Exception as exc:
+                    failures[code] = f"{type(exc).__name__}: {exc}"
+                    print(f"FAILED {code}: {failures[code]}", file=sys.stderr, flush=True)
+                if completed_count % 100 == 0 or completed_count == len(futures):
+                    with _YF_CALL_LOCK:
+                        partial_call_count = sum(_YF_CALLS.values())
+                    print(
+                        f"Progress {completed_count}/{len(futures)}: success={len(results)}, "
+                        f"failed={len(failures)}, elapsed={time.perf_counter() - started_at:.1f}s, "
+                        f"yfinance_calls={partial_call_count}",
+                        flush=True,
+                    )
 
     universe_rows = active_universe(client, bucket, fetched, session_date)
     for row in universe_rows:
@@ -1690,6 +1735,9 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
         "elapsed_seconds": elapsed_seconds,
         "yfinance_call_count": sum(yfinance_calls.values()),
         "yfinance_calls": yfinance_calls,
+        "http_max_requests_per_second": rate_limiter.requests_per_second,
+        "http_request_count": rate_limiter.request_count,
+        "http_429_count": rate_limiter.http_429_count,
         "rotation": {
             "full_history_bucket": full_history_bucket,
             "full_history_bucket_count": FULL_HISTORY_BUCKETS,

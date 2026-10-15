@@ -14,6 +14,7 @@ concurrency:
 
 jobs:
   benchmark:
+    if: github.run_number == 1
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -41,5 +42,57 @@ jobs:
         with:
           name: yfinance-rate-check-${{ github.run_id }}
           path: benchmark-output.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
+  market-calendar:
+    if: github.run_number == 2
+    runs-on: ubuntu-latest
+    outputs:
+      is_open: ${{ steps.check.outputs.is_open }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Tokyo market calendar dependency
+        run: python -m pip install "exchange_calendars>=4.7,<5"
+      - name: Check Tokyo Stock Exchange session
+        id: check
+        run: python scripts/yfinance_r2/check_market_day.py
+
+  full-universe-sync:
+    needs: market-calendar
+    if: github.run_number == 2 && needs.market-calendar.outputs.is_open == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/yfinance_r2/requirements.txt
+      - name: Install collection dependencies
+        run: python -m pip install -r scripts/yfinance_r2/requirements.txt
+      - name: Fetch the J-Quants universe and publish yfinance v2 to R2
+        run: set -o pipefail; python scripts/yfinance_r2/sync_v2.py --publish --workers 16 2>&1 | tee full-sync-output.txt
+        shell: bash
+        env:
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+          YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
+          YFINANCE_LIBRARY_RETRIES: "1"
+          YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND: "8"
+          YFINANCE_V2_WORKERS: "16"
+          CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: diview-market-data
+      - name: Save full-universe sync log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yfinance-full-universe-sync-${{ github.run_id }}
+          path: full-sync-output.txt
           if-no-files-found: ignore
           retention-days: 30
