@@ -333,6 +333,38 @@ async function readV2Catalog(env, generation = '') {
   return readV2Json(env, key);
 }
 
+function yfinanceCalendarYearDividends(events) {
+  if (!Array.isArray(events)) return { records: [], status: 'not_fetched' };
+  const currentYear = Number(new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Tokyo', year: 'numeric'
+  }).format(new Date()));
+  const yearly = new Map();
+  const seenEvents = new Set();
+  for (const event of events) {
+    const date = typeof event?.date === 'string' ? event.date : '';
+    const year = Number(date.slice(0, 4));
+    const amount = finiteNumber(event?.amount);
+    const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T00:00:00.000Z`) : null;
+    if (!parsedDate || !Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date || !Number.isInteger(year)
+      || year < 1900 || year >= currentYear || amount == null || amount <= 0) continue;
+    const eventKey = `${date}:${amount}`;
+    if (seenEvents.has(eventKey)) continue;
+    seenEvents.add(eventKey);
+    yearly.set(year, (yearly.get(year) || 0) + amount);
+  }
+  const records = [...yearly.entries()].sort(([a], [b]) => a - b)
+    .map(([calendar_year, amount]) => ({
+      calendar_year,
+      calendar_year_distribution_per_share: amount,
+      amount_basis: 'yfinance_split_adjusted_assumption',
+    }));
+  return {
+    records,
+    status: records.length ? 'available' : 'empty',
+    amount_basis: 'yfinance_split_adjusted_assumption',
+  };
+}
+
 async function readV2FinancialPayload(env, code) {
   const symbol = yfinanceV2Symbol(code);
   if (!symbol || !env.MARKET_DATA) return null;
@@ -389,30 +421,11 @@ async function readV2FinancialPayload(env, code) {
     valuationByPeriod.set(period, row);
   }
   valuation = [...valuationByPeriod.values()].sort((a, b) => String(a.fiscal_year || '').localeCompare(String(b.fiscal_year || '')));
-  const yearTotals = new Map();
-  const tokyoYear = Number(new Intl.DateTimeFormat('en', {
-    timeZone: 'Asia/Tokyo', year: 'numeric'
-  }).format(new Date()));
-  for (const document of dividendDocuments) {
-    for (const event of document.records || []) {
-      const eventDate = String(event.date || '');
-      const amount = finiteNumber(event.amount);
-      const year = Number(eventDate.slice(0, 4));
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || amount == null || amount <= 0 || year < 1900 || year >= tokyoYear) continue;
-      yearTotals.set(year, (yearTotals.get(year) || 0) + amount);
-    }
-  }
-  let dividends = [...yearTotals.entries()].sort(([a], [b]) => a - b)
-    .map(([fiscal_year, annual_dps_adjusted]) => ({ fiscal_year, annual_dps_adjusted }));
+  const dividendHistory = yfinanceCalendarYearDividends(
+    dividendDocuments.flatMap(document => Array.isArray(document.records) ? document.records : []),
+  );
+  const dividends = dividendHistory.records;
   const dividendHistoryStatus = current?.field_status?.dividend_history;
-  let dividendHistoryBasis = 'calendar_year_observed_distributions';
-  let legacyPayoutRatio = null;
-  if (dividends.length === 0 && (dividendHistoryStatus === 'failed' || dividendHistoryStatus == null)
-    && Array.isArray(legacyOverview?.dividends?.records)) {
-    dividends = legacyOverview.dividends.records;
-    dividendHistoryBasis = legacyOverview.dividends.history_basis || 'fiscal_year_reported';
-    legacyPayoutRatio = finiteNumber(dividends.at(-1)?.payout_ratio);
-  }
   const payoutRatio = finiteNumber(current?.statistics?.payoutRatio);
   return {
     security: {
@@ -424,13 +437,15 @@ async function readV2FinancialPayload(env, code) {
     financials: { annual, field_status: retrievalStatus },
     dividends: {
       records: dividends,
-      history_basis: dividendHistoryBasis,
+      history_basis: 'calendar_year_observed_distributions',
+      amount_basis: dividendHistory.amount_basis,
       source: 'Yahoo Finance via yfinance',
       current: current?.dividend || null,
-      payout_ratio: payoutRatio ?? legacyPayoutRatio,
+      payout_ratio: payoutRatio,
       field_status: {
         ...(current?.field_status || {}),
-        payout_ratio: payoutRatio != null ? 'available' : legacyPayoutRatio != null ? 'legacy_retained' : 'empty',
+        dividend_history: dividendHistoryStatus || dividendHistory.status,
+        payout_ratio: payoutRatio != null ? 'available' : 'empty',
       },
     },
     valuation: { history: valuation, field_status: retrievalStatus.valuation || current?.field_status?.financial_valuation || 'empty' },
@@ -444,6 +459,17 @@ async function readV2DividendEvents(env, code, years) {
   if (!symbol || !env.MARKET_DATA) return null;
   const documents = await Promise.all(years.map(async year => {
     const key = `${YFINANCE_V2_ROOT}/securities/${symbol}/dividends/${year}.json`;
+    return readV2Json(env, key);
+  }));
+  if (documents.every(document => !document)) return null;
+  return documents.flatMap(document => Array.isArray(document?.records) ? document.records : []);
+}
+
+async function readV2SplitEvents(env, code, years) {
+  const symbol = yfinanceV2Symbol(code);
+  if (!symbol || !env.MARKET_DATA) return null;
+  const documents = await Promise.all(years.map(async year => {
+    const key = `${YFINANCE_V2_ROOT}/securities/${symbol}/splits/${year}.json`;
     return readV2Json(env, key);
   }));
   if (documents.every(document => !document)) return null;
@@ -826,38 +852,24 @@ async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
     latestMarketForSecurity(env, security.security_code_display, marketIndex),
     readV2FinancialPayload(env, security.security_code_display),
   ]);
-  let legacyDividend = null;
   let legacyFinancial = null;
   if (!v2Payload) {
-    [legacyDividend, legacyFinancial] = await Promise.all([
-      env.DB.prepare(
-        `SELECT fiscal_year, annual_dps, annual_dps_adjusted, record_date, final_rights_date, date_status, data_json
-         FROM dividend_events WHERE security_code = ? ORDER BY fiscal_year DESC LIMIT 1`
-      ).bind(security.security_code).first(),
-      env.DB.prepare(
+    legacyFinancial = await env.DB.prepare(
         `SELECT fiscal_year, accounting_standard, is_consolidated, data_json
          FROM financial_periods WHERE security_code = ? AND period_type = 'annual' ORDER BY fiscal_year DESC LIMIT 1`
-      ).bind(security.security_code).first(),
-    ]);
+      ).bind(security.security_code).first();
   }
   const latestV2Dividend = v2Payload?.dividends?.records?.at(-1) || null;
-  const dividend = v2Payload ? {
-    fiscal_year: latestV2Dividend?.fiscal_year ?? null,
-    annual_dps: latestV2Dividend?.annual_dps_adjusted ?? null,
-    annual_dps_adjusted: latestV2Dividend?.annual_dps_adjusted ?? null,
-    data_json: JSON.stringify({ payout_ratio: v2Payload.dividends.payout_ratio }),
-  } : legacyDividend;
+  const dividendYear = latestV2Dividend?.calendar_year ?? null;
+  const dividendData = v2Payload ? { payout_ratio: v2Payload.dividends.payout_ratio } : null;
   const financial = v2Payload
     ? v2Payload.financials.annual.at(-1) || null
     : legacyFinancial;
   const metrics = v2Payload ? [] : JSON.parse(security.metrics_json || '[]');
-  const dividendData = dividend ? JSON.parse(dividend.data_json || '{}') : null;
   const financialData = financial
     ? (typeof financial.data_json === 'string' ? JSON.parse(financial.data_json || '{}') : financial)
     : null;
   const summary = marketData?.summary || null;
-  const price = finiteNumber(marketData?.price?.close);
-  const annualDps = finiteNumber(dividend?.annual_dps_adjusted ?? dividend?.annual_dps);
   const sales = finiteNumber(financialData?.sales);
   const operatingProfit = finiteNumber(financialData?.operating_profit);
   const operatingMargin = finiteNumber(financialData?.operating_margin)
@@ -874,8 +886,17 @@ async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
     fcf_margin: finiteNumber(financialData?.fcf_margin) ?? (fcf != null && sales > 0 ? fcf / sales * 100 : null) ?? firstMetricValue(metrics, ['fcf_margin', 'fcf余力']),
     dividend_growth_years: finiteNumber(dividendData?.consecutive_dividend_increase_years),
   };
-  const currentYield = finiteNumber(marketData?.dividend?.yield_rate) ?? (price && annualDps ? annualDps / price * 100 : null);
-  return { dividend, financial, dividendData, financialData, marketData, values, currentYield };
+  const currentYield = finiteNumber(marketData?.dividend?.yield_rate);
+  return {
+    dividendYear,
+    dividendHistoryBasis: v2Payload?.dividends?.history_basis || null,
+    dividendData,
+    financial,
+    financialData,
+    marketData,
+    values,
+    currentYield,
+  };
 }
 
 async function buildAnalysisSnapshot(env, security, targetYield = null, preloaded = null) {
@@ -914,7 +935,8 @@ async function buildAnalysisSnapshot(env, security, targetYield = null, preloade
       market_age_days: daysOld(input.marketData?.price?.generated_at),
       market_stale: (daysOld(input.marketData?.price?.generated_at) ?? 999) > Number(config.market_stale_days || 3),
       financial_fiscal_year: input.financial?.fiscal_year ?? null,
-      dividend_fiscal_year: input.dividend?.fiscal_year ?? null
+      dividend_history_year: input.dividendYear,
+      dividend_history_basis: input.dividendHistoryBasis,
     }
   };
 }
@@ -1547,11 +1569,14 @@ export default {
               const eventDate = String(event.date);
               const rightsDates = rightsDatesByEvent.get(`${symbol}|${eventDate}`) || {};
               return { date: eventDate, amount: finiteNumber(event.amount),
+                amount_basis: current?.dividend?.event_amount_basis || 'yfinance_split_adjusted_assumption',
+                row_repaired_by_yfinance: event.row_repaired_by_yfinance === true,
                 final_rights_date: rightsDates.finalRightsDate || null, record_date: rightsDates.recordDate || null };
             }).sort((a, b) => a.date.localeCompare(b.date));
             return {
               symbol,
               history_status: historyStatus,
+              amount_basis: current?.dividend?.event_amount_basis || 'yfinance_split_adjusted_assumption',
               months: [...new Set(events.map(event => Number(event.date.slice(5, 7))))].sort((a, b) => a - b),
               events,
               upcoming_event: upcomingRightsDates ? {
@@ -1654,6 +1679,48 @@ export default {
       return response;
     }
 
+    if (url.pathname === '/api/v1/share-split-history') {
+      if (!env.MARKET_DATA) return json({ error: 'market_data_unavailable' }, 503);
+      const code = irbankR2Code(String(url.searchParams.get('code') || '').trim());
+      const from = String(url.searchParams.get('from') || '');
+      const to = String(url.searchParams.get('to') || '');
+      const isValidDate = value => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+        const timestamp = Date.parse(`${value}T00:00:00.000Z`);
+        return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value;
+      };
+      if (!code || !isValidDate(from) || !isValidDate(to)
+        || from > to || Number(to.slice(0, 4)) - Number(from.slice(0, 4)) > 9) {
+        return json({ error: 'invalid_request' }, 400);
+      }
+      const symbol = yfinanceV2Symbol(code);
+      const years = Array.from(
+        { length: Number(to.slice(0, 4)) - Number(from.slice(0, 4)) + 1 },
+        (_, index) => Number(from.slice(0, 4)) + index,
+      );
+      try {
+        const [events, current] = await Promise.all([
+          readV2SplitEvents(env, code, years),
+          symbol ? readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`) : Promise.resolve(null),
+        ]);
+        const historyStatus = current?.field_status?.split_history
+          || (events ? (events.length > 0 ? 'available' : 'empty') : 'not_fetched');
+        const records = (events || []).map(event => {
+          const date = String(event?.date || '');
+          const ratio = finiteNumber(event?.ratio);
+          return /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= from && date <= to
+            && ratio != null && ratio > 0 && Math.abs(ratio - 1) > 1e-9
+            ? { date, ratio }
+            : null;
+        }).filter(Boolean).sort((a, b) => a.date.localeCompare(b.date));
+        const response = json({ code, history_status: historyStatus, events: records });
+        response.headers.set('cache-control', 'public, max-age=300');
+        return response;
+      } catch {
+        return json({ error: 'share_split_history_unavailable' }, 503);
+      }
+    }
+
     if (url.pathname === '/api/v1/monthly-price-history') {
       if (!env.MARKET_DATA) return json({ error: 'market_data_unavailable' }, 503);
       const codes = [...new Set(String(url.searchParams.get('codes') || '')
@@ -1726,7 +1793,12 @@ export default {
           price: row.price,
           quote_date: row.quote_date,
           annual_dividend_per_share: row.annual_dividend_per_share,
+          trailing_12_month_distribution_per_share: row.trailing_12_month_distribution_per_share,
+          dividend_period: row.dividend_period,
+          dividend_amount_basis: row.dividend_amount_basis,
           yield_rate: row.yield_rate,
+          yield_basis: row.yield_basis,
+          dividend_status: row.dividend_status,
         }));
         const nextOffset = offset + items.length;
         const response = json({ run_id: generation, market_data_date: marketDataDate, complete: true,
@@ -1763,8 +1835,10 @@ export default {
           return rank(aCode) - rank(bCode) || String(a.name || '').localeCompare(String(b.name || ''), 'ja');
         })
         .slice(0, 30)
-        .map(({ code, name, price, annual_dividend_per_share, yield_rate, security_type }) => ({
-          code, name, price, annual_dividend_per_share, yield_rate, security_type,
+        .map(({ code, name, price, annual_dividend_per_share, trailing_12_month_distribution_per_share,
+          dividend_period, dividend_amount_basis, yield_rate, yield_basis, security_type, dividend_status }) => ({
+          code, name, price, annual_dividend_per_share, trailing_12_month_distribution_per_share,
+          dividend_period, dividend_amount_basis, yield_rate, yield_basis, security_type, dividend_status,
         }));
       return json({ items, generation: v2Catalog.generation || null });
     }
@@ -1790,7 +1864,7 @@ export default {
         ? finiteNumber(dividend.next_fiscal_year_forecast_per_share)
         : dividend.yield_basis === 'current_fiscal_year'
           ? finiteNumber(dividend.current_fiscal_year_per_share)
-          : null;
+          : dividend.dividend_status === 'no_dividend' ? 0 : null;
       return json({
         code,
         name: profile.display_name || profile.short_name || profile.long_name || profile.english_name || code,
@@ -1803,6 +1877,7 @@ export default {
         },
         market_price: current.price || null,
         market_yield_rate: finiteNumber(dividend.yield_rate),
+        dividend_status: dividend.dividend_status || 'unknown',
       });
     }
 
@@ -1821,49 +1896,24 @@ export default {
       const v2Payload = await readV2FinancialPayload(env, code);
       if (v2Payload) return json(v2Payload);
       const object = await env.MARKET_DATA.get(`market/irbank/v1/securities/${code}/overview.json`);
-      let document = null;
-      if (object) {
-        document = await object.json();
-        const issuerRecords = document.dividends?.records;
-        const hasUsableIssuerDividend = Array.isArray(issuerRecords) && issuerRecords.some(record =>
-          Number.isInteger(Number(record?.fiscal_year)) && Number(record.fiscal_year) >= 1900 &&
-          Number(record.fiscal_year) <= 2100 && finiteNumber(record?.annual_dps_adjusted) != null &&
-          Number(record.annual_dps_adjusted) >= 0);
-        if (hasUsableIssuerDividend) {
-          return json({ security: document.security, financials: { annual: document.financials?.annual || [] },
-            dividends: document.dividends, valuation: document.valuation, sources: document.sources });
-        }
-      }
+      const document = object ? await object.json() : null;
+      if (!document) return json({ error: 'not_found' }, 404);
 
-      // ETFs and funds have no issuer financial statements; use Yahoo's observed
-      // distribution events, grouped by complete calendar year. Never label
-      // these as fiscal-year/company-reported DPS.
-      const unified = await env.MARKET_DATA.get(`market/securities/v1/${code}.json`);
-      if (!unified) return json({ error: 'not_found' }, 404);
-      const bundle = await unified.json();
-      if (bundle.security?.code && String(bundle.security.code) !== code) return json({ error: 'not_found' }, 404);
-      const events = bundle.dividend_history_by_source?.yfinance;
-      if (!Array.isArray(events) || events.length === 0) return json({ error: 'not_found' }, 404);
-      const currentYear = Number(new Intl.DateTimeFormat('en', { timeZone: 'Asia/Tokyo', year: 'numeric' }).format(new Date()));
-      const yearly = new Map();
-      const seenEvents = new Set();
-      for (const event of events) {
-        const date = typeof event?.date === 'string' ? event.date : '';
-        const year = Number(date.slice(0, 4));
-        const amount = finiteNumber(event?.amount);
-        const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T00:00:00.000Z`) : null;
-        if (!parsedDate || parsedDate.toISOString().slice(0, 10) !== date || !Number.isInteger(year) || year < 1900 || year >= currentYear || amount == null || amount <= 0) continue;
-        const eventKey = `${date}:${amount}`;
-        if (seenEvents.has(eventKey)) continue;
-        seenEvents.add(eventKey);
-        yearly.set(year, (yearly.get(year) || 0) + amount);
-      }
-      const records = [...yearly.entries()].sort(([a], [b]) => a - b)
-        .map(([year, amount]) => ({ fiscal_year: year, annual_dps_adjusted: amount }));
-      if (!records.length) return json({ error: 'not_found' }, 404);
-      return json({ security: document?.security || { code }, financials: { annual: document?.financials?.annual || [] },
-        dividends: { records, history_basis: 'calendar_year_observed_distributions', source: 'Yahoo Finance via yfinance' },
-        valuation: document?.valuation || { history: [] }, sources: { ...(bundle.sources || {}), ...(document?.sources || {}) } });
+      // Legacy annual DPS is not an acceptable fallback for the yfinance event chart.
+      // Until repaired v2 events are published, report history as not fetched.
+      return json({
+        security: document.security,
+        financials: { annual: document.financials?.annual || [] },
+        dividends: {
+          records: [],
+          history_basis: 'calendar_year_observed_distributions',
+          amount_basis: null,
+          source: 'Yahoo Finance via yfinance',
+          field_status: { dividend_history: 'not_fetched', payout_ratio: 'not_fetched' },
+        },
+        valuation: document.valuation || { history: [] },
+        sources: { ...(document.sources || {}), dividend_history: 'Yahoo Finance via yfinance' },
+      });
     }
 
     const irbankMatch = url.pathname.match(/^\/api\/v1\/irbank\/securities\/([^/]+)(?:\/(prices|weekly-margin|jsf-margin))?$/);
@@ -2005,6 +2055,7 @@ export default {
           source: 'Yahoo Finance via yfinance',
         } : null,
         market_yield_rate: v2Current.dividend?.yield_rate ?? null,
+        dividend_status: v2Current.dividend?.dividend_status || 'unknown',
         financial: null,
         market_price: includeMarket ? v2Current.price || null : null,
         valuation: includeMarket ? { per: stats.trailingPE ?? null, pbr: stats.priceToBook ?? null } : null,

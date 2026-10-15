@@ -509,7 +509,21 @@ def publish_search_catalog(client: Any, bucket: str, summaries: list[dict[str, A
             market = summary_by_symbol.get(f"{code}.T", {})
             quote = market.get("latest_daily_price") or {}
             price = quote.get("close")
+            statistics = market.get("statistics_current") if isinstance(market.get("statistics_current"), dict) else {}
             annual_dividend = market.get("dividendRate")
+            if annual_dividend is None:
+                annual_dividend = statistics.get("dividendRate")
+            reported_yield = market.get("dividendYield")
+            if reported_yield is None:
+                reported_yield = statistics.get("dividendYield")
+            has_numeric_dps = isinstance(annual_dividend, (int, float)) and not isinstance(annual_dividend, bool) and math.isfinite(annual_dividend) and annual_dividend >= 0
+            has_positive_yield = isinstance(reported_yield, (int, float)) and not isinstance(reported_yield, bool) and math.isfinite(reported_yield) and reported_yield > 0
+            no_dividend = not has_positive_yield and ((has_numeric_dps and annual_dividend == 0) or (
+                not has_numeric_dps and isinstance(reported_yield, (int, float))
+                and not isinstance(reported_yield, bool) and math.isfinite(reported_yield) and reported_yield == 0
+            ))
+            if no_dividend:
+                annual_dividend = 0.0
             dividend_yield = (
                 round(annual_dividend / price * 100, 2)
                 if isinstance(price, (int, float)) and price > 0
@@ -526,6 +540,7 @@ def publish_search_catalog(client: Any, bucket: str, summaries: list[dict[str, A
                 "annual_dividend_per_share": annual_dividend
                     if isinstance(annual_dividend, (int, float)) and annual_dividend >= 0 else None,
                 "yield_rate": dividend_yield,
+                "dividend_status": "no_dividend" if no_dividend else "has_dividend" if has_numeric_dps and annual_dividend > 0 else "unknown",
             })
     if len(catalog) != len({item["code"] for item in catalog}):
         raise RuntimeError("Search catalog has duplicate security codes")

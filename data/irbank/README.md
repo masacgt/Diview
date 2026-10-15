@@ -2,6 +2,8 @@
 
 取得データを原本、銘柄別データ、Cloudflare D1取り込み用に分けて保存しています。再生成処理はローカルのデータだけを読み込み、IRBANKへの通信やCloudflareへの登録は行いません。
 
+このIRBANKスナップショットは保存資料と一部の財務互換処理向けです。現行の上場銘柄ユニバース、価格、配当・分割イベント、月次価格の取得・公開元はyfinance v2で、J-Quants v2は銘柄コード一覧に使います。最新のR2構造とアプリ取得規則は `ai_docs/r2-yfinance-target-spec.md` を参照してください。
+
 ## フォルダー構成
 
 - `catalog/`: 銘柄一覧と取得時のページ情報 (`securities.json`, `manifest.json`)
