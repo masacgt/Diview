@@ -47,10 +47,12 @@ def measure_action_method(symbol: str, method: str, session_date) -> dict[str, o
     session = ticker._data._session
     original_get = session.get
     response_bytes = 0
+    response_count = 0
 
     def counted_get(*args, **kwargs):
-        nonlocal response_bytes
+        nonlocal response_bytes, response_count
         response = original_get(*args, **kwargs)
+        response_count += 1
         response_bytes += len(getattr(response, "content", b"") or b"")
         return response
 
@@ -77,12 +79,14 @@ def measure_action_method(symbol: str, method: str, session_date) -> dict[str, o
         return {
             "method": method,
             "elapsed_seconds": round(time.perf_counter() - started, 3),
+            "http_get_response_count": response_count,
             "response_body_bytes": response_bytes,
             "dividend_event_count": len(dividends),
             "split_event_count": len(splits),
-            "event_fingerprint": hashlib.sha256(json.dumps(
-                {"dividends": dividends, "splits": splits}, sort_keys=True, separators=(",", ":")
-            ).encode("utf-8")).hexdigest(),
+            "event_fingerprint": hashlib.sha256(json.dumps({
+                "dividends": [{key: row[key] for key in ("date", "amount") if key in row} for row in dividends],
+                "splits": [{key: row[key] for key in ("date", "ratio") if key in row} for row in splits],
+            }, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest(),
         }
     finally:
         session.get = original_get
