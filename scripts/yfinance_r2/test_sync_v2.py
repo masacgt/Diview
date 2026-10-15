@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -8,6 +8,13 @@ import sync_v2 as sync
 
 
 class SyncPriceTests(TestCase):
+    def test_pre_market_sync_uses_latest_completed_xtks_session(self):
+        before_open = datetime(2026, 10, 16, 6, 0, tzinfo=sync.JST)
+        after_close = datetime(2026, 10, 16, 21, 30, tzinfo=sync.JST)
+
+        self.assertEqual(sync.latest_completed_xtks_session(before_open), date(2026, 10, 15))
+        self.assertEqual(sync.latest_completed_xtks_session(after_close), date(2026, 10, 16))
+
     def test_today_close_requires_exact_session_date(self):
         rows = [
             {"date": "2026-10-14", "close": 100.0},

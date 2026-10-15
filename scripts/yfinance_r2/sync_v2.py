@@ -135,6 +135,23 @@ def is_last_market_session(day: date) -> bool:
     return next_session.month != session.month
 
 
+def latest_completed_xtks_session(now: datetime | None = None) -> date:
+    """Return today's XTKS session only after its close; otherwise use the last closed session."""
+    import exchange_calendars as xcals
+    import pandas as pd
+
+    current = now or datetime.now(JST)
+    current = current.replace(tzinfo=JST) if current.tzinfo is None else current.astimezone(JST)
+    calendar = xcals.get_calendar("XTKS")
+    today = pd.Timestamp(current.date())
+    session = calendar.date_to_session(today, direction="previous")
+    if session.date() == current.date():
+        market_close = calendar.session_close(session).to_pydatetime().astimezone(JST)
+        if current < market_close:
+            session = calendar.previous_session(session)
+    return session.date()
+
+
 def year_end_price_years(as_of: date) -> tuple[int, int]:
     latest_year = as_of.year if as_of.month == 12 and is_last_market_session(as_of) else as_of.year - 1
     return latest_year - 7, latest_year
@@ -1463,7 +1480,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         verify_v2_transfer(client, bucket, symbol, old, verification_statements, monthly, as_of)
         archived_legacy_document(client, bucket, symbol, old)
     return {"code": code, "symbol": symbol, "name": profile["display_name"], "price": close,
-            "quote_date": price_date.isoformat(), "annual_dividend_per_share": trailing_dividends,
+            "quote_date": price_date.isoformat() if price_date else None,
+            "annual_dividend_per_share": trailing_dividends,
             "yield_rate": current["dividend"]["yield_rate"], "currency": current["price"]["currency"],
             "field_status": current["field_status"], "field_failures": field_failures,
             "status": "partial" if field_failures else "ok"}
@@ -1588,7 +1606,7 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
     if not api_key:
         raise RuntimeError("JQUANTS_API_KEY is required")
     fetched = fetch_securities(api_key)
-    session_date = datetime.now(JST).date()
+    session_date = latest_completed_xtks_session()
     client = collector.get_client() if publish else None
     bucket = collector.required_env("R2_BUCKET") if publish else ""
     if dry_run:
