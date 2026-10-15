@@ -5,6 +5,20 @@ on:
     # 12:17 UTC is 21:17 JST, after the Tokyo market close and away from the hourly boundary.
     - cron: "17 12 * * 1-5"
   workflow_dispatch:
+    inputs:
+      run_mode:
+        description: Run a non-publishing sample measurement or the full R2 sync
+        type: choice
+        options:
+          - benchmark
+          - sync
+        default: benchmark
+        required: true
+      sample_size:
+        description: Number of J-Quants securities to sample in benchmark mode
+        type: number
+        default: 40
+        required: true
 
 permissions:
   contents: read
@@ -34,9 +48,9 @@ jobs:
 
   v2-daily-sync:
     needs: market-calendar
-    if: needs.market-calendar.outputs.is_open == 'true'
+    if: needs.market-calendar.outputs.is_open == 'true' && (github.event_name == 'schedule' || inputs.run_mode == 'sync')
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 80
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -57,3 +71,33 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: diview-market-data
+
+  yfinance-sample-benchmark:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'benchmark'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/yfinance_r2/requirements.txt
+      - name: Install collection dependencies
+        run: python -m pip install -r scripts/yfinance_r2/requirements.txt
+      - name: Measure a stratified J-Quants sample without R2 writes
+        run: set -o pipefail; python scripts/yfinance_r2/benchmark_v2.py 2>&1 | tee benchmark-output.txt
+        shell: bash
+        env:
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+          YFINANCE_BENCHMARK_SAMPLE_SIZE: ${{ inputs.sample_size }}
+          YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
+          YFINANCE_LIBRARY_RETRIES: "1"
+      - name: Save benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yfinance-sample-benchmark-${{ github.run_id }}
+          path: benchmark-output.txt
+          if-no-files-found: ignore
+          retention-days: 30
