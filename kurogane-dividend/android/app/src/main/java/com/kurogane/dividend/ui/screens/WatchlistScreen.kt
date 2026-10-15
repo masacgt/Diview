@@ -1085,10 +1085,10 @@ fun WatchlistScreen(
                 val isReached = currentYield >= stock.targetYield
                 val isClose = !isReached && (currentYield >= (stock.targetYield - 0.25))
                 val yieldAchievement = (currentYield / stock.targetYield * 100.0).coerceIn(0.0, 100.0)
-                val targetPriceGap = kotlin.math.abs(stock.price - stock.targetPrice).toInt()
+                val targetPriceGap = kotlin.math.abs(stock.price - stock.targetPrice)
                 val targetPriceGapText = when {
-                    stock.price > stock.targetPrice -> resources.getString(R.string.watchlist_label_21, (stock.currency).toString(), (targetPriceGap).toString())
-                    stock.price < stock.targetPrice -> resources.getString(R.string.watchlist_label_22, (stock.currency).toString(), (targetPriceGap).toString())
+                    stock.price > stock.targetPrice -> resources.getString(R.string.watchlist_label_21, (stock.currency).toString(), com.kurogane.dividend.model.formatFinancialAmountDisplay(targetPriceGap))
+                    stock.price < stock.targetPrice -> resources.getString(R.string.watchlist_label_22, (stock.currency).toString(), com.kurogane.dividend.model.formatFinancialAmountDisplay(targetPriceGap))
                     else -> resources.getString(R.string.watchlist_label_23)
                 }
                 
@@ -1324,7 +1324,7 @@ fun WatchlistScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    stringResource(R.string.add_holding_1_s_2_s_2 , stock.currency, stock.price.toInt()),
+                                    stringResource(R.string.add_holding_1_s_2_s_2 , stock.currency, com.kurogane.dividend.model.formatStockPriceDisplay(stock.price, stock.code)),
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
                                     fontSize = AppTextSize.section,
@@ -1363,7 +1363,10 @@ fun WatchlistScreen(
                                         Text(stringResource(R.string.stock_detail_text_4), color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
                                         Spacer(modifier = Modifier.width(5.dp))
                                         Text(
-                                            stringResource(R.string.settings_1_s , String.format(Locale.JAPAN, "%.2f", stock.currentYield)),
+                                            com.kurogane.dividend.model.formatDividendYieldDisplay(
+                                                stock.currentYield,
+                                                stock.isNoDividendConfirmed
+                                            ),
                                             fontWeight = FontWeight.Bold,
                                             color = if (stock.isReady) PrimaryEmerald else OnSurface,
                                             fontSize = AppTextSize.body,
@@ -1449,7 +1452,7 @@ fun WatchlistScreen(
                                         Icon(Icons.Default.Paid, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            stringResource(R.string.watchlist_text_16 , stock.currency, stock.targetPrice.toInt(), targetPriceGapText),
+                                            stringResource(R.string.watchlist_text_16 , stock.currency, com.kurogane.dividend.model.formatStockPriceDisplay(stock.targetPrice, stock.code), targetPriceGapText),
                                             color = OnSurfaceVariant,
                                             fontSize = AppTextSize.dense,
                                             maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
@@ -1468,7 +1471,7 @@ fun WatchlistScreen(
                                         ) {
                                             Icon(Icons.Default.Savings, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(12.dp))
                                             Text(
-                                                stringResource(R.string.watchlist_text_17 , stock.currency, stock.dps.roundToInt()),
+                                                stringResource(R.string.watchlist_text_17 , stock.currency, com.kurogane.dividend.model.formatFinancialAmountDisplay(stock.dps)),
                                                 color = PrimaryEmerald,
                                                 fontSize = AppTextSize.dense,
                                                 fontWeight = FontWeight.Bold,
@@ -2599,7 +2602,18 @@ fun WatchlistScreen(
                                 }
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(watchlist.firstOrNull { it.code == "1928" }?.let { percent(it.currentYield) }.orEmpty(), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
+                                    Text(
+                                        watchlist.firstOrNull { it.code == "1928" }?.let {
+                                            com.kurogane.dividend.model.formatDividendYieldDisplay(
+                                                it.currentYield,
+                                                it.isNoDividendConfirmed
+                                            )
+                                        }.orEmpty(),
+                                        color = PrimaryEmerald,
+                                        fontSize = AppTextSize.dense,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
                                     Button(
                                         onClick = {
                                             addWatchlist("1928") { showGraphBottomSheet = false }

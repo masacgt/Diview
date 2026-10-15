@@ -5,26 +5,38 @@ import org.json.JSONObject
 import java.util.Locale
 import kotlin.math.pow
 
-data class FiscalDividend(val year: Int, val dps: Double)
+data class CalendarYearDividend(val year: Int, val dps: Double)
+
+data class DividendHistoryOverride(
+    val year: Int,
+    val stockPrice: Double?,
+    val annualDividend: Double?,
+    val hasStockPriceOverride: Boolean,
+    val hasAnnualDividendOverride: Boolean
+)
 
 data class FinancialData(
     val code: String,
     val period: String,
     val profile: StockFinancialProfile,
-    val dividends: List<FiscalDividend>,
+    val dividends: List<CalendarYearDividend>,
     val values: Map<String, Double?>,
-    val dividendHistoryBasis: String = "fiscal_year_reported"
+    val dividendHistoryBasis: String = "unknown"
 ) {
     companion object {
         fun parse(root: JSONObject, expectedCode: String): FinancialData {
             val code = root.getJSONObject("security").getString("code")
             require(code == expectedCode) { "財務情報の銘柄コードが一致しません" }
+            val historyBasis = root.optJSONObject("dividends")?.optString("history_basis")
+                ?.takeIf { it == "calendar_year_observed_distributions" } ?: "unknown"
             val history = root.optJSONObject("dividends")?.optJSONArray("records")
             val rows = (0 until (history?.length() ?: 0)).mapNotNull { history?.optJSONObject(it) }
-                .filter { it.optInt("fiscal_year") in 1900..2100 }.sortedBy { it.optInt("fiscal_year") }
-            // Unadjusted DPS cannot be mixed with a current-share history after a split.
-            val dividends = rows.mapNotNull { row -> row.number("annual_dps_adjusted")?.takeIf { it >= 0 }
-                ?.let { FiscalDividend(row.getInt("fiscal_year"), it) } }
+                .filter { it.optInt("calendar_year") in 1900..2100 }
+                .sortedBy { it.optInt("calendar_year") }
+            val dividends = rows.mapNotNull { row ->
+                row.number("calendar_year_distribution_per_share")
+                    ?.takeIf { it >= 0 }
+                ?.let { CalendarYearDividend(row.getInt("calendar_year"), it) } }
                 .associateBy { it.year }.values.sortedBy { it.year }
             val annual = root.optJSONObject("financials")?.optJSONArray("annual")
             val financial = (0 until (annual?.length() ?: 0)).mapNotNull { annual?.optJSONObject(it) }
@@ -34,7 +46,7 @@ data class FinancialData(
             val valuationRows = root.optJSONObject("valuation")?.optJSONArray("history")
             val valuation = (0 until (valuationRows?.length() ?: 0)).mapNotNull { valuationRows?.optJSONObject(it) }
                 .filter { it.optString("fiscal_year") == period }.firstOrNull()
-            val dividend = rows.lastOrNull { it.optInt("fiscal_year").toString() == period.take(4) }
+            val dividend = rows.lastOrNull { it.optInt("calendar_year").toString() == period.take(4) }
             fun percent(numerator: Double?, denominator: Double?): Double? =
                 if (numerator != null && denominator != null && denominator > 0) numerator / denominator * 100 else null
             val sales = financial?.number("sales")
@@ -56,7 +68,7 @@ data class FinancialData(
                 .filter { it.optString("fiscal_year").take(4).toIntOrNull()?.let { year ->
                     period.take(4).toIntOrNull()?.let { year in (it - 4)..it } } == true }
                 .mapNotNull { it.number("dividend_yield_adjusted") }
-            val calendarYearEvents = root.optJSONObject("dividends")?.optString("history_basis") == "calendar_year_observed_distributions"
+            val calendarYearEvents = historyBasis == "calendar_year_observed_distributions"
             val profile = StockFinancialProfile(
                 payoutRatio = payout ?: Double.NaN, equityRatio = equity ?: Double.NaN,
                 consecutiveYears = if (calendarYearEvents) -1 else dividend?.number("consecutive_dividend_increase_years")?.toInt() ?: -1,
@@ -79,8 +91,7 @@ data class FinancialData(
             return FinancialData(code, period, profile, dividends, mapOf(
                 "payout_ratio" to payout, "equity_ratio" to equity, "operating_margin" to operating,
                 "fcf_margin" to fcfMargin, "dividend_growth_years" to dividend?.number("consecutive_dividend_increase_years")
-            ), root.optJSONObject("dividends")?.optString("history_basis")
-                ?.takeIf { it == "calendar_year_observed_distributions" } ?: "fiscal_year_reported")
+            ), historyBasis)
         }
     }
 }

@@ -24,7 +24,8 @@ data class Holding(
     val taxFreeShares: Int? = null,
     val usdJpyRate: Double? = null,
     val usWithholdingEnabled: Boolean = true,
-    val financialProfile: StockFinancialProfile? = null
+    val financialProfile: StockFinancialProfile? = null,
+    val isNoDividendConfirmed: Boolean = false
 ) {
     val priceUnit: Double get() = if (category == Category.FUND) 10_000.0 else 1.0
     val effectiveTaxFreeShares: Int get() =
@@ -131,7 +132,8 @@ data class WatchlistStock(
     val alertEnabled: Boolean = false,
     val badge: String? = null,
     val defaultShares: Int = 100,
-    val usdJpyRate: Double? = null
+    val usdJpyRate: Double? = null,
+    val isNoDividendConfirmed: Boolean = false
 ) {
     val currencyFactor: Double get() = if (currency == "$") usdJpyRate?.takeIf { it.isFinite() && it > 0 } ?: 0.0 else 1.0
     val isReady: Boolean get() = targetYield.isFinite() && targetYield > 0.0 && currentYield.isFinite() && currentYield >= targetYield

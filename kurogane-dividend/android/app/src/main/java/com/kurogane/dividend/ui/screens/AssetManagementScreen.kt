@@ -524,14 +524,14 @@ fun AssetManagementScreen(
                                     Text(stringResource(R.string.asset_management_text_3), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_4) else resources.getString(R.string.add_holding_text_22, (javaCurrencyFormat.format(totalAnnualDivVal.toLong())).toString()),
+                                        text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_4) else resources.getString(R.string.add_holding_text_22, com.kurogane.dividend.model.formatFinancialAmountDisplay(totalAnnualDivVal)),
                                         fontSize = AppTextSize.headline,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = NeonGreen
                                     )
                                     Spacer(modifier = Modifier.height(1.dp))
                                     Text(
-                                        text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_6) else resources.getString(R.string.asset_management_label_7, (javaCurrencyFormat.format(netAnnualDivVal.toLong())).toString()),
+                                        text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_6) else resources.getString(R.string.asset_management_label_7, com.kurogane.dividend.model.formatFinancialAmountDisplay(netAnnualDivVal)),
                                         fontSize = AppTextSize.dense,
                                         color = SoftGray
                                     )
@@ -626,7 +626,7 @@ fun AssetManagementScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_8) else resources.getString(R.string.asset_management_label_9, (javaCurrencyFormat.format(totalAnnualDivVal.toLong())).toString()),
+                                text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_8) else resources.getString(R.string.asset_management_label_9, com.kurogane.dividend.model.formatFinancialAmountDisplay(totalAnnualDivVal)),
                                 fontSize = AppTextSize.dense,
                                 color = SoftGray
                             )
@@ -1074,7 +1074,10 @@ fun AssetManagementScreen(
                                 }
                                 HoldingMetricTile(
                                     label = resources.getString(R.string.asset_management_label_31),
-                                    value = "${String.format(java.util.Locale.JAPAN, "%.2f", if (calculationBasis == "cost") holding.liveYoc else holding.liveYield)}%",
+                                    value = com.kurogane.dividend.model.formatDividendYieldDisplay(
+                                        if (calculationBasis == "cost") holding.liveYoc else holding.liveYield,
+                                        holding.isNoDividendConfirmed
+                                    ),
                                     detail = if (calculationBasis == "cost") resources.getString(R.string.yield_basis_cost_detail) else "現在株価比",
                                     modifier = Modifier.weight(1f),
                                     valueColor = NeonGreenLight
@@ -1104,7 +1107,7 @@ fun AssetManagementScreen(
                                 HoldingMetricTile(
                                     label = resources.getString(R.string.csv_import_label_5),
                                     value = "${holding.shares}株",
-                                    detail = "@${holding.currency}${javaCurrencyFormat.format(holding.price.toLong())}",
+                                    detail = "@${holding.currency}${com.kurogane.dividend.model.formatStockPriceDisplay(holding.price, holding.code)}",
                                     modifier = Modifier.weight(1f),
                                     showEditHint = true,
                                     onClick = {
@@ -1177,7 +1180,7 @@ fun AssetManagementScreen(
                             }
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(stringResource(R.string.add_holding_1_s , javaCurrencyFormat.format(upcomingDividend.amount)), fontWeight = FontWeight.Bold, color = NeonGreenLight, fontSize = AppTextSize.body, fontFamily = AppNumericFontFamily)
+                            Text(stringResource(R.string.add_holding_1_s , com.kurogane.dividend.model.formatFinancialAmountDisplay(upcomingDividend.amount)), fontWeight = FontWeight.Bold, color = NeonGreenLight, fontSize = AppTextSize.body, fontFamily = AppNumericFontFamily)
                             Text(stringResource(R.string.asset_management_text_12 , upcomingDividend.dividendType ?: resources.getString(R.string.asset_management_label_19), upcomingDividend.shares), color = SoftGray, fontSize = AppTextSize.dense)
                         }
                     }
@@ -1578,7 +1581,7 @@ fun HoldingQuickEditModal(
             ) {
                 Column {
                     Text(stringResource(R.string.asset_management_text_23), color = SoftGray, fontSize = AppTextSize.dense)
-                    Text(stringResource(R.string.add_holding_1_s_2_s_2 , modalCurrency, javaCurrencyFormat.format(currentPrice)), color = OnSurface, fontSize = AppTextSize.screenTitle, fontWeight = FontWeight.ExtraBold, fontFamily = AppNumericFontFamily)
+                    Text(stringResource(R.string.add_holding_1_s_2_s_2 , modalCurrency, com.kurogane.dividend.model.formatStockPriceDisplay(currentPrice, holding.code)), color = OnSurface, fontSize = AppTextSize.screenTitle, fontWeight = FontWeight.ExtraBold, fontFamily = AppNumericFontFamily)
                 }
                 Surface(shape = CircleShape, color = NeonGreen.copy(alpha = 0.18f)) {
                     Text(
@@ -1689,7 +1692,7 @@ fun HoldingQuickEditModal(
                 AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     QuickEditSummary("投資元本", "$modalCurrency${javaCurrencyFormat.format(cost.toLong())}", OnSurface, Modifier.weight(1f))
                     QuickEditSummary("評価損益", "${if (gain >= 0) "+" else "−"}$modalCurrency${javaCurrencyFormat.format(kotlin.math.abs(gain).toLong())}\n(${String.format(Locale.JAPAN, "%+.1f%%", gainPct)})", if (gain >= 0) StatusSuccess else ErrorRed, Modifier.weight(1f), Alignment.CenterHorizontally)
-                    QuickEditSummary("年間予想配当金", "$modalCurrency${javaCurrencyFormat.format(projectedDividend.toLong())}/年", NeonGreenLight, Modifier.weight(1f), Alignment.End)
+                    QuickEditSummary("年間予想配当金", "$modalCurrency${com.kurogane.dividend.model.formatFinancialAmountDisplay(projectedDividend)}/年", NeonGreenLight, Modifier.weight(1f), Alignment.End)
                 }
             }
 
