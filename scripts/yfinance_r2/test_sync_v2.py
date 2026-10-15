@@ -123,6 +123,30 @@ class SyncPriceTests(TestCase):
             "last_success_session_date": "2026-10-15",
         }, date(2026, 10, 15)))
 
+    def test_financial_period_marker_changes_only_when_reporting_dates_change(self):
+        first = sync.financial_period_marker({
+            "lastFiscalYearEnd": "2025-03-31", "mostRecentQuarter": "2025-12-31",
+        })
+        same = sync.financial_period_marker({
+            "lastFiscalYearEnd": "2025-03-31", "mostRecentQuarter": "2025-12-31",
+        })
+        changed = sync.financial_period_marker({
+            "lastFiscalYearEnd": "2025-03-31", "mostRecentQuarter": "2026-03-31",
+        })
+        self.assertEqual(first, same)
+        self.assertNotEqual(first, changed)
+
+    def test_failed_financial_retry_falls_back_to_all_groups_without_field_status(self):
+        self.assertEqual(
+            sync.financial_groups_to_fetch(
+                same_session_retry=False,
+                retry_pending=True,
+                due=False,
+                failed_groups=set(),
+            ),
+            set(sync.FINANCIAL_GROUPS),
+        )
+
 
 if __name__ == "__main__":
     import unittest
