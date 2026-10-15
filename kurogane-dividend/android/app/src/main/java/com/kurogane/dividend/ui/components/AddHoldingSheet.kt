@@ -49,7 +49,8 @@ data class PresetStock(
     val price: Double,
     val yieldRate: Double,
     val dps: Double,
-    val currency: String
+    val currency: String,
+    val isNoDividendConfirmed: Boolean = false
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -249,7 +250,8 @@ fun AddHoldingSheet(
                         price = price,
                         yieldRate = if (price > 0.0) dps / price * 100 else 0.0,
                         dps = dps,
-                        currency = "¥"
+                        currency = "¥",
+                        isNoDividendConfirmed = security.isNoDividendConfirmed
                     )
                 )
             }
@@ -410,7 +412,8 @@ fun AddHoldingSheet(
                         Text(stringResource(R.string.add_holding_text_4), color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                     }
                     Text(
-                        stringResource(R.string.add_holding_text_5 , selectedStock.name, String.format(java.util.Locale.JAPAN, "%.2f", selectedStock.yieldRate)),
+                        stringResource(R.string.add_holding_text_5 , selectedStock.name,
+                            com.kurogane.dividend.model.formatDividendYieldDisplay(selectedStock.yieldRate, selectedStock.isNoDividendConfirmed)),
                         color = PrimaryEmerald,
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.SemiBold
@@ -460,7 +463,8 @@ fun AddHoldingSheet(
                             price,
                             if (price > 0.0) dps / price * 100 else 0.0,
                             dps,
-                            "¥"
+                            "¥",
+                            hit.isNoDividendConfirmed
                         )
                     }
                 if (suggestedStocks.isNotEmpty()) Row(
@@ -527,13 +531,15 @@ fun AddHoldingSheet(
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
-                            stringResource(R.string.add_holding_1_s_2_s_2 , selectedStock.currency, currencyFormat.format(selectedStock.price.toLong())),
+                            stringResource(R.string.add_holding_1_s_2_s_2 , selectedStock.currency, com.kurogane.dividend.model.formatStockPriceDisplay(selectedStock.price, selectedStock.code)),
                             color = OnSurface,
                             fontWeight = FontWeight.Bold,
                             fontSize = AppTextSize.caption,
                             fontFamily = AppNumericFontFamily
                         )
-                        Text(stringResource(R.string.add_holding_text_7 , String.format(java.util.Locale.JAPAN, "%.2f", selectedStock.yieldRate)), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.add_holding_text_7 ,
+                            com.kurogane.dividend.model.formatDividendYieldDisplay(selectedStock.yieldRate, selectedStock.isNoDividendConfirmed)),
+                            color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -761,7 +767,7 @@ fun AddHoldingSheet(
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text(stringResource(R.string.add_holding_text_20), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text(stringResource(R.string.add_holding_1_s , currencyFormat.format(weightedAvgAcqPrice.toLong())), color = OnSurface, fontWeight = FontWeight.Black, fontSize = AppTextSize.body)
+                                Text(stringResource(R.string.add_holding_1_s , com.kurogane.dividend.model.formatStockPriceDisplay(weightedAvgAcqPrice, selectedStock.code)), color = OnSurface, fontWeight = FontWeight.Black, fontSize = AppTextSize.body)
                             }
                         }
                     }
@@ -775,7 +781,7 @@ fun AddHoldingSheet(
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text(stringResource(R.string.add_holding_text_21), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text(stringResource(R.string.add_holding_text_22 , currencyFormat.format(totalNetDividend.toLong())), color = PrimaryEmerald, fontWeight = FontWeight.Black, fontSize = AppTextSize.body)
+                                Text(stringResource(R.string.add_holding_text_22 , com.kurogane.dividend.model.formatFinancialAmountDisplay(totalNetDividend)), color = PrimaryEmerald, fontWeight = FontWeight.Black, fontSize = AppTextSize.body)
                             }
                         }
                         // Box 4

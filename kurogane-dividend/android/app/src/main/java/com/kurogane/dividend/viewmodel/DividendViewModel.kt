@@ -22,8 +22,11 @@ import com.kurogane.dividend.data.CloudflareStockAnalysis
 import com.kurogane.dividend.data.CloudflareSearchHit
 import com.kurogane.dividend.data.CloudflareSearchQuote
 import com.kurogane.dividend.data.CloudflareMonthlyPriceSeries
+import com.kurogane.dividend.data.CloudflareShareSplitHistory
+import com.kurogane.dividend.data.DividendHistoryOverride
 import com.kurogane.dividend.data.PriceRefreshPolicy
 import com.kurogane.dividend.data.Tse33IndustryMaster
+import com.kurogane.dividend.data.JPXTickSizeMaster
 import com.kurogane.dividend.data.CsvHoldingRow
 import com.kurogane.dividend.data.DvmBackupPreview
 import com.kurogane.dividend.data.DvmBackupKind
@@ -119,6 +122,11 @@ class DividendViewModel @JvmOverloads constructor(
     private val _stockClimateOverrides = MutableStateFlow(runCatching { localImportStore.loadStockClimateOverrides() }.getOrDefault(emptyMap()))
     val stockClimateOverrides: StateFlow<Map<String, StockClimate>> = _stockClimateOverrides.asStateFlow()
     private var stockClimateSaveJob: Job? = null
+    private val _dividendHistoryOverrides = MutableStateFlow(runCatching {
+        localImportStore.loadDividendHistoryOverrides()
+    }.getOrDefault(emptyMap()))
+    val dividendHistoryOverrides: StateFlow<Map<String, List<DividendHistoryOverride>>> = _dividendHistoryOverrides.asStateFlow()
+    private val dividendHistoryOverrideSaveMutex = Mutex()
     private val notificationStore = NotificationStore(application)
     private val notificationMutex = Mutex()
     private val _notificationSettings = MutableStateFlow(notificationStore.settings())
@@ -282,12 +290,18 @@ class DividendViewModel @JvmOverloads constructor(
     private fun runtimeHolding(
         holding: Holding,
         cachedPrices: Map<String, Double> = readCachedPrices(),
-        cachedDividendsPerShare: Map<String, Double> = readCachedDividendsPerShare()
+        cachedDividendsPerShare: Map<String, Double> = readCachedDividendsPerShare(),
+        cachedNoDividendCodes: Set<String> = readCachedNoDividendCodes(),
+        cachedDividendStatusCodes: Set<String> = readCachedDividendStatusCodes()
     ): Holding {
         val code = holding.code.uppercase(java.util.Locale.ROOT)
         val price = cachedPrices[code] ?: holding.price
         val quoteDps = cachedDividendsPerShare[code]
-        val dps = quoteDps ?: _financialData.value[holding.code]?.dividends?.lastOrNull()?.dps ?: holding.dps
+        val noDividendConfirmed = resolveNoDividendStatus(
+            code, quoteDps, holding.isNoDividendConfirmed, cachedNoDividendCodes, cachedDividendStatusCodes
+        )
+        val dps = quoteDps ?: if (noDividendConfirmed) 0.0 else
+            _financialData.value[holding.code]?.dividends?.lastOrNull()?.dps ?: holding.dps
         return holding.copy(
         name = japaneseDisplayName(holding.code, holding.name),
         sector = if (holding.category == Category.JAPAN) identities[Tse33IndustryMaster.normalizeCode(holding.code)]?.industry ?: "東証33業種未分類" else holding.sector,
@@ -295,7 +309,8 @@ class DividendViewModel @JvmOverloads constructor(
         usdJpyRate = _exchangeRate.value?.usdJpy,
         usWithholdingEnabled = _usTaxDeduction.value,
         financialProfile = _financialData.value[holding.code]?.profile,
-        dps = dps, yieldRate = PortfolioMath.yieldPercent(dps, price), yoc = PortfolioMath.yieldPercent(dps, holding.acqPrice)
+        dps = dps, yieldRate = PortfolioMath.yieldPercent(dps, price), yoc = PortfolioMath.yieldPercent(dps, holding.acqPrice),
+        isNoDividendConfirmed = noDividendConfirmed
         ).refreshPayout()
     }
 
@@ -310,10 +325,12 @@ class DividendViewModel @JvmOverloads constructor(
         } else {
             readCachedDividendPerShare(normalizedOnlyCode)?.let { mapOf(normalizedOnlyCode to it) }.orEmpty()
         }
+        val cachedNoDividendCodes = readCachedNoDividendCodes()
+        val cachedDividendStatusCodes = readCachedDividendStatusCodes()
         _holdings.update { list ->
             list.map { holding ->
                 if (normalizedOnlyCode == null || normalizedSecurityCode(holding.code) == normalizedOnlyCode) {
-                    runtimeHolding(holding, cachedPrices, cachedDividendsPerShare)
+                    runtimeHolding(holding, cachedPrices, cachedDividendsPerShare, cachedNoDividendCodes, cachedDividendStatusCodes)
                 } else holding
             }
         }
@@ -322,13 +339,18 @@ class DividendViewModel @JvmOverloads constructor(
             val code = stock.code.uppercase(java.util.Locale.ROOT)
             val price = cachedPrices[code] ?: stock.price
             val quoteDps = cachedDividendsPerShare[code]
-            val dps = quoteDps ?: _financialData.value[stock.code]?.dividends?.lastOrNull()?.dps ?: stock.dps
+            val noDividendConfirmed = resolveNoDividendStatus(
+                code, quoteDps, stock.isNoDividendConfirmed, cachedNoDividendCodes, cachedDividendStatusCodes
+            )
+            val dps = quoteDps ?: if (noDividendConfirmed) 0.0 else
+                _financialData.value[stock.code]?.dividends?.lastOrNull()?.dps ?: stock.dps
             stock.copy(
                 name = japaneseDisplayName(stock.code, stock.name),
                 sector = if (stock.category == "jp") identities[Tse33IndustryMaster.normalizeCode(stock.code)]?.industry ?: "東証33業種未分類" else stock.sector,
                 price = price,
                 usdJpyRate = _exchangeRate.value?.usdJpy,
                 dps = dps, currentYield = PortfolioMath.yieldPercent(dps, price),
+                isNoDividendConfirmed = noDividendConfirmed,
                 targetPrice = if (stock.targetYield.isFinite() && stock.targetYield > 0) dps / stock.targetYield * 100 else 0.0
             )
         } }
@@ -782,6 +804,30 @@ class DividendViewModel @JvmOverloads constructor(
             delay(300)
             runCatching {
                 withContext(Dispatchers.IO) { localImportStore.saveStockClimateOverrides(_stockClimateOverrides.value) }
+            }.onFailure { _saveError.value = it.message ?: getApplication<Application>().getString(R.string.setting_save_failed) }
+        }
+    }
+
+    fun saveDividendHistoryOverrides(code: String, overrides: List<DividendHistoryOverride>) {
+        val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
+        if (!normalized.matches(Regex("[A-Z0-9]{4}"))) return
+        val valid = overrides.distinctBy { it.year }.filter { row ->
+            row.year in 1900..2100 && (row.hasStockPriceOverride || row.hasAnnualDividendOverride) &&
+                (row.stockPrice == null || (row.stockPrice.isFinite() && row.stockPrice >= 0.0 && PortfolioMath.validMoney(row.stockPrice))) &&
+                (row.annualDividend == null || (row.annualDividend.isFinite() && row.annualDividend >= 0.0 && PortfolioMath.validMoney(row.annualDividend)))
+        }.sortedBy { it.year }
+        _dividendHistoryOverrides.update { current ->
+            current.toMutableMap().apply {
+                if (valid.isEmpty()) remove(normalized) else put(normalized, valid)
+            }
+        }
+        viewModelScope.launch {
+            runCatching {
+                dividendHistoryOverrideSaveMutex.withLock {
+                    withContext(Dispatchers.IO) {
+                        localImportStore.saveDividendHistoryOverrides(_dividendHistoryOverrides.value)
+                    }
+                }
             }.onFailure { _saveError.value = it.message ?: getApplication<Application>().getString(R.string.setting_save_failed) }
         }
     }
@@ -1578,15 +1624,12 @@ class DividendViewModel @JvmOverloads constructor(
 
     suspend fun resolveCloudflareSecurity(code: String): CloudflareSecurity? {
         val security = marketRepository.getSecurity(code) ?: return null
-        val financialData = if ((security.annualDividendPerShare ?: 0.0) <= 0.0) {
-            runCatchingCancellable { fetchFinancialData(security.code) }.getOrNull()
-        } else {
-            _financialData.value[security.code]
+        if ((security.annualDividendPerShare ?: 0.0) <= 0.0) {
+            runCatchingCancellable { fetchFinancialData(security.code) }
         }
+        // Calendar-year event sums are historical chart values, not the current
+        // forecast/current-fiscal-year DPS used for the detail yield.
         val annualDividendPerShare = security.annualDividendPerShare
-            ?.takeIf { it > 0.0 }
-            ?: financialData?.dividends?.lastOrNull()?.dps
-            ?: security.annualDividendPerShare
         val industry = withContext(Dispatchers.IO) { runCatching {
             Tse33IndustryMaster.industries(getApplication())[security.code.take(4).uppercase(java.util.Locale.ROOT)]
         }.getOrNull() }
@@ -1623,6 +1666,9 @@ class DividendViewModel @JvmOverloads constructor(
                 ?.let { prices -> CloudflareMonthlyPriceSeries(code, prices.sortedBy { it.month }) }
         }
     }
+
+    suspend fun loadShareSplitHistory(code: String, from: LocalDate, to: LocalDate): CloudflareShareSplitHistory =
+        marketRepository.fetchShareSplitHistory(code, from, to)
 
     suspend fun loadMonthlyPriceHistory(codes: List<String>, months: List<String>): List<CloudflareMonthlyPriceSeries> {
         val normalizedCodes = codes.map { code ->
@@ -1708,22 +1754,35 @@ class DividendViewModel @JvmOverloads constructor(
                 val fetchedQuotes = snapshot.quotes
                 val fetchedPrices = fetchedQuotes.mapValues { it.value.price }
                 val cachedDividendsPerShare = readCachedDividendsPerShare().toMutableMap()
+                val cachedNoDividendCodes = readCachedNoDividendCodes().toMutableSet()
+                val cachedDividendStatusCodes = readCachedDividendStatusCodes().toMutableSet()
                 fetchedQuotes.forEach { (code, quote) ->
                     if (quote.annualDividendPerShare != null) cachedDividendsPerShare[code] = quote.annualDividendPerShare
                     else cachedDividendsPerShare.remove(code)
+                    if (quote.hasDividendStatus) {
+                        cachedDividendStatusCodes += code
+                        if (quote.isNoDividendConfirmed) cachedNoDividendCodes += code
+                        else cachedNoDividendCodes -= code
+                    } else if (quote.annualDividendPerShare != null && quote.annualDividendPerShare > 0.0) {
+                        cachedNoDividendCodes -= code
+                    }
                 }
                 val mergedPrices = readCachedPrices() + fetchedPrices
                 val json = JSONObject().apply { mergedPrices.forEach { (code, price) -> put(code, price) } }
                 val dividendJson = JSONObject().apply { cachedDividendsPerShare.forEach { (code, dps) -> put(code, dps) } }
+                val noDividendJson = JSONArray().apply { cachedNoDividendCodes.sorted().forEach { put(it) } }
+                val dividendStatusJson = JSONArray().apply { cachedDividendStatusCodes.sorted().forEach { put(it) } }
                 marketPreferences.edit()
                     .putString("prices", json.toString())
                     .putString("dividend_per_share", dividendJson.toString())
+                    .putString("confirmed_no_dividend_codes", noDividendJson.toString())
+                    .putString("known_dividend_status_codes", dividendStatusJson.toString())
                     .putLong("last_price_fetch_at", now)
                     .putString("last_price_fetch_jst_date", PriceRefreshPolicy.japanDate(now))
                     .putString("last_price_fetch_status", "ok")
                     .remove("last_price_fetch_error")
                     .apply()
-                applyPrices(mergedPrices, cachedDividendsPerShare)
+                applyPrices(mergedPrices, cachedDividendsPerShare, cachedNoDividendCodes, cachedDividendStatusCodes)
             }
             .onFailure { error ->
                 marketPreferences.edit()
@@ -1762,26 +1821,73 @@ class DividendViewModel @JvmOverloads constructor(
         value.takeIf { it.isFinite() && it >= 0.0 && PortfolioMath.validMoney(it) }
     }.getOrNull()
 
-    private fun applyCachedPrices() = applyPrices(readCachedPrices(), readCachedDividendsPerShare())
+    private fun readCachedNoDividendCodes(): Set<String> = runCatching {
+        val rows = JSONArray(marketPreferences.getString("confirmed_no_dividend_codes", "[]") ?: "[]")
+        (0 until rows.length()).mapNotNull { index ->
+            rows.optString(index).trim().uppercase(java.util.Locale.ROOT)
+                .takeIf { it.matches(Regex("[A-Z0-9.\\-]{1,16}")) }
+        }.toSet()
+    }.getOrDefault(emptySet())
 
-    private fun applyPrices(prices: Map<String, Double>, dividendsPerShare: Map<String, Double>) {
-        if (prices.isEmpty() && dividendsPerShare.isEmpty()) return
+    private fun readCachedDividendStatusCodes(): Set<String> = runCatching {
+        val rows = JSONArray(marketPreferences.getString("known_dividend_status_codes", "[]") ?: "[]")
+        (0 until rows.length()).mapNotNull { index ->
+            rows.optString(index).trim().uppercase(java.util.Locale.ROOT)
+                .takeIf { it.matches(Regex("[A-Z0-9.\\-]{1,16}")) }
+        }.toSet()
+    }.getOrDefault(emptySet())
+
+    private fun resolveNoDividendStatus(
+        code: String,
+        quoteDps: Double?,
+        existingStatus: Boolean,
+        noDividendCodes: Set<String>,
+        knownStatusCodes: Set<String>
+    ): Boolean = when {
+        quoteDps?.let { it > 0.0 } == true -> false
+        code in knownStatusCodes -> code in noDividendCodes
+        else -> existingStatus || code in noDividendCodes
+    }
+
+    private fun applyCachedPrices() = applyPrices(
+        readCachedPrices(), readCachedDividendsPerShare(), readCachedNoDividendCodes(), readCachedDividendStatusCodes()
+    )
+
+    private fun applyPrices(
+        prices: Map<String, Double>,
+        dividendsPerShare: Map<String, Double>,
+        noDividendCodes: Set<String>,
+        knownStatusCodes: Set<String>
+    ) {
+        if (prices.isEmpty() && dividendsPerShare.isEmpty() && noDividendCodes.isEmpty() && knownStatusCodes.isEmpty()) return
         _holdings.update { list -> list.map { holding ->
             val code = holding.code.uppercase(java.util.Locale.ROOT)
             val price = prices[code] ?: holding.price
-            val dps = dividendsPerShare[code] ?: _financialData.value[holding.code]?.dividends?.lastOrNull()?.dps ?: holding.dps
-            if (price == holding.price && dps == holding.dps) holding
-            else holding.copy(price = price, dps = dps, yieldRate = PortfolioMath.yieldPercent(dps, price)).refreshPayout()
+            val quoteDps = dividendsPerShare[code]
+            val noDividendConfirmed = resolveNoDividendStatus(
+                code, quoteDps, holding.isNoDividendConfirmed, noDividendCodes, knownStatusCodes
+            )
+            val dps = quoteDps ?: if (noDividendConfirmed) 0.0 else
+                _financialData.value[holding.code]?.dividends?.lastOrNull()?.dps ?: holding.dps
+            if (price == holding.price && dps == holding.dps && noDividendConfirmed == holding.isNoDividendConfirmed) holding
+            else holding.copy(price = price, dps = dps, yieldRate = PortfolioMath.yieldPercent(dps, price),
+                isNoDividendConfirmed = noDividendConfirmed).refreshPayout()
         } }
         _watchlist.update { list -> list.map { stock ->
             val code = stock.code.uppercase(java.util.Locale.ROOT)
             val price = prices[code] ?: stock.price
-            val dps = dividendsPerShare[code] ?: _financialData.value[stock.code]?.dividends?.lastOrNull()?.dps ?: stock.dps
-            if (price == stock.price && dps == stock.dps) stock
+            val quoteDps = dividendsPerShare[code]
+            val noDividendConfirmed = resolveNoDividendStatus(
+                code, quoteDps, stock.isNoDividendConfirmed, noDividendCodes, knownStatusCodes
+            )
+            val dps = quoteDps ?: if (noDividendConfirmed) 0.0 else
+                _financialData.value[stock.code]?.dividends?.lastOrNull()?.dps ?: stock.dps
+            if (price == stock.price && dps == stock.dps && noDividendConfirmed == stock.isNoDividendConfirmed) stock
             else stock.copy(
                     price = price,
                     dps = dps,
                     currentYield = PortfolioMath.yieldPercent(dps, price),
+                    isNoDividendConfirmed = noDividendConfirmed,
                     targetPrice = if (stock.targetYield > 0) dps / (stock.targetYield / 100) else stock.targetPrice
                 )
         } }
@@ -1863,7 +1969,8 @@ class DividendViewModel @JvmOverloads constructor(
             else list + WatchlistStock(holding.code, holding.name, holding.market, holding.sector,
                 if (holding.category == Category.US) "us" else "jp", holding.price, holding.currency, holding.dps,
                 holding.liveYield, holding.liveYield.coerceAtLeast(0.1), holding.price, holding.dailyChange, holding.isPositive,
-                holding.dividendMonths, holding.nextPayoutTiming, "", false, usdJpyRate = _exchangeRate.value?.usdJpy)
+                holding.dividendMonths, holding.nextPayoutTiming, "", false, usdJpyRate = _exchangeRate.value?.usdJpy,
+                isNoDividendConfirmed = holding.isNoDividendConfirmed)
         }
         saveRequests.trySend(Unit)
         applyCachedDividendMonths()
@@ -1875,7 +1982,8 @@ class DividendViewModel @JvmOverloads constructor(
             holding.code, holding.name, holding.market, holding.sector,
             if (holding.category == Category.US) "us" else "jp", holding.price, holding.currency, holding.dps,
             holding.liveYield, holding.liveYield.coerceAtLeast(0.1), holding.price, holding.dailyChange, holding.isPositive,
-            holding.dividendMonths, holding.nextPayoutTiming, "", false, usdJpyRate = _exchangeRate.value?.usdJpy
+            holding.dividendMonths, holding.nextPayoutTiming, "", false, usdJpyRate = _exchangeRate.value?.usdJpy,
+            isNoDividendConfirmed = holding.isNoDividendConfirmed
         )
         _watchlist.update { list ->
             if (list.any { it.code.equals(holding.code, true) }) list else list + stock
@@ -1976,7 +2084,19 @@ class DividendViewModel @JvmOverloads constructor(
         val old = holdings.firstOrNull { it.code.equals(normalized, true) }
         val preset = _watchlist.value.firstOrNull { it.code.equals(normalized, true) }
         if (old == null && preset == null && security == null) return null
-        val dps = security?.annualDividendPerShare ?: old?.dps ?: preset?.dps ?: 0.0
+        val securityHasDividend = security?.annualDividendPerShare?.let { it > 0.0 } == true
+        val noDividendConfirmed = when {
+            securityHasDividend -> false
+            security?.hasDividendStatus == true -> security.isNoDividendConfirmed
+            old?.isNoDividendConfirmed == true || preset?.isNoDividendConfirmed == true -> true
+            else -> false
+        }
+        val dps = when {
+            security?.isNoDividendConfirmed == true -> 0.0
+            security?.annualDividendPerShare != null -> security.annualDividendPerShare
+            noDividendConfirmed -> 0.0
+            else -> old?.dps ?: preset?.dps ?: 0.0
+        }
         val price = readCachedPrices()[normalized] ?: security?.marketPrice ?: old?.price ?: preset?.price ?: 0.0
         if (!PortfolioMath.validMoney(dps) || !PortfolioMath.validMoney(price)) return null
         val currency = old?.currency ?: preset?.currency ?: if (normalized.matches(Regex("[A-Z]+"))) "$" else "¥"
@@ -1992,7 +2112,10 @@ class DividendViewModel @JvmOverloads constructor(
             template.copy(shares = 0, acqPrice = 0.0, taxFreeShares = 0, accountType = "")
         } else template
         val merged = runCatching {
-            PortfolioMath.mergeAllocations(mergeBase.copy(price = price, dps = dps, name = security?.name ?: template.name), allocations)
+            PortfolioMath.mergeAllocations(mergeBase.copy(
+                price = price, dps = dps, name = security?.name ?: template.name,
+                isNoDividendConfirmed = noDividendConfirmed
+            ), allocations)
         }.getOrNull() ?: return null
         return merged
     }
@@ -2076,6 +2199,7 @@ class DividendViewModel @JvmOverloads constructor(
             _shareholderBenefits.value = emptyMap()
             stockClimateSaveJob?.cancel()
             _stockClimateOverrides.value = emptyMap()
+            _dividendHistoryOverrides.value = emptyMap()
             hasRestoredLocalHoldings = true
             holdingsLoadFailed = false
             watchlistLoadFailed = false
@@ -2104,6 +2228,7 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     init {
+        JPXTickSizeMaster.load(getApplication())
         hasRestoredLocalHoldings = localImportStore.hasHoldings()
         viewModelScope.launch {
             val (heldResult, watchedResult) = withContext(Dispatchers.IO) {

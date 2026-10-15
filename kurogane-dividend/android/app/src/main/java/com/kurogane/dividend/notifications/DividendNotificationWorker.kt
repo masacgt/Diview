@@ -5,6 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.kurogane.dividend.data.CloudflareMarketRepository
 import com.kurogane.dividend.data.LocalImportStore
+import com.kurogane.dividend.data.JPXTickSizeMaster
 import com.kurogane.dividend.model.PortfolioMath
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +18,7 @@ import java.util.Locale
 
 class DividendNotificationWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result {
+        JPXTickSizeMaster.load(applicationContext)
         val kind = inputData.getString("kind")?.let { value -> NotificationKind.entries.firstOrNull { it.name == value } }
             ?: return Result.failure()
         val morning = inputData.getBoolean("morning", true)
@@ -123,7 +125,7 @@ class NotificationDeliveryEngine(
         if (pending.isEmpty()) return
         val details = pending.take(5).joinToString("\n") { event ->
             val held = if (event.held) "・保有中" else ""
-            "${event.name.take(70)} (${event.code})$held：取得株価 ${event.currency}${String.format(Locale.JAPAN, "%.2f", event.price)} / 利回り ${String.format(Locale.JAPAN, "%.2f", event.yield)}% / 目標 ${String.format(Locale.JAPAN, "%.2f", event.targetYield)}%"
+            "${event.name.take(70)} (${event.code})$held：取得株価 ${event.currency}${com.kurogane.dividend.model.formatStockPriceDisplay(event.price, event.code)} / 利回り ${String.format(Locale.JAPAN, "%.2f", event.yield)}% / 目標 ${String.format(Locale.JAPAN, "%.2f", event.targetYield)}%"
         } + if (pending.size > 5) "\nほか${pending.size - 5}銘柄" else ""
         store.ifCurrent(settings) {
             if (canPost(NotificationKind.PRICE) && post(NotificationKind.PRICE, "${pending.size}銘柄が目標利回りに到達", details)) {
@@ -170,7 +172,7 @@ class NotificationDeliveryEngine(
         }.joinToString("・") + "のお知らせ"
         val details = pending.take(8).joinToString("\n") { event ->
             val direction = if (event.isIncrease) "増配" else "減配"
-            "${event.name.take(50)} (${event.code})：${event.fiscalYear}年度 $direction / 1株配当 ¥${String.format(Locale.JAPAN, "%.2f", event.previousDps)} → ¥${String.format(Locale.JAPAN, "%.2f", event.currentDps)}"
+            "${event.name.take(50)} (${event.code})：${event.fiscalYear}年度 $direction / 1株配当 ¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(event.previousDps)} → ¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(event.currentDps)}"
         } + if (pending.size > 8) "\nほか${pending.size - 8}銘柄" else ""
         store.ifCurrent(settings) {
             if (canPost(NotificationKind.DIVIDEND_CHANGE) && post(NotificationKind.DIVIDEND_CHANGE, title, details)) {

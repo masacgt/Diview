@@ -309,7 +309,7 @@ internal fun RoadmapAllocationSheet(viewModel: DividendViewModel, onDismiss: () 
                                 }
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    stringResource(R.string.roadmap_text_36 , activeStockCurrency) + String.format(java.util.Locale.JAPAN, "%.2f", activeStockDPS),
+                                    stringResource(R.string.roadmap_text_36 , activeStockCurrency) + com.kurogane.dividend.model.formatFinancialAmountDisplay(activeStockDPS),
                                     color = OnSurface,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
@@ -326,14 +326,17 @@ internal fun RoadmapAllocationSheet(viewModel: DividendViewModel, onDismiss: () 
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                stringResource(R.string.roadmap_text_37 , activeStockCurrency) + currencyFormat.format(activeStockPrice),
+                                stringResource(R.string.roadmap_text_37 , activeStockCurrency) + com.kurogane.dividend.model.formatStockPriceDisplay(activeStockPrice, activeTicker),
                                 color = OnSurface,
                                 fontSize = AppTextSize.caption,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = AppNumericFontFamily
                             )
                             Text(
-                                stringResource(R.string.roadmap_text_38) + String.format(java.util.Locale.JAPAN, "%.2f%%", activeStockYield),
+                                stringResource(R.string.roadmap_text_38) + com.kurogane.dividend.model.formatDividendYieldDisplay(
+                                    activeStockYield,
+                                    selectedHolding?.isNoDividendConfirmed == true
+                                ),
                                 color = PrimaryEmerald,
                                 fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold
@@ -546,7 +549,7 @@ private fun AccountMatrixCard(
                 }
 
                 Text(
-                    text = stringResource(R.string.roadmap_text_58 , currency) + String.format(java.util.Locale.JAPAN, resources.getString(R.string.roadmap_label_11), finalDividend),
+                    text = stringResource(R.string.roadmap_text_58 , currency) + com.kurogane.dividend.model.formatFinancialAmountDisplay(finalDividend) + "/年",
                     color = if (numShares > 0) PrimaryEmerald else OnSurfaceVariant,
                     fontSize = AppTextSize.dense,
                     fontWeight = FontWeight.Bold

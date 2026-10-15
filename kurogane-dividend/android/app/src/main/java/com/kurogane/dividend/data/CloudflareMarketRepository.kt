@@ -1,6 +1,7 @@
 package com.kurogane.dividend.data
 
 import com.kurogane.dividend.BuildConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineDispatcher
@@ -19,13 +20,22 @@ data class CloudflareSearchHit(
     val cachedPrice: Double? = null,
     val annualDividendPerShare: Double? = null,
     val industry: String? = null,
-    val marketYieldRate: Double? = null
+    val marketYieldRate: Double? = null,
+    val isNoDividendConfirmed: Boolean = false
 )
 
 data class CloudflareSearchQuote(
     val price: Double?,
     val yieldRate: Double?,
-    val annualDividendPerShare: Double? = null
+    val annualDividendPerShare: Double? = null,
+    val isNoDividendConfirmed: Boolean = false,
+    val hasDividendStatus: Boolean = false,
+    val quoteDate: String? = null
+)
+
+private data class CachedSearchCatalogQuotes(
+    val loadedAtElapsedMillis: Long,
+    val quotesByCode: Map<String, CloudflareSearchQuote>
 )
 
 data class CloudflareSecurity(
@@ -34,7 +44,9 @@ data class CloudflareSecurity(
     val annualDividendPerShare: Double?,
     val marketPrice: Double?,
     val industry: String? = null,
-    val marketYieldRate: Double? = null
+    val marketYieldRate: Double? = null,
+    val isNoDividendConfirmed: Boolean = false,
+    val hasDividendStatus: Boolean = false
 )
 
 data class CloudflareStockAnalysis(
@@ -43,7 +55,9 @@ data class CloudflareStockAnalysis(
 
 data class CloudflareMarketQuote(
     val price: Double,
-    val annualDividendPerShare: Double?
+    val annualDividendPerShare: Double?,
+    val isNoDividendConfirmed: Boolean = false,
+    val hasDividendStatus: Boolean = false
 )
 
 data class CloudflarePriceCatalogSnapshot(
@@ -60,7 +74,8 @@ data class CloudflarePopularStock(
     val acquisitionDate: String,
     val annualDividendPerShare: Double?,
     val dividendYield: Double?,
-    val tradingValue20d: Double
+    val tradingValue20d: Double,
+    val isNoDividendConfirmed: Boolean = false
 )
 
 data class CloudflarePopularStocksPage(
@@ -78,6 +93,17 @@ data class CloudflareMonthlyPrice(
 data class CloudflareMonthlyPriceSeries(
     val code: String,
     val prices: List<CloudflareMonthlyPrice>
+)
+
+data class CloudflareShareSplitEvent(
+    val date: LocalDate,
+    val ratio: Double
+)
+
+data class CloudflareShareSplitHistory(
+    val code: String,
+    val historyStatus: String,
+    val events: List<CloudflareShareSplitEvent>
 )
 
 data class CloudflareDividendMonths(
@@ -106,6 +132,10 @@ class CloudflareMarketRepository(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection }
 ) {
+    @Volatile
+    private var cachedSearchCatalogQuotes: CachedSearchCatalogQuotes? = null
+    private val searchCatalogQuotesLock = Any()
+
     suspend fun searchSecurities(query: String): List<CloudflareSearchHit> = withContext(ioDispatcher) {
         if (query.isBlank()) return@withContext emptyList()
         require(query.length <= 256) { "検索文字列が長すぎます" }
@@ -126,7 +156,8 @@ class CloudflareMarketRepository(
                     cachedPrice = row.numberOrNull("price")?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 },
                     annualDividendPerShare = row.numberOrNull("annual_dividend_per_share")
                         ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) },
-                    marketYieldRate = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 }
+                    marketYieldRate = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 },
+                    isNoDividendConfirmed = row.hasConfirmedNoDividend()
                 )
             }
         }
@@ -138,24 +169,95 @@ class CloudflareMarketRepository(
             .distinct()
         if (requestedCodes.isEmpty()) return@withContext emptyMap()
         val encodedCodes = URLEncoder.encode(requestedCodes.joinToString(","), Charsets.UTF_8.name())
-        val root = getJson("/api/v1/live-quotes?codes=$encodedCodes")
-        val rows = root.optJSONArray("items") ?: throw IOException("Cloudflareの価格一覧にitemsがありません")
+        val liveQuotes = try {
+            parseSearchQuotes(getJson("/api/v1/live-quotes?codes=$encodedCodes"), requestedCodes.toSet())
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyMap()
+        }
+        val needsCatalogFallback = requestedCodes.any { code ->
+            val quote = liveQuotes[code]
+            quote?.price == null || quote.yieldRate == null
+        }
+        if (!needsCatalogFallback) return@withContext liveQuotes
+
+        val catalogQuotes = searchCatalogQuotes()
         buildMap {
-            for (index in 0 until rows.length()) {
-                val row = rows.optJSONObject(index) ?: continue
-                val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT)
-                if (code !in requestedCodes) continue
-                val quote = CloudflareSearchQuote(
-                    price = row.numberOrNull("price")?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 },
-                    yieldRate = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 },
-                    annualDividendPerShare = row.numberOrNull("annual_dividend_per_share")
-                        ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) }
-                )
-                if (quote.price != null || quote.yieldRate != null || quote.annualDividendPerShare != null) {
-                    put(code, quote)
+            for (code in requestedCodes) {
+                val live = liveQuotes[code]
+                val catalog = catalogQuotes[code]
+                val price = live?.price ?: catalog?.price
+                val annualDividend = live?.annualDividendPerShare ?: catalog?.annualDividendPerShare
+                val yieldRate = live?.yieldRate ?: catalog?.yieldRate
+                val isNoDividendConfirmed = live?.isNoDividendConfirmed == true || catalog?.isNoDividendConfirmed == true
+                val hasDividendStatus = live?.hasDividendStatus == true || catalog?.hasDividendStatus == true
+                if (price != null || yieldRate != null || annualDividend != null) {
+                    put(code, CloudflareSearchQuote(price, yieldRate, annualDividend, isNoDividendConfirmed, hasDividendStatus))
                 }
             }
         }
+    }
+
+    private fun searchCatalogQuotes(): Map<String, CloudflareSearchQuote> {
+        val now = System.nanoTime() / NANOS_PER_MILLISECOND
+        cachedSearchCatalogQuotes?.let { cached ->
+            if (now - cached.loadedAtElapsedMillis in 0 until SEARCH_CATALOG_CACHE_MILLIS) {
+                return cached.quotesByCode
+            }
+        }
+        return synchronized(searchCatalogQuotesLock) {
+            val lockedNow = System.nanoTime() / NANOS_PER_MILLISECOND
+            cachedSearchCatalogQuotes?.let { cached ->
+                if (lockedNow - cached.loadedAtElapsedMillis in 0 until SEARCH_CATALOG_CACHE_MILLIS) {
+                    return@synchronized cached.quotesByCode
+                }
+            }
+            val rows = getJson("/api/v1/search-catalog").optJSONArray("items")
+                ?: throw IOException("Cloudflareの銘柄カタログにitemsがありません")
+            val quotes = buildMap {
+                for (index in 0 until rows.length()) {
+                    val row = rows.optJSONObject(index) ?: continue
+                    val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT)
+                    if (!isSecurityCode(code)) continue
+                    val quote = parseSearchQuote(row) ?: continue
+                    put(code, quote)
+                }
+            }
+            if (quotes.isNotEmpty()) {
+                cachedSearchCatalogQuotes = CachedSearchCatalogQuotes(lockedNow, quotes)
+            }
+            quotes
+        }
+    }
+
+    private fun parseSearchQuotes(root: JSONObject, allowedCodes: Set<String>): Map<String, CloudflareSearchQuote> {
+        val rows = root.optJSONArray("items") ?: throw IOException("Cloudflareの価格一覧にitemsがありません")
+        return buildMap {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT)
+                if (code !in allowedCodes) continue
+                val quote = parseSearchQuote(row) ?: continue
+                put(code, quote)
+            }
+        }
+    }
+
+    private fun parseSearchQuote(row: JSONObject): CloudflareSearchQuote? {
+        val price = row.numberOrNull("price")?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }
+        val annualDividend = row.numberOrNull("annual_dividend_per_share")
+            ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) }
+        val yieldRate = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 }
+        val noDividend = row.hasConfirmedNoDividend()
+        val quoteDate = row.optString("quote_date").takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
+        return CloudflareSearchQuote(price, yieldRate, annualDividend, noDividend, row.hasDividendStatus(), quoteDate)
+            .takeIf { it.price != null || it.yieldRate != null || it.annualDividendPerShare != null }
+    }
+
+    private companion object {
+        const val SEARCH_CATALOG_CACHE_MILLIS = 5L * 60L * 1_000L
+        const val NANOS_PER_MILLISECOND = 1_000_000L
     }
 
     suspend fun getSecurity(code: String): CloudflareSecurity? = withContext(ioDispatcher) {
@@ -165,15 +267,37 @@ class CloudflareMarketRepository(
         val root = try { getJson("/api/v1/securities/$safeCode") }
             catch (error: MarketHttpException) { if (error.status == 404) return@withContext null else throw error }
         val dividend = root.optJSONObject("dividend")
+        // Legacy /securities responses contain IRBANK fiscal-year DPS. Only read
+        // current dividend values from the v2 yfinance payload; calendar-year
+        // history is handled separately by FinancialData and is not current DPS.
+        val yfinanceDividend = dividend?.takeIf {
+            it.has("yield_basis") || it.has("trailing_12_month_per_share") || it.optJSONObject("field_status") != null
+        }
+        val catalogQuote = runCatching { searchCatalogQuotes()[normalized] }.getOrNull()
+        val detailPrice = root.optJSONObject("market_price")?.numberOrNull("close")
+            ?: root.numberOrNull("market_price")
+        val detailQuoteDate = root.optJSONObject("market_price")?.optString("date")
+            ?.takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
+            ?: root.optString("quote_date").takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
+        val catalogPriceIsNewer = catalogQuote?.price != null &&
+            (detailPrice == null || (catalogQuote.quoteDate != null &&
+                (detailQuoteDate == null || catalogQuote.quoteDate > detailQuoteDate)))
         CloudflareSecurity(
             code = root.optString("code", normalized).ifBlank { normalized }.also {
                 require(it.equals(normalized, true)) { "応答の銘柄コードが一致しません" }
             },
             name = root.optString("name").takeIf(String::isNotBlank) ?: return@withContext null,
-            annualDividendPerShare = (dividend?.numberOrNull("annual_dps_adjusted")
-                ?: dividend?.numberOrNull("annual_dps"))?.takeIf(PortfolioMath::validMoney),
-            marketPrice = root.optJSONObject("market_price")?.numberOrNull("close")?.takeIf { PortfolioMath.validMoney(it) && it > 0 },
-            marketYieldRate = root.numberOrNull("market_yield_rate")?.takeIf { it in 0.0..100.0 }
+            annualDividendPerShare = (yfinanceDividend?.numberOrNull("annual_dps_adjusted")
+                ?: yfinanceDividend?.numberOrNull("annual_dps"))?.takeIf(PortfolioMath::validMoney)
+                ?: catalogQuote?.takeIf { it.hasDividendStatus }?.annualDividendPerShare,
+            marketPrice = (if (catalogPriceIsNewer) catalogQuote?.price else detailPrice)
+                ?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }
+                ?: catalogQuote?.price,
+            marketYieldRate = (if (yfinanceDividend != null) root.numberOrNull("market_yield_rate") else null)
+                ?.takeIf { it in 0.0..100.0 }
+                ?: catalogQuote?.yieldRate,
+            isNoDividendConfirmed = root.hasConfirmedNoDividend() || catalogQuote?.isNoDividendConfirmed == true,
+            hasDividendStatus = root.hasDividendStatus() || catalogQuote?.hasDividendStatus == true
         )
     }
 
@@ -207,7 +331,13 @@ class CloudflareMarketRepository(
                 if (isSecurityCode(code) && price != null && PortfolioMath.validMoney(price) && price > 0.0) {
                     val annualDividend = row.numberOrNull("annual_dividend_per_share")
                         ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) }
-                    put(code, CloudflareMarketQuote(price, annualDividend))
+                    val yieldRate = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 }
+                    put(code, CloudflareMarketQuote(
+                        price,
+                        annualDividend,
+                        row.hasConfirmedNoDividend(),
+                        row.hasDividendStatus()
+                    ))
                 }
             }
         }.toMutableMap()
@@ -249,7 +379,8 @@ class CloudflareMarketRepository(
                 acquisitionDate = row.optString("acquisition_date").ifBlank { date },
                 annualDividendPerShare = annualDividend,
                 dividendYield = dividendYield,
-                tradingValue20d = tradingValue
+                tradingValue20d = tradingValue,
+                isNoDividendConfirmed = row.hasConfirmedNoDividend()
             )
         }
         CloudflarePopularStocksPage(
@@ -290,6 +421,35 @@ class CloudflareMarketRepository(
             }
             CloudflareMonthlyPriceSeries(code, monthlyPrices)
         }
+    }
+
+    /** Returns split and reverse-split events from the published yfinance R2 history. */
+    suspend fun fetchShareSplitHistory(code: String, from: LocalDate, to: LocalDate): CloudflareShareSplitHistory = withContext(ioDispatcher) {
+        val normalizedCode = code.trim().uppercase(java.util.Locale.ROOT).removeSuffix(".T")
+        require(normalizedCode.matches(Regex("[A-Z0-9]{4}")) && from <= to && to.year - from.year <= 9) {
+            "銘柄コードまたは対象期間が正しくありません"
+        }
+        val safeCode = URLEncoder.encode(normalizedCode, Charsets.UTF_8.name())
+        val encodedFrom = URLEncoder.encode(from.toString(), Charsets.UTF_8.name())
+        val encodedTo = URLEncoder.encode(to.toString(), Charsets.UTF_8.name())
+        val root = getJson("/api/v1/share-split-history?code=$safeCode&from=$encodedFrom&to=$encodedTo")
+        val responseCode = root.optString("code").trim().uppercase(java.util.Locale.ROOT).removeSuffix(".T")
+        require(responseCode == normalizedCode) { "株式分割履歴の銘柄コードが一致しません" }
+        val rows = root.optJSONArray("events")
+        val events = (0 until (rows?.length() ?: 0)).mapNotNull { index ->
+            val row = rows?.optJSONObject(index) ?: return@mapNotNull null
+            val date = runCatching { LocalDate.parse(row.optString("date")) }.getOrNull() ?: return@mapNotNull null
+            val ratio = row.optDouble("ratio", Double.NaN)
+            if (date !in from..to || !ratio.isFinite() || ratio <= 0.0 || kotlin.math.abs(ratio - 1.0) < 1e-9) {
+                return@mapNotNull null
+            }
+            CloudflareShareSplitEvent(date, ratio)
+        }.sortedBy { it.date }
+        CloudflareShareSplitHistory(
+            code = normalizedCode,
+            historyStatus = root.optString("history_status", "not_fetched"),
+            events = events
+        )
     }
 
     /** Returns dividend months observed in the last 365 days from the Cloudflare R2 history. */
@@ -385,6 +545,11 @@ class CloudflareMarketRepository(
     private fun isSecurityCode(code: String) = code.matches(Regex("[A-Z0-9.\\-]{1,16}"))
 
 }
+
+private fun JSONObject.hasConfirmedNoDividend(): Boolean =
+    optString("dividend_status").equals("no_dividend", ignoreCase = true) || optBoolean("is_no_dividend", false)
+
+private fun JSONObject.hasDividendStatus(): Boolean = has("dividend_status") || has("is_no_dividend")
 
 class MarketHttpException(val status: Int) : IOException("Cloudflare API HTTP $status")
 

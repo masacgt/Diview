@@ -44,7 +44,14 @@ fun RollingMoney(amount: String, style: TextStyle, modifier: Modifier = Modifier
 }
 
 @Composable
-fun SmoothMoney(value: Double, suffix: String = "", style: TextStyle, modifier: Modifier = Modifier, inTenThousands: Boolean = false) {
+fun SmoothMoney(
+    value: Double,
+    suffix: String = "",
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    inTenThousands: Boolean = false,
+    useOneDecimalAmountFormat: Boolean = false
+) {
     val mergedStyle = LocalTextStyle.current.merge(style)
     val doubleConverter = androidx.compose.runtime.remember {
         TwoWayConverter<Double, AnimationVector1D>(
@@ -53,7 +60,10 @@ fun SmoothMoney(value: Double, suffix: String = "", style: TextStyle, modifier: 
         )
     }
     val animated by animateValueAsState(value, doubleConverter, tween(400), label = "Simulation amount")
-    val formatted = if (inTenThousands) "¥${kotlin.math.round(animated / 10000).toLong()}万"
-        else "¥${NumberFormat.getNumberInstance(Locale.JAPAN).format(kotlin.math.round(animated).toLong())}"
+    val formatted = when {
+        inTenThousands -> "¥${kotlin.math.round(animated / 10000).toLong()}万"
+        useOneDecimalAmountFormat -> "¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(animated)}"
+        else -> "¥${NumberFormat.getNumberInstance(Locale.JAPAN).format(kotlin.math.round(animated).toLong())}"
+    }
     Text(formatted + suffix, modifier = modifier, style = mergedStyle, maxLines = 1)
 }

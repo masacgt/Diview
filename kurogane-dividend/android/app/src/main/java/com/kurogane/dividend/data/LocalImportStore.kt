@@ -98,6 +98,54 @@ class LocalImportStore(context: Context) {
             }
         }.orEmpty()
 
+    fun saveDividendHistoryOverrides(overridesByCode: Map<String, List<DividendHistoryOverride>>) {
+        val json = JSONObject().apply {
+            overridesByCode.forEach { (rawCode, overrides) ->
+                val code = rawCode.trim().uppercase(java.util.Locale.ROOT).removeSuffix(".T")
+                if (!code.matches(Regex("[A-Z0-9]{4}"))) return@forEach
+                put(code, JSONArray().apply {
+                    overrides.filter { it.year in 1900..2100 && (it.hasStockPriceOverride || it.hasAnnualDividendOverride) }
+                        .sortedBy { it.year }
+                        .forEach { row ->
+                            put(JSONObject().apply {
+                                put("year", row.year)
+                                put("stock_price_overridden", row.hasStockPriceOverride)
+                                put("stock_price", if (row.stockPrice == null) JSONObject.NULL else row.stockPrice)
+                                put("annual_dividend_overridden", row.hasAnnualDividendOverride)
+                                put("annual_dividend", if (row.annualDividend == null) JSONObject.NULL else row.annualDividend)
+                            })
+                        }
+                })
+            }
+        }
+        save("dividend_history_overrides", json.toString().toByteArray(Charsets.UTF_8))
+    }
+
+    fun loadDividendHistoryOverrides(): Map<String, List<DividendHistoryOverride>> =
+        load("dividend_history_overrides")?.let { bytes ->
+            val json = JSONObject(bytes.toString(Charsets.UTF_8))
+            buildMap {
+                val codes = json.keys()
+                while (codes.hasNext()) {
+                    val rawCode = codes.next()
+                    val code = rawCode.trim().uppercase(java.util.Locale.ROOT).removeSuffix(".T")
+                    if (!code.matches(Regex("[A-Z0-9]{4}"))) continue
+                    val rows = json.optJSONArray(rawCode) ?: continue
+                    put(code, (0 until rows.length()).mapNotNull { index ->
+                        val row = rows.optJSONObject(index) ?: return@mapNotNull null
+                        val hasPrice = row.optBoolean("stock_price_overridden")
+                        val hasDividend = row.optBoolean("annual_dividend_overridden")
+                        val price = if (row.isNull("stock_price")) null else row.optDouble("stock_price", Double.NaN)
+                            .takeIf { it.isFinite() && it >= 0.0 && PortfolioMath.validMoney(it) }
+                        val dividend = if (row.isNull("annual_dividend")) null else row.optDouble("annual_dividend", Double.NaN)
+                            .takeIf { it.isFinite() && it >= 0.0 && PortfolioMath.validMoney(it) }
+                        if (row.optInt("year") !in 1900..2100 || (!hasPrice && !hasDividend)) null
+                        else DividendHistoryOverride(row.optInt("year"), price, dividend, hasPrice, hasDividend)
+                    }.sortedBy { it.year })
+                }
+            }
+        }.orEmpty()
+
     fun clearFeedbackDraft() { check(prefs.edit().remove("feedback_draft").commit()) }
 
     fun clear() {
@@ -162,6 +210,7 @@ class LocalImportStore(context: Context) {
         put("targetYield", targetYield); put("targetPrice", targetPrice); put("dailyChange", dailyChange)
         put("isPositive", isPositive); put("payoutMonths", JSONArray(payoutMonths)); put("payoutTiming", payoutTiming)
         put("desc", desc); put("alertEnabled", alertEnabled); put("badge", badge); put("defaultShares", defaultShares)
+        put("isNoDividendConfirmed", isNoDividendConfirmed)
     }
 
     private fun JSONObject.toWatchlistStock() = WatchlistStock(
@@ -170,7 +219,8 @@ class LocalImportStore(context: Context) {
         getDouble("targetPrice"), getString("dailyChange"), getBoolean("isPositive"),
         getJSONArray("payoutMonths").let { months -> (0 until months.length()).map { months.getInt(it) } },
         getString("payoutTiming"), getString("desc"), optBoolean("alertEnabled"),
-        if (isNull("badge")) null else optString("badge"), optInt("defaultShares", 100)
+        if (isNull("badge")) null else optString("badge"), optInt("defaultShares", 100),
+        isNoDividendConfirmed = optBoolean("isNoDividendConfirmed", false)
     )
 
     private fun save(key: String, clear: ByteArray) {
@@ -202,6 +252,7 @@ class LocalImportStore(context: Context) {
         put("yieldRate", yieldRate); put("yoc", yoc); put("nextPayoutTiming", nextPayoutTiming); put("nextPayoutAmount", nextPayoutAmount)
         put("dividendMonths", JSONArray(dividendMonths)); put("dividendType", dividendType); put("accountType", accountType)
         put("dailyChange", dailyChange); put("isPositive", isPositive)
+        put("isNoDividendConfirmed", isNoDividendConfirmed)
         taxFreeShares?.let { put("taxFreeShares", it) }
     }
     private fun JSONObject.toHolding() = Holding(
@@ -211,7 +262,8 @@ class LocalImportStore(context: Context) {
         yieldRate = optDouble("yieldRate"), yoc = optDouble("yoc"), nextPayoutTiming = optString("nextPayoutTiming"), nextPayoutAmount = optString("nextPayoutAmount"),
         dividendMonths = optJSONArray("dividendMonths")?.let { a -> (0 until a.length()).map { a.optInt(it) } } ?: emptyList(),
         dividendType = optString("dividendType"), accountType = optString("accountType"), dailyChange = optString("dailyChange"), isPositive = optBoolean("isPositive"),
-        taxFreeShares = if (has("taxFreeShares")) getInt("taxFreeShares") else null
+        taxFreeShares = if (has("taxFreeShares")) getInt("taxFreeShares") else null,
+        isNoDividendConfirmed = optBoolean("isNoDividendConfirmed", false)
     ).also {
         require(PortfolioMath.validCode(it.code) && it.name.isNotBlank() && it.shares >= 0 &&
             listOf(it.price, it.acqPrice, it.dps).all(PortfolioMath::validMoney) &&

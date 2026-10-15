@@ -42,21 +42,22 @@ data class CandidateStock(
     val price: String,
     val yieldRate: String,
     val cat: String,
-    val isHigh: Boolean
+    val isHigh: Boolean,
+    val isNoDividendConfirmed: Boolean = false
 )
 
-private fun formatCandidatePrice(price: Double?): String? = price
+private fun formatCandidatePrice(price: Double?, code: String): String? = price
     ?.takeIf { it.isFinite() && it > 0.0 }
     ?.let {
-        val formatter = java.text.NumberFormat.getNumberInstance(java.util.Locale.JAPAN).apply {
-            maximumFractionDigits = 2
-        }
-        "¥${formatter.format(it)}"
+        "¥${com.kurogane.dividend.model.formatStockPriceDisplay(it, code)}"
     }
 
-private fun formatCandidateYield(yieldRate: Double?): String? = yieldRate
-    ?.takeIf { it.isFinite() && it in 0.0..100.0 }
-    ?.let { "%.2f%%".format(java.util.Locale.JAPAN, it) }
+private fun formatCandidateYield(yieldRate: Double?, isNoDividendConfirmed: Boolean = false): String =
+    com.kurogane.dividend.model.formatDividendYieldDisplay(
+        yieldRate?.takeIf { it.isFinite() && it in 0.0..100.0 } ?: 0.0,
+        isNoDividendConfirmed,
+        java.util.Locale.JAPAN
+    )
 
 private const val RECENT_SEARCHES_PREFERENCES = "stock_search_history"
 private const val RECENT_SEARCHES_KEY = "recent_candidates"
@@ -76,7 +77,8 @@ private fun loadRecentSearches(context: Context): List<CandidateStock> = runCatc
             price = row.optString("price"),
             yieldRate = row.optString("yieldRate"),
             cat = row.optString("cat", "jp"),
-            isHigh = row.optBoolean("isHigh")
+            isHigh = row.optBoolean("isHigh"),
+            isNoDividendConfirmed = row.optBoolean("isNoDividendConfirmed", false)
         ).takeIf { it.code.isNotBlank() && it.name.isNotBlank() }
     }
 }.getOrDefault(emptyList())
@@ -93,6 +95,7 @@ private fun saveRecentSearches(context: Context, candidates: List<CandidateStock
                 .put("yieldRate", candidate.yieldRate)
                 .put("cat", candidate.cat)
                 .put("isHigh", candidate.isHigh)
+                .put("isNoDividendConfirmed", candidate.isNoDividendConfirmed)
         )
     }
     context.getSharedPreferences(RECENT_SEARCHES_PREFERENCES, Context.MODE_PRIVATE)
@@ -172,26 +175,42 @@ fun SearchSheet(
             val result = runCatchingCancellable { search(query) }
             searchError = result.exceptionOrNull()?.let { networkErrorMessage(resources, it) }
             val hits = result.getOrNull()
+            val quotesNeeded = hits.orEmpty()
+                .filter { it.cachedPrice == null || it.marketYieldRate == null }
+                .map { it.code }
+                .distinct()
+            val searchQuotes = if (quotesNeeded.isEmpty()) {
+                emptyMap()
+            } else {
+                runCatchingCancellable { loadQuotes(quotesNeeded) }.getOrDefault(emptyMap())
+            }
             remoteCandidates = hits?.map { hit ->
                 val local = candidates.firstOrNull { it.code.equals(hit.code, ignoreCase = true) }
-                val priceValue = hit.cachedPrice
-                val price = formatCandidatePrice(priceValue)
-                val yieldValue = hit.marketYieldRate
-                val yieldRate = formatCandidateYield(yieldValue)
+                val quote = searchQuotes[hit.code.uppercase(java.util.Locale.ROOT)]
+                val priceValue = hit.cachedPrice ?: quote?.price
+                val price = formatCandidatePrice(priceValue, hit.code)
+                val annualDividend = hit.annualDividendPerShare ?: quote?.annualDividendPerShare
+                val noDividendConfirmed = hit.isNoDividendConfirmed || quote?.isNoDividendConfirmed == true
+                val yieldValue = hit.marketYieldRate ?: quote?.yieldRate ?: annualDividend?.let { dps ->
+                    priceValue?.takeIf { it > 0.0 }?.let { price -> dps / price * 100.0 }
+                }?.takeIf { it.isFinite() && it in 0.0..100.0 }
+                val yieldRate = formatCandidateYield(yieldValue ?: if (noDividendConfirmed) 0.0 else null, noDividendConfirmed)
                 local?.copy(
                     name = hit.name,
                     desc = hit.industry?.let { "東証 • $it" } ?: local.desc,
                     price = price ?: "株価未取得",
-                    yieldRate = yieldRate ?: "--",
-                    isHigh = yieldValue?.let { it >= 3.0 } ?: false
+                    yieldRate = yieldRate,
+                    isHigh = yieldValue?.let { it >= 3.0 } ?: false,
+                    isNoDividendConfirmed = noDividendConfirmed
                 ) ?: CandidateStock(
                     code = hit.code,
                     name = hit.name,
                     desc = hit.industry?.let { "東証 • $it" } ?: "日本株",
                     price = price ?: "株価未取得",
-                    yieldRate = yieldRate ?: "--",
+                    yieldRate = yieldRate,
                     cat = "jp",
-                    isHigh = yieldValue?.let { it >= 3.0 } ?: false
+                    isHigh = yieldValue?.let { it >= 3.0 } ?: false,
+                    isNoDividendConfirmed = noDividendConfirmed
                 )
             }
             isSearching = false
@@ -207,9 +226,11 @@ fun SearchSheet(
                 if (!shouldRefreshQuote) candidate else {
                     val yieldValue = quote?.yieldRate
                     candidate.copy(
-                        price = formatCandidatePrice(quote?.price) ?: "株価未取得",
-                        yieldRate = formatCandidateYield(yieldValue) ?: "--",
-                        isHigh = yieldValue?.let { it >= 3.0 } ?: false
+                        price = formatCandidatePrice(quote?.price, candidate.code) ?: "株価未取得",
+                        yieldRate = formatCandidateYield(yieldValue ?: if (quote?.isNoDividendConfirmed == true) 0.0 else null,
+                            quote?.isNoDividendConfirmed == true),
+                        isHigh = yieldValue?.let { it >= 3.0 } ?: false,
+                        isNoDividendConfirmed = quote?.isNoDividendConfirmed ?: candidate.isNoDividendConfirmed
                     )
                 }
             }

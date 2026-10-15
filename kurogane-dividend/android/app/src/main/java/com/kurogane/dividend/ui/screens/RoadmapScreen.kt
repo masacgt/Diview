@@ -88,6 +88,8 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
         it.getEffectiveAnnualDividend(taxRateMode).toLong()
     }
     val monthlyIncome = totalAnnualExpectedDividend / 12
+    val displayAnnualExpectedDividend = holdings.sumOf { it.getEffectiveAnnualDividend(taxRateMode) }
+    val displayMonthlyIncome = displayAnnualExpectedDividend / 12.0
 
     // Define the 30 static milestone thresholds
     val milestoneSteps = listOf(
@@ -320,7 +322,7 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                         Spacer(modifier = Modifier.height(4.dp))
                         
                         Text(
-                            stringResource(R.string.roadmap_text_6 , currencyFormat.format(totalAnnualExpectedDividend)),
+                            stringResource(R.string.roadmap_text_6 , com.kurogane.dividend.model.formatFinancialAmountDisplay(displayAnnualExpectedDividend)),
                             fontSize = AppTextSize.hero,
                             fontWeight = FontWeight.Black,
                             color = OnSurface,
@@ -328,7 +330,7 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                         )
                         
                         Text(
-                            text = stringResource(R.string.roadmap_text_7 , currencyFormat.format(monthlyIncome)),
+                            text = stringResource(R.string.roadmap_text_7 , com.kurogane.dividend.model.formatFinancialAmountDisplay(displayMonthlyIncome)),
                             color = PrimaryEmerald,
                             fontSize = AppTextSize.body,
                             fontWeight = FontWeight.ExtraBold
@@ -392,7 +394,7 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        stringResource(R.string.roadmap_text_10 , currencyFormat.format(monthlyIncome)),
+                                        stringResource(R.string.roadmap_text_10 , com.kurogane.dividend.model.formatFinancialAmountDisplay(displayMonthlyIncome)),
                                         color = OnSurfaceVariant,
                                         fontSize = AppTextSize.dense
                                     )
@@ -863,7 +865,7 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                                                 Icon(Icons.Default.CheckCircle, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                                                 Text(stringResource(R.string.roadmap_text_26), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = PrimaryEmerald)
                                             }
-                                            Text(stringResource(R.string.roadmap_text_27 , currencyFormat.format(monthlyIncome)), fontSize = AppTextSize.dense, color = PrimaryEmerald)
+                                            Text(stringResource(R.string.roadmap_text_27 , com.kurogane.dividend.model.formatFinancialAmountDisplay(displayMonthlyIncome)), fontSize = AppTextSize.dense, color = PrimaryEmerald)
                                         } else {
                                             Text(stringResource(R.string.roadmap_text_28 , currencyFormat.format(shortageAmt)), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = ErrorRed)
                                             Text(stringResource(R.string.roadmap_text_29 , currencyFormat.format(shortageAmt * 12)), fontSize = AppTextSize.dense, color = OnSurfaceVariant)
@@ -1135,8 +1137,9 @@ private fun RoadmapGrowthSimulatorSheet(
                         Text("年間配当額", color = OnSurfaceVariant, fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
                         SmoothMoney(estimatedAnnualDividend, suffix = "/年",
                             style = androidx.compose.ui.text.TextStyle(color = PrimaryEmerald, fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center))
-                        Text("月平均 ¥${numberFormat.format(kotlin.math.round(estimatedMonthlyDividend).toLong())}/月", color = PrimaryEmerald, fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
+                                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
+                            useOneDecimalAmountFormat = true)
+                        Text("月平均 ¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(estimatedMonthlyDividend)}/月", color = PrimaryEmerald, fontSize = AppTextSize.dense, textAlign = TextAlign.Center)
                     }
                 }
             }

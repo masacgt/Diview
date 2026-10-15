@@ -74,7 +74,6 @@ import java.text.NumberFormat
 import kotlin.math.atan2
 import kotlin.math.pow
 import kotlin.math.roundToInt
-import kotlin.math.roundToLong
 import kotlin.math.sqrt
 import java.time.YearMonth
 import java.time.ZoneId
@@ -290,7 +289,7 @@ fun AnnualDividendScreen(
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     RollingMoney(
-                                        amount = if (isPrivacyActive) "¥••••••••" else "¥${currencyFormat.format(grossAnnualDividend.toLong())}",
+                                        amount = if (isPrivacyActive) "¥••••••••" else "¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(grossAnnualDividend)}",
                                         modifier = Modifier.weight(1f, fill = false),
                                         style = MaterialTheme.typography.headlineLarge.copy(
                                                 fontWeight = FontWeight.ExtraBold,
@@ -313,7 +312,7 @@ fun AnnualDividendScreen(
                                         .padding(horizontal = 9.dp, vertical = 4.dp)
                                 ) {
                                     Text(
-                                        text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_5) else resources.getString(R.string.annual_dividend_label_6, (currencyFormat.format((grossAnnualDividend / 12).roundToLong())).toString()),
+                                        text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_5) else resources.getString(R.string.annual_dividend_label_6, com.kurogane.dividend.model.formatFinancialAmountDisplay(grossAnnualDividend / 12)),
                                         fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryEmerald,
@@ -323,7 +322,7 @@ fun AnnualDividendScreen(
                                 }
                                 Spacer(modifier = Modifier.height(3.dp))
                                 Text(
-                                    text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_7) else resources.getString(R.string.annual_dividend_label_8, (currencyFormat.format((netAnnualDividend / 12).roundToLong())).toString()),
+                                    text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_7) else resources.getString(R.string.annual_dividend_label_8, com.kurogane.dividend.model.formatFinancialAmountDisplay(netAnnualDividend / 12)),
                                     fontSize = AppTextSize.dense,
                                     color = OnSurfaceVariant,
                                     maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
@@ -334,7 +333,7 @@ fun AnnualDividendScreen(
 
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_9) else resources.getString(R.string.annual_dividend_label_10, (currencyFormat.format(netAnnualDividend.toLong())).toString()),
+                            text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_9) else resources.getString(R.string.annual_dividend_label_10, com.kurogane.dividend.model.formatFinancialAmountDisplay(netAnnualDividend)),
                             fontSize = AppTextSize.caption,
                             fontWeight = FontWeight.Medium,
                             color = OnSurfaceVariant
@@ -785,7 +784,7 @@ private fun MonthlyDividendEstimateCard(
                     }
                 }
                 Text(
-                    text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_15) else resources.getString(R.string.annual_dividend_label_16, (currencyFormat.format(totalAnnualDividend.toLong())).toString()),
+                    text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_15) else resources.getString(R.string.annual_dividend_label_16, com.kurogane.dividend.model.formatFinancialAmountDisplay(totalAnnualDividend)),
                     fontSize = AppTextSize.caption,
                     fontWeight = FontWeight.ExtraBold,
                     color = NeonGreenLight
@@ -950,8 +949,8 @@ private fun MonthlyDividendEstimateCard(
                     Text(
                         text = selectedMonth?.let { month ->
                             val amount = monthlyDividends.firstOrNull { it.first == month }?.second ?: 0.0
-                            "${month}月: ¥${currencyFormat.format(amount.toLong())}"
-                        } ?: "月平均: ¥${currencyFormat.format((monthlyDividends.sumOf { it.second } / 12).toLong())}",
+                            "${month}月: ¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(amount)}"
+                        } ?: "月平均: ¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(monthlyDividends.sumOf { it.second } / 12)}",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         color = NeonGreenLight,
                         fontSize = AppTextSize.dense,
@@ -1123,7 +1122,7 @@ private fun QuarterlyCashFlowComparison(
                     val firstMonth = index * 3 + 1
                     val lastMonth = firstMonth + 2
                     val sharePercent = if (totalMonthlyAmount > 0.0) amount / totalMonthlyAmount * 100.0 else 0.0
-                    val amountText = if (isPrivacyActive) "¥••••" else "¥${currencyFormat.format(amount.roundToLong())}"
+                    val amountText = if (isPrivacyActive) "¥••••" else "¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(amount)}"
                     val percentageText = if (isPrivacyActive) "•••%" else String.format(Locale.JAPAN, "%.1f%%", sharePercent)
 
                     Surface(
@@ -1991,7 +1990,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    stringResource(R.string.annual_dividend_1_s_2_s , NumberFormat.getNumberInstance(Locale.JAPAN).format(sectorAmount.toLong()), if (sectorValueMode == "dividend") " / 年" else ""),
+                    stringResource(R.string.annual_dividend_1_s_2_s , if (sectorValueMode == "dividend") com.kurogane.dividend.model.formatFinancialAmountDisplay(sectorAmount) else NumberFormat.getNumberInstance(Locale.JAPAN).format(sectorAmount.toLong()), if (sectorValueMode == "dividend") " / 年" else ""),
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = sec.color,
                                         fontWeight = FontWeight.Bold,
@@ -2065,7 +2064,14 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                                     maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1
                                                 )
                                                 Text(
-                                                    stringResource(R.string.annual_dividend_text_22 , h.shares, String.format(java.util.Locale.JAPAN, "%.2f%%", currentYield)),
+                                                    stringResource(
+                                                        R.string.annual_dividend_text_22,
+                                                        h.shares,
+                                                        com.kurogane.dividend.model.formatDividendYieldDisplay(
+                                                            currentYield,
+                                                            h.isNoDividendConfirmed
+                                                        )
+                                                    ),
                                                     style = MaterialTheme.typography.labelSmall.copy(
                                                         color = OnSurfaceVariant,
                                                         fontSize = AppTextSize.dense
@@ -2075,7 +2081,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                         }
                                         Column(horizontalAlignment = Alignment.End) {
                                             Text(
-                                                stringResource(R.string.annual_dividend_1_s_2_s , NumberFormat.getNumberInstance(Locale.JAPAN).format(holdingAmount.toLong()), if (sectorValueMode == "dividend") " / 年" else ""),
+                                                stringResource(R.string.annual_dividend_1_s_2_s , if (sectorValueMode == "dividend") com.kurogane.dividend.model.formatFinancialAmountDisplay(holdingAmount) else NumberFormat.getNumberInstance(Locale.JAPAN).format(holdingAmount.toLong()), if (sectorValueMode == "dividend") " / 年" else ""),
                                                 style = MaterialTheme.typography.bodySmall.copy(
                                                     color = OnSurface,
                                                     fontWeight = FontWeight.SemiBold,
@@ -2344,14 +2350,14 @@ private fun CompoundingSimulationSection(
         }
     }
     val format = NumberFormat.getNumberInstance(Locale.JAPAN)
-    fun money(value: Double?): String = if (value == null) "未取得" else if (isPrivacyActive) "¥••••" else "¥${format.format(value.toLong())}"
+    fun money(value: Double?): String = if (value == null) "未取得" else if (isPrivacyActive) "¥••••" else "¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(value)}"
     fun compactMoney(value: Double): String {
         val absoluteValue = kotlin.math.abs(value)
         return when {
             absoluteValue >= 1_000_000_000_000.0 -> String.format(Locale.JAPAN, "%.1f兆", value / 1_000_000_000_000.0)
             absoluteValue >= 100_000_000.0 -> String.format(Locale.JAPAN, "%.1f億", value / 100_000_000.0)
             absoluteValue >= 10_000.0 -> String.format(Locale.JAPAN, "%.1f万", value / 10_000.0)
-            else -> "¥${format.format(value.toLong())}"
+            else -> "¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(value)}"
         }
     }
     var selectedYearIndex by remember { mutableIntStateOf(4) }
@@ -2373,8 +2379,8 @@ private fun CompoundingSimulationSection(
     fun signedMoney(value: Double?): String = when {
         value == null -> "未取得"
         isPrivacyActive -> "••••"
-        value > 0 -> "+¥${format.format(value.toLong())}"
-        value < 0 -> "−¥${format.format(kotlin.math.abs(value).toLong())}"
+        value > 0 -> "+¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(value)}"
+        value < 0 -> "−¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(kotlin.math.abs(value))}"
         else -> "¥0"
     }
     fun compactSignedMoney(value: Double?): String = when {
