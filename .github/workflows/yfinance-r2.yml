@@ -59,7 +59,7 @@ jobs:
     needs: market-calendar
     if: needs.market-calendar.outputs.is_open == 'true' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'sync'))
     runs-on: ubuntu-latest
-    timeout-minutes: 80
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -70,12 +70,13 @@ jobs:
       - name: Install collection dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
       - name: Fetch J-Quants universe and publish the yfinance v2 generation
-        run: python scripts/yfinance_r2/sync_v2.py --publish --workers 8
+        run: python scripts/yfinance_r2/sync_v2.py --publish --workers 16
         env:
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
           YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
           YFINANCE_LIBRARY_RETRIES: "1"
-          YFINANCE_V2_WORKERS: "8"
+          YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND: "8"
+          YFINANCE_V2_WORKERS: "16"
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -100,6 +101,7 @@ jobs:
         env:
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
           YFINANCE_BENCHMARK_SAMPLE_SIZE: ${{ inputs.sample_size }}
+          YFINANCE_BENCHMARK_WORKERS: "16"
           YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
           YFINANCE_LIBRARY_RETRIES: "1"
       - name: Save benchmark report
@@ -123,6 +125,6 @@ jobs:
           cache: pip
           cache-dependency-path: scripts/yfinance_r2/requirements.txt
       - name: Install test dependencies
-        run: python -m pip install "yfinance==1.7.0" "boto3>=1.35,<2"
+        run: python -m pip install "yfinance==1.7.0" "boto3>=1.35,<2" "exchange_calendars>=4.7,<5"
       - name: Run deterministic sync tests without Yahoo or R2 access
         run: python -m unittest discover -s scripts/yfinance_r2 -p 'test_*.py' -v
