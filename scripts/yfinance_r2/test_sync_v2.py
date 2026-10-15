@@ -67,6 +67,62 @@ class SyncPriceTests(TestCase):
         self.assertTrue(all(item["month"].endswith("-12") for item in result))
         self.assertEqual([item["month"] for item in result], [f"{year}-12" for year in range(2019, 2027)])
 
+    def test_financial_refresh_on_new_reporting_period_marker(self):
+        info = {"lastFiscalYearEnd": "2025-03-31", "mostRecentQuarter": "2025-12-31"}
+        prior = {
+            "financials_initialized": True,
+            "financial_refresh_policy_version": 1,
+            "financial_period_marker": sync.financial_period_marker(info),
+            "financials_last_checked_session_date": "2026-01-01",
+        }
+        changed = {**info, "mostRecentQuarter": "2026-03-31"}
+        due, marker, marker_changed = sync.financial_refresh_due(
+            info=changed, prior_sync=prior, as_of=date(2026, 4, 2),
+            initialize_due=False, retry_pending=False,
+        )
+        self.assertTrue(due)
+        self.assertTrue(marker_changed)
+        self.assertNotEqual(marker, prior["financial_period_marker"])
+
+    def test_financial_refresh_has_max_age_fallback(self):
+        due, _, marker_changed = sync.financial_refresh_due(
+            info={},
+            prior_sync={
+                "financials_initialized": True,
+                "financials_last_checked_session_date": "2026-01-01",
+            },
+            as_of=date(2026, 2, 16), initialize_due=False, retry_pending=False,
+        )
+        self.assertTrue(due)
+        self.assertFalse(marker_changed)
+
+    def test_same_session_retry_reuses_successful_financial_groups(self):
+        requested = sync.financial_groups_to_fetch(
+            same_session_retry=True,
+            retry_pending=True,
+            due=True,
+            failed_groups={"cash_flow"},
+        )
+        self.assertEqual(requested, {"cash_flow"})
+
+    def test_retry_of_failed_financial_groups_does_not_repeat_successful_groups(self):
+        self.assertEqual(
+            sync.financial_failed_groups({
+                "financial_income_statement": "available",
+                "financial_balance_sheet": "failed",
+                "financial_cash_flow": "empty",
+                "financial_valuation": "available",
+            }),
+            {"balance_sheet"},
+        )
+
+    def test_same_session_partial_retry_is_identified_after_attempt_start(self):
+        self.assertTrue(sync.same_session_partial_retry({
+            "status": "running",
+            "retry_session_date": "2026-10-15",
+            "last_success_session_date": "2026-10-15",
+        }, date(2026, 10, 15)))
+
 
 if __name__ == "__main__":
     import unittest
