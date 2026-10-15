@@ -38,10 +38,51 @@ FINANCIAL_REFRESH_MAX_AGE_DAYS = 45
 FINANCIAL_GROUPS = ("income_statement", "balance_sheet", "cash_flow", "valuation")
 _YF_CALL_LOCK = threading.Lock()
 _YF_CALLS: dict[str, int] = {}
-PROFILE_FIELDS = (
-    "quoteType", "exchange", "fullExchangeName", "market", "currency", "country",
-    "website", "longBusinessSummary", "marketCap", "sharesOutstanding",
-)
+
+
+class GlobalHttpRateLimiter:
+    """Limit request starts across all yfinance worker threads in this process."""
+
+    def __init__(self, requests_per_second: float):
+        if requests_per_second <= 0:
+            raise ValueError("YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND must be positive")
+        self.requests_per_second = requests_per_second
+        self.interval = 1.0 / requests_per_second
+        self.lock = threading.Lock()
+        self.next_start = 0.0
+        self.request_count = 0
+        self.http_429_count = 0
+        self.original_request = None
+
+    def __enter__(self):
+        from curl_cffi.requests import Session
+
+        self.session_class = Session
+        self.original_request = Session.request
+
+        def limited_request(session, *args, **kwargs):
+            with self.lock:
+                now = time.monotonic()
+                if now < self.next_start:
+                    time.sleep(self.next_start - now)
+                self.next_start = time.monotonic() + self.interval
+                self.request_count += 1
+            response = self.original_request(session, *args, **kwargs)
+            if getattr(response, "status_code", None) == 429:
+                with self.lock:
+                    self.http_429_count += 1
+            return response
+
+        Session.request = limited_request
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self.original_request is not None:
+            self.session_class.request = self.original_request
+# J-Quants is the source for the supported Japanese-market universe and product
+# category. Keep only names/IDs in profile.json; price currency remains on the
+# current quote, where app calculations and display consume it.
+PROFILE_FIELDS: tuple[str, ...] = ()
 CURRENT_FIELDS = (
     "regularMarketChange", "regularMarketChangePercent", "trailingPE", "forwardPE",
     "priceToBook", "enterpriseValue", "trailingEps", "forwardEps", "bookValue",
@@ -52,20 +93,15 @@ INCOME_FIELDS = {
     "Total Revenue": "sales",
     "Operating Revenue": "sales",
     "Operating Income": "operating_profit",
-    "Net Income": "net_income",
-    "Basic EPS": "eps",
-    "Diluted EPS": "eps_diluted",
 }
 BALANCE_FIELDS = {
     "Stockholders Equity": "stockholders_equity",
     "Total Equity Gross Minority Interest": "stockholders_equity",
     "Total Assets": "total_assets",
-    "Ordinary Shares Number": "shares_outstanding",
 }
 CASH_FLOW_FIELDS = {
     "Operating Cash Flow": "operating_cf",
     "Investing Cash Flow": "investing_cf",
-    "Capital Expenditure": "capital_expenditure",
 }
 
 
@@ -97,6 +133,23 @@ def is_last_market_session(day: date) -> bool:
         return False
     next_session = calendar.next_session(session)
     return next_session.month != session.month
+
+
+def latest_completed_xtks_session(now: datetime | None = None) -> date:
+    """Return today's XTKS session only after its close; otherwise use the last closed session."""
+    import exchange_calendars as xcals
+    import pandas as pd
+
+    current = now or datetime.now(JST)
+    current = current.replace(tzinfo=JST) if current.tzinfo is None else current.astimezone(JST)
+    calendar = xcals.get_calendar("XTKS")
+    today = pd.Timestamp(current.date())
+    session = calendar.date_to_session(today, direction="previous")
+    if session.date() == current.date():
+        market_close = calendar.session_close(session).to_pydatetime().astimezone(JST)
+        if current < market_close:
+            session = calendar.previous_session(session)
+    return session.date()
 
 
 def year_end_price_years(as_of: date) -> tuple[int, int]:
@@ -319,6 +372,74 @@ def fetch_repaired_action_history(ticker: Any, as_of: date, *, period: str = "ma
     return fresh_dividends, fresh_splits, coverage_start, coverage_end
 
 
+def fetch_action_event_candidate(ticker: Any, as_of: date, *, period: str = "1y") -> tuple[
+    list[dict[str, Any]], list[dict[str, Any]], date, date
+]:
+    """Read the lightweight actions accessor for change detection; never publish its unrepaired values."""
+    count_yfinance_call(f"actions_accessor_{period}")
+    frame = ticker.get_actions(period=period)
+    if frame is None or getattr(frame, "empty", True):
+        raise RuntimeError("yfinance actions accessor returned no dated history")
+    if not hasattr(frame, "iterrows") or "Dividends" not in frame.columns or "Stock Splits" not in frame.columns:
+        raise RuntimeError("yfinance actions accessor omitted dividend or split columns")
+    dates = [date_value(value) for value in frame.index]
+    dates = [value for value in dates if value is not None and value <= as_of]
+    if not dates:
+        raise RuntimeError("yfinance actions accessor has no dates in the completed market period")
+    coverage_start = min(dates)
+    coverage_end = max(dates)
+    dividends: list[dict[str, Any]] = []
+    splits: list[dict[str, Any]] = []
+    for timestamp, row in frame.iterrows():
+        event_date = date_value(timestamp)
+        if event_date is None or event_date < coverage_start or event_date > coverage_end:
+            continue
+        amount = finite_number(row.get("Dividends"))
+        ratio = finite_number(row.get("Stock Splits"))
+        if amount is not None and amount > 0:
+            dividends.append({"date": event_date.isoformat(), "amount": amount})
+        if ratio is not None and ratio > 0:
+            splits.append({"date": event_date.isoformat(), "ratio": ratio})
+    return dividends, splits, coverage_start, coverage_end
+
+
+def action_events_changed(
+    candidate: list[dict[str, Any]], previous: list[dict[str, Any]], *,
+    value_field: str, coverage_start: date, coverage_end: date,
+) -> bool:
+    def signature(rows: list[dict[str, Any]]) -> set[tuple[str, float]]:
+        result = set()
+        for row in rows:
+            event_date = str(row.get("date") or "")[:10]
+            value = finite_number(row.get(value_field))
+            if coverage_start.isoformat() <= event_date <= coverage_end.isoformat() and value is not None and value > 0:
+                result.add((event_date, round(value, 12)))
+        return result
+
+    return signature(candidate) != signature(previous)
+
+
+def action_event_fingerprint(dividends: list[dict[str, Any]], splits: list[dict[str, Any]]) -> str:
+    canonical = {
+        "dividends": sorted(
+            (str(row.get("date") or "")[:10], round(finite_number(row.get("amount")) or 0.0, 12))
+            for row in dividends
+        ),
+        "splits": sorted(
+            (str(row.get("date") or "")[:10], round(finite_number(row.get("ratio")) or 0.0, 12))
+            for row in splits
+        ),
+    }
+    return hashlib.sha256(json.dumps(canonical, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def pending_action_repair_period(field_status: dict[str, Any], action_history: dict[str, Any]) -> str | None:
+    if field_status.get("dividend_history") != "failed" and field_status.get("split_history") != "failed":
+        return None
+    period = action_history.get("repair_attempt_period")
+    return period if period in {"1y", "max"} else None
+
+
 def replace_dated_history(
     previous: list[dict[str, Any]], fresh: list[dict[str, Any]], key: str,
     coverage_start: date, coverage_end: date,
@@ -339,7 +460,10 @@ def monthly_history_rows(ticker: Any, *, initial: bool, as_of: date) -> list[dic
         count_yfinance_call("history_year_end_prices_initial_8y")
         frame = ticker.history(
             start=date(first_year, 12, 1), end=date(latest_year + 1, 1, 1),
-            interval="1mo", auto_adjust=False, actions=False, repair=True,
+            # Yahoo's monthly Close is already split-adjusted. yfinance's
+            # monthly repair resampler requires a Stock Splits column even
+            # when actions=False, and can raise KeyError for valid symbols.
+            interval="1mo", auto_adjust=False, actions=False, repair=False,
             timeout=float(os.environ.get("YFINANCE_HTTP_TIMEOUT_SECONDS", "30")),
         )
     else:
@@ -372,6 +496,17 @@ def completed_close_for_session(daily: list[dict[str, Any]], session_date: date)
     if not matches:
         raise RuntimeError(f"yfinance returned no closing price for Japan session {session_date.isoformat()}")
     return matches[-1]
+
+
+def current_close_with_fallback(fetch_daily: Any, previous_price: dict[str, Any], session_date: date
+                                ) -> tuple[dict[str, Any], str, str | None]:
+    try:
+        return completed_close_for_session(fetch_daily(), session_date), "available", None
+    except Exception as exc:
+        return {
+            "date": previous_price.get("date"),
+            "close": previous_price.get("close"),
+        }, "failed", f"{type(exc).__name__}: {exc}"
 
 
 def has_new_split(
@@ -891,13 +1026,20 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     prior_price = prior_current.get("price") if isinstance(prior_current.get("price"), dict) else {}
     if same_session_retry and str(prior_price.get("date") or "")[:10] == as_of.isoformat():
         latest = {"date": prior_price["date"], "close": prior_price.get("close")}
+        price_status = str(prior_field_status.get("price") or "available")
     else:
-        count_yfinance_call("history_latest_daily_5d")
-        daily = collector.history_rows(ticker, "1d", "5d")
-        latest = completed_close_for_session(daily, as_of)
-    price_date = date.fromisoformat(str(latest["date"])[:10])
-    if price_date > as_of:
-        raise RuntimeError("yfinance daily close is newer than the Japan session date")
+        def fetch_daily_close():
+            count_yfinance_call("history_latest_daily_5d")
+            return collector.history_rows(ticker, "1d", "5d")
+
+        latest, price_status, price_failure = current_close_with_fallback(fetch_daily_close, prior_price, as_of)
+        if price_failure:
+            print(f"Daily close unavailable for {symbol}: {price_failure}"[:500], file=sys.stderr)
+    price_date = date_value(latest.get("date"))
+    if price_date and price_date > as_of:
+        latest = {"date": prior_price.get("date"), "close": prior_price.get("close")}
+        price_date = date_value(latest.get("date"))
+        price_status = "failed"
 
     old_actions = old.get("actions") if isinstance(old.get("actions"), dict) else {}
     prior_dividends = load_all_year_records(client, bucket, symbol, "dividends", include_archive=True)
@@ -909,21 +1051,26 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     if not isinstance(prior_action_history, dict):
         prior_action_history = {}
     action_retrieval: dict[str, Any] = {
-        "source": "yfinance_history",
+        "source": "yfinance_actions_accessor",
         "yfinance_version": yf.__version__,
         "period": "max" if refresh_full_history else "1y",
-        "interval": "1d",
-        "repair": True,
+        "repair": False,
+        "repair_on_change": True,
         "full_history_refreshed": False,
         "full_history_coverage_end": prior_action_history.get("full_history_coverage_end"),
+        "candidate_fingerprint": prior_action_history.get("candidate_fingerprint"),
         "dividend_amount_basis": "yfinance_split_adjusted_assumption",
         "split_ratio_reapplied_to_dividends": False,
     }
-    full_history_attempted = refresh_full_history
+    prior_actions_succeeded = prior_field_status.get("dividend_history") != "failed" and prior_field_status.get("split_history") != "failed"
+    prior_repair_period = pending_action_repair_period(prior_field_status, prior_action_history)
+    full_history_attempted = refresh_full_history or prior_sync.get("long_history_retry_pending") is True or prior_repair_period == "max"
     full_history_refreshed = False
     new_split_detected = False
-    prior_actions_succeeded = prior_field_status.get("dividend_history") != "failed" and prior_field_status.get("split_history") != "failed"
     skip_action_retry = same_session_retry and prior_actions_succeeded
+    forced_repair = False
+    repair_period = "1y"
+    actions_changed = False
     if skip_action_retry:
         dividends = prior_dividends
         splits = prior_splits
@@ -933,48 +1080,100 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         action_retrieval["retry_status"] = "reused_successful_same_session"
     else:
         try:
-            fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
-                ticker, as_of,
-                period="max" if (refresh_full_history or prior_sync.get("long_history_retry_pending") is True) else "1y",
-            )
-            full_history_refreshed = refresh_full_history or prior_sync.get("long_history_retry_pending") is True
+            forced_repair = refresh_full_history or prior_sync.get("long_history_retry_pending") is True or bool(prior_repair_period)
+            repair_period = "max" if (refresh_full_history or prior_sync.get("long_history_retry_pending") is True or prior_repair_period == "max") else "1y"
             prior_full_coverage_end = str(prior_action_history.get("full_history_coverage_end") or "")
-            new_split_detected = not refresh_full_history and has_new_split(fresh_splits, prior_splits)
-            if new_split_detected:
-                # A newly observed split can change the interpretation of older actions and prices.
-                full_history_attempted = True
+            if forced_repair:
                 fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
-                    ticker, as_of, period="max",
+                    ticker, as_of, period=repair_period,
                 )
-                full_history_refreshed = True
-            dividends = replace_dated_history(
-                prior_dividends, fresh_dividends, "date", action_coverage_start, action_coverage_end,
-            )
-            splits = replace_dated_history(
-                prior_splits, fresh_splits, "date", action_coverage_start, action_coverage_end,
-            )
-            action_status["dividends"] = "available" if fresh_dividends else "empty"
-            action_status["splits"] = "available" if fresh_splits else "empty"
-            action_retrieval.update({
-                "status": "success",
-                "period": "max" if full_history_refreshed else "1y",
-                "full_history_refreshed": full_history_refreshed,
-                "full_history_attempted": full_history_attempted,
-                "full_history_coverage_end": (
-                    action_coverage_end.isoformat() if full_history_refreshed
-                    else prior_full_coverage_end or None
-                ),
-                "coverage_start": action_coverage_start.isoformat(),
-                "coverage_end": action_coverage_end.isoformat(),
-                "dividend_event_count": len(fresh_dividends),
-                "split_event_count": len(fresh_splits),
-            })
+                full_history_refreshed = repair_period == "max"
+            else:
+                candidate_dividends, candidate_splits, candidate_start, candidate_end = fetch_action_event_candidate(
+                    ticker, as_of, period="1y",
+                )
+                candidate_fingerprint = action_event_fingerprint(candidate_dividends, candidate_splits)
+                new_split_detected = has_new_split(candidate_splits, prior_splits)
+                previous_candidate_fingerprint = prior_action_history.get("candidate_fingerprint")
+                actions_changed = (
+                    candidate_fingerprint != previous_candidate_fingerprint
+                    if previous_candidate_fingerprint
+                    else (
+                        action_events_changed(candidate_dividends, prior_dividends, value_field="amount",
+                                              coverage_start=candidate_start, coverage_end=candidate_end)
+                        or action_events_changed(candidate_splits, prior_splits, value_field="ratio",
+                                                 coverage_start=candidate_start, coverage_end=candidate_end)
+                    )
+                )
+                if new_split_detected:
+                    # A newly observed split can change the interpretation of older actions and prices.
+                    full_history_attempted = True
+                    fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
+                        ticker, as_of, period="max",
+                    )
+                    full_history_refreshed = True
+                elif actions_changed:
+                    fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
+                        ticker, as_of, period="1y",
+                    )
+                else:
+                    fresh_dividends = fresh_splits = None
+                    action_coverage_start, action_coverage_end = candidate_start, candidate_end
+                    dividends, splits = prior_dividends, prior_splits
+                    action_status["dividends"] = "available" if candidate_dividends else "empty"
+                    action_status["splits"] = "available" if candidate_splits else "empty"
+                    action_retrieval.update({
+                        "status": "success",
+                        "period": "1y",
+                        "repair": False,
+                        "change_detected": False,
+                        "candidate_fingerprint": candidate_fingerprint,
+                        "coverage_start": candidate_start.isoformat(),
+                        "coverage_end": candidate_end.isoformat(),
+                        "dividend_event_count": len(candidate_dividends),
+                        "split_event_count": len(candidate_splits),
+                        "stored_repaired_events_reused": True,
+                    })
+            if fresh_dividends is not None and fresh_splits is not None:
+                action_retrieval["repair_attempt_period"] = "max" if full_history_refreshed else "1y"
+                if not forced_repair:
+                    action_retrieval["candidate_fingerprint"] = candidate_fingerprint
+                action_retrieval["source"] = "yfinance_history"
+                action_retrieval["repair"] = True
+                action_retrieval["change_detected"] = not forced_repair
+                dividends = replace_dated_history(
+                    prior_dividends, fresh_dividends, "date", action_coverage_start, action_coverage_end,
+                )
+                splits = replace_dated_history(
+                    prior_splits, fresh_splits, "date", action_coverage_start, action_coverage_end,
+                )
+                action_status["dividends"] = "available" if fresh_dividends else "empty"
+                action_status["splits"] = "available" if fresh_splits else "empty"
+                action_retrieval.update({
+                    "status": "success",
+                    "period": "max" if full_history_refreshed else "1y",
+                    "full_history_refreshed": full_history_refreshed,
+                    "full_history_attempted": full_history_attempted,
+                    "full_history_coverage_end": (
+                        action_coverage_end.isoformat() if full_history_refreshed
+                        else prior_full_coverage_end or None
+                    ),
+                    "coverage_start": action_coverage_start.isoformat(),
+                    "coverage_end": action_coverage_end.isoformat(),
+                    "dividend_event_count": len(fresh_dividends),
+                    "split_event_count": len(fresh_splits),
+                    "stored_repaired_events_reused": False,
+                })
         except Exception as exc:
             dividends = prior_dividends
             splits = prior_splits
             action_status["dividends"] = "failed"
             action_status["splits"] = "failed"
-            action_retrieval.update({"status": "failed", "failure_reason": f"{type(exc).__name__}: {exc}"[:500]})
+            action_retrieval.update({
+                "status": "failed",
+                "repair_attempt_period": repair_period if forced_repair or actions_changed or new_split_detected else None,
+                "failure_reason": f"{type(exc).__name__}: {exc}"[:500],
+            })
             print(f"Dividend history unavailable for {symbol}: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
     action_years: dict[str, set[str]] = {
         "dividends": {str(row.get("date") or "")[:4] for row in prior_dividends + dividends if row.get("date")},
@@ -1118,7 +1317,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "schema_version": 1,
         "code": code,
         "symbol": symbol,
-        "price": {"close": close, "date": price_date.isoformat(), "currency": str(info.get("currency") or "JPY")},
+        "price": {"close": close, "date": price_date.isoformat() if price_date else None, "currency": str(info.get("currency") or "JPY")},
         "dividend": {
             "trailing_12_month_per_share": trailing_dividends,
             "trailing_12_month_period": {
@@ -1135,6 +1334,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         },
         "statistics": {key: collector.json_safe(info[key]) for key in CURRENT_FIELDS if info.get(key) is not None},
         "field_status": {
+            "price": price_status,
             "dividend_history": action_status["dividends"],
             "split_history": action_status["splits"],
             "monthly_prices": monthly_status,
@@ -1280,7 +1480,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         verify_v2_transfer(client, bucket, symbol, old, verification_statements, monthly, as_of)
         archived_legacy_document(client, bucket, symbol, old)
     return {"code": code, "symbol": symbol, "name": profile["display_name"], "price": close,
-            "quote_date": price_date.isoformat(), "annual_dividend_per_share": trailing_dividends,
+            "quote_date": price_date.isoformat() if price_date else None,
+            "annual_dividend_per_share": trailing_dividends,
             "yield_rate": current["dividend"]["yield_rate"], "currency": current["price"]["currency"],
             "field_status": current["field_status"], "field_failures": field_failures,
             "status": "partial" if field_failures else "ok"}
@@ -1405,7 +1606,7 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
     if not api_key:
         raise RuntimeError("JQUANTS_API_KEY is required")
     fetched = fetch_securities(api_key)
-    session_date = datetime.now(JST).date()
+    session_date = latest_completed_xtks_session()
     client = collector.get_client() if publish else None
     bucket = collector.required_env("R2_BUCKET") if publish else ""
     if dry_run:
@@ -1485,30 +1686,34 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
             save_failure(
                 client, bucket, code, symbol, session_date, exc,
                 attempt_count=attempt_count, retry_full_history=retry_full_history,
-                retry_financials=retry_financials or initialize_financials, retry_monthly=retry_monthly,
+                retry_financials=retry_financials, retry_monthly=retry_monthly,
             )
             raise
 
     completed_count = 0
-    with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
-        futures = {pool.submit(process, code): code for code in securities}
-        for future in as_completed(futures):
-            completed_count += 1
-            code = futures[future]
-            try:
-                results[code] = future.result()
-            except Exception as exc:
-                failures[code] = f"{type(exc).__name__}: {exc}"
-                print(f"FAILED {code}: {failures[code]}", file=sys.stderr, flush=True)
-            if completed_count % 100 == 0 or completed_count == len(futures):
-                with _YF_CALL_LOCK:
-                    partial_call_count = sum(_YF_CALLS.values())
-                print(
-                    f"Progress {completed_count}/{len(futures)}: success={len(results)}, "
-                    f"failed={len(failures)}, elapsed={time.perf_counter() - started_at:.1f}s, "
-                    f"yfinance_calls={partial_call_count}",
-                    flush=True,
-                )
+    rate_limiter = GlobalHttpRateLimiter(
+        float(os.environ.get("YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND", "8"))
+    )
+    with rate_limiter:
+        with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
+            futures = {pool.submit(process, code): code for code in securities}
+            for future in as_completed(futures):
+                completed_count += 1
+                code = futures[future]
+                try:
+                    results[code] = future.result()
+                except Exception as exc:
+                    failures[code] = f"{type(exc).__name__}: {exc}"
+                    print(f"FAILED {code}: {failures[code]}", file=sys.stderr, flush=True)
+                if completed_count % 100 == 0 or completed_count == len(futures):
+                    with _YF_CALL_LOCK:
+                        partial_call_count = sum(_YF_CALLS.values())
+                    print(
+                        f"Progress {completed_count}/{len(futures)}: success={len(results)}, "
+                        f"failed={len(failures)}, elapsed={time.perf_counter() - started_at:.1f}s, "
+                        f"yfinance_calls={partial_call_count}",
+                        flush=True,
+                    )
 
     universe_rows = active_universe(client, bucket, fetched, session_date)
     for row in universe_rows:
@@ -1548,6 +1753,9 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
         "elapsed_seconds": elapsed_seconds,
         "yfinance_call_count": sum(yfinance_calls.values()),
         "yfinance_calls": yfinance_calls,
+        "http_max_requests_per_second": rate_limiter.requests_per_second,
+        "http_request_count": rate_limiter.request_count,
+        "http_429_count": rate_limiter.http_429_count,
         "rotation": {
             "full_history_bucket": full_history_bucket,
             "full_history_bucket_count": FULL_HISTORY_BUCKETS,
