@@ -427,8 +427,7 @@ def financial_refresh_due(
     initialized = prior_sync.get("financials_initialized") is True
     marker_changed = bool(initialized and marker and previous_marker and marker != previous_marker)
     last_checked = date_value(prior_sync.get("financials_last_checked_session_date"))
-    stale = last_checked is None and not initialized
-    stale = stale or bool(last_checked and as_of >= last_checked + timedelta(days=FINANCIAL_REFRESH_MAX_AGE_DAYS))
+    stale = bool(last_checked and as_of >= last_checked + timedelta(days=FINANCIAL_REFRESH_MAX_AGE_DAYS))
     return initialize_due or retry_pending or marker_changed or stale, marker, marker_changed
 
 
@@ -868,6 +867,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     )
     if same_session_retry and prior_profile and prior_current.get("statistics"):
         info = {**prior_profile, **prior_current["statistics"]}
+        info["shortName"] = prior_profile.get("short_name") or prior_profile.get("display_name")
+        info["longName"] = prior_profile.get("long_name")
     else:
         count_yfinance_call("ticker_get_info")
         info = ticker.get_info()
