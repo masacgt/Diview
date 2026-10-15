@@ -379,7 +379,10 @@ def fetch_action_event_candidate(ticker: Any, as_of: date, *, period: str = "1y"
     count_yfinance_call(f"actions_accessor_{period}")
     frame = ticker.get_actions(period=period)
     if frame is None or getattr(frame, "empty", True):
-        raise RuntimeError("yfinance actions accessor returned no dated history")
+        # An empty accessor result is a valid no-event state. Keep the period
+        # covered so a prior event disappearing from Yahoo triggers repaired
+        # history reconciliation, and let the scheduled refresh check again.
+        return [], [], years_before(as_of, 1), as_of
     if not hasattr(frame, "iterrows") or "Dividends" not in frame.columns or "Stock Splits" not in frame.columns:
         raise RuntimeError("yfinance actions accessor omitted dividend or split columns")
     dates = [date_value(value) for value in frame.index]
