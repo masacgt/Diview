@@ -418,6 +418,24 @@ def financial_failed_groups(field_status: dict[str, Any]) -> set[str]:
     }
 
 
+def same_session_partial_retry(prior_sync: dict[str, Any], as_of: date) -> bool:
+    return (
+        prior_sync.get("status") in {"partial", "running"}
+        and prior_sync.get("retry_session_date") == as_of.isoformat()
+        and prior_sync.get("last_success_session_date") == as_of.isoformat()
+    )
+
+
+def financial_groups_to_fetch(
+    *, same_session_retry: bool, retry_pending: bool, due: bool, failed_groups: set[str],
+) -> set[str]:
+    if same_session_retry:
+        return set(failed_groups)
+    if retry_pending:
+        return set(failed_groups) or set(FINANCIAL_GROUPS)
+    return set(FINANCIAL_GROUPS) if due else set()
+
+
 def financial_refresh_due(
     *, info: dict[str, Any], prior_sync: dict[str, Any], as_of: date,
     initialize_due: bool, retry_pending: bool,
@@ -860,11 +878,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     prior_field_status = prior_current.get("field_status", {})
     if not isinstance(prior_field_status, dict):
         prior_field_status = {}
-    same_session_retry = (
-        prior_sync.get("status") in {"partial", "running"}
-        and prior_sync.get("retry_session_date") == as_of.isoformat()
-        and prior_sync.get("last_success_session_date") == as_of.isoformat()
-    )
+    same_session_retry = same_session_partial_retry(prior_sync, as_of)
     if same_session_retry and prior_profile and prior_current.get("statistics"):
         info = {**prior_profile, **prior_current["statistics"]}
         info["shortName"] = prior_profile.get("short_name") or prior_profile.get("display_name")
@@ -1016,14 +1030,12 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         info=info, prior_sync=prior_sync, as_of=as_of,
         initialize_due=refresh_financials, retry_pending=retry_financials,
     )
-    if same_session_retry:
-        financial_groups = failed_financial_groups
-    elif retry_financials:
-        financial_groups = failed_financial_groups or set(FINANCIAL_GROUPS)
-    elif financial_due:
-        financial_groups = set(FINANCIAL_GROUPS)
-    else:
-        financial_groups = set()
+    financial_groups = financial_groups_to_fetch(
+        same_session_retry=same_session_retry,
+        retry_pending=retry_financials,
+        due=financial_due,
+        failed_groups=failed_financial_groups,
+    )
     financial_attempted = bool(financial_groups)
     if financial_attempted:
         statements, valuation, financial_status = collect_financials(
