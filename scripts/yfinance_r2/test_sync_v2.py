@@ -8,6 +8,21 @@ import sync_v2 as sync
 
 
 class SyncPriceTests(TestCase):
+    def test_empty_actions_accessor_is_recorded_as_empty_history(self):
+        class Ticker:
+            def get_actions(self, **kwargs):
+                return pd.DataFrame()
+
+        with patch.object(sync, "count_yfinance_call"):
+            dividends, splits, start, end = sync.fetch_action_event_candidate(
+                Ticker(), date(2026, 10, 15), period="1y"
+            )
+
+        self.assertEqual(dividends, [])
+        self.assertEqual(splits, [])
+        self.assertEqual(start, date(2025, 10, 15))
+        self.assertEqual(end, date(2026, 10, 15))
+
     def test_pre_market_sync_uses_latest_completed_xtks_session(self):
         before_open = datetime(2026, 10, 16, 6, 0, tzinfo=sync.JST)
         after_close = datetime(2026, 10, 16, 21, 30, tzinfo=sync.JST)
