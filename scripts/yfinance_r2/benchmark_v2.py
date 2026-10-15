@@ -70,17 +70,25 @@ def main() -> int:
         sync.count_yfinance_call("history_latest_daily_5d")
         attempt("history_latest_daily_5d", lambda: collector.history_rows(ticker, "1d", "5d"), failures)
 
-        def fetch_recent_or_full():
+        def fetch_recent_or_full() -> bool:
             if is_long_history:
                 sync.fetch_repaired_action_history(ticker, session_date, period="max")
-                return
-            dividends, splits, _, _ = sync.fetch_repaired_action_history(ticker, session_date, period="1y")
+                return False
+            _, splits, _, _ = sync.fetch_repaired_action_history(ticker, session_date, period="1y")
             if splits:
                 sync.fetch_repaired_action_history(ticker, session_date, period="max")
+                return True
+            return False
 
-        attempt("history_actions", fetch_recent_or_full, failures)
-        if is_long_history:
-            attempt("history_monthly_initial_10y", lambda: sync.monthly_history_rows(ticker, initial=True), failures)
+        split_refresh = False
+        try:
+            split_refresh = fetch_recent_or_full()
+        except Exception as exc:
+            failures[type(exc).__name__] += 1
+            print(f"history_actions failed: {type(exc).__name__}: {str(exc)[:240]}", file=sys.stderr, flush=True)
+        if is_long_history or split_refresh:
+            label = "history_year_end_prices_split_refresh_8y" if split_refresh else "history_year_end_prices_initial_8y"
+            attempt(label, lambda: sync.monthly_history_rows(ticker, initial=True, as_of=session_date), failures)
         if is_financial:
             for name, request in (
                 ("income_statement_yearly", lambda: ticker.get_income_stmt(freq="yearly")),
@@ -104,7 +112,7 @@ def main() -> int:
         "failed_requests": dict(sorted(failures.items())),
         "r2_accessed": False,
         "r2_written": False,
-        "note": "High-level yfinance method invocations; excludes hidden HTTP retries and R2 publication work.",
+        "note": "Measures daily profile/close/actions plus rotating eight-year December prices and split-triggered refreshes; excludes hidden HTTP retries and R2 publication work.",
     }
     print("BENCHMARK_RESULT=" + json.dumps(report, ensure_ascii=False, sort_keys=True), flush=True)
     return 1 if failures else 0

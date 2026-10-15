@@ -14,6 +14,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -33,6 +34,8 @@ OLD_ROOT = "market/yfinance"
 MAX_DAILY_ATTEMPTS = 4
 FULL_HISTORY_BUCKETS = 20
 FINANCIAL_BUCKETS = 5
+FINANCIAL_REFRESH_MAX_AGE_DAYS = 45
+FINANCIAL_GROUPS = ("income_statement", "balance_sheet", "cash_flow", "valuation")
 _YF_CALL_LOCK = threading.Lock()
 _YF_CALLS: dict[str, int] = {}
 PROFILE_FIELDS = (
@@ -94,6 +97,23 @@ def is_last_market_session(day: date) -> bool:
         return False
     next_session = calendar.next_session(session)
     return next_session.month != session.month
+
+
+def year_end_price_years(as_of: date) -> tuple[int, int]:
+    latest_year = as_of.year if as_of.month == 12 and is_last_market_session(as_of) else as_of.year - 1
+    return latest_year - 7, latest_year
+
+
+@lru_cache(maxsize=32)
+def last_xtks_session_in_december(year: int) -> date:
+    import exchange_calendars as xcals
+    import pandas as pd
+
+    calendar = xcals.get_calendar("XTKS")
+    sessions = calendar.sessions_in_range(pd.Timestamp(date(year, 12, 1)), pd.Timestamp(date(year, 12, 31)))
+    if len(sessions) == 0:
+        raise RuntimeError(f"XTKS calendar has no December sessions for {year}")
+    return sessions[-1].date()
 
 
 def safe_symbol(symbol: str) -> str:
@@ -313,25 +333,103 @@ def replace_dated_history(
     return collector.merge_dated(retained, fresh, key)
 
 
-def monthly_history_rows(ticker: Any, *, initial: bool) -> list[dict[str, Any]]:
-    count_yfinance_call("history_monthly_initial_10y" if initial else "history_monthly_incremental_5d")
-    frame = ticker.history(
-        period="10y" if initial else "5d", interval="1d", auto_adjust=False,
-        actions=False, repair=True,
-        timeout=float(os.environ.get("YFINANCE_HTTP_TIMEOUT_SECONDS", "30")),
-    )
+def monthly_history_rows(ticker: Any, *, initial: bool, as_of: date) -> list[dict[str, Any]]:
+    first_year, latest_year = year_end_price_years(as_of)
+    if initial:
+        count_yfinance_call("history_year_end_prices_initial_8y")
+        frame = ticker.history(
+            start=date(first_year, 12, 1), end=date(latest_year + 1, 1, 1),
+            interval="1mo", auto_adjust=False, actions=False, repair=True,
+            timeout=float(os.environ.get("YFINANCE_HTTP_TIMEOUT_SECONDS", "30")),
+        )
+    else:
+        count_yfinance_call("history_year_end_price_incremental_5d")
+        frame = ticker.history(
+            period="5d", interval="1d", auto_adjust=False, actions=False, repair=True,
+            timeout=float(os.environ.get("YFINANCE_HTTP_TIMEOUT_SECONDS", "30")),
+        )
     latest_by_month: dict[str, dict[str, Any]] = {}
     if frame is None or frame.empty:
         return []
     for timestamp, row in frame.iterrows():
         point_date = date_value(timestamp)
         close = finite_number(row.get("Close"))
-        if point_date and close and close > 0:
-            month = point_date.strftime("%Y-%m")
-            point = {"month": month, "date": point_date.isoformat(), "close": close}
+        if point_date and close and close > 0 and point_date.month == 12 and first_year <= point_date.year <= latest_year:
+            month = f"{point_date.year}-12"
+            point = {"month": month, "date": last_xtks_session_in_december(point_date.year).isoformat(), "close": close}
             if month not in latest_by_month or point["date"] > latest_by_month[month]["date"]:
                 latest_by_month[month] = point
     return [latest_by_month[month] for month in sorted(latest_by_month)]
+
+
+def completed_close_for_session(daily: list[dict[str, Any]], session_date: date) -> dict[str, Any]:
+    """Require Yahoo's daily Close for this XTKS session; never publish a stale quote as today's."""
+    matches = [
+        row for row in daily
+        if str(row.get("date") or "")[:10] == session_date.isoformat()
+        and (finite_number(row.get("close")) or 0) > 0
+    ]
+    if not matches:
+        raise RuntimeError(f"yfinance returned no closing price for Japan session {session_date.isoformat()}")
+    return matches[-1]
+
+
+def has_new_split(
+    fresh_splits: list[dict[str, Any]], prior_splits: list[dict[str, Any]],
+) -> bool:
+    """Detect a newly reported event or changed ratio, independent of prior fetch dates."""
+    previous = {
+        str(row.get("date") or "")[:10]: finite_number(row.get("ratio"))
+        for row in prior_splits if row.get("date")
+    }
+    return any(
+        (event_date := str(row.get("date") or "")[:10])
+        and (event_date not in previous or finite_number(row.get("ratio")) != previous[event_date])
+        for row in fresh_splits
+    )
+
+
+def year_end_price_refresh_required(
+    *, previous_monthly: bool, refresh_monthly: bool, initialize_monthly: bool,
+    retry_monthly: bool, new_split_detected: bool,
+) -> bool:
+    return (
+        (previous_monthly and refresh_monthly)
+        or (not previous_monthly and initialize_monthly)
+        or retry_monthly
+        or new_split_detected
+    )
+
+
+def financial_period_marker(info: dict[str, Any]) -> str | None:
+    markers = {
+        key: marker.isoformat() if (marker := date_value(info.get(key))) else None
+        for key in ("lastFiscalYearEnd", "mostRecentQuarter")
+    }
+    if not any(markers.values()):
+        return None
+    return json.dumps(markers, sort_keys=True, separators=(",", ":"))
+
+
+def financial_failed_groups(field_status: dict[str, Any]) -> set[str]:
+    return {
+        group for group in FINANCIAL_GROUPS
+        if field_status.get(f"financial_{group}") == "failed"
+    }
+
+
+def financial_refresh_due(
+    *, info: dict[str, Any], prior_sync: dict[str, Any], as_of: date,
+    initialize_due: bool, retry_pending: bool,
+) -> tuple[bool, str | None, bool]:
+    marker = financial_period_marker(info)
+    previous_marker = prior_sync.get("financial_period_marker")
+    initialized = prior_sync.get("financials_initialized") is True
+    marker_changed = bool(initialized and marker and previous_marker and marker != previous_marker)
+    last_checked = date_value(prior_sync.get("financials_last_checked_session_date"))
+    stale = last_checked is None and not initialized
+    stale = stale or bool(last_checked and as_of >= last_checked + timedelta(days=FINANCIAL_REFRESH_MAX_AGE_DAYS))
+    return initialize_due or retry_pending or marker_changed or stale, marker, marker_changed
 
 
 def read_monthly_points(client: Any, bucket: str, symbol: str, year: int) -> list[dict[str, Any]]:
@@ -358,12 +456,12 @@ def save_monthly_prices(
     safe = safe_symbol(symbol)
     month_index = as_of.year * 12 + as_of.month - 1 - 12
     cutoff_hot = date(month_index // 12, month_index % 12 + 1, 1)
-    cutoff_archive = years_before(as_of, 10)
-    # Hot storage includes the current month and the previous twelve months.
+    first_year, latest_year = year_end_price_years(as_of)
+    # Keep only the eight most recent completed December closes. A close from
+    # the latest 13 months stays hot; older retained year-end prices are archived.
     for year in range(as_of.year - 10, as_of.year + 1):
         points = read_monthly_points(client, bucket, symbol, year)
-        if year == as_of.year:
-            points.extend(point for point in fresh if point["month"].startswith(f"{year}-"))
+        points.extend(point for point in fresh if point["month"].startswith(f"{year}-"))
         if not points:
             continue
         unique = {str(item.get("month")): item for item in points if item.get("month")}
@@ -372,10 +470,13 @@ def save_monthly_prices(
         archived: list[dict[str, Any]] = []
         for point in merged:
             month = str(point["month"])
+            if not re.fullmatch(r"\d{4}-12", month):
+                continue
+            point_year = int(month[:4])
+            if point_year < first_year or point_year > latest_year:
+                continue
             month_date = date.fromisoformat(f"{month}-01")
             point_date = date.fromisoformat(str(point.get("date") or f"{month}-01")[:10])
-            if point_date < cutoff_archive:
-                continue
             if month_date < cutoff_hot:
                 archived.append(point)
             else:
@@ -401,7 +502,7 @@ def save_monthly_prices(
         if not archived:
             client.delete_object(Bucket=bucket, Key=archive_key)
 
-    # Remove year partitions that have aged completely beyond the ten-year window.
+    # Remove year partitions that are no longer part of the rolling eight-year window.
     expired_year = as_of.year - 10
     for prefix in (
         object_key("archive", "prices", "monthly", safe) + "/",
@@ -488,9 +589,13 @@ def prior_financial_maps(client: Any, bucket: str, symbol: str) -> tuple[dict[st
     return statements, valuations
 
 
-def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: str, symbol: str
+def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: str, symbol: str,
+                       *, fetch_groups: set[str] | None = None,
+                       previous_status: dict[str, Any] | None = None
                        ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     retrieval_status: dict[str, Any] = {}
+    requested_groups = set(FINANCIAL_GROUPS) if fetch_groups is None else set(fetch_groups)
+    previous_status = previous_status or {}
 
     def fetch_metrics(name: str, request: Any, fields: dict[str, str]) -> dict[str, dict[str, Any]]:
         try:
@@ -502,21 +607,25 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             print(f"Financial field {name} unavailable: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
             return {}
 
-    fresh_income = fetch_metrics("income_statement", lambda: (count_yfinance_call("income_statement_yearly"), ticker.get_income_stmt(freq="yearly"))[1], INCOME_FIELDS)
-    fresh_balance = fetch_metrics("balance_sheet", lambda: (count_yfinance_call("balance_sheet_yearly"), ticker.get_balance_sheet(freq="yearly"))[1], BALANCE_FIELDS)
-    fresh_cash = fetch_metrics("cash_flow", lambda: (count_yfinance_call("cash_flow_yearly"), ticker.get_cash_flow(freq="yearly"))[1], CASH_FLOW_FIELDS)
+    fresh_income = fetch_metrics("income_statement", lambda: (count_yfinance_call("income_statement_yearly"), ticker.get_income_stmt(freq="yearly"))[1], INCOME_FIELDS) if "income_statement" in requested_groups else {}
+    fresh_balance = fetch_metrics("balance_sheet", lambda: (count_yfinance_call("balance_sheet_yearly"), ticker.get_balance_sheet(freq="yearly"))[1], BALANCE_FIELDS) if "balance_sheet" in requested_groups else {}
+    fresh_cash = fetch_metrics("cash_flow", lambda: (count_yfinance_call("cash_flow_yearly"), ticker.get_cash_flow(freq="yearly"))[1], CASH_FLOW_FIELDS) if "cash_flow" in requested_groups else {}
+    for group in FINANCIAL_GROUPS:
+        if group not in requested_groups:
+            retrieval_status[group] = previous_status.get(f"financial_{group}", "not_scheduled")
     legacy_income = legacy_frame_map(old, "income_statement", INCOME_FIELDS)
     legacy_balance = legacy_frame_map(old, "balance_sheet", BALANCE_FIELDS)
     legacy_cash = legacy_frame_map(old, "cash_flow", CASH_FLOW_FIELDS)
     prior_v2, prior_v2_valuation = prior_financial_maps(client, bucket, symbol)
-    try:
-        count_yfinance_call("valuation_measures_yearly")
-        valuation_frame = ticker.get_valuation_measures(freq="yearly", periods=10)
-        retrieval_status["valuation"] = "available" if valuation_frame is not None and not getattr(valuation_frame, "empty", True) else "empty"
-    except Exception as exc:
-        valuation_frame = None
-        retrieval_status["valuation"] = "failed"
-        print(f"Financial field valuation unavailable: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
+    valuation_frame = None
+    if "valuation" in requested_groups:
+        try:
+            count_yfinance_call("valuation_measures_yearly")
+            valuation_frame = ticker.get_valuation_measures(freq="yearly", periods=10)
+            retrieval_status["valuation"] = "available" if valuation_frame is not None and not getattr(valuation_frame, "empty", True) else "empty"
+        except Exception as exc:
+            retrieval_status["valuation"] = "failed"
+            print(f"Financial field valuation unavailable: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
     valuation: dict[str, dict[str, Any]] = {}
     if valuation_frame is not None and not getattr(valuation_frame, "empty", True):
         for period in valuation_frame.columns:
@@ -583,6 +692,7 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
                 **valuation_values,
             })
     retrieval_status["fields"] = field_retrieval_status
+    retrieval_status["requested_groups"] = sorted(requested_groups)
     retrieval_status["legacy_source"] = "migrated" if any((legacy_income, legacy_balance, legacy_cash, legacy_valuation)) else "not_found"
     return statements, valuation_rows, retrieval_status
 
@@ -699,7 +809,8 @@ def archived_legacy_document(client: Any, bucket: str, symbol: str, old: dict[st
 
 
 def verify_v2_transfer(client: Any, bucket: str, symbol: str, old: dict[str, Any],
-                       statements: list[dict[str, Any]], monthly: list[dict[str, Any]]) -> None:
+                       statements: list[dict[str, Any]], monthly: list[dict[str, Any]],
+                       as_of: date) -> None:
     safe = safe_symbol(symbol)
     if not read_json(client, bucket, object_key("securities", safe, "profile.json")):
         raise RuntimeError(f"v2 profile missing before legacy cleanup: {symbol}")
@@ -719,12 +830,14 @@ def verify_v2_transfer(client: Any, bucket: str, symbol: str, old: dict[str, Any
         missing = required_dates - stored_dates
         if missing:
             raise RuntimeError(f"v2 {family} events missing before legacy cleanup for {symbol}: {len(missing)}")
+    first_year, latest_year = year_end_price_years(as_of)
     for point in monthly:
         point_date = date_value(point.get("date"))
-        if point_date is None or point_date < years_before(datetime.now(JST).date(), 10):
+        month = str(point.get("month") or "")
+        point_year = int(month[:4]) if re.fullmatch(r"\d{4}-12", month) else None
+        if point_date is None or point_year is None or not first_year <= point_year <= latest_year:
             continue
-        year = int(str(point.get("month", "0000"))[:4])
-        stored_months = {str(row.get("month")) for row in read_monthly_points(client, bucket, symbol, year)}
+        stored_months = {str(row.get("month")) for row in read_monthly_points(client, bucket, symbol, point_year)}
         if point.get("month") not in stored_months:
             raise RuntimeError(f"v2 monthly price missing before legacy cleanup: {symbol} {point.get('month')}")
     for row in statements:
@@ -751,10 +864,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         raise RuntimeError("yfinance returned no company profile")
     count_yfinance_call("history_latest_daily_5d")
     daily = collector.history_rows(ticker, "1d", "5d")
-    daily = [row for row in daily if finite_number(row.get("close")) and float(row["close"]) > 0]
-    if not daily:
-        raise RuntimeError("yfinance returned no completed daily close")
-    latest = max(daily, key=lambda row: str(row.get("date") or ""))
+    latest = completed_close_for_session(daily, as_of)
     price_date = date.fromisoformat(str(latest["date"])[:10])
     if price_date > as_of:
         raise RuntimeError("yfinance daily close is newer than the Japan session date")
@@ -781,14 +891,15 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     }
     full_history_attempted = refresh_full_history
     full_history_refreshed = False
+    new_split_detected = False
     try:
         fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
             ticker, as_of, period="max" if refresh_full_history else "1y",
         )
         full_history_refreshed = refresh_full_history
-        latest_recent_split = max((str(row.get("date") or "") for row in fresh_splits), default="")
         prior_full_coverage_end = str(prior_action_history.get("full_history_coverage_end") or "")
-        if not refresh_full_history and latest_recent_split and latest_recent_split > prior_full_coverage_end:
+        new_split_detected = not refresh_full_history and has_new_split(fresh_splits, prior_splits)
+        if new_split_detected:
             # A newly observed split can change the interpretation of older actions and prices.
             full_history_attempted = True
             fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
@@ -829,15 +940,25 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "splits": {str(row.get("date") or "")[:4] for row in prior_splits + splits if row.get("date")},
     }
 
-    previous_monthly = prior_sync.get("monthly_history_initialized") is True
-    update_monthly_now = (
-        (previous_monthly and refresh_monthly)
-        or (not previous_monthly and initialize_monthly)
-        or retry_monthly
+    previous_monthly = prior_sync.get("monthly_history_schema_version") == 2
+    update_monthly_now = year_end_price_refresh_required(
+        previous_monthly=previous_monthly,
+        refresh_monthly=refresh_monthly,
+        initialize_monthly=initialize_monthly,
+        retry_monthly=retry_monthly,
+        new_split_detected=new_split_detected,
     )
     if update_monthly_now:
         try:
-            monthly = monthly_history_rows(ticker, initial=not previous_monthly)
+            monthly = monthly_history_rows(
+                ticker,
+                initial=(
+                    not previous_monthly
+                    or prior_sync.get("monthly_retry_pending") is True
+                    or new_split_detected
+                ),
+                as_of=as_of,
+            )
             monthly_status = "available" if monthly else "empty"
         except Exception as exc:
             monthly = []
@@ -1054,7 +1175,13 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "last_attempt_at": iso_now(),
         "last_success_at": iso_now(),
         "last_success_session_date": as_of.isoformat(),
-        "monthly_history_initialized": previous_monthly or (update_monthly_now and monthly_status != "failed"),
+        "monthly_history_initialized": bool(prior_sync.get("monthly_history_initialized")) or (
+            update_monthly_now and monthly_status != "failed"
+        ),
+        "monthly_history_schema_version": (
+            2 if previous_monthly or (update_monthly_now and monthly_status != "failed")
+            else prior_sync.get("monthly_history_schema_version")
+        ),
         "legacy_monthly_migrated": bool(prior_sync.get("legacy_monthly_migrated")) or legacy_monthly_migration_pending,
         "full_history_initialized": bool(prior_sync.get("full_history_initialized")) or full_history_refreshed,
         "financials_initialized": bool(prior_sync.get("financials_initialized")) or (
@@ -1075,13 +1202,14 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "source": "Yahoo Finance via yfinance",
     }
     put_json_if_changed(client, bucket, object_key("securities", safe, "sync.json"), sync)
-    if old and sync["full_history_initialized"] and sync["financials_initialized"] and sync["monthly_history_initialized"]:
+    if (old and sync["full_history_initialized"] and sync["financials_initialized"]
+            and sync["monthly_history_schema_version"] == 2):
         stored_statements, _ = prior_financial_maps(client, bucket, symbol)
         verification_statements = [
             {"period_end": period_end, **values}
             for period_end, values in sorted(stored_statements.items())
         ]
-        verify_v2_transfer(client, bucket, symbol, old, verification_statements, monthly)
+        verify_v2_transfer(client, bucket, symbol, old, verification_statements, monthly, as_of)
         archived_legacy_document(client, bucket, symbol, old)
     return {"code": code, "symbol": symbol, "name": profile["display_name"], "price": close,
             "quote_date": price_date.isoformat(), "annual_dividend_per_share": trailing_dividends,
@@ -1229,9 +1357,11 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
         full_history_bucket = int(schedule_state.get("next_full_history_bucket", 0)) % FULL_HISTORY_BUCKETS
         financial_bucket = int(schedule_state.get("next_financial_bucket", 0)) % FINANCIAL_BUCKETS
     month_end_session = is_last_market_session(session_date)
+    december_end_session = month_end_session and session_date.month == 12
     print(
         f"Rotation: long_history={full_history_bucket + 1}/{FULL_HISTORY_BUCKETS}, "
-        f"financials={financial_bucket + 1}/{FINANCIAL_BUCKETS}, month_end={month_end_session}",
+        f"financials={financial_bucket + 1}/{FINANCIAL_BUCKETS}, "
+        f"december_price_refresh={december_end_session}",
         flush=True,
     )
     securities = [row["security_code_display"] for row in fetched]
@@ -1262,11 +1392,12 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
                               or previous_sync.get("long_history_retry_pending") is True)
         retry_financials = (bucket_for(code, FINANCIAL_BUCKETS) == financial_bucket
                             or previous_sync.get("financial_retry_pending") is True)
+        previous_monthly = previous_sync.get("monthly_history_schema_version") == 2
         initialize_monthly = bucket_for(code, FULL_HISTORY_BUCKETS) == full_history_bucket
         retry_monthly = (
             previous_sync.get("monthly_retry_pending") is True
-            or (month_end_session and previous_sync.get("monthly_history_initialized") is True)
-            or (initialize_monthly and previous_sync.get("monthly_history_initialized") is not True)
+            or (december_end_session and previous_monthly)
+            or (initialize_monthly and not previous_monthly)
         )
         record_attempt_start(client, bucket, code, symbol, session_date, attempt_count)
         try:
@@ -1275,7 +1406,7 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
                 attempt_count=attempt_count,
                 refresh_full_history=retry_full_history,
                 refresh_financials=retry_financials,
-                refresh_monthly=month_end_session,
+                refresh_monthly=december_end_session,
                 initialize_monthly=initialize_monthly,
                 retry_monthly=retry_monthly,
             )
@@ -1351,7 +1482,7 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
             "full_history_bucket_count": FULL_HISTORY_BUCKETS,
             "financial_bucket": financial_bucket,
             "financial_bucket_count": FINANCIAL_BUCKETS,
-            "month_end_session": month_end_session,
+            "december_end_session": december_end_session,
         },
     }
     put_json_if_changed(client, bucket, object_key("publications", "current.json"), publication)

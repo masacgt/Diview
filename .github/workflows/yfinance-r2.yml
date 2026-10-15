@@ -1,15 +1,24 @@
 name: Sync Japanese market data to R2 v2
 
 on:
+  push:
+    paths:
+      - "scripts/yfinance_r2/**"
+      - ".github/workflows/yfinance-r2.yml"
+  pull_request:
+    paths:
+      - "scripts/yfinance_r2/**"
+      - ".github/workflows/yfinance-r2.yml"
   schedule:
     # 12:17 UTC is 21:17 JST, after the Tokyo market close and away from the hourly boundary.
     - cron: "17 12 * * 1-5"
   workflow_dispatch:
     inputs:
       run_mode:
-        description: Run a non-publishing sample measurement or the full R2 sync
+        description: Run deterministic tests, a non-publishing sample measurement, or the full R2 sync
         type: choice
         options:
+          - test
           - benchmark
           - sync
         default: benchmark
@@ -29,7 +38,7 @@ concurrency:
 
 jobs:
   market-calendar:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'sync')
     runs-on: ubuntu-latest
     outputs:
       is_open: ${{ steps.check.outputs.is_open }}
@@ -48,7 +57,7 @@ jobs:
 
   v2-daily-sync:
     needs: market-calendar
-    if: needs.market-calendar.outputs.is_open == 'true' && (github.event_name == 'schedule' || inputs.run_mode == 'sync')
+    if: needs.market-calendar.outputs.is_open == 'true' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'sync'))
     runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
@@ -101,3 +110,19 @@ jobs:
           path: benchmark-output.txt
           if-no-files-found: ignore
           retention-days: 30
+
+  yfinance-sync-tests:
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'test')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/yfinance_r2/requirements.txt
+      - name: Install test dependencies
+        run: python -m pip install "yfinance==1.7.0" "boto3>=1.35,<2"
+      - name: Run deterministic sync tests without Yahoo or R2 access
+        run: python -m unittest discover -s scripts/yfinance_r2 -p 'test_*.py' -v
