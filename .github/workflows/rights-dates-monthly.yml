@@ -23,9 +23,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: scripts/yfinance_r2/requirements.txt
-      - name: Install calculation and R2 dependencies
-        run: python -m pip install -r scripts/yfinance_r2/requirements.txt
+          cache-dependency-path: scripts/yfinance_r2/requirements-rights.txt
+      - name: Install rights-date calculation and R2 dependencies
+        run: python -m pip install -r scripts/yfinance_r2/requirements-rights.txt
       - name: Calculate rights dates from stored yfinance v2 events
         run: python scripts/yfinance_r2/calculate_rights_dates.py --upload
         env:
