@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import gzip
 import json
 import math
 import os
 import re
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
@@ -28,7 +30,11 @@ UTC = timezone.utc
 JST = ZoneInfo("Asia/Tokyo")
 ROOT = "market/yfinance/v2"
 OLD_ROOT = "market/yfinance"
-RETRY_DELAYS = (15 * 60, 60 * 60, 4 * 60 * 60)
+MAX_DAILY_ATTEMPTS = 4
+FULL_HISTORY_BUCKETS = 20
+FINANCIAL_BUCKETS = 5
+_YF_CALL_LOCK = threading.Lock()
+_YF_CALLS: dict[str, int] = {}
 PROFILE_FIELDS = (
     "quoteType", "exchange", "fullExchangeName", "market", "currency", "country",
     "website", "longBusinessSummary", "marketCap", "sharesOutstanding",
@@ -66,6 +72,28 @@ def now_utc() -> datetime:
 
 def iso_now() -> str:
     return now_utc().isoformat()
+
+
+def count_yfinance_call(name: str) -> None:
+    with _YF_CALL_LOCK:
+        _YF_CALLS[name] = _YF_CALLS.get(name, 0) + 1
+
+
+def bucket_for(code: str, count: int) -> int:
+    digest = hashlib.sha256(code.encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big") % count
+
+
+def is_last_market_session(day: date) -> bool:
+    import exchange_calendars as xcals
+    import pandas as pd
+
+    calendar = xcals.get_calendar("XTKS")
+    session = pd.Timestamp(day)
+    if not calendar.is_session(session):
+        return False
+    next_session = calendar.next_session(session)
+    return next_session.month != session.month
 
 
 def safe_symbol(symbol: str) -> str:
@@ -243,12 +271,13 @@ def series_records(
     return rows
 
 
-def fetch_repaired_action_history(ticker: Any, as_of: date) -> tuple[
+def fetch_repaired_action_history(ticker: Any, as_of: date, *, period: str = "max") -> tuple[
     list[dict[str, Any]], list[dict[str, Any]], date, date
 ]:
     """Fetch Yahoo's complete daily action history with yfinance's repair pass enabled."""
+    count_yfinance_call(f"history_actions_{period}")
     frame = ticker.history(
-        period="max", interval="1d", auto_adjust=False, actions=True,
+        period=period, interval="1d", auto_adjust=False, actions=True,
         repair=True, keepna=True,
         timeout=float(os.environ.get("YFINANCE_HTTP_TIMEOUT_SECONDS", "30")),
     )
@@ -285,8 +314,9 @@ def replace_dated_history(
 
 
 def monthly_history_rows(ticker: Any, *, initial: bool) -> list[dict[str, Any]]:
+    count_yfinance_call("history_monthly_initial_10y" if initial else "history_monthly_incremental_5d")
     frame = ticker.history(
-        period="10y" if initial else "3mo", interval="1d", auto_adjust=False,
+        period="10y" if initial else "5d", interval="1d", auto_adjust=False,
         actions=False, repair=True,
         timeout=float(os.environ.get("YFINANCE_HTTP_TIMEOUT_SECONDS", "30")),
     )
@@ -472,14 +502,15 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             print(f"Financial field {name} unavailable: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
             return {}
 
-    fresh_income = fetch_metrics("income_statement", lambda: ticker.get_income_stmt(freq="yearly"), INCOME_FIELDS)
-    fresh_balance = fetch_metrics("balance_sheet", lambda: ticker.get_balance_sheet(freq="yearly"), BALANCE_FIELDS)
-    fresh_cash = fetch_metrics("cash_flow", lambda: ticker.get_cash_flow(freq="yearly"), CASH_FLOW_FIELDS)
+    fresh_income = fetch_metrics("income_statement", lambda: (count_yfinance_call("income_statement_yearly"), ticker.get_income_stmt(freq="yearly"))[1], INCOME_FIELDS)
+    fresh_balance = fetch_metrics("balance_sheet", lambda: (count_yfinance_call("balance_sheet_yearly"), ticker.get_balance_sheet(freq="yearly"))[1], BALANCE_FIELDS)
+    fresh_cash = fetch_metrics("cash_flow", lambda: (count_yfinance_call("cash_flow_yearly"), ticker.get_cash_flow(freq="yearly"))[1], CASH_FLOW_FIELDS)
     legacy_income = legacy_frame_map(old, "income_statement", INCOME_FIELDS)
     legacy_balance = legacy_frame_map(old, "balance_sheet", BALANCE_FIELDS)
     legacy_cash = legacy_frame_map(old, "cash_flow", CASH_FLOW_FIELDS)
     prior_v2, prior_v2_valuation = prior_financial_maps(client, bucket, symbol)
     try:
+        count_yfinance_call("valuation_measures_yearly")
         valuation_frame = ticker.get_valuation_measures(freq="yearly", periods=10)
         retrieval_status["valuation"] = "available" if valuation_frame is not None and not getattr(valuation_frame, "empty", True) else "empty"
     except Exception as exc:
@@ -705,16 +736,20 @@ def verify_v2_transfer(client: Any, bucket: str, symbol: str, old: dict[str, Any
 
 
 def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date,
-                   *, attempt_count: int = 1) -> dict[str, Any]:
+                   *, attempt_count: int = 1, refresh_full_history: bool = False,
+                   refresh_financials: bool = False, refresh_monthly: bool = False,
+                   initialize_monthly: bool = False, retry_monthly: bool = False) -> dict[str, Any]:
     safe = safe_symbol(symbol)
     prior_sync = read_json(client, bucket, object_key("securities", safe, "sync.json")) or {}
     prior_profile = read_json(client, bucket, object_key("securities", safe, "profile.json")) or {}
     prior_current = read_json(client, bucket, object_key("securities", safe, "current.json")) or {}
     old = legacy_document(client, bucket, symbol)
     ticker = yf.Ticker(symbol)
+    count_yfinance_call("ticker_get_info")
     info = ticker.get_info()
     if not isinstance(info, dict) or not info:
         raise RuntimeError("yfinance returned no company profile")
+    count_yfinance_call("history_latest_daily_5d")
     daily = collector.history_rows(ticker, "1d", "5d")
     daily = [row for row in daily if finite_number(row.get("close")) and float(row["close"]) > 0]
     if not daily:
@@ -730,17 +765,36 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     prior_dividends.extend(row for row in old_actions.get("dividends", []) if isinstance(row, dict))
     prior_splits.extend(row for row in old_actions.get("stock_splits", []) if isinstance(row, dict))
     action_status: dict[str, str] = {}
+    prior_action_history = prior_current.get("action_history", {})
+    if not isinstance(prior_action_history, dict):
+        prior_action_history = {}
     action_retrieval: dict[str, Any] = {
         "source": "yfinance_history",
         "yfinance_version": yf.__version__,
-        "period": "max",
+        "period": "max" if refresh_full_history else "1y",
         "interval": "1d",
         "repair": True,
+        "full_history_refreshed": False,
+        "full_history_coverage_end": prior_action_history.get("full_history_coverage_end"),
         "dividend_amount_basis": "yfinance_split_adjusted_assumption",
         "split_ratio_reapplied_to_dividends": False,
     }
+    full_history_attempted = refresh_full_history
+    full_history_refreshed = False
     try:
-        fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(ticker, as_of)
+        fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
+            ticker, as_of, period="max" if refresh_full_history else "1y",
+        )
+        full_history_refreshed = refresh_full_history
+        latest_recent_split = max((str(row.get("date") or "") for row in fresh_splits), default="")
+        prior_full_coverage_end = str(prior_action_history.get("full_history_coverage_end") or "")
+        if not refresh_full_history and latest_recent_split and latest_recent_split > prior_full_coverage_end:
+            # A newly observed split can change the interpretation of older actions and prices.
+            full_history_attempted = True
+            fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
+                ticker, as_of, period="max",
+            )
+            full_history_refreshed = True
         dividends = replace_dated_history(
             prior_dividends, fresh_dividends, "date", action_coverage_start, action_coverage_end,
         )
@@ -751,6 +805,13 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         action_status["splits"] = "available" if fresh_splits else "empty"
         action_retrieval.update({
             "status": "success",
+            "period": "max" if full_history_refreshed else "1y",
+            "full_history_refreshed": full_history_refreshed,
+            "full_history_attempted": full_history_attempted,
+            "full_history_coverage_end": (
+                action_coverage_end.isoformat() if full_history_refreshed
+                else prior_full_coverage_end or None
+            ),
             "coverage_start": action_coverage_start.isoformat(),
             "coverage_end": action_coverage_end.isoformat(),
             "dividend_event_count": len(fresh_dividends),
@@ -769,18 +830,30 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     }
 
     previous_monthly = prior_sync.get("monthly_history_initialized") is True
-    try:
-        monthly = monthly_history_rows(ticker, initial=not previous_monthly)
-        monthly_status = "available" if monthly else "empty"
-    except Exception as exc:
+    update_monthly_now = (
+        (previous_monthly and refresh_monthly)
+        or (not previous_monthly and initialize_monthly)
+        or retry_monthly
+    )
+    if update_monthly_now:
+        try:
+            monthly = monthly_history_rows(ticker, initial=not previous_monthly)
+            monthly_status = "available" if monthly else "empty"
+        except Exception as exc:
+            monthly = []
+            monthly_status = "failed"
+            print(f"Monthly history unavailable for {symbol}: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
+    else:
         monthly = []
-        monthly_status = "failed"
-        print(f"Monthly history unavailable for {symbol}: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
+        monthly_status = prior_current.get("field_status", {}).get("monthly_prices", "not_scheduled")
     old_prices = old.get("price_history") or {}
     migrated_months = [
         {"month": str(row.get("date", ""))[:7], "date": row.get("date"), "close": row.get("close")}
         for row in old_prices.get("1mo", []) if row.get("date") and row.get("close")
     ]
+    legacy_monthly_migration_pending = bool(migrated_months) and not bool(
+        prior_sync.get("legacy_monthly_migrated")
+    )
     merged_months = {str(point["month"]): point for point in migrated_months}
     merged_months.update({str(point["month"]): point for point in monthly})
     monthly = [merged_months[month] for month in sorted(merged_months)]
@@ -789,7 +862,20 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         point["close"] = float(point["close"])
         point["currency"] = str(info.get("currency") or "JPY")
 
-    statements, valuation, financial_status = collect_financials(ticker, old, client, bucket, symbol)
+    if refresh_financials:
+        statements, valuation, financial_status = collect_financials(ticker, old, client, bucket, symbol)
+        financial_retry_pending = any(value == "failed" for value in financial_status.values() if isinstance(value, str))
+        if isinstance(financial_status.get("fields"), dict):
+            financial_retry_pending = financial_retry_pending or any(
+                value == "failed" for value in financial_status["fields"].values()
+            )
+    else:
+        statements, valuation = [], []
+        financial_status = prior_current.get("field_status", {}).get("financial_fields", {})
+        if not isinstance(financial_status, dict):
+            financial_status = {}
+        financial_status = {**financial_status, "refresh_status": "not_scheduled"}
+        financial_retry_pending = bool(prior_sync.get("financial_retry_pending"))
     names = japanese_names(info)
     profile = {
         "schema_version": 1,
@@ -932,7 +1018,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             else:
                 client.delete_object(Bucket=bucket, Key=hot_key)
 
-    save_monthly_prices(client, bucket, symbol, monthly, as_of=as_of)
+    if update_monthly_now or legacy_monthly_migration_pending:
+        save_monthly_prices(client, bucket, symbol, monthly, as_of=as_of)
     for row in statements:
         year = str(row.get("period_end", ""))[:4]
         if year:
@@ -967,7 +1054,19 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "last_attempt_at": iso_now(),
         "last_success_at": iso_now(),
         "last_success_session_date": as_of.isoformat(),
-        "monthly_history_initialized": previous_monthly or monthly_status != "failed",
+        "monthly_history_initialized": previous_monthly or (update_monthly_now and monthly_status != "failed"),
+        "legacy_monthly_migrated": bool(prior_sync.get("legacy_monthly_migrated")) or legacy_monthly_migration_pending,
+        "full_history_initialized": bool(prior_sync.get("full_history_initialized")) or full_history_refreshed,
+        "financials_initialized": bool(prior_sync.get("financials_initialized")) or (
+            refresh_financials and not financial_retry_pending
+        ),
+        "monthly_retry_pending": monthly_status == "failed" or (
+            not update_monthly_now and bool(prior_sync.get("monthly_retry_pending"))
+        ),
+        "long_history_retry_pending": (
+            action_retrieval.get("status") == "failed" and full_history_attempted
+        ) or (not full_history_attempted and bool(prior_sync.get("long_history_retry_pending"))),
+        "financial_retry_pending": financial_retry_pending,
         "failure_reason": f"Field fetch failed: {', '.join(field_failures)}"[:500] if field_failures else None,
         "attempt_count_today": attempt_count,
         "retry_count_today": max(0, attempt_count - 1),
@@ -976,8 +1075,13 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "source": "Yahoo Finance via yfinance",
     }
     put_json_if_changed(client, bucket, object_key("securities", safe, "sync.json"), sync)
-    if old:
-        verify_v2_transfer(client, bucket, symbol, old, statements, monthly)
+    if old and sync["full_history_initialized"] and sync["financials_initialized"] and sync["monthly_history_initialized"]:
+        stored_statements, _ = prior_financial_maps(client, bucket, symbol)
+        verification_statements = [
+            {"period_end": period_end, **values}
+            for period_end, values in sorted(stored_statements.items())
+        ]
+        verify_v2_transfer(client, bucket, symbol, old, verification_statements, monthly)
         archived_legacy_document(client, bucket, symbol, old)
     return {"code": code, "symbol": symbol, "name": profile["display_name"], "price": close,
             "quote_date": price_date.isoformat(), "annual_dividend_per_share": trailing_dividends,
@@ -987,7 +1091,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
 
 
 def save_failure(client: Any, bucket: str, code: str, symbol: str, session_date: date, error: Exception,
-                 *, attempt_count: int) -> None:
+                 *, attempt_count: int, retry_full_history: bool = False,
+                 retry_financials: bool = False, retry_monthly: bool = False) -> None:
     safe = safe_symbol(symbol)
     prior = read_json(client, bucket, object_key("securities", safe, "sync.json")) or {}
     prior.update({
@@ -998,6 +1103,9 @@ def save_failure(client: Any, bucket: str, code: str, symbol: str, session_date:
         "attempt_count_today": attempt_count,
         "retry_count_today": max(0, attempt_count - 1),
         "retry_session_date": session_date.isoformat(),
+        "long_history_retry_pending": bool(prior.get("long_history_retry_pending")) or retry_full_history,
+        "financial_retry_pending": bool(prior.get("financial_retry_pending")) or retry_financials,
+        "monthly_retry_pending": bool(prior.get("monthly_retry_pending")) or retry_monthly,
     })
     put_json_if_changed(client, bucket, object_key("securities", safe, "sync.json"), prior)
 
@@ -1089,6 +1197,9 @@ def active_universe(client: Any, bucket: str, fetched: list[dict[str, str]], ses
 
 
 def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
+    started_at = time.perf_counter()
+    with _YF_CALL_LOCK:
+        _YF_CALLS.clear()
     if not publish and not dry_run:
         raise RuntimeError("Specify --publish or --dry-run")
     configure = getattr(collector, "configure_yfinance", None)
@@ -1109,6 +1220,20 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
     old_universe = read_json(client, bucket, object_key("universe", "current.json")) or {}
     old_status = {str(row.get("code")): row for row in old_universe.get("securities", []) if isinstance(row, dict)}
     previous_catalog = read_json(client, bucket, object_key("catalog", "current.json"))
+    schedule_key = object_key("schedules", "current.json")
+    schedule_state = read_json(client, bucket, schedule_key) or {}
+    if schedule_state.get("active_session_date") == session_date.isoformat():
+        full_history_bucket = int(schedule_state.get("active_full_history_bucket", 0)) % FULL_HISTORY_BUCKETS
+        financial_bucket = int(schedule_state.get("active_financial_bucket", 0)) % FINANCIAL_BUCKETS
+    else:
+        full_history_bucket = int(schedule_state.get("next_full_history_bucket", 0)) % FULL_HISTORY_BUCKETS
+        financial_bucket = int(schedule_state.get("next_financial_bucket", 0)) % FINANCIAL_BUCKETS
+    month_end_session = is_last_market_session(session_date)
+    print(
+        f"Rotation: long_history={full_history_bucket + 1}/{FULL_HISTORY_BUCKETS}, "
+        f"financials={financial_bucket + 1}/{FINANCIAL_BUCKETS}, month_end={month_end_session}",
+        flush=True,
+    )
     securities = [row["security_code_display"] for row in fetched]
     results: dict[str, dict[str, Any]] = {}
     failures: dict[str, str] = {}
@@ -1126,50 +1251,62 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
         if (previous_sync.get("status") == "ok"
                 and previous_sync.get("last_success_session_date") == session_date.isoformat()):
             return {"code": code, "symbol": symbol, "status": "ok", "field_failures": []}
-        if attempts_used >= len(RETRY_DELAYS) + 1:
+        if attempts_used >= MAX_DAILY_ATTEMPTS:
+            reason = str(previous_sync.get("failure_reason") or "")
+            fields = reason.removeprefix("Field fetch failed: ").split(", ") if reason else []
             if previous_sync.get("status") == "partial":
-                reason = str(previous_sync.get("failure_reason") or "")
-                failures_today = reason.removeprefix("Field fetch failed: ").split(", ") if reason else []
-                return {"code": code, "symbol": symbol, "status": "partial", "field_failures": failures_today}
-            error = RuntimeError("Daily per-security attempt limit reached")
-            save_failure(client, bucket, code, symbol, session_date, error,
-                         attempt_count=len(RETRY_DELAYS) + 1)
-            raise error
-        if attempts_used:
-            delay = RETRY_DELAYS[attempts_used - 1]
-            print(f"{symbol}: resuming today's retries after {delay}s", file=sys.stderr, flush=True)
-            time.sleep(delay)
-        attempt_count = attempts_used
-        for retry_index in range(attempts_used, len(RETRY_DELAYS) + 1):
-            attempt_count = retry_index + 1
-            record_attempt_start(client, bucket, code, symbol, session_date, attempt_count)
-            try:
-                result = collect_symbol(client, bucket, code, symbol, session_date, attempt_count=attempt_count)
-                if result.get("field_failures") and retry_index < len(RETRY_DELAYS):
-                    delay = RETRY_DELAYS[retry_index]
-                    print(f"{symbol}: field fetch failed; retrying in {delay}s", file=sys.stderr, flush=True)
-                    time.sleep(delay)
-                    continue
-                return result
-            except Exception as exc:
-                error = exc
-                if retry_index < len(RETRY_DELAYS):
-                    delay = RETRY_DELAYS[retry_index]
-                    print(f"{symbol}: attempt {retry_index + 1} failed; retrying in {delay}s", file=sys.stderr, flush=True)
-                    time.sleep(delay)
-        assert error is not None
-        save_failure(client, bucket, code, symbol, session_date, error, attempt_count=attempt_count)
-        raise error
+                return {"code": code, "symbol": symbol, "status": "partial", "field_failures": fields}
+            raise RuntimeError("Daily per-security attempt limit reached")
+        attempt_count = attempts_used + 1
+        retry_full_history = (bucket_for(code, FULL_HISTORY_BUCKETS) == full_history_bucket
+                              or previous_sync.get("long_history_retry_pending") is True)
+        retry_financials = (bucket_for(code, FINANCIAL_BUCKETS) == financial_bucket
+                            or previous_sync.get("financial_retry_pending") is True)
+        initialize_monthly = bucket_for(code, FULL_HISTORY_BUCKETS) == full_history_bucket
+        retry_monthly = (
+            previous_sync.get("monthly_retry_pending") is True
+            or (month_end_session and previous_sync.get("monthly_history_initialized") is True)
+            or (initialize_monthly and previous_sync.get("monthly_history_initialized") is not True)
+        )
+        record_attempt_start(client, bucket, code, symbol, session_date, attempt_count)
+        try:
+            return collect_symbol(
+                client, bucket, code, symbol, session_date,
+                attempt_count=attempt_count,
+                refresh_full_history=retry_full_history,
+                refresh_financials=retry_financials,
+                refresh_monthly=month_end_session,
+                initialize_monthly=initialize_monthly,
+                retry_monthly=retry_monthly,
+            )
+        except Exception as exc:
+            save_failure(
+                client, bucket, code, symbol, session_date, exc,
+                attempt_count=attempt_count, retry_full_history=retry_full_history,
+                retry_financials=retry_financials, retry_monthly=retry_monthly,
+            )
+            raise
 
+    completed_count = 0
     with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
         futures = {pool.submit(process, code): code for code in securities}
         for future in as_completed(futures):
+            completed_count += 1
             code = futures[future]
             try:
                 results[code] = future.result()
             except Exception as exc:
                 failures[code] = f"{type(exc).__name__}: {exc}"
                 print(f"FAILED {code}: {failures[code]}", file=sys.stderr, flush=True)
+            if completed_count % 100 == 0 or completed_count == len(futures):
+                with _YF_CALL_LOCK:
+                    partial_call_count = sum(_YF_CALLS.values())
+                print(
+                    f"Progress {completed_count}/{len(futures)}: success={len(results)}, "
+                    f"failed={len(failures)}, elapsed={time.perf_counter() - started_at:.1f}s, "
+                    f"yfinance_calls={partial_call_count}",
+                    flush=True,
+                )
 
     universe_rows = active_universe(client, bucket, fetched, session_date)
     for row in universe_rows:
@@ -1192,6 +1329,9 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
     })
     put_json_if_changed(client, bucket, object_key("catalog", "generations", f"{session_date.isoformat()}.json"), catalog)
     put_json_if_changed(client, bucket, object_key("catalog", "current.json"), catalog)
+    elapsed_seconds = round(time.perf_counter() - started_at, 3)
+    with _YF_CALL_LOCK:
+        yfinance_calls = dict(sorted(_YF_CALLS.items()))
     publication = {
         "schema_version": 1,
         "yfinance_version": yf.__version__,
@@ -1203,6 +1343,16 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
         "partial_count": sum(1 for row in results.values() if row.get("status") == "partial"),
         "failure_count": len(failures),
         "catalog_count": len(catalog["items"]),
+        "elapsed_seconds": elapsed_seconds,
+        "yfinance_call_count": sum(yfinance_calls.values()),
+        "yfinance_calls": yfinance_calls,
+        "rotation": {
+            "full_history_bucket": full_history_bucket,
+            "full_history_bucket_count": FULL_HISTORY_BUCKETS,
+            "financial_bucket": financial_bucket,
+            "financial_bucket_count": FINANCIAL_BUCKETS,
+            "month_end_session": month_end_session,
+        },
     }
     put_json_if_changed(client, bucket, object_key("publications", "current.json"), publication)
     put_json_if_changed(client, bucket, object_key("manifest.json"), {
@@ -1212,7 +1362,20 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
         "universe_source": "J-Quants API v2", "security_count": len(fetched),
         "catalog_count": len(catalog["items"]),
     })
-    print(f"Published v2 generation {session_date}: success={len(results)}, failed={len(failures)}, catalog={len(catalog['items'])}")
+    put_json_if_changed(client, bucket, schedule_key, {
+        "schema_version": 1,
+        "active_session_date": session_date.isoformat(),
+        "active_full_history_bucket": full_history_bucket,
+        "active_financial_bucket": financial_bucket,
+        "next_full_history_bucket": (full_history_bucket + 1) % FULL_HISTORY_BUCKETS,
+        "next_financial_bucket": (financial_bucket + 1) % FINANCIAL_BUCKETS,
+        "updated_at": iso_now(),
+    })
+    print(
+        f"Published v2 generation {session_date}: success={len(results)}, failed={len(failures)}, "
+        f"catalog={len(catalog['items'])}, elapsed={elapsed_seconds}s, "
+        f"yfinance_calls={sum(yfinance_calls.values())} {json.dumps(yfinance_calls, ensure_ascii=False, sort_keys=True)}"
+    )
     return 1 if failures else 0
 
 
