@@ -2,8 +2,8 @@ name: Sync Japanese market data to R2 v2
 
 on:
   schedule:
-    # 12:00 UTC is 21:00 JST, after the Tokyo market close.
-    - cron: "0 12 * * 1-5"
+    # 12:17 UTC is 21:17 JST, after the Tokyo market close and away from the hourly boundary.
+    - cron: "17 12 * * 1-5"
   workflow_dispatch:
 
 permissions:
