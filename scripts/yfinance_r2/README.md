@@ -1,6 +1,6 @@
 # yfinance v2 market data
 
-The `yfinance-r2.yml` workflow is configured as the scheduled collector. It runs at 21:00 Japan time on weekdays, checks the XTKS exchange calendar, obtains the current listed-security universe from J-Quants v2, and writes app-required yfinance data to `market/yfinance/v2/` in the private `diview-market-data` R2 bucket. The first v2 R2 publication and production Worker deployment are still pending; until then, production API responses may continue to use the previous data path.
+The `yfinance-r2.yml` workflow is configured as the scheduled collector. It starts at 21:17 Japan time on weekdays, checks the XTKS exchange calendar, obtains the current listed-security universe from J-Quants v2, and writes app-required yfinance data to `market/yfinance/v2/` in the private `diview-market-data` R2 bucket. It uses the standard GitHub-hosted Ubuntu runner; standard runners are free for public repositories. The first v2 R2 publication and production Worker deployment are still pending; until then, production API responses may continue to use the previous data path.
 
 The J-Quants master includes equities, ETFs, and REITs. Its product category is retained in the v2 universe, while the app continues to resolve industry names through its bundled industry master. Each J-Quants code is converted to a Yahoo Finance `.T` symbol. A security enters the search catalog only after its yfinance profile and completed daily close are available.
 
@@ -33,6 +33,8 @@ The repository requires these Actions secrets:
 - `JQUANTS_API_KEY`
 - `R2_ACCESS_KEY_ID`
 - `R2_SECRET_ACCESS_KEY`
+
+The secrets must be added in the repository's Actions secrets settings before the scheduled collector can publish. Their values are never stored in the repository. Scheduled runs can be delayed during GitHub Actions load; the schedule is set away from the start of the hour to reduce this risk. GitHub automatically disables scheduled workflows in public repositories with no repository activity for 60 days, so periodically confirm the workflow remains active.
 
 The R2 credentials should be scoped to read and write the `diview-market-data` bucket. `CLOUDFLARE_ACCOUNT_ID` and the bucket name are configured in the workflow. A manual workflow dispatch runs the same calendar-gated v2 sync as the schedule.
 
