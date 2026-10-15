@@ -1234,7 +1234,10 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "financial_refresh_policy_version": (
             1 if financial_attempted or prior_sync.get("financial_refresh_policy_version") == 1 else None
         ),
-        "financial_period_marker": current_financial_marker or prior_sync.get("financial_period_marker"),
+        "financial_period_marker": (
+            current_financial_marker if financial_attempted and current_financial_marker
+            else prior_sync.get("financial_period_marker")
+        ),
         "financials_last_checked_session_date": (
             as_of.isoformat() if financial_attempted
             else prior_sync.get("financials_last_checked_session_date")
