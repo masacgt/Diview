@@ -59,7 +59,7 @@ jobs:
     needs: market-calendar
     if: needs.market-calendar.outputs.is_open == 'true' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'sync'))
     runs-on: ubuntu-latest
-    timeout-minutes: 80
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -75,6 +75,7 @@ jobs:
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
           YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
           YFINANCE_LIBRARY_RETRIES: "1"
+          YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND: "8"
           YFINANCE_V2_WORKERS: "16"
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

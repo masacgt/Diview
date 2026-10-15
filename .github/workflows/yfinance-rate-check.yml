@@ -46,7 +46,7 @@ jobs:
           retention-days: 30
 
   market-calendar:
-    if: github.run_number == 2
+    if: github.run_number == 3
     runs-on: ubuntu-latest
     outputs:
       is_open: ${{ steps.check.outputs.is_open }}
@@ -63,9 +63,9 @@ jobs:
 
   full-universe-sync:
     needs: market-calendar
-    if: github.run_number == 2 && needs.market-calendar.outputs.is_open == 'true'
+    if: github.run_number == 3 && needs.market-calendar.outputs.is_open == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
