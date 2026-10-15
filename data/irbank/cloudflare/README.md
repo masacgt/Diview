@@ -1,10 +1,10 @@
 # IRBANK → Cloudflare D1
 
-このディレクトリには、整理済みのIRBANKデータをCloudflare D1へ登録するスキーマとWorker APIがあります。銘柄・財務情報はD1、株価スナップショットはR2から配信します。
+このディレクトリには、Cloudflare D1/R2を使うWorker APIがあります。D1は運用・分析データ、R2はIRBANKの保存データとyfinance由来の市場データを保持します。上場銘柄の検索・日次価格・配当・月次価格は、仕様上 `market/yfinance/v2/` を参照します。R2バケットは非公開で、アプリにはWorker APIを通じて配信します。
 
 ## Android財務・問い合わせAPI
 
-`GET /api/v1/financial-data/7203` はR2の概要から年次財務・分割調整済み配当・評価指標を返します。概要の配当履歴に有効な実績がない銘柄では、`market/securities/v1/{code}.json` のYahoo Finance分配イベントを暦年単位で合計し、確定済み年の履歴を返します。この場合は `dividends.history_basis=calendar_year_observed_distributions` と出所を付け、決算期配当と区別します。当年は年途中のため対象外です。どちらのデータもない銘柄は404です。同一日・同一金額の重複イベント、不正日付、0以下の金額は除外します。Androidは欠損指標を固定値で補完せず、取得済みの値を端末へキャッシュします。
+`GET /api/v1/financial-data/7203` は、v2のプロフィール・現在値・年次財務・配当イベントを返します。配当イベントはyfinanceの日足履歴から取得した修復済み金額を暦年単位で集計し、完了した年だけを `calendar_year` と `calendar_year_distribution_per_share` で返します。金額基準は `dividends.amount_basis=yfinance_split_adjusted_assumption` で、返却配当額を分割調整済みとして扱います。会社公表の決算期DPSやIRBANKの `annual_dps_adjusted` とは異なる値で、アプリ・Workerから分割比率を追加適用しません。財務・評価値は移行中に項目単位で旧概要から補う場合がありますが、配当履歴はIRBANK値へフォールバックしません。v2の初回公開前は配当履歴を空配列・`not_fetched` として返し、金額基準はnullにします。v2データのいずれかがあれば、配当履歴が空でも404にせず項目状態を併記します。Androidは未取得の配当履歴を決算期DPSで埋めず、配当利回りを `0.00%` と表示しながら取得状態を未取得として保持します。銘柄情報の8期編集値は端末内に暗号化保存し、R2の共有データを変更しません。
 
 問い合わせテーブルを初めて導入する場合は、次の移行SQLを実行します。既存テーブルとデータを削除せず、再実行できます。
 
@@ -43,7 +43,7 @@ npx wrangler d1 execute diview-irbank --remote --file ..\organized\d1\seed_app_d
 
 D1には銘柄マスター、API・分析・Watchlistなどの運用データ、株式分析に使う年次財務を保持します。四半期・半期財務はアプリとWorkerの現在の処理では参照されないため、R2の `market/irbank/v1/` 配下を配信元とし、D1の原本は `market/irbank/v1/archive/d1-financial-periods-qs-20261009.json` に全32,442行を退避しています。退避オブジェクトは取得ファイルのSHA-256と行数を照合済みです。
 
-D1の財務インポートは年次だけを生成します。D1には銘柄マスターを保持しますが、現在の `/api/v1/security-search` はD1の部分一致SQLを使わず、R2の `market/irbank/v1/catalog.json` を検索します。D1の `dividend_events` と年次 `financial_periods` は分析APIが参照し、価格・配当履歴など大量の市場スナップショットはR2から配信します。
+D1の財務インポートは年次だけを生成します。D1の `dividend_events` と年次 `financial_periods` は分析APIや互換処理で使われます。検索・日次価格・配当イベント・月次価格の新しいデータ経路は、yfinance v2のR2カタログと銘柄別オブジェクトです。IRBANKのカタログと銘柄概要APIは、IRBANKデータの参照用に引き続き提供します。
 
 ## J-Quants調整済み日足API
 
@@ -63,23 +63,9 @@ powershell -ExecutionPolicy Bypass -File .\import-d1.ps1
 
 生成したSQLを分割して実行し、再実行時は `import-state.json` の成功記録から続けます。
 
-## Android検証
+## AndroidとWorker API
 
-AndroidアプリはWorker APIを使って銘柄を検索・照合します。`/api/v1/security-search?q=...` はR2の日本語銘柄カタログを部分一致検索し、`/api/v1/securities/{銘柄コード}?include_market=false` はR2の銘柄概要から登録用情報を返します。`/api/v1/financial-data/{銘柄コード}` もR2の概要を読みます。これらの読み取りはD1の無料枠や再設定に依存しません。Worker URLはGradleプロパティ `diviewD1ApiBaseUrl` で上書きできます。既定値は `https://diview-irbank.omasa.workers.dev` です。
-
-株価一覧は `/api/v1/search-catalog` から取得し、Android端末のSharedPreferencesへ保存します。通常は日本時間の日付ごとに1回取得し、日付が変わっていても前回取得から12時間未満なら見送ります。18時以降は、Workerの当日更新完了日が確認できるまで30分間隔で再確認します。完了前の一覧は端末キャッシュへ反映しません。
-
-### Cloudflare上での株価更新
-
-UTC毎時17分（日本時間の毎時17分）のCronを1本使います。まだ初回同期が終わっていない場合は次のCronから同期を開始し、以後は平日17時以降に最大12銘柄ずつのQueueメッセージを投入します。価格取得Workerは1銘柄につき1リクエストでYahoo Finance Chart APIを呼び、同時実行数を6に抑えて最新値を `market/yfinance/live_quotes/{銘柄コード}.json` へ保存します。日次終値は `market/yfinance/daily_prices/{銘柄コード}/{年月}.json` に追記し、月次履歴APIは従来の履歴とこの追加データを合わせて返します。検索一覧の `market_data_date` は全バッチの成功または失敗確定後に更新されます。失敗バッチはQueueの再試行後にDead Letter Queueへ移し、完了状態と失敗件数を記録します。
-
-Queueは `diview-market-prices` と `diview-market-prices-dlq` を使います。初回設定時は `npx wrangler queues create diview-market-prices` を実行してからWorkerをデプロイします。約3,960銘柄なら330メッセージ/平日が目安で、通常のQueue操作は送信・読取・削除の約990回/日です。再試行分は追加されます。QueueとCronの設定は同じWorkerにあり、日次開始のための追加Cron枠は使いません。`/api/v1/health` の `market.live_refresh_batches_total`、`market.live_refresh_batches_enqueued`、`market.live_refresh_last_completed_date`、`market.live_refresh_failed_batches` で状態を確認できます。
-
-このWorkerは価格取得専用です。配当・財務は既存のPython版 `yfinance` ワークフロー（`.github/workflows/yfinance-r2.yml`）で週次更新します。実行時刻は毎週月曜03:30（日本時間）で、東京市場の休場日は市場カレンダーの判定で更新をスキップします。日次の株価更新はCloudflare Workerが担当し、週次ワークフローは配当・財務を含む市場データの更新とR2公開を担当します。GitHub Actionsの月間実行枠が上限に達している間は実行できないため、枠のリセット後に再開します。スケジュールはGitHubの既定ブランチにこの設定を反映した後に有効になります。この構成では週次処理用のCloudflare Cron枠は追加しません。
-
-更新は直近の約定価格を含むYahoo Chart応答を使い、リアルタイム配信は保証しません。Yahooの非公式Chart APIへの直接アクセスを使うため、利用条件や可用性の変更により取得できなくなる可能性があります。Workers Freeの1実行あたり50サブリクエスト・同時外向き通信6件の上限内に収めるため、同時取得は6銘柄までにしています。Workers FreeのCPU時間は1実行10msです。
-
-D1 APIは `/api/v1/securities/{銘柄コード}`、定義APIは `/api/v1/diagnosis-definitions`、`/api/v1/valuation-scenarios`、`/api/v1/stock-analysis-definitions`、`/api/v1/watchlist-analysis-definitions` です。現在のR2スナップショットが未配置の場合、株価・PER・PBRは未収録として返されます。
+AndroidはWorker APIを通じて検索、価格、配当、財務データを取得します。Worker URLはGradleプロパティ `diviewD1ApiBaseUrl` で上書きでき、既定値は `https://diview-irbank.omasa.workers.dev` です。分析定義API、問い合わせAPI、IRBANK固有のAPIはそれぞれの既存経路を使います。市場データAPIのv2仕様と本番反映状況は、後述の「yfinance v2市場データとAndroid取得」を参照してください。
 
 ## R2のIRBANKデータ
 
@@ -113,22 +99,35 @@ R2キーは `market/irbank/v1/` 配下です。Worker APIは `/api/v1/irbank/cat
 
 起動後、`http://localhost:8787/api/v1/irbank/manifest`、`/api/v1/irbank/catalog`、`/api/v1/irbank/securities/1301` でデータを確認できます。リモートR2バインディングにはCloudflareへログインしたWrangler認証が必要です。
 
-## 全銘柄サジェスト
+## yfinance v2市場データとAndroid取得
 
-`/api/v1/search-catalog` は R2 の `market/yfinance/search_catalog.json` を返します。検索用一覧は銘柄マスター全件から作り、株価データがある銘柄には直近20営業日の終値×出来高から計算した平均推定売買代金・株価・配当利回りを付けます。日次の yfinance 集計で更新されます。初回だけ先に公開する場合は、R2 の認証情報を設定して `python scripts/yfinance_r2/fetch_and_upload.py --publish-catalog` をリポジトリのルートから実行します。市場スナップショットが未配置でも銘柄名とコードは全件公開されますが、人気順の値は市場データ公開後に入ります。
+### 検索・登録と候補価格
 
-React の検索画面はこの一覧を1日端末にキャッシュし、銘柄名2文字・コード3文字から端末内で絞り込んで最大20件を表示します。別の Worker を使う場合は `VITE_MARKET_API_BASE_URL` を設定してください。現在のマスターは日本市場の3,960件で、米国株・投資信託の別マスターはまだ含まれません。
+`.github/workflows/yfinance-r2.yml` は、平日の日本時間21時に起動し、XTKS営業日を確認してからJ-Quants v2の銘柄一覧を取得します。株式、ETF、REITを含むコードに `.T` を付けてyfinanceデータを取得し、プロフィールと完了済み終値を保存できた銘柄だけを `market/yfinance/v2/catalog/current.json` に掲載します。J-Quants一覧にあっても、初回取得に成功していない銘柄は検索・登録できません。
 
-`GET /api/v1/monthly-price-history?codes=7203,9984&months=2025-11,2025-12` は、指定した国内株（最大20銘柄、最大12か月）について、R2の日次終値から各月の最終取引日価格を返します。日次Workerが追加した終値も履歴に含めます。月中の指定月は当日までに取得できた最新終値を返します。yfinanceの終値は株式分割を反映した現在の株数単位で保存されているため、Workerでは分割比率を再適用しません。月次資産推移はこの価格と端末内の現在保有株数から参考評価額を算出します。端末から送るのは銘柄コードと年月のみで、株数や取得単価は送信しません。
+`GET /api/v1/security-search?q=...` はv2カタログのコード・表示名を検索し、価格、価格日、直近12か月の配当合計、利回りを返します。利回りはyfinanceの `dividendRate`（Yahoo Financeが示す今後12か月の年間配当見積もり）を終値で割り、この値がない場合は取得日までに記録された今期の配当イベント合計を使います。`dividendRate` は会社が確定した次会計年度DPSとは区別します。検索時にyfinanceへ問い合わせることはありません。空の検索欄に表示する既存候補の価格も、`GET /api/v1/live-quotes?codes=7203,8306` でR2カタログから読みます。
 
-`GET /api/v1/dividend-months?symbols=7203.T,AAPL` は、R2 の `market/yfinance/securities/{symbol}.json` にある配当イベントから、直近365日（日本時間の当日を基準）に記録された月を銘柄ごとに返します。1回に最大50銘柄を指定できます。アプリは銘柄コードと取得日を端末内に保存し、日本時間の日付が変わるまで同じ配当月を再取得しません。保有数や取得単価は送信しません。履歴のない銘柄は空の月一覧を返します。
+候補を選んで銘柄詳細・登録情報を開くと、`GET /api/v1/securities/{code}` がv2の `profile.json` と `current.json` を読みます。J-Quantsの有効ユニバースとv2カタログにない銘柄は返しません。業種表示はAndroid同梱の業種マスターを使います。
 
+### 端末の日次価格一覧
 
-## yfinance v2市場データ移行（ローカル実装）
+`GET /api/v1/search-catalog` はv2の `catalog/current.json` を返します。`GET /api/v1/live-quotes` は同じ公開世代の価格をページ単位で返し、`codes` を指定した場合は候補コードだけを返します。どちらもWorkerからYahoo Financeへ接続せず、yfinance更新ジョブが公開した日次データを配信します。
 
-`.github/workflows/yfinance-r2.yml` の定期実行は日本時間21時に起動し、`XTKS` 営業日を確認してからJ-Quants v2の銘柄一覧とyfinanceデータをR2の `market/yfinance/v2/` へ保存します。検索カタログと銘柄登録APIは公開済みのv2カタログだけを使い、初回yfinance取得に成功する前は旧カタログへフォールバックしません。旧Workerの価格取得キューは、新しい価格を取得せず既存メッセージを処理終了します。
+Androidは端末ごとに最終試行時刻、最終成功時刻、成功した日本時間の日付、取得状態を保存します。同じ日本時間の日に成功済みなら全件一覧を再取得せず、前回成功から12時間未満の場合も取得を見送ります。失敗時は端末内の前回データと成功時刻を維持し、後のアプリ起動時に再試行できます。個別の検索・登録時は該当銘柄の公開済みR2データを読みます。
 
-この移行のローカルコードはまだWorkerへデプロイされておらず、v2初回データのR2読戻しも未実施です。GitHub Actionsには `JQUANTS_API_KEY`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` が必要です。移行仕様とR2キー構造はリポジトリ直下の `ai_docs/r2-yfinance-target-spec.md` を参照してください。
+### 配当・月次価格
+
+`GET /api/v1/monthly-price-history?codes=7203,9984&months=2025-11,2025-12` は指定月の月末最終営業日価格をv2から返します。通常領域に直近13か月、アーカイブに過去10年分を保持します。価格にはyfinanceの `Close` を使い、株式分割比率を再適用しません。要求に含めるのは銘柄コードと年月だけです。
+
+`GET /api/v1/dividend-months?symbols=7203.T` はv2の年別配当イベントから直近365日のイベント、配当月、金額基準、yfinance修復フラグを返します。権利日派生値は `market/yfinance/v2/derived/rights_dates/current.json` から読みます。正常に取得した空履歴と未取得状態は `history_status` で区別します。定期取得は固定したyfinance 1.7.0・SciPy 1.18.1で `history(period="max", interval="1d", actions=True, repair=True)` を使います。成功した取得範囲を正本として既存イベントを置き換え、取得失敗時は前回イベントを維持して失敗状態を記録します。配当・分割イベントは直近10年を通常領域、それより古いイベントを無期限アーカイブに保持します。
+
+財務APIには財務諸表・評価値の項目単位の旧データ互換処理が残っています。配当履歴はyfinance v2イベントだけを使い、v2公開前は `not_fetched` として扱います。分析のD1依存は移行完了まで維持します。IRBANK全体を一括アーカイブ・削除する処理は行いません。
+
+### 本番反映状況と有効化
+
+2026-10-14時点でv2同期、Worker、Androidの変更はコミット `edcd12c2` として `main` にプッシュ済みです。R2への初回v2公開とWorker本番デプロイは未実施です。本番APIを読み取り確認したところ、`/api/v1/security-search?q=7203` は名称だけを返し、`/api/v1/live-quotes` は `legacy_unpublished` を返しました。そのため、端末にインストールした最新APKでも検索候補の株価・利回りを本番データで確認できていません。
+
+有効化にはGitHub Actionsの `JQUANTS_API_KEY`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` を設定し、営業日にv2同期を実行してR2の公開データを読戻し確認した後、Workerをデプロイします。デプロイ後は検索候補、銘柄詳細、配当履歴、月次価格、端末の日次一覧をそれぞれ確認してください。詳細な仕様はリポジトリ直下の `ai_docs/r2-yfinance-target-spec.md` に記載しています。
 
 ## バックエンド運用（分析・通知）
 

@@ -17,6 +17,9 @@ from zoneinfo import ZoneInfo
 
 import yfinance as yf
 
+# Surface yfinance request/repair exceptions to the per-security retry state machine.
+yf.config.debug.hide_exceptions = False
+
 import fetch_and_upload as collector
 from fetch_jquants_universe import fetch_securities
 
@@ -33,7 +36,7 @@ PROFILE_FIELDS = (
 CURRENT_FIELDS = (
     "regularMarketChange", "regularMarketChangePercent", "trailingPE", "forwardPE",
     "priceToBook", "enterpriseValue", "trailingEps", "forwardEps", "bookValue",
-    "dividendRate", "payoutRatio", "fiveYearAvgDividendYield", "lastDividendValue",
+    "dividendRate", "dividendYield", "payoutRatio", "fiveYearAvgDividendYield", "lastDividendValue",
     "lastDividendDate", "exDividendDate", "beta", "lastFiscalYearEnd", "mostRecentQuarter",
 )
 INCOME_FIELDS = {
@@ -196,20 +199,30 @@ def merge_year_documents(
     return output
 
 
-def load_all_year_records(client: Any, bucket: Any, symbol: str, family: str) -> list[dict[str, Any]]:
+def load_all_year_records(client: Any, bucket: Any, symbol: str, family: str,
+                          *, include_archive: bool = False) -> list[dict[str, Any]]:
     safe = safe_symbol(symbol)
-    prefix = object_key("securities", safe, family) + "/"
     paginator = client.get_paginator("list_objects_v2")
     records: list[dict[str, Any]] = []
-    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
-        for item in page.get("Contents", []):
-            document = read_json(client, bucket, item["Key"])
-            if document:
-                records.extend(row for row in document.get("records", []) if isinstance(row, dict))
+    prefixes = [object_key("securities", safe, family) + "/"]
+    if include_archive:
+        prefixes.append(object_key("archive", "events", safe, family) + "/")
+    for prefix in prefixes:
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for item in page.get("Contents", []):
+                document = read_json(client, bucket, item["Key"])
+                if document:
+                    records.extend(row for row in document.get("records", []) if isinstance(row, dict))
     return records
 
 
-def series_records(series: Any, *, key: str, value_field: str = "amount") -> list[dict[str, Any]]:
+def series_records(
+    series: Any,
+    *,
+    key: str,
+    value_field: str = "amount",
+    repaired_rows: Any = None,
+) -> list[dict[str, Any]]:
     if series is None or not hasattr(series, "items"):
         return []
     rows = []
@@ -218,14 +231,63 @@ def series_records(series: Any, *, key: str, value_field: str = "amount") -> lis
         amount = finite_number(value)
         if event_date is None or amount is None or amount <= 0:
             continue
-        rows.append({key: event_date.isoformat(), value_field: amount})
+        record = {key: event_date.isoformat(), value_field: amount}
+        if repaired_rows is not None:
+            try:
+                repaired = repaired_rows.get(timestamp, False)
+            except (AttributeError, TypeError):
+                repaired = False
+            if repaired is True or str(repaired).strip().lower() == "true":
+                record["row_repaired_by_yfinance"] = True
+        rows.append(record)
     return rows
+
+
+def fetch_repaired_action_history(ticker: Any, as_of: date) -> tuple[
+    list[dict[str, Any]], list[dict[str, Any]], date, date
+]:
+    """Fetch Yahoo's complete daily action history with yfinance's repair pass enabled."""
+    frame = ticker.history(
+        period="max", interval="1d", auto_adjust=False, actions=True,
+        repair=True, keepna=True,
+        timeout=float(os.environ.get("YFINANCE_HTTP_TIMEOUT_SECONDS", "30")),
+    )
+    if frame is None or frame.empty:
+        raise RuntimeError("yfinance returned no daily action history")
+    if "Dividends" not in frame.columns or "Stock Splits" not in frame.columns:
+        raise RuntimeError("yfinance daily history omitted dividend or split action columns")
+    dates = [date_value(value) for value in frame.index]
+    dates = [value for value in dates if value is not None and value <= as_of]
+    if not dates:
+        raise RuntimeError("yfinance daily action history has no dates in the completed market period")
+    coverage_start = min(dates)
+    coverage_end = max(dates)
+    repaired_rows = frame["Repaired?"] if "Repaired?" in frame.columns else None
+    fresh_dividends = series_records(frame["Dividends"], key="date", repaired_rows=repaired_rows)
+    fresh_splits = series_records(frame["Stock Splits"], key="date", value_field="ratio", repaired_rows=repaired_rows)
+    fresh_dividends = [row for row in fresh_dividends if str(row["date"]) <= coverage_end.isoformat()]
+    fresh_splits = [row for row in fresh_splits if str(row["date"]) <= coverage_end.isoformat()]
+    return fresh_dividends, fresh_splits, coverage_start, coverage_end
+
+
+def replace_dated_history(
+    previous: list[dict[str, Any]], fresh: list[dict[str, Any]], key: str,
+    coverage_start: date, coverage_end: date,
+) -> list[dict[str, Any]]:
+    """Replace all stored actions in a successfully fetched range, including removed/corrected events."""
+    start_text = coverage_start.isoformat()
+    end_text = coverage_end.isoformat()
+    retained = [
+        row for row in previous
+        if str(row.get(key) or "")[:10] < start_text or str(row.get(key) or "")[:10] > end_text
+    ]
+    return collector.merge_dated(retained, fresh, key)
 
 
 def monthly_history_rows(ticker: Any, *, initial: bool) -> list[dict[str, Any]]:
     frame = ticker.history(
         period="10y" if initial else "3mo", interval="1d", auto_adjust=False,
-        actions=False, repair=True, raise_errors=True,
+        actions=False, repair=True,
         timeout=float(os.environ.get("YFINANCE_HTTP_TIMEOUT_SECONDS", "30")),
     )
     latest_by_month: dict[str, dict[str, Any]] = {}
@@ -663,27 +725,48 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         raise RuntimeError("yfinance daily close is newer than the Japan session date")
 
     old_actions = old.get("actions") if isinstance(old.get("actions"), dict) else {}
-    prior_dividends = load_all_year_records(client, bucket, symbol, "dividends")
-    prior_splits = load_all_year_records(client, bucket, symbol, "splits")
+    prior_dividends = load_all_year_records(client, bucket, symbol, "dividends", include_archive=True)
+    prior_splits = load_all_year_records(client, bucket, symbol, "splits", include_archive=True)
     prior_dividends.extend(row for row in old_actions.get("dividends", []) if isinstance(row, dict))
     prior_splits.extend(row for row in old_actions.get("stock_splits", []) if isinstance(row, dict))
     action_status: dict[str, str] = {}
+    action_retrieval: dict[str, Any] = {
+        "source": "yfinance_history",
+        "yfinance_version": yf.__version__,
+        "period": "max",
+        "interval": "1d",
+        "repair": True,
+        "dividend_amount_basis": "yfinance_split_adjusted_assumption",
+        "split_ratio_reapplied_to_dividends": False,
+    }
     try:
-        fresh_dividends = series_records(ticker.dividends, key="date")
+        fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(ticker, as_of)
+        dividends = replace_dated_history(
+            prior_dividends, fresh_dividends, "date", action_coverage_start, action_coverage_end,
+        )
+        splits = replace_dated_history(
+            prior_splits, fresh_splits, "date", action_coverage_start, action_coverage_end,
+        )
         action_status["dividends"] = "available" if fresh_dividends else "empty"
-    except Exception as exc:
-        fresh_dividends = []
-        action_status["dividends"] = "failed"
-        print(f"Dividend history unavailable for {symbol}: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
-    try:
-        fresh_splits = series_records(ticker.splits, key="date", value_field="ratio")
         action_status["splits"] = "available" if fresh_splits else "empty"
+        action_retrieval.update({
+            "status": "success",
+            "coverage_start": action_coverage_start.isoformat(),
+            "coverage_end": action_coverage_end.isoformat(),
+            "dividend_event_count": len(fresh_dividends),
+            "split_event_count": len(fresh_splits),
+        })
     except Exception as exc:
-        fresh_splits = []
+        dividends = prior_dividends
+        splits = prior_splits
+        action_status["dividends"] = "failed"
         action_status["splits"] = "failed"
-        print(f"Split history unavailable for {symbol}: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
-    dividends = collector.merge_dated(prior_dividends, fresh_dividends, "date")
-    splits = collector.merge_dated(prior_splits, fresh_splits, "date")
+        action_retrieval.update({"status": "failed", "failure_reason": f"{type(exc).__name__}: {exc}"[:500]})
+        print(f"Dividend history unavailable for {symbol}: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
+    action_years: dict[str, set[str]] = {
+        "dividends": {str(row.get("date") or "")[:4] for row in prior_dividends + dividends if row.get("date")},
+        "splits": {str(row.get("date") or "")[:4] for row in prior_splits + splits if row.get("date")},
+    }
 
     previous_monthly = prior_sync.get("monthly_history_initialized") is True
     try:
@@ -729,19 +812,44 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     }
 
     close = finite_number(latest.get("close"))
-    trailing_start = (as_of - timedelta(days=365)).isoformat()
+    trailing_start = years_before(as_of, 1).isoformat()
     trailing_dividends = round(sum(
         finite_number(row.get("amount")) or 0.0 for row in dividends
-        if trailing_start <= str(row.get("date") or "")[:10] <= as_of.isoformat()
+        if trailing_start < str(row.get("date") or "")[:10] <= as_of.isoformat()
     ), 8)
     forecast_dps = finite_number(info.get("dividendRate"))
     has_forecast_dps = forecast_dps is not None and forecast_dps > 0
     current_fy_dps = fiscal_year_events(dividends, info, as_of)
-    yield_dps = forecast_dps if has_forecast_dps else current_fy_dps
+    reported_yield = finite_number(info.get("dividendYield"))
+    no_dividend = (
+        not has_forecast_dps
+        and current_fy_dps is None
+        and (forecast_dps == 0.0 or reported_yield == 0.0)
+    )
+    yield_dps = forecast_dps if has_forecast_dps else (
+        current_fy_dps if current_fy_dps is not None else 0.0 if no_dividend else None
+    )
     yield_basis = "next_fiscal_year_forecast" if has_forecast_dps else (
-        "current_fiscal_year" if current_fy_dps is not None else None
+        "current_fiscal_year" if current_fy_dps is not None else "yfinance_reported_no_dividend" if no_dividend else None
     )
     dividend_yield = round(yield_dps / close * 100, 4) if yield_dps is not None and close and close > 0 else None
+    dividend_history_failed = action_status["dividends"] == "failed"
+    dividend_status = "no_dividend" if no_dividend else "has_dividend" if yield_dps is not None and yield_dps > 0 else "unknown"
+    current_fiscal_status = (
+        "failed" if dividend_history_failed and current_fy_dps is None
+        else "stale" if dividend_history_failed
+        else "available" if current_fy_dps is not None else "empty"
+    )
+    dividend_yield_status = (
+        "failed" if dividend_history_failed and yield_basis is None
+        else "stale" if dividend_history_failed and yield_basis == "current_fiscal_year"
+        else "empty" if dividend_yield is None else "available"
+    )
+    dividend_status_state = (
+        "failed" if dividend_history_failed and dividend_status == "unknown"
+        else "stale" if dividend_history_failed and yield_basis == "current_fiscal_year"
+        else "empty" if dividend_status == "unknown" else "available"
+    )
     current = {
         "schema_version": 1,
         "code": code,
@@ -749,10 +857,17 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "price": {"close": close, "date": price_date.isoformat(), "currency": str(info.get("currency") or "JPY")},
         "dividend": {
             "trailing_12_month_per_share": trailing_dividends,
+            "trailing_12_month_period": {
+                "start_exclusive": trailing_start,
+                "end_inclusive": as_of.isoformat(),
+            },
             "next_fiscal_year_forecast_per_share": forecast_dps,
             "current_fiscal_year_per_share": current_fy_dps,
             "yield_rate": dividend_yield,
             "yield_basis": yield_basis,
+            "event_amount_basis": "yfinance_split_adjusted_assumption",
+            "split_adjustment_policy": "assume_yfinance_returned_amounts_are_split_adjusted",
+            "dividend_status": dividend_status,
         },
         "statistics": {key: collector.json_safe(info[key]) for key in CURRENT_FIELDS if info.get(key) is not None},
         "field_status": {
@@ -760,11 +875,15 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             "split_history": action_status["splits"],
             "monthly_prices": monthly_status,
             "forecast_dividend": "available" if has_forecast_dps else "empty",
-            "current_fiscal_dividend": "available" if current_fy_dps is not None else "empty",
-            "dividend_yield": "available" if dividend_yield is not None else "empty",
+            "trailing_12_month_per_share": "stale" if dividend_history_failed else "available" if trailing_dividends > 0 else "empty",
+            "current_fiscal_dividend": current_fiscal_status,
+            "dividend_yield": dividend_yield_status,
+            "dividend_status": dividend_status_state,
             "financial_fields": financial_status.get("fields", {}),
             **{f"financial_{key}": value for key, value in financial_status.items()},
         },
+        "action_history": action_retrieval,
+        "yfinance_version": yf.__version__,
         "updated_at": iso_now(),
         "source": "Yahoo Finance via yfinance",
     }
@@ -789,23 +908,25 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                 continue
             target = by_year if event_date >= cutoff10 else archive_by_year
             target.setdefault(event_date[:4], []).append(row)
-        years = set(by_year) | set(archive_by_year)
-        for year in years:
+        years = action_years[family] | set(by_year) | set(archive_by_year)
+        for year in sorted(years):
             hot_key = object_key("securities", safe, family, f"{year}.json")
-            if year in archive_by_year:
-                archive_key = object_key("archive", "events", safe, family, f"{year}.json")
-                prior_archive = read_json(client, bucket, archive_key) or {}
-                merged = collector.merge_dated(prior_archive.get("records", []), archive_by_year[year], event_key)
+            archive_key = object_key("archive", "events", safe, family, f"{year}.json")
+            if archive_by_year.get(year):
                 put_json_if_changed(client, bucket, archive_key, {
-                    "schema_version": 1, "symbol": symbol, "year": int(year), "records": merged,
+                    "schema_version": 1, "symbol": symbol, "year": int(year),
+                    "records": archive_by_year[year], "action_history": action_retrieval,
                     "updated_at": iso_now(), "source": "Yahoo Finance via yfinance",
                 })
                 saved = read_json(client, bucket, archive_key)
-                if not saved or len(saved.get("records", [])) < len(merged):
+                if not saved or saved.get("records") != archive_by_year[year]:
                     raise RuntimeError(f"Event archive read-back failed: {archive_key}")
+            else:
+                client.delete_object(Bucket=bucket, Key=archive_key)
             if year in by_year:
                 put_json_if_changed(client, bucket, hot_key, {
-                    "schema_version": 1, "symbol": symbol, "year": int(year), "records": by_year[year],
+                    "schema_version": 1, "symbol": symbol, "year": int(year),
+                    "records": by_year[year], "action_history": action_retrieval,
                     "updated_at": iso_now(), "source": "Yahoo Finance via yfinance",
                 })
             else:
@@ -920,8 +1041,12 @@ def publish_catalog(client: Any, bucket: str, universe: list[dict[str, str]], se
             "quote_date": current["price"].get("date"),
             "currency": current["price"].get("currency"),
             "annual_dividend_per_share": dividend.get("trailing_12_month_per_share"),
+            "trailing_12_month_distribution_per_share": dividend.get("trailing_12_month_per_share"),
+            "dividend_period": "trailing_12_months",
+            "dividend_amount_basis": dividend.get("event_amount_basis"),
             "yield_rate": dividend.get("yield_rate"),
             "yield_basis": dividend.get("yield_basis"),
+            "dividend_status": dividend.get("dividend_status", "unknown"),
             "status": sync.get("status") if sync.get("status") in {"ok", "partial", "failed"} else "ok",
             "failure_reason": sync.get("failure_reason"),
         })
@@ -1069,6 +1194,7 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
     put_json_if_changed(client, bucket, object_key("catalog", "current.json"), catalog)
     publication = {
         "schema_version": 1,
+        "yfinance_version": yf.__version__,
         "generation": session_date.isoformat(),
         "market_data_date": session_date.isoformat(),
         "last_completed_at": iso_now(),
@@ -1082,6 +1208,7 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
     put_json_if_changed(client, bucket, object_key("manifest.json"), {
         "schema_version": 1, "active_generation": session_date.isoformat(),
         "generated_at": iso_now(), "source": "Yahoo Finance via yfinance",
+        "yfinance_version": yf.__version__,
         "universe_source": "J-Quants API v2", "security_count": len(fetched),
         "catalog_count": len(catalog["items"]),
     })
