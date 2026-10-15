@@ -858,13 +858,28 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     prior_current = read_json(client, bucket, object_key("securities", safe, "current.json")) or {}
     old = legacy_document(client, bucket, symbol)
     ticker = yf.Ticker(symbol)
-    count_yfinance_call("ticker_get_info")
-    info = ticker.get_info()
+    prior_field_status = prior_current.get("field_status", {})
+    if not isinstance(prior_field_status, dict):
+        prior_field_status = {}
+    same_session_retry = (
+        prior_sync.get("status") in {"partial", "running"}
+        and prior_sync.get("retry_session_date") == as_of.isoformat()
+        and prior_sync.get("last_success_session_date") == as_of.isoformat()
+    )
+    if same_session_retry and prior_profile and prior_current.get("statistics"):
+        info = {**prior_profile, **prior_current["statistics"]}
+    else:
+        count_yfinance_call("ticker_get_info")
+        info = ticker.get_info()
     if not isinstance(info, dict) or not info:
         raise RuntimeError("yfinance returned no company profile")
-    count_yfinance_call("history_latest_daily_5d")
-    daily = collector.history_rows(ticker, "1d", "5d")
-    latest = completed_close_for_session(daily, as_of)
+    prior_price = prior_current.get("price") if isinstance(prior_current.get("price"), dict) else {}
+    if same_session_retry and str(prior_price.get("date") or "")[:10] == as_of.isoformat():
+        latest = {"date": prior_price["date"], "close": prior_price.get("close")}
+    else:
+        count_yfinance_call("history_latest_daily_5d")
+        daily = collector.history_rows(ticker, "1d", "5d")
+        latest = completed_close_for_session(daily, as_of)
     price_date = date.fromisoformat(str(latest["date"])[:10])
     if price_date > as_of:
         raise RuntimeError("yfinance daily close is newer than the Japan session date")
@@ -892,49 +907,60 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     full_history_attempted = refresh_full_history
     full_history_refreshed = False
     new_split_detected = False
-    try:
-        fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
-            ticker, as_of, period="max" if refresh_full_history else "1y",
-        )
-        full_history_refreshed = refresh_full_history
-        prior_full_coverage_end = str(prior_action_history.get("full_history_coverage_end") or "")
-        new_split_detected = not refresh_full_history and has_new_split(fresh_splits, prior_splits)
-        if new_split_detected:
-            # A newly observed split can change the interpretation of older actions and prices.
-            full_history_attempted = True
-            fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
-                ticker, as_of, period="max",
-            )
-            full_history_refreshed = True
-        dividends = replace_dated_history(
-            prior_dividends, fresh_dividends, "date", action_coverage_start, action_coverage_end,
-        )
-        splits = replace_dated_history(
-            prior_splits, fresh_splits, "date", action_coverage_start, action_coverage_end,
-        )
-        action_status["dividends"] = "available" if fresh_dividends else "empty"
-        action_status["splits"] = "available" if fresh_splits else "empty"
-        action_retrieval.update({
-            "status": "success",
-            "period": "max" if full_history_refreshed else "1y",
-            "full_history_refreshed": full_history_refreshed,
-            "full_history_attempted": full_history_attempted,
-            "full_history_coverage_end": (
-                action_coverage_end.isoformat() if full_history_refreshed
-                else prior_full_coverage_end or None
-            ),
-            "coverage_start": action_coverage_start.isoformat(),
-            "coverage_end": action_coverage_end.isoformat(),
-            "dividend_event_count": len(fresh_dividends),
-            "split_event_count": len(fresh_splits),
-        })
-    except Exception as exc:
+    prior_actions_succeeded = prior_field_status.get("dividend_history") != "failed" and prior_field_status.get("split_history") != "failed"
+    skip_action_retry = same_session_retry and prior_actions_succeeded
+    if skip_action_retry:
         dividends = prior_dividends
         splits = prior_splits
-        action_status["dividends"] = "failed"
-        action_status["splits"] = "failed"
-        action_retrieval.update({"status": "failed", "failure_reason": f"{type(exc).__name__}: {exc}"[:500]})
-        print(f"Dividend history unavailable for {symbol}: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
+        action_status["dividends"] = str(prior_field_status.get("dividend_history") or "empty")
+        action_status["splits"] = str(prior_field_status.get("split_history") or "empty")
+        action_retrieval = dict(prior_action_history)
+        action_retrieval["retry_status"] = "reused_successful_same_session"
+    else:
+        try:
+            fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
+                ticker, as_of,
+                period="max" if (refresh_full_history or prior_sync.get("long_history_retry_pending") is True) else "1y",
+            )
+            full_history_refreshed = refresh_full_history or prior_sync.get("long_history_retry_pending") is True
+            prior_full_coverage_end = str(prior_action_history.get("full_history_coverage_end") or "")
+            new_split_detected = not refresh_full_history and has_new_split(fresh_splits, prior_splits)
+            if new_split_detected:
+                # A newly observed split can change the interpretation of older actions and prices.
+                full_history_attempted = True
+                fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
+                    ticker, as_of, period="max",
+                )
+                full_history_refreshed = True
+            dividends = replace_dated_history(
+                prior_dividends, fresh_dividends, "date", action_coverage_start, action_coverage_end,
+            )
+            splits = replace_dated_history(
+                prior_splits, fresh_splits, "date", action_coverage_start, action_coverage_end,
+            )
+            action_status["dividends"] = "available" if fresh_dividends else "empty"
+            action_status["splits"] = "available" if fresh_splits else "empty"
+            action_retrieval.update({
+                "status": "success",
+                "period": "max" if full_history_refreshed else "1y",
+                "full_history_refreshed": full_history_refreshed,
+                "full_history_attempted": full_history_attempted,
+                "full_history_coverage_end": (
+                    action_coverage_end.isoformat() if full_history_refreshed
+                    else prior_full_coverage_end or None
+                ),
+                "coverage_start": action_coverage_start.isoformat(),
+                "coverage_end": action_coverage_end.isoformat(),
+                "dividend_event_count": len(fresh_dividends),
+                "split_event_count": len(fresh_splits),
+            })
+        except Exception as exc:
+            dividends = prior_dividends
+            splits = prior_splits
+            action_status["dividends"] = "failed"
+            action_status["splits"] = "failed"
+            action_retrieval.update({"status": "failed", "failure_reason": f"{type(exc).__name__}: {exc}"[:500]})
+            print(f"Dividend history unavailable for {symbol}: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
     action_years: dict[str, set[str]] = {
         "dividends": {str(row.get("date") or "")[:4] for row in prior_dividends + dividends if row.get("date")},
         "splits": {str(row.get("date") or "")[:4] for row in prior_splits + splits if row.get("date")},
@@ -983,8 +1009,26 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         point["close"] = float(point["close"])
         point["currency"] = str(info.get("currency") or "JPY")
 
-    if refresh_financials:
-        statements, valuation, financial_status = collect_financials(ticker, old, client, bucket, symbol)
+    retry_financials = prior_sync.get("financial_retry_pending") is True
+    failed_financial_groups = financial_failed_groups(prior_field_status)
+    financial_due, current_financial_marker, financial_marker_changed = financial_refresh_due(
+        info=info, prior_sync=prior_sync, as_of=as_of,
+        initialize_due=refresh_financials, retry_pending=retry_financials,
+    )
+    if same_session_retry:
+        financial_groups = failed_financial_groups
+    elif retry_financials:
+        financial_groups = failed_financial_groups or set(FINANCIAL_GROUPS)
+    elif financial_due:
+        financial_groups = set(FINANCIAL_GROUPS)
+    else:
+        financial_groups = set()
+    financial_attempted = bool(financial_groups)
+    if financial_attempted:
+        statements, valuation, financial_status = collect_financials(
+            ticker, old, client, bucket, symbol,
+            fetch_groups=financial_groups, previous_status=prior_field_status,
+        )
         financial_retry_pending = any(value == "failed" for value in financial_status.values() if isinstance(value, str))
         if isinstance(financial_status.get("fields"), dict):
             financial_retry_pending = financial_retry_pending or any(
@@ -992,11 +1036,11 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             )
     else:
         statements, valuation = [], []
-        financial_status = prior_current.get("field_status", {}).get("financial_fields", {})
+        financial_status = prior_field_status.get("financial_fields", {})
         if not isinstance(financial_status, dict):
             financial_status = {}
         financial_status = {**financial_status, "refresh_status": "not_scheduled"}
-        financial_retry_pending = bool(prior_sync.get("financial_retry_pending"))
+        financial_retry_pending = retry_financials
     names = japanese_names(info)
     profile = {
         "schema_version": 1,
@@ -1185,7 +1229,15 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "legacy_monthly_migrated": bool(prior_sync.get("legacy_monthly_migrated")) or legacy_monthly_migration_pending,
         "full_history_initialized": bool(prior_sync.get("full_history_initialized")) or full_history_refreshed,
         "financials_initialized": bool(prior_sync.get("financials_initialized")) or (
-            refresh_financials and not financial_retry_pending
+            financial_attempted and not financial_retry_pending
+        ),
+        "financial_refresh_policy_version": (
+            1 if financial_attempted or prior_sync.get("financial_refresh_policy_version") == 1 else None
+        ),
+        "financial_period_marker": current_financial_marker or prior_sync.get("financial_period_marker"),
+        "financials_last_checked_session_date": (
+            as_of.isoformat() if financial_attempted
+            else prior_sync.get("financials_last_checked_session_date")
         ),
         "monthly_retry_pending": monthly_status == "failed" or (
             not update_monthly_now and bool(prior_sync.get("monthly_retry_pending"))
@@ -1390,8 +1442,11 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
         attempt_count = attempts_used + 1
         retry_full_history = (bucket_for(code, FULL_HISTORY_BUCKETS) == full_history_bucket
                               or previous_sync.get("long_history_retry_pending") is True)
-        retry_financials = (bucket_for(code, FINANCIAL_BUCKETS) == financial_bucket
-                            or previous_sync.get("financial_retry_pending") is True)
+        retry_financials = previous_sync.get("financial_retry_pending") is True
+        initialize_financials = (
+            bucket_for(code, FINANCIAL_BUCKETS) == financial_bucket
+            and previous_sync.get("financial_refresh_policy_version") != 1
+        )
         previous_monthly = previous_sync.get("monthly_history_schema_version") == 2
         initialize_monthly = bucket_for(code, FULL_HISTORY_BUCKETS) == full_history_bucket
         retry_monthly = (
@@ -1405,7 +1460,7 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
                 client, bucket, code, symbol, session_date,
                 attempt_count=attempt_count,
                 refresh_full_history=retry_full_history,
-                refresh_financials=retry_financials,
+                refresh_financials=initialize_financials,
                 refresh_monthly=december_end_session,
                 initialize_monthly=initialize_monthly,
                 retry_monthly=retry_monthly,
@@ -1414,7 +1469,7 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
             save_failure(
                 client, bucket, code, symbol, session_date, exc,
                 attempt_count=attempt_count, retry_full_history=retry_full_history,
-                retry_financials=retry_financials, retry_monthly=retry_monthly,
+                retry_financials=retry_financials or initialize_financials, retry_monthly=retry_monthly,
             )
             raise
 
