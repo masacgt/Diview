@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import sys
 import time
@@ -38,6 +39,75 @@ def attempt(name: str, call, failures: Counter[str]) -> None:
     except Exception as exc:
         failures[type(exc).__name__] += 1
         print(f"{name} failed: {type(exc).__name__}: {str(exc)[:240]}", file=sys.stderr, flush=True)
+
+
+def measure_action_method(symbol: str, method: str, session_date) -> dict[str, object]:
+    """Compare repaired price-history actions with yfinance's actions-only result accessor."""
+    ticker = yf.Ticker(symbol)
+    session = ticker._data._session
+    original_get = session.get
+    response_bytes = 0
+
+    def counted_get(*args, **kwargs):
+        nonlocal response_bytes
+        response = original_get(*args, **kwargs)
+        response_bytes += len(getattr(response, "content", b"") or b"")
+        return response
+
+    started = time.perf_counter()
+    session.get = counted_get
+    try:
+        if method == "repaired_history":
+            dividends, splits, _, _ = sync.fetch_repaired_action_history(ticker, session_date, period="1y")
+        else:
+            actions = ticker.get_actions(period="1y")
+            dividends, splits = [], []
+            if actions is not None and not getattr(actions, "empty", True):
+                if hasattr(actions, "iterrows"):
+                    for timestamp, row in actions.iterrows():
+                        event_date = sync.date_value(timestamp)
+                        if event_date is None or event_date > session_date:
+                            continue
+                        amount = sync.finite_number(row.get("Dividends"))
+                        ratio = sync.finite_number(row.get("Stock Splits"))
+                        if amount and amount > 0:
+                            dividends.append({"date": event_date.isoformat(), "amount": amount})
+                        if ratio and ratio > 0:
+                            splits.append({"date": event_date.isoformat(), "ratio": ratio})
+        return {
+            "method": method,
+            "elapsed_seconds": round(time.perf_counter() - started, 3),
+            "response_body_bytes": response_bytes,
+            "dividend_event_count": len(dividends),
+            "split_event_count": len(splits),
+            "event_fingerprint": hashlib.sha256(json.dumps(
+                {"dividends": dividends, "splits": splits}, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")).hexdigest(),
+        }
+    finally:
+        session.get = original_get
+
+
+def compare_action_methods(sample: list[dict[str, str]], session_date) -> dict[str, object]:
+    results = []
+    for entry in sample[: min(6, len(sample))]:
+        symbol = sync.market_symbol(entry["security_code_display"])
+        for method in ("repaired_history", "actions_accessor"):
+            try:
+                result = measure_action_method(symbol, method, session_date)
+                result["symbol"] = symbol
+                results.append(result)
+            except Exception as exc:
+                results.append({
+                    "symbol": symbol,
+                    "method": method,
+                    "error": f"{type(exc).__name__}: {str(exc)[:240]}",
+                })
+    return {
+        "sample_count": min(6, len(sample)),
+        "results": results,
+        "note": "response_body_bytes counts decoded HTTP response bodies, not TLS/compression wire bytes; comparison is non-publishing and does not replace repair=True collection.",
+    }
 
 
 def main() -> int:
@@ -101,6 +171,7 @@ def main() -> int:
 
     elapsed = round(time.perf_counter() - started, 3)
     calls = dict(sorted(sync._YF_CALLS.items()))
+    action_comparison = compare_action_methods(sample, session_date)
     report = {
         "universe_count": len(universe),
         "sample_count": len(sample),
@@ -110,9 +181,10 @@ def main() -> int:
         "yfinance_call_count": sum(calls.values()),
         "yfinance_calls": calls,
         "failed_requests": dict(sorted(failures.items())),
+        "action_method_comparison": action_comparison,
         "r2_accessed": False,
         "r2_written": False,
-        "note": "Measures daily profile/close/actions plus rotating eight-year December prices and split-triggered refreshes; excludes hidden HTTP retries and R2 publication work.",
+        "note": "Measures daily profile/close/actions plus rotating eight-year December prices and split-triggered refreshes. Action-method comparison separately measures elapsed time, decoded response bytes, and event counts; excludes hidden HTTP retries and R2 publication work.",
     }
     print("BENCHMARK_RESULT=" + json.dumps(report, ensure_ascii=False, sort_keys=True), flush=True)
     return 1 if failures else 0
