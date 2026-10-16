@@ -12,6 +12,7 @@ import re
 import sys
 import threading
 import time
+from collections import Counter
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
@@ -42,6 +43,69 @@ _YF_CALLS: dict[str, int] = {}
 _R2_DOCUMENT_CACHE = threading.local()
 
 
+class ActivityTimeline:
+    """Measure wall-clock intervals with Yahoo and R2 requests active, including overlap."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.intervals: list[tuple[str, float, float]] = []
+
+    def record(self, category: str, started: float, ended: float) -> None:
+        if ended <= started:
+            return
+        with self.lock:
+            self.intervals.append((category, started, ended))
+
+    def snapshot(self, window_start: float, window_end: float) -> dict[str, float]:
+        if window_end < window_start:
+            raise ValueError("activity window end precedes start")
+        with self.lock:
+            intervals = tuple(self.intervals)
+        boundaries: dict[float, dict[str, int]] = {}
+        for category, started, ended in intervals:
+            left = max(window_start, started)
+            right = min(window_end, ended)
+            if right <= left:
+                continue
+            boundaries.setdefault(left, {}).setdefault(category, 0)
+            boundaries[left][category] += 1
+            boundaries.setdefault(right, {}).setdefault(category, 0)
+            boundaries[right][category] -= 1
+
+        active: Counter[str] = Counter()
+        totals = Counter()
+        points = sorted(set(boundaries) | {window_start, window_end})
+        for index, point in enumerate(points[:-1]):
+            for category, delta in boundaries.get(point, {}).items():
+                active[category] += delta
+                if active[category] <= 0:
+                    active.pop(category, None)
+            duration = points[index + 1] - point
+            yahoo_active = active.get("yfinance", 0) > 0
+            r2_active = active.get("r2", 0) > 0
+            if yahoo_active:
+                totals["yfinance_active_wall_seconds"] += duration
+            if r2_active:
+                totals["r2_active_wall_seconds"] += duration
+            if yahoo_active and r2_active:
+                totals["overlap_wall_seconds"] += duration
+            elif yahoo_active:
+                totals["yfinance_only_wall_seconds"] += duration
+            elif r2_active:
+                totals["r2_only_wall_seconds"] += duration
+            else:
+                totals["other_wall_seconds"] += duration
+
+        return {
+            "window_wall_seconds": round(window_end - window_start, 3),
+            **{key: round(totals[key], 3) for key in (
+                "yfinance_active_wall_seconds", "r2_active_wall_seconds",
+                "overlap_wall_seconds", "yfinance_only_wall_seconds",
+                "r2_only_wall_seconds", "other_wall_seconds",
+            )},
+        }
+
+
 class R2Metrics:
     """Thread-safe timings for R2 operations performed by the sync run."""
 
@@ -49,11 +113,15 @@ class R2Metrics:
         self.lock = threading.Lock()
         self.calls: dict[str, int] = {}
         self.seconds: dict[str, float] = {}
+        self.activity = ActivityTimeline()
 
-    def record(self, operation: str, elapsed: float) -> None:
+    def record(self, operation: str, elapsed: float, *, started: float | None = None,
+               ended: float | None = None) -> None:
         with self.lock:
             self.calls[operation] = self.calls.get(operation, 0) + 1
             self.seconds[operation] = self.seconds.get(operation, 0.0) + elapsed
+        if started is not None and ended is not None:
+            self.activity.record("r2", started, ended)
 
     def snapshot(self) -> dict[str, Any]:
         with self.lock:
@@ -73,7 +141,8 @@ class _MeasuredBody:
         try:
             return self.body.read(*args, **kwargs)
         finally:
-            self.metrics.record("get_body", time.perf_counter() - started)
+            ended = time.perf_counter()
+            self.metrics.record("get_body", ended - started, started=started, ended=ended)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self.body, name)
@@ -92,9 +161,12 @@ class _MeasuredPaginator:
                 page = next(pages)
             except StopIteration:
                 return
-            finally:
-                elapsed = time.perf_counter() - started
-            self.metrics.record("list_objects_v2", elapsed)
+            except Exception:
+                ended = time.perf_counter()
+                self.metrics.record("list_objects_v2", ended - started, started=started, ended=ended)
+                raise
+            ended = time.perf_counter()
+            self.metrics.record("list_objects_v2", ended - started, started=started, ended=ended)
             yield page
 
     def __getattr__(self, name: str) -> Any:
@@ -123,7 +195,8 @@ class MeasuredR2Client:
             try:
                 response = method(*args, **kwargs)
             finally:
-                self.metrics.record(name, time.perf_counter() - started)
+                ended = time.perf_counter()
+                self.metrics.record(name, ended - started, started=started, ended=ended)
             if name == "get_object" and isinstance(response, dict) and response.get("Body") is not None:
                 response = dict(response)
                 response["Body"] = _MeasuredBody(response["Body"], self.metrics)
@@ -145,6 +218,7 @@ class GlobalHttpRateLimiter:
         self.request_count = 0
         self.http_429_count = 0
         self.original_request = None
+        self.activity: ActivityTimeline | None = None
 
     def __enter__(self):
         from curl_cffi.requests import Session
@@ -159,7 +233,12 @@ class GlobalHttpRateLimiter:
                     time.sleep(self.next_start - now)
                 self.next_start = time.monotonic() + self.interval
                 self.request_count += 1
-            response = self.original_request(session, *args, **kwargs)
+            request_started = time.perf_counter()
+            try:
+                response = self.original_request(session, *args, **kwargs)
+            finally:
+                if self.activity is not None:
+                    self.activity.record("yfinance", request_started, time.perf_counter())
             if getattr(response, "status_code", None) == 429:
                 with self.lock:
                     self.http_429_count += 1
@@ -199,6 +278,49 @@ CASH_FLOW_FIELDS = {
 
 def now_utc() -> datetime:
     return datetime.now(UTC)
+
+
+def exception_http_status(error: Exception) -> int | None:
+    candidates = [getattr(error, "status_code", None), getattr(error, "code", None)]
+    response = getattr(error, "response", None)
+    if isinstance(response, dict):
+        candidates.extend((response.get("status_code"), response.get("status")))
+        response_error = response.get("Error")
+        if isinstance(response_error, dict):
+            candidates.append(response_error.get("HTTPStatusCode"))
+    elif response is not None:
+        candidates.extend((getattr(response, "status_code", None), getattr(response, "status", None)))
+    for candidate in candidates:
+        try:
+            status = int(candidate)
+        except (TypeError, ValueError):
+            continue
+        if 100 <= status <= 599:
+            return status
+    message = str(error)
+    match = re.search(
+        r"\b(?:HTTP(?:\s+Error)?\s*[:=]?\s*|HTTP/\d(?:\.\d)?\s+)(\d{3})\b"
+        r"|\b([45]\d\d)\s+(?:Client|Server) Error\b",
+        message,
+        re.IGNORECASE,
+    )
+    if match:
+        return int(match.group(1) or match.group(2))
+    return None
+
+
+def classify_yfinance_error(error: Exception) -> str:
+    """Separate absent Yahoo data from retryable service/network errors."""
+    error_name = type(error).__name__
+    status = exception_http_status(error)
+    if error_name == "YFPricesMissingError" or status == 404:
+        return "no_data"
+    if error_name == "YFRateLimitError" or status in {408, 425, 429} or (status is not None and 500 <= status <= 599):
+        return "transient"
+    lowered_name = error_name.lower()
+    if any(token in lowered_name for token in ("timeout", "connectionerror", "networkerror")):
+        return "transient"
+    return "unknown"
 
 
 def iso_now() -> str:
@@ -769,6 +891,14 @@ def same_session_partial_retry(prior_sync: dict[str, Any], as_of: date) -> bool:
         prior_sync.get("status") in {"partial", "running"}
         and prior_sync.get("retry_session_date") == as_of.isoformat()
         and prior_sync.get("last_success_session_date") == as_of.isoformat()
+    )
+
+
+def skip_same_session_no_data_retry(prior_sync: dict[str, Any], as_of: date) -> bool:
+    return (
+        prior_sync.get("failure_class") == "no_data"
+        and prior_sync.get("retry_session_date") == as_of.isoformat()
+        and prior_sync.get("status") in {"failed", "running"}
     )
 
 
@@ -1764,6 +1894,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         ) or (not full_history_attempted and bool(prior_sync.get("long_history_retry_pending"))),
         "financial_retry_pending": financial_retry_pending,
         "failure_reason": f"Field fetch failed: {', '.join(field_failures)}"[:500] if field_failures else None,
+        "failure_class": None,
+        "retry_policy": None,
         "attempt_count_today": attempt_count,
         "retry_count_today": max(0, attempt_count - 1),
         "retry_session_date": as_of.isoformat(),
@@ -1796,11 +1928,14 @@ def save_failure(client: Any, bucket: str, code: str, symbol: str, session_date:
                  retry_financials: bool = False, retry_monthly: bool = False) -> None:
     safe = safe_symbol(symbol)
     prior = read_json(client, bucket, object_key("securities", safe, "sync.json")) or {}
+    failure_class = classify_yfinance_error(error)
     prior.update({
         "schema_version": 1, "code": code, "symbol": symbol,
         "status": "failed", "last_attempt_at": iso_now(),
         "last_attempt_session_date": session_date.isoformat(),
         "failure_reason": f"{type(error).__name__}: {error}"[:500],
+        "failure_class": failure_class,
+        "retry_policy": "next_market_session" if failure_class == "no_data" else "same_session_retryable_limited",
         "attempt_count_today": attempt_count,
         "retry_count_today": max(0, attempt_count - 1),
         "retry_session_date": session_date.isoformat(),
@@ -1988,6 +2123,14 @@ def run(*, publish: bool, max_workers: int, dry_run: bool, reprocess_successful:
                 attempts_used = max(0, int(previous_sync.get("attempt_count_today", 0)))
             except (TypeError, ValueError):
                 attempts_used = 0
+        if skip_same_session_no_data_retry(previous_sync, session_date):
+            return {
+                "code": code,
+                "symbol": symbol,
+                "status": "failed",
+                "skip_no_data_retry": True,
+                "failure_reason": previous_sync.get("failure_reason") or "Yahoo returned no data",
+            }
         if (previous_sync.get("status") == "ok"
                 and previous_sync.get("last_success_session_date") == session_date.isoformat()
                 and not reprocess_successful):
@@ -2041,6 +2184,7 @@ def run(*, publish: bool, max_workers: int, dry_run: bool, reprocess_successful:
     rate_limiter = GlobalHttpRateLimiter(
         float(os.environ.get("YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND", "8"))
     )
+    rate_limiter.activity = r2_metrics.activity
     phase_started = time.perf_counter()
     with rate_limiter:
         with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
@@ -2049,7 +2193,12 @@ def run(*, publish: bool, max_workers: int, dry_run: bool, reprocess_successful:
                 completed_count += 1
                 code = futures[future]
                 try:
-                    results[code] = future.result()
+                    result = future.result()
+                    if result.get("skip_no_data_retry"):
+                        failures[code] = str(result.get("failure_reason") or "Yahoo returned no data")
+                        print(f"SKIP same-session no-data retry {code}: {failures[code]}", flush=True)
+                    else:
+                        results[code] = result
                 except Exception as exc:
                     failures[code] = f"{type(exc).__name__}: {exc}"
                     print(f"FAILED {code}: {failures[code]}", file=sys.stderr, flush=True)
@@ -2063,7 +2212,9 @@ def run(*, publish: bool, max_workers: int, dry_run: bool, reprocess_successful:
                         flush=True,
                     )
 
-    phase_seconds["security_collection"] = round(time.perf_counter() - phase_started, 3)
+    collection_ended = time.perf_counter()
+    phase_seconds["security_collection"] = round(collection_ended - phase_started, 3)
+    collection_activity = r2_metrics.activity.snapshot(phase_started, collection_ended)
     phase_started = time.perf_counter()
     universe_rows = active_universe(client, bucket, fetched, session_date)
     for row in universe_rows:
@@ -2120,6 +2271,7 @@ def run(*, publish: bool, max_workers: int, dry_run: bool, reprocess_successful:
         "http_request_count": rate_limiter.request_count,
         "http_429_count": rate_limiter.http_429_count,
         "phase_seconds": phase_seconds,
+        "security_collection_activity": collection_activity,
         "r2_metrics_before_publication_record": r2_metrics.snapshot(),
         "rotation": {
             "full_history_bucket": full_history_bucket,
@@ -2153,6 +2305,7 @@ def run(*, publish: bool, max_workers: int, dry_run: bool, reprocess_successful:
     )
     print(
         "Phase timings: " + json.dumps(phase_seconds, ensure_ascii=False, sort_keys=True)
+        + "; security-collection activity: " + json.dumps(collection_activity, ensure_ascii=False, sort_keys=True)
         + "; R2 operations: " + json.dumps(r2_metrics.snapshot(), ensure_ascii=False, sort_keys=True),
         flush=True,
     )

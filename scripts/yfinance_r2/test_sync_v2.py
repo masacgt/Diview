@@ -1,5 +1,7 @@
 from datetime import date, datetime
 import json
+import tempfile
+from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -98,6 +100,21 @@ class CatalogTests(TestCase):
 
 
 class R2MetricsTests(TestCase):
+    def test_activity_timeline_separates_and_counts_overlapping_work(self):
+        timeline = sync.ActivityTimeline()
+        timeline.record("yfinance", 1.0, 4.0)
+        timeline.record("r2", 3.0, 5.0)
+
+        self.assertEqual(timeline.snapshot(0.0, 6.0), {
+            "window_wall_seconds": 6.0,
+            "yfinance_active_wall_seconds": 3.0,
+            "r2_active_wall_seconds": 2.0,
+            "overlap_wall_seconds": 1.0,
+            "yfinance_only_wall_seconds": 2.0,
+            "r2_only_wall_seconds": 1.0,
+            "other_wall_seconds": 2.0,
+        })
+
     def test_measured_client_counts_requests_and_body_reads(self):
         class Body:
             def read(self):
@@ -287,6 +304,96 @@ class EventPartitionPersistenceTests(TestCase):
 
 
 class SyncPolicyTests(TestCase):
+    def test_yahoo_missing_data_and_transient_errors_are_classified(self):
+        class YFPricesMissingError(Exception):
+            pass
+
+        class HttpError(Exception):
+            response = type("Response", (), {"status_code": 404})()
+
+        class RateLimited(Exception):
+            response = type("Response", (), {"status_code": 429})()
+
+        class ServerFailure(Exception):
+            response = type("Response", (), {"status_code": 503})()
+
+        self.assertEqual(sync.classify_yfinance_error(YFPricesMissingError()), "no_data")
+        self.assertEqual(sync.classify_yfinance_error(HttpError("missing")), "no_data")
+        self.assertEqual(sync.classify_yfinance_error(RateLimited("rate limited")), "transient")
+        self.assertEqual(sync.classify_yfinance_error(ServerFailure("unavailable")), "transient")
+        self.assertEqual(sync.classify_yfinance_error(TimeoutError("timed out")), "transient")
+        self.assertEqual(sync.classify_yfinance_error(ValueError("bad response")), "unknown")
+        self.assertEqual(sync.classify_yfinance_error(RuntimeError("HTTP 404 Not Found")), "no_data")
+
+    def test_no_data_is_skipped_only_after_it_failed_in_the_same_session(self):
+        prior = {
+            "failure_class": "no_data",
+            "retry_policy": "next_market_session",
+            "retry_session_date": "2026-10-16",
+            "status": "failed",
+        }
+        self.assertTrue(sync.skip_same_session_no_data_retry(prior, date(2026, 10, 16)))
+        self.assertFalse(sync.skip_same_session_no_data_retry(prior, date(2026, 10, 19)))
+        self.assertFalse(sync.skip_same_session_no_data_retry({**prior, "failure_class": "transient"}, date(2026, 10, 16)))
+
+    def test_no_data_failure_state_preserves_the_last_success_and_defers_retry(self):
+        previous = {
+            "status": "ok",
+            "last_success_session_date": "2026-10-15",
+            "last_success_at": "2026-10-15T12:00:00+00:00",
+        }
+        with patch.object(sync, "read_json", return_value=previous), \
+             patch.object(sync, "put_json_if_changed") as write:
+            sync.save_failure(
+                object(), "bucket", "7203", "7203.T", date(2026, 10, 16),
+                RuntimeError("HTTP Error 404: Not Found"), attempt_count=1,
+            )
+
+        saved = write.call_args.args[3]
+        self.assertEqual(saved["status"], "failed")
+        self.assertEqual(saved["failure_class"], "no_data")
+        self.assertEqual(saved["retry_policy"], "next_market_session")
+        self.assertEqual(saved["last_success_session_date"], "2026-10-15")
+        self.assertEqual(saved["attempt_count_today"], 1)
+
+    def test_action_sample_includes_recent_split_and_reverse_split_codes(self):
+        universe = [
+            {"security_code_display": f"{number:04d}", "security_type": "listed_security"}
+            for number in range(1, 9)
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            events_path = Path(temp_dir) / "events.csv"
+            events_path.write_text(
+                "code,effective_date,factor,event_type\n"
+                "0001,2026-06-01,2,split\n"
+                "0002,2026-07-01,0.1,reverse_split\n"
+                "0003,2024-01-01,3,split\n",
+                encoding="utf-8",
+            )
+            sample, summary = benchmark.action_stratified_sample(
+                universe, universe[:6], 6, date(2026, 10, 16), events_path,
+            )
+
+        codes = {row["security_code_display"] for row in sample}
+        self.assertEqual(len(sample), 6)
+        self.assertTrue({"0001", "0002"}.issubset(codes))
+        self.assertEqual(summary["known_recent_event_codes_in_jquants_universe"], 2)
+        self.assertEqual(summary["sampled_recent_event_types"], {"reverse_split": 1, "split": 1})
+
+    def test_action_method_comparison_covers_the_entire_sample(self):
+        sample = [{"security_code_display": f"{number:04d}"} for number in range(12)]
+
+        def measured(symbol, method, session_date):
+            return {"symbol": symbol, "method": method, "event_fingerprint": "same"}
+
+        with patch.object(benchmark, "measure_action_method", side_effect=measured) as mock_measure:
+            summary, details = benchmark.compare_action_methods(sample, date(2026, 10, 16))
+
+        self.assertEqual(mock_measure.call_count, 24)
+        self.assertEqual(summary["comparison_count"], 12)
+        self.assertEqual(summary["equal_event_fingerprints"], 12)
+        self.assertEqual(len(details), 24)
+
     def test_pre_market_sync_uses_latest_completed_xtks_session(self):
         before_open = datetime(2026, 10, 16, 6, 0, tzinfo=sync.JST)
         after_close = datetime(2026, 10, 16, 21, 30, tzinfo=sync.JST)
