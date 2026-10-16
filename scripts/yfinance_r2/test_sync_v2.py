@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
+import benchmark_v2 as benchmark
 import sync_v2 as sync
 
 
@@ -136,6 +137,11 @@ class SyncPolicyTests(TestCase):
 
         self.assertEqual(sync.latest_completed_xtks_session(before_open), date(2026, 10, 15))
         self.assertEqual(sync.latest_completed_xtks_session(after_close), date(2026, 10, 16))
+
+    def test_weekend_benchmark_uses_latest_completed_xtks_session(self):
+        saturday = datetime(2026, 10, 17, 12, 0, tzinfo=sync.JST)
+
+        self.assertEqual(benchmark.benchmark_session_date(saturday), date(2026, 10, 16))
 
     def test_today_close_requires_exact_session_date(self):
         rows = [
