@@ -142,6 +142,10 @@ class SyncPolicyTests(TestCase):
         saturday = datetime(2026, 10, 17, 12, 0, tzinfo=sync.JST)
 
         self.assertEqual(benchmark.benchmark_session_date(saturday), date(2026, 10, 16))
+        self.assertEqual(
+            benchmark.benchmark_session_date(saturday, date(2026, 10, 15)),
+            date(2026, 10, 15),
+        )
 
     def test_today_close_requires_exact_session_date(self):
         rows = [
