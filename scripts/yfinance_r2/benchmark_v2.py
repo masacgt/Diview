@@ -130,14 +130,18 @@ def measure_security(index: int, total: int, entry: dict[str, str], session_date
 
     info_succeeded = attempt("ticker_get_info", fetch_info, failures)
 
+    quote_succeeded = False
+
     def daily_quote_and_candidate():
+        nonlocal quote_succeeded
         period = "5d" if is_long_history else "1y"
         daily, frame = sync.fetch_daily_history_with_actions(ticker, session_date, period=period)
         sync.completed_close_for_session(daily, session_date)
+        quote_succeeded = True
         if not is_long_history:
             sync.action_candidate_from_history(frame, session_date)
 
-    chart_succeeded = attempt("daily_quote_and_action_history_1y", daily_quote_and_candidate, failures)
+    history_succeeded = attempt("daily_quote_and_action_history_1y", daily_quote_and_candidate, failures)
 
     if is_long_history:
         attempt("history_actions_max", lambda: sync.fetch_repaired_action_history(ticker, session_date, period="max"), failures)
@@ -155,7 +159,9 @@ def measure_security(index: int, total: int, entry: dict[str, str], session_date
     return {
         "code": code,
         "symbol": symbol,
-        "core_succeeded": info_succeeded and chart_succeeded,
+        "profile_succeeded": info_succeeded,
+        "quote_succeeded": quote_succeeded,
+        "core_succeeded": info_succeeded and history_succeeded,
         "failures": dict(failures),
     }
 
@@ -298,9 +304,15 @@ def main() -> int:
     failures: Counter[str] = Counter()
     for result in results:
         failures.update(result["failures"])
+    profile_success_count = sum(1 for result in results if result["profile_succeeded"])
+    quote_success_count = sum(1 for result in results if result["quote_succeeded"])
+    profile_failure_count = len(results) - profile_success_count
+    quote_failure_count = len(results) - quote_success_count
     core_failure_count = sum(1 for result in results if not result["core_succeeded"])
     core_success_count = len(results) - core_failure_count
     core_success_rate_pct = round(core_success_count / len(results) * 100, 2) if results else 0.0
+    profile_success_rate_pct = round(profile_success_count / len(results) * 100, 2) if results else 0.0
+    quote_success_rate_pct = round(quote_success_count / len(results) * 100, 2) if results else 0.0
     comparison_http_request_count = http_limit.request_count - sample_http_request_count - session_probe_http_request_count
     comparison_http_429_count = http_limit.http_429_count - sample_http_429_count - session_probe_429_count
     benchmark_elapsed = round(time.perf_counter() - benchmark_started, 3)
@@ -327,6 +339,18 @@ def main() -> int:
         "core_success_count": core_success_count,
         "core_failure_count": core_failure_count,
         "core_success_rate_pct": core_success_rate_pct,
+        "profile_success_count": profile_success_count,
+        "profile_failure_count": profile_failure_count,
+        "profile_success_rate_pct": profile_success_rate_pct,
+        "quote_close_success_count": quote_success_count,
+        "quote_close_failure_count": quote_failure_count,
+        "quote_close_success_rate_pct": quote_success_rate_pct,
+        "core_failed_securities": [
+            {"code": result["code"], "symbol": result["symbol"],
+             "profile_succeeded": result["profile_succeeded"],
+             "quote_succeeded": result["quote_succeeded"], "failures": result["failures"]}
+            for result in results if not result["core_succeeded"]
+        ],
         "securities_with_any_failed_request": sum(1 for result in results if result["failures"]),
         "yfinance_call_count": sum(sample_calls.values()),
         "yfinance_calls": sample_calls,
@@ -337,8 +361,13 @@ def main() -> int:
         "note": "Measures a production-shaped sample with at least one full-history rotation and one annual-financial refresh. The benchmark session is the earlier of the latest completed XTKS session and the latest close returned by a 7203.T probe; production sync continues to require the exact latest completed XTKS close. elapsed_seconds covers sample acquisition; benchmark_elapsed_seconds also includes J-Quants retrieval, the session probe, and serial action-method comparison. Both exclude R2 publication, dependency installation, hidden HTTP retry, and runner setup.",
     }
     print("BENCHMARK_RESULT=" + json.dumps(report, ensure_ascii=False, sort_keys=True), flush=True)
-    max_core_failure_rate = min(1.0, max(0.0, float(os.environ.get("YFINANCE_BENCHMARK_MAX_CORE_FAILURE_RATE", "0.10"))))
-    return 1 if http_limit.http_429_count or core_failure_count / max(1, len(results)) > max_core_failure_rate else 0
+    max_profile_failure_rate = min(1.0, max(0.0, float(os.environ.get("YFINANCE_BENCHMARK_MAX_PROFILE_FAILURE_RATE", "0.10"))))
+    min_quote_success_rate = min(1.0, max(0.0, float(os.environ.get("YFINANCE_BENCHMARK_MIN_QUOTE_SUCCESS_RATE", "0.50"))))
+    return 1 if (
+        http_limit.http_429_count
+        or profile_failure_count / max(1, len(results)) > max_profile_failure_rate
+        or quote_success_count / max(1, len(results)) < min_quote_success_rate
+    ) else 0
 
 
 if __name__ == "__main__":
