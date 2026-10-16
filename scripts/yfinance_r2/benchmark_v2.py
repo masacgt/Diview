@@ -10,6 +10,7 @@ import threading
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date
 
 import yfinance as yf
 
@@ -224,9 +225,10 @@ def compare_action_methods(sample: list[dict[str, str]], session_date) -> dict[s
     }
 
 
-def benchmark_session_date(now=None):
-    """Use the latest completed Tokyo session, including for weekend/manual runs."""
-    return sync.latest_completed_xtks_session(now)
+def benchmark_session_date(now=None, latest_yahoo_date: date | None = None) -> date:
+    """Bound the benchmark date by both the latest XTKS session and Yahoo's available close."""
+    latest_session = sync.latest_completed_xtks_session(now)
+    return min(latest_session, latest_yahoo_date) if latest_yahoo_date else latest_session
 
 
 def main() -> int:
@@ -240,7 +242,7 @@ def main() -> int:
         configure()
     universe = fetch_securities(api_key)
     sample = ensure_workload_coverage(universe, sample_universe(universe, limit))
-    session_date = benchmark_session_date()
+    expected_session_date = sync.latest_completed_xtks_session()
     worker_count = max(1, int(os.environ.get("YFINANCE_BENCHMARK_WORKERS", "16")))
     max_requests_per_second = float(os.environ.get("YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND", "8"))
     http_limit = HttpRateLimit(max_requests_per_second)
@@ -250,19 +252,45 @@ def main() -> int:
     action_comparison = None
     sample_http_request_count = 0
     sample_http_429_count = 0
+    session_probe_http_request_count = 0
+    session_probe_429_count = 0
+    session_probe_yahoo_date = None
+    session_probe_elapsed = 0.0
+    session_probe_calls: dict[str, int] = {}
     with sync._YF_CALL_LOCK:
         sample_calls: dict[str, int] = {}
     try:
+        probe_started = time.perf_counter()
+        probe = yf.Ticker("7203.T")
+        probe_daily, _ = sync.fetch_daily_history_with_actions(
+            probe, expected_session_date, period="5d",
+        )
+        if not probe_daily:
+            raise RuntimeError("Yahoo session probe returned no completed daily close")
+        session_probe_yahoo_date = max(date.fromisoformat(str(row["date"])) for row in probe_daily)
+        session_date = benchmark_session_date(latest_yahoo_date=session_probe_yahoo_date)
+        session_probe_elapsed = round(time.perf_counter() - probe_started, 3)
+        session_probe_http_request_count = http_limit.request_count
+        session_probe_429_count = http_limit.http_429_count
+        with sync._YF_CALL_LOCK:
+            session_probe_calls = dict(sorted(sync._YF_CALLS.items()))
+
+        sample_started = time.perf_counter()
         with ThreadPoolExecutor(max_workers=worker_count) as pool:
             futures = [pool.submit(measure_security, index, len(sample), entry, session_date)
                        for index, entry in enumerate(sample, start=1)]
             for future in as_completed(futures):
                 results.append(future.result())
-        elapsed = round(time.perf_counter() - started, 3)
-        sample_http_request_count = http_limit.request_count
-        sample_http_429_count = http_limit.http_429_count
+        elapsed = round(time.perf_counter() - sample_started, 3)
+        sample_http_request_count = http_limit.request_count - session_probe_http_request_count
+        sample_http_429_count = http_limit.http_429_count - session_probe_429_count
         with sync._YF_CALL_LOCK:
-            sample_calls = dict(sorted(sync._YF_CALLS.items()))
+            all_calls = dict(sorted(sync._YF_CALLS.items()))
+            sample_calls = {
+                name: count - session_probe_calls.get(name, 0)
+                for name, count in all_calls.items()
+                if count - session_probe_calls.get(name, 0) > 0
+            }
         action_comparison = compare_action_methods(sample, session_date)
     finally:
         http_limit.restore()
@@ -273,8 +301,8 @@ def main() -> int:
     core_failure_count = sum(1 for result in results if not result["core_succeeded"])
     core_success_count = len(results) - core_failure_count
     core_success_rate_pct = round(core_success_count / len(results) * 100, 2) if results else 0.0
-    comparison_http_request_count = http_limit.request_count - sample_http_request_count
-    comparison_http_429_count = http_limit.http_429_count - sample_http_429_count
+    comparison_http_request_count = http_limit.request_count - sample_http_request_count - session_probe_http_request_count
+    comparison_http_429_count = http_limit.http_429_count - sample_http_429_count - session_probe_429_count
     benchmark_elapsed = round(time.perf_counter() - benchmark_started, 3)
     report = {
         "universe_count": len(universe),
@@ -287,7 +315,13 @@ def main() -> int:
         "http_429_count": http_limit.http_429_count,
         "action_comparison_http_429_count": comparison_http_429_count,
         "http_rate_limit_circuit_tripped": http_limit.tripped,
+        "expected_session_date": expected_session_date.isoformat(),
         "session_date": session_date.isoformat(),
+        "session_fallback_used": session_date < expected_session_date,
+        "session_probe_yahoo_date": session_probe_yahoo_date.isoformat(),
+        "session_probe_elapsed_seconds": session_probe_elapsed,
+        "session_probe_http_request_count": session_probe_http_request_count,
+        "session_probe_yfinance_calls": session_probe_calls,
         "elapsed_seconds": elapsed,
         "benchmark_elapsed_seconds": benchmark_elapsed,
         "core_success_count": core_success_count,
@@ -300,7 +334,7 @@ def main() -> int:
         "action_method_comparison": action_comparison,
         "r2_accessed": False,
         "r2_written": False,
-        "note": "Measures a production-shaped sample with at least one full-history rotation and one annual-financial refresh, using the latest completed XTKS session, configured ticker worker count, and a process-wide HTTP request-start limiter. elapsed_seconds covers only sample acquisition; benchmark_elapsed_seconds also includes J-Quants universe retrieval and the serial action-method comparison. Both exclude R2 publication, dependency installation, hidden HTTP retry, and runner setup.",
+        "note": "Measures a production-shaped sample with at least one full-history rotation and one annual-financial refresh. The benchmark session is the earlier of the latest completed XTKS session and the latest close returned by a 7203.T probe; production sync continues to require the exact latest completed XTKS close. elapsed_seconds covers sample acquisition; benchmark_elapsed_seconds also includes J-Quants retrieval, the session probe, and serial action-method comparison. Both exclude R2 publication, dependency installation, hidden HTTP retry, and runner setup.",
     }
     print("BENCHMARK_RESULT=" + json.dumps(report, ensure_ascii=False, sort_keys=True), flush=True)
     max_core_failure_rate = min(1.0, max(0.0, float(os.environ.get("YFINANCE_BENCHMARK_MAX_CORE_FAILURE_RATE", "0.10"))))
