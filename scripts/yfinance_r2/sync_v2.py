@@ -12,6 +12,7 @@ import re
 import sys
 import threading
 import time
+from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
@@ -38,6 +39,7 @@ FINANCIAL_REFRESH_MAX_AGE_DAYS = 45
 FINANCIAL_GROUPS = ("income_statement", "balance_sheet", "cash_flow", "valuation")
 _YF_CALL_LOCK = threading.Lock()
 _YF_CALLS: dict[str, int] = {}
+_R2_DOCUMENT_CACHE = threading.local()
 
 
 class R2Metrics:
@@ -274,8 +276,57 @@ def object_key(*parts: str) -> str:
     return "/".join((ROOT, *parts))
 
 
-def read_json(client: Any, bucket: str, key: str) -> dict[str, Any] | None:
+@contextmanager
+def r2_document_cache_scope():
+    """Reuse a security's R2 documents during one worker task, then release them."""
+    previous = getattr(_R2_DOCUMENT_CACHE, "documents", None)
+    previous_listed_prefixes = getattr(_R2_DOCUMENT_CACHE, "listed_prefixes", None)
+    _R2_DOCUMENT_CACHE.documents = {}
+    _R2_DOCUMENT_CACHE.listed_prefixes = set()
+    try:
+        yield
+    finally:
+        _R2_DOCUMENT_CACHE.documents = previous
+        _R2_DOCUMENT_CACHE.listed_prefixes = previous_listed_prefixes
+
+
+def read_object(client: Any, bucket: str, key: str) -> bytes | None:
+    cache = getattr(_R2_DOCUMENT_CACHE, "documents", None)
+    cache_key = (bucket, key)
+    if cache is not None and cache_key in cache:
+        return cache[cache_key]
     raw = collector.read_object(client, bucket, key)
+    if cache is not None:
+        cache[cache_key] = raw
+    return raw
+
+
+def cache_object(client: Any, bucket: str, key: str, raw: bytes | None) -> None:
+    cache = getattr(_R2_DOCUMENT_CACHE, "documents", None)
+    if cache is not None:
+        cache[(bucket, key)] = raw
+
+
+def delete_object_if_present(client: Any, bucket: str, key: str) -> bool:
+    cache = getattr(_R2_DOCUMENT_CACHE, "documents", None)
+    cache_key = (bucket, key)
+    if cache is not None and cache_key not in cache:
+        if any(
+            listed_bucket == bucket and key.startswith(prefix)
+            for listed_bucket, prefix in getattr(_R2_DOCUMENT_CACHE, "listed_prefixes", set())
+        ):
+            return False
+    raw = read_object(client, bucket, key)
+    if raw is None:
+        return False
+    client.delete_object(Bucket=bucket, Key=key)
+    if cache is not None:
+        cache[cache_key] = None
+    return True
+
+
+def read_json(client: Any, bucket: str, key: str) -> dict[str, Any] | None:
+    raw = read_object(client, bucket, key)
     if raw is None:
         return None
     value = json.loads(raw)
@@ -285,8 +336,11 @@ def read_json(client: Any, bucket: str, key: str) -> dict[str, Any] | None:
 
 
 def put_json_if_changed(client: Any, bucket: str, key: str, value: dict[str, Any]) -> bool:
-    previous = collector.read_object(client, bucket, key)
-    return collector.put_json_if_changed(client, bucket, key, value, previous)
+    previous = read_object(client, bucket, key)
+    changed = collector.put_json_if_changed(client, bucket, key, value, previous)
+    if changed:
+        cache_object(client, bucket, key, collector.json_payload(value))
+    return changed
 
 
 def finite_number(value: Any) -> float | None:
@@ -399,12 +453,52 @@ def load_all_year_records(client: Any, bucket: Any, symbol: str, family: str,
     if include_archive:
         prefixes.append(object_key("archive", "events", safe, family) + "/")
     for prefix in prefixes:
+        listed_prefixes = getattr(_R2_DOCUMENT_CACHE, "listed_prefixes", None)
+        if listed_prefixes is not None:
+            listed_prefixes.add((bucket, prefix))
         for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
             for item in page.get("Contents", []):
                 document = read_json(client, bucket, item["Key"])
                 if document:
                     records.extend(row for row in document.get("records", []) if isinstance(row, dict))
     return records
+
+
+def load_year_records(client: Any, bucket: str, symbol: str, family: str,
+                      years: set[int], *, include_archive: bool = True) -> list[dict[str, Any]]:
+    safe = safe_symbol(symbol)
+    records: list[dict[str, Any]] = []
+    for year in sorted(years):
+        keys = [object_key("securities", safe, family, f"{year}.json")]
+        if include_archive:
+            keys.append(object_key("archive", "events", safe, family, f"{year}.json"))
+        for key in keys:
+            document = read_json(client, bucket, key)
+            if document:
+                records.extend(row for row in document.get("records", []) if isinstance(row, dict))
+    return records
+
+
+def load_recent_year_records(client: Any, bucket: str, symbol: str, family: str, as_of: date) -> list[dict[str, Any]]:
+    # Three calendar years cover a trailing 12-month period and the current
+    # fiscal-year event window, including fiscal years that straddle January.
+    years = set(range(as_of.year - 2, as_of.year + 1))
+    return load_year_records(client, bucket, symbol, family, years)
+
+
+def action_partitions_need_persist(
+    fresh_dividends: list[dict[str, Any]] | None,
+    fresh_splits: list[dict[str, Any]] | None,
+    legacy_dividends: list[dict[str, Any]],
+    legacy_splits: list[dict[str, Any]],
+) -> bool:
+    # A no-change daily chart is only a verification signal. Keep existing
+    # historical partitions intact instead of rewriting every year each day.
+    return (
+        fresh_dividends is not None
+        or fresh_splits is not None
+        or bool(legacy_dividends or legacy_splits)
+    )
 
 
 def series_records(
@@ -714,6 +808,22 @@ def read_monthly_points(client: Any, bucket: str, symbol: str, year: int) -> lis
     return points
 
 
+def list_object_keys(client: Any, bucket: str, prefixes: tuple[str, ...]) -> set[str]:
+    keys: set[str] = set()
+    paginator = client.get_paginator("list_objects_v2")
+    for prefix in prefixes:
+        listed_prefixes = getattr(_R2_DOCUMENT_CACHE, "listed_prefixes", None)
+        if listed_prefixes is not None:
+            listed_prefixes.add((bucket, prefix))
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            keys.update(
+                str(item["Key"])
+                for item in page.get("Contents", [])
+                if isinstance(item, dict) and item.get("Key")
+            )
+    return keys
+
+
 def save_monthly_prices(
     client: Any,
     bucket: str,
@@ -726,10 +836,26 @@ def save_monthly_prices(
     month_index = as_of.year * 12 + as_of.month - 1 - 12
     cutoff_hot = date(month_index // 12, month_index % 12 + 1, 1)
     first_year, latest_year = year_end_price_years(as_of)
+    monthly_prefixes = (
+        object_key("archive", "prices", "monthly", safe) + "/",
+        object_key("securities", safe, "prices", "monthly") + "/",
+    )
+    existing_keys = list_object_keys(client, bucket, monthly_prefixes)
     # Keep only the eight most recent completed December closes. A close from
     # the latest 13 months stays hot; older retained year-end prices are archived.
     for year in range(as_of.year - 10, as_of.year + 1):
-        points = read_monthly_points(client, bucket, symbol, year)
+        hot_key = object_key("securities", safe, "prices", "monthly", f"{year}.json")
+        archive_key = object_key("archive", "prices", "monthly", safe, f"{year}.json")
+        for key in (hot_key, archive_key):
+            if key not in existing_keys:
+                cache_object(client, bucket, key, None)
+        points: list[dict[str, Any]] = []
+        for key in (archive_key, hot_key):
+            if key not in existing_keys:
+                continue
+            document = read_json(client, bucket, key)
+            if document:
+                points.extend(row for row in document.get("points", []) if isinstance(row, dict))
         points.extend(point for point in fresh if point["month"].startswith(f"{year}-"))
         if not points:
             continue
@@ -750,13 +876,12 @@ def save_monthly_prices(
                 archived.append(point)
             else:
                 hot.append(point)
-        hot_key = object_key("securities", safe, "prices", "monthly", f"{year}.json")
-        archive_key = object_key("archive", "prices", "monthly", safe, f"{year}.json")
         if hot:
             put_json_if_changed(client, bucket, hot_key, {
                 "schema_version": 1, "symbol": symbol, "year": year, "points": hot,
                 "updated_at": iso_now(), "source": "Yahoo Finance via yfinance",
             })
+            existing_keys.add(hot_key)
         if archived:
             archive_document = {
                 "schema_version": 1, "symbol": symbol, "year": year, "points": archived,
@@ -766,22 +891,23 @@ def save_monthly_prices(
             saved = read_json(client, bucket, archive_key)
             if not saved or {item.get("month") for item in saved.get("points", [])} != {item.get("month") for item in archived}:
                 raise RuntimeError(f"Monthly price archive read-back failed: {archive_key}")
-        if not hot:
+            existing_keys.add(archive_key)
+        if not hot and hot_key in existing_keys:
             client.delete_object(Bucket=bucket, Key=hot_key)
-        if not archived:
+            cache_object(client, bucket, hot_key, None)
+            existing_keys.discard(hot_key)
+        if not archived and archive_key in existing_keys:
             client.delete_object(Bucket=bucket, Key=archive_key)
+            cache_object(client, bucket, archive_key, None)
+            existing_keys.discard(archive_key)
 
     # Remove year partitions that are no longer part of the rolling eight-year window.
     expired_year = as_of.year - 10
-    for prefix in (
-        object_key("archive", "prices", "monthly", safe) + "/",
-        object_key("securities", safe, "prices", "monthly") + "/",
-    ):
-        for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
-            for item in page.get("Contents", []):
-                match = re.search(r"/(\d{4})\.json$", str(item.get("Key", "")))
-                if match and int(match.group(1)) < expired_year:
-                    client.delete_object(Bucket=bucket, Key=item["Key"])
+    for key in existing_keys:
+        match = re.search(r"/(\d{4})\.json$", key)
+        if match and int(match.group(1)) < expired_year:
+            client.delete_object(Bucket=bucket, Key=key)
+            cache_object(client, bucket, key, None)
 
 
 def fiscal_year_events(events: list[dict[str, Any]], info: dict[str, Any], as_of: date) -> float | None:
@@ -968,7 +1094,7 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
 
 def legacy_document(client: Any, bucket: str, symbol: str) -> dict[str, Any]:
     safe = safe_symbol(symbol)
-    raw = collector.read_object(client, bucket, f"{OLD_ROOT}/securities/{safe}.json")
+    raw = read_object(client, bucket, f"{OLD_ROOT}/securities/{safe}.json")
     if not raw:
         return {}
     value = json.loads(raw)
@@ -1054,7 +1180,7 @@ def archived_legacy_document(client: Any, bucket: str, symbol: str, old: dict[st
     archive_key = object_key("archive", "legacy", "securities", safe, "unused.json.gz")
     fields = legacy_unused_fields(old)
     if fields:
-        existing_raw = collector.read_object(client, bucket, archive_key)
+        existing_raw = read_object(client, bucket, archive_key)
         existing = json.loads(gzip.decompress(existing_raw)) if existing_raw else {}
         archive_document = {
             "schema_version": 1,
@@ -1068,13 +1194,18 @@ def archived_legacy_document(client: Any, bucket: str, symbol: str, old: dict[st
         payload = gzip.compress(json.dumps(archive_document, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), compresslevel=6)
         client.put_object(Bucket=bucket, Key=archive_key, Body=payload,
                           ContentType="application/gzip", CacheControl="private, max-age=31536000")
+        cache_object(client, bucket, archive_key, payload)
+        # Keep this one remote read-back: the source legacy object is deleted
+        # only after the compressed archive has been verified in R2.
         saved_raw = collector.read_object(client, bucket, archive_key)
         if not saved_raw:
             raise RuntimeError(f"Legacy field archive read-back failed: {archive_key}")
+        cache_object(client, bucket, archive_key, saved_raw)
         saved = json.loads(gzip.decompress(saved_raw))
         if saved.get("source_key") != legacy_key or saved.get("fields") != archive_document["fields"]:
             raise RuntimeError(f"Legacy field archive verification failed: {archive_key}")
     client.delete_object(Bucket=bucket, Key=legacy_key)
+    cache_object(client, bucket, legacy_key, None)
 
 
 def verify_v2_transfer(client: Any, bucket: str, symbol: str, old: dict[str, Any],
@@ -1185,10 +1316,21 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         price_status = "failed"
 
     old_actions = old.get("actions") if isinstance(old.get("actions"), dict) else {}
-    prior_dividends = load_all_year_records(client, bucket, symbol, "dividends", include_archive=True)
-    prior_splits = load_all_year_records(client, bucket, symbol, "splits", include_archive=True)
-    prior_dividends.extend(row for row in old_actions.get("dividends", []) if isinstance(row, dict))
-    prior_splits.extend(row for row in old_actions.get("stock_splits", []) if isinstance(row, dict))
+    legacy_dividends = [row for row in old_actions.get("dividends", []) if isinstance(row, dict)]
+    legacy_splits = [row for row in old_actions.get("stock_splits", []) if isinstance(row, dict)]
+    full_action_history_required = (
+        forced_repair_expected
+        or bool(legacy_dividends or legacy_splits)
+        or not prior_action_history.get("candidate_fingerprint")
+    )
+    if full_action_history_required:
+        prior_dividends = load_all_year_records(client, bucket, symbol, "dividends", include_archive=True)
+        prior_splits = load_all_year_records(client, bucket, symbol, "splits", include_archive=True)
+    else:
+        prior_dividends = load_recent_year_records(client, bucket, symbol, "dividends", as_of)
+        prior_splits = load_recent_year_records(client, bucket, symbol, "splits", as_of)
+    prior_dividends.extend(legacy_dividends)
+    prior_splits.extend(legacy_splits)
     action_status: dict[str, str] = {}
     action_retrieval: dict[str, Any] = {
         "source": "yfinance_history_chart",
@@ -1208,6 +1350,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     forced_repair = False
     repair_period = "1y"
     actions_changed = False
+    fresh_dividends: list[dict[str, Any]] | None = None
+    fresh_splits: list[dict[str, Any]] | None = None
     if skip_action_retry:
         dividends = prior_dividends
         splits = prior_splits
@@ -1251,6 +1395,16 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                 )
                 if new_split_detected:
                     # A newly observed split can change the interpretation of older actions and prices.
+                    if not full_action_history_required:
+                        prior_dividends = load_all_year_records(
+                            client, bucket, symbol, "dividends", include_archive=True,
+                        )
+                        prior_splits = load_all_year_records(
+                            client, bucket, symbol, "splits", include_archive=True,
+                        )
+                        prior_dividends.extend(legacy_dividends)
+                        prior_splits.extend(legacy_splits)
+                        full_action_history_required = True
                     full_history_attempted = True
                     fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
                         ticker, as_of, period="max",
@@ -1516,7 +1670,10 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                 continue
             target = by_year if event_date >= cutoff10 else archive_by_year
             target.setdefault(event_date[:4], []).append(row)
-        years = action_years[family] | set(by_year) | set(archive_by_year)
+        persist_action_partitions = action_partitions_need_persist(
+            fresh_dividends, fresh_splits, legacy_dividends, legacy_splits,
+        )
+        years = (action_years[family] | set(by_year) | set(archive_by_year)) if persist_action_partitions else set()
         for year in sorted(years):
             hot_key = object_key("securities", safe, family, f"{year}.json")
             archive_key = object_key("archive", "events", safe, family, f"{year}.json")
@@ -1530,7 +1687,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                 if not saved or saved.get("records") != archive_by_year[year]:
                     raise RuntimeError(f"Event archive read-back failed: {archive_key}")
             else:
-                client.delete_object(Bucket=bucket, Key=archive_key)
+                delete_object_if_present(client, bucket, archive_key)
             if year in by_year:
                 put_json_if_changed(client, bucket, hot_key, {
                     "schema_version": 1, "symbol": symbol, "year": int(year),
@@ -1538,7 +1695,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                     "updated_at": iso_now(), "source": "Yahoo Finance via yfinance",
                 })
             else:
-                client.delete_object(Bucket=bucket, Key=hot_key)
+                delete_object_if_present(client, bucket, hot_key)
 
     if update_monthly_now or legacy_monthly_migration_pending:
         save_monthly_prices(client, bucket, symbol, monthly, as_of=as_of)
@@ -1767,7 +1924,7 @@ def active_universe(client: Any, bucket: str, fetched: list[dict[str, str]], ses
     return rows
 
 
-def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
+def run(*, publish: bool, max_workers: int, dry_run: bool, reprocess_successful: bool = False) -> int:
     started_at = time.perf_counter()
     with _YF_CALL_LOCK:
         _YF_CALLS.clear()
@@ -1819,8 +1976,11 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
     failures: dict[str, str] = {}
 
     def process(code: str) -> dict[str, Any]:
+        with r2_document_cache_scope():
+            return process_with_cache(code)
+
+    def process_with_cache(code: str) -> dict[str, Any]:
         symbol = market_symbol(code)
-        error: Exception | None = None
         previous_sync = read_json(client, bucket, object_key("securities", safe_symbol(symbol), "sync.json")) or {}
         attempts_used = 0
         if previous_sync.get("retry_session_date") == session_date.isoformat():
@@ -1829,7 +1989,8 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
             except (TypeError, ValueError):
                 attempts_used = 0
         if (previous_sync.get("status") == "ok"
-                and previous_sync.get("last_success_session_date") == session_date.isoformat()):
+                and previous_sync.get("last_success_session_date") == session_date.isoformat()
+                and not reprocess_successful):
             return {"code": code, "symbol": symbol, "status": "ok", "field_failures": []}
         if attempts_used >= MAX_DAILY_ATTEMPTS:
             reason = str(previous_sync.get("failure_reason") or "")
@@ -2003,8 +2164,17 @@ def main() -> int:
     parser.add_argument("--publish", action="store_true", help="Write the v2 generation to R2")
     parser.add_argument("--dry-run", action="store_true", help="Fetch the J-Quants universe only; do not access R2 or yfinance")
     parser.add_argument("--workers", type=int, default=int(os.environ.get("YFINANCE_V2_WORKERS", "8")))
+    parser.add_argument(
+        "--reprocess-successful", action="store_true",
+        help="Re-fetch securities already successful this session; intended for controlled full-universe timing studies",
+    )
     args = parser.parse_args()
-    return run(publish=args.publish, max_workers=args.workers, dry_run=args.dry_run)
+    return run(
+        publish=args.publish,
+        max_workers=args.workers,
+        dry_run=args.dry_run,
+        reprocess_successful=args.reprocess_successful,
+    )
 
 
 if __name__ == "__main__":
