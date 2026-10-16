@@ -93,7 +93,7 @@ jobs:
   yfinance-sample-benchmark:
     if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'benchmark'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -113,12 +113,16 @@ jobs:
           YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
           YFINANCE_LIBRARY_RETRIES: "1"
           YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND: "8"
+          YFINANCE_BENCHMARK_ACTION_REPORT_PATH: benchmark-action-comparison.json
       - name: Save benchmark report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: yfinance-sample-benchmark-${{ github.run_id }}
-          path: benchmark-output.txt
+          path: |
+            benchmark-output.txt
+            benchmark-action-*.json
+            benchmark-action-comparison.json
           if-no-files-found: ignore
           retention-days: 30
 
@@ -138,9 +142,9 @@ jobs:
       - name: Measure 20 and 500 security workloads at 16 and 24 workers
         run: |
           set -euo pipefail
-          YFINANCE_BENCHMARK_SAMPLE_SIZE=20 YFINANCE_BENCHMARK_WORKERS=16 python scripts/yfinance_r2/benchmark_v2.py 2>&1 | tee -a benchmark-output.txt
-          YFINANCE_BENCHMARK_SAMPLE_SIZE=500 YFINANCE_BENCHMARK_WORKERS=16 python scripts/yfinance_r2/benchmark_v2.py 2>&1 | tee -a benchmark-output.txt
-          YFINANCE_BENCHMARK_SAMPLE_SIZE=500 YFINANCE_BENCHMARK_WORKERS=24 python scripts/yfinance_r2/benchmark_v2.py 2>&1 | tee -a benchmark-output.txt
+          YFINANCE_BENCHMARK_SAMPLE_SIZE=20 YFINANCE_BENCHMARK_WORKERS=16 YFINANCE_BENCHMARK_ACTION_REPORT_PATH=benchmark-action-20-16.json python scripts/yfinance_r2/benchmark_v2.py 2>&1 | tee -a benchmark-output.txt
+          YFINANCE_BENCHMARK_SAMPLE_SIZE=500 YFINANCE_BENCHMARK_WORKERS=16 YFINANCE_BENCHMARK_ACTION_REPORT_PATH=benchmark-action-500-16.json python scripts/yfinance_r2/benchmark_v2.py 2>&1 | tee -a benchmark-output.txt
+          YFINANCE_BENCHMARK_SAMPLE_SIZE=500 YFINANCE_BENCHMARK_WORKERS=24 YFINANCE_BENCHMARK_ACTION_REPORT_PATH=benchmark-action-500-24.json python scripts/yfinance_r2/benchmark_v2.py 2>&1 | tee -a benchmark-output.txt
         shell: bash
         env:
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
@@ -152,13 +156,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: yfinance-capacity-study-${{ github.run_id }}
-          path: benchmark-output.txt
+          path: |
+            benchmark-output.txt
+            benchmark-action-*.json
           if-no-files-found: ignore
           retention-days: 30
 
   yfinance-full-universe-study:
-    needs: yfinance-sync-tests
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[yfinance-full-universe-study]')
+    needs: [yfinance-sync-tests, yfinance-capacity-study]
+    if: always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[yfinance-full-universe-study]') && needs.yfinance-sync-tests.result == 'success' && (needs.yfinance-capacity-study.result == 'success' || needs.yfinance-capacity-study.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
