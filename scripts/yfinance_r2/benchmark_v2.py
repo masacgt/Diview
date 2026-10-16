@@ -10,7 +10,7 @@ import threading
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import date
 
 import yfinance as yf
 
@@ -78,12 +78,14 @@ def sample_universe(rows: list[dict[str, str]], limit: int) -> list[dict[str, st
     return selected
 
 
-def attempt(name: str, call, failures: Counter[str]) -> None:
+def attempt(name: str, call, failures: Counter[str]) -> bool:
     try:
         call()
+        return True
     except Exception as exc:
         failures[type(exc).__name__] += 1
         print(f"{name} failed: {type(exc).__name__}: {str(exc)[:240]}", file=sys.stderr, flush=True)
+        return False
 
 
 def ensure_workload_coverage(universe: list[dict[str, str]], sample: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -120,16 +122,30 @@ def measure_security(index: int, total: int, entry: dict[str, str], session_date
         flush=True,
     )
     sync.count_yfinance_call("ticker_get_info")
-    attempt("ticker_get_info", ticker.get_info, failures)
-    sync.count_yfinance_call("history_latest_daily_5d")
-    attempt("history_latest_daily_5d", lambda: collector.history_rows(ticker, "1d", "5d"), failures)
+
+    def fetch_info():
+        info = ticker.get_info()
+        if not isinstance(info, dict) or not info:
+            raise RuntimeError("yfinance returned no company profile")
+
+    info_succeeded = attempt("ticker_get_info", fetch_info, failures)
+
+    quote_succeeded = False
+
+    def daily_quote_and_candidate():
+        nonlocal quote_succeeded
+        period = "5d" if is_long_history else "1y"
+        daily, frame = sync.fetch_daily_history_with_actions(ticker, session_date, period=period)
+        sync.completed_close_for_session(daily, session_date)
+        quote_succeeded = True
+        if not is_long_history:
+            sync.action_candidate_from_history(frame, session_date)
+
+    history_succeeded = attempt("daily_quote_and_action_history_1y", daily_quote_and_candidate, failures)
 
     if is_long_history:
         attempt("history_actions_max", lambda: sync.fetch_repaired_action_history(ticker, session_date, period="max"), failures)
         attempt("history_year_end_prices_initial_8y", lambda: sync.monthly_history_rows(ticker, initial=True, as_of=session_date), failures)
-    else:
-        sync.count_yfinance_call("actions_accessor_1y")
-        attempt("actions_accessor_1y", lambda: ticker.get_actions(period="1y"), failures)
 
     if is_financial:
         for name, request in (
@@ -140,11 +156,18 @@ def measure_security(index: int, total: int, entry: dict[str, str], session_date
         ):
             sync.count_yfinance_call(name)
             attempt(name, request, failures)
-    return {"code": code, "symbol": symbol, "failures": dict(failures)}
+    return {
+        "code": code,
+        "symbol": symbol,
+        "profile_succeeded": info_succeeded,
+        "quote_succeeded": quote_succeeded,
+        "core_succeeded": info_succeeded and history_succeeded,
+        "failures": dict(failures),
+    }
 
 
 def measure_action_method(symbol: str, method: str, session_date) -> dict[str, object]:
-    """Compare repaired price-history actions with yfinance's actions-only result accessor."""
+    """Compare unrepaired daily-chart action candidates with repaired history."""
     ticker = yf.Ticker(symbol)
     session = ticker._data._session
     original_get = session.get
@@ -164,20 +187,12 @@ def measure_action_method(symbol: str, method: str, session_date) -> dict[str, o
         if method == "repaired_history":
             dividends, splits, _, _ = sync.fetch_repaired_action_history(ticker, session_date, period="1y")
         else:
-            actions = ticker.get_actions(period="1y")
-            dividends, splits = [], []
-            if actions is not None and not getattr(actions, "empty", True):
-                if hasattr(actions, "iterrows"):
-                    for timestamp, row in actions.iterrows():
-                        event_date = sync.date_value(timestamp)
-                        if event_date is None or event_date > session_date:
-                            continue
-                        amount = sync.finite_number(row.get("Dividends"))
-                        ratio = sync.finite_number(row.get("Stock Splits"))
-                        if amount and amount > 0:
-                            dividends.append({"date": event_date.isoformat(), "amount": amount})
-                        if ratio and ratio > 0:
-                            splits.append({"date": event_date.isoformat(), "ratio": ratio})
+            frame = ticker.history(
+                period="1y", interval="1d", auto_adjust=False, actions=True,
+                repair=False, keepna=True, raise_errors=True,
+                timeout=float(os.environ.get("YFINANCE_HTTP_TIMEOUT_SECONDS", "30")),
+            )
+            dividends, splits, _, _ = sync.action_candidate_from_history(frame, session_date)
         return {
             "method": method,
             "elapsed_seconds": round(time.perf_counter() - started, 3),
@@ -198,7 +213,7 @@ def compare_action_methods(sample: list[dict[str, str]], session_date) -> dict[s
     results = []
     for entry in sample[: min(6, len(sample))]:
         symbol = sync.market_symbol(entry["security_code_display"])
-        for method in ("repaired_history", "actions_accessor"):
+        for method in ("repaired_history", "daily_chart_candidate"):
             try:
                 result = measure_action_method(symbol, method, session_date)
                 result["symbol"] = symbol
@@ -212,11 +227,18 @@ def compare_action_methods(sample: list[dict[str, str]], session_date) -> dict[s
     return {
         "sample_count": min(6, len(sample)),
         "results": results,
-        "note": "response_body_bytes counts decoded HTTP response bodies, not TLS/compression wire bytes; comparison is non-publishing and does not replace repair=True collection.",
+        "note": "response_body_bytes counts decoded HTTP response bodies, not TLS/compression wire bytes; comparison is diagnostic, and repaired history remains authoritative whenever an event change is detected.",
     }
 
 
+def benchmark_session_date(now=None, latest_yahoo_date: date | None = None) -> date:
+    """Bound the benchmark date by both the latest XTKS session and Yahoo's available close."""
+    latest_session = sync.latest_completed_xtks_session(now)
+    return min(latest_session, latest_yahoo_date) if latest_yahoo_date else latest_session
+
+
 def main() -> int:
+    benchmark_started = time.perf_counter()
     api_key = os.environ.get("JQUANTS_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("JQUANTS_API_KEY is required")
@@ -226,7 +248,7 @@ def main() -> int:
         configure()
     universe = fetch_securities(api_key)
     sample = ensure_workload_coverage(universe, sample_universe(universe, limit))
-    session_date = datetime.now(sync.JST).date()
+    expected_session_date = sync.latest_completed_xtks_session()
     worker_count = max(1, int(os.environ.get("YFINANCE_BENCHMARK_WORKERS", "16")))
     max_requests_per_second = float(os.environ.get("YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND", "8"))
     http_limit = HttpRateLimit(max_requests_per_second)
@@ -234,13 +256,47 @@ def main() -> int:
     started = time.perf_counter()
     results = []
     action_comparison = None
+    sample_http_request_count = 0
+    sample_http_429_count = 0
+    session_probe_http_request_count = 0
+    session_probe_429_count = 0
+    session_probe_yahoo_date = None
+    session_probe_elapsed = 0.0
+    session_probe_calls: dict[str, int] = {}
+    with sync._YF_CALL_LOCK:
+        sample_calls: dict[str, int] = {}
     try:
+        probe_started = time.perf_counter()
+        probe = yf.Ticker("7203.T")
+        probe_daily, _ = sync.fetch_daily_history_with_actions(
+            probe, expected_session_date, period="5d",
+        )
+        if not probe_daily:
+            raise RuntimeError("Yahoo session probe returned no completed daily close")
+        session_probe_yahoo_date = max(date.fromisoformat(str(row["date"])) for row in probe_daily)
+        session_date = benchmark_session_date(latest_yahoo_date=session_probe_yahoo_date)
+        session_probe_elapsed = round(time.perf_counter() - probe_started, 3)
+        session_probe_http_request_count = http_limit.request_count
+        session_probe_429_count = http_limit.http_429_count
+        with sync._YF_CALL_LOCK:
+            session_probe_calls = dict(sorted(sync._YF_CALLS.items()))
+
+        sample_started = time.perf_counter()
         with ThreadPoolExecutor(max_workers=worker_count) as pool:
             futures = [pool.submit(measure_security, index, len(sample), entry, session_date)
                        for index, entry in enumerate(sample, start=1)]
             for future in as_completed(futures):
                 results.append(future.result())
-        elapsed = round(time.perf_counter() - started, 3)
+        elapsed = round(time.perf_counter() - sample_started, 3)
+        sample_http_request_count = http_limit.request_count - session_probe_http_request_count
+        sample_http_429_count = http_limit.http_429_count - session_probe_429_count
+        with sync._YF_CALL_LOCK:
+            all_calls = dict(sorted(sync._YF_CALLS.items()))
+            sample_calls = {
+                name: count - session_probe_calls.get(name, 0)
+                for name, count in all_calls.items()
+                if count - session_probe_calls.get(name, 0) > 0
+            }
         action_comparison = compare_action_methods(sample, session_date)
     finally:
         http_limit.restore()
@@ -248,28 +304,70 @@ def main() -> int:
     failures: Counter[str] = Counter()
     for result in results:
         failures.update(result["failures"])
-    calls = dict(sorted(sync._YF_CALLS.items()))
+    profile_success_count = sum(1 for result in results if result["profile_succeeded"])
+    quote_success_count = sum(1 for result in results if result["quote_succeeded"])
+    profile_failure_count = len(results) - profile_success_count
+    quote_failure_count = len(results) - quote_success_count
+    core_failure_count = sum(1 for result in results if not result["core_succeeded"])
+    core_success_count = len(results) - core_failure_count
+    core_success_rate_pct = round(core_success_count / len(results) * 100, 2) if results else 0.0
+    profile_success_rate_pct = round(profile_success_count / len(results) * 100, 2) if results else 0.0
+    quote_success_rate_pct = round(quote_success_count / len(results) * 100, 2) if results else 0.0
+    comparison_http_request_count = http_limit.request_count - sample_http_request_count - session_probe_http_request_count
+    comparison_http_429_count = http_limit.http_429_count - sample_http_429_count - session_probe_429_count
+    benchmark_elapsed = round(time.perf_counter() - benchmark_started, 3)
     report = {
         "universe_count": len(universe),
         "sample_count": len(sample),
         "sample_types": dict(sorted(Counter(row.get("security_type", "listed_security") for row in sample).items())),
         "workers": worker_count,
         "http_max_requests_per_second": max_requests_per_second,
-        "http_request_count": http_limit.request_count,
+        "http_request_count": sample_http_request_count,
+        "action_comparison_http_request_count": comparison_http_request_count,
         "http_429_count": http_limit.http_429_count,
+        "action_comparison_http_429_count": comparison_http_429_count,
         "http_rate_limit_circuit_tripped": http_limit.tripped,
+        "expected_session_date": expected_session_date.isoformat(),
         "session_date": session_date.isoformat(),
+        "session_fallback_used": session_date < expected_session_date,
+        "session_probe_yahoo_date": session_probe_yahoo_date.isoformat(),
+        "session_probe_elapsed_seconds": session_probe_elapsed,
+        "session_probe_http_request_count": session_probe_http_request_count,
+        "session_probe_yfinance_calls": session_probe_calls,
         "elapsed_seconds": elapsed,
-        "yfinance_call_count": sum(calls.values()),
-        "yfinance_calls": calls,
+        "benchmark_elapsed_seconds": benchmark_elapsed,
+        "core_success_count": core_success_count,
+        "core_failure_count": core_failure_count,
+        "core_success_rate_pct": core_success_rate_pct,
+        "profile_success_count": profile_success_count,
+        "profile_failure_count": profile_failure_count,
+        "profile_success_rate_pct": profile_success_rate_pct,
+        "quote_close_success_count": quote_success_count,
+        "quote_close_failure_count": quote_failure_count,
+        "quote_close_success_rate_pct": quote_success_rate_pct,
+        "core_failed_securities": [
+            {"code": result["code"], "symbol": result["symbol"],
+             "profile_succeeded": result["profile_succeeded"],
+             "quote_succeeded": result["quote_succeeded"], "failures": result["failures"]}
+            for result in results if not result["core_succeeded"]
+        ],
+        "securities_with_any_failed_request": sum(1 for result in results if result["failures"]),
+        "yfinance_call_count": sum(sample_calls.values()),
+        "yfinance_calls": sample_calls,
         "failed_requests": dict(sorted(failures.items())),
         "action_method_comparison": action_comparison,
         "r2_accessed": False,
         "r2_written": False,
-        "note": "Measures a production-shaped sample with at least one full-history rotation and one annual-financial refresh, using the configured ticker worker count and a process-wide HTTP request-start limiter. It excludes R2 publication, installation, calendar, hidden HTTP retry, and repository setup time. Action-method comparison is serial and excluded from elapsed_seconds but remains rate-limited.",
+        "note": "Measures a production-shaped sample with at least one full-history rotation and one annual-financial refresh. The benchmark session is the earlier of the latest completed XTKS session and the latest close returned by a 7203.T probe; production sync continues to require the exact latest completed XTKS close. elapsed_seconds covers sample acquisition; benchmark_elapsed_seconds also includes J-Quants retrieval, the session probe, and serial action-method comparison. Both exclude R2 publication, dependency installation, hidden HTTP retry, and runner setup.",
     }
     print("BENCHMARK_RESULT=" + json.dumps(report, ensure_ascii=False, sort_keys=True), flush=True)
-    return 1 if http_limit.http_429_count else 0
+    max_profile_failure_rate = min(1.0, max(0.0, float(os.environ.get("YFINANCE_BENCHMARK_MAX_PROFILE_FAILURE_RATE", "0.10"))))
+    min_quote_success_rate = min(1.0, max(0.0, float(os.environ.get("YFINANCE_BENCHMARK_MIN_QUOTE_SUCCESS_RATE", "0.50"))))
+    return 1 if (
+        http_limit.http_429_count
+        or profile_failure_count / max(1, len(results)) > max_profile_failure_rate
+        or quote_success_count / max(1, len(results)) < min_quote_success_rate
+    ) else 0
 
 
 if __name__ == "__main__":
