@@ -1,4 +1,5 @@
 from datetime import date, datetime
+import json
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -128,6 +129,161 @@ class R2MetricsTests(TestCase):
         self.assertEqual(snapshot["calls"]["put_object"], 1)
         self.assertEqual(snapshot["calls"]["list_objects_v2"], 1)
         self.assertGreaterEqual(snapshot["seconds"]["list_objects_v2"], 0.0)
+
+    def test_security_cache_reuses_reads_and_tracks_successful_writes(self):
+        class MissingObject(Exception):
+            response = {"Error": {"Code": "NoSuchKey"}}
+
+        class Body:
+            def __init__(self, value):
+                self.value = value
+
+            def read(self):
+                return self.value
+
+        class Client:
+            def __init__(self):
+                self.get_count = 0
+                self.put_count = 0
+                self.objects = {}
+
+            def get_object(self, **kwargs):
+                self.get_count += 1
+                key = kwargs["Key"]
+                if key not in self.objects:
+                    raise MissingObject(key)
+                return {"Body": Body(self.objects[key])}
+
+            def put_object(self, **kwargs):
+                self.put_count += 1
+                self.objects[kwargs["Key"]] = kwargs["Body"]
+
+        client = Client()
+        with sync.r2_document_cache_scope():
+            self.assertIsNone(sync.read_object(client, "bucket", "security/current.json"))
+            self.assertIsNone(sync.read_object(client, "bucket", "security/current.json"))
+            sync.put_json_if_changed(client, "bucket", "security/current.json", {"price": 10})
+            self.assertEqual(
+                sync.read_json(client, "bucket", "security/current.json"),
+                {"price": 10},
+            )
+
+        self.assertEqual(client.get_count, 1)
+        self.assertEqual(client.put_count, 1)
+
+    def test_monthly_price_migration_reads_only_listed_objects_and_skips_absent_deletes(self):
+        class Body:
+            def __init__(self, value):
+                self.value = value
+
+            def read(self):
+                return self.value
+
+        class Paginator:
+            def __init__(self, client):
+                self.client = client
+
+            def paginate(self, **kwargs):
+                prefix = kwargs["Prefix"]
+                matches = [
+                    {"Key": key} for key in self.client.objects
+                    if key.startswith(prefix)
+                ]
+                self.client.list_count += 1
+                yield {"Contents": matches}
+
+        class Client:
+            def __init__(self, objects):
+                self.objects = objects
+                self.get_count = 0
+                self.put_count = 0
+                self.delete_count = 0
+                self.list_count = 0
+
+            def get_paginator(self, operation):
+                self.asserted_operation = operation
+                return Paginator(self)
+
+            def get_object(self, **kwargs):
+                self.get_count += 1
+                key = kwargs["Key"]
+                if key not in self.objects:
+                    raise KeyError(key)
+                return {"Body": Body(self.objects[key])}
+
+            def put_object(self, **kwargs):
+                self.put_count += 1
+                self.objects[kwargs["Key"]] = kwargs["Body"]
+
+            def delete_object(self, **kwargs):
+                self.delete_count += 1
+                self.objects.pop(kwargs["Key"], None)
+
+        safe = "7203.T"
+        hot_key = sync.object_key("securities", safe, "prices", "monthly", "2025.json")
+        existing = {
+            "schema_version": 1,
+            "symbol": "7203.T",
+            "year": 2025,
+            "points": [{"month": "2025-12", "date": "2025-12-30", "close": 100.0}],
+            "updated_at": "old",
+            "source": "Yahoo Finance via yfinance",
+        }
+        client = Client({
+            hot_key: json.dumps(existing, separators=(",", ":")).encode("utf-8"),
+        })
+
+        with sync.r2_document_cache_scope():
+            sync.save_monthly_prices(client, "bucket", "7203.T", [], as_of=date(2026, 10, 16))
+
+        self.assertEqual(client.list_count, 2)
+        self.assertEqual(client.get_count, 1)
+        self.assertEqual(client.delete_count, 0)
+        self.assertEqual(client.put_count, 1)
+
+
+class EventPartitionPersistenceTests(TestCase):
+    def test_unchanged_daily_chart_does_not_rewrite_event_partitions(self):
+        self.assertFalse(sync.action_partitions_need_persist(None, None, [], []))
+
+    def test_repaired_or_migrated_event_history_is_written(self):
+        self.assertTrue(sync.action_partitions_need_persist([], [], [], []))
+        self.assertTrue(sync.action_partitions_need_persist(
+            None, None, [{"date": "2020-01-01", "amount": 1.0}], [],
+        ))
+
+    def test_normal_event_refresh_reads_only_recent_year_partitions(self):
+        class MissingObject(Exception):
+            response = {"Error": {"Code": "NoSuchKey"}}
+
+        class Body:
+            def read(self):
+                return json.dumps({"records": [{"date": "2025-03-01", "amount": 1.0}]}).encode()
+
+        class Client:
+            def __init__(self):
+                self.keys = []
+                self.list_count = 0
+
+            def get_object(self, **kwargs):
+                self.keys.append(kwargs["Key"])
+                if kwargs["Key"] == sync.object_key("securities", "7203.T", "dividends", "2025.json"):
+                    return {"Body": Body()}
+                raise MissingObject(kwargs["Key"])
+
+            def get_paginator(self, operation):
+                self.list_count += 1
+                raise AssertionError("normal event refresh must not list archive partitions")
+
+        client = Client()
+        with sync.r2_document_cache_scope():
+            records = sync.load_recent_year_records(
+                client, "bucket", "7203.T", "dividends", date(2026, 10, 16),
+            )
+
+        self.assertEqual(records, [{"date": "2025-03-01", "amount": 1.0}])
+        self.assertEqual(len(client.keys), 6)
+        self.assertEqual(client.list_count, 0)
 
 
 class SyncPolicyTests(TestCase):
