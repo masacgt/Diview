@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -2203,7 +2204,7 @@ fun StockDetailScreen(
                                 border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.4f))
                             ) {
                                 Row(
-                                    modifier = Modifier.widthIn(max = 130.dp).padding(horizontal = 8.dp, vertical = 4.dp),
+                                    modifier = Modifier.widthIn(max = 220.dp).padding(horizontal = 8.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
@@ -2213,7 +2214,10 @@ fun StockDetailScreen(
                                         color = PrimaryEmerald,
                                         fontSize = 11.sp,
                                         lineHeight = 15.sp,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
