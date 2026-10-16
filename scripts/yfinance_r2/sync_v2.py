@@ -40,6 +40,96 @@ _YF_CALL_LOCK = threading.Lock()
 _YF_CALLS: dict[str, int] = {}
 
 
+class R2Metrics:
+    """Thread-safe timings for R2 operations performed by the sync run."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.calls: dict[str, int] = {}
+        self.seconds: dict[str, float] = {}
+
+    def record(self, operation: str, elapsed: float) -> None:
+        with self.lock:
+            self.calls[operation] = self.calls.get(operation, 0) + 1
+            self.seconds[operation] = self.seconds.get(operation, 0.0) + elapsed
+
+    def snapshot(self) -> dict[str, Any]:
+        with self.lock:
+            return {
+                "calls": dict(sorted(self.calls.items())),
+                "seconds": {key: round(value, 3) for key, value in sorted(self.seconds.items())},
+            }
+
+
+class _MeasuredBody:
+    def __init__(self, body: Any, metrics: R2Metrics):
+        self.body = body
+        self.metrics = metrics
+
+    def read(self, *args: Any, **kwargs: Any) -> Any:
+        started = time.perf_counter()
+        try:
+            return self.body.read(*args, **kwargs)
+        finally:
+            self.metrics.record("get_body", time.perf_counter() - started)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.body, name)
+
+
+class _MeasuredPaginator:
+    def __init__(self, paginator: Any, metrics: R2Metrics):
+        self.paginator = paginator
+        self.metrics = metrics
+
+    def paginate(self, *args: Any, **kwargs: Any):
+        pages = iter(self.paginator.paginate(*args, **kwargs))
+        while True:
+            started = time.perf_counter()
+            try:
+                page = next(pages)
+            except StopIteration:
+                return
+            finally:
+                elapsed = time.perf_counter() - started
+            self.metrics.record("list_objects_v2", elapsed)
+            yield page
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.paginator, name)
+
+
+class MeasuredR2Client:
+    """Transparent boto client proxy that records request and body-read time."""
+
+    _MEASURED_METHODS = {"get_object", "put_object", "delete_object", "head_object"}
+
+    def __init__(self, client: Any, metrics: R2Metrics):
+        self.client = client
+        self.metrics = metrics
+
+    def __getattr__(self, name: str) -> Any:
+        if name == "get_paginator":
+            return lambda operation: _MeasuredPaginator(self.client.get_paginator(operation), self.metrics)
+        if name not in self._MEASURED_METHODS:
+            return getattr(self.client, name)
+
+        method = getattr(self.client, name)
+
+        def measured(*args: Any, **kwargs: Any) -> Any:
+            started = time.perf_counter()
+            try:
+                response = method(*args, **kwargs)
+            finally:
+                self.metrics.record(name, time.perf_counter() - started)
+            if name == "get_object" and isinstance(response, dict) and response.get("Body") is not None:
+                response = dict(response)
+                response["Body"] = _MeasuredBody(response["Body"], self.metrics)
+            return response
+
+        return measured
+
+
 class GlobalHttpRateLimiter:
     """Limit request starts across all yfinance worker threads in this process."""
 
@@ -372,23 +462,39 @@ def fetch_repaired_action_history(ticker: Any, as_of: date, *, period: str = "ma
     return fresh_dividends, fresh_splits, coverage_start, coverage_end
 
 
-def fetch_action_event_candidate(ticker: Any, as_of: date, *, period: str = "1y") -> tuple[
+def fetch_daily_history_with_actions(ticker: Any, as_of: date, *, period: str = "1y") -> tuple[
+    list[dict[str, Any]], Any
+]:
+    """Fetch one daily chart containing both the current close and action columns."""
+    count_yfinance_call(f"history_daily_{period}_with_actions")
+    frame = ticker.history(
+        period=period, interval="1d", auto_adjust=False, actions=True,
+        repair=False, keepna=True, raise_errors=True,
+        timeout=float(os.environ.get("YFINANCE_HTTP_TIMEOUT_SECONDS", "30")),
+    )
+    if frame is None or getattr(frame, "empty", True):
+        raise RuntimeError("yfinance returned no daily price and action history")
+    daily_rows = []
+    for timestamp, row in frame.iterrows():
+        row_date = date_value(timestamp)
+        close = finite_number(row.get("Close"))
+        if row_date is not None and row_date <= as_of and close is not None:
+            daily_rows.append({"date": row_date.isoformat(), "close": close})
+    return daily_rows, frame
+
+
+def action_candidate_from_history(frame: Any, as_of: date) -> tuple[
     list[dict[str, Any]], list[dict[str, Any]], date, date
 ]:
-    """Read the lightweight actions accessor for change detection; never publish its unrepaired values."""
-    count_yfinance_call(f"actions_accessor_{period}")
-    frame = ticker.get_actions(period=period)
+    """Extract one-year action candidates from the already fetched daily chart."""
     if frame is None or getattr(frame, "empty", True):
-        # An empty accessor result is a valid no-event state. Keep the period
-        # covered so a prior event disappearing from Yahoo triggers repaired
-        # history reconciliation, and let the scheduled refresh check again.
-        return [], [], years_before(as_of, 1), as_of
+        raise RuntimeError("yfinance returned no daily action history")
     if not hasattr(frame, "iterrows") or "Dividends" not in frame.columns or "Stock Splits" not in frame.columns:
-        raise RuntimeError("yfinance actions accessor omitted dividend or split columns")
+        raise RuntimeError("yfinance daily history omitted dividend or split action columns")
     dates = [date_value(value) for value in frame.index]
     dates = [value for value in dates if value is not None and value <= as_of]
     if not dates:
-        raise RuntimeError("yfinance actions accessor has no dates in the completed market period")
+        raise RuntimeError("yfinance daily history has no dates in the completed market period")
     coverage_start = min(dates)
     coverage_end = max(dates)
     dividends: list[dict[str, Any]] = []
@@ -404,6 +510,14 @@ def fetch_action_event_candidate(ticker: Any, as_of: date, *, period: str = "1y"
         if ratio is not None and ratio > 0:
             splits.append({"date": event_date.isoformat(), "ratio": ratio})
     return dividends, splits, coverage_start, coverage_end
+
+
+def fetch_action_event_candidate(ticker: Any, as_of: date, *, period: str = "1y") -> tuple[
+    list[dict[str, Any]], list[dict[str, Any]], date, date
+]:
+    """Fetch chart action columns for change detection; repaired history remains authoritative."""
+    _, frame = fetch_daily_history_with_actions(ticker, as_of, period=period)
+    return action_candidate_from_history(frame, as_of)
 
 
 def action_events_changed(
@@ -1006,9 +1120,11 @@ def verify_v2_transfer(client: Any, bucket: str, symbol: str, old: dict[str, Any
 def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date,
                    *, attempt_count: int = 1, refresh_full_history: bool = False,
                    refresh_financials: bool = False, refresh_monthly: bool = False,
-                   initialize_monthly: bool = False, retry_monthly: bool = False) -> dict[str, Any]:
+                   initialize_monthly: bool = False, retry_monthly: bool = False,
+                   universe_entry: dict[str, Any] | None = None,
+                   prior_sync_document: dict[str, Any] | None = None) -> dict[str, Any]:
     safe = safe_symbol(symbol)
-    prior_sync = read_json(client, bucket, object_key("securities", safe, "sync.json")) or {}
+    prior_sync = prior_sync_document or read_json(client, bucket, object_key("securities", safe, "sync.json")) or {}
     prior_profile = read_json(client, bucket, object_key("securities", safe, "profile.json")) or {}
     prior_current = read_json(client, bucket, object_key("securities", safe, "current.json")) or {}
     old = legacy_document(client, bucket, symbol)
@@ -1017,6 +1133,20 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     if not isinstance(prior_field_status, dict):
         prior_field_status = {}
     same_session_retry = same_session_partial_retry(prior_sync, as_of)
+    prior_action_history = prior_current.get("action_history", {})
+    if not isinstance(prior_action_history, dict):
+        prior_action_history = {}
+    prior_actions_succeeded = (
+        prior_field_status.get("dividend_history") != "failed"
+        and prior_field_status.get("split_history") != "failed"
+    )
+    prior_repair_period = pending_action_repair_period(prior_field_status, prior_action_history)
+    skip_action_retry = same_session_retry and prior_actions_succeeded
+    forced_repair_expected = (
+        refresh_full_history
+        or prior_sync.get("long_history_retry_pending") is True
+        or bool(prior_repair_period)
+    )
     if same_session_retry and prior_profile and prior_current.get("statistics"):
         info = {**prior_profile, **prior_current["statistics"]}
         info["shortName"] = prior_profile.get("short_name") or prior_profile.get("display_name")
@@ -1027,13 +1157,23 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     if not isinstance(info, dict) or not info:
         raise RuntimeError("yfinance returned no company profile")
     prior_price = prior_current.get("price") if isinstance(prior_current.get("price"), dict) else {}
+    market_history_frame = None
+    market_history_error: Exception | None = None
     if same_session_retry and str(prior_price.get("date") or "")[:10] == as_of.isoformat():
         latest = {"date": prior_price["date"], "close": prior_price.get("close")}
         price_status = str(prior_field_status.get("price") or "available")
     else:
         def fetch_daily_close():
-            count_yfinance_call("history_latest_daily_5d")
-            return collector.history_rows(ticker, "1d", "5d")
+            nonlocal market_history_frame, market_history_error
+            try:
+                quote_period = "5d" if forced_repair_expected or skip_action_retry else "1y"
+                daily_rows, market_history_frame = fetch_daily_history_with_actions(
+                    ticker, as_of, period=quote_period,
+                )
+                return daily_rows
+            except Exception as exc:
+                market_history_error = exc
+                raise
 
         latest, price_status, price_failure = current_close_with_fallback(fetch_daily_close, prior_price, as_of)
         if price_failure:
@@ -1050,11 +1190,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     prior_dividends.extend(row for row in old_actions.get("dividends", []) if isinstance(row, dict))
     prior_splits.extend(row for row in old_actions.get("stock_splits", []) if isinstance(row, dict))
     action_status: dict[str, str] = {}
-    prior_action_history = prior_current.get("action_history", {})
-    if not isinstance(prior_action_history, dict):
-        prior_action_history = {}
     action_retrieval: dict[str, Any] = {
-        "source": "yfinance_actions_accessor",
+        "source": "yfinance_history_chart",
         "yfinance_version": yf.__version__,
         "period": "max" if refresh_full_history else "1y",
         "repair": False,
@@ -1065,12 +1202,9 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "dividend_amount_basis": "yfinance_split_adjusted_assumption",
         "split_ratio_reapplied_to_dividends": False,
     }
-    prior_actions_succeeded = prior_field_status.get("dividend_history") != "failed" and prior_field_status.get("split_history") != "failed"
-    prior_repair_period = pending_action_repair_period(prior_field_status, prior_action_history)
     full_history_attempted = refresh_full_history or prior_sync.get("long_history_retry_pending") is True or prior_repair_period == "max"
     full_history_refreshed = False
     new_split_detected = False
-    skip_action_retry = same_session_retry and prior_actions_succeeded
     forced_repair = False
     repair_period = "1y"
     actions_changed = False
@@ -1090,10 +1224,17 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                 fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
                     ticker, as_of, period=repair_period,
                 )
+                new_split_detected = has_new_split(fresh_splits, prior_splits)
                 full_history_refreshed = repair_period == "max"
             else:
-                candidate_dividends, candidate_splits, candidate_start, candidate_end = fetch_action_event_candidate(
-                    ticker, as_of, period="1y",
+                if market_history_frame is None:
+                    if market_history_error is not None:
+                        raise market_history_error
+                    _, market_history_frame = fetch_daily_history_with_actions(
+                        ticker, as_of, period="1y",
+                    )
+                candidate_dividends, candidate_splits, candidate_start, candidate_end = action_candidate_from_history(
+                    market_history_frame, as_of,
                 )
                 candidate_fingerprint = action_event_fingerprint(candidate_dividends, candidate_splits)
                 new_split_detected = has_new_split(candidate_splits, prior_splits)
@@ -1482,12 +1623,15 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         ]
         verify_v2_transfer(client, bucket, symbol, old, verification_statements, monthly, as_of)
         archived_legacy_document(client, bucket, symbol, old)
+    catalog_item = catalog_item_from_documents(
+        code, universe_entry or {"security_code_display": code}, profile, current, sync,
+    )
     return {"code": code, "symbol": symbol, "name": profile["display_name"], "price": close,
             "quote_date": price_date.isoformat() if price_date else None,
             "annual_dividend_per_share": trailing_dividends,
             "yield_rate": current["dividend"]["yield_rate"], "currency": current["price"]["currency"],
             "field_status": current["field_status"], "field_failures": field_failures,
-            "status": "partial" if field_failures else "ok"}
+            "status": "partial" if field_failures else "ok", "catalog_item": catalog_item}
 
 
 def save_failure(client: Any, bucket: str, code: str, symbol: str, session_date: date, error: Exception,
@@ -1511,9 +1655,10 @@ def save_failure(client: Any, bucket: str, code: str, symbol: str, session_date:
 
 
 def record_attempt_start(client: Any, bucket: str, code: str, symbol: str,
-                         session_date: date, attempt_count: int) -> None:
+                         session_date: date, attempt_count: int,
+                         previous_sync: dict[str, Any] | None = None) -> dict[str, Any]:
     safe = safe_symbol(symbol)
-    prior = read_json(client, bucket, object_key("securities", safe, "sync.json")) or {}
+    prior = dict(previous_sync or read_json(client, bucket, object_key("securities", safe, "sync.json")) or {})
     prior.update({
         "schema_version": 1, "code": code, "symbol": symbol,
         "status": "running", "last_attempt_at": iso_now(),
@@ -1522,42 +1667,68 @@ def record_attempt_start(client: Any, bucket: str, code: str, symbol: str,
         "retry_count_today": max(0, attempt_count - 1),
         "retry_session_date": session_date.isoformat(),
     })
-    put_json_if_changed(client, bucket, object_key("securities", safe, "sync.json"), prior)
+    # last_attempt_at always changes, so a read-before-write check only adds an R2 request.
+    collector.put_json(client, bucket, object_key("securities", safe, "sync.json"), prior)
+    return prior
+
+
+def catalog_item_from_documents(code: str, security: dict[str, Any], profile: dict[str, Any],
+                                current: dict[str, Any], sync: dict[str, Any],
+                                previous_name: str | None = None) -> dict[str, Any] | None:
+    price = current.get("price") if isinstance(current.get("price"), dict) else {}
+    close = finite_number(price.get("close"))
+    if not profile or not current or close is None or close <= 0:
+        return None
+    dividend = current.get("dividend") if isinstance(current.get("dividend"), dict) else {}
+    return {
+        "code": code,
+        "name": profile.get("display_name") or previous_name or code,
+        "category": "jp",
+        "security_type": security.get("security_type", "listed_security"),
+        "jquants_product_category": security.get("jquants_product_category") or None,
+        "price": price.get("close"),
+        "quote_date": price.get("date"),
+        "currency": price.get("currency"),
+        "annual_dividend_per_share": dividend.get("trailing_12_month_per_share"),
+        "trailing_12_month_distribution_per_share": dividend.get("trailing_12_month_per_share"),
+        "dividend_period": "trailing_12_months",
+        "dividend_amount_basis": dividend.get("event_amount_basis"),
+        "yield_rate": dividend.get("yield_rate"),
+        "yield_basis": dividend.get("yield_basis"),
+        "dividend_status": dividend.get("dividend_status", "unknown"),
+        "status": sync.get("status") if sync.get("status") in {"ok", "partial", "failed"} else "ok",
+        "failure_reason": sync.get("failure_reason"),
+    }
 
 
 def publish_catalog(client: Any, bucket: str, universe: list[dict[str, str]], session_date: date,
-                    previous_catalog: dict[str, Any] | None) -> dict[str, Any]:
+                    previous_catalog: dict[str, Any] | None,
+                    processed_items: dict[str, dict[str, Any]] | None = None,
+                    failures: dict[str, str] | None = None) -> dict[str, Any]:
     old_items = {str(row.get("code")): row for row in (previous_catalog or {}).get("items", []) if isinstance(row, dict)}
+    processed_items = processed_items or {}
+    failures = failures or {}
     items: list[dict[str, Any]] = []
     for security in universe:
         code = security["security_code_display"]
-        symbol = market_symbol(code)
-        safe = safe_symbol(symbol)
-        profile = read_json(client, bucket, object_key("securities", safe, "profile.json"))
-        current = read_json(client, bucket, object_key("securities", safe, "current.json"))
-        if not profile or not current or not current.get("price", {}).get("close"):
+        item = processed_items.get(code) or old_items.get(code)
+        if item is None:
+            symbol = market_symbol(code)
+            safe = safe_symbol(symbol)
+            profile = read_json(client, bucket, object_key("securities", safe, "profile.json"))
+            current = read_json(client, bucket, object_key("securities", safe, "current.json"))
+            sync = read_json(client, bucket, object_key("securities", safe, "sync.json")) or {}
+            item = catalog_item_from_documents(
+                code, security, profile or {}, current or {}, sync,
+                previous_name=old_items.get(code, {}).get("name"),
+            )
+        if item is None:
             continue
-        sync = read_json(client, bucket, object_key("securities", safe, "sync.json")) or {}
-        dividend = current.get("dividend") or {}
-        items.append({
-            "code": code,
-            "name": profile.get("display_name") or old_items.get(code, {}).get("name") or code,
-            "category": "jp",
-            "security_type": security.get("security_type", "listed_security"),
-            "jquants_product_category": security.get("jquants_product_category") or None,
-            "price": current["price"].get("close"),
-            "quote_date": current["price"].get("date"),
-            "currency": current["price"].get("currency"),
-            "annual_dividend_per_share": dividend.get("trailing_12_month_per_share"),
-            "trailing_12_month_distribution_per_share": dividend.get("trailing_12_month_per_share"),
-            "dividend_period": "trailing_12_months",
-            "dividend_amount_basis": dividend.get("event_amount_basis"),
-            "yield_rate": dividend.get("yield_rate"),
-            "yield_basis": dividend.get("yield_basis"),
-            "dividend_status": dividend.get("dividend_status", "unknown"),
-            "status": sync.get("status") if sync.get("status") in {"ok", "partial", "failed"} else "ok",
-            "failure_reason": sync.get("failure_reason"),
-        })
+        item = {**item}
+        if code in failures:
+            item["status"] = "failed"
+            item["failure_reason"] = failures[code][:500]
+        items.append(item)
     items.sort(key=lambda item: item["code"])
     if len(items) != len({item["code"] for item in items}):
         raise RuntimeError("v2 search catalog contains duplicate security codes")
@@ -1608,20 +1779,26 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
     api_key = os.environ.get("JQUANTS_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("JQUANTS_API_KEY is required")
+    phase_seconds: dict[str, float] = {}
+    phase_started = time.perf_counter()
     fetched = fetch_securities(api_key)
+    phase_seconds["jquants_universe_fetch"] = round(time.perf_counter() - phase_started, 3)
     session_date = latest_completed_xtks_session()
-    client = collector.get_client() if publish else None
+    r2_metrics = R2Metrics()
+    client = MeasuredR2Client(collector.get_client(), r2_metrics) if publish else None
     bucket = collector.required_env("R2_BUCKET") if publish else ""
     if dry_run:
         print(f"J-Quants universe: {len(fetched)} listed issues; session date={session_date}")
         print("Dry-run validates the universe only; no yfinance calls or R2 writes were made.")
         return 0
 
+    phase_started = time.perf_counter()
     old_universe = read_json(client, bucket, object_key("universe", "current.json")) or {}
     old_status = {str(row.get("code")): row for row in old_universe.get("securities", []) if isinstance(row, dict)}
     previous_catalog = read_json(client, bucket, object_key("catalog", "current.json"))
     schedule_key = object_key("schedules", "current.json")
     schedule_state = read_json(client, bucket, schedule_key) or {}
+    phase_seconds["initial_r2_state"] = round(time.perf_counter() - phase_started, 3)
     if schedule_state.get("active_session_date") == session_date.isoformat():
         full_history_bucket = int(schedule_state.get("active_full_history_bucket", 0)) % FULL_HISTORY_BUCKETS
         financial_bucket = int(schedule_state.get("active_financial_bucket", 0)) % FINANCIAL_BUCKETS
@@ -1637,6 +1814,7 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
         flush=True,
     )
     securities = [row["security_code_display"] for row in fetched]
+    security_by_code = {row["security_code_display"]: row for row in fetched}
     results: dict[str, dict[str, Any]] = {}
     failures: dict[str, str] = {}
 
@@ -1674,7 +1852,10 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
             or (december_end_session and previous_monthly)
             or (initialize_monthly and not previous_monthly)
         )
-        record_attempt_start(client, bucket, code, symbol, session_date, attempt_count)
+        running_sync = record_attempt_start(
+            client, bucket, code, symbol, session_date, attempt_count,
+            previous_sync=previous_sync,
+        )
         try:
             return collect_symbol(
                 client, bucket, code, symbol, session_date,
@@ -1684,6 +1865,8 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
                 refresh_monthly=december_end_session,
                 initialize_monthly=initialize_monthly,
                 retry_monthly=retry_monthly,
+                universe_entry=security_by_code.get(code),
+                prior_sync_document=running_sync,
             )
         except Exception as exc:
             save_failure(
@@ -1697,6 +1880,7 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
     rate_limiter = GlobalHttpRateLimiter(
         float(os.environ.get("YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND", "8"))
     )
+    phase_started = time.perf_counter()
     with rate_limiter:
         with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
             futures = {pool.submit(process, code): code for code in securities}
@@ -1718,6 +1902,8 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
                         flush=True,
                     )
 
+    phase_seconds["security_collection"] = round(time.perf_counter() - phase_started, 3)
+    phase_started = time.perf_counter()
     universe_rows = active_universe(client, bucket, fetched, session_date)
     for row in universe_rows:
         code = row["code"]
@@ -1732,13 +1918,26 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
                 row["failure_reason"] = f"Field fetch failed: {', '.join(results[code].get('field_failures', []))}"[:500]
         else:
             row["sync_status"] = old_status.get(code, {}).get("sync_status", "pending")
-    catalog = publish_catalog(client, bucket, fetched, session_date, previous_catalog)
+    phase_seconds["active_universe"] = round(time.perf_counter() - phase_started, 3)
+    phase_started = time.perf_counter()
+    processed_items = {
+        code: result["catalog_item"]
+        for code, result in results.items()
+        if isinstance(result.get("catalog_item"), dict)
+    }
+    catalog = publish_catalog(
+        client, bucket, fetched, session_date, previous_catalog,
+        processed_items=processed_items, failures=failures,
+    )
+    phase_seconds["catalog_build"] = round(time.perf_counter() - phase_started, 3)
+    phase_started = time.perf_counter()
     put_json_if_changed(client, bucket, object_key("universe", "current.json"), {
         "schema_version": 1, "updated_at": iso_now(), "source": "J-Quants API v2",
         "session_date": session_date.isoformat(), "security_count": len(fetched), "securities": universe_rows,
     })
     put_json_if_changed(client, bucket, object_key("catalog", "generations", f"{session_date.isoformat()}.json"), catalog)
     put_json_if_changed(client, bucket, object_key("catalog", "current.json"), catalog)
+    phase_seconds["catalog_publication"] = round(time.perf_counter() - phase_started, 3)
     elapsed_seconds = round(time.perf_counter() - started_at, 3)
     with _YF_CALL_LOCK:
         yfinance_calls = dict(sorted(_YF_CALLS.items()))
@@ -1759,6 +1958,8 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
         "http_max_requests_per_second": rate_limiter.requests_per_second,
         "http_request_count": rate_limiter.request_count,
         "http_429_count": rate_limiter.http_429_count,
+        "phase_seconds": phase_seconds,
+        "r2_metrics_before_publication_record": r2_metrics.snapshot(),
         "rotation": {
             "full_history_bucket": full_history_bucket,
             "full_history_bucket_count": FULL_HISTORY_BUCKETS,
@@ -1788,6 +1989,11 @@ def run(*, publish: bool, max_workers: int, dry_run: bool) -> int:
         f"Published v2 generation {session_date}: success={len(results)}, failed={len(failures)}, "
         f"catalog={len(catalog['items'])}, elapsed={elapsed_seconds}s, "
         f"yfinance_calls={sum(yfinance_calls.values())} {json.dumps(yfinance_calls, ensure_ascii=False, sort_keys=True)}"
+    )
+    print(
+        "Phase timings: " + json.dumps(phase_seconds, ensure_ascii=False, sort_keys=True)
+        + "; R2 operations: " + json.dumps(r2_metrics.snapshot(), ensure_ascii=False, sort_keys=True),
+        flush=True,
     )
     return 1 if failures else 0
 

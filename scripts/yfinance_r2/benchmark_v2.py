@@ -121,15 +121,18 @@ def measure_security(index: int, total: int, entry: dict[str, str], session_date
     )
     sync.count_yfinance_call("ticker_get_info")
     attempt("ticker_get_info", ticker.get_info, failures)
-    sync.count_yfinance_call("history_latest_daily_5d")
-    attempt("history_latest_daily_5d", lambda: collector.history_rows(ticker, "1d", "5d"), failures)
+    def daily_quote_and_candidate():
+        period = "5d" if is_long_history else "1y"
+        daily, frame = sync.fetch_daily_history_with_actions(ticker, session_date, period=period)
+        sync.completed_close_for_session(daily, session_date)
+        if not is_long_history:
+            sync.action_candidate_from_history(frame, session_date)
+
+    attempt("daily_quote_and_action_history_1y", daily_quote_and_candidate, failures)
 
     if is_long_history:
         attempt("history_actions_max", lambda: sync.fetch_repaired_action_history(ticker, session_date, period="max"), failures)
         attempt("history_year_end_prices_initial_8y", lambda: sync.monthly_history_rows(ticker, initial=True, as_of=session_date), failures)
-    else:
-        sync.count_yfinance_call("actions_accessor_1y")
-        attempt("actions_accessor_1y", lambda: ticker.get_actions(period="1y"), failures)
 
     if is_financial:
         for name, request in (
@@ -144,7 +147,7 @@ def measure_security(index: int, total: int, entry: dict[str, str], session_date
 
 
 def measure_action_method(symbol: str, method: str, session_date) -> dict[str, object]:
-    """Compare repaired price-history actions with yfinance's actions-only result accessor."""
+    """Compare unrepaired daily-chart action candidates with repaired history."""
     ticker = yf.Ticker(symbol)
     session = ticker._data._session
     original_get = session.get
@@ -164,20 +167,12 @@ def measure_action_method(symbol: str, method: str, session_date) -> dict[str, o
         if method == "repaired_history":
             dividends, splits, _, _ = sync.fetch_repaired_action_history(ticker, session_date, period="1y")
         else:
-            actions = ticker.get_actions(period="1y")
-            dividends, splits = [], []
-            if actions is not None and not getattr(actions, "empty", True):
-                if hasattr(actions, "iterrows"):
-                    for timestamp, row in actions.iterrows():
-                        event_date = sync.date_value(timestamp)
-                        if event_date is None or event_date > session_date:
-                            continue
-                        amount = sync.finite_number(row.get("Dividends"))
-                        ratio = sync.finite_number(row.get("Stock Splits"))
-                        if amount and amount > 0:
-                            dividends.append({"date": event_date.isoformat(), "amount": amount})
-                        if ratio and ratio > 0:
-                            splits.append({"date": event_date.isoformat(), "ratio": ratio})
+            frame = ticker.history(
+                period="1y", interval="1d", auto_adjust=False, actions=True,
+                repair=False, keepna=True, raise_errors=True,
+                timeout=float(os.environ.get("YFINANCE_HTTP_TIMEOUT_SECONDS", "30")),
+            )
+            dividends, splits, _, _ = sync.action_candidate_from_history(frame, session_date)
         return {
             "method": method,
             "elapsed_seconds": round(time.perf_counter() - started, 3),
@@ -198,7 +193,7 @@ def compare_action_methods(sample: list[dict[str, str]], session_date) -> dict[s
     results = []
     for entry in sample[: min(6, len(sample))]:
         symbol = sync.market_symbol(entry["security_code_display"])
-        for method in ("repaired_history", "actions_accessor"):
+        for method in ("repaired_history", "daily_chart_candidate"):
             try:
                 result = measure_action_method(symbol, method, session_date)
                 result["symbol"] = symbol
@@ -212,7 +207,7 @@ def compare_action_methods(sample: list[dict[str, str]], session_date) -> dict[s
     return {
         "sample_count": min(6, len(sample)),
         "results": results,
-        "note": "response_body_bytes counts decoded HTTP response bodies, not TLS/compression wire bytes; comparison is non-publishing and does not replace repair=True collection.",
+        "note": "response_body_bytes counts decoded HTTP response bodies, not TLS/compression wire bytes; comparison is diagnostic, and repaired history remains authoritative whenever an event change is detected.",
     }
 
 
@@ -234,6 +229,10 @@ def main() -> int:
     started = time.perf_counter()
     results = []
     action_comparison = None
+    sample_http_request_count = 0
+    sample_http_429_count = 0
+    with sync._YF_CALL_LOCK:
+        sample_calls: dict[str, int] = {}
     try:
         with ThreadPoolExecutor(max_workers=worker_count) as pool:
             futures = [pool.submit(measure_security, index, len(sample), entry, session_date)
@@ -241,6 +240,10 @@ def main() -> int:
             for future in as_completed(futures):
                 results.append(future.result())
         elapsed = round(time.perf_counter() - started, 3)
+        sample_http_request_count = http_limit.request_count
+        sample_http_429_count = http_limit.http_429_count
+        with sync._YF_CALL_LOCK:
+            sample_calls = dict(sorted(sync._YF_CALLS.items()))
         action_comparison = compare_action_methods(sample, session_date)
     finally:
         http_limit.restore()
@@ -248,20 +251,23 @@ def main() -> int:
     failures: Counter[str] = Counter()
     for result in results:
         failures.update(result["failures"])
-    calls = dict(sorted(sync._YF_CALLS.items()))
+    comparison_http_request_count = http_limit.request_count - sample_http_request_count
+    comparison_http_429_count = http_limit.http_429_count - sample_http_429_count
     report = {
         "universe_count": len(universe),
         "sample_count": len(sample),
         "sample_types": dict(sorted(Counter(row.get("security_type", "listed_security") for row in sample).items())),
         "workers": worker_count,
         "http_max_requests_per_second": max_requests_per_second,
-        "http_request_count": http_limit.request_count,
+        "http_request_count": sample_http_request_count,
+        "action_comparison_http_request_count": comparison_http_request_count,
         "http_429_count": http_limit.http_429_count,
+        "action_comparison_http_429_count": comparison_http_429_count,
         "http_rate_limit_circuit_tripped": http_limit.tripped,
         "session_date": session_date.isoformat(),
         "elapsed_seconds": elapsed,
-        "yfinance_call_count": sum(calls.values()),
-        "yfinance_calls": calls,
+        "yfinance_call_count": sum(sample_calls.values()),
+        "yfinance_calls": sample_calls,
         "failed_requests": dict(sorted(failures.items())),
         "action_method_comparison": action_comparison,
         "r2_accessed": False,
