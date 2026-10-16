@@ -10,7 +10,6 @@ import threading
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
 
 import yfinance as yf
 
@@ -78,12 +77,14 @@ def sample_universe(rows: list[dict[str, str]], limit: int) -> list[dict[str, st
     return selected
 
 
-def attempt(name: str, call, failures: Counter[str]) -> None:
+def attempt(name: str, call, failures: Counter[str]) -> bool:
     try:
         call()
+        return True
     except Exception as exc:
         failures[type(exc).__name__] += 1
         print(f"{name} failed: {type(exc).__name__}: {str(exc)[:240]}", file=sys.stderr, flush=True)
+        return False
 
 
 def ensure_workload_coverage(universe: list[dict[str, str]], sample: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -120,7 +121,14 @@ def measure_security(index: int, total: int, entry: dict[str, str], session_date
         flush=True,
     )
     sync.count_yfinance_call("ticker_get_info")
-    attempt("ticker_get_info", ticker.get_info, failures)
+
+    def fetch_info():
+        info = ticker.get_info()
+        if not isinstance(info, dict) or not info:
+            raise RuntimeError("yfinance returned no company profile")
+
+    info_succeeded = attempt("ticker_get_info", fetch_info, failures)
+
     def daily_quote_and_candidate():
         period = "5d" if is_long_history else "1y"
         daily, frame = sync.fetch_daily_history_with_actions(ticker, session_date, period=period)
@@ -128,7 +136,7 @@ def measure_security(index: int, total: int, entry: dict[str, str], session_date
         if not is_long_history:
             sync.action_candidate_from_history(frame, session_date)
 
-    attempt("daily_quote_and_action_history_1y", daily_quote_and_candidate, failures)
+    chart_succeeded = attempt("daily_quote_and_action_history_1y", daily_quote_and_candidate, failures)
 
     if is_long_history:
         attempt("history_actions_max", lambda: sync.fetch_repaired_action_history(ticker, session_date, period="max"), failures)
@@ -143,7 +151,12 @@ def measure_security(index: int, total: int, entry: dict[str, str], session_date
         ):
             sync.count_yfinance_call(name)
             attempt(name, request, failures)
-    return {"code": code, "symbol": symbol, "failures": dict(failures)}
+    return {
+        "code": code,
+        "symbol": symbol,
+        "core_succeeded": info_succeeded and chart_succeeded,
+        "failures": dict(failures),
+    }
 
 
 def measure_action_method(symbol: str, method: str, session_date) -> dict[str, object]:
@@ -211,7 +224,13 @@ def compare_action_methods(sample: list[dict[str, str]], session_date) -> dict[s
     }
 
 
+def benchmark_session_date(now=None):
+    """Use the latest completed Tokyo session, including for weekend/manual runs."""
+    return sync.latest_completed_xtks_session(now)
+
+
 def main() -> int:
+    benchmark_started = time.perf_counter()
     api_key = os.environ.get("JQUANTS_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("JQUANTS_API_KEY is required")
@@ -221,7 +240,7 @@ def main() -> int:
         configure()
     universe = fetch_securities(api_key)
     sample = ensure_workload_coverage(universe, sample_universe(universe, limit))
-    session_date = datetime.now(sync.JST).date()
+    session_date = benchmark_session_date()
     worker_count = max(1, int(os.environ.get("YFINANCE_BENCHMARK_WORKERS", "16")))
     max_requests_per_second = float(os.environ.get("YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND", "8"))
     http_limit = HttpRateLimit(max_requests_per_second)
@@ -251,8 +270,12 @@ def main() -> int:
     failures: Counter[str] = Counter()
     for result in results:
         failures.update(result["failures"])
+    core_failure_count = sum(1 for result in results if not result["core_succeeded"])
+    core_success_count = len(results) - core_failure_count
+    core_success_rate_pct = round(core_success_count / len(results) * 100, 2) if results else 0.0
     comparison_http_request_count = http_limit.request_count - sample_http_request_count
     comparison_http_429_count = http_limit.http_429_count - sample_http_429_count
+    benchmark_elapsed = round(time.perf_counter() - benchmark_started, 3)
     report = {
         "universe_count": len(universe),
         "sample_count": len(sample),
@@ -266,16 +289,22 @@ def main() -> int:
         "http_rate_limit_circuit_tripped": http_limit.tripped,
         "session_date": session_date.isoformat(),
         "elapsed_seconds": elapsed,
+        "benchmark_elapsed_seconds": benchmark_elapsed,
+        "core_success_count": core_success_count,
+        "core_failure_count": core_failure_count,
+        "core_success_rate_pct": core_success_rate_pct,
+        "securities_with_any_failed_request": sum(1 for result in results if result["failures"]),
         "yfinance_call_count": sum(sample_calls.values()),
         "yfinance_calls": sample_calls,
         "failed_requests": dict(sorted(failures.items())),
         "action_method_comparison": action_comparison,
         "r2_accessed": False,
         "r2_written": False,
-        "note": "Measures a production-shaped sample with at least one full-history rotation and one annual-financial refresh, using the configured ticker worker count and a process-wide HTTP request-start limiter. It excludes R2 publication, installation, calendar, hidden HTTP retry, and repository setup time. Action-method comparison is serial and excluded from elapsed_seconds but remains rate-limited.",
+        "note": "Measures a production-shaped sample with at least one full-history rotation and one annual-financial refresh, using the latest completed XTKS session, configured ticker worker count, and a process-wide HTTP request-start limiter. elapsed_seconds covers only sample acquisition; benchmark_elapsed_seconds also includes J-Quants universe retrieval and the serial action-method comparison. Both exclude R2 publication, dependency installation, hidden HTTP retry, and runner setup.",
     }
     print("BENCHMARK_RESULT=" + json.dumps(report, ensure_ascii=False, sort_keys=True), flush=True)
-    return 1 if http_limit.http_429_count else 0
+    max_core_failure_rate = min(1.0, max(0.0, float(os.environ.get("YFINANCE_BENCHMARK_MAX_CORE_FAILURE_RATE", "0.10"))))
+    return 1 if http_limit.http_429_count or core_failure_count / max(1, len(results)) > max_core_failure_rate else 0
 
 
 if __name__ == "__main__":
