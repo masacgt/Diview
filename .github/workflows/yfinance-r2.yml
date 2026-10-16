@@ -28,6 +28,14 @@ on:
         type: number
         default: 40
         required: true
+      benchmark_workers:
+        description: yfinance ticker workers for a single benchmark run
+        type: choice
+        options:
+          - "16"
+          - "24"
+        default: "16"
+        required: true
 
 permissions:
   contents: read
@@ -101,14 +109,49 @@ jobs:
         env:
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
           YFINANCE_BENCHMARK_SAMPLE_SIZE: ${{ inputs.sample_size }}
-          YFINANCE_BENCHMARK_WORKERS: "16"
+          YFINANCE_BENCHMARK_WORKERS: ${{ inputs.benchmark_workers }}
           YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
           YFINANCE_LIBRARY_RETRIES: "1"
+          YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND: "8"
       - name: Save benchmark report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: yfinance-sample-benchmark-${{ github.run_id }}
+          path: benchmark-output.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
+  yfinance-capacity-study:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[yfinance-capacity-study]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/yfinance_r2/requirements.txt
+      - name: Install collection dependencies
+        run: python -m pip install -r scripts/yfinance_r2/requirements.txt
+      - name: Measure 20 and 500 security workloads at 16 and 24 workers
+        run: |
+          set -euo pipefail
+          YFINANCE_BENCHMARK_SAMPLE_SIZE=20 YFINANCE_BENCHMARK_WORKERS=16 python scripts/yfinance_r2/benchmark_v2.py 2>&1 | tee -a benchmark-output.txt
+          YFINANCE_BENCHMARK_SAMPLE_SIZE=500 YFINANCE_BENCHMARK_WORKERS=16 python scripts/yfinance_r2/benchmark_v2.py 2>&1 | tee -a benchmark-output.txt
+          YFINANCE_BENCHMARK_SAMPLE_SIZE=500 YFINANCE_BENCHMARK_WORKERS=24 python scripts/yfinance_r2/benchmark_v2.py 2>&1 | tee -a benchmark-output.txt
+        shell: bash
+        env:
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+          YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
+          YFINANCE_LIBRARY_RETRIES: "1"
+          YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND: "8"
+      - name: Save capacity study report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yfinance-capacity-study-${{ github.run_id }}
           path: benchmark-output.txt
           if-no-files-found: ignore
           retention-days: 30
