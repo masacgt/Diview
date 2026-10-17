@@ -263,6 +263,7 @@ fun StockDetailScreen(
         shareSplitHistoryLoading = false
     }
     val fiscalMonth = financial?.period?.substringAfterLast('/')?.toIntOrNull()?.takeIf { it in 1..12 }
+    val isCalendarYearDividendHistory = financial?.dividendHistoryBasis == "calendar_year_observed_distributions"
     val baseProfile = financial?.profile ?: com.kurogane.dividend.model.StockFinancialProfile()
     var financialError by remember(currentHolding.code) { mutableStateOf(false) }
     var financialLoading by remember(currentHolding.code) { mutableStateOf(false) }
@@ -332,7 +333,9 @@ fun StockDetailScreen(
                 profile.growthRate < 0.0 -> "減配傾向"
                 else -> "横ばい"
             }
-            "配当成長率：取得できた直近最大5期の年平均成長率（CAGR）は${profile.growthRate.financialText(1, "%")}で、${growthDirection}です。"
+            val basis = if (isCalendarYearDividendHistory) "暦年配当合計" else "年間配当額"
+            val note = if (isCalendarYearDividendHistory) "（参考値）" else ""
+            "配当成長率：${basis}を使った直近最大5年の年平均成長率（CAGR）は${profile.growthRate.financialText(1, "%")}で、${growthDirection}です。$note"
         } else {
             "配当成長率：連続した複数期の比較データが不足しているため算出できません。"
         },
@@ -848,9 +851,14 @@ fun StockDetailScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             val recent = dividendPeriods.filter { it.annualDividend != null }.takeLast(4)
-                            val growth = if (recent.size == 4 && (recent.first().annualDividend ?: 0.0) > 0 && recent.last().year - recent.first().year == 3)
+                            val legacyGrowth = if (recent.size == 4 && (recent.first().annualDividend ?: 0.0) > 0 && recent.last().year - recent.first().year == 3)
                                 (((recent.last().annualDividend ?: 0.0) / (recent.first().annualDividend ?: 1.0)) - 1) * 100 else Double.NaN
-                            Text(stringResource(R.string.stock_detail_text_10 , growth.financialText(1, "%")), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            val growthLabel = if (isCalendarYearDividendHistory) {
+                                stringResource(R.string.stock_detail_calendar_growth_cagr_detail, profile.growthRate.financialText(1, "%"))
+                            } else {
+                                stringResource(R.string.stock_detail_text_10, legacyGrowth.financialText(1, "%"))
+                            }
+                            Text(growthLabel, color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             Text(stringResource(R.string.stock_detail_text_11 , profile.payoutRatio.financialText(1, "%")), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -981,7 +989,12 @@ fun StockDetailScreen(
                                         Icon(Icons.Default.MilitaryTech, contentDescription = null, tint = SecondaryIndigo, modifier = Modifier.size(14.dp))
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(if (profile.consecutiveYears > 0) stringResource(R.string.stock_detail_label_10, (if (profile.consecutiveYears >= 0) resources.getString(R.string.stock_detail_label_5, (profile.consecutiveYears).toString()) else resources.getString(R.string.not_available)).toString(), (profile.growthRate.financialText(1, "%")).toString()) else stringResource(R.string.stock_detail_label_11, (profile.growthRate.financialText(1, "%")).toString()), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
+                                    val growthSummary = when {
+                                        isCalendarYearDividendHistory -> stringResource(R.string.stock_detail_calendar_growth_cagr, profile.growthRate.financialText(1, "%"))
+                                        profile.consecutiveYears > 0 -> stringResource(R.string.stock_detail_label_10, resources.getString(R.string.stock_detail_label_5, profile.consecutiveYears.toString()), profile.growthRate.financialText(1, "%"))
+                                        else -> stringResource(R.string.stock_detail_label_11, profile.growthRate.financialText(1, "%"))
+                                    }
+                                    Text(growthSummary, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
                                     Text(stringResource(R.string.dividend_change_analysis_cards_text_15 , profile.noCutYears.financialYears()), color = PrimaryEmerald, fontSize = AppTextSize.dense)
                                 }
                             }
@@ -1929,7 +1942,13 @@ fun StockDetailScreen(
                                                     Text(stringResource(R.string.stock_detail_text_67), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                     Spacer(Modifier.height(4.dp))
                                                     Text(stringResource(R.string.annual_dividend_1_s , if (profile.consecutiveYears >= 0) resources.getString(R.string.stock_detail_label_5, (profile.consecutiveYears).toString()) else resources.getString(R.string.not_available)), color = PrimaryEmerald, fontWeight = FontWeight.ExtraBold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
-                                                    Text(stringResource(R.string.stock_detail_text_68 , profile.growthRate.financialText(1, "%")), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                                    Text(
+                                                        if (isCalendarYearDividendHistory) stringResource(R.string.stock_detail_calendar_growth_cagr_detail, profile.growthRate.financialText(1, "%"))
+                                                        else stringResource(R.string.stock_detail_text_68, profile.growthRate.financialText(1, "%")),
+                                                        color = PrimaryEmerald,
+                                                        fontSize = AppTextSize.dense,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
                                                 }
                                             }
                                             Surface(

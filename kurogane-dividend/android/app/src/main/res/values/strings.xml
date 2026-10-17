@@ -760,6 +760,8 @@
     <string name="stock_detail_health_payout">"配当性向 %1$s"</string>
     <string name="stock_detail_label_10">"%1$s連続 +%2$s"</string>
     <string name="stock_detail_label_11">"増配率 %1$s"</string>
+    <string name="stock_detail_calendar_growth_cagr">"暦年配当合計CAGR %1$s"</string>
+    <string name="stock_detail_calendar_growth_cagr_detail">"暦年配当合計CAGR %1$s"</string>
     <string name="stock_detail_label_12">"通知ON"</string>
     <string name="stock_detail_label_13">"通知OFF"</string>
     <string name="watchlist_ach">"ach"</string>
