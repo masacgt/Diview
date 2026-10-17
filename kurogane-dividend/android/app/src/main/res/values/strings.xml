@@ -471,12 +471,12 @@
     <string name="stock_detail_text_63">"フリーキャッシュフロー余力"</string>
     <string name="stock_detail_text_64">"健全性スコア: %1$s"</string>
     <string name="stock_detail_text_65">"総合自動診断：%1$s"</string>
-    <string name="stock_detail_text_66">"増配耐性詳細分析"</string>
+    <string name="stock_detail_text_66">"年間配当の増減詳細分析"</string>
     <string name="stock_detail_text_67">"連続増配実績"</string>
     <string name="stock_detail_text_68">"年平均増配率 +%1$s"</string>
     <string name="stock_detail_text_69">"非減配年数"</string>
     <string name="stock_detail_text_70">"減配せず配当を維持"</string>
-    <string name="stock_detail_text_71">"増配耐性の評価"</string>
+    <string name="stock_detail_text_71">"年間配当の増減評価"</string>
     <string name="stock_detail_text_72">"取得履歴での非減配期間：%1$s。直近最大5期の年平均増配率：%2$s。履歴が不足する項目は未取得です。"</string>
     <string name="stock_detail_text_73">"配当月・通知設定"</string>
     <string name="stock_detail_text_74">"配当月"</string>
