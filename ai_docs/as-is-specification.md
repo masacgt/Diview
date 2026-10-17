@@ -1,6 +1,6 @@
 # Diview 現行仕様（As-Is）
 
-- 基準日：2026-10-17
+- 基準日：2026-10-18
 - 対象：現行の Android ネイティブアプリと、アプリが参照するデータ/API・端末内処理。運用管理者向け API は連携仕様として記録し、管理画面は対象 UI に含めない。
 - 現行ソース：`kurogane-dividend/android/`。`kurogane-dividend/src/` は必要に応じた挙動参照であり、Android のビルド元ではない。`archive/` は対象外。
 - 記述根拠：現行ソース、リポジトリ内の `ai_docs/`、および本文に日時を付した本番 GET 応答。
@@ -824,6 +824,7 @@ Stripe、Firebase Authentication、Google Maps、Adjust、Firebase Cloud Messagi
 - 公開・認証済み・管理用のレート制限をルート別に適用する。具体的な閾値は Worker 定義・運用設定に依存する。
 - Android アプリに Worker 管理 secret を含めない。アプリの市場データ取得は一般ユーザーログインを要求しない。
 - 2026-10-17本番確認では `search-catalog`、`security-search`、`live-quotes`、`securities`、`financial-data`、`dividend-months`、`share-split-history`、`monthly-price-history`、`analysis` が応答した。`dividend-months?symbols=7203.T` は3月・9月、`share-split-history` は7203の2021-09-29 5:1イベントを返した。銘柄情報画面を開くと、表示対象コードの配当月・イベントAPIを日本日付ごとに取得する。2026-10-17の2060.TではR2応答の `2027-03-30` を画面に表示し、1326.Tは今後イベントなしとして「権利落ち日未取得」を表示した。2026-10-15に記録した旧 `share-split-history` 404と `legacy_unpublished` 応答は、初回v2公開前の履歴である。
+- 2026-10-18の本番確認では、rights-date artifact の生成時刻は `2026-10-17T23:43:46+09:00`。`dividend-months` は7203.Tを2027-03-30（権利付き最終日2027-03-29、権利確定日2027-03-31）、2914.Tを2026-12-29（2026-12-28、2026-12-30）、4626.Tを2027-03-30（2027-03-29、2027-03-31）として返し、3銘柄とも `estimated_from_history: true`。エミュレータで4626.Tの銘柄情報を開き、「次回権利落ち日（履歴推定）」「過去の配当イベント日から推定」と3つの日付ラベルを確認した。4626.Tの直近365日イベント配列は空で「配当月：未取得」と併記されるが、複数年の権利日推定は表示される。
 
 ### 5.3 通知・バックグラウンド処理
 
