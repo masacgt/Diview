@@ -13,7 +13,7 @@
 
 ## Next
 
-- [ ] Run the one-time financial seed into v2, deploy the Worker without legacy financial/valuation fallbacks, and verify the API reads migrated values and reports `legacy_migrated`/yfinance field states. The production sample on 2026-10-17 showed legacy-only annual financial and valuation rows for 7203, 2914, 8056, and 1491; the migration workflow and v2-only API changes are implemented locally but have not been run against production R2 or deployed.
+- [ ] Finish the one-time financial seed into v2, deploy the Worker without legacy financial/valuation fallbacks, and verify the API reads migrated values and reports `legacy_migrated`/yfinance field states. Evidence: Actions #73 processed 4,444 securities and migrated 276,954 fields across 3,337 securities, but 71 failed because legacy and v2 periods with the same calendar year collided in `{year}.json`; counts also include 519 missing legacy objects, 227 with no app-used fields, 283 already seeded, and 7 unsupported codes. The migration and daily writer now use full `period_end` keys for new records while preserving exact-period matches in existing year-keyed files; pushing, rerunning, deploying, and production API read-back remain open.
 
 - [ ] Verify V2 calendar-year dividend streak initialization, daily sync updates, Worker API propagation, and Android display. `assembleDebug` succeeded and the APK installed/launched on device `RFCNC0E4H8J`; live Worker/R2 propagation and displayed metric values remain unverified because the changes have not been published.
 
