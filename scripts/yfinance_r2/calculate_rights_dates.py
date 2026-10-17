@@ -152,7 +152,9 @@ def build_records(
     as_of: date | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     as_of = as_of or datetime.now(UTC).date()
-    inference_rows = rows + infer_upcoming_events(rows, as_of, calendars)
+    # Keep historical provenance when a direct upcoming schedule happens to
+    # fall on the same date as the recurring-date estimate.
+    inference_rows = infer_upcoming_events(rows, as_of, calendars) + rows
     records: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     skipped_events = 0
