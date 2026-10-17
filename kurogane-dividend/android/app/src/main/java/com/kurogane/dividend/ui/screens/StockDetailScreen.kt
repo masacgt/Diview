@@ -1461,7 +1461,7 @@ fun StockDetailScreen(
 
                                         // 2. 2x1 Grid for PER & PBR
                                         AdaptiveRow(
-                                            modifier = Modifier.fillMaxWidth(),
+                                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
                                             // PER
@@ -1469,7 +1469,7 @@ fun StockDetailScreen(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
                                                 border = BorderStroke(1.dp, BorderColor),
-                                                modifier = Modifier.weight(1f)
+                                                modifier = Modifier.weight(1f).fillMaxHeight()
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     AdaptiveRow(
@@ -1492,7 +1492,7 @@ fun StockDetailScreen(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
                                                 border = BorderStroke(1.dp, BorderColor),
-                                                modifier = Modifier.weight(1f)
+                                                modifier = Modifier.weight(1f).fillMaxHeight()
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     AdaptiveRow(
