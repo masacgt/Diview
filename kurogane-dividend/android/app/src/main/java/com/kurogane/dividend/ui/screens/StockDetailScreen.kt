@@ -240,7 +240,7 @@ fun StockDetailScreen(
     val sourceDividendsByYear = financial?.dividends.orEmpty().associate { it.year to it.dps }
     var yearEndPrices by remember(currentHolding.code) { mutableStateOf<Map<Int, Double>>(emptyMap()) }
     LaunchedEffect(currentHolding.code, dividendHistoryYears) {
-        yearEndPrices = runCatching {
+        yearEndPrices = com.kurogane.dividend.data.runCatchingCancellable {
             viewModel.loadMonthlyPriceHistory(
                 listOf(normalizedDividendCode),
                 dividendHistoryYears.map { "$it-12" }
@@ -268,20 +268,28 @@ fun StockDetailScreen(
     var shareSplitHistoryLoading by remember(currentHolding.code) { mutableStateOf(false) }
     var shareSplitHistoryError by remember(currentHolding.code) { mutableStateOf<String?>(null) }
     var shareSplitHistoryRetry by remember(currentHolding.code) { mutableIntStateOf(0) }
+    var handledShareSplitHistoryRetry by remember(currentHolding.code) { mutableIntStateOf(0) }
     LaunchedEffect(showDividendHistoryEditor, currentHolding.code, shareSplitHistoryRetry) {
         if (!showDividendHistoryEditor) return@LaunchedEffect
+        val explicitlyRetried = shareSplitHistoryRetry != handledShareSplitHistoryRetry
+        handledShareSplitHistoryRetry = shareSplitHistoryRetry
         shareSplitHistoryLoading = true
         shareSplitHistoryError = null
-        val result = com.kurogane.dividend.data.runCatchingCancellable {
-            viewModel.loadShareSplitHistory(
-                normalizedDividendCode,
-                java.time.LocalDate.of(dividendHistoryYears.first(), 1, 1),
-                java.time.LocalDate.of(dividendHistoryYears.last(), 12, 31)
-            )
-        }
-        shareSplitHistory = result.getOrNull() ?: shareSplitHistory
-        shareSplitHistoryError = result.exceptionOrNull()?.message
-        shareSplitHistoryLoading = false
+        try {
+            val result = com.kurogane.dividend.data.runCatchingCancellable {
+                viewModel.loadShareSplitHistory(
+                    normalizedDividendCode,
+                    java.time.LocalDate.of(dividendHistoryYears.first(), 1, 1),
+                    java.time.LocalDate.of(dividendHistoryYears.last(), 12, 31),
+                    force = explicitlyRetried
+                )
+            }
+            shareSplitHistory = result.getOrNull() ?: shareSplitHistory
+            shareSplitHistoryError = result.exceptionOrNull()?.let { error ->
+                android.util.Log.w("CloudflareMarket", "Split history display failed (${error.javaClass.simpleName})")
+                networkErrorMessage(resources, error)
+            }
+        } finally { shareSplitHistoryLoading = false }
     }
     val fiscalMonth = financial?.period?.substringAfterLast('/')?.toIntOrNull()?.takeIf { it in 1..12 }
     val isCalendarYearDividendHistory = financial?.dividendHistoryBasis == "calendar_year_observed_distributions"
@@ -296,7 +304,9 @@ fun StockDetailScreen(
         financialError = false
         financialFailure = null
         try {
-            val result = com.kurogane.dividend.data.runCatchingCancellable { viewModel.fetchFinancialData(currentHolding.code, force = true) }
+            val result = com.kurogane.dividend.data.runCatchingCancellable {
+                viewModel.fetchFinancialData(currentHolding.code, force = financialRetry > 0)
+            }
             financialError = result.isFailure
             financialFailure = result.exceptionOrNull()?.let { networkErrorMessage(resources, it) }
         } finally { financialLoading = false }

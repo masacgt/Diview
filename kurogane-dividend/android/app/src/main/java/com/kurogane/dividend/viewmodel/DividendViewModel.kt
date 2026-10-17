@@ -463,7 +463,9 @@ class DividendViewModel @JvmOverloads constructor(
         val now = System.currentTimeMillis()
         val attemptKey = "financial_fetch_attempt_at_$normalized"
         val attemptDateKey = "financial_fetch_attempt_jst_$normalized"
-        if (!PriceRefreshPolicy.shouldFetch(
+        // An explicit retry may bypass a failed attempt. Today's successfully
+        // parsed document is still returned by the cache check above.
+        if (!force && !PriceRefreshPolicy.shouldFetch(
                 now,
                 marketPreferences.getLong(attemptKey, 0L),
                 marketPreferences.getString(attemptDateKey, null)
@@ -1972,7 +1974,7 @@ class DividendViewModel @JvmOverloads constructor(
         }
     }
 
-    suspend fun loadShareSplitHistory(code: String, from: LocalDate, to: LocalDate): CloudflareShareSplitHistory =
+    suspend fun loadShareSplitHistory(code: String, from: LocalDate, to: LocalDate, force: Boolean = false): CloudflareShareSplitHistory =
         shareSplitRefreshMutex.withLock {
         val normalizedCode = PortfolioMath.normalizeCode(code).removeSuffix(".T")
         val cacheKey = "share_split_history_${normalizedCode}_${from}_$to"
@@ -1998,12 +2000,13 @@ class DividendViewModel @JvmOverloads constructor(
 
         val now = System.currentTimeMillis()
         val lastAttemptDate = marketPreferences.getString(attemptDateKey, null)
-        if (!PriceRefreshPolicy.shouldFetch(
+        if (!force && !PriceRefreshPolicy.shouldFetch(
                 now,
                 marketPreferences.getLong(attemptKey, 0L),
                 lastAttemptDate
             )) {
-            return@withLock readCached() ?: CloudflareShareSplitHistory(normalizedCode, "not_fetched", emptyList())
+            return@withLock readCached()
+                ?: throw java.io.IOException("株式分割履歴を取得できませんでした")
         }
         marketPreferences.edit().putLong(attemptKey, now)
             .putString(attemptDateKey, PriceRefreshPolicy.japanDate(now)).apply()
