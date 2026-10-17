@@ -223,7 +223,7 @@ private class WatchlistDerivedMetricsCache {
 }
 
 private data class WatchlistMetricsSnapshot(
-    val stocks: List<WatchlistStock>,
+    val stockCodes: List<String>,
     val metrics: WatchlistDerivedMetrics
 )
 
@@ -337,15 +337,19 @@ fun WatchlistScreen(
             watchlistMetricsCache.get(sourceStocks, resources)
         }
         if (viewModel.watchlist.value === sourceStocks) {
-            watchlistMetricsSnapshot = WatchlistMetricsSnapshot(sourceStocks, metrics)
+            watchlistMetricsSnapshot = WatchlistMetricsSnapshot(
+                stockCodes = sourceStocks.map { it.code },
+                metrics = metrics
+            )
         }
     }
-    val hasWatchlistMetrics = watchlistMetricsSnapshot?.stocks === watchlist
-    val watchlistMetrics = watchlistMetricsSnapshot
-        ?.takeIf { it.stocks === watchlist }
+    val watchlistCodes = remember(watchlist) { watchlist.map { it.code } }
+    val displayedWatchlistMetrics = watchlistMetricsSnapshot
+        ?.takeIf { it.stockCodes == watchlistCodes }
+    val hasWatchlistMetrics = displayedWatchlistMetrics != null
+    val watchlistMetrics = displayedWatchlistMetrics
         ?.metrics
         ?: EmptyWatchlistDerivedMetrics
-    val watchlistCodes = remember(watchlist) { watchlist.map { it.code } }
     val snackbarHostState = remember { SnackbarHostState() }
     val screenScope = rememberCoroutineScope()
     var alertSnackbarJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }

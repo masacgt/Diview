@@ -1085,7 +1085,7 @@ fun AssetManagementScreen(
                                 HoldingMetricDivider()
                                 HoldingMetricTile(
                                     label = resources.getString(R.string.asset_management_label_32),
-                                    value = if (annualDiv > 0) "¥${javaCurrencyFormat.format(annualDiv.toLong())}/年" else "再投資型",
+                                    value = if (annualDiv > 0) "¥${javaCurrencyFormat.format(annualDiv.toLong())}/年" else "¥0/年",
                                     detail = payoutMonthSummary,
                                     modifier = Modifier.weight(1f)
                                 )
@@ -1093,12 +1093,12 @@ fun AssetManagementScreen(
                                 HoldingMetricTile(
                                     label = resources.getString(R.string.asset_management_label_33),
                                     value = latestDividendGrowth?.let {
-                                        String.format(java.util.Locale.JAPAN, "%+.1f%%", it)
-                                    } ?: "未取得",
+                                        if (it == 0.0) "0.0%" else String.format(java.util.Locale.JAPAN, "%+.1f%%", it)
+                                    } ?: "0.0%",
                                     detail = annualDividendChange?.let {
                                         val sign = if (it > 0) "+" else if (it < 0) "−" else ""
                                         "年額 $sign¥${javaCurrencyFormat.format(kotlin.math.abs(it).toLong())}"
-                                    } ?: "履歴なし",
+                                    } ?: "年額 ¥0",
                                     modifier = Modifier.weight(1f),
                                     valueColor = latestChangeColor,
                                     detailColor = latestChangeColor

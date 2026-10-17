@@ -22,6 +22,9 @@ import com.kurogane.dividend.data.CloudflareStockAnalysis
 import com.kurogane.dividend.data.CloudflareSearchHit
 import com.kurogane.dividend.data.CloudflareSearchQuote
 import com.kurogane.dividend.data.CloudflareMonthlyPriceSeries
+import com.kurogane.dividend.data.CloudflareDataRetrieval
+import com.kurogane.dividend.data.CloudflareDividendHistoryRetrieval
+import com.kurogane.dividend.data.CloudflareShareSplitEvent
 import com.kurogane.dividend.data.CloudflareShareSplitHistory
 import com.kurogane.dividend.data.DividendHistoryOverride
 import com.kurogane.dividend.data.PriceRefreshPolicy
@@ -267,6 +270,8 @@ class DividendViewModel @JvmOverloads constructor(
     val financialData = _financialData.asStateFlow()
     private val _stockAnalysisData = MutableStateFlow<Map<String, CloudflareStockAnalysis>>(emptyMap())
     val stockAnalysisData = _stockAnalysisData.asStateFlow()
+    private val _cloudflareSecurityData = MutableStateFlow(loadCachedCloudflareSecurityData())
+    val cloudflareSecurityData = _cloudflareSecurityData.asStateFlow()
     private val stockAnalysisMutex = Mutex()
     private val stockAnalysisLoading = mutableSetOf<String>()
     private val _dividendEventRevision = MutableStateFlow(0)
@@ -278,6 +283,12 @@ class DividendViewModel @JvmOverloads constructor(
     private val financialMutex = Mutex()
     private val financialLoading = mutableSetOf<String>()
     private val financialSlots = Semaphore(4)
+    private val cloudflareSecurityMutex = Mutex()
+    private val cloudflareSecuritySlots = Semaphore(4)
+    private val cloudflareSecurityLoading = mutableSetOf<String>()
+    private val stockAnalysisSlots = Semaphore(4)
+    private val monthlyPriceRefreshMutex = Mutex()
+    private val shareSplitRefreshMutex = Mutex()
     private val dataGeneration = java.util.concurrent.atomic.AtomicLong(0L)
 
     fun japaneseDisplayName(code: String, fallback: String): String =
@@ -372,6 +383,16 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     suspend fun refreshExchangeRate() {
+        val now = System.currentTimeMillis()
+        val attemptAtKey = "fx_fetch_attempt_at"
+        val attemptDateKey = "fx_fetch_attempt_jst_date"
+        if (!PriceRefreshPolicy.shouldFetch(
+                now,
+                marketPreferences.getLong(attemptAtKey, 0L),
+                marketPreferences.getString(attemptDateKey, null)
+            )) return
+        marketPreferences.edit().putLong(attemptAtKey, now)
+            .putString(attemptDateKey, PriceRefreshPolicy.japanDate(now)).apply()
         val generation = dataGeneration.get()
         runCatchingCancellable { ExchangeRateRepository().latest() }.onSuccess { rate ->
             if (generation != dataGeneration.get()) return@onSuccess
@@ -391,7 +412,7 @@ class DividendViewModel @JvmOverloads constructor(
         val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
         if (!normalized.matches(Regex("[A-Z0-9]{4}"))) return null
         val today = PriceRefreshPolicy.japanDate(System.currentTimeMillis())
-        if (!force && marketPreferences.getString("financial_date_$normalized", null) == today) {
+        if (marketPreferences.getString("financial_date_$normalized", null) == today) {
             _financialData.value[normalized]?.let { return it }
             val cached = withContext(Dispatchers.IO) {
                 runCatching {
@@ -404,6 +425,28 @@ class DividendViewModel @JvmOverloads constructor(
                 return cached
             }
         }
+        val now = System.currentTimeMillis()
+        val attemptKey = "financial_fetch_attempt_at_$normalized"
+        val attemptDateKey = "financial_fetch_attempt_jst_$normalized"
+        if (!PriceRefreshPolicy.shouldFetch(
+                now,
+                marketPreferences.getLong(attemptKey, 0L),
+                marketPreferences.getString(attemptDateKey, null)
+                    ?: marketPreferences.getString("financial_date_$normalized", null)
+            )) {
+            val cached = _financialData.value[normalized] ?: withContext(Dispatchers.IO) {
+                runCatching {
+                    marketPreferences.getString("financial_$normalized", null)
+                        ?.let { FinancialData.parse(JSONObject(it), normalized) }
+                }.getOrNull()
+            }
+            if (cached != null) _financialData.update { it + (normalized to cached) }
+            return cached
+        }
+        marketPreferences.edit()
+            .putLong(attemptKey, now)
+            .putString(attemptDateKey, PriceRefreshPolicy.japanDate(now))
+            .apply()
         val allowed = financialMutex.withLock { financialLoading.add(normalized) }
         if (!allowed) return _financialData.value[normalized]
         try {
@@ -438,8 +481,44 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     private suspend fun refreshStockAnalysisForHoldings() = coroutineScope {
-        _holdings.value.distinctBy { it.code.uppercase(java.util.Locale.ROOT) }.map { holding ->
-            async { runCatchingCancellable { fetchStockAnalysis(holding.code) } }
+        val codes = (
+            _holdings.value.filter { it.category != Category.FUND }.map { it.code } +
+                _watchlist.value.filter { it.category == "jp" || it.category == "us" }.map { it.code }
+            ).distinctBy { it.uppercase(java.util.Locale.ROOT) }
+        codes.map { code ->
+            async { runCatchingCancellable { fetchStockAnalysis(code) } }
+        }.awaitAll()
+    }
+
+    private suspend fun refreshStockDetailDataForPortfolio() = coroutineScope {
+        val holdings = _holdings.value.filter { it.category != Category.FUND }
+        val watchlist = _watchlist.value.filter { it.category == "jp" || it.category == "us" }
+        val codes = (holdings.map { it.code } + watchlist.map { it.code })
+            .distinctBy { PortfolioMath.normalizeCode(it).uppercase(java.util.Locale.ROOT) }
+        codes.map { code ->
+            async { fetchCloudflareSecurityIfDue(code) }
+        }.awaitAll()
+
+        refreshStockAnalysisForHoldings()
+
+        val japaneseCodes = (
+            holdings.filter { it.category == Category.JAPAN }.map { it.code } +
+                _watchlist.value.filter { it.category == "jp" }.map { it.code }
+            ).distinctBy { PortfolioMath.normalizeCode(it).uppercase(java.util.Locale.ROOT) }
+        val latestCompleteYear = LocalDate.now(ZoneId.of("Asia/Tokyo")).year - 1
+        val historyYears = (latestCompleteYear - 7..latestCompleteYear).toList()
+        if (japaneseCodes.isNotEmpty()) {
+            runCatchingCancellable { loadMonthlyPriceHistory(japaneseCodes, historyYears.map { "$it-12" }) }
+                .onFailure { android.util.Log.w("CloudflareMarket", "年末株価履歴の取得に失敗しました", it) }
+        }
+
+        val from = LocalDate.of(historyYears.first(), 1, 1)
+        val to = LocalDate.of(historyYears.last(), 12, 31)
+        codes.map { code ->
+            async {
+                runCatchingCancellable { loadShareSplitHistory(code, from, to) }
+                    .onFailure { android.util.Log.w("CloudflareMarket", "株式分割履歴の取得に失敗しました: $code", it) }
+            }
         }.awaitAll()
     }
 
@@ -608,12 +687,26 @@ class DividendViewModel @JvmOverloads constructor(
 
     private suspend fun refreshDividendMonths(symbols: Collection<String>) = dividendMonthRefreshMutex.withLock {
         val today = LocalDate.now(ZoneId.of("Asia/Tokyo")).toString()
+        val now = System.currentTimeMillis()
         val dueSymbols = symbols.map { it.trim().uppercase(java.util.Locale.ROOT) }
             .distinct()
             .filter { symbol ->
-                marketPreferences.getString("dividend_months_fetched_jst_$symbol", null) != today ||
-                    marketPreferences.getString("dividend_events_fetched_jst_$symbol", null) != today
+                PriceRefreshPolicy.shouldFetch(
+                    now,
+                    marketPreferences.getLong("dividend_fetch_attempt_at_$symbol", 0L),
+                    marketPreferences.getString("dividend_fetch_attempt_jst_$symbol", null)
+                        ?: marketPreferences.getString("dividend_events_fetched_jst_$symbol", null)
+                        ?: marketPreferences.getString("dividend_months_fetched_jst_$symbol", null)
+                ) && (marketPreferences.getString("dividend_months_fetched_jst_$symbol", null) != today ||
+                    marketPreferences.getString("dividend_events_fetched_jst_$symbol", null) != today)
             }
+        if (dueSymbols.isEmpty()) return@withLock
+        val attemptEditor = marketPreferences.edit()
+        dueSymbols.forEach { symbol ->
+            attemptEditor.putLong("dividend_fetch_attempt_at_$symbol", now)
+                .putString("dividend_fetch_attempt_jst_$symbol", today)
+        }
+        attemptEditor.apply()
         for (batch in dueSymbols.chunked(50)) {
             val result = runCatchingCancellable { marketRepository.fetchDividendMonths(batch) }
             if (result.isFailure) {
@@ -1630,35 +1723,200 @@ class DividendViewModel @JvmOverloads constructor(
         return true
     }
 
+    private fun loadCachedCloudflareSecurityData(): Map<String, CloudflareSecurity> =
+        marketPreferences.all.entries.asSequence()
+            .filter { it.key.startsWith("cloudflare_security_snapshot_") }
+            .mapNotNull { (key, value) ->
+                val raw = value as? String ?: return@mapNotNull null
+                val security = parseCloudflareSecuritySnapshot(raw) ?: return@mapNotNull null
+                key.removePrefix("cloudflare_security_snapshot_") to security
+            }.toMap()
+
+    private fun parseCloudflareSecuritySnapshot(raw: String): CloudflareSecurity? = runCatching {
+        val json = JSONObject(raw)
+        fun JSONObject.stringOrNull(key: String): String? =
+            if (!has(key) || isNull(key)) null else optString(key).takeIf(String::isNotBlank)
+        fun JSONObject.doubleOrNull(key: String): Double? =
+            if (!has(key) || isNull(key)) null else optDouble(key).takeIf(Double::isFinite)
+        val retrievalJson = json.optJSONObject("data_retrieval")
+        val historyJson = retrievalJson?.optJSONObject("dividend_history")
+        val retrieval = retrievalJson?.let {
+            CloudflareDataRetrieval(
+                yfinanceTicker = it.stringOrNull("yfinance_ticker"),
+                source = it.stringOrNull("source"),
+                currency = it.stringOrNull("currency"),
+                lastAttemptAt = it.stringOrNull("last_attempt_at"),
+                processingStatus = it.stringOrNull("processing_status"),
+                failureReason = it.stringOrNull("failure_reason"),
+                dividendHistory = historyJson?.let { history ->
+                    CloudflareDividendHistoryRetrieval(
+                        status = history.stringOrNull("status"),
+                        lastAttemptStatus = history.stringOrNull("last_attempt_status"),
+                        source = history.stringOrNull("source"),
+                        storedHistoryStatus = history.stringOrNull("stored_history_status"),
+                        storedHistoryStart = history.stringOrNull("stored_history_start"),
+                        storedHistoryEnd = history.stringOrNull("stored_history_end"),
+                        lastCoverageStart = history.stringOrNull("last_coverage_start"),
+                        lastCoverageEnd = history.stringOrNull("last_coverage_end")
+                    )
+                }
+            )
+        }
+        CloudflareSecurity(
+            code = json.getString("code"),
+            name = json.getString("name"),
+            annualDividendPerShare = json.doubleOrNull("annual_dividend_per_share"),
+            marketPrice = json.doubleOrNull("market_price"),
+            industry = json.stringOrNull("industry"),
+            marketYieldRate = json.doubleOrNull("market_yield_rate"),
+            isNoDividendConfirmed = json.optBoolean("is_no_dividend_confirmed"),
+            hasDividendStatus = json.optBoolean("has_dividend_status"),
+            dataRetrieval = retrieval
+        )
+    }.getOrNull()
+
+    private fun cacheCloudflareSecuritySnapshot(security: CloudflareSecurity) {
+        val normalized = PortfolioMath.normalizeCode(security.code).removeSuffix(".T")
+        val history = security.dataRetrieval?.dividendHistory?.let { value ->
+            JSONObject().apply {
+                put("status", value.status ?: JSONObject.NULL)
+                put("last_attempt_status", value.lastAttemptStatus ?: JSONObject.NULL)
+                put("source", value.source ?: JSONObject.NULL)
+                put("stored_history_status", value.storedHistoryStatus ?: JSONObject.NULL)
+                put("stored_history_start", value.storedHistoryStart ?: JSONObject.NULL)
+                put("stored_history_end", value.storedHistoryEnd ?: JSONObject.NULL)
+                put("last_coverage_start", value.lastCoverageStart ?: JSONObject.NULL)
+                put("last_coverage_end", value.lastCoverageEnd ?: JSONObject.NULL)
+            }
+        }
+        val retrieval = security.dataRetrieval?.let { value ->
+            JSONObject().apply {
+                put("yfinance_ticker", value.yfinanceTicker ?: JSONObject.NULL)
+                put("source", value.source ?: JSONObject.NULL)
+                put("currency", value.currency ?: JSONObject.NULL)
+                put("last_attempt_at", value.lastAttemptAt ?: JSONObject.NULL)
+                put("processing_status", value.processingStatus ?: JSONObject.NULL)
+                put("failure_reason", value.failureReason ?: JSONObject.NULL)
+                put("dividend_history", history ?: JSONObject.NULL)
+            }
+        }
+        val json = JSONObject().apply {
+            put("code", security.code)
+            put("name", security.name)
+            put("annual_dividend_per_share", security.annualDividendPerShare ?: JSONObject.NULL)
+            put("market_price", security.marketPrice ?: JSONObject.NULL)
+            put("industry", security.industry ?: JSONObject.NULL)
+            put("market_yield_rate", security.marketYieldRate ?: JSONObject.NULL)
+            put("is_no_dividend_confirmed", security.isNoDividendConfirmed)
+            put("has_dividend_status", security.hasDividendStatus)
+            put("data_retrieval", retrieval ?: JSONObject.NULL)
+        }
+        marketPreferences.edit()
+            .putString("cloudflare_security_snapshot_$normalized", json.toString())
+            .putString("cloudflare_security_fetched_jst_$normalized", PriceRefreshPolicy.japanDate(System.currentTimeMillis()))
+            .apply()
+        _cloudflareSecurityData.update { it + (normalized to security) }
+    }
+
+    private suspend fun fetchCloudflareSecurityIfDue(code: String): CloudflareSecurity? {
+        val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
+        if (!normalized.matches(Regex("[A-Z0-9.\\-]{1,16}"))) return null
+        val cacheKey = "cloudflare_security_snapshot_$normalized"
+        val attemptKey = "cloudflare_security_fetch_attempt_at_$normalized"
+        val attemptDateKey = "cloudflare_security_fetch_attempt_jst_$normalized"
+        var cached: CloudflareSecurity? = null
+        val shouldFetch = cloudflareSecurityMutex.withLock {
+            cached = _cloudflareSecurityData.value[normalized]
+                ?: marketPreferences.getString(cacheKey, null)?.let(::parseCloudflareSecuritySnapshot)
+            val now = System.currentTimeMillis()
+            if (!PriceRefreshPolicy.shouldFetch(
+                    now,
+                    marketPreferences.getLong(attemptKey, 0L),
+                    marketPreferences.getString(attemptDateKey, null)
+                        ?: marketPreferences.getString("cloudflare_security_fetched_jst_$normalized", null)
+                ) || !cloudflareSecurityLoading.add(normalized)) {
+                false
+            } else {
+                marketPreferences.edit().putLong(attemptKey, now)
+                    .putString(attemptDateKey, PriceRefreshPolicy.japanDate(now)).apply()
+                true
+            }
+        }
+        if (!shouldFetch) return cached
+        try {
+            val fetched = runCatchingCancellable {
+                cloudflareSecuritySlots.withPermit { marketRepository.getSecurity(normalized) }
+            }.onFailure {
+                android.util.Log.w("CloudflareMarket", "銘柄情報の取得に失敗しました: $normalized", it)
+            }.getOrNull() ?: return cached
+            val enriched = withContext(Dispatchers.IO) {
+                fetched.copy(
+                    name = japaneseDisplayName(fetched.code, fetched.name),
+                    industry = runCatching {
+                        Tse33IndustryMaster.industries(getApplication())[fetched.code.take(4).uppercase(java.util.Locale.ROOT)]
+                    }.getOrNull()
+                )
+            }
+            cacheCloudflareSecuritySnapshot(enriched)
+            return enriched
+        } finally {
+            cloudflareSecurityMutex.withLock { cloudflareSecurityLoading.remove(normalized) }
+        }
+    }
+
+    fun cachedCloudflareSecurity(code: String): CloudflareSecurity? {
+        val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
+        return _cloudflareSecurityData.value[normalized]
+            ?: marketPreferences.getString("cloudflare_security_snapshot_$normalized", null)
+                ?.let(::parseCloudflareSecuritySnapshot)
+    }
+
     suspend fun resolveCloudflareSecurity(code: String): CloudflareSecurity? {
-        val security = marketRepository.getSecurity(code) ?: return null
+        val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
+        val security = cachedCloudflareSecurity(normalized) ?: fetchCloudflareSecurityIfDue(normalized) ?: return null
         if ((security.annualDividendPerShare ?: 0.0) <= 0.0) {
             runCatchingCancellable { fetchFinancialData(security.code) }
         }
-        // Calendar-year event sums are historical chart values, not the current
-        // forecast/current-fiscal-year DPS used for the detail yield.
-        val annualDividendPerShare = security.annualDividendPerShare
-        val industry = withContext(Dispatchers.IO) { runCatching {
-            Tse33IndustryMaster.industries(getApplication())[security.code.take(4).uppercase(java.util.Locale.ROOT)]
-        }.getOrNull() }
-        return security.copy(
-            name = japaneseDisplayName(security.code, security.name),
-            annualDividendPerShare = annualDividendPerShare,
-            marketPrice = security.marketPrice,
-            industry = industry,
-            marketYieldRate = security.marketYieldRate
-        )
+        return security
     }
 
     suspend fun fetchStockAnalysis(code: String, force: Boolean = false): CloudflareStockAnalysis? {
         val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
         if (!normalized.matches(Regex("[A-Z0-9]{4}"))) return null
         _stockAnalysisData.value[normalized]?.let { if (!force) return it }
+        val now = System.currentTimeMillis()
+        val attemptKey = "stock_analysis_fetch_attempt_at_$normalized"
+        val attemptDateKey = "stock_analysis_fetch_attempt_jst_$normalized"
+        if (!PriceRefreshPolicy.shouldFetch(
+                now,
+                marketPreferences.getLong(attemptKey, 0L),
+                marketPreferences.getString(attemptDateKey, null)
+            )) {
+            val cached = runCatching {
+                marketPreferences.getString("stock_analysis_$normalized", null)?.let { raw ->
+                    val json = JSONObject(raw)
+                    val values = json.keys().asSequence().associateWith { key ->
+                        if (json.isNull(key)) null else json.optDouble(key).takeIf(Double::isFinite)
+                    }
+                    CloudflareStockAnalysis(values)
+                }
+            }.getOrNull()
+            if (cached != null) _stockAnalysisData.update { it + (normalized to cached) }
+            return cached ?: _stockAnalysisData.value[normalized]
+        }
+        marketPreferences.edit().putLong(attemptKey, now)
+            .putString(attemptDateKey, PriceRefreshPolicy.japanDate(now)).apply()
         val allowed = stockAnalysisMutex.withLock { stockAnalysisLoading.add(normalized) }
         if (!allowed) return _stockAnalysisData.value[normalized]
         return try {
-            val result = marketRepository.getStockAnalysis(normalized)
-            if (result != null) _stockAnalysisData.update { it + (normalized to result) }
+            val result = stockAnalysisSlots.withPermit { marketRepository.getStockAnalysis(normalized) }
+            if (result != null) {
+                _stockAnalysisData.update { it + (normalized to result) }
+                val json = JSONObject().apply {
+                    result.values.forEach { (key, value) -> put(key, value ?: JSONObject.NULL) }
+                }
+                marketPreferences.edit().putString("stock_analysis_$normalized", json.toString()).apply()
+            }
             result
         } finally {
             stockAnalysisMutex.withLock { stockAnalysisLoading.remove(normalized) }
@@ -1676,20 +1934,75 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     suspend fun loadShareSplitHistory(code: String, from: LocalDate, to: LocalDate): CloudflareShareSplitHistory =
-        marketRepository.fetchShareSplitHistory(code, from, to)
+        shareSplitRefreshMutex.withLock {
+        val normalizedCode = PortfolioMath.normalizeCode(code).removeSuffix(".T")
+        val cacheKey = "share_split_history_${normalizedCode}_${from}_$to"
+        val attemptKey = "share_split_fetch_attempt_at_${normalizedCode}_${from}_$to"
+        val attemptDateKey = "share_split_fetch_attempt_jst_${normalizedCode}_${from}_$to"
+        fun readCached(): CloudflareShareSplitHistory? = runCatching {
+            val cached = marketPreferences.getString(cacheKey, null)?.let(::JSONObject) ?: return@runCatching null
+            val rows = cached.optJSONArray("events")
+            val events = (0 until (rows?.length() ?: 0)).mapNotNull { index ->
+                val row = rows?.optJSONObject(index) ?: return@mapNotNull null
+                val date = runCatching { LocalDate.parse(row.optString("date")) }.getOrNull()
+                    ?: return@mapNotNull null
+                val ratio = row.optDouble("ratio", Double.NaN)
+                if (!ratio.isFinite() || ratio <= 0.0) return@mapNotNull null
+                CloudflareShareSplitEvent(date, ratio)
+            }
+            CloudflareShareSplitHistory(
+                code = normalizedCode,
+                historyStatus = cached.optString("history_status", "not_fetched"),
+                events = events
+            )
+        }.getOrNull()
 
-    suspend fun loadMonthlyPriceHistory(codes: List<String>, months: List<String>): List<CloudflareMonthlyPriceSeries> {
+        val now = System.currentTimeMillis()
+        val lastAttemptDate = marketPreferences.getString(attemptDateKey, null)
+        if (!PriceRefreshPolicy.shouldFetch(
+                now,
+                marketPreferences.getLong(attemptKey, 0L),
+                lastAttemptDate
+            )) {
+            return@withLock readCached() ?: CloudflareShareSplitHistory(normalizedCode, "not_fetched", emptyList())
+        }
+        marketPreferences.edit().putLong(attemptKey, now)
+            .putString(attemptDateKey, PriceRefreshPolicy.japanDate(now)).apply()
+        val fetched = marketRepository.fetchShareSplitHistory(normalizedCode, from, to)
+        val rows = JSONArray().apply {
+            fetched.events.forEach { event ->
+                put(JSONObject().put("date", event.date.toString()).put("ratio", event.ratio))
+            }
+        }
+        marketPreferences.edit().putString(cacheKey, JSONObject()
+            .put("history_status", fetched.historyStatus)
+            .put("events", rows).toString()).apply()
+        fetched
+    }
+
+    suspend fun loadMonthlyPriceHistory(codes: List<String>, months: List<String>): List<CloudflareMonthlyPriceSeries> =
+        monthlyPriceRefreshMutex.withLock {
         val normalizedCodes = codes.map { code ->
             code.trim().uppercase(java.util.Locale.ROOT).removeSuffix(".T").let {
                 if (it.length == 5 && it.endsWith('0')) it.dropLast(1) else it
             }
         }.filter { it.matches(Regex("[A-Z0-9]{4}")) }.distinct()
         val requestedMonths = months.distinct().filter { it.matches(Regex("\\d{4}-(0[1-9]|1[0-2])")) }
-        if (normalizedCodes.isEmpty() || requestedMonths.isEmpty()) return emptyList()
+        if (normalizedCodes.isEmpty() || requestedMonths.isEmpty()) return@withLock emptyList()
 
         val cachedByCode = normalizedCodes.associateWith { readCachedMonthlyPrices(it) }
+        val now = System.currentTimeMillis()
         val missingByCode = normalizedCodes.associateWith { code ->
-            requestedMonths.filterNot { it in cachedByCode[code].orEmpty() }
+            requestedMonths.filter { month ->
+                if (month in cachedByCode[code].orEmpty()) return@filter false
+                val key = "monthly_price_fetch_attempt_at_${code}_$month"
+                val dateKey = "monthly_price_fetch_attempt_jst_${code}_$month"
+                PriceRefreshPolicy.shouldFetch(
+                    now,
+                    marketPreferences.getLong(key, 0L),
+                    marketPreferences.getString(dateKey, null)
+                )
+            }
         }
         for (codeBatch in normalizedCodes.chunked(20)) {
             for (monthBatch in requestedMonths.chunked(12)) {
@@ -1697,27 +2010,27 @@ class DividendViewModel @JvmOverloads constructor(
                     missingByCode[code].orEmpty().any { it in monthBatch }
                 }
                 if (codesForBatch.isNotEmpty()) {
-                    var attempt = 0
-                    while (true) {
-                        try {
-                            marketRepository.fetchMonthlyPriceHistory(codesForBatch, monthBatch).forEach { series ->
-                                val merged = readCachedMonthlyPrices(series.code).toMutableMap()
-                                series.prices.forEach { price -> merged[price.month] = price }
-                                if (merged.isNotEmpty()) saveCachedMonthlyPrices(series.code, merged)
-                            }
-                            break
-                        } catch (error: kotlinx.coroutines.CancellationException) {
-                            throw error
-                        } catch (error: Exception) {
-                            if (attempt >= 2) throw error
-                            delay(500L * (attempt + 1))
-                            attempt++
+                    val attemptEditor = marketPreferences.edit()
+                    codesForBatch.forEach { code ->
+                        monthBatch.filter { it in missingByCode[code].orEmpty() }.forEach { month ->
+                            attemptEditor.putLong("monthly_price_fetch_attempt_at_${code}_$month", now)
+                                .putString("monthly_price_fetch_attempt_jst_${code}_$month", PriceRefreshPolicy.japanDate(now))
                         }
+                    }
+                    attemptEditor.apply()
+                    try {
+                        marketRepository.fetchMonthlyPriceHistory(codesForBatch, monthBatch).forEach { series ->
+                            val merged = readCachedMonthlyPrices(series.code).toMutableMap()
+                            series.prices.forEach { price -> merged[price.month] = price }
+                            if (merged.isNotEmpty()) saveCachedMonthlyPrices(series.code, merged)
+                        }
+                    } catch (error: kotlinx.coroutines.CancellationException) {
+                        throw error
                     }
                 }
             }
         }
-        return cachedMonthlyPriceHistory(normalizedCodes, requestedMonths)
+        cachedMonthlyPriceHistory(normalizedCodes, requestedMonths)
     }
 
     private fun readCachedMonthlyPrices(code: String): Map<String, com.kurogane.dividend.data.CloudflareMonthlyPrice> = runCatching {
@@ -1745,11 +2058,28 @@ class DividendViewModel @JvmOverloads constructor(
     private suspend fun refreshMarketPricesIfDue() {
         val generation = dataGeneration.get()
         val now = System.currentTimeMillis()
-        val lastFetchAt = marketPreferences.getLong("last_price_fetch_at", 0L)
-        val lastFetchJstDate = marketPreferences.getString("last_price_fetch_jst_date", null)
+        val lastFetchAt = marketPreferences.getLong(
+            "last_price_fetch_attempt_at",
+            marketPreferences.getLong("last_price_fetch_at", 0L)
+        )
+        val lastFetchJstDate = marketPreferences.getString("last_price_fetch_attempt_jst_date", null)
+            ?: marketPreferences.getString("last_price_fetch_jst_date", null)
         val shouldFetchPrices = PriceRefreshPolicy.shouldFetch(now, lastFetchAt, lastFetchJstDate)
         val needsAnnualDpsRefresh = marketPreferences.getInt("annual_dps_contract_version", 0) < ANNUAL_DPS_CONTRACT_VERSION
-        if (!shouldFetchPrices && !needsAnnualDpsRefresh) return
+        val dpsAttemptKey = "annual_dps_contract_refresh_attempt_at"
+        val dpsAttemptDateKey = "annual_dps_contract_refresh_attempt_jst"
+        val shouldRefreshAnnualDps = needsAnnualDpsRefresh && PriceRefreshPolicy.shouldFetch(
+            now,
+            marketPreferences.getLong(dpsAttemptKey, 0L),
+            marketPreferences.getString(dpsAttemptDateKey, null)
+        )
+        if (!shouldFetchPrices && !shouldRefreshAnnualDps) return
+        if (shouldRefreshAnnualDps) {
+            marketPreferences.edit()
+                .putLong(dpsAttemptKey, now)
+                .putString(dpsAttemptDateKey, PriceRefreshPolicy.japanDate(now))
+                .apply()
+        }
 
         val heldCodes = _holdings.value
             .filter { it.category == Category.JAPAN && it.shares > 0 }
@@ -1798,9 +2128,9 @@ class DividendViewModel @JvmOverloads constructor(
             marketPreferences.edit().putInt("annual_dps_contract_version", ANNUAL_DPS_CONTRACT_VERSION).apply()
         }
         if (!shouldFetchPrices) return
-
         marketPreferences.edit()
             .putLong("last_price_fetch_attempt_at", now)
+            .putString("last_price_fetch_attempt_jst_date", PriceRefreshPolicy.japanDate(now))
             .putString("last_price_fetch_status", "running")
             .apply()
 
@@ -2347,6 +2677,7 @@ class DividendViewModel @JvmOverloads constructor(
                 // Start the payout-month request as soon as local Watchlist data is restored.
                 // The monthly projection observes the Watchlist flow and updates when results arrive.
                 launch { refreshDividendHistoryIfDue() }
+                launch { refreshStockDetailDataForPortfolio() }
                 launch { refreshExchangeRate() }
                 runCatching { notificationScheduler(getApplication(), _notificationSettings.value) }.onFailure {
                     _saveError.value = getApplication<android.app.Application>().getString(R.string.dividend_view_model_message_5)
