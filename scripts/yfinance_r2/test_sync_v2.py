@@ -15,6 +15,17 @@ import audit_split_transition_dividends as split_audit
 
 
 class SplitTransitionAuditTests(TestCase):
+    def test_security_csv_row_excludes_internal_comparisons(self):
+        row = split_audit.security_csv_row({
+            "code": "7203",
+            "split_events": [{"date": "2021-09-29", "ratio": 5.0}],
+            "comparisons": [{"fiscal_year": 2022, "within_tolerance": True}],
+        })
+
+        self.assertEqual(set(row), set(split_audit.SECURITY_CSV_FIELDS))
+        self.assertEqual(json.loads(row["split_events"]), [{"date": "2021-09-29", "ratio": 5.0}])
+        self.assertNotIn("comparisons", row)
+
     def test_event_dates_are_grouped_by_reported_fiscal_period_ends(self):
         period_ends = [date(2020, 3, 31), date(2021, 3, 31), date(2022, 3, 31)]
         self.assertEqual(split_audit.fiscal_year_for_event(date(2020, 9, 29), period_ends), 2021)

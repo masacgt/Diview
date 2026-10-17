@@ -58,3 +58,5 @@ The prior `full`, `weekly-minimal`, and `publish-dividends` jobs have been remov
 ## December close date repair
 
 Existing December price points are normalized so `date` is the final XTKS session of the month, while `close` remains the saved yfinance monthly `Close`. Manual workflow mode `repair-monthly-prices` rewrites only affected date fields, reads every changed object back for verification, and makes no Yahoo/yfinance requests. It installs only `boto3` and `exchange_calendars` from `requirements-rights.txt`.
+
+The production repair in Actions run #51 scanned 28,950 year partitions and normalized 25,680 points with zero failures and zero yfinance requests. Worker API read-back confirmed all eight 7203 December dates and all 142 available price points in a 20-security split/reverse-split sample matched the final XTKS session. One sample security (1491) had no stored price history.
