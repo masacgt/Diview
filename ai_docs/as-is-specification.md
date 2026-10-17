@@ -787,7 +787,7 @@ Stripe、Firebase Authentication、Google Maps、Adjust、Firebase Cloud Messagi
 - Worker は CORS の `*` を返し、OPTIONS は204。未知ルート404、メソッド不一致405、入力不正400、管理認証失敗401を返す実装がある。
 - 公開・認証済み・管理用のレート制限をルート別に適用する。具体的な閾値は Worker 定義・運用設定に依存する。
 - Android アプリに Worker 管理 secret を含めない。アプリの市場データ取得は一般ユーザーログインを要求しない。
-- 2026-10-17本番確認では `search-catalog`、`security-search`、`live-quotes`、`securities`、`financial-data`、`dividend-months`、`share-split-history`、`monthly-price-history`、`analysis` が応答した。`dividend-months?symbols=7203.T` は3月・9月、`share-split-history` は7203の2021-09-29 5:1イベントを返した。2026-10-15に記録した旧 `share-split-history` 404と `legacy_unpublished` 応答は、初回v2公開前の履歴である。
+- 2026-10-17本番確認では `search-catalog`、`security-search`、`live-quotes`、`securities`、`financial-data`、`dividend-months`、`share-split-history`、`monthly-price-history`、`analysis` が応答した。`dividend-months?symbols=7203.T` は3月・9月、`share-split-history` は7203の2021-09-29 5:1イベントを返した。銘柄情報画面を開くと、表示対象コードの配当月・イベントAPIを日本日付ごとに取得する。2026-10-17の2060.TではR2応答の `2027-03-30` を画面に表示し、1326.Tは今後イベントなしとして「権利落ち日未取得」を表示した。2026-10-15に記録した旧 `share-split-history` 404と `legacy_unpublished` 応答は、初回v2公開前の履歴である。
 
 ### 5.3 通知・バックグラウンド処理
 

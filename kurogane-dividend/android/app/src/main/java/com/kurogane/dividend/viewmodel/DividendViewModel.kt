@@ -639,6 +639,12 @@ class DividendViewModel @JvmOverloads constructor(
         refreshDividendMonths(symbols)
     }
 
+    fun refreshDividendMonthsForSecurity(category: Category, code: String) {
+        if (!refreshOnStart) return
+        val symbol = yahooSymbol(category, code) ?: return
+        viewModelScope.launch { refreshDividendMonths(listOf(symbol)) }
+    }
+
     private var dividendHistoryRefreshStarted = false
 
     private val _selectedMonth = MutableStateFlow<Int?>(null)
