@@ -2,6 +2,8 @@
 
 ## Completed
 
+- [x] Fix the confirmed Android release-audit error, retry, lifecycle, StateFlow, and threshold accessibility regressions without changing rendered UI. Evidence: the JDK 17 build passes 137 JVM tests, Lint with zero errors, debug/test APK assembly and unsigned R8 release assembly; API 26/35 each pass five new regressions plus six existing UI cases, and SCG01 API 33 passes all five new cases with five existing production-file hashes unchanged. See `android-release-audit-20261018.md`.
+
 - [x] Correct the annual DPS field contract, stop TTM totals from inflating the 2026 portfolio chart, and migrate held-security cache values. Evidence: all 43 yfinance sync tests and 3 focused Worker tests pass; the JDK 17 repository unit test and debug APK build pass; Worker version `f154c6b2-85e1-408b-9474-862c745dc3a0` returns 8214/8058/6493/6721/2914/8306 at ¥90/¥125/¥20/¥0/¥272/¥96 per share with TTM totals separate; SCG01 cache contract v2 stores those six values and the chart displays ¥693,000 for 2026.
 
 - [x] Calculate and label Stock Detail's calendar-year dividend-total CAGR from yfinance events. Evidence: `FinancialData.kt` selects the latest two to five consecutive annual totals, and the JDK 17 debug APK displayed `暦年配当合計CAGR 13.7%` for 2914 on device `RFCNC0E4H8J`; consecutive-increase and no-cut counts remain unavailable for this history basis.
@@ -17,6 +19,9 @@
 ## Next
 
 - [ ] Run the scheduled V2 financial refresh for 7203 after the DOE collector change and verify the stored annual numerator, stockholders' equity, calculated DOE, API response, and Android display. Evidence to date: the yfinance collector now captures the two annual cash-dividend rows and computes DOE only alongside freshly returned period-matched `StockholdersEquity`; Android parses the V2 annual field, but no production R2 refresh has run yet.
+- [ ] Decide and resolve release-audit follow-ups R1-R6: legacy DVM fixed-key compatibility, startup/save IO, notification retry policy, auto-backup protection and size limits, and financial-fetch outcome state across recreation. Evidence and alternatives are recorded in `android-release-audit-20261018.md`; no credential rotation or production deployment was performed.
+- [ ] Complete the remaining Android release acceptance: minified release runtime, large-data performance/lifecycle stress, full visual comparison and TalkBack, remaining OS/device coverage, and storage isolation for the rest of the legacy instrumentation suite.
+
 - [x] Publish and verify history-based upcoming ex-dividend estimates and exchange-calendar rights dates. Evidence: the rights-date workflow published 15,265 records from 330,359 input events, including 3,423 history estimates for 3,713 symbols with zero skipped events; production API checks for 7203, 2914, and 4626 return `estimated_from_history: true`, and the JDK 17 emulator displays 4626's 2027-03-30 estimate, 2027-03-29 final-rights date, and 2027-03-31 calculated record date. Python tests pass 5/5 and focused Worker tests pass 6/6; Android unit tests and clean JDK 17 build pass. The full Worker suite passes 18/20; two unrelated existing assertions fail for the security metadata fixture and legacy financial route. Worker version `85b22aae-50bc-47c0-9d40-d769be051d6a` is deployed.
 
 - [ ] Verify V2 calendar-year dividend streak initialization, daily sync updates, Worker API propagation, and Android display. `assembleDebug` succeeded and the APK installed/launched on device `RFCNC0E4H8J`; live Worker/R2 propagation and displayed metric values remain unverified because the changes have not been published.
