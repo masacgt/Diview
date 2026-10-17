@@ -86,7 +86,7 @@ jobs:
         run: |
           args=(--publish --workers 24)
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            args+=(--allow-one-extra-attempt)
+            args+=(--reprocess-successful --allow-one-extra-attempt)
           fi
           python scripts/yfinance_r2/sync_v2.py "${args[@]}"
         shell: bash
