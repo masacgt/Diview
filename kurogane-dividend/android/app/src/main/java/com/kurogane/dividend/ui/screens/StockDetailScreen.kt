@@ -1555,25 +1555,38 @@ fun StockDetailScreen(
                                         ) {
                                             Column(modifier = Modifier.padding(12.dp)) {
                                                 Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
                                                     verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                                 ) {
-                                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(15.dp))
-                                                    Text(profile.buySignalTitle, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
-                                                }
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                                Surface(
-                                                    shape = RoundedCornerShape(4.dp),
-                                                    color = PrimaryEmerald.copy(alpha = 0.14f),
-                                                    border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
-                                                ) {
-                                                    Text(
-                                                        profile.buySignalBadge,
-                                                        color = PrimaryEmerald,
-                                                        fontSize = AppTextSize.dense,
-                                                        fontWeight = FontWeight.Bold,
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                    )
+                                                    Row(
+                                                        modifier = Modifier.weight(1f),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(15.dp))
+                                                        Text(
+                                                            profile.buySignalTitle,
+                                                            color = PrimaryEmerald,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = AppTextSize.dense,
+                                                            maxLines = 1,
+                                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = PrimaryEmerald.copy(alpha = 0.14f),
+                                                        border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
+                                                    ) {
+                                                        Text(
+                                                            profile.buySignalBadge,
+                                                            color = PrimaryEmerald,
+                                                            fontSize = AppTextSize.dense,
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
                                                 }
                                                 Spacer(modifier = Modifier.height(6.dp))
                                                 Text("診断コメント", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
