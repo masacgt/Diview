@@ -108,6 +108,7 @@ fun StockDetailScreen(
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
     val stockAnalysisData by viewModel.stockAnalysisData.collectAsStateWithLifecycle()
+    val cloudflareSecurityData by viewModel.cloudflareSecurityData.collectAsStateWithLifecycle()
     val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
     val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
     val localSnackbarHostState = remember { SnackbarHostState() }
@@ -129,7 +130,22 @@ fun StockDetailScreen(
     var lookupFinished by remember(stockCode) { mutableStateOf(false) }
     var lookupError by remember(stockCode) { mutableStateOf<String?>(null) }
     var lookupRetry by remember(stockCode) { mutableIntStateOf(0) }
-    LaunchedEffect(stockCode, lookupRetry) {
+    val normalizedSecurityCode = remember(stockCode) { com.kurogane.dividend.model.PortfolioMath.normalizeCode(stockCode).removeSuffix(".T") }
+    val cachedSecurity = cloudflareSecurityData[normalizedSecurityCode]
+    LaunchedEffect(stockCode, lookupRetry, cachedSecurity) {
+        if (cachedSecurity != null) {
+            resolvedSecurity = cachedSecurity
+            lookupFinished = true
+            lookupError = null
+            return@LaunchedEffect
+        }
+        val isTracked = holdings.any { it.code.equals(stockCode, true) } || watchlist.any { it.code.equals(stockCode, true) }
+        if (isTracked && lookupRetry == 0) {
+            resolvedSecurity = null
+            lookupFinished = true
+            lookupError = null
+            return@LaunchedEffect
+        }
         lookupFinished = false
         lookupError = null
         val result = com.kurogane.dividend.data.runCatchingCancellable { viewModel.resolveCloudflareSecurity(stockCode) }

@@ -176,7 +176,6 @@ fun SearchSheet(
             searchError = result.exceptionOrNull()?.let { networkErrorMessage(resources, it) }
             val hits = result.getOrNull()
             val quotesNeeded = hits.orEmpty()
-                .filter { it.cachedPrice == null || it.marketYieldRate == null }
                 .map { it.code }
                 .distinct()
             val searchQuotes = if (quotesNeeded.isEmpty()) {
@@ -187,11 +186,15 @@ fun SearchSheet(
             remoteCandidates = hits?.map { hit ->
                 val local = candidates.firstOrNull { it.code.equals(hit.code, ignoreCase = true) }
                 val quote = searchQuotes[hit.code.uppercase(java.util.Locale.ROOT)]
-                val priceValue = hit.cachedPrice ?: quote?.price
+                val priceValue = quote?.price ?: hit.cachedPrice
                 val price = formatCandidatePrice(priceValue, hit.code)
-                val annualDividend = hit.annualDividendPerShare ?: quote?.annualDividendPerShare
-                val noDividendConfirmed = hit.isNoDividendConfirmed || quote?.isNoDividendConfirmed == true
-                val yieldValue = hit.marketYieldRate ?: quote?.yieldRate ?: annualDividend?.let { dps ->
+                val annualDividend = quote?.annualDividendPerShare ?: hit.annualDividendPerShare
+                val noDividendConfirmed = if (quote?.hasDividendStatus == true) {
+                    quote.isNoDividendConfirmed
+                } else {
+                    hit.isNoDividendConfirmed
+                }
+                val yieldValue = quote?.yieldRate ?: hit.marketYieldRate ?: annualDividend?.let { dps ->
                     priceValue?.takeIf { it > 0.0 }?.let { price -> dps / price * 100.0 }
                 }?.takeIf { it.isFinite() && it in 0.0..100.0 }
                 val yieldRate = formatCandidateYield(yieldValue ?: if (noDividendConfirmed) 0.0 else null, noDividendConfirmed)

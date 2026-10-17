@@ -629,11 +629,19 @@ object PriceRefreshPolicy {
         lastFetchEpochMillis: Long,
         lastFetchJapanDate: String?
     ): Boolean {
-        val todayInJapan = java.time.Instant.ofEpochMilli(nowEpochMillis).atZone(japanZone).toLocalDate().toString()
-        if (lastFetchEpochMillis <= 0L) return true
+        val nowInJapan = java.time.Instant.ofEpochMilli(nowEpochMillis).atZone(japanZone)
+        val todayInJapan = nowInJapan.toLocalDate().toString()
         if (lastFetchJapanDate == todayInJapan) return false
-        return nowEpochMillis >= lastFetchEpochMillis &&
-            nowEpochMillis - lastFetchEpochMillis >= MINIMUM_INTERVAL_MILLIS
+        if (lastFetchEpochMillis > 0L) {
+            return nowEpochMillis >= lastFetchEpochMillis &&
+                nowEpochMillis - lastFetchEpochMillis >= MINIMUM_INTERVAL_MILLIS
+        }
+        // Older per-day caches did not persist a timestamp. If yesterday is the
+        // last known fetch date, wait until noon so even a late-day fetch was
+        // followed by at least twelve hours.
+        if (runCatching { LocalDate.parse(lastFetchJapanDate) }.getOrNull() == nowInJapan.toLocalDate().minusDays(1) &&
+            nowInJapan.toLocalTime() < java.time.LocalTime.NOON) return false
+        return true
     }
 
     fun japanDate(epochMillis: Long): String =
