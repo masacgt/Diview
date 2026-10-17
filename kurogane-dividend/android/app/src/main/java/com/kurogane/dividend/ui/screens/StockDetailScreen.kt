@@ -731,13 +731,6 @@ fun StockDetailScreen(
                 }
             }
 
-            if (currentHolding.category == com.kurogane.dividend.model.Category.JAPAN) item {
-                DataRetrievalCard(
-                    securityCode = currentHolding.code,
-                    data = resolvedSecurity?.dataRetrieval
-                )
-            }
-
             // 2. 1株配当金の推移 (最大8期) Bar Chart Card
             item {
                 Card(
@@ -3005,113 +2998,6 @@ fun StockDetailScreen(
             containerColor = SurfaceContainer,
             titleContentColor = OnSurface,
             textContentColor = OnSurfaceVariant
-        )
-    }
-}
-
-@Composable
-private fun DataRetrievalCard(
-    securityCode: String,
-    data: com.kurogane.dividend.data.CloudflareDataRetrieval?
-) {
-    val history = data?.dividendHistory
-    val statusText = when (data?.processingStatus) {
-        "ok" -> "取得完了"
-        "partial" -> "一部項目を取得できません"
-        "failed" -> "取得失敗"
-        else -> "未取得"
-    }
-    val historyStatusText = when (history?.status) {
-        "available" -> "取得済み"
-        "empty" -> "配当イベントなし"
-        "failed" -> "取得失敗"
-        "stale" -> "保存済みデータあり"
-        else -> "未取得"
-    }
-    val historyAttemptText = when (history?.lastAttemptStatus) {
-        "success" -> "成功"
-        "failed" -> "失敗"
-        null, "" -> "未取得"
-        else -> history?.lastAttemptStatus ?: "未取得"
-    }
-    val historyRange = when {
-        history?.storedHistoryStart != null && history.storedHistoryEnd != null ->
-            "${history.storedHistoryStart} ～ ${history.storedHistoryEnd}"
-        history?.storedHistoryStatus == "empty" -> "配当イベントなし"
-        history?.storedHistoryStatus == "failed" -> "範囲を取得できません"
-        else -> "未取得"
-    }
-    val latestCoverage = if (history?.lastCoverageStart != null && history.lastCoverageEnd != null) {
-        "${history.lastCoverageStart} ～ ${history.lastCoverageEnd}"
-    } else {
-        "未取得"
-    }
-    val attemptTime = data?.lastAttemptAt?.let { value ->
-        runCatching {
-            java.time.Instant.parse(value)
-                .atZone(ZoneId.of("Asia/Tokyo"))
-                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm", Locale.JAPAN))
-        }.getOrDefault(value)
-    } ?: "未取得"
-    val sourceText = when (data?.source) {
-        "Yahoo Finance via yfinance" -> "Yahoo Finance（yfinance）"
-        null, "" -> "未取得"
-        else -> data?.source ?: "未取得"
-    }
-    val historySourceText = when (history?.source) {
-        "yfinance_history", "yfinance_history_chart" -> "Yahoo Finance配当履歴"
-        null, "" -> "未取得"
-        else -> history?.source ?: "未取得"
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-        border = BorderStroke(1.dp, BorderColor)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
-        ) {
-            Text("データ取得情報", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
-            DataRetrievalRow("証券コード", securityCode)
-            DataRetrievalRow("yfinance ticker", data?.yfinanceTicker ?: "未取得")
-            DataRetrievalRow("通貨", data?.currency ?: "未取得")
-            DataRetrievalRow("取得元", sourceText)
-            DataRetrievalRow("最終取得試行", attemptTime)
-            DataRetrievalRow("取得処理", statusText)
-            DataRetrievalRow("配当履歴", historyStatusText)
-            DataRetrievalRow("配当履歴の取得処理", historyAttemptText)
-            DataRetrievalRow("保存履歴の期間", historyRange)
-            DataRetrievalRow("直近取得範囲", latestCoverage)
-            DataRetrievalRow("履歴データ元", historySourceText)
-            data?.failureReason?.takeIf(String::isNotBlank)?.let { reason ->
-                Text(
-                    "取得できなかった項目: $reason",
-                    color = ErrorRed,
-                    fontSize = AppTextSize.dense,
-                    lineHeight = 16.sp
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DataRetrievalRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
-    ) {
-        Text(label, color = OnSurfaceVariant, fontSize = AppTextSize.dense, modifier = Modifier.weight(0.9f))
-        Text(
-            value,
-            color = OnSurface,
-            fontSize = AppTextSize.dense,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1.1f)
         )
     }
 }
