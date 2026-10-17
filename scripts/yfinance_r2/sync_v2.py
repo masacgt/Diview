@@ -38,6 +38,10 @@ FULL_HISTORY_BUCKETS = 20
 FINANCIAL_BUCKETS = 5
 FINANCIAL_REFRESH_MAX_AGE_DAYS = 45
 FINANCIAL_GROUPS = ("income_statement", "balance_sheet", "cash_flow", "valuation")
+# Latest company guidance replaces Yahoo's stale dividendRate while it still
+# reports the audited old amount. AOKI: https://ir.aoki-hd.co.jp/ja/news/news/auto_20260508520915/pdfFile.pdf
+# Mitsubishi: https://www.mitsubishicorp.com/jp/ja/ir/shareholder/allot/
+OFFICIAL_NEXT_FY_DPS = {"8214": (120.0, 90.0), "8058": (126.0, 125.0)}
 _YF_CALL_LOCK = threading.Lock()
 _YF_CALLS: dict[str, int] = {}
 _R2_DOCUMENT_CACHE = threading.local()
@@ -458,6 +462,15 @@ def finite_number(value: Any) -> float | None:
         return None
     result = float(value)
     return result if math.isfinite(result) else None
+
+
+def next_fiscal_year_forecast_dps(code: str, reported_value: Any, as_of: date) -> float | None:
+    reported = finite_number(reported_value)
+    stale_value, official_value = OFFICIAL_NEXT_FY_DPS.get(code, (None, None))
+    if (as_of <= date(2027, 3, 31) and official_value is not None
+            and (reported is None or math.isclose(reported, stale_value, abs_tol=0.001))):
+        return official_value
+    return reported
 
 
 def date_value(value: Any) -> date | None:
@@ -1876,7 +1889,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         finite_number(row.get("amount")) or 0.0 for row in dividends
         if trailing_start < str(row.get("date") or "")[:10] <= as_of.isoformat()
     ), 8)
-    forecast_dps = finite_number(info.get("dividendRate"))
+    forecast_dps = next_fiscal_year_forecast_dps(code, info.get("dividendRate"), as_of)
     has_forecast_dps = forecast_dps is not None and forecast_dps > 0
     current_fy_dps = fiscal_year_events(dividends, info, as_of)
     reported_yield = finite_number(info.get("dividendYield"))
@@ -2168,6 +2181,24 @@ def catalog_item_from_documents(code: str, security: dict[str, Any], profile: di
     if not profile or not current or close is None or close <= 0:
         return None
     dividend = current.get("dividend") if isinstance(current.get("dividend"), dict) else {}
+    yield_basis = dividend.get("yield_basis")
+    annual_dps = (
+        finite_number(dividend.get("next_fiscal_year_forecast_per_share"))
+        if yield_basis == "next_fiscal_year_forecast" else
+        finite_number(dividend.get("current_fiscal_year_per_share"))
+        if yield_basis == "current_fiscal_year" else
+        0.0 if yield_basis == "yfinance_reported_no_dividend" or dividend.get("dividend_status") == "no_dividend" else
+        None
+    )
+    if yield_basis == "next_fiscal_year_forecast" and annual_dps is not None:
+        annual_dps = next_fiscal_year_forecast_dps(
+            code, annual_dps, date_value(current.get("updated_at")) or date.today()
+        )
+    annual_yield = (
+        round(annual_dps / close * 100, 4)
+        if annual_dps is not None and close is not None and close > 0 else
+        None
+    )
     return {
         "code": code,
         "name": profile.get("display_name") or previous_name or code,
@@ -2177,11 +2208,11 @@ def catalog_item_from_documents(code: str, security: dict[str, Any], profile: di
         "price": price.get("close"),
         "quote_date": price.get("date"),
         "currency": price.get("currency"),
-        "annual_dividend_per_share": dividend.get("trailing_12_month_per_share"),
+        "annual_dividend_per_share": annual_dps,
         "trailing_12_month_distribution_per_share": dividend.get("trailing_12_month_per_share"),
-        "dividend_period": "trailing_12_months",
+        "dividend_period": yield_basis or "unknown",
         "dividend_amount_basis": dividend.get("event_amount_basis"),
-        "yield_rate": dividend.get("yield_rate"),
+        "yield_rate": annual_yield,
         "yield_basis": dividend.get("yield_basis"),
         "dividend_status": dividend.get("dividend_status", "unknown"),
         "status": sync.get("status") if sync.get("status") in {"ok", "partial", "failed"} else "ok",
@@ -2199,7 +2230,30 @@ def publish_catalog(client: Any, bucket: str, universe: list[dict[str, str]], se
     items: list[dict[str, Any]] = []
     for security in universe:
         code = security["security_code_display"]
-        item = processed_items.get(code) or old_items.get(code)
+        old_item = old_items.get(code)
+        item = processed_items.get(code)
+        if item is None and old_item and old_item.get("dividend_period") == "trailing_12_months":
+            symbol = market_symbol(code)
+            safe = safe_symbol(symbol)
+            profile = read_json(client, bucket, object_key("securities", safe, "profile.json"))
+            current = read_json(client, bucket, object_key("securities", safe, "current.json"))
+            sync = read_json(client, bucket, object_key("securities", safe, "sync.json")) or {}
+            item = catalog_item_from_documents(
+                code, security, profile or {}, current or {}, sync,
+                previous_name=old_item.get("name"),
+            )
+            if item is None:
+                # Preserve quote metadata while making the unknown DPS basis explicit.
+                item = {
+                    **old_item,
+                    "annual_dividend_per_share": None,
+                    "dividend_period": "unknown",
+                    "yield_rate": None,
+                    "yield_basis": None,
+                    "dividend_status": "unknown",
+                }
+        if item is None:
+            item = old_item
         if item is None:
             symbol = market_symbol(code)
             safe = safe_symbol(symbol)
