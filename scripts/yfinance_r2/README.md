@@ -6,6 +6,8 @@ The J-Quants master includes equities, ETFs, and REITs. Its product category is 
 
 The collector pins `yfinance==1.7.0`, `scipy==1.18.1`, and `scikit-learn==1.9.1` so scheduled runs do not silently change price-repair or dividend-event behavior when a library release appears. yfinance's `repair=True` path uses SciPy for random unit-mixup detection and scikit-learn's DBSCAN when reconstructing damaged price intervals; without scikit-learn, some history requests fail before actions can be stored. Upgrade these dependencies deliberately and validate representative split, reverse-split, and ordinary dividend histories before publishing a new collector version. Rights-date calculation uses the separate `requirements-rights.txt` set (`exchange_calendars` and `boto3`) and does not install yfinance, SciPy, or scikit-learn.
 
+Manual workflow mode `split-audit` performs a read-only comparison for current securities with split or reverse-split events in the latest eight years. It reads dated yfinance event partitions from R2 and compares their fiscal-period sums with the processed issuer `annual_dps_adjusted` snapshot, using each reported fiscal-period end date to assign events. It writes per-security and per-fiscal-year CSV files plus a summary artifact; it never writes to R2 or changes the app's yfinance-only data path. Missing issuer DPS, missing fiscal dates, failed yfinance history, and numerical mismatches remain separate outcomes. A mismatch identifies a case for source-level review; it does not by itself establish which source is wrong.
+
 ## Published data
 
 - `manifest.json`, `universe/current.json`, `catalog/current.json`, generation snapshots, and `publications/current.json` describe the active universe and publication state.
