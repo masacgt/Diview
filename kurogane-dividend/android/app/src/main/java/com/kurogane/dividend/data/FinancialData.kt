@@ -29,7 +29,8 @@ data class FinancialData(
             require(code == expectedCode) { "財務情報の銘柄コードが一致しません" }
             val historyBasis = root.optJSONObject("dividends")?.optString("history_basis")
                 ?.takeIf { it == "calendar_year_observed_distributions" } ?: "unknown"
-            val history = root.optJSONObject("dividends")?.optJSONArray("records")
+            val dividendPayload = root.optJSONObject("dividends")
+            val history = dividendPayload?.optJSONArray("records")
             val rows = (0 until (history?.length() ?: 0)).mapNotNull { history?.optJSONObject(it) }
                 .filter { it.optInt("calendar_year") in 1900..2100 }
                 .sortedBy { it.optInt("calendar_year") }
@@ -77,8 +78,10 @@ data class FinancialData(
             val calendarYearEvents = historyBasis == "calendar_year_observed_distributions"
             val profile = StockFinancialProfile(
                 payoutRatio = payout ?: Double.NaN, equityRatio = equity ?: Double.NaN,
-                consecutiveYears = if (calendarYearEvents) -1 else dividend?.number("consecutive_dividend_increase_years")?.toInt() ?: -1,
-                noCutYears = if (!calendarYearEvents && dividends.size >= 2) noCut else -1,
+                consecutiveYears = dividendPayload?.number("consecutive_dividend_increase_years")?.toInt()
+                    ?: if (calendarYearEvents) -1 else dividend?.number("consecutive_dividend_increase_years")?.toInt() ?: -1,
+                noCutYears = dividendPayload?.number("no_cut_years")?.toInt()
+                    ?: if (!calendarYearEvents && dividends.size >= 2) noCut else -1,
                 growthRate = growth ?: Double.NaN,
                 eps = valuation?.number("eps_adjusted") ?: Double.NaN,
                 bps = valuation?.number("bps_adjusted") ?: Double.NaN,
@@ -96,7 +99,9 @@ data class FinancialData(
             )
             return FinancialData(code, period, profile, dividends, mapOf(
                 "payout_ratio" to payout, "equity_ratio" to equity, "operating_margin" to operating,
-                "fcf_margin" to fcfMargin, "dividend_growth_years" to dividend?.number("consecutive_dividend_increase_years")
+                "fcf_margin" to fcfMargin,
+                "dividend_growth_years" to (dividendPayload?.number("consecutive_dividend_increase_years")
+                    ?: dividend?.number("consecutive_dividend_increase_years"))
             ), historyBasis)
         }
     }
