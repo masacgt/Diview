@@ -110,6 +110,11 @@ data class AssetManagementUpcomingDividend(
     val amount: Long = 0L
 )
 
+data class WatchlistSortSelection(
+    val criteria: String,
+    val direction: String
+)
+
 class DividendViewModel @JvmOverloads constructor(
     application: Application,
     private val refreshOnStart: Boolean = true,
@@ -119,6 +124,8 @@ class DividendViewModel @JvmOverloads constructor(
 
     private val displayPreferences = application.getSharedPreferences("display_preferences", Context.MODE_PRIVATE)
     private val marketPreferences = application.getSharedPreferences("cloudflare_market_cache", Context.MODE_PRIVATE)
+    private val _watchlistSortSelection = MutableStateFlow(loadWatchlistSortSelection())
+    val watchlistSortSelection: StateFlow<WatchlistSortSelection?> = _watchlistSortSelection.asStateFlow()
     private val dividendMonthRefreshMutex = Mutex()
     private val localImportStore = LocalImportStore(application)
     private val _shareholderBenefits = MutableStateFlow(runCatching { localImportStore.loadShareholderBenefits() }.getOrDefault(emptyMap()))
@@ -140,6 +147,8 @@ class DividendViewModel @JvmOverloads constructor(
     private val saveMutex = Mutex()
     private val saveRequests = Channel<Unit>(Channel.CONFLATED)
     private val restoration = CompletableDeferred<Unit>()
+    private val _localDataRestored = MutableStateFlow(false)
+    val localDataRestored: StateFlow<Boolean> = _localDataRestored.asStateFlow()
     private var holdingsLoadFailed = false
     private var watchlistLoadFailed = false
     private val _saveError = MutableStateFlow<String?>(null)
@@ -197,6 +206,32 @@ class DividendViewModel @JvmOverloads constructor(
     private fun saveDisplaySetting(editor: android.content.SharedPreferences.Editor, update: () -> Unit) {
         if (editor.commit()) update()
         else _saveError.value = getApplication<Application>().getString(R.string.setting_save_failed)
+    }
+
+    private fun loadWatchlistSortSelection(): WatchlistSortSelection? {
+        val criteria = displayPreferences.getString("watchlist_sort_criteria", null)
+            ?.takeIf { it in WATCHLIST_SORT_CRITERIA }
+            ?: return null
+        val direction = displayPreferences.getString("watchlist_sort_direction", null)
+            ?.takeIf { it in WATCHLIST_SORT_DIRECTIONS }
+            ?: return null
+        return WatchlistSortSelection(criteria, direction)
+    }
+
+    fun saveWatchlistSortSelection(criteria: String, direction: String): Boolean {
+        if (criteria !in WATCHLIST_SORT_CRITERIA || direction !in WATCHLIST_SORT_DIRECTIONS) return false
+        val selection = WatchlistSortSelection(criteria, direction)
+        if (_watchlistSortSelection.value == selection) return true
+        val saved = displayPreferences.edit()
+            .putString("watchlist_sort_criteria", criteria)
+            .putString("watchlist_sort_direction", direction)
+            .commit()
+        if (!saved) {
+            _saveError.value = getApplication<Application>().getString(R.string.setting_save_failed)
+            return false
+        }
+        _watchlistSortSelection.value = selection
+        return true
     }
 
     fun setCalculationBasis(basis: String) {
@@ -2581,6 +2616,7 @@ class DividendViewModel @JvmOverloads constructor(
                 synchronized(dividendEventCacheLock) { dividendEventCache.clear() }
                 check(displayPreferences.edit().clear().putBoolean("popular_r2_holdings_seeded_v1", true).commit()) { "設定を初期化できませんでした" }
             }
+            _watchlistSortSelection.value = null
             _holdings.value = emptyList()
             _watchlist.value = emptyList()
             _dividendEventRevision.update { it + 1 }
@@ -2660,6 +2696,7 @@ class DividendViewModel @JvmOverloads constructor(
             runCatchingCancellable { persistCurrentHoldings() }.onFailure {
                 _saveError.value = getApplication<android.app.Application>().getString(R.string.dividend_view_model_message_4)
             }
+            _localDataRestored.value = true
             restoration.complete(Unit)
             for (ignored in saveRequests) {
                 runCatchingCancellable { persistCurrentHoldings() }.onFailure {
@@ -2692,6 +2729,8 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     private companion object {
+        val WATCHLIST_SORT_CRITERIA = setOf("ach", "yield", "price", "code")
+        val WATCHLIST_SORT_DIRECTIONS = setOf("asc", "desc")
         val SAMPLE_HOLDING_IDS = setOf("h-7203", "h-2914", "h-8306", "h-8316", "h-8058", "h-9432", "h-9433", "h-8766", "h-8031", "h-4502", "h-apple", "h-emaxis")
     }
 }
