@@ -429,7 +429,7 @@
     <string name="stock_detail_text_24">"① 健全性"</string>
     <string name="stock_detail_text_25">"② 買場シグナル"</string>
     <string name="stock_detail_text_26">"配当利回り %1$s"</string>
-    <string name="stock_detail_text_27">"③ 増配耐性"</string>
+    <string name="stock_detail_text_27">"③ 年間配当の増減"</string>
     <string name="stock_detail_text_28">"④ 集中リスク"</string>
     <string name="stock_detail_1_s_2_s">"%1$s %2$s%%"</string>
     <string name="stock_detail_text_29" formatted="false">"上限目安10%"</string>
@@ -760,7 +760,7 @@
     <string name="stock_detail_health_payout">"配当性向 %1$s"</string>
     <string name="stock_detail_label_10">"%1$s連続 +%2$s"</string>
     <string name="stock_detail_label_11">"増配率 %1$s"</string>
-    <string name="stock_detail_calendar_growth_cagr">"年間配当の伸び 年平均 %1$s"</string>
+    <string name="stock_detail_calendar_growth_cagr">"年平均 %1$s"</string>
     <string name="stock_detail_calendar_growth_cagr_detail">"年間配当の伸び 年平均 %1$s"</string>
     <string name="stock_detail_label_12">"通知ON"</string>
     <string name="stock_detail_label_13">"通知OFF"</string>
