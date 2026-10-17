@@ -927,18 +927,18 @@ fun StockDetailScreen(
                                         Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Text(stringResource(R.string.stock_detail_health_grade, profile.healthGrade), modifier = Modifier.weight(0.8f), color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                        Text(stringResource(R.string.stock_detail_health_payout, profile.payoutRatio.financialText(1, "%")), modifier = Modifier.weight(1.2f), color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                    }
                                     val healthBadgeColor = when (profile.healthGrade) {
                                         "S", "A", "B" -> PrimaryEmerald
                                         "C", "D" -> AccentAmber
                                         else -> OnSurfaceVariant
                                     }
-                                    Surface(shape = RoundedCornerShape(50), color = healthBadgeColor.copy(alpha = 0.14f), border = BorderStroke(1.dp, healthBadgeColor.copy(alpha = 0.35f))) {
-                                        Text(profile.healthEvaluation, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp), color = healthBadgeColor, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                        Text(stringResource(R.string.stock_detail_health_grade, profile.healthGrade), modifier = Modifier.weight(1f), color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                        Surface(shape = RoundedCornerShape(50), color = healthBadgeColor.copy(alpha = 0.14f), border = BorderStroke(1.dp, healthBadgeColor.copy(alpha = 0.35f))) {
+                                            Text(profile.healthEvaluation, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp), color = healthBadgeColor, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                        }
                                     }
+                                    Text(stringResource(R.string.stock_detail_health_payout, profile.payoutRatio.financialText(1, "%")), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
 
