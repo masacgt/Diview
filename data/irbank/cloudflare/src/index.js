@@ -1625,8 +1625,8 @@ export default {
           const upcomingRightsDates = upcomingExDate && upcomingExDate > asOf
             ? rightsDatesByEvent.get(`${symbol}|${upcomingExDate}`) || null
             : null;
-          const usesCalendarDate = Boolean(calendarUpcoming && upcomingExDate === calendarUpcoming);
-          const usesHistoryEstimate = Boolean(!usesCalendarDate && estimatedHistoryDate && upcomingExDate === estimatedHistoryDate);
+          const usesHistoryEstimate = Boolean(estimatedHistoryDate && upcomingExDate === estimatedHistoryDate);
+          const usesCalendarDate = Boolean(!usesHistoryEstimate && calendarUpcoming && upcomingExDate === calendarUpcoming);
           const upcomingEvent = upcomingExDate && upcomingExDate > asOf ? {
             ex_dividend_date: upcomingExDate,
             final_rights_date: upcomingRightsDates?.finalRightsDate || null,

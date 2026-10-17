@@ -299,6 +299,41 @@ test('dividend-months prefers a recurring history estimate over an off-month Tic
   assert.equal(data.items[0].upcoming_event.source, 'Yahoo Finance historical dividend event dates');
 });
 
+test('dividend-months preserves history provenance when its date matches Ticker.calendar', async () => {
+  const today = japanToday();
+  const estimatedDate = dateOffset(today, 120);
+  const symbol = '7203.T';
+  const base = `market/yfinance/v2/securities/${symbol}`;
+  const env = dividendEnvironment(new Map([
+    ['market/yfinance/v2/derived/rights_dates/current.json', {
+      records: [{
+        symbol,
+        ex_dividend_date: estimatedDate,
+        final_rights_date: dateOffset(estimatedDate, -1),
+        record_date: dateOffset(estimatedDate, 1),
+        event_type: 'history_estimated',
+        estimated_from_history: true,
+        source: 'Yahoo Finance historical dividend event dates',
+      }],
+    }],
+    [`${base}/current.json`, {
+      calendar: { ex_dividend_date: estimatedDate, source: 'Yahoo Finance via yfinance Ticker.calendar' },
+      field_status: { dividend_history: 'empty', upcoming_ex_dividend_date: 'available' },
+    }],
+    [`${base}/dividends/${today.slice(0, 4)}.json`, { records: [] }],
+    [`${base}/dividends/${Number(today.slice(0, 4)) - 1}.json`, { records: [] }],
+  ]));
+
+  const response = await worker.fetch(
+    new Request(`https://example.com/api/v1/dividend-months?symbols=${symbol}`), env);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.items[0].upcoming_event.ex_dividend_date, estimatedDate);
+  assert.equal(data.items[0].upcoming_event.estimated_from_history, true);
+  assert.equal(data.items[0].upcoming_event.ex_dividend_date_status, 'estimated_from_dividend_history');
+  assert.equal(data.items[0].upcoming_event.source, 'Yahoo Finance historical dividend event dates');
+});
+
 test('dividend-months uses Ticker.calendar when no recurring history estimate exists', async () => {
   const today = japanToday();
   const calendarDate = dateOffset(today, 30);
