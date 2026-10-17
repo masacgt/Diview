@@ -117,11 +117,15 @@ class ReleaseReadinessTest {
         assertTrue(vm.restoreWatchlistStock(watchlistStock("TEST-WATCHLIST-US", "Apple", "us")))
 
         compose.setContent { KuroganeDividendTheme { WatchlistScreen(vm) } }
-        compose.onNodeWithText("Toyota", substring = true).performScrollTo().assertIsDisplayed()
+        val list = compose.onNode(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.ScrollToIndex))
+        list.performScrollToNode(hasText("Toyota", substring = true))
+        compose.onNodeWithText("Toyota", substring = true).assertIsDisplayed()
 
-        compose.onNode(hasSetTextAction()).performScrollTo().performTextInput("TEST-WATCHLIST-US")
+        list.performScrollToNode(hasSetTextAction())
+        compose.onNode(hasSetTextAction()).performTextInput("TEST-WATCHLIST-US")
 
-        compose.onNodeWithText("Apple", substring = true).performScrollTo().assertIsDisplayed()
+        list.performScrollToNode(hasText("Apple", substring = true))
+        compose.onNodeWithText("Apple", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Toyota", substring = true).assertDoesNotExist()
     }
 
@@ -226,15 +230,21 @@ class ReleaseReadinessTest {
 
     @Test fun settingsExposeSwitchSelectionAndAccessibleSliderActions() {
         val vm = model()
-        compose.setContent { KuroganeDividendTheme { SettingsScreen(vm) } }
+        compose.runOnIdle { vm.setThemeMode("light") }
+        compose.setContent {
+            val mode by vm.themeMode.collectAsState()
+            KuroganeDividendTheme(themeMode = mode) { SettingsScreen(vm) }
+        }
         val oled = app.getString(R.string.settings_text_3)
         compose.onNodeWithText(oled).performScrollTo()
         val switch = compose.onNode(hasText(oled) and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch))
-        switch.assertIsOff().performClick().assertIsOn()
+        switch.assertIsNotEnabled().assertIsOff()
+        compose.onNodeWithText(app.getString(R.string.settings_label_42)).performScrollTo().performClick()
+        switch.performScrollTo().assertIsEnabled().assertIsOff().performClick().assertIsOn()
         assertTrue(vm.isOledBlack.value)
         val slider = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo))
         slider.performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { assertTrue(it(8f)) }
-        slider.assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(8f, 3f..10f, 6))
+        slider.assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(8f, 1f..10f, 8))
     }
 
     @Test fun screensRemainScrollableInBothThemesWithLargeFontAndDisplay() {

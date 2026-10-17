@@ -43,6 +43,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Job
 import androidx.compose.foundation.BorderStroke
 
+private fun reportImportFailure(error: Throwable, fallback: String): String {
+    val message = com.kurogane.dividend.ui.importErrorMessage(error, fallback)
+    // Provider messages and parser input can contain private file names/content.
+    android.util.Log.w("DiviewImport", "Import failed (${error.javaClass.simpleName}): $fallback")
+    return message
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CsvImportScreen(
@@ -91,7 +98,7 @@ fun CsvImportScreen(
                     brokerWasAutoDetected = detected != null
                     BrokerCsvImporter.parse(bytes, detected ?: CsvBroker.SBI, catalog, funds)
                     }
-                }.onSuccess { parsed -> csvResult = parsed; selectedRowIndexes = parsed.rows.indices.toSet() }.onFailure { error = it.message ?: resources.getString(R.string.csv_import_label_8) }
+                }.onSuccess { parsed -> csvResult = parsed; selectedRowIndexes = parsed.rows.indices.toSet() }.onFailure { error = reportImportFailure(it, resources.getString(R.string.csv_import_label_8)) }
                 } finally { isReading = false }
             }
         }
@@ -117,10 +124,10 @@ fun CsvImportScreen(
                         isImporting = true
                         runCatchingCancellable { onImportDvm(previews) }
                             .onSuccess { complete = true }
-                            .onFailure { error = it.message ?: resources.getString(R.string.csv_import_label_17) }
+                            .onFailure { error = reportImportFailure(it, resources.getString(R.string.csv_import_label_17)) }
                         if (skipped > 0 && complete) error = resources.getString(R.string.csv_dvm_folder_skipped, skipped)
                     }
-                }.onFailure { error = it.message ?: resources.getString(R.string.csv_import_label_15) }
+                }.onFailure { error = reportImportFailure(it, resources.getString(R.string.csv_import_label_15)) }
                 } finally { isReading = false }
                 isImporting = false
             }
@@ -235,7 +242,7 @@ fun CsvImportScreen(
                                 isImporting = true
                                 scope.launch {
                                     try { runCatchingCancellable { onImportCsv(chosen, fields) }.onSuccess { complete = true }
-                                        .onFailure { error = it.message ?: resources.getString(R.string.csv_import_label_17) }
+                                        .onFailure { error = reportImportFailure(it, resources.getString(R.string.csv_import_label_17)) }
                                     } finally { isImporting = false }
                                 }
                             }
@@ -287,11 +294,11 @@ fun DvmBackupFolderImportCard(onImportDvm: suspend (List<DvmBackupPreview>) -> U
                                 status = resources.getString(R.string.csv_dvm_folder_imported, backups.size)
                                 if (skipped > 0) error = resources.getString(R.string.csv_dvm_folder_skipped, skipped)
                             }
-                            .onFailure { error = it.message ?: resources.getString(R.string.csv_import_label_17) }
+                            .onFailure { error = reportImportFailure(it, resources.getString(R.string.csv_import_label_17)) }
                     }
-                } catch (failure: Throwable) {
+                } catch (failure: Exception) {
                     if (failure is kotlinx.coroutines.CancellationException) throw failure
-                    error = failure.message ?: resources.getString(R.string.csv_import_label_15)
+                    error = reportImportFailure(failure, resources.getString(R.string.csv_import_label_15))
                 } finally { isWorking = false }
             }
         }
@@ -407,7 +414,7 @@ fun BrokerCsvImportCard(onImportCsv: suspend (List<CsvHoldingRow>, Set<String>) 
                     }.onSuccess { result ->
                         csvResult = result
                         selectedRowIndexes = result.rows.indices.toSet()
-                    }.onFailure { error = it.message ?: resources.getString(R.string.csv_import_label_8) }
+                    }.onFailure { error = reportImportFailure(it, resources.getString(R.string.csv_import_label_8)) }
                 } finally { isReading = false }
             }
         }
@@ -460,7 +467,7 @@ fun BrokerCsvImportCard(onImportCsv: suspend (List<CsvHoldingRow>, Set<String>) 
                     isImporting = true
                     scope.launch {
                         try { runCatchingCancellable { onImportCsv(chosen, selectedFields.toSet()) }
-                            .onSuccess { complete = true }.onFailure { error = it.message ?: resources.getString(R.string.csv_import_label_17) }
+                            .onSuccess { complete = true }.onFailure { error = reportImportFailure(it, resources.getString(R.string.csv_import_label_17)) }
                         } finally { isImporting = false }
                     }
                 }
