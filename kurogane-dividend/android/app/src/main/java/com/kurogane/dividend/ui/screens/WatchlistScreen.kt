@@ -329,6 +329,8 @@ fun WatchlistScreen(
     val feedbackView = LocalView.current
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
+    val savedSortSelection by viewModel.watchlistSortSelection.collectAsStateWithLifecycle()
+    val localDataRestored by viewModel.localDataRestored.collectAsStateWithLifecycle()
     val watchlistMetricsCache = WatchlistDerivedMetricsCacheStore.forViewModel(viewModel)
     var watchlistMetricsSnapshot by remember(viewModel) { mutableStateOf<WatchlistMetricsSnapshot?>(null) }
     LaunchedEffect(watchlist, resources) {
@@ -432,8 +434,8 @@ fun WatchlistScreen(
     var showProjectionInfo by remember { mutableStateOf(false) }
     var showSortBottomSheet by remember { mutableStateOf(false) }
     var showSortInfo by remember { mutableStateOf(false) }
-    var sortCriteria by rememberSaveable(viewModel) { mutableStateOf("ach") } // "ach", "yield", "price", "code"
-    var sortDirection by rememberSaveable(viewModel) { mutableStateOf("desc") } // "asc", "desc"
+    val sortCriteria = savedSortSelection?.criteria ?: "ach"
+    val sortDirection = savedSortSelection?.direction ?: "desc"
     var draftSortCriteria by remember { mutableStateOf("ach") }
     var draftSortDirection by remember { mutableStateOf("desc") }
     var appliedOrderCodes by rememberSaveable(viewModel) { mutableStateOf<List<String>?>(null) }
@@ -471,24 +473,38 @@ fun WatchlistScreen(
     val projectionNote = resources.getString(R.string.watchlist_projection_note, projection.unallocatedCount) +
         if (projection.missingExchangeRate) resources.getString(R.string.watchlist_projection_fx_missing) else ""
 
-    // Capture the default order once, then preserve it while stock values change.
-    LaunchedEffect(watchlistCodes) {
+    // Preserve the current Watchlist order unless the user has selected a sort.
+    // Wait for local restoration so seeded fallback cards cannot determine it.
+    val appliedCodes = if (savedSortSelection == null) null else appliedOrderCodes
+    LaunchedEffect(watchlistCodes, localDataRestored, savedSortSelection, appliedCodes) {
+        if (!localDataRestored) return@LaunchedEffect
         val sourceStocks = watchlist
-        val existingOrder = appliedOrderCodes
+        val existingOrder = appliedCodes
+        val selection = savedSortSelection
         val nextOrder = withContext(Dispatchers.Default) {
-            if (existingOrder == null) {
-                if (sourceStocks.isEmpty()) null
-                else sortWatchlist(sourceStocks, sortCriteria, sortDirection, emptyMap()).map { it.code }
-            } else {
-                val currentCodes = sourceStocks.mapTo(mutableSetOf()) { it.code }
-                existingOrder.filter { it in currentCodes } +
-                    sourceStocks.map { it.code }.filterNot { it in existingOrder }
+            when {
+                selection == null || sourceStocks.isEmpty() -> null
+                existingOrder == null -> sortWatchlist(
+                    sourceStocks,
+                    selection.criteria,
+                    selection.direction,
+                    emptyMap()
+                ).map { it.code }
+                else -> {
+                    val currentCodes = sourceStocks.mapTo(mutableSetOf()) { it.code }
+                    existingOrder.filter { it in currentCodes } +
+                        sourceStocks.map { it.code }.filterNot { it in existingOrder }
+                }
             }
         }
         if (viewModel.watchlist.value === sourceStocks) appliedOrderCodes = nextOrder
     }
 
-    val appliedCodes = appliedOrderCodes
+    val effectiveOrderCodes = remember(watchlist, appliedCodes, savedSortSelection) {
+        appliedCodes ?: savedSortSelection?.let { selection ->
+            sortWatchlist(watchlist, selection.criteria, selection.direction, emptyMap()).map { it.code }
+        }
+    }
     val immediateFilteredStocks = remember(watchlist, searchQuery, filterState, watchlistMetrics) {
         filterWatchlistStocks(
             stocks = watchlist,
@@ -497,17 +513,17 @@ fun WatchlistScreen(
             currentYields = watchlistMetrics.currentYields
         )
     }
-    val immediateSortedStocks = remember(immediateFilteredStocks, appliedCodes) {
-        applyWatchlistOrder(immediateFilteredStocks, appliedCodes)
+    val immediateSortedStocks = remember(immediateFilteredStocks, effectiveOrderCodes) {
+        applyWatchlistOrder(immediateFilteredStocks, effectiveOrderCodes)
     }
     var watchlistListSnapshot by remember(viewModel) { mutableStateOf<WatchlistListSnapshot?>(null) }
-    LaunchedEffect(watchlist, searchQuery, filterState, appliedCodes, sortCriteria, sortDirection, watchlistMetrics) {
+    LaunchedEffect(watchlist, searchQuery, filterState, effectiveOrderCodes, sortCriteria, sortDirection, watchlistMetrics) {
         val sourceStocks = watchlist
         val sourceMetrics = watchlistMetrics
         val sourceFilteredStocks = immediateFilteredStocks
         val query = searchQuery
         val filter = filterState
-        val orderCodes = appliedCodes
+        val orderCodes = effectiveOrderCodes
         val criteria = sortCriteria
         val direction = sortDirection
         val prepared = withContext(Dispatchers.Default) {
@@ -528,7 +544,7 @@ fun WatchlistScreen(
         if (viewModel.watchlist.value === sourceStocks) watchlistListSnapshot = prepared
     }
     val currentListSnapshot = watchlistListSnapshot?.takeIf {
-        it.matches(watchlist, searchQuery, filterState, appliedCodes, sortCriteria, sortDirection, watchlistMetrics)
+        it.matches(watchlist, searchQuery, filterState, effectiveOrderCodes, sortCriteria, sortDirection, watchlistMetrics)
     }
     val filteredList = currentListSnapshot?.filteredStocks ?: immediateFilteredStocks
     val sortedList = currentListSnapshot?.sortedStocks ?: immediateSortedStocks
@@ -1775,11 +1791,20 @@ fun WatchlistScreen(
                                     sortWatchlist(sourceFilteredStocks, criteria, direction, currentYields).map { it.code }
                                 }
                                 if (viewModel.watchlist.value !== sourceStocks) return@launch
-                                val visibleCodes = newlySortedCodes.toHashSet()
-                                val previousOrder = appliedOrderCodes ?: sourceStocks.map { it.code }
-                                appliedOrderCodes = newlySortedCodes + previousOrder.filterNot { it in visibleCodes }
-                                sortCriteria = criteria
-                                sortDirection = direction
+                                val previousAppliedOrder = appliedOrderCodes
+                                if (localDataRestored) {
+                                    val visibleCodes = newlySortedCodes.toHashSet()
+                                    val previousOrder = appliedOrderCodes ?: sourceStocks.map { it.code }
+                                    appliedOrderCodes = newlySortedCodes + previousOrder.filterNot { it in visibleCodes }
+                                } else {
+                                    // Let restoration apply this selection to the durable Watchlist,
+                                    // rather than carrying an order derived from startup placeholders.
+                                    appliedOrderCodes = null
+                                }
+                                if (!viewModel.saveWatchlistSortSelection(criteria, direction)) {
+                                    appliedOrderCodes = previousAppliedOrder
+                                    return@launch
+                                }
                                 showSortInfo = false
                                 showSortBottomSheet = false
                             }

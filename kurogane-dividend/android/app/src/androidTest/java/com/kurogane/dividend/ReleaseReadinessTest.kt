@@ -101,11 +101,11 @@ class ReleaseReadinessTest {
         compose.onNodeWithText(message).assertIsDisplayed()
     }
 
-    private fun model(): DividendViewModel {
+    private fun model(key: String = "quality"): DividendViewModel {
         lateinit var model: DividendViewModel
         compose.runOnIdle {
             model = DividendViewModel(app, false, CloudflareMarketRepository("https://example.com") { throw IOException("offline") }, notificationScheduler = { _, _ -> })
-            stores.put("quality", model)
+            stores.put(key, model)
         }
         runBlocking { model.awaitRestoration() }
         return model
@@ -126,14 +126,19 @@ class ReleaseReadinessTest {
     }
 
     @Test fun watchlistSortOrderSurvivesLeavingAndReturningToTab() {
+        app.getSharedPreferences("display_preferences", Context.MODE_PRIVATE).edit()
+            .remove("watchlist_sort_criteria")
+            .remove("watchlist_sort_direction")
+            .commit()
         val vm = model()
         vm.watchlist.value.toList().forEach { vm.removeWatchlistStock(it.code) }
-        val higherYield = watchlistStock("3000", "Higher yield").copy(dps = 10.0, targetYield = 5.0)
-        val lowerYield = watchlistStock("1000", "Lower yield").copy(dps = 1.0, targetYield = 5.0)
-        assertTrue(vm.restoreWatchlistStock(higherYield))
+        val lowerYield = watchlistStock("3000", "Lower yield").copy(dps = 1.0, targetYield = 5.0)
+        val higherYield = watchlistStock("1000", "Higher yield").copy(dps = 10.0, targetYield = 5.0)
         assertTrue(vm.restoreWatchlistStock(lowerYield))
+        assertTrue(vm.restoreWatchlistStock(higherYield))
         vm.watchlistScrollIndex = 0
         vm.watchlistScrollOffset = 0
+        val activeViewModel = mutableStateOf(vm)
 
         compose.setContent {
             KuroganeDividendTheme {
@@ -143,10 +148,16 @@ class ReleaseReadinessTest {
                     Button(onClick = { showWatchlist = !showWatchlist }) { Text("タブ切替") }
                     val route = if (showWatchlist) "watchlist" else "asset"
                     stateHolder.SaveableStateProvider(route) {
-                        if (showWatchlist) WatchlistScreen(vm) else Box(Modifier.fillMaxSize())
+                        if (showWatchlist) WatchlistScreen(activeViewModel.value) else Box(Modifier.fillMaxSize())
                     }
                 }
             }
+        }
+
+        val initialOrderObservedAt = android.os.SystemClock.elapsedRealtime()
+        compose.waitUntil(10_000) {
+            firstVisibleWatchlistCardCode(compose) == "3000" &&
+                android.os.SystemClock.elapsedRealtime() - initialOrderObservedAt >= 750L
         }
 
         val defaultSortLabel = app.getString(
@@ -171,6 +182,16 @@ class ReleaseReadinessTest {
         compose.onNodeWithText("タブ切替").performClick()
 
         compose.onNodeWithText(codeAscendingLabel).assertIsDisplayed()
+        compose.waitUntil(10_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
+
+        val reopenedVm = model("quality-after-restart")
+        reopenedVm.watchlist.value.toList().forEach { reopenedVm.removeWatchlistStock(it.code) }
+        assertTrue(reopenedVm.restoreWatchlistStock(lowerYield))
+        assertTrue(reopenedVm.restoreWatchlistStock(higherYield))
+        assertEquals("code", reopenedVm.watchlistSortSelection.value?.criteria)
+        assertEquals("asc", reopenedVm.watchlistSortSelection.value?.direction)
+
+        compose.runOnIdle { activeViewModel.value = reopenedVm }
         compose.waitUntil(10_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
     }
 
