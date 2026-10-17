@@ -2349,13 +2349,28 @@ fun StockDetailScreen(
                                         }
                                         Spacer(Modifier.weight(1f))
                                         if (hasClimateOverride) {
-                                            TextButton(
-                                                onClick = { viewModel.setStockClimateOverride(currentHolding.code, null) },
-                                                modifier = Modifier.heightIn(min = 32.dp),
-                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                                            ) { Text("業種の初期分類に戻す", color = OnSurfaceVariant, fontSize = AppTextSize.dense) }
+                                            Text(
+                                                "業種の初期分類に戻す",
+                                                modifier = Modifier
+                                                    .clickable(role = androidx.compose.ui.semantics.Role.Button) {
+                                                        viewModel.setStockClimateOverride(currentHolding.code, null)
+                                                    }
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                                color = OnSurfaceVariant,
+                                                fontSize = AppTextSize.dense,
+                                                maxLines = 1,
+                                                softWrap = false,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         } else {
-                                            Text("${cleanSectorName}の標準分類", color = OnSurfaceVariant, fontSize = 12.sp)
+                                            Text(
+                                                "${cleanSectorName}の標準分類",
+                                                color = OnSurfaceVariant,
+                                                fontSize = 12.sp,
+                                                maxLines = 1,
+                                                softWrap = false,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
                                     }
                                     Box(
