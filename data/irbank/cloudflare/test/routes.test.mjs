@@ -265,10 +265,10 @@ test('dividend-months returns the history-based next ex-date before the legacy s
   });
 });
 
-test('dividend-months keeps a future Ticker.calendar date ahead of a history estimate', async () => {
+test('dividend-months prefers a recurring history estimate over an off-month Ticker.calendar date', async () => {
   const today = japanToday();
-  const calendarDate = dateOffset(today, 60);
-  const estimatedDate = dateOffset(today, 120);
+  const calendarDate = dateOffset(today, 30);
+  const estimatedDate = dateOffset(today, 150);
   const symbol = '7203.T';
   const base = `market/yfinance/v2/securities/${symbol}`;
   const env = dividendEnvironment(new Map([
@@ -282,6 +282,29 @@ test('dividend-months keeps a future Ticker.calendar date ahead of a history est
         estimated_from_history: true,
       }],
     }],
+    [`${base}/current.json`, {
+      calendar: { ex_dividend_date: calendarDate, source: 'Yahoo Finance via yfinance Ticker.calendar' },
+      field_status: { dividend_history: 'empty', upcoming_ex_dividend_date: 'available' },
+    }],
+    [`${base}/dividends/${today.slice(0, 4)}.json`, { records: [] }],
+    [`${base}/dividends/${Number(today.slice(0, 4)) - 1}.json`, { records: [] }],
+  ]));
+
+  const response = await worker.fetch(
+    new Request(`https://example.com/api/v1/dividend-months?symbols=${symbol}`), env);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.items[0].upcoming_event.ex_dividend_date, estimatedDate);
+  assert.equal(data.items[0].upcoming_event.estimated_from_history, true);
+  assert.equal(data.items[0].upcoming_event.source, 'Yahoo Finance historical dividend event dates');
+});
+
+test('dividend-months uses Ticker.calendar when no recurring history estimate exists', async () => {
+  const today = japanToday();
+  const calendarDate = dateOffset(today, 30);
+  const symbol = '7203.T';
+  const base = `market/yfinance/v2/securities/${symbol}`;
+  const env = dividendEnvironment(new Map([
     [`${base}/current.json`, {
       calendar: { ex_dividend_date: calendarDate, source: 'Yahoo Finance via yfinance Ticker.calendar' },
       field_status: { dividend_history: 'empty', upcoming_ex_dividend_date: 'available' },

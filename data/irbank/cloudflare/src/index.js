@@ -1621,7 +1621,7 @@ export default {
             ? estimatedHistoryEvent.ex_dividend_date : null;
           const statisticsUpcoming = /^\d{4}-\d{2}-\d{2}$/.test(String(statisticsExDate || '')) && statisticsExDate > asOf
             ? statisticsExDate : null;
-          const upcomingExDate = calendarUpcoming || estimatedHistoryDate || statisticsUpcoming;
+          const upcomingExDate = estimatedHistoryDate || calendarUpcoming || statisticsUpcoming;
           const upcomingRightsDates = upcomingExDate && upcomingExDate > asOf
             ? rightsDatesByEvent.get(`${symbol}|${upcomingExDate}`) || null
             : null;
