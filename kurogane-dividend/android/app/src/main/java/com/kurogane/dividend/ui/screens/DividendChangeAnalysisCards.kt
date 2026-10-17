@@ -821,9 +821,8 @@ private fun DividendRiskCard(row: DividendChangeSecurity, onClick: () -> Unit) {
 @Composable
 private fun DividendChangeCard(row: DividendChangeSecurity, privacy: Boolean, onClick: () -> Unit) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
-    // Display-only fallback for the requested rows; keep the underlying unknown analysis state intact.
-    val showZeroForMissingDividendHistory = (row.code == "7318" || row.code == "5578") &&
-        row.previousDps == null && row.currentDps == null
+    // Display zero amounts when both periods are missing; keep the underlying unknown analysis state intact.
+    val showZeroForMissingDividendHistory = row.previousDps == null && row.currentDps == null
     val previousDps = if (showZeroForMissingDividendHistory) 0.0 else row.previousDps
     val currentDps = if (showZeroForMissingDividendHistory) 0.0 else row.currentDps
     val annualImpact = if (showZeroForMissingDividendHistory) 0.0 else row.annualImpact
