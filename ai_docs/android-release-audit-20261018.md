@@ -2,13 +2,15 @@
 
 調査開始: 2026-10-17 / 報告日: 2026-10-18（JST）
 
+追補: 旧 DVM の読み込みと機種変更時の自動復元を両方維持する方針を受け、バックアップの追加修正・検証を実施した。R1 / R4 は互換性を維持し保護上の制約を残す。R5 の 10 MiB 読み戻し制限と、追加で再現した API 26 の大容量暗号処理の欠落を修正した。最新の結果と残課題は [バックアップ追補](android-backup-followup-20261018.md) を参照。本書の F1〜F6、検証表、ファイル一覧は初回調査時点の記録である。
+
 ## 対象と作業の分離
 
 対象は `kurogane-dividend/android/`。開始時の `main` / `origin/main` は `2febde27` で一致していた。元の `C:\Codex\Diview` にある未追跡の添付資料、CSV、R2 調査資料を残し、`C:\dv-ra-1017` の専用 worktree と `codex/android-release-audit-20261017` ブランチで作業した。
 
 終了前の確認でも元の未追跡 4 項目は残っており、並行作業による `ai_docs/as-is-specification.md` の未コミット変更にも触れていない。
 
-仕上げ時に `2fd7b23a` へ rebase した。コード修正は `68134dd6` と、追加で確認したアクセシビリティ修正の `a250ce12`。作業中に別途追加された画面・文言・配当日程の変更をベースとして保持し、本 PR の差分には混入させていない。統合後にクリーンビルドを行い、追加のアクセシビリティ修正後にも関連検査を再実行した。
+初回の仕上げでは `2fd7b23a` へ rebase した。追補では別途入った DOE 対応 `1739d69b` をベースに取り込み、初回コード修正のコミットは `5e15feac` と `08049e1b` へ更新された。バックアップ修正は `9782a5ba`。並行作業の機能・文言を保持し、その変更自体を PR の差分へ混入させていない。初回統合後のクリーンビルドと、追補統合後の関連検査をそれぞれ実行した。
 
 `minSdk = 26`、依存関係、署名設定、保存形式、API のリクエスト・レスポンス形式、通知設定は変更していない。今回の差分ではレイアウト、色、サイズ、余白、フォント、アイコン、表示項目、操作方法を変更していない。取り込みエラーでは既存の表示領域・スタイルを使い、表示する文面を限定した。
 
@@ -63,7 +65,7 @@
 
 F6 はアクセシビリティに渡す値域情報の修正である。[ProgressBarRangeInfo の API](https://developer.android.com/reference/kotlin/androidx/compose/ui/semantics/ProgressBarRangeInfo)と[刻み数の定義](https://developer.android.com/reference/kotlin/androidx/compose/material3/Slider.composable)を参照。既存 Canvas の見た目やジェスチャー処理を変更する修正ではない。
 
-## 未修正の指摘と必要な判断
+## 初回の未修正指摘と判断事項（最新状況は追補参照）
 
 | ID | ファイル・箇所 | 確認できた事実・発生条件 | 影響度 / 確度 | 未修正の理由・選択肢 |
 | --- | --- | --- | --- | --- |
@@ -91,7 +93,7 @@ R3 の再試行は OS 上でバックオフされる処理であり、CPU を回
 - API 26 を超える無保護の API 使用は今回の Lint で検出されなかった。Lint はすべての実行時互換性問題を検出するものではない。
 - Lint の依存更新提案、未使用リソース、文字組み・Modifier・不要な API 条件、KTX 提案などは、依存更新や見た目・仕様の変更を伴うため自動対応していない。
 
-## 検証結果
+## 初回の検証結果
 
 | 検査 | 変更前 | 修正後 |
 | --- | --- | --- |
@@ -142,11 +144,11 @@ foreach ($auditDevice in @('emulator-5558', 'emulator-5556', 'RFCNC0E4H8J')) {
 }
 ```
 
-## 未検証範囲と引き継ぎ
+## 初回の未検証範囲と引き継ぎ
 
 R1〜R6 の判断・修正、実サービスの障害や認証失効、通知の長期間の配信・省電力条件、画面離脱と HTTP 中断の厳密なタイミング、最大データでのメモリ・フレーム時間、全画面の画像比較、実際の TalkBack サービスでの読み上げ・ジェスチャーは未検証。API 27〜32、34、36 や各メーカー全機種の動作も網羅していない。
 
-## 変更ファイルと成果物
+## 初回の変更ファイルと成果物
 
 | 区分 | ファイル |
 | --- | --- |
@@ -154,4 +156,4 @@ R1〜R6 の判断・修正、実サービスの障害や認証失効、通知の
 | 自動テスト | `ReleaseAuditRegressionTest.kt`、`ReleaseReadinessTest.kt`、`FinancialDataTest.kt`、`ImportMessagesTest.kt` |
 | 調査・開発記録 | `ai_docs/android-release-audit-20261018.md`、`ai_docs/todo.md`、`ai_docs/trouble.md` |
 
-PR は `codex/android-release-audit-20261017` から `main` 向けに作成する。検証ログ・変更前 XML・限定走査結果はローカルの `C:\Users\htdn\.codex\tmp\diview-release-audit-20261017` に保存した。APK・Gradle キャッシュ・生成された検査レポート・端末ログはコミット対象に含めない。
+[PR #7](https://github.com/masacgt/Diview/pull/7) を `codex/android-release-audit-20261017` から `main` 向けに作成した。検証ログ・変更前 XML・限定走査結果はローカルの `C:\Users\htdn\.codex\tmp\diview-release-audit-20261017` に保存した。APK・Gradle キャッシュ・生成された検査レポート・端末ログはコミット対象に含めない。

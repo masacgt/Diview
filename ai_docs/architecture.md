@@ -3,6 +3,7 @@
 ## Runtime and storage
 
 - The current app source is `kurogane-dividend/`; Android builds come from `kurogane-dividend/android/`.
+- Android local imports use device-bound Keystore AES-GCM preferences. Cipher input is fed in 64 KiB chunks to preserve all output on API 26. The portable auto-restore file remains app-private version-one JSON at `files/diview_auto_backup.json`; it is read by selected section and replaced with `AtomicFile`. Encrypted import preferences remain excluded from OS backup, and the existing cloud-backup encryption condition on API 31+ remains in place. Legacy DVM import compatibility and OS auto-restore are retained by the 2026-10-18 decision; this does not remove the legacy shared-key or plaintext-snapshot confidentiality limits, or the OS cloud-backup quota.
 - The Cloudflare Worker API is in `data/irbank/cloudflare/src/index.js` and uses D1 for operational records and R2 bucket `diview-market-data` for market snapshots.
 - The Worker binds R2 as `MARKET_DATA`. R2 public URLs remain disabled; selected objects are served by explicit Worker routes.
 
