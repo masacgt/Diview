@@ -274,9 +274,9 @@
     <string name="roadmap_text_11">"あと ¥%1$s / 月 で攻略"</string>
     <string name="roadmap_text_12">"マイルストーン達成済！"</string>
     <string name="roadmap_text_13">"STEP %1$sクリアに向けた目安"</string>
-    <string name="roadmap_summary_annual_shortfall">"年額不足"</string>
+    <string name="roadmap_summary_annual_shortfall">"年間配当不足額"</string>
     <string name="roadmap_summary_yield">"想定利回り"</string>
-    <string name="roadmap_summary_required_principal">"必要元本"</string>
+    <string name="roadmap_summary_required_principal">"追加元本目安"</string>
     <string name="roadmap_summary_yen">"¥%1$s"</string>
     <string name="roadmap_summary_principal">"約 ¥%1$s万円"</string>
     <string name="roadmap_text_14">"達成度を共有する"</string>
@@ -760,8 +760,8 @@
     <string name="stock_detail_health_payout">"配当性向 %1$s"</string>
     <string name="stock_detail_label_10">"%1$s連続 +%2$s"</string>
     <string name="stock_detail_label_11">"増配率 %1$s"</string>
-    <string name="stock_detail_calendar_growth_cagr">"年間配当の伸び（年平均） 年平均 %1$s"</string>
-    <string name="stock_detail_calendar_growth_cagr_detail">"年間配当の伸び（年平均） 年平均 %1$s"</string>
+    <string name="stock_detail_calendar_growth_cagr">"年間配当の伸び 年平均 %1$s"</string>
+    <string name="stock_detail_calendar_growth_cagr_detail">"年間配当の伸び 年平均 %1$s"</string>
     <string name="stock_detail_label_12">"通知ON"</string>
     <string name="stock_detail_label_13">"通知OFF"</string>
     <string name="watchlist_ach">"ach"</string>
