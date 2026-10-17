@@ -1576,12 +1576,28 @@ export default {
           ]);
           const historyStatus = current?.field_status?.dividend_history
             || (v2Events ? (v2Events.length > 0 ? 'available' : 'empty') : 'not_fetched');
+          const calendarExDate = String(current?.calendar?.ex_dividend_date || '');
+          const rawUpcoming = finiteNumber(current?.statistics?.exDividendDate);
+          const statisticsExDate = rawUpcoming ? new Date(rawUpcoming * 1000).toISOString().slice(0, 10) : null;
+          const upcomingExDate = /^\d{4}-\d{2}-\d{2}$/.test(calendarExDate)
+            ? calendarExDate
+            : statisticsExDate;
+          const upcomingRightsDates = upcomingExDate && upcomingExDate > asOf
+            ? rightsDatesByEvent.get(`${symbol}|${upcomingExDate}`) || null
+            : null;
+          const usesCalendarDate = Boolean(upcomingExDate && upcomingExDate === calendarExDate);
+          const upcomingEvent = upcomingExDate && upcomingExDate > asOf ? {
+            ex_dividend_date: upcomingExDate,
+            final_rights_date: upcomingRightsDates?.finalRightsDate || null,
+            record_date: upcomingRightsDates?.recordDate || null,
+            ex_dividend_date_status: usesCalendarDate
+              ? current?.field_status?.upcoming_ex_dividend_date || 'available'
+              : current?.field_status?.statistics_exDividendDate || 'legacy_statistics',
+            source: usesCalendarDate
+              ? current?.calendar?.source || 'Yahoo Finance via yfinance Ticker.calendar'
+              : 'Yahoo Finance via yfinance Ticker.get_info',
+          } : null;
           if (v2Events) {
-            const rawUpcoming = finiteNumber(current?.statistics?.exDividendDate);
-            const upcomingExDate = rawUpcoming ? new Date(rawUpcoming * 1000).toISOString().slice(0, 10) : null;
-            const upcomingRightsDates = upcomingExDate && upcomingExDate > asOf
-              ? rightsDatesByEvent.get(`${symbol}|${upcomingExDate}`) || null
-              : null;
             const events = v2Events.filter(event => {
               const date = String(event?.date || '');
               const amount = finiteNumber(event?.amount);
@@ -1600,14 +1616,10 @@ export default {
               amount_basis: current?.dividend?.event_amount_basis || 'yfinance_split_adjusted_assumption',
               months: [...new Set(events.map(event => Number(event.date.slice(5, 7))))].sort((a, b) => a - b),
               events,
-              upcoming_event: upcomingRightsDates ? {
-                ex_dividend_date: upcomingExDate,
-                final_rights_date: upcomingRightsDates.finalRightsDate || null,
-                record_date: upcomingRightsDates.recordDate || null,
-              } : null,
+              upcoming_event: upcomingEvent,
             };
           }
-          return { symbol, history_status: historyStatus, months: [], events: [], upcoming_event: null };
+          return { symbol, history_status: historyStatus, months: [], events: [], upcoming_event: upcomingEvent };
         }));
         return json({ as_of: asOf, lookback_days: 365,
           rights_dates_generated_at: rightsDatesDocument?.generated_at || null, items });
@@ -1932,6 +1944,13 @@ export default {
             full_history_coverage_end: actionHistory.full_history_coverage_end || null,
             last_coverage_event_count: finiteNumber(actionHistory.dividend_event_count),
             period: actionHistory.period || null,
+          },
+          ex_dividend_calendar: {
+            date: current.calendar?.ex_dividend_date || null,
+            status: current.field_status?.upcoming_ex_dividend_date || 'not_fetched',
+            last_attempt_status: current.calendar?.last_attempt_status || null,
+            fetched_at: current.calendar?.fetched_at || null,
+            source: current.calendar?.source || null,
           },
         },
       });

@@ -473,6 +473,31 @@ def date_value(value: Any) -> date | None:
         return None
 
 
+def calendar_ex_dividend_date(calendar: Any) -> date | None:
+    """Read Yahoo's next Ex-Dividend Date from yfinance's calendar payload."""
+    value: Any = None
+    if isinstance(calendar, dict):
+        value = calendar.get("Ex-Dividend Date", calendar.get("exDividendDate"))
+    elif hasattr(calendar, "index") and hasattr(calendar, "columns"):
+        # Older yfinance releases returned a one-column DataFrame with event
+        # names on the index; newer releases return a dictionary.
+        for key in ("Ex-Dividend Date", "exDividendDate"):
+            try:
+                if key in calendar.index:
+                    value = calendar.loc[key]
+                    if hasattr(value, "iloc"):
+                        value = value.iloc[0]
+                    break
+                if key in calendar.columns:
+                    value = calendar[key]
+                    if hasattr(value, "iloc"):
+                        value = value.iloc[0]
+                    break
+            except (KeyError, IndexError, TypeError):
+                continue
+    return date_value(value)
+
+
 def years_before(day: date, years: int) -> date:
     try:
         return day.replace(year=day.year - years)
@@ -1425,6 +1450,42 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         info = ticker.get_info()
     if not isinstance(info, dict) or not info:
         raise RuntimeError("yfinance returned no company profile")
+    previous_calendar = prior_current.get("calendar", {})
+    if not isinstance(previous_calendar, dict):
+        previous_calendar = {}
+    previous_calendar_attempt = date_value(
+        previous_calendar.get("last_attempt_at") or previous_calendar.get("fetched_at")
+    )
+    calendar_refresh_due = (
+        previous_calendar_attempt is None
+        or (as_of - previous_calendar_attempt).days >= 30
+    )
+    calendar_ex_date = date_value(previous_calendar.get("ex_dividend_date"))
+    calendar_status = str(previous_calendar.get("status") or "not_fetched")
+    calendar_last_attempt_status = str(previous_calendar.get("last_attempt_status") or calendar_status)
+    calendar_fetched_at = previous_calendar.get("fetched_at")
+    calendar_last_attempt_at = previous_calendar.get("last_attempt_at") or calendar_fetched_at
+    if calendar_refresh_due:
+        calendar_last_attempt_at = iso_now()
+        try:
+            count_yfinance_call("ticker_calendar")
+            calendar_payload = ticker.calendar
+            calendar_ex_date = calendar_ex_dividend_date(calendar_payload)
+            calendar_status = "available" if calendar_ex_date else "empty"
+            calendar_last_attempt_status = calendar_status
+            calendar_fetched_at = calendar_last_attempt_at
+        except Exception as exc:
+            calendar_last_attempt_status = "failed"
+            calendar_status = "stale" if calendar_ex_date else "failed"
+            print(f"Dividend calendar unavailable for {symbol}: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
+    calendar = {
+        "ex_dividend_date": calendar_ex_date.isoformat() if calendar_ex_date else None,
+        "status": calendar_status,
+        "last_attempt_status": calendar_last_attempt_status,
+        "last_attempt_at": calendar_last_attempt_at,
+        "fetched_at": calendar_fetched_at,
+        "source": "Yahoo Finance via yfinance Ticker.calendar",
+    }
     prior_price = prior_current.get("price") if isinstance(prior_current.get("price"), dict) else {}
     market_history_frame = None
     market_history_error: Exception | None = None
@@ -1770,10 +1831,12 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             "dividend_status": dividend_status,
         },
         "statistics": {key: collector.json_safe(info[key]) for key in CURRENT_FIELDS if info.get(key) is not None},
+        "calendar": calendar,
         "field_status": {
             "price": price_status,
             "dividend_history": action_status["dividends"],
             "split_history": action_status["splits"],
+            "upcoming_ex_dividend_date": calendar["status"],
             "monthly_prices": monthly_status,
             "forecast_dividend": "available" if has_forecast_dps else "empty",
             "trailing_12_month_per_share": "stale" if dividend_history_failed else "available" if trailing_dividends > 0 else "empty",
