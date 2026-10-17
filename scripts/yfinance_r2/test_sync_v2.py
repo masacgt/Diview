@@ -279,6 +279,25 @@ class CatalogTests(TestCase):
         self.assertEqual(catalog["items"][1]["failure_reason"], "Yahoo timeout")
 
 
+class CalendarYearDividendMetricsTests(TestCase):
+    def test_missing_completed_years_are_assumed_zero_within_successful_history(self):
+        metrics = sync.calendar_year_dividend_metrics(
+            [
+                {"date": "2023-06-30", "amount": 5.0},
+                {"date": "2025-06-30", "amount": 10.0},
+            ],
+            None,
+            date(2026, 7, 1),
+        )
+
+        records = {row["calendar_year"]: row for row in metrics["annual_records"]}
+        self.assertEqual(set(records), {2023, 2024, 2025})
+        self.assertEqual(records[2024]["calendar_year_distribution_per_share"], 0.0)
+        self.assertEqual(records[2024]["record_basis"], "no_observed_distribution_assumed_zero")
+        self.assertEqual(metrics["consecutive_increase_years"], 1)
+        self.assertEqual(metrics["no_cut_years"], 1)
+
+
 class R2MetricsTests(TestCase):
     def test_activity_timeline_separates_and_counts_overlapping_work(self):
         timeline = sync.ActivityTimeline()
