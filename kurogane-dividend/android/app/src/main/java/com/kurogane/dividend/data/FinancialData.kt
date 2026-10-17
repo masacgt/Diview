@@ -60,9 +60,15 @@ data class FinancialData(
                 if (dividends[i].year != dividends[i - 1].year + 1 || dividends[i].dps < dividends[i - 1].dps) break
                 noCut++
             }
-            val recent = dividends.takeLast(5)
-            val growth = if (recent.size >= 2 && recent.first().dps > 0 &&
-                recent.last().year - recent.first().year == recent.size - 1)
+            val recent = mutableListOf<CalendarYearDividend>()
+            for (row in dividends.asReversed()) {
+                val previous = recent.lastOrNull()
+                if (previous != null && previous.year != row.year + 1) break
+                recent += row
+                if (recent.size == 5) break
+            }
+            recent.reverse()
+            val growth = if (recent.size >= 2 && recent.first().dps > 0)
                 ((recent.last().dps / recent.first().dps).pow(1.0 / (recent.size - 1)) - 1) * 100 else null
             val ranges = (0 until (valuationRows?.length() ?: 0)).mapNotNull { valuationRows?.optJSONObject(it) }
                 .filter { it.optString("fiscal_year").take(4).toIntOrNull()?.let { year ->
@@ -73,7 +79,7 @@ data class FinancialData(
                 payoutRatio = payout ?: Double.NaN, equityRatio = equity ?: Double.NaN,
                 consecutiveYears = if (calendarYearEvents) -1 else dividend?.number("consecutive_dividend_increase_years")?.toInt() ?: -1,
                 noCutYears = if (!calendarYearEvents && dividends.size >= 2) noCut else -1,
-                growthRate = if (calendarYearEvents) Double.NaN else growth ?: Double.NaN,
+                growthRate = growth ?: Double.NaN,
                 eps = valuation?.number("eps_adjusted") ?: Double.NaN,
                 bps = valuation?.number("bps_adjusted") ?: Double.NaN,
                 operatingMargin = operating ?: Double.NaN, fcfMargin = fcfMargin,
