@@ -47,6 +47,26 @@ class CloudflareMarketRepositoryTest {
         assertNull(stock.marketPrice)
     }
 
+    @Test fun trailingTwelveMonthDistributionsAreNotParsedAsAnnualDps() = runBlocking {
+        val quotes = repository(Connection(200, """{"items":[
+            {"code":"8214","price":1800,"annual_dividend_per_share":630,
+             "trailing_12_month_distribution_per_share":630,"dividend_period":"trailing_12_months",
+             "yield_rate":5,"dividend_status":"has_dividend"},
+            {"code":"8058","price":2800,"annual_dividend_per_share":125,
+             "trailing_12_month_distribution_per_share":819,"dividend_period":"next_fiscal_year_forecast",
+             "yield_rate":4.4643,"dividend_status":"has_dividend"},
+            {"code":"6721","price":200,"annual_dividend_per_share":0,
+             "trailing_12_month_distribution_per_share":0,"dividend_period":"trailing_12_months",
+             "yield_rate":0,"dividend_status":"no_dividend"}
+        ]}""")).fetchSearchQuotes(listOf("8214", "8058", "6721"))
+
+        assertNull(quotes["8214"]?.annualDividendPerShare)
+        assertNull(quotes["8214"]?.yieldRate)
+        assertEquals(125.0, quotes["8058"]?.annualDividendPerShare!!, 0.0)
+        assertEquals(0.0, quotes["6721"]?.annualDividendPerShare!!, 0.0)
+        assertEquals(0.0, quotes["6721"]?.yieldRate!!, 0.0)
+    }
+
     @Test fun unknownDividendAmountIsNotConvertedToZeroButConfirmedNoDividendIs() = runBlocking {
         val result = repository(Connection(200, """{"items":[
             {"code":"1326","name":"金ETF","annual_dividend_per_share":0,"yield_rate":null,"dividend_status":"unknown"},

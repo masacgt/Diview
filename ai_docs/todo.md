@@ -2,6 +2,8 @@
 
 ## Completed
 
+- [x] Correct the annual DPS field contract, stop TTM totals from inflating the 2026 portfolio chart, and migrate held-security cache values. Evidence: all 43 yfinance sync tests and 3 focused Worker tests pass; the JDK 17 repository unit test and debug APK build pass; Worker version `f154c6b2-85e1-408b-9474-862c745dc3a0` returns 8214/8058/6493/6721/2914/8306 at ¥90/¥125/¥20/¥0/¥272/¥96 per share with TTM totals separate; SCG01 cache contract v2 stores those six values and the chart displays ¥693,000 for 2026.
+
 - [x] Calculate and label Stock Detail's calendar-year dividend-total CAGR from yfinance events. Evidence: `FinancialData.kt` selects the latest two to five consecutive annual totals, and the JDK 17 debug APK displayed `暦年配当合計CAGR 13.7%` for 2914 on device `RFCNC0E4H8J`; consecutive-increase and no-cut counts remain unavailable for this history basis.
 - [x] Publish yfinance retrieval metadata through the security API and show it on Android Stock Detail. Evidence: Worker version `3cdc544d-c1f4-404b-9246-76c5a04b46ca` returned the added ticker, currency, source/status, and dividend-history bounds in production; all 20 Worker tests passed, and the JDK 17 debug APK installed and displayed the information card on device `RFCNC0E4H8J` and emulator `emulator-5554`.
 - [x] Publish the J-Quants adjusted daily quote subset through the Worker API. Evidence: `src/index.js` streams the selected R2 object; production returned HEAD 200, ranged GET 206, full GET 200 with 93,355,497 bytes, and existing health/search-catalog routes returned 200.

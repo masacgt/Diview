@@ -167,6 +167,90 @@ class SyncPriceTests(TestCase):
 
 
 class CatalogTests(TestCase):
+    def test_catalog_keeps_annual_forecast_separate_from_trailing_distributions(self):
+        item = sync.catalog_item_from_documents(
+            "7203",
+            {"security_type": "listed_security"},
+            {"display_name": "トヨタ"},
+            {"price": {"close": 3000, "date": "2026-10-16"}, "updated_at": "2026-10-16T00:00:00Z",
+             "dividend": {
+                 "yield_basis": "next_fiscal_year_forecast",
+                 "next_fiscal_year_forecast_per_share": 100,
+                 "current_fiscal_year_per_share": 95,
+                 "trailing_12_month_per_share": 630,
+                 "dividend_status": "has_dividend",
+                 "yield_rate": 3.33,
+             }},
+            {"status": "ok"},
+        )
+
+        self.assertEqual(item["annual_dividend_per_share"], 100)
+        self.assertEqual(item["trailing_12_month_distribution_per_share"], 630)
+        self.assertEqual(item["dividend_period"], "next_fiscal_year_forecast")
+
+    def test_catalog_does_not_reuse_yield_when_current_annual_dps_is_unknown(self):
+        item = sync.catalog_item_from_documents(
+            "7203",
+            {"security_type": "listed_security"},
+            {"display_name": "トヨタ"},
+            {"price": {"close": 3000}, "updated_at": "2026-10-16T00:00:00Z",
+             "dividend": {
+                 "yield_basis": None,
+                 "next_fiscal_year_forecast_per_share": None,
+                 "current_fiscal_year_per_share": None,
+                 "trailing_12_month_per_share": 630,
+                 "yield_rate": 21,
+                 "dividend_status": "unknown",
+             }},
+            {"status": "ok"},
+        )
+
+        self.assertIsNone(item["annual_dividend_per_share"])
+        self.assertIsNone(item["yield_rate"])
+
+    def test_official_forecast_replaces_stale_yahoo_value_and_accepts_an_updated_value(self):
+        self.assertEqual(sync.next_fiscal_year_forecast_dps("8214", 120, date(2026, 10, 17)), 90)
+        self.assertEqual(sync.next_fiscal_year_forecast_dps("8058", 126, date(2026, 10, 17)), 125)
+        self.assertEqual(sync.next_fiscal_year_forecast_dps("7203", 100, date(2026, 10, 17)), 100)
+        self.assertEqual(sync.next_fiscal_year_forecast_dps("8214", 90, date(2026, 10, 17)), 90)
+        self.assertEqual(sync.next_fiscal_year_forecast_dps("8214", 100, date(2026, 10, 17)), 100)
+        self.assertEqual(sync.next_fiscal_year_forecast_dps("8214", 120, date(2027, 4, 1)), 120)
+
+    def test_catalog_rebuilds_legacy_trailing_total_rows_from_current_documents(self):
+        current = {
+            "updated_at": "2026-10-16T00:00:00Z",
+            "price": {"close": 1800, "date": "2026-10-16"},
+            "dividend": {
+                "dividend_status": "has_dividend",
+                "yield_basis": "next_fiscal_year_forecast",
+                "next_fiscal_year_forecast_per_share": 120,
+                "trailing_12_month_per_share": 630,
+            },
+        }
+        documents = {
+            sync.object_key("securities", "8214.T", "profile.json"): {"display_name": "AOKI"},
+            sync.object_key("securities", "8214.T", "current.json"): current,
+            sync.object_key("securities", "8214.T", "sync.json"): {"status": "ok"},
+        }
+        previous = {"items": [{
+            "code": "8214", "name": "AOKI", "price": 1800,
+            "annual_dividend_per_share": 630,
+            "trailing_12_month_distribution_per_share": 630,
+            "dividend_period": "trailing_12_months",
+        }]}
+
+        with patch.object(sync, "read_json", side_effect=lambda _client, _bucket, key: documents.get(key)):
+            catalog = sync.publish_catalog(
+                object(), "bucket", [{"security_code_display": "8214", "security_type": "listed_security"}],
+                date(2026, 10, 17), previous,
+            )
+
+        item = catalog["items"][0]
+        self.assertEqual(item["annual_dividend_per_share"], 90)
+        self.assertEqual(item["trailing_12_month_distribution_per_share"], 630)
+        self.assertEqual(item["dividend_period"], "next_fiscal_year_forecast")
+        self.assertEqual(item["yield_rate"], 5.0)
+
     def test_catalog_reuses_previous_rows_without_r2_reads(self):
         previous = {"items": [
             {"code": "1111", "name": "Old Name", "price": 10.0, "status": "ok"},
