@@ -2242,7 +2242,13 @@ def active_universe(client: Any, bucket: str, fetched: list[dict[str, str]], ses
     return rows
 
 
-def run(*, publish: bool, max_workers: int, dry_run: bool, reprocess_successful: bool = False) -> int:
+def run(
+    *, publish: bool,
+    max_workers: int,
+    dry_run: bool,
+    reprocess_successful: bool = False,
+    allow_one_extra_attempt: bool = False,
+) -> int:
     started_at = time.perf_counter()
     with _YF_CALL_LOCK:
         _YF_CALLS.clear()
@@ -2318,7 +2324,8 @@ def run(*, publish: bool, max_workers: int, dry_run: bool, reprocess_successful:
                 and previous_sync.get("last_success_session_date") == session_date.isoformat()
                 and not reprocess_successful):
             return {"code": code, "symbol": symbol, "status": "ok", "field_failures": []}
-        if attempts_used >= MAX_DAILY_ATTEMPTS:
+        attempt_limit = MAX_DAILY_ATTEMPTS + (1 if allow_one_extra_attempt else 0)
+        if attempts_used >= attempt_limit:
             reason = str(previous_sync.get("failure_reason") or "")
             fields = reason.removeprefix("Field fetch failed: ").split(", ") if reason else []
             if previous_sync.get("status") == "partial":
@@ -2504,12 +2511,17 @@ def main() -> int:
         "--reprocess-successful", action="store_true",
         help="Re-fetch securities already successful this session; intended for controlled full-universe timing studies",
     )
+    parser.add_argument(
+        "--allow-one-extra-attempt", action="store_true",
+        help="Allow one additional per-security attempt beyond the daily cap for a controlled manual backfill",
+    )
     args = parser.parse_args()
     return run(
         publish=args.publish,
         max_workers=args.workers,
         dry_run=args.dry_run,
         reprocess_successful=args.reprocess_successful,
+        allow_one_extra_attempt=args.allow_one_extra_attempt,
     )
 
 
