@@ -463,7 +463,7 @@
     <string name="stock_detail_text_55" formatted="false">"適正目安 30〜50%"</string>
     <string name="stock_detail_text_56" formatted="false">"100% (高負担)"</string>
     <string name="stock_detail_text_57">"自己資本比率"</string>
-    <string name="stock_detail_text_58">"株主還元方針 (DOE/累進)"</string>
+    <string name="stock_detail_text_58">"計算DOE"</string>
     <string name="stock_detail_text_59">"ネットD/Eレシオ"</string>
     <string name="stock_detail_text_60">"財務余力・借入健全性"</string>
     <string name="stock_detail_text_61">"営業利益率"</string>

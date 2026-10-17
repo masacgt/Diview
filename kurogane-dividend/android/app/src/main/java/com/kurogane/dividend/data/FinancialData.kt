@@ -45,6 +45,8 @@ data class FinancialData(
                 .filter { it.optString("fiscal_year").matches(Regex("\\d{4}/\\d{2}")) }
                 .maxByOrNull { it.getString("fiscal_year") }
             val period = financial?.optString("fiscal_year").orEmpty()
+            val doeStatus = financial?.optJSONObject("field_status")?.optString("calculated_doe").orEmpty()
+            val calculatedDoe = financial?.number("calculated_doe")
             val valuationRows = root.optJSONObject("valuation")?.optJSONArray("history")
             val valuation = (0 until (valuationRows?.length() ?: 0)).mapNotNull { valuationRows?.optJSONObject(it) }
                 .filter { it.optString("fiscal_year") == period }.firstOrNull()
@@ -90,8 +92,13 @@ data class FinancialData(
                 bps = valuation?.number("bps_adjusted") ?: Double.NaN,
                 operatingMargin = operating ?: Double.NaN, fcfMargin = fcfMargin,
                 fcfStatus = when { cf == null -> "未取得"; cf >= 0 -> "フリーCF黒字"; else -> "フリーCF赤字" },
-                doePolicy = dividend?.number("doe")?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: "未取得",
-                doePolicySub = "実績DOE（会社の配当方針とは異なります）",
+                calculatedDoe = calculatedDoe?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: "未取得",
+                calculatedDoeSub = when {
+                    calculatedDoe != null && doeStatus == "stale" -> "$period 更新確認中"
+                    calculatedDoe != null -> "$period 計算値"
+                    doeStatus == "failed" -> "財務データの取得失敗"
+                    else -> "配当総額または期末株主資本が未取得"
+                },
                 yieldRangeMin = ranges.minOrNull() ?: Double.NaN,
                 yieldRangeAvg = ranges.takeIf { it.isNotEmpty() }?.average() ?: Double.NaN,
                 yieldRangeMax = ranges.maxOrNull() ?: Double.NaN,
