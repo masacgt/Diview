@@ -318,6 +318,7 @@ fun StockDetailScreen(
         buySignalTitle = valuationNarrative.title,
         buySignalComment = valuationNarrative.findings.joinToString(" ") { it.text }.ifBlank { "株価指標未取得" }
     )
+    val healthDiagnosisItems = healthNarrative.findings.map { it.text }.ifEmpty { listOf("財務指標未取得") }
     val buySignalDiagnosisItems = buildList {
         if (currentDpsUnavailable) {
             add("配当利回り：DPS未取得のため過去の利回り実績と比較できません。現在利回りの表示は0.00%です。")
@@ -434,6 +435,16 @@ fun StockDetailScreen(
             else -> "現在は銘柄・セクターの集中が比較的小さい状態です。複数の投資先への分散を続けると、偏りを抑えやすくなります。"
         }
     )
+    val growthStatusBadge = when {
+        profile.consecutiveYears > 0 -> resources.getString(R.string.stock_detail_label_34, "${profile.consecutiveYears}期")
+        profile.consecutiveYears == 0 -> resources.getString(R.string.stock_detail_label_32)
+        else -> resources.getString(R.string.stock_detail_label_33)
+    }
+    val growthDiagnosisTitle = if (profile.consecutiveYears > 0) {
+        resources.getString(R.string.stock_detail_label_35, "${profile.consecutiveYears}期")
+    } else {
+        resources.getString(R.string.stock_detail_label_36)
+    }
 
     Scaffold(
         snackbarHost = { DiviewSnackbarHost(snackbarHostState) },
@@ -1284,20 +1295,43 @@ fun StockDetailScreen(
                                         border = BorderStroke(1.dp, AccentAmber.copy(alpha = 0.35f)),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Column(
-                                            modifier = Modifier.padding(12.dp),
-                                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    Icons.Default.AutoAwesome,
-                                                    contentDescription = null,
-                                                    tint = AccentAmber,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text("診断コメント", color = AccentAmber, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.weight(1f),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(15.dp))
+                                                    Text(
+                                                        stringResource(R.string.stock_detail_text_28),
+                                                        color = AccentAmber,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = AppTextSize.dense,
+                                                        maxLines = 1,
+                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = AccentAmber.copy(alpha = 0.15f),
+                                                    border = BorderStroke(1.dp, AccentAmber.copy(alpha = 0.3f))
+                                                ) {
+                                                    Text(
+                                                        riskBadgeText,
+                                                        color = AccentAmber,
+                                                        fontSize = AppTextSize.dense,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
                                             }
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text("診断コメント", color = AccentAmber, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                             riskDiagnosisItems.forEachIndexed { index, item ->
                                                 Text(
                                                     "${index + 1}. $item",
@@ -1867,17 +1901,25 @@ fun StockDetailScreen(
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Column(modifier = Modifier.padding(12.dp)) {
-                                                AdaptiveRow(
+                                                Row(
                                                     modifier = Modifier.fillMaxWidth(),
                                                     horizontalArrangement = Arrangement.SpaceBetween,
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
                                                     Row(
+                                                        modifier = Modifier.weight(1f),
                                                         verticalAlignment = Alignment.CenterVertically,
                                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                                     ) {
                                                         Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(15.dp))
-                                                        Text(profile.modelType, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
+                                                        Text(
+                                                            profile.modelType,
+                                                            color = PrimaryEmerald,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = AppTextSize.dense,
+                                                            maxLines = 1,
+                                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                        )
                                                     }
                                                     Surface(
                                                         shape = RoundedCornerShape(6.dp),
@@ -1894,12 +1936,15 @@ fun StockDetailScreen(
                                                     }
                                                 }
                                                 Spacer(modifier = Modifier.height(6.dp))
-                                                Text(
-                                                    stringResource(R.string.stock_detail_text_65 , profile.healthDiagnosisComment),
-                                                    color = OnSurface.copy(alpha = 0.95f),
-                                                    fontSize = AppTextSize.dense,
-                                                    lineHeight = 16.sp
-                                                )
+                                                Text("診断コメント", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                                healthDiagnosisItems.forEachIndexed { index, item ->
+                                                    Text(
+                                                        "${index + 1}. $item",
+                                                        color = OnSurface.copy(alpha = 0.95f),
+                                                        fontSize = AppTextSize.dense,
+                                                        lineHeight = 18.sp
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -2031,16 +2076,38 @@ fun StockDetailScreen(
                                         ) {
                                             Column(Modifier.padding(12.dp)) {
                                                 Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
                                                     verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                                 ) {
-                                                    Icon(Icons.Default.AutoAwesome, null, tint = PrimaryEmerald, modifier = Modifier.size(15.dp))
-                                                    Text(
-                                                        if (profile.consecutiveYears > 0) resources.getString(R.string.stock_detail_label_35, (if (profile.consecutiveYears >= 0) "${profile.consecutiveYears}期" else "未取得").toString()) else resources.getString(R.string.stock_detail_label_36),
-                                                        color = PrimaryEmerald,
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = AppTextSize.dense
-                                                    )
+                                                    Row(
+                                                        modifier = Modifier.weight(1f),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(15.dp))
+                                                        Text(
+                                                            growthDiagnosisTitle,
+                                                            color = PrimaryEmerald,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = AppTextSize.dense,
+                                                            maxLines = 1,
+                                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = PrimaryEmerald.copy(alpha = 0.14f),
+                                                        border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
+                                                    ) {
+                                                        Text(
+                                                            growthStatusBadge,
+                                                            color = PrimaryEmerald,
+                                                            fontSize = AppTextSize.dense,
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
                                                 }
                                                 Spacer(Modifier.height(6.dp))
                                                 Text("診断コメント", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
