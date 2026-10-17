@@ -821,6 +821,11 @@ private fun DividendRiskCard(row: DividendChangeSecurity, onClick: () -> Unit) {
 @Composable
 private fun DividendChangeCard(row: DividendChangeSecurity, privacy: Boolean, onClick: () -> Unit) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
+    // Display zero amounts when both periods are missing; keep the underlying unknown analysis state intact.
+    val showZeroForMissingDividendHistory = row.previousDps == null && row.currentDps == null
+    val previousDps = if (showZeroForMissingDividendHistory) 0.0 else row.previousDps
+    val currentDps = if (showZeroForMissingDividendHistory) 0.0 else row.currentDps
+    val annualImpact = if (showZeroForMissingDividendHistory) 0.0 else row.annualImpact
     val color = when (row.change) {
         DividendChangeStatus.INCREASE -> PrimaryEmerald
         DividendChangeStatus.DECREASE -> ErrorRed
@@ -849,16 +854,16 @@ private fun DividendChangeCard(row: DividendChangeSecurity, privacy: Boolean, on
             Text(buildAnnotatedString {
                 withStyle(SpanStyle(color = muted, fontSize = 10.sp)) { append(resources.getString(R.string.dividend_change_analysis_cards_label_22)) }
                 withStyle(SpanStyle(color = color, fontSize = 17.sp, fontWeight = FontWeight.Bold)) {
-                    append(money(row.annualImpact, privacy, signed = true))
+                    append(money(annualImpact, privacy, signed = true))
                 }
             }, lineHeight = 21.sp)
         }
         AdaptiveRow(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(SurfaceContainerLowest)
             .padding(horizontal = 8.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            InlineDividendValue(row.previousYear, row.previousDps, privacy, "前期実績", OnSurface, Modifier.weight(1f))
+            InlineDividendValue(row.previousYear, previousDps, privacy, "前期実績", OnSurface, Modifier.weight(1f))
             Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = color, modifier = Modifier.size(13.dp))
-            InlineDividendValue(row.currentYear, row.currentDps, privacy, "最新実績", color, Modifier.weight(1f))
+            InlineDividendValue(row.currentYear, currentDps, privacy, "最新実績", color, Modifier.weight(1f))
             MonitorBadge(percent(row.growthRate, signed = true), color, compact = true)
         }
     }
