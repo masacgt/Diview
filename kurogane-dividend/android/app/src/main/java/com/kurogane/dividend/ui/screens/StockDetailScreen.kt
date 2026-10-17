@@ -171,6 +171,10 @@ fun StockDetailScreen(
         return
     }
 
+    LaunchedEffect(currentHolding.category, currentHolding.code) {
+        viewModel.refreshDividendMonthsForSecurity(currentHolding.category, currentHolding.code)
+    }
+
     val currentDpsUnavailable = lookupFinished && lookupError == null &&
         resolvedSecurity?.annualDividendPerShare == null && !currentHolding.isNoDividendConfirmed
     val uriHandler = LocalUriHandler.current
