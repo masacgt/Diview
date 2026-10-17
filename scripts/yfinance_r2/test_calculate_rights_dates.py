@@ -69,6 +69,25 @@ class RightsDateCalculationTests(TestCase):
         self.assertEqual(estimate["source"], "Yahoo Finance historical dividend event dates")
         self.assertEqual(estimate["calendar"], "XTKS")
 
+    def test_history_estimate_keeps_its_provenance_when_calendar_date_matches(self):
+        history = [
+            {"symbol": "7203.T", "date": "2024-03-28", "amount": 40},
+            {"symbol": "7203.T", "date": "2025-03-28", "amount": 45},
+        ]
+        estimated_date = rights_dates.infer_upcoming_events(
+            history, date(2026, 1, 1), self.calendars
+        )[0]["date"]
+        rows = [{"symbol": "7203.T", "date": estimated_date, "upcoming": True}, *history]
+
+        records, skipped = rights_dates.build_records(rows, self.calendars, date(2026, 1, 1))
+        upcoming = [row for row in records if row["ex_dividend_date"] == estimated_date]
+
+        self.assertEqual(skipped, 0)
+        self.assertEqual(len(upcoming), 1)
+        self.assertTrue(upcoming[0]["estimated_from_history"])
+        self.assertEqual(upcoming[0]["event_type"], "history_estimated")
+        self.assertEqual(upcoming[0]["source"], "Yahoo Finance historical dividend event dates")
+
 
 if __name__ == "__main__":
     import unittest

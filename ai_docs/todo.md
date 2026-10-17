@@ -16,7 +16,7 @@
 
 ## Next
 
-- [ ] Publish and verify history-based upcoming ex-dividend estimates and exchange-calendar rights dates. The calculation uses recurring dividend-event dates and XTKS/XNYS sessions; when a recurring estimate exists it takes priority over an off-month Yahoo calendar/statistics date. The Worker and Android label estimates explicitly, and estimated events are excluded from confirmed-date notifications. Python estimate tests (4/4), focused Worker route tests (5/5), Android unit tests, and JDK 17 debug build pass; production R2/API display still needs verification.
+- [ ] Publish and verify history-based upcoming ex-dividend estimates and exchange-calendar rights dates. The calculation uses recurring dividend-event dates and XTKS/XNYS sessions; when a recurring estimate exists it takes priority over an off-month Yahoo calendar/statistics date and keeps its history-estimate label if it coincides with the calendar date. The Worker and Android label estimates explicitly, and estimated events are excluded from confirmed-date notifications. Python estimate tests (5/5), focused Worker route tests (5/5), Android unit tests, and JDK 17 debug build pass; regenerate R2 after the provenance-priority fix and verify the API/device display.
 
 - [ ] Verify V2 calendar-year dividend streak initialization, daily sync updates, Worker API propagation, and Android display. `assembleDebug` succeeded and the APK installed/launched on device `RFCNC0E4H8J`; live Worker/R2 propagation and displayed metric values remain unverified because the changes have not been published.
 
