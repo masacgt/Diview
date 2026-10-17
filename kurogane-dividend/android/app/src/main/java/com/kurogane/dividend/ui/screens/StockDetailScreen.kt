@@ -733,7 +733,7 @@ fun StockDetailScreen(
                                             val defaults = defaultDividendPeriods.firstOrNull { it.year == period.year }
                                             DividendHistoryEditDraft(
                                                 year = period.year,
-                                                stockPriceInput = period.stockPrice.toEditableAmount(),
+                                                stockPriceInput = period.stockPrice.toEditableStockPrice(currentHolding.code),
                                                 annualDividendInput = period.annualDividend.toEditableAmount(),
                                                 defaultStockPrice = defaults?.stockPrice,
                                                 defaultAnnualDividend = defaults?.annualDividend
@@ -2898,7 +2898,7 @@ fun StockDetailScreen(
                 dividendHistoryDraft = dividendHistoryEditorDefaults.map { period ->
                     DividendHistoryEditDraft(
                         year = period.year,
-                        stockPriceInput = period.stockPrice.toEditableAmount(),
+                        stockPriceInput = period.stockPrice.toEditableStockPrice(currentHolding.code),
                         annualDividendInput = period.annualDividend.toEditableAmount(),
                         defaultStockPrice = period.stockPrice,
                         defaultAnnualDividend = period.annualDividend
@@ -3264,7 +3264,14 @@ private fun isEditableValueModified(input: String, defaultValue: Double?): Boole
 }
 
 private fun Double?.toEditableAmount(): String = this?.takeIf { it.isFinite() }?.let {
-    java.math.BigDecimal.valueOf(it).stripTrailingZeros().toPlainString()
+    java.math.BigDecimal.valueOf(it)
+        .setScale(1, java.math.RoundingMode.HALF_UP)
+        .stripTrailingZeros()
+        .toPlainString()
+}.orEmpty()
+
+private fun Double?.toEditableStockPrice(code: String): String = this?.takeIf { it.isFinite() }?.let {
+    com.kurogane.dividend.model.formatStockPriceDisplay(it, code).replace(",", "")
 }.orEmpty()
 
 private fun String.toNullableEditableAmount(): Double? {
@@ -3276,7 +3283,8 @@ private fun String.toNullableEditableAmount(): Double? {
 
 private fun sameEditableAmount(left: Double?, right: Double?): Boolean = when {
     left == null || right == null -> left == right
-    else -> kotlin.math.abs(left - right) < 0.0000001
+    else -> java.math.BigDecimal.valueOf(left).setScale(1, java.math.RoundingMode.HALF_UP)
+        .compareTo(java.math.BigDecimal.valueOf(right).setScale(1, java.math.RoundingMode.HALF_UP)) == 0
 }
 
 @Composable

@@ -9,7 +9,7 @@ class FinancialDataTest {
     private fun document() = JSONObject("""{
       "security":{"code":"7203"},
       "financials":{"annual":[{"fiscal_year":"2025/03","sales":1000,"operating_profit":100,"operating_cf":200,"investing_cf":-50,"equity_ratio_computed":40}]},
-      "dividends":{"records":[{"fiscal_year":2023,"annual_dps_adjusted":10},{"fiscal_year":2024,"annual_dps_adjusted":20},{"fiscal_year":2025,"annual_dps_adjusted":30,"payout_ratio":35,"doe":3,"consecutive_dividend_increase_years":2}]},
+      "dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"calendar_year":2023,"calendar_year_distribution_per_share":10},{"calendar_year":2024,"calendar_year_distribution_per_share":20},{"calendar_year":2025,"calendar_year_distribution_per_share":30,"payout_ratio":35,"doe":3,"consecutive_dividend_increase_years":2}]},
       "valuation":{"history":[{"fiscal_year":"2025/03","eps_adjusted":50,"bps_adjusted":200,"dividend_yield_adjusted":3}]}
     }""")
     @Test fun calculatesMarginsAndUsesAdjustedPerShareData() {
@@ -18,7 +18,7 @@ class FinancialDataTest {
         assertEquals(10.0, data.profile.operatingMargin, 0.0)
         assertEquals(15.0, data.profile.fcfMargin!!, 0.0)
         assertEquals(35.0, data.profile.payoutRatio, 0.0)
-        assertEquals(2, data.profile.noCutYears)
+        assertEquals(-1, data.profile.noCutYears)
         assertEquals("10.0倍", data.profile.getPer(500.0))
         assertEquals(30.0, data.dividends.last().dps, 0.0)
     }
@@ -31,7 +31,7 @@ class FinancialDataTest {
         assertTrue(data.dividends.isEmpty())
     }
     @Test fun identifiesObservedCalendarYearDistributionsWithoutCallingThemFiscalMetrics() {
-        val root = JSONObject("""{"security":{"code":"1306"},"dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"fiscal_year":2024,"annual_dps_adjusted":100},{"fiscal_year":2025,"annual_dps_adjusted":110}]}}""")
+        val root = JSONObject("""{"security":{"code":"1306"},"dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"calendar_year":2024,"calendar_year_distribution_per_share":100},{"calendar_year":2025,"calendar_year_distribution_per_share":110}]}}""")
         val data = FinancialData.parse(root, "1306")
         assertEquals("calendar_year_observed_distributions", data.dividendHistoryBasis)
         assertEquals(110.0, data.dividends.last().dps, 0.0)
@@ -39,19 +39,19 @@ class FinancialDataTest {
         assertTrue(data.profile.growthRate.isNaN())
     }
     @Test fun duplicateFiscalYearUsesLastPublishedRecordOnlyOnce() {
-        val root = JSONObject("""{"security":{"code":"7203"},"dividends":{"records":[{"fiscal_year":2024,"annual_dps_adjusted":10},{"fiscal_year":2024,"annual_dps_adjusted":12},{"fiscal_year":2025,"annual_dps_adjusted":15}]}}""")
+        val root = JSONObject("""{"security":{"code":"7203"},"dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"calendar_year":2024,"calendar_year_distribution_per_share":10},{"calendar_year":2024,"calendar_year_distribution_per_share":12},{"calendar_year":2025,"calendar_year_distribution_per_share":15}]}}""")
         val data = FinancialData.parse(root, "7203")
         assertEquals(listOf(2024, 2025), data.dividends.map { it.year })
         assertEquals(12.0, data.dividends.first().dps, 0.0)
     }
-    @Test fun rejectsOtherSecurityAndDoesNotUseUnadjustedHistory() {
+    @Test fun rejectsOtherSecurityAndIgnoresRowsWithoutDistributionAmounts() {
         assertThrows(IllegalArgumentException::class.java) { FinancialData.parse(document(), "2914") }
         val root = document()
-        root.getJSONObject("dividends").getJSONArray("records").getJSONObject(1).remove("annual_dps_adjusted")
+        root.getJSONObject("dividends").getJSONArray("records").getJSONObject(1).remove("calendar_year_distribution_per_share")
         val data = FinancialData.parse(root, "7203")
         assertEquals(2, data.dividends.size)
         assertTrue(data.profile.growthRate.isNaN())
-        assertEquals(0, data.profile.noCutYears)
+        assertEquals(-1, data.profile.noCutYears)
     }
     @Test fun zeroSalesAndNegativeCashFlowAreHandled() {
         val root = document()
@@ -75,7 +75,7 @@ class FinancialDataTest {
     @Test fun zeroDividendRecordCountsAsCoveredAndMissingHoldingsAreExcluded() {
         val zeroDocument = document()
         zeroDocument.getJSONObject("dividends").getJSONArray("records").put(
-            JSONObject().put("fiscal_year", 2022).put("annual_dps_adjusted", 0)
+            JSONObject().put("calendar_year", 2022).put("calendar_year_distribution_per_share", 0)
         )
         val zeroData = FinancialData.parse(zeroDocument, "7203")
         val h = Holding("id", "7203", "トヨタ", "輸送用機器", "東証", Category.JAPAN, 1000.0, shares = 100, acqPrice = 1000.0, dps = 30.0, yieldRate = 3.0, yoc = 3.0, nextPayoutTiming = "", nextPayoutAmount = "", dividendMonths = emptyList(), dividendType = "", accountType = "特定", dailyChange = "", isPositive = true)

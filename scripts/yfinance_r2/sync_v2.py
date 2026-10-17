@@ -16,7 +16,6 @@ from collections import Counter
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
-from functools import lru_cache
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -27,6 +26,7 @@ yf.config.debug.hide_exceptions = False
 
 import fetch_and_upload as collector
 from fetch_jquants_universe import fetch_securities
+from monthly_price_calendar import last_xtks_session_in_december, normalize_december_price_point as normalize_monthly_price_point
 
 
 UTC = timezone.utc
@@ -369,18 +369,6 @@ def latest_completed_xtks_session(now: datetime | None = None) -> date:
 def year_end_price_years(as_of: date) -> tuple[int, int]:
     latest_year = as_of.year if as_of.month == 12 and is_last_market_session(as_of) else as_of.year - 1
     return latest_year - 7, latest_year
-
-
-@lru_cache(maxsize=32)
-def last_xtks_session_in_december(year: int) -> date:
-    import exchange_calendars as xcals
-    import pandas as pd
-
-    calendar = xcals.get_calendar("XTKS")
-    sessions = calendar.sessions_in_range(pd.Timestamp(date(year, 12, 1)), pd.Timestamp(date(year, 12, 31)))
-    if len(sessions) == 0:
-        raise RuntimeError(f"XTKS calendar has no December sessions for {year}")
-    return sessions[-1].date()
 
 
 def safe_symbol(symbol: str) -> str:
@@ -954,6 +942,10 @@ def list_object_keys(client: Any, bucket: str, prefixes: tuple[str, ...]) -> set
     return keys
 
 
+def normalize_december_price_point(point: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    return normalize_monthly_price_point(point)
+
+
 def save_monthly_prices(
     client: Any,
     bucket: str,
@@ -1000,8 +992,8 @@ def save_monthly_prices(
             point_year = int(month[:4])
             if point_year < first_year or point_year > latest_year:
                 continue
+            point, _ = normalize_december_price_point(point)
             month_date = date.fromisoformat(f"{month}-01")
-            point_date = date.fromisoformat(str(point.get("date") or f"{month}-01")[:10])
             if month_date < cutoff_hot:
                 archived.append(point)
             else:

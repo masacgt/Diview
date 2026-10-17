@@ -6,7 +6,10 @@ function environment(limit = 1, storageFails = false) {
   const rows = new Map();
   return {
     APP_DEFINITIONS: { get: async () => null },
-    MARKET_DATA: { get: async () => ({ json: async () => ({ security: { code: '7203' }, financials: { annual: [{ fiscal_year: '2026/03' }] }, dividends: { records: [{ fiscal_year: 2025, annual_dps_adjusted: 10 }] }, valuation: { history: [] }, officers: ['private-not-needed'] }) }) },
+    MARKET_DATA: {
+      get: async () => ({ json: async () => ({ security: { code: '7203' }, financials: { annual: [{ fiscal_year: '2026/03' }] }, dividends: { records: [{ fiscal_year: 2025, annual_dps_adjusted: 10 }] }, valuation: { history: [] }, officers: ['private-not-needed'] }) }),
+      list: async () => ({ objects: [], truncated: false }),
+    },
     DB: { prepare: sql => ({ bind: (...values) => ({
       first: async () => sql.includes('api_request_log') ? { request_count: limit } : rows.get(values[0]),
       run: async () => { if (storageFails) throw Error('storage unavailable'); if (sql.includes('INSERT INTO support_feedback') && !rows.has(values[0])) rows.set(values[0], { request_hash: values[2] }); }
@@ -18,7 +21,11 @@ function dividendEnvironment(documents, marketAvailable = true) {
   return {
     APP_DEFINITIONS: { get: async () => null },
     MARKET_DATA: marketAvailable ? {
-      get: async key => documents.has(key) ? { json: async () => documents.get(key) } : null
+      get: async key => documents.has(key) ? { json: async () => documents.get(key) } : null,
+      list: async ({ prefix }) => ({
+        objects: [...documents.keys()].filter(key => key.startsWith(prefix)).map(key => ({ key })),
+        truncated: false,
+      }),
     } : undefined,
     DB: { prepare: sql => ({ bind: () => ({ first: async () =>
       sql.includes('api_request_log') ? { request_count: 1 } : null
@@ -48,58 +55,74 @@ test('financial API only returns the necessary public document fields', async ()
   assert.equal((await worker.fetch(new Request('https://example.com/api/v1/financial-data/7203', { method: 'POST' }), environment())).status, 405);
 });
 
-test('financial API falls back to full calendar-year Yahoo distributions when issuer history is absent', async () => {
+test('financial API aggregates only published v2 yfinance calendar-year events', async () => {
   const code = '1306';
   const year = new Date().getUTCFullYear();
-  const bundle = { security: { code }, sources: { yfinance: { attribution: 'Yahoo Finance via yfinance' } },
-    dividend_history_by_source: { yfinance: [
-      { date: `${year - 2}-03-01`, amount: 10 }, { date: `${year - 2}-09-01`, amount: 15 },
-      { date: `${year - 1}-03-01`, amount: 12 }, { date: `${year - 1}-09-01`, amount: 18 },
-      { date: `${year}-03-01`, amount: 99 }
-    ] } };
+  const base = `market/yfinance/v2/securities/${code}.T`;
   const env = dividendEnvironment(new Map([
-    [`market/securities/v1/${code}.json`, bundle]
+    [`${base}/profile.json`, { display_name: 'ETF' }],
+    [`${base}/current.json`, { field_status: { dividend_history: 'available' } }],
+    [`${base}/dividends/${year - 2}.json`, { records: [
+      { date: `${year - 2}-03-01`, amount: 10 }, { date: `${year - 2}-09-01`, amount: 15 },
+      { date: `${year - 2}-09-01`, amount: 15 }, { date: `${year - 2}-02-30`, amount: 99 },
+    ] }],
+    [`${base}/dividends/${year - 1}.json`, { records: [
+      { date: `${year - 1}-03-01`, amount: 12 }, { date: `${year - 1}-09-01`, amount: 18 },
+    ] }],
+    [`${base}/dividends/${year}.json`, { records: [{ date: `${year}-03-01`, amount: 99 }] }],
   ]));
   const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
   assert.equal(response.status, 200);
   const data = await response.json();
   assert.equal(data.dividends.history_basis, 'calendar_year_observed_distributions');
   assert.deepEqual(data.dividends.records, [
-    { fiscal_year: year - 2, annual_dps_adjusted: 25 },
-    { fiscal_year: year - 1, annual_dps_adjusted: 30 }
+    { calendar_year: year - 2, calendar_year_distribution_per_share: 25, amount_basis: 'yfinance_split_adjusted_assumption' },
+    { calendar_year: year - 1, calendar_year_distribution_per_share: 30, amount_basis: 'yfinance_split_adjusted_assumption' },
   ]);
 });
 
-test('financial API falls back to Yahoo when an issuer overview exists without dividend rows', async () => {
+test('financial API keeps observed event history separate from legacy fiscal-year DPS', async () => {
   const code = '1306';
   const currentYear = Number(new Intl.DateTimeFormat('en', { timeZone: 'Asia/Tokyo', year: 'numeric' }).format(new Date()));
+  const base = `market/yfinance/v2/securities/${code}.T`;
   const documents = new Map([
     [`market/irbank/v1/securities/${code}/overview.json`, {
-      security: { code, name: 'ETF' }, financials: { annual: [] }, dividends: { records: [] }, valuation: { history: [] }
+      security: { code, name: 'ETF' }, financials: { annual: [] },
+      dividends: { records: [{ fiscal_year: '2025/03', annual_dps_adjusted: 999 }] }, valuation: { history: [] }
     }],
-    [`market/securities/v1/${code}.json`, {
-      security: { code }, dividend_history_by_source: { yfinance: [
+    [`${base}/profile.json`, { display_name: 'ETF' }],
+    [`${base}/current.json`, { field_status: { dividend_history: 'available' } }],
+    [`${base}/dividends/${currentYear - 1}.json`, { records: [
         { date: `${currentYear - 1}-03-01`, amount: 10 },
         { date: `${currentYear - 1}-03-01`, amount: 10 },
         { date: `${currentYear - 1}-02-30`, amount: 100 },
         { date: `${currentYear - 1}-09-01`, amount: 15 }
-      ] }
-    }]
+      ] }],
   ]);
   const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), dividendEnvironment(documents));
   assert.equal(response.status, 200);
   const data = await response.json();
   assert.equal(data.security.name, 'ETF');
-  assert.deepEqual(data.dividends.records, [{ fiscal_year: currentYear - 1, annual_dps_adjusted: 25 }]);
+  assert.deepEqual(data.dividends.records, [{
+    calendar_year: currentYear - 1,
+    calendar_year_distribution_per_share: 25,
+    amount_basis: 'yfinance_split_adjusted_assumption',
+  }]);
 });
 
-test('financial API rejects a unified bundle for a different security', async () => {
+test('financial API does not substitute legacy DPS when v2 event history is unavailable', async () => {
   const code = '1306';
-  const env = dividendEnvironment(new Map([[`market/securities/v1/${code}.json`, {
-    security: { code: '1489' }, dividend_history_by_source: { yfinance: [{ date: '2024-03-01', amount: 10 }] }
+  const env = dividendEnvironment(new Map([[`market/irbank/v1/securities/${code}/overview.json`, {
+    security: { code, name: 'ETF' },
+    financials: { annual: [] },
+    dividends: { records: [{ fiscal_year: '2025/03', annual_dps_adjusted: 999 }] },
+    valuation: { history: [] },
   }]]));
   const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
-  assert.equal(response.status, 404);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.deepEqual(data.dividends.records, []);
+  assert.equal(data.dividends.field_status.dividend_history, 'not_fetched');
 });
 
 test('dividend-months returns sorted recent observed months from R2 for each requested symbol', async () => {
@@ -109,17 +132,17 @@ test('dividend-months returns sorted recent observed months from R2 for each req
   while ([today.slice(5, 7), recentDate.slice(5, 7)].includes(oldDate.slice(5, 7))) {
     oldDate = dateOffset(oldDate, -20);
   }
-  const key = 'market/yfinance/securities/7203.T.json';
-  const env = dividendEnvironment(new Map([[key, {
-    actions: { dividends: [
-      { date: today, amount: 25 },
-      { date: recentDate, amount: 30 },
-      { date: oldDate, amount: 40 },
-      { date: dateOffset(today, 1), amount: 50 },
-      { date: recentDate, amount: 0 },
-      { date: 'invalid', amount: 100 }
-    ] }
-  }]]));
+  const base = 'market/yfinance/v2/securities/7203.T';
+  const record = (date, amount) => ({ date, amount });
+  const env = dividendEnvironment(new Map([
+    [`${base}/current.json`, { field_status: { dividend_history: 'available' } }],
+    [`${base}/dividends/${today.slice(0, 4)}.json`, { records: [
+      record(today, 25), record(dateOffset(today, 1), 50), record(today, 0), record('invalid', 100),
+    ] }],
+    [`${base}/dividends/${Number(today.slice(0, 4)) - 1}.json`, { records: [
+      record(recentDate, 30), record(oldDate, 40),
+    ] }],
+  ]));
   const response = await worker.fetch(new Request('https://example.com/api/v1/dividend-months?symbols=7203.T,7203.T,MSFT'), env);
   assert.equal(response.status, 200);
   const data = await response.json();
@@ -128,13 +151,16 @@ test('dividend-months returns sorted recent observed months from R2 for each req
   assert.deepEqual(data.items, [
     {
       symbol: '7203.T',
+      history_status: 'available',
+      amount_basis: 'yfinance_split_adjusted_assumption',
       months: [...new Set([Number(today.slice(5, 7)), Number(recentDate.slice(5, 7))])].sort((a, b) => a - b),
       events: [
-        { date: recentDate, amount: 30, final_rights_date: null },
-        { date: today, amount: 25, final_rights_date: null },
+        { date: recentDate, amount: 30, amount_basis: 'yfinance_split_adjusted_assumption', row_repaired_by_yfinance: false, final_rights_date: null, record_date: null },
+        { date: today, amount: 25, amount_basis: 'yfinance_split_adjusted_assumption', row_repaired_by_yfinance: false, final_rights_date: null, record_date: null },
       ],
+      upcoming_event: null,
     },
-    { symbol: 'MSFT', months: [] }
+    { symbol: 'MSFT', history_status: 'not_fetched', months: [], events: [], upcoming_event: null }
   ]);
 });
 
@@ -144,75 +170,95 @@ test('dividend-months validates batches and reports missing R2 storage', async (
   assert.equal((await worker.fetch(new Request('https://example.com/api/v1/dividend-months?symbols=7203.T'), dividendEnvironment(new Map(), false))).status, 503);
 });
 
-test('live-quotes pages only the immutable completed run and validates cursors', async () => {
-  const env = dividendEnvironment(new Map([['market/yfinance/live_quotes_completion.json', {
-    last_completed_run_id: '2026-10-09', last_completed_date: '2026-10-09'
-  }]]));
-  const listCalls = [];
-  env.MARKET_DATA.list = async options => {
-    listCalls.push(options);
-    return {
-      objects: [{ key: 'market/yfinance/live_quote_runs/2026-10-09/7203.json', customMetadata: { close: '2100', quoteDate: '2026-10-09' } }],
-      truncated: true,
-      cursor: 'opaque-next-token'
-    };
+test('live-quotes pages an immutable v2 catalog generation and validates cursors', async () => {
+  const generation = '2026-10-09';
+  const catalog = {
+    generation,
+    market_data_date: generation,
+    items: [
+      { code: '7203', price: 2100, quote_date: generation, annual_dividend_per_share: 100, yield_rate: 4.76, dividend_status: 'has_dividend' },
+      { code: '8306', price: 1000, quote_date: generation, annual_dividend_per_share: 0, yield_rate: 0, dividend_status: 'no_dividend' },
+    ],
   };
+  const env = dividendEnvironment(new Map([
+    ['market/yfinance/v2/catalog/current.json', catalog],
+    [`market/yfinance/v2/catalog/generations/${generation}.json`, catalog],
+  ]));
   const first = await worker.fetch(new Request('https://example.com/api/v1/live-quotes?limit=1'), env);
   assert.equal(first.status, 200);
   const firstPage = await first.json();
-  assert.equal(firstPage.run_id, '2026-10-09');
-  assert.equal(firstPage.market_data_date, '2026-10-09');
-  assert.deepEqual(firstPage.items, [{ code: '7203', price: 2100, quote_date: '2026-10-09' }]);
-  assert.equal(firstPage.next_cursor, 'opaque-next-token');
-  assert.equal(listCalls[0].prefix, 'market/yfinance/live_quote_runs/2026-10-09/');
-  assert.equal(listCalls[0].limit, 1);
+  assert.equal(firstPage.run_id, generation);
+  assert.equal(firstPage.market_data_date, generation);
+  assert.equal(firstPage.complete, true);
+  assert.equal(firstPage.items[0].code, '7203');
+  assert.equal(firstPage.items[0].price, 2100);
+  assert.equal(firstPage.next_cursor, '1');
 
-  const second = await worker.fetch(new Request('https://example.com/api/v1/live-quotes?run_id=2026-10-09&market_data_date=2026-10-09&cursor=opaque-next-token'), env);
+  const second = await worker.fetch(new Request(`https://example.com/api/v1/live-quotes?run_id=${generation}&market_data_date=${generation}&cursor=1`), env);
   assert.equal(second.status, 200);
-  assert.equal(listCalls[1].cursor, 'opaque-next-token');
+  assert.deepEqual((await second.json()).items.map(item => item.code), ['8306']);
   assert.equal((await worker.fetch(new Request('https://example.com/api/v1/live-quotes?run_id=../bad'), env)).status, 400);
+  assert.equal((await worker.fetch(new Request(`https://example.com/api/v1/live-quotes?run_id=${generation}&market_data_date=2026-10-10`), env)).status, 409);
 });
 
-test('legacy completion metadata is not exposed as a published quote snapshot', async () => {
+test('legacy completion metadata cannot substitute for the published v2 catalog', async () => {
   const env = dividendEnvironment(new Map([['market/yfinance/live_quotes_completion.json', {
-    last_completed_date: '2026-10-10', live_quote_count: 3960
+    last_completed_date: '2026-10-10', live_quote_count: 3960,
   }]]));
-  env.MARKET_DATA.list = async () => assert.fail('no versioned run should be listed');
   const response = await worker.fetch(new Request('https://example.com/api/v1/live-quotes?limit=2'), env);
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: 'catalog_unavailable' });
+});
+
+test('share-split-history reports stored events as available and removes duplicate partition rows', async () => {
+  const code = '7203';
+  const base = 'market/yfinance/v2/securities/7203.T';
+  const split = { date: '2021-09-29', ratio: 5 };
+  const documents = new Map([
+    [`${base}/current.json`, { field_status: { split_history: 'empty' } }],
+    [`${base}/splits/2021.json`, { records: [split] }],
+    [`${base}/splits/2022.json`, { records: [split] }],
+    [`${base}/splits/2023.json`, { records: [split] }],
+  ]);
+  const response = await worker.fetch(new Request(
+    'https://example.com/api/v1/share-split-history?code=7203&from=2017-01-01&to=2026-10-16',
+  ), dividendEnvironment(documents));
+
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
-    run_id: null,
-    market_data_date: null,
-    complete: false,
-    legacy_unpublished: true,
-    items: [],
-    next_cursor: null,
+    code,
+    history_status: 'available',
+    events: [split],
   });
 });
 
-test('legacy 12-symbol queue deliveries are forwarded as six two-symbol jobs', async () => {
+test('share-split-history preserves empty and failed states when no events are stored', async () => {
+  const base = 'market/yfinance/v2/securities/7203.T';
+  const documents = new Map([
+    [`${base}/current.json`, { field_status: { split_history: 'failed' } }],
+    [`${base}/splits/2025.json`, { records: [] }],
+  ]);
+  const response = await worker.fetch(new Request(
+    'https://example.com/api/v1/share-split-history?code=7203&from=2025-01-01&to=2025-12-31',
+  ), dividendEnvironment(documents));
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { code: '7203', history_status: 'failed', events: [] });
+});
+
+test('retired Yahoo quote queue deliveries are acknowledged without a fetch or requeue', async () => {
   const messages = [];
   let acknowledged = false;
-  const env = {
-    MARKET_DATA: {
-      get: async key => key.endsWith('live_quotes_state.json')
-        ? { json: async () => ({ universe_size: 3960, queue_run_date: '2026-10-10' }) }
-        : null
-    },
-    MARKET_PRICE_QUEUE: { sendBatch: async batch => messages.push(...batch) },
-    DB: { prepare: () => ({ bind: () => ({ run: async () => ({ success: true }) }) }) }
-  };
+  let retried = false;
   await worker.queue({ queue: 'diview-market-prices', messages: [{
     body: { run_date: '2026-10-10', batch_index: 7, total_batches: 330, symbols: Array.from({ length: 12 }, (_, index) => String(7200 + index)) },
     ack: () => { acknowledged = true; },
-    retry: () => assert.fail('legacy forwarding should not retry')
-  }] }, env);
+    retry: () => { retried = true; }
+  }] }, {});
 
   assert.equal(acknowledged, true);
-  assert.equal(messages.length, 6);
-  assert.ok(messages.every(message => message.body.symbols.length === 2));
-  assert.deepEqual(messages.map(message => message.body.batch_index), [42, 43, 44, 45, 46, 47]);
-  assert.ok(messages.every(message => message.body.total_batches === 1980));
+  assert.equal(retried, false);
+  assert.equal(messages.length, 0);
 });
 
 test('feedback acceptance, retries, collisions and storage failure are distinct', async () => {
