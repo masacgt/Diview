@@ -293,9 +293,41 @@ async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
 
 const YFINANCE_V2_ROOT = 'market/yfinance/v2';
 
+// Company forecasts checked against issuer disclosures on 2026-10-17.
+// AOKI: https://ir.aoki-hd.co.jp/ja/news/news/auto_20260508520915/pdfFile.pdf
+// Mitsubishi: https://www.mitsubishicorp.com/jp/ja/ir/shareholder/allot/
+// Refresh these when the issuers publish their next fiscal-year forecasts.
+const OFFICIAL_NEXT_FY_DPS = { '8214': { stale: 120, official: 90 }, '8058': { stale: 126, official: 125 } };
+
 function yfinanceV2Symbol(code) {
   const normalized = irbankR2Code(String(code || '').toUpperCase().replace(/\.T$/, ''));
   return normalized ? `${normalized}.T` : null;
+}
+
+function selectedAnnualDividendPerShare(code, dividend, updatedAt = '') {
+  if (dividend?.dividend_status === 'no_dividend'
+    || dividend?.yield_basis === 'yfinance_reported_no_dividend') return 0;
+  if (dividend?.yield_basis === 'next_fiscal_year_forecast') {
+    const updatedDate = String(updatedAt || '').slice(0, 10);
+    const officialOverride = OFFICIAL_NEXT_FY_DPS[code];
+    const reported = finiteNumber(dividend.next_fiscal_year_forecast_per_share);
+    if (officialOverride && (!updatedDate || updatedDate <= '2027-03-31')
+      && (reported === null || Math.abs(reported - officialOverride.stale) < 0.001)) {
+      return officialOverride.official;
+    }
+    return reported;
+  }
+  if (dividend?.yield_basis === 'current_fiscal_year') {
+    return finiteNumber(dividend.current_fiscal_year_per_share);
+  }
+  return null;
+}
+
+function yieldFromDividend(price, annualDps) {
+  const close = finiteNumber(price);
+  return close !== null && close > 0 && annualDps !== null
+    ? Math.round((annualDps / close * 100) * 10000) / 10000
+    : null;
 }
 
 async function readV2Json(env, key) {
@@ -342,7 +374,28 @@ async function readV2Catalog(env, generation = '') {
   const key = generation
     ? `${YFINANCE_V2_ROOT}/catalog/generations/${generation}.json`
     : `${YFINANCE_V2_ROOT}/catalog/current.json`;
-  return readV2Json(env, key);
+  const catalog = await readV2Json(env, key);
+  if (!catalog || !Array.isArray(catalog.items)) return catalog;
+  return {
+    ...catalog,
+    items: catalog.items.map(row => row?.dividend_period !== 'trailing_12_months'
+      ? row
+      : row?.dividend_status === 'no_dividend'
+        ? {
+            ...row,
+            annual_dividend_per_share: 0,
+            dividend_period: 'yfinance_reported_no_dividend',
+            yield_rate: 0,
+            yield_basis: 'yfinance_reported_no_dividend',
+          }
+        : {
+          ...row,
+          annual_dividend_per_share: null,
+          dividend_period: 'unknown',
+          yield_rate: null,
+          yield_basis: null,
+        }),
+  };
 }
 
 function yfinanceCalendarYearDividends(events) {
@@ -1795,17 +1848,54 @@ export default {
         const requestedItems = requestedCodes
           ? requestedCodes.map(code => catalogItems.find(row => String(row.code || '').toUpperCase() === code)).filter(Boolean)
           : catalogItems.slice(offset, offset + limit);
-        const items = requestedItems.map(row => ({
-          code: row.code,
-          price: row.price,
-          quote_date: row.quote_date,
-          annual_dividend_per_share: row.annual_dividend_per_share,
-          trailing_12_month_distribution_per_share: row.trailing_12_month_distribution_per_share,
-          dividend_period: row.dividend_period,
-          dividend_amount_basis: row.dividend_amount_basis,
-          yield_rate: row.yield_rate,
-          yield_basis: row.yield_basis,
-          dividend_status: row.dividend_status,
+        const items = await Promise.all(requestedItems.map(async row => {
+          const item = {
+            code: row.code,
+            price: row.price,
+            quote_date: row.quote_date,
+            annual_dividend_per_share: row.annual_dividend_per_share,
+            trailing_12_month_distribution_per_share: row.trailing_12_month_distribution_per_share,
+            dividend_period: row.dividend_period,
+            dividend_amount_basis: row.dividend_amount_basis,
+            yield_rate: row.yield_rate,
+            yield_basis: row.yield_basis,
+            dividend_status: row.dividend_status,
+          };
+          if (!requestedCodes) return item;
+
+          // The full catalog may lag the per-security current document. For a
+          // portfolio refresh, read the fiscal forecast directly so a trailing
+          // 12-month distribution total cannot be mistaken for annual DPS.
+          const code = String(row.code || '').toUpperCase();
+          const symbol = yfinanceV2Symbol(code);
+          const current = symbol
+            ? await readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`)
+            : null;
+          const dividend = current?.dividend;
+          if (!dividend) {
+            return {
+              ...item,
+              annual_dividend_per_share: null,
+              dividend_period: 'unknown',
+              yield_rate: null,
+              yield_basis: null,
+              dividend_status: 'unknown',
+            };
+          }
+          const annualDps = selectedAnnualDividendPerShare(code, dividend, current.updated_at);
+          const close = finiteNumber(current.price?.close) ?? finiteNumber(row.price);
+          return {
+            ...item,
+            price: close ?? item.price,
+            quote_date: current.price?.date ?? item.quote_date,
+            annual_dividend_per_share: annualDps,
+            trailing_12_month_distribution_per_share: finiteNumber(dividend.trailing_12_month_per_share),
+            dividend_period: dividend.yield_basis || 'unknown',
+            dividend_amount_basis: dividend.event_amount_basis || item.dividend_amount_basis,
+            yield_rate: yieldFromDividend(close, annualDps),
+            yield_basis: dividend.yield_basis || null,
+            dividend_status: dividend.dividend_status || 'unknown',
+          };
         }));
         const nextOffset = offset + items.length;
         const response = json({ run_id: generation, market_data_date: marketDataDate, complete: true,
@@ -1874,11 +1964,7 @@ export default {
       const dividendHistoryStatus = current.field_status?.dividend_history
         || syncFieldStatus.dividend_history
         || null;
-      const selectedDps = dividend.yield_basis === 'next_fiscal_year_forecast'
-        ? finiteNumber(dividend.next_fiscal_year_forecast_per_share)
-        : dividend.yield_basis === 'current_fiscal_year'
-          ? finiteNumber(dividend.current_fiscal_year_per_share)
-          : dividend.dividend_status === 'no_dividend' ? 0 : null;
+      const selectedDps = selectedAnnualDividendPerShare(code, dividend, current.updated_at);
       return json({
         code,
         name: profile.display_name || profile.short_name || profile.long_name || profile.english_name || code,
@@ -1890,7 +1976,7 @@ export default {
           field_status: current.field_status || {},
         },
         market_price: current.price || null,
-        market_yield_rate: finiteNumber(dividend.yield_rate),
+        market_yield_rate: yieldFromDividend(current.price?.close, selectedDps) ?? finiteNumber(dividend.yield_rate),
         dividend_status: dividend.dividend_status || 'unknown',
         data_retrieval: {
           yfinance_ticker: profile.symbol || current.symbol || symbol,
@@ -2074,8 +2160,8 @@ export default {
         metrics: [],
         dividend: v2Current.dividend ? {
           fiscal_year: null,
-          annual_dps: v2Current.dividend.trailing_12_month_per_share ?? null,
-          annual_dps_adjusted: v2Current.dividend.trailing_12_month_per_share ?? null,
+          annual_dps: selectedAnnualDividendPerShare(code, v2Current.dividend, v2Current.updated_at),
+          annual_dps_adjusted: selectedAnnualDividendPerShare(code, v2Current.dividend, v2Current.updated_at),
           payout_ratio: stats.payoutRatio ?? null,
           source: 'Yahoo Finance via yfinance',
         } : null,

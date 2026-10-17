@@ -75,6 +75,8 @@ import com.kurogane.dividend.notifications.NotificationStore
 import com.kurogane.dividend.notifications.NotificationScheduler
 import com.kurogane.dividend.notifications.DiviewNotifications
 
+private const val ANNUAL_DPS_CONTRACT_VERSION = 2
+
 data class AssetManagementListItem(
     val id: String,
     val code: String,
@@ -1745,7 +1747,58 @@ class DividendViewModel @JvmOverloads constructor(
         val now = System.currentTimeMillis()
         val lastFetchAt = marketPreferences.getLong("last_price_fetch_at", 0L)
         val lastFetchJstDate = marketPreferences.getString("last_price_fetch_jst_date", null)
-        if (!PriceRefreshPolicy.shouldFetch(now, lastFetchAt, lastFetchJstDate)) return
+        val shouldFetchPrices = PriceRefreshPolicy.shouldFetch(now, lastFetchAt, lastFetchJstDate)
+        val needsAnnualDpsRefresh = marketPreferences.getInt("annual_dps_contract_version", 0) < ANNUAL_DPS_CONTRACT_VERSION
+        if (!shouldFetchPrices && !needsAnnualDpsRefresh) return
+
+        val heldCodes = _holdings.value
+            .filter { it.category == Category.JAPAN && it.shares > 0 }
+            .map { normalizedSecurityCode(it.code) }
+            .distinct()
+        val heldQuotes = runCatchingCancellable {
+            heldCodes.chunked(50).flatMap { codes -> marketRepository.fetchSearchQuotes(codes).entries }
+                .associate { it.toPair() }
+        }.getOrElse { error ->
+            android.util.Log.w("CloudflareMarket", "保有銘柄の年間配当データ取得に失敗しました", error)
+            emptyMap()
+        }
+        val heldDpsCoverageComplete = heldCodes.all { code ->
+            heldQuotes[code]?.let { it.annualDividendPerShare != null || it.isNoDividendConfirmed } == true
+        }
+        if (heldQuotes.isNotEmpty()) {
+            val cachedDividendsPerShare = readCachedDividendsPerShare().toMutableMap()
+            val cachedNoDividendCodes = readCachedNoDividendCodes().toMutableSet()
+            val cachedDividendStatusCodes = readCachedDividendStatusCodes().toMutableSet()
+            heldQuotes.forEach { (code, quote) ->
+                when {
+                    quote.annualDividendPerShare != null -> cachedDividendsPerShare[code] = quote.annualDividendPerShare
+                    quote.isNoDividendConfirmed -> cachedDividendsPerShare[code] = 0.0
+                }
+                if (quote.hasDividendStatus) {
+                    cachedDividendStatusCodes += code
+                    if (quote.isNoDividendConfirmed) cachedNoDividendCodes += code
+                    else cachedNoDividendCodes -= code
+                }
+            }
+            marketPreferences.edit()
+                .putString("dividend_per_share", JSONObject().apply {
+                    cachedDividendsPerShare.forEach { (code, dps) -> put(code, dps) }
+                }.toString())
+                .putString("confirmed_no_dividend_codes", JSONArray().apply {
+                    cachedNoDividendCodes.sorted().forEach { put(it) }
+                }.toString())
+                .putString("known_dividend_status_codes", JSONArray().apply {
+                    cachedDividendStatusCodes.sorted().forEach { put(it) }
+                }.toString())
+                .apply()
+            applyPrices(readCachedPrices(), cachedDividendsPerShare, cachedNoDividendCodes, cachedDividendStatusCodes)
+            saveRequests.trySend(Unit)
+        }
+        if (heldDpsCoverageComplete) {
+            marketPreferences.edit().putInt("annual_dps_contract_version", ANNUAL_DPS_CONTRACT_VERSION).apply()
+        }
+        if (!shouldFetchPrices) return
+
         marketPreferences.edit()
             .putLong("last_price_fetch_attempt_at", now)
             .putString("last_price_fetch_status", "running")
@@ -1764,7 +1817,7 @@ class DividendViewModel @JvmOverloads constructor(
                 val cachedDividendStatusCodes = readCachedDividendStatusCodes().toMutableSet()
                 fetchedQuotes.forEach { (code, quote) ->
                     if (quote.annualDividendPerShare != null) cachedDividendsPerShare[code] = quote.annualDividendPerShare
-                    else cachedDividendsPerShare.remove(code)
+                    else if (quote.isNoDividendConfirmed) cachedDividendsPerShare[code] = 0.0
                     if (quote.hasDividendStatus) {
                         cachedDividendStatusCodes += code
                         if (quote.isNoDividendConfirmed) cachedNoDividendCodes += code

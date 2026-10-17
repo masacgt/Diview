@@ -260,6 +260,116 @@ test('live-quotes pages an immutable v2 catalog generation and validates cursors
   assert.equal((await worker.fetch(new Request(`https://example.com/api/v1/live-quotes?run_id=${generation}&market_data_date=2026-10-10`), env)).status, 409);
 });
 
+test('legacy trailing-distribution catalog rows are not exposed as annual DPS or yield', async () => {
+  const catalog = {
+    generation: '2026-10-16',
+    market_data_date: '2026-10-16',
+    items: [{
+      code: '8214', name: 'AOKI', price: 1800, quote_date: '2026-10-16',
+      annual_dividend_per_share: 630,
+      trailing_12_month_distribution_per_share: 630,
+      dividend_period: 'trailing_12_months',
+      yield_rate: 35,
+      yield_basis: 'trailing_12_months',
+      dividend_status: 'has_dividend',
+    }, {
+      code: '6721', name: 'Wintest', price: 200, quote_date: '2026-10-16',
+      annual_dividend_per_share: 0,
+      trailing_12_month_distribution_per_share: 0,
+      dividend_period: 'trailing_12_months',
+      yield_rate: 0,
+      dividend_status: 'no_dividend',
+    }],
+  };
+  const env = dividendEnvironment(new Map([['market/yfinance/v2/catalog/current.json', catalog]]));
+
+  const catalogResponse = await worker.fetch(new Request('https://example.com/api/v1/search-catalog'), env);
+  const catalogPayload = await catalogResponse.json();
+  const catalogItem = catalogPayload.items[0];
+  assert.equal(catalogItem.annual_dividend_per_share, null);
+  assert.equal(catalogItem.yield_rate, null);
+  assert.equal(catalogItem.trailing_12_month_distribution_per_share, 630);
+  const noDividendItem = catalogPayload.items.find(item => item.code === '6721');
+  assert.equal(noDividendItem.annual_dividend_per_share, 0);
+  assert.equal(noDividendItem.dividend_period, 'yfinance_reported_no_dividend');
+  assert.equal(noDividendItem.yield_rate, 0);
+
+  const quotesResponse = await worker.fetch(new Request('https://example.com/api/v1/live-quotes?limit=1'), env);
+  const quoteItem = (await quotesResponse.json()).items[0];
+  assert.equal(quoteItem.annual_dividend_per_share, null);
+  assert.equal(quoteItem.yield_rate, null);
+});
+
+test('requested live quotes use annual fiscal DPS and keep trailing distributions separate', async () => {
+  const generation = '2026-10-16';
+  const codes = ['8214', '8058'];
+  const catalog = {
+    generation,
+    market_data_date: generation,
+    items: codes.map((code, index) => ({
+      code,
+      price: 1800 + index * 1000,
+      quote_date: generation,
+      annual_dividend_per_share: 630,
+      trailing_12_month_distribution_per_share: 630,
+      dividend_period: 'trailing_12_months',
+      yield_rate: 35,
+      dividend_status: 'has_dividend',
+    })),
+  };
+  const documents = new Map([
+    ['market/yfinance/v2/catalog/current.json', catalog],
+    [`market/yfinance/v2/catalog/generations/${generation}.json`, catalog],
+    ['market/yfinance/v2/securities/8214.T/current.json', {
+      updated_at: '2026-10-16T00:00:00Z',
+      price: { close: 1800, date: generation },
+      dividend: {
+        dividend_status: 'has_dividend',
+        yield_basis: 'next_fiscal_year_forecast',
+        next_fiscal_year_forecast_per_share: 120,
+        trailing_12_month_per_share: 630,
+      },
+    }],
+    ['market/yfinance/v2/securities/8058.T/current.json', {
+      updated_at: '2026-10-16T00:00:00Z',
+      price: { close: 2800, date: generation },
+      dividend: {
+        dividend_status: 'has_dividend',
+        yield_basis: 'next_fiscal_year_forecast',
+        next_fiscal_year_forecast_per_share: 126,
+        trailing_12_month_per_share: 819,
+      },
+    }],
+  ]);
+  const response = await worker.fetch(new Request(
+    'https://example.com/api/v1/live-quotes?codes=8214%2C8058',
+  ), dividendEnvironment(documents));
+
+  assert.equal(response.status, 200);
+  const items = (await response.json()).items;
+  assert.deepEqual(items.map(item => item.annual_dividend_per_share), [90, 125]);
+  assert.deepEqual(items.map(item => item.trailing_12_month_distribution_per_share), [630, 819]);
+  assert.deepEqual(items.map(item => item.dividend_period), [
+    'next_fiscal_year_forecast', 'next_fiscal_year_forecast',
+  ]);
+  assert.deepEqual(items.map(item => item.yield_rate), [5, 4.4643]);
+
+  documents.set('market/yfinance/v2/securities/8214.T/current.json', {
+    updated_at: '2026-10-17T00:00:00Z',
+    price: { close: 1800, date: generation },
+    dividend: {
+      dividend_status: 'has_dividend',
+      yield_basis: 'next_fiscal_year_forecast',
+      next_fiscal_year_forecast_per_share: 100,
+      trailing_12_month_per_share: 630,
+    },
+  });
+  const revisedResponse = await worker.fetch(new Request(
+    'https://example.com/api/v1/live-quotes?codes=8214',
+  ), dividendEnvironment(documents));
+  assert.equal((await revisedResponse.json()).items[0].annual_dividend_per_share, 100);
+});
+
 test('legacy completion metadata cannot substitute for the published v2 catalog', async () => {
   const env = dividendEnvironment(new Map([['market/yfinance/live_quotes_completion.json', {
     last_completed_date: '2026-10-10', live_quote_count: 3960,
