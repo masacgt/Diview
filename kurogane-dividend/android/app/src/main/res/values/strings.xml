@@ -468,7 +468,7 @@
     <string name="stock_detail_text_60">"財務余力・借入健全性"</string>
     <string name="stock_detail_text_61">"営業利益率"</string>
     <string name="stock_detail_text_62">"稼ぐ力・本業収益性"</string>
-    <string name="stock_detail_text_63">"フリーキャッシュフロー余力"</string>
+    <string name="stock_detail_text_63">"売上から残る現金"</string>
     <string name="stock_detail_text_64">"健全性スコア: %1$s"</string>
     <string name="stock_detail_text_65">"総合自動診断：%1$s"</string>
     <string name="stock_detail_text_66">"年間配当の増減詳細分析"</string>
