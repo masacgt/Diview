@@ -31,7 +31,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
 /** Every preference and backup file belongs to this test, including applicationContext users. */
-private class AuditApplication : Application() {
+internal class AuditApplication : Application() {
     private val prefix = "release_audit_${UUID.randomUUID()}_"
     private val preferences = mutableSetOf<String>()
     init { attachBaseContext(InstrumentationRegistry.getInstrumentation().targetContext) }
