@@ -432,9 +432,9 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                             val neededPrincipalAt4 = Math.round(shortageAnnual / (targetYield / 100.0) / 10000.0)
                             val summaryMetrics = listOf(
                                 Triple(
-                                    R.string.roadmap_summary_annual_shortfall,
-                                    stringResource(R.string.roadmap_summary_yen, currencyFormat.format(shortageAnnual)),
-                                    ErrorRed
+                                    R.string.roadmap_summary_required_principal,
+                                    stringResource(R.string.roadmap_summary_principal, NumberFormat.getNumberInstance(Locale.JAPAN).format(neededPrincipalAt4)),
+                                    OnSurface
                                 ),
                                 Triple(
                                     R.string.roadmap_summary_yield,
@@ -442,9 +442,9 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                                     PrimaryEmerald
                                 ),
                                 Triple(
-                                    R.string.roadmap_summary_required_principal,
-                                    stringResource(R.string.roadmap_summary_principal, NumberFormat.getNumberInstance(Locale.JAPAN).format(neededPrincipalAt4)),
-                                    OnSurface
+                                    R.string.roadmap_summary_annual_shortfall,
+                                    stringResource(R.string.roadmap_summary_yen, currencyFormat.format(shortageAnnual)),
+                                    ErrorRed
                                 )
                             )
 
