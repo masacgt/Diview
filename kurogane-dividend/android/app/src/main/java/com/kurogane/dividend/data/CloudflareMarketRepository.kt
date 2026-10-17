@@ -154,8 +154,7 @@ class CloudflareMarketRepository(
                     code = code,
                     name = name,
                     cachedPrice = row.numberOrNull("price")?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 },
-                    annualDividendPerShare = row.numberOrNull("annual_dividend_per_share")
-                        ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) },
+                    annualDividendPerShare = row.annualDividendPerShareOrNull(),
                     marketYieldRate = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 },
                     isNoDividendConfirmed = row.hasConfirmedNoDividend()
                 )
@@ -246,8 +245,7 @@ class CloudflareMarketRepository(
 
     private fun parseSearchQuote(row: JSONObject): CloudflareSearchQuote? {
         val price = row.numberOrNull("price")?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }
-        val annualDividend = row.numberOrNull("annual_dividend_per_share")
-            ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) }
+        val annualDividend = row.annualDividendPerShareOrNull()
         val yieldRate = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 }
         val noDividend = row.hasConfirmedNoDividend()
         val quoteDate = row.optString("quote_date").takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
@@ -287,8 +285,9 @@ class CloudflareMarketRepository(
                 require(it.equals(normalized, true)) { "応答の銘柄コードが一致しません" }
             },
             name = root.optString("name").takeIf(String::isNotBlank) ?: return@withContext null,
-            annualDividendPerShare = (yfinanceDividend?.numberOrNull("annual_dps_adjusted")
-                ?: yfinanceDividend?.numberOrNull("annual_dps"))?.takeIf(PortfolioMath::validMoney)
+            annualDividendPerShare = (if (root.hasUnknownDividendStatus() && !root.hasConfirmedNoDividend()) null else
+                (yfinanceDividend?.numberOrNull("annual_dps_adjusted")
+                    ?: yfinanceDividend?.numberOrNull("annual_dps"))?.takeIf(PortfolioMath::validMoney))
                 ?: catalogQuote?.takeIf { it.hasDividendStatus }?.annualDividendPerShare,
             marketPrice = (if (catalogPriceIsNewer) catalogQuote?.price else detailPrice)
                 ?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }
@@ -329,8 +328,7 @@ class CloudflareMarketRepository(
                 if (catalogDate != null && quoteDate != null && quoteDate > catalogDate) continue
                 val price = row.numberOrNull("price")
                 if (isSecurityCode(code) && price != null && PortfolioMath.validMoney(price) && price > 0.0) {
-                    val annualDividend = row.numberOrNull("annual_dividend_per_share")
-                        ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) }
+                    val annualDividend = row.annualDividendPerShareOrNull()
                     val yieldRate = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 }
                     put(code, CloudflareMarketQuote(
                         price,
@@ -365,8 +363,7 @@ class CloudflareMarketRepository(
             val acquisitionPrice = row.numberOrNull("acquisition_price") ?: return@mapNotNull null
             val tradingValue = row.numberOrNull("estimated_average_trading_value_20d") ?: return@mapNotNull null
             if (!isSecurityCode(code) || name.isBlank() || !PortfolioMath.validMoney(currentPrice) || !PortfolioMath.validMoney(acquisitionPrice) || currentPrice <= 0.0 || acquisitionPrice <= 0.0 || tradingValue <= 0.0) return@mapNotNull null
-            val annualDividend = row.numberOrNull("annual_dividend_per_share")
-                ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) }
+            val annualDividend = row.annualDividendPerShareOrNull()
             val dividendYield = annualDividend?.let { dividend ->
                 (dividend / currentPrice * 100.0).takeIf { it.isFinite() && it in 0.0..100.0 }
             }
@@ -548,6 +545,17 @@ class CloudflareMarketRepository(
 
 private fun JSONObject.hasConfirmedNoDividend(): Boolean =
     optString("dividend_status").equals("no_dividend", ignoreCase = true) || optBoolean("is_no_dividend", false)
+
+private fun JSONObject.hasUnknownDividendStatus(): Boolean =
+    optString("dividend_status").equals("unknown", ignoreCase = true)
+
+private fun JSONObject.annualDividendPerShareOrNull(): Double? {
+    if (hasUnknownDividendStatus() && !hasConfirmedNoDividend()) return null
+    val amount = if (!has("annual_dividend_per_share") || isNull("annual_dividend_per_share")) null
+        else optDouble("annual_dividend_per_share").takeIf(Double::isFinite)
+    return amount
+        ?.takeIf { it >= 0.0 && PortfolioMath.validMoney(it) }
+}
 
 private fun JSONObject.hasDividendStatus(): Boolean = has("dividend_status") || has("is_no_dividend")
 

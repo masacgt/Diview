@@ -9,9 +9,40 @@ import pandas as pd
 
 import benchmark_v2 as benchmark
 import sync_v2 as sync
+import repair_monthly_price_dates as monthly_date_repair
+import monthly_price_calendar as monthly_calendar
 
 
 class SyncPriceTests(TestCase):
+    def test_monthly_price_point_date_is_normalized_without_changing_close(self):
+        point = {"month": "2024-12", "date": "2024-12-01", "close": 3146.0}
+        with patch.object(monthly_calendar, "last_xtks_session_in_december", return_value=date(2024, 12, 30)):
+            normalized, changed = sync.normalize_december_price_point(point)
+
+        self.assertTrue(changed)
+        self.assertEqual(normalized, {"month": "2024-12", "date": "2024-12-30", "close": 3146.0})
+        self.assertEqual(point["date"], "2024-12-01")
+
+    def test_monthly_price_repair_normalizes_all_december_points(self):
+        document = {
+            "symbol": "7203.T",
+            "points": [
+                {"month": "2024-12", "date": "2024-12-01", "close": 3146.0},
+                {"month": "2025-12", "date": "2025-12-30", "close": 3356.0},
+                {"month": "2025-11", "date": "2025-11-28", "close": 3200.0},
+            ],
+        }
+        with patch.object(monthly_calendar, "last_xtks_session_in_december", side_effect=lambda year: {
+            2024: date(2024, 12, 30), 2025: date(2025, 12, 30),
+        }[year]):
+            repaired, changed = monthly_date_repair.normalize_points(document)
+
+        self.assertEqual(changed, 1)
+        self.assertEqual(repaired["points"][0], {"month": "2024-12", "date": "2024-12-30", "close": 3146.0})
+        self.assertEqual(repaired["points"][1], document["points"][1])
+        self.assertEqual(repaired["points"][2], document["points"][2])
+        self.assertEqual(document["points"][0]["date"], "2024-12-01")
+
     def test_no_action_rows_are_recorded_as_empty_history_when_chart_has_coverage(self):
         class Ticker:
             def history(self, **kwargs):

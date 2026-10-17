@@ -1,6 +1,6 @@
 # Diview 現行仕様（As-Is）
 
-- 基準日：2026-10-15
+- 基準日：2026-10-17
 - 対象：現行の Android ネイティブアプリと、アプリが参照するデータ/API・端末内処理。運用管理者向け API は連携仕様として記録し、管理画面は対象 UI に含めない。
 - 現行ソース：`kurogane-dividend/android/`。`kurogane-dividend/src/` は必要に応じた挙動参照であり、Android のビルド元ではない。`archive/` は対象外。
 - 記述根拠：現行ソース、リポジトリ内の `ai_docs/`、および本文に日時を付した本番 GET 応答。
@@ -757,9 +757,9 @@ FAQ を参照し、機能改善要望・不具合・銘柄データ誤り・そ�
 
 | 連携先 | 用途 | 認証・通信 | 現行確認事項 |
 |---|---|---|---|
-| Cloudflare Worker `diview-irbank` | 銘柄検索、価格・配当・財務情報、配当月、月次価格、問い合わせ受付 | Android の市場 GET は HTTPS 公開読み取り API。問い合わせは HTTPS POST | チェックアウトに v2/legacy の両経路を含む。2026-10-15 本番は legacy 公開状態を観測 |
+| Cloudflare Worker `diview-irbank` | 銘柄検索、価格・配当・財務情報、配当月、月次価格、問い合わせ受付 | Android の市場 GET は HTTPS 公開読み取り API。問い合わせは HTTPS POST | 2026-10-17 本番はv2世代 `2026-10-16`、4,341件を公開。各APIの本番応答を同日確認 |
 | Cloudflare D1 | IRBANK・銘柄・財務・問い合わせ・実行記録等 | Worker バインディング `DB` | Android から直接アクセスしない |
-| Cloudflare R2 `diview-market-data` | 市場データ・スナップショット | Worker の `MARKET_DATA` バインディング、収集ジョブ | 2026-10-15 Health の最新 snapshot は3日超過 |
+| Cloudflare R2 `diview-market-data` | 市場データ・スナップショット | Worker の `MARKET_DATA` バインディング、収集ジョブ | v2の公開カタログと価格・配当・分割データをWorker経由で確認。バケットは非公開 |
 | Frankfurter API | USD/JPY 日次レート | `GET https://api.frankfurter.dev/v2/rate/USD/JPY` | 値・通貨・日付を検証して利用 |
 | Yahoo Finance / yfinance、IRBANK、EDINET、J-Quants、JPX 等 | サーバー側の株価・財務・配当・銘柄マスター収集 | GitHub Actions／収集スクリプト | Android がこれら各社 API へ直接接続する構成ではない |
 | Android BiometricPrompt / WorkManager | 端末認証、通知・定期バックグラウンド処理 | OS API | OS 権限・省電力・実行時刻の制約を受ける |
@@ -787,7 +787,7 @@ Stripe、Firebase Authentication、Google Maps、Adjust、Firebase Cloud Messagi
 - Worker は CORS の `*` を返し、OPTIONS は204。未知ルート404、メソッド不一致405、入力不正400、管理認証失敗401を返す実装がある。
 - 公開・認証済み・管理用のレート制限をルート別に適用する。具体的な閾値は Worker 定義・運用設定に依存する。
 - Android アプリに Worker 管理 secret を含めない。アプリの市場データ取得は一般ユーザーログインを要求しない。
-- Worker ソースのルート定義が本番へ配備済みとは限らない。2026-10-15 本番 `share-split-history` は404、`live-quotes` は `legacy_unpublished` を返した。
+- 2026-10-17本番確認では `search-catalog`、`security-search`、`live-quotes`、`securities`、`financial-data`、`dividend-months`、`share-split-history`、`monthly-price-history`、`analysis` が応答した。`dividend-months?symbols=7203.T` は3月・9月、`share-split-history` は7203の2021-09-29 5:1イベントを返した。2026-10-15に記録した旧 `share-split-history` 404と `legacy_unpublished` 応答は、初回v2公開前の履歴である。
 
 ### 5.3 通知・バックグラウンド処理
 
@@ -811,7 +811,8 @@ Stripe、Firebase Authentication、Google Maps、Adjust、Firebase Cloud Messagi
 - GitHub Actions の yfinance→R2 平日ジョブは J-Quants v2 の銘柄 universe と東証営業日で実行対象を判定し、通常の開始時刻は日本時間21:17。プロフィール・現在値・直近終値・1年の配当／分割イベントを更新する。より長い配当／分割履歴と初期年末価格は20分割バケット、年次財務・評価値は5バケットで順次取得する。
 - 年末価格は各銘柄につき直近8完了年の12月終値を保持する。直近13か月内の対象価格を通常領域、より古い保持対象を R2 archive に置く。12月以外・8年範囲外の月次価格はこの新スキーマで保持しない。対象12月の東証最終営業日後に当年終値を更新する。
 - 銘柄ごとの取得失敗は以前の値を保持し、後続ジョブで再試行する。1銘柄あたりの1市場日内取得試行回数は最大4回。v2データの読み戻し検証後に不要な旧 yfinance 値を gzip archive する。
-- 手動実行は標準で40銘柄の非公開ベンチマーク。全件 R2 同期には `sync` モードが必要。初回の v2 R2 公開と本番 Worker 配備は未完了と既存プロジェクト資料に記録されており、本番 GET でも旧公開状態を観測した。
+- 手動実行の既定は40銘柄の非公開ベンチマーク。全件R2同期は `sync` モード、保存済み12月価格の日付だけを補正する処理は `repair-monthly-prices` モードで実行する。2026-10-16にv2 R2初回公開を行い、2026-10-17にWorkerをデプロイ・本番読戻し確認した。全銘柄再処理Actions run #49は実行中で、通常の次営業日同期は未確認。
+- 本番 `/api/v1/monthly-price-history` は7203の直近8年分の12月終値を返す。現在の保存データでは `date` が各月の1日になっているため、価格値を変えず最終XTKS営業日へ直す専用R2補正ジョブを用意した。run #49完了後に実行する。
 - 月次 rights-date 処理は別 GitHub Actions workflow で実行する。Worker は計算済み rights-date JSON を v2 R2 から読む実装を持つ。
 - 【本番応答確認】2026-10-15 13:30:13 UTC 時点で health は最新 snapshot の3日超過、バッチ状態 `running`、直近 run `running`／processed 0 を報告した。本番公開の健全性は次回確認が必要な運用時点情報であり、コード仕様として固定しない。
 

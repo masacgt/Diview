@@ -1,14 +1,14 @@
 package com.kurogane.dividend.model
 
 import com.kurogane.dividend.data.FinancialData
-import com.kurogane.dividend.data.FiscalDividend
+import com.kurogane.dividend.data.CalendarYearDividend
 import org.junit.Assert.*
 import org.junit.Test
 
 class DividendChangeAnalysisTest {
     @Test fun combinesAccountsAndAppliesTheirIndividualTaxTreatment() {
         val holdings = listOf(holding("a", shares = 100, free = 100), holding("b", shares = 200, free = 0))
-        val data = mapOf("8316" to financial(listOf(FiscalDividend(2024, 100.0), FiscalDividend(2025, 120.0))))
+        val data = mapOf("8316" to financial(listOf(CalendarYearDividend(2024, 100.0), CalendarYearDividend(2025, 120.0))))
         val gross = DividendChangeAnalysis.calculate(holdings, data, "gross")
         val net = DividendChangeAnalysis.calculate(holdings, data, "net")
         assertEquals(1, gross.securities.size)
@@ -19,7 +19,7 @@ class DividendChangeAnalysisTest {
     }
 
     @Test fun excludesMissingAndNonConsecutiveYearsFromChangeCounts() {
-        val data = mapOf("8316" to financial(listOf(FiscalDividend(2023, 100.0), FiscalDividend(2025, 150.0))))
+        val data = mapOf("8316" to financial(listOf(CalendarYearDividend(2023, 100.0), CalendarYearDividend(2025, 150.0))))
         val result = DividendChangeAnalysis.calculate(listOf(holding("a"), holding("b", code = "7203")), data, "gross")
         assertEquals(2, result.securities.size)
         assertTrue(result.compared.isEmpty())
@@ -29,8 +29,8 @@ class DividendChangeAnalysisTest {
 
     @Test fun treatsDividendSuspensionAndResumptionAsChanges() {
         val data = mapOf(
-            "8316" to financial(listOf(FiscalDividend(2024, 100.0), FiscalDividend(2025, 0.0))),
-            "7203" to financial(listOf(FiscalDividend(2024, 0.0), FiscalDividend(2025, 30.0)))
+            "8316" to financial(listOf(CalendarYearDividend(2024, 100.0), CalendarYearDividend(2025, 0.0))),
+            "7203" to financial(listOf(CalendarYearDividend(2024, 0.0), CalendarYearDividend(2025, 30.0)))
         )
         val result = DividendChangeAnalysis.calculate(listOf(holding("a"), holding("b", code = "7203")), data, "gross")
         assertEquals(DividendChangeStatus.DECREASE, result.securities[0].change)
@@ -59,7 +59,7 @@ class DividendChangeAnalysisTest {
         assertEquals(1, result.securities.size)
     }
 
-    private fun financial(dividends: List<FiscalDividend>) = FinancialData(
+    private fun financial(dividends: List<CalendarYearDividend>) = FinancialData(
         code = "8316", period = "2025/03", profile = StockFinancialProfile(), dividends = dividends, values = emptyMap()
     )
 

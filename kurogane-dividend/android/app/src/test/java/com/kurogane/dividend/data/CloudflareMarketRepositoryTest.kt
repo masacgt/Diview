@@ -32,7 +32,7 @@ class CloudflareMarketRepositoryTest {
         }
 
     @Test fun parsesValidSecurityAndClosesTheConnection() = runBlocking {
-        val connection = Connection(200, """{"code":"7203","name":"トヨタ","dividend":{"annual_dps_adjusted":100},"market_price":{"close":2000}}""")
+        val connection = Connection(200, """{"code":"7203","name":"トヨタ","dividend":{"annual_dps_adjusted":100,"yield_basis":"annual_dps"},"market_price":{"close":2000}}""")
         val stock = repository(connection).getSecurity(" 7203 ")!!
         assertEquals("7203", stock.code)
         assertEquals(100.0, stock.annualDividendPerShare!!, 0.0)
@@ -45,6 +45,38 @@ class CloudflareMarketRepositoryTest {
         val stock = repository(Connection(200, """{"code":"7203","name":"トヨタ","dividend":null,"market_price":{"close":null}}""")).getSecurity("7203")!!
         assertNull(stock.annualDividendPerShare)
         assertNull(stock.marketPrice)
+    }
+
+    @Test fun unknownDividendAmountIsNotConvertedToZeroButConfirmedNoDividendIs() = runBlocking {
+        val result = repository(Connection(200, """{"items":[
+            {"code":"1326","name":"金ETF","annual_dividend_per_share":0,"yield_rate":null,"dividend_status":"unknown"},
+            {"code":"8306","name":"三菱UFJ","annual_dividend_per_share":0,"yield_rate":0,"dividend_status":"no_dividend"}
+        ]}""")).searchSecurities("13")
+
+        val unknown = result.first { it.code == "1326" }
+        assertNull(unknown.annualDividendPerShare)
+        assertNull(unknown.marketYieldRate)
+        assertFalse(unknown.isNoDividendConfirmed)
+
+        val noDividend = result.first { it.code == "8306" }
+        assertEquals(0.0, noDividend.annualDividendPerShare!!, 0.0)
+        assertEquals(0.0, noDividend.marketYieldRate!!, 0.0)
+        assertTrue(noDividend.isNoDividendConfirmed)
+    }
+
+    @Test fun unknownDividendCatalogFallbackDoesNotPopulateZeroDps() = runBlocking {
+        val connections = mutableListOf(
+            Connection(200, """{"code":"1326","name":"金ETF","dividend":{"annual_dps":0,"annual_dps_adjusted":0},
+                "dividend_status":"unknown","market_price":{"close":59870,"date":"2026-10-15"}}"""),
+            Connection(200, """{"items":[{"code":"1326","name":"金ETF","price":59870,"annual_dividend_per_share":0,
+                "yield_rate":null,"dividend_status":"unknown","quote_date":"2026-10-15"}]}""")
+        )
+        val stock = repository(connections, mutableListOf()).getSecurity("1326")!!
+
+        assertNull(stock.annualDividendPerShare)
+        assertNull(stock.marketYieldRate)
+        assertFalse(stock.isNoDividendConfirmed)
+        assertTrue(stock.hasDividendStatus)
     }
 
     @Test fun notFoundReturnsNullWhileServerErrorRemainsAnError() {
@@ -101,38 +133,32 @@ class CloudflareMarketRepositoryTest {
         assertEquals(mapOf("7203" to 2000.0), result)
     }
 
-    @Test fun priceSnapshotPagesCompletedQuotesAndIgnoresPartialCatalogRows() = runBlocking {
-        val connections = mutableListOf(
-            Connection(200, """{"market_data_date":"2026-10-09","items":[
-                {"code":"7203","price":2000,"annual_dividend_per_share":100,"quote_date":"2026-10-09"},
-                {"code":"9999","price":100,"annual_dividend_per_share":25,"quote_date":"2026-10-09"},
-                {"code":"130A","price":500,"quote_date":"2026-10-10"}]}"""),
-            Connection(200, """{"run_id":"2026-10-09","market_data_date":"2026-10-09","complete":true,
-                "items":[{"code":"7203","price":2100}],"next_cursor":"next /="}"""),
-            Connection(200, """{"run_id":"2026-10-09","market_data_date":"2026-10-09","complete":true,
-                "items":[{"code":"9999","price":110}],"next_cursor":null}""")
-        )
+    @Test fun priceSnapshotReadsPublishedCatalogAndPreservesDividendStates() = runBlocking {
         val urls = mutableListOf<String>()
-        val snapshot = repository(connections, urls).fetchPriceCatalogSnapshot()
+        val snapshot = repository(mutableListOf(
+            Connection(200, """{"market_data_date":"2026-10-09","items":[
+                {"code":"7203","price":2000,"annual_dividend_per_share":100,"dividend_status":"has_dividend","quote_date":"2026-10-09"},
+                {"code":"9999","price":100,"annual_dividend_per_share":25,"dividend_status":"has_dividend","quote_date":"2026-10-09"},
+                {"code":"1326","price":59870,"annual_dividend_per_share":0,"yield_rate":null,"dividend_status":"unknown","quote_date":"2026-10-09"},
+                {"code":"8306","price":1000,"annual_dividend_per_share":0,"yield_rate":0,"dividend_status":"no_dividend","quote_date":"2026-10-09"},
+                {"code":"130A","price":500,"quote_date":"2026-10-10"}]}""")
+        ), urls).fetchPriceCatalogSnapshot()
 
         assertEquals("2026-10-09", snapshot.marketDataDate)
-        assertEquals(setOf("7203", "9999"), snapshot.quotes.keys)
-        assertEquals(2100.0, snapshot.quotes.getValue("7203").price, 0.0)
+        assertEquals(setOf("7203", "9999", "1326", "8306"), snapshot.quotes.keys)
+        assertEquals(2000.0, snapshot.quotes.getValue("7203").price, 0.0)
         assertEquals(100.0, snapshot.quotes.getValue("7203").annualDividendPerShare!!, 0.0)
-        assertEquals(110.0, snapshot.quotes.getValue("9999").price, 0.0)
         assertEquals(25.0, snapshot.quotes.getValue("9999").annualDividendPerShare!!, 0.0)
-        assertEquals(3, urls.size)
-        assertTrue(urls[1].contains("/api/v1/live-quotes?limit=200"))
-        assertTrue(urls[2].contains("run_id=2026-10-09"))
-        assertTrue(urls[2].contains("market_data_date=2026-10-09"))
-        assertTrue(urls[2].contains("cursor=next+%2F%3D"))
+        assertNull(snapshot.quotes.getValue("1326").annualDividendPerShare)
+        assertFalse(snapshot.quotes.getValue("1326").isNoDividendConfirmed)
+        assertEquals(0.0, snapshot.quotes.getValue("8306").annualDividendPerShare!!, 0.0)
+        assertTrue(snapshot.quotes.getValue("8306").isNoDividendConfirmed)
+        assertEquals(1, urls.size)
+        assertTrue(urls.single().endsWith("/api/v1/search-catalog"))
     }
 
-    @Test fun priceSnapshotDoesNotTrustLegacyCompletionWithoutRunSnapshot() = runBlocking {
-        val snapshot = repository(mutableListOf(
-            Connection(200, """{"market_data_date":"2026-10-10","items":[{"code":"7203","price":2000,"quote_date":"2026-10-10"}]}"""),
-            Connection(200, """{"run_id":null,"market_data_date":null,"complete":false,"legacy_unpublished":true,"items":[],"next_cursor":null}""")
-        ), mutableListOf()).fetchPriceCatalogSnapshot()
+    @Test fun priceSnapshotKeepsEmptyPublishedCatalogEmpty() = runBlocking {
+        val snapshot = repository(Connection(200, """{"market_data_date":null,"items":[],"complete":false}""")).fetchPriceCatalogSnapshot()
 
         assertNull(snapshot.marketDataDate)
         assertTrue(snapshot.quotes.isEmpty())

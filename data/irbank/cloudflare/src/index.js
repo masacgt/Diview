@@ -303,7 +303,7 @@ async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
 const YFINANCE_V2_ROOT = 'market/yfinance/v2';
 
 function yfinanceV2Symbol(code) {
-  const normalized = irbankR2Code(String(code || '').toUpperCase());
+  const normalized = irbankR2Code(String(code || '').toUpperCase().replace(/\.T$/, ''));
   return normalized ? `${normalized}.T` : null;
 }
 
@@ -1703,8 +1703,6 @@ export default {
           readV2SplitEvents(env, code, years),
           symbol ? readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`) : Promise.resolve(null),
         ]);
-        const historyStatus = current?.field_status?.split_history
-          || (events ? (events.length > 0 ? 'available' : 'empty') : 'not_fetched');
         const records = (events || []).map(event => {
           const date = String(event?.date || '');
           const ratio = finiteNumber(event?.ratio);
@@ -1712,8 +1710,16 @@ export default {
             && ratio != null && ratio > 0 && Math.abs(ratio - 1) > 1e-9
             ? { date, ratio }
             : null;
-        }).filter(Boolean).sort((a, b) => a.date.localeCompare(b.date));
-        const response = json({ code, history_status: historyStatus, events: records });
+        }).filter(Boolean);
+        const uniqueRecords = [...new Map(records.map(event => [
+          `${event.date}:${event.ratio}`,
+          event,
+        ])).values()].sort((a, b) => a.date.localeCompare(b.date));
+        const storedHistoryStatus = current?.field_status?.split_history;
+        const historyStatus = uniqueRecords.length > 0
+          ? 'available'
+          : storedHistoryStatus || (events ? 'empty' : 'not_fetched');
+        const response = json({ code, history_status: historyStatus, events: uniqueRecords });
         response.headers.set('cache-control', 'public, max-age=300');
         return response;
       } catch {
