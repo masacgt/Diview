@@ -55,6 +55,65 @@ test('financial API only returns the necessary public document fields', async ()
   assert.equal((await worker.fetch(new Request('https://example.com/api/v1/financial-data/7203', { method: 'POST' }), environment())).status, 405);
 });
 
+test('security API exposes yfinance retrieval metadata and stored dividend history bounds', async () => {
+  const base = 'market/yfinance/v2/securities/7203.T';
+  const documents = new Map([
+    ['market/yfinance/v2/catalog/current.json', { items: [{ code: '7203' }] }],
+    [`${base}/profile.json`, {
+      code: '7203', symbol: '7203.T', display_name: 'トヨタ自動車', source: 'Yahoo Finance via yfinance',
+    }],
+    [`${base}/current.json`, {
+      code: '7203', symbol: '7203.T', source: 'Yahoo Finance via yfinance',
+      price: { close: 3000, currency: 'JPY' },
+      dividend: { dividend_status: 'has_dividend' },
+      field_status: { dividend_history: 'available' },
+      action_history: {
+        status: 'success', source: 'yfinance_history', yfinance_version: '1.7.0',
+        coverage_start: '2025-01-01', coverage_end: '2025-12-31',
+        full_history_coverage_end: '2025-12-31', dividend_event_count: 2, period: 'max',
+      },
+    }],
+    [`${base}/sync.json`, {
+      last_attempt_at: '2026-10-17T00:00:00Z', status: 'partial',
+      failure_reason: 'Field fetch failed: price', yfinance_version: '1.7.0',
+    }],
+    [`${base}/dividends/2025.json`, { records: [
+      { date: '2025-03-31', amount: 20 }, { date: '2025-09-30', amount: 30 },
+    ] }],
+    [`market/yfinance/v2/archive/events/7203.T/dividends/1990.json`, { records: [
+      { date: '1990-06-29', amount: 1 },
+    ] }],
+  ]);
+  const response = await worker.fetch(
+    new Request('https://example.com/api/v1/securities/7203'), dividendEnvironment(documents),
+  );
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.code, '7203');
+  assert.deepEqual(data.data_retrieval, {
+    yfinance_ticker: '7203.T',
+    source: 'Yahoo Finance via yfinance',
+    currency: 'JPY',
+    last_attempt_at: '2026-10-17T00:00:00Z',
+    processing_status: 'partial',
+    failure_reason: 'Field fetch failed: price',
+    dividend_history: {
+      status: 'available',
+      last_attempt_status: 'success',
+      source: 'yfinance_history',
+      yfinance_version: '1.7.0',
+      stored_history_status: 'available',
+      stored_history_start: '1990-06-29',
+      stored_history_end: '2025-09-30',
+      last_coverage_start: '2025-01-01',
+      last_coverage_end: '2025-12-31',
+      full_history_coverage_end: '2025-12-31',
+      last_coverage_event_count: 2,
+      period: 'max',
+    },
+  });
+});
+
 test('financial API aggregates only published v2 yfinance calendar-year events', async () => {
   const code = '1306';
   const year = new Date().getUTCFullYear();

@@ -46,7 +46,29 @@ data class CloudflareSecurity(
     val industry: String? = null,
     val marketYieldRate: Double? = null,
     val isNoDividendConfirmed: Boolean = false,
-    val hasDividendStatus: Boolean = false
+    val hasDividendStatus: Boolean = false,
+    val dataRetrieval: CloudflareDataRetrieval? = null
+)
+
+data class CloudflareDataRetrieval(
+    val yfinanceTicker: String?,
+    val source: String?,
+    val currency: String?,
+    val lastAttemptAt: String?,
+    val processingStatus: String?,
+    val failureReason: String?,
+    val dividendHistory: CloudflareDividendHistoryRetrieval?
+)
+
+data class CloudflareDividendHistoryRetrieval(
+    val status: String?,
+    val lastAttemptStatus: String?,
+    val source: String?,
+    val storedHistoryStatus: String?,
+    val storedHistoryStart: String?,
+    val storedHistoryEnd: String?,
+    val lastCoverageStart: String?,
+    val lastCoverageEnd: String?
 )
 
 data class CloudflareStockAnalysis(
@@ -280,6 +302,8 @@ class CloudflareMarketRepository(
         val catalogPriceIsNewer = catalogQuote?.price != null &&
             (detailPrice == null || (catalogQuote.quoteDate != null &&
                 (detailQuoteDate == null || catalogQuote.quoteDate > detailQuoteDate)))
+        val retrievalJson = root.optJSONObject("data_retrieval")
+        val dividendHistoryJson = retrievalJson?.optJSONObject("dividend_history")
         CloudflareSecurity(
             code = root.optString("code", normalized).ifBlank { normalized }.also {
                 require(it.equals(normalized, true)) { "応答の銘柄コードが一致しません" }
@@ -296,7 +320,29 @@ class CloudflareMarketRepository(
                 ?.takeIf { it in 0.0..100.0 }
                 ?: catalogQuote?.yieldRate,
             isNoDividendConfirmed = root.hasConfirmedNoDividend() || catalogQuote?.isNoDividendConfirmed == true,
-            hasDividendStatus = root.hasDividendStatus() || catalogQuote?.hasDividendStatus == true
+            hasDividendStatus = root.hasDividendStatus() || catalogQuote?.hasDividendStatus == true,
+            dataRetrieval = retrievalJson?.let { retrieval ->
+                CloudflareDataRetrieval(
+                    yfinanceTicker = retrieval.stringOrNull("yfinance_ticker"),
+                    source = retrieval.stringOrNull("source"),
+                    currency = retrieval.stringOrNull("currency"),
+                    lastAttemptAt = retrieval.stringOrNull("last_attempt_at"),
+                    processingStatus = retrieval.stringOrNull("processing_status"),
+                    failureReason = retrieval.stringOrNull("failure_reason"),
+                    dividendHistory = dividendHistoryJson?.let { history ->
+                        CloudflareDividendHistoryRetrieval(
+                            status = history.stringOrNull("status"),
+                            lastAttemptStatus = history.stringOrNull("last_attempt_status"),
+                            source = history.stringOrNull("source"),
+                            storedHistoryStatus = history.stringOrNull("stored_history_status"),
+                            storedHistoryStart = history.stringOrNull("stored_history_start"),
+                            storedHistoryEnd = history.stringOrNull("stored_history_end"),
+                            lastCoverageStart = history.stringOrNull("last_coverage_start"),
+                            lastCoverageEnd = history.stringOrNull("last_coverage_end")
+                        )
+                    }
+                )
+            }
         )
     }
 
@@ -545,6 +591,9 @@ class CloudflareMarketRepository(
 
 private fun JSONObject.hasConfirmedNoDividend(): Boolean =
     optString("dividend_status").equals("no_dividend", ignoreCase = true) || optBoolean("is_no_dividend", false)
+
+private fun JSONObject.stringOrNull(key: String): String? =
+    if (!has(key) || isNull(key)) null else optString(key).takeIf(String::isNotBlank)
 
 private fun JSONObject.hasUnknownDividendStatus(): Boolean =
     optString("dividend_status").equals("unknown", ignoreCase = true)
