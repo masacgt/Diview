@@ -326,6 +326,27 @@ async function listV2Documents(env, prefix) {
   return documents;
 }
 
+async function readV2DividendHistoryBounds(env, symbol) {
+  try {
+    const [currentDocuments, archivedDocuments] = await Promise.all([
+      listV2Documents(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/dividends/`),
+      listV2Documents(env, `${YFINANCE_V2_ROOT}/archive/events/${symbol}/dividends/`),
+    ]);
+    const dates = [...currentDocuments, ...archivedDocuments]
+      .flatMap(document => Array.isArray(document.records) ? document.records : [])
+      .map(record => String(record?.date || '').slice(0, 10))
+      .filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value))
+      .sort();
+    return {
+      status: dates.length ? 'available' : 'empty',
+      start: dates[0] || null,
+      end: dates.length ? dates[dates.length - 1] : null,
+    };
+  } catch {
+    return { status: 'failed', start: null, end: null };
+  }
+}
+
 async function readV2Catalog(env, generation = '') {
   const key = generation
     ? `${YFINANCE_V2_ROOT}/catalog/generations/${generation}.json`
@@ -1860,12 +1881,19 @@ export default {
       const symbol = yfinanceV2Symbol(code);
       if (!symbol) return json({ error: 'invalid_security_code' }, 400);
       const base = `${YFINANCE_V2_ROOT}/securities/${symbol}`;
-      const [profile, current] = await Promise.all([
+      const [profile, current, sync, dividendHistoryBounds] = await Promise.all([
         readV2Json(env, `${base}/profile.json`),
         readV2Json(env, `${base}/current.json`),
+        readV2Json(env, `${base}/sync.json`),
+        readV2DividendHistoryBounds(env, symbol),
       ]);
       if (!profile || !current) return json({ error: 'security_data_unavailable' }, 503);
       const dividend = current.dividend || {};
+      const actionHistory = current.action_history || {};
+      const syncFieldStatus = sync?.field_status || {};
+      const dividendHistoryStatus = current.field_status?.dividend_history
+        || syncFieldStatus.dividend_history
+        || null;
       const selectedDps = dividend.yield_basis === 'next_fiscal_year_forecast'
         ? finiteNumber(dividend.next_fiscal_year_forecast_per_share)
         : dividend.yield_basis === 'current_fiscal_year'
@@ -1884,6 +1912,28 @@ export default {
         market_price: current.price || null,
         market_yield_rate: finiteNumber(dividend.yield_rate),
         dividend_status: dividend.dividend_status || 'unknown',
+        data_retrieval: {
+          yfinance_ticker: profile.symbol || current.symbol || symbol,
+          source: current.source || profile.source || null,
+          currency: current.price?.currency || null,
+          last_attempt_at: sync?.last_attempt_at || null,
+          processing_status: sync?.status || null,
+          failure_reason: sync?.failure_reason || null,
+          dividend_history: {
+            status: dividendHistoryStatus,
+            last_attempt_status: actionHistory.status || null,
+            source: actionHistory.source || null,
+            yfinance_version: actionHistory.yfinance_version || sync?.yfinance_version || null,
+            stored_history_status: dividendHistoryBounds.status,
+            stored_history_start: dividendHistoryBounds.start,
+            stored_history_end: dividendHistoryBounds.end,
+            last_coverage_start: actionHistory.coverage_start || null,
+            last_coverage_end: actionHistory.coverage_end || null,
+            full_history_coverage_end: actionHistory.full_history_coverage_end || null,
+            last_coverage_event_count: finiteNumber(actionHistory.dividend_event_count),
+            period: actionHistory.period || null,
+          },
+        },
       });
     }
 
