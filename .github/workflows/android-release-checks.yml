@@ -5,11 +5,13 @@ on:
     paths:
       - 'kurogane-dividend/android/**'
       - '.github/workflows/android-release-checks.yml'
+      - 'kurogane-dividend/scripts/summarize_android_checks.py'
   push:
-    branches: [main, 'codex/android-release-*']
+    branches: [main]
     paths:
       - 'kurogane-dividend/android/**'
       - '.github/workflows/android-release-checks.yml'
+      - 'kurogane-dividend/scripts/summarize_android_checks.py'
   workflow_dispatch:
 
 permissions:
@@ -44,14 +46,15 @@ jobs:
           -Pkotlin.compiler.execution.strategy=in-process
           :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest
           :app:assembleRelease :app:bundleRelease
-      - name: Test and lint reports (no APKs or signing credentials)
+      - name: Summarize results without source snippets or exception text
+        if: always()
+        run: python ../scripts/summarize_android_checks.py --root app/build --output app/build/reports/release-check-summary.json
+      - name: Sanitized check report (no APKs or signing credentials)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: android-build-reports
-          path: |
-            kurogane-dividend/android/app/build/test-results/testDebugUnitTest/
-            kurogane-dividend/android/app/build/reports/lint-results-debug.*
+          path: kurogane-dividend/android/app/build/reports/release-check-summary.json
           retention-days: 7
 
   device-tests:
@@ -70,6 +73,8 @@ jobs:
           java-version: '17'
       - name: Enable KVM on the disposable runner
         run: sudo chown "$USER" /dev/kvm
+      - name: Install the existing compile SDK requirements with JDK 17
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
       - name: API ${{ matrix.api }} instrumented regression tests with JDK 17
         uses: reactivecircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808 # v2
         with:
@@ -82,10 +87,13 @@ jobs:
             bash ./gradlew --no-daemon --console plain --max-workers=1
             -Pkotlin.compiler.execution.strategy=in-process
             :app:connectedDebugAndroidTest
-      - name: Device test reports
+      - name: Summarize device results without exception text
+        if: always()
+        run: python ../scripts/summarize_android_checks.py --root app/build --output app/build/reports/release-device-summary.json
+      - name: Sanitized device test report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: android-device-reports-api-${{ matrix.api }}
-          path: kurogane-dividend/android/app/build/outputs/androidTest-results/connected/
+          path: kurogane-dividend/android/app/build/reports/release-device-summary.json
           retention-days: 7
