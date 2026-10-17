@@ -330,8 +330,25 @@ class EventPartitionPersistenceTests(TestCase):
             )
 
         self.assertEqual(records, [{"date": "2025-03-01", "amount": 1.0}])
-        self.assertEqual(len(client.keys), 6)
+        self.assertEqual(len(client.keys), 3)
+        self.assertTrue(all("/archive/" not in key for key in client.keys))
         self.assertEqual(client.list_count, 0)
+
+    def test_unchanged_profile_keeps_timestamp_to_avoid_rewriting_r2(self):
+        previous = {"display_name": "会社", "field_status": {"display_name": "available"}, "updated_at": "old"}
+        profile = {"display_name": "会社", "field_status": {"display_name": "available"}, "updated_at": "new"}
+
+        result = sync.preserve_profile_timestamp_if_unchanged(profile, previous)
+
+        self.assertEqual(result["updated_at"], "old")
+
+    def test_changed_profile_gets_new_timestamp(self):
+        previous = {"display_name": "旧社名", "updated_at": "old"}
+        profile = {"display_name": "新社名", "updated_at": "new"}
+
+        result = sync.preserve_profile_timestamp_if_unchanged(profile, previous)
+
+        self.assertEqual(result["updated_at"], "new")
 
 
 class SyncPolicyTests(TestCase):
