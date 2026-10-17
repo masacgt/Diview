@@ -244,7 +244,7 @@ class ReleaseReadinessTest {
         assertTrue(vm.isOledBlack.value)
         val slider = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo))
         slider.performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { assertTrue(it(8f)) }
-        slider.assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(8f, 3f..10f, 6))
+        slider.assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(8f, 1f..10f, 8))
     }
 
     @Test fun screensRemainScrollableInBothThemesWithLargeFontAndDisplay() {

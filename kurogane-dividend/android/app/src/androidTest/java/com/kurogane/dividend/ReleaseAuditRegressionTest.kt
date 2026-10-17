@@ -11,6 +11,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.kurogane.dividend.data.CloudflareMarketRepository
 import com.kurogane.dividend.model.WatchlistStock
 import com.kurogane.dividend.ui.screens.StockDetailScreen
+import com.kurogane.dividend.ui.screens.SettingsScreen
 import com.kurogane.dividend.ui.theme.KuroganeDividendTheme
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import kotlinx.coroutines.CancellationException
@@ -159,5 +160,22 @@ class ReleaseAuditRegressionTest {
         assertEquals("empty", runBlocking { vm.loadShareSplitHistory("1306", from, to, force = true) }.historyStatus)
         assertEquals("empty", runBlocking { vm.loadShareSplitHistory("1306", from, to) }.historyStatus)
         assertEquals(2, attempts.get())
+    }
+
+    @Test fun thresholdAccessibilityAlwaysDescribesAllTenIntegerValues() {
+        val vm = model { """{"items":[]}""" }
+        compose.setContent { KuroganeDividendTheme { SettingsScreen(vm) } }
+        val rangeMatcher = androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(
+            androidx.compose.ui.semantics.SemanticsProperties.ProgressBarRangeInfo
+        )
+        compose.onNode(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.ScrollToIndex))
+            .performScrollToNode(rangeMatcher)
+        val slider = compose.onNode(rangeMatcher)
+        for (value in listOf(1f, 5f, 10f)) {
+            slider.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) {
+                assertTrue(it(value))
+            }
+            slider.assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(value, 1f..10f, 8))
+        }
     }
 }
