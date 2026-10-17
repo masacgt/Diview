@@ -35,13 +35,21 @@ class FinancialDataTest {
         val data = FinancialData.parse(root, "7203")
         assertEquals(25.0, data.profile.payoutRatio, 0.0)
     }
-    @Test fun identifiesObservedCalendarYearDistributionsWithoutCallingThemFiscalMetrics() {
+    @Test fun identifiesObservedCalendarYearDistributionsAndCalculatesTheirCagr() {
         val root = JSONObject("""{"security":{"code":"1306"},"dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"calendar_year":2024,"calendar_year_distribution_per_share":100},{"calendar_year":2025,"calendar_year_distribution_per_share":110}]}}""")
         val data = FinancialData.parse(root, "1306")
         assertEquals("calendar_year_observed_distributions", data.dividendHistoryBasis)
         assertEquals(110.0, data.dividends.last().dps, 0.0)
         assertEquals(-1, data.profile.noCutYears)
-        assertTrue(data.profile.growthRate.isNaN())
+        assertEquals(10.0, data.profile.growthRate, 0.000001)
+    }
+    @Test fun calendarYearCagrUsesOnlyTheLatestFiveConsecutiveYears() {
+        val root = JSONObject("""{"security":{"code":"1306"},"dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"calendar_year":2020,"calendar_year_distribution_per_share":1},{"calendar_year":2021,"calendar_year_distribution_per_share":10},{"calendar_year":2022,"calendar_year_distribution_per_share":20},{"calendar_year":2023,"calendar_year_distribution_per_share":40},{"calendar_year":2024,"calendar_year_distribution_per_share":80},{"calendar_year":2025,"calendar_year_distribution_per_share":160}]}}""")
+        assertEquals(100.0, FinancialData.parse(root, "1306").profile.growthRate, 0.000001)
+    }
+    @Test fun calendarYearCagrRemainsUnknownWhenItsStartingDividendIsZero() {
+        val root = JSONObject("""{"security":{"code":"1306"},"dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"calendar_year":2024,"calendar_year_distribution_per_share":0},{"calendar_year":2025,"calendar_year_distribution_per_share":10}]}}""")
+        assertTrue(FinancialData.parse(root, "1306").profile.growthRate.isNaN())
     }
     @Test fun duplicateFiscalYearUsesLastPublishedRecordOnlyOnce() {
         val root = JSONObject("""{"security":{"code":"7203"},"dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"calendar_year":2024,"calendar_year_distribution_per_share":10},{"calendar_year":2024,"calendar_year_distribution_per_share":12},{"calendar_year":2025,"calendar_year_distribution_per_share":15}]}}""")
