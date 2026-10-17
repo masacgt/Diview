@@ -29,6 +29,7 @@ data class FinancialData(
             require(code == expectedCode) { "財務情報の銘柄コードが一致しません" }
             val historyBasis = root.optJSONObject("dividends")?.optString("history_basis")
                 ?.takeIf { it == "calendar_year_observed_distributions" } ?: "unknown"
+            val calendarYearEvents = historyBasis == "calendar_year_observed_distributions"
             val dividendPayload = root.optJSONObject("dividends")
             val history = dividendPayload?.optJSONArray("records")
             val rows = (0 until (history?.length() ?: 0)).mapNotNull { history?.optJSONObject(it) }
@@ -55,7 +56,10 @@ data class FinancialData(
             val cf = financial?.number("operating_cf")?.let { a -> financial.number("investing_cf")?.let { a + it } }
             val fcfMargin = percent(cf, sales)
             val equity = financial?.number("equity_ratio_computed")
-            val payout = dividend?.number("payout_ratio") ?: root.optJSONObject("dividends")?.number("payout_ratio")
+            // Yahoo's current `payout_ratio` is a fraction; older annual rows
+            // already store the value in percentage points.
+            val payout = dividend?.number("payout_ratio")
+                ?: dividendPayload?.number("payout_ratio")?.times(100.0)
             var noCut = 0
             for (i in dividends.lastIndex downTo 1) {
                 if (dividends[i].year != dividends[i - 1].year + 1 || dividends[i].dps < dividends[i - 1].dps) break
@@ -69,13 +73,12 @@ data class FinancialData(
                 if (recent.size == 5) break
             }
             recent.reverse()
-            val growth = if (recent.size >= 2 && recent.first().dps > 0)
+            val growth = if (!calendarYearEvents && recent.size >= 2 && recent.first().dps > 0)
                 ((recent.last().dps / recent.first().dps).pow(1.0 / (recent.size - 1)) - 1) * 100 else null
             val ranges = (0 until (valuationRows?.length() ?: 0)).mapNotNull { valuationRows?.optJSONObject(it) }
                 .filter { it.optString("fiscal_year").take(4).toIntOrNull()?.let { year ->
                     period.take(4).toIntOrNull()?.let { year in (it - 4)..it } } == true }
                 .mapNotNull { it.number("dividend_yield_adjusted") }
-            val calendarYearEvents = historyBasis == "calendar_year_observed_distributions"
             val profile = StockFinancialProfile(
                 payoutRatio = payout ?: Double.NaN, equityRatio = equity ?: Double.NaN,
                 consecutiveYears = dividendPayload?.number("consecutive_dividend_increase_years")?.toInt()

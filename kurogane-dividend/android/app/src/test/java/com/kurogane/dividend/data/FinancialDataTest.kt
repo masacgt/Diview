@@ -30,6 +30,11 @@ class FinancialDataTest {
         assertEquals("未取得", data.profile.payoutRatio.financialText())
         assertTrue(data.dividends.isEmpty())
     }
+    @Test fun convertsCurrentYahooPayoutRatioFractionToPercentagePoints() {
+        val root = JSONObject("""{"security":{"code":"7203"},"dividends":{"payout_ratio":0.25}}""")
+        val data = FinancialData.parse(root, "7203")
+        assertEquals(25.0, data.profile.payoutRatio, 0.0)
+    }
     @Test fun identifiesObservedCalendarYearDistributionsWithoutCallingThemFiscalMetrics() {
         val root = JSONObject("""{"security":{"code":"1306"},"dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"calendar_year":2024,"calendar_year_distribution_per_share":100},{"calendar_year":2025,"calendar_year_distribution_per_share":110}]}}""")
         val data = FinancialData.parse(root, "1306")
