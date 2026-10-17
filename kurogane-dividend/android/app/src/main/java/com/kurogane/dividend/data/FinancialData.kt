@@ -73,7 +73,7 @@ data class FinancialData(
                 if (recent.size == 5) break
             }
             recent.reverse()
-            val growth = if (!calendarYearEvents && recent.size >= 2 && recent.first().dps > 0)
+            val growth = if (recent.size >= 2 && recent.first().dps > 0)
                 ((recent.last().dps / recent.first().dps).pow(1.0 / (recent.size - 1)) - 1) * 100 else null
             val ranges = (0 until (valuationRows?.length() ?: 0)).mapNotNull { valuationRows?.optJSONObject(it) }
                 .filter { it.optString("fiscal_year").take(4).toIntOrNull()?.let { year ->
