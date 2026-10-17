@@ -145,7 +145,8 @@ data class CloudflareDividendEvent(
 data class CloudflareUpcomingDividendEvent(
     val exDividendDate: LocalDate,
     val finalRightsDate: LocalDate? = null,
-    val recordDate: LocalDate? = null
+    val recordDate: LocalDate? = null,
+    val estimatedFromHistory: Boolean = false
 )
 
 /** Public, read-only access to the app's Cloudflare D1/R2 data. No credentials belong in the APK. */
@@ -540,7 +541,10 @@ class CloudflareMarketRepository(
                     ?: continue
                 val finalRightsDate = runCatching { LocalDate.parse(event.optString("final_rights_date")) }.getOrNull()
                 val recordDate = runCatching { LocalDate.parse(event.optString("record_date")) }.getOrNull()
-                put(symbol, CloudflareUpcomingDividendEvent(exDividendDate, finalRightsDate, recordDate))
+                put(symbol, CloudflareUpcomingDividendEvent(
+                    exDividendDate, finalRightsDate, recordDate,
+                    estimatedFromHistory = event.optBoolean("estimated_from_history", false)
+                ))
             }
         }
         val monthsBySymbol = buildMap {

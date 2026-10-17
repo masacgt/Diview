@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import calendar as calendar_module
 import csv
 import json
 import os
@@ -13,6 +14,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 import exchange_calendars as xcals
@@ -21,6 +23,9 @@ import exchange_calendars as xcals
 UTC = timezone.utc
 PREFIX = os.environ.get("R2_PREFIX", "market/yfinance/v2").strip("/")
 OUTPUT_KEY = f"{PREFIX}/derived/rights_dates/current.json"
+HISTORY_LOOKBACK_YEARS = 10
+ESTIMATE_LOOKBACK_YEARS = 5
+MIN_RECURRING_YEARS = 2
 
 
 def previous_session(calendar: Any, ex_date: date) -> date:
@@ -51,15 +56,112 @@ def next_session(calendar: Any, ex_date: date) -> date:
     return sessions[0].date()
 
 
-def build_records(rows: list[dict[str, Any]], calendar: Any) -> tuple[list[dict[str, Any]], int]:
+def calendar_name_for_symbol(symbol: str) -> str:
+    return "XTKS" if symbol.endswith(".T") else "XNYS"
+
+
+def calendar_for_symbol(symbol: str, calendars: Any) -> Any:
+    if isinstance(calendars, dict):
+        name = calendar_name_for_symbol(symbol)
+        if name not in calendars:
+            raise ValueError(f"missing {name} exchange calendar for {symbol}")
+        return calendars[name]
+    return calendars
+
+
+def nearest_session(calendar: Any, candidate: date) -> date:
+    """Snap a recurring calendar-date estimate to the closest exchange session."""
+    first_session = calendar.first_session.date()
+    last_session = calendar.last_session.date()
+    if candidate < first_session or candidate > last_session:
+        raise ValueError(f"exchange calendar does not cover estimated ex-dividend date {candidate}")
+    start = max(first_session, candidate - timedelta(days=4))
+    end = min(last_session, candidate + timedelta(days=4))
+    sessions = calendar.sessions_in_range(start.isoformat(), end.isoformat())
+    if not len(sessions):
+        raise ValueError(f"no nearby exchange session for estimated ex-dividend date {candidate}")
+    return min((session.date() for session in sessions), key=lambda session: (abs((session - candidate).days), session))
+
+
+def infer_upcoming_events(
+    rows: list[dict[str, Any]],
+    as_of: date,
+    calendars: Any,
+) -> list[dict[str, Any]]:
+    """Infer one next ex-date per symbol from recurring historical dividend months."""
+    events_by_symbol_month: dict[tuple[str, int], list[date]] = defaultdict(list)
+    earliest_year = as_of.year - ESTIMATE_LOOKBACK_YEARS
+    for row in rows:
+        symbol = str(row.get("symbol") or row.get("yfinance_symbol") or "").strip().upper()
+        if not symbol or row.get("upcoming") is True or row.get("inferred_from_history") is True:
+            continue
+        try:
+            event_date = date.fromisoformat(str(row.get("date") or row.get("ex_dividend_date") or "")[:10])
+            amount = float(row.get("amount", row.get("dividend_per_share")))
+        except (TypeError, ValueError):
+            continue
+        if event_date > as_of or event_date.year < earliest_year or not amount > 0:
+            continue
+        events_by_symbol_month[(symbol, event_date.month)].append(event_date)
+
+    estimates: list[dict[str, Any]] = []
+    for (symbol, month), event_dates in events_by_symbol_month.items():
+        years = sorted({event.year for event in event_dates})
+        if len(years) < MIN_RECURRING_YEARS:
+            continue
+        recent_events = [event for event in event_dates if event.year >= earliest_year]
+        typical_day = int(median(event.day for event in recent_events))
+        candidate_year = as_of.year
+        candidate = date(candidate_year, month, min(typical_day, calendar_module.monthrange(candidate_year, month)[1]))
+        if candidate <= as_of:
+            candidate_year += 1
+            candidate = date(candidate_year, month,
+                             min(typical_day, calendar_module.monthrange(candidate_year, month)[1]))
+        try:
+            estimated_ex_date = nearest_session(calendar_for_symbol(symbol, calendars), candidate)
+        except ValueError:
+            continue
+        if estimated_ex_date <= as_of:
+            candidate_year += 1
+            candidate = date(candidate_year, month,
+                             min(typical_day, calendar_module.monthrange(candidate_year, month)[1]))
+            try:
+                estimated_ex_date = nearest_session(calendar_for_symbol(symbol, calendars), candidate)
+            except ValueError:
+                continue
+        estimates.append({
+            "symbol": symbol,
+            "date": estimated_ex_date.isoformat(),
+            "upcoming": True,
+            "inferred_from_history": True,
+            "history_year_count": len(years),
+        })
+
+    earliest_by_symbol: dict[str, dict[str, Any]] = {}
+    for estimate in estimates:
+        symbol = estimate["symbol"]
+        current = earliest_by_symbol.get(symbol)
+        if current is None or estimate["date"] < current["date"]:
+            earliest_by_symbol[symbol] = estimate
+    return list(earliest_by_symbol.values())
+
+
+def build_records(
+    rows: list[dict[str, Any]],
+    calendars: Any,
+    as_of: date | None = None,
+) -> tuple[list[dict[str, Any]], int]:
+    as_of = as_of or datetime.now(UTC).date()
+    inference_rows = rows + infer_upcoming_events(rows, as_of, calendars)
     records: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     skipped_events = 0
-    for row in rows:
+    for row in inference_rows:
         symbol = str(row.get("symbol") or row.get("yfinance_symbol") or "").strip().upper()
         code = str(row.get("security_code") or symbol.removesuffix(".T")).strip().upper()
         raw_date = str(row.get("date") or row.get("ex_dividend_date") or "")[:10]
         upcoming = row.get("upcoming") is True
+        inferred = row.get("inferred_from_history") is True
         amount_value = row.get("amount", row.get("dividend_per_share"))
         try:
             ex_date = date.fromisoformat(raw_date)
@@ -69,29 +171,41 @@ def build_records(rows: list[dict[str, Any]], calendar: Any) -> tuple[list[dict[
             amount = float(amount_value) if amount_value is not None else None
         except (TypeError, ValueError):
             amount = None
-        if (not re.fullmatch(r"[A-Z0-9]{4,5}", code) or not symbol or
+        valid_code = (re.fullmatch(r"[A-Z0-9]{4,5}", code) if symbol.endswith(".T")
+                      else re.fullmatch(r"[A-Z0-9.^_=-]{1,32}", code))
+        if (not valid_code or not symbol or
                 (not upcoming and (amount is None or not amount > 0))):
+            continue
+        if not upcoming and ex_date < date(as_of.year - 1, 1, 1):
             continue
         key = (symbol, ex_date.isoformat())
         if key in seen:
             continue
         seen.add(key)
+        calendar_name = calendar_name_for_symbol(symbol)
         try:
-            final_rights_date = previous_session(calendar, ex_date).isoformat()
-            record_date = next_session(calendar, ex_date).isoformat()
+            event_calendar = calendar_for_symbol(symbol, calendars)
+            final_rights_date = previous_session(event_calendar, ex_date).isoformat()
+            record_date = next_session(event_calendar, ex_date).isoformat()
         except ValueError:
             skipped_events += 1
             continue
         records.append({
-            "security_code": code.removesuffix("0") if len(code) == 5 and code.endswith("0") else code,
+            "security_code": code.removesuffix("0") if symbol.endswith(".T") and len(code) == 5 and code.endswith("0") else code,
             "symbol": symbol,
             "ex_dividend_date": ex_date.isoformat(),
             "final_rights_date": final_rights_date,
             "record_date": record_date,
             "dividend_per_share": amount,
-            "event_type": "upcoming" if upcoming else "observed",
-            "source": "Yahoo Finance via yfinance",
-            "calculation_method": "previous_and_next_XTKS_sessions_around_ex_dividend_date",
+            "event_type": "history_estimated" if inferred else "upcoming" if upcoming else "observed",
+            "estimated_from_history": inferred,
+            "history_year_count": row.get("history_year_count") if inferred else None,
+            "calendar": calendar_name,
+            "source": "Yahoo Finance historical dividend event dates" if inferred else "Yahoo Finance via yfinance",
+            "calculation_method": (
+                f"median_recurring_month_day_snapped_to_nearest_{calendar_name}_session"
+                if inferred else f"previous_and_next_{calendar_name}_sessions_around_ex_dividend_date"
+            ),
         })
     return sorted(records, key=lambda row: (row["security_code"], row["ex_dividend_date"])), skipped_events
 
@@ -104,7 +218,8 @@ def read_csv(path: Path) -> list[dict[str, Any]]:
 def write_csv(path: Path, records: list[dict[str, Any]], generated_at: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     columns = ["security_code", "symbol", "ex_dividend_date", "final_rights_date", "record_date",
-               "dividend_per_share", "source", "calculation_method", "generated_at"]
+               "dividend_per_share", "event_type", "estimated_from_history", "history_year_count",
+               "calendar", "source", "calculation_method", "generated_at"]
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns)
         writer.writeheader()
@@ -129,7 +244,7 @@ def rows_from_r2(client: Any, bucket: str) -> tuple[list[dict[str, Any]], int]:
     paginator = client.get_paginator("list_objects_v2")
     keys: list[str] = []
     current_year = datetime.now(UTC).year
-    recent_years = {current_year, current_year - 1}
+    recent_years = set(range(current_year - HISTORY_LOOKBACK_YEARS + 1, current_year + 1))
     for page in paginator.paginate(Bucket=bucket, Prefix=f"{PREFIX}/securities/"):
         for item in page.get("Contents", []):
             key = str(item.get("Key") or "")
@@ -142,6 +257,14 @@ def rows_from_r2(client: Any, bucket: str) -> tuple[list[dict[str, Any]], int]:
         document = json.loads(response["Body"].read())
         symbol = str(document.get("symbol") or "").upper()
         if key.endswith("/current.json"):
+            calendar_ex_date = str((document.get("calendar") or {}).get("ex_dividend_date") or "")
+            if calendar_ex_date and symbol:
+                try:
+                    parsed_calendar_date = date.fromisoformat(calendar_ex_date[:10])
+                    if parsed_calendar_date > datetime.now(UTC).date():
+                        return [{"symbol": symbol, "date": parsed_calendar_date.isoformat(), "upcoming": True}]
+                except ValueError:
+                    pass
             raw_ex_date = (document.get("statistics") or {}).get("exDividendDate")
             if raw_ex_date is None or not symbol:
                 return []
@@ -168,7 +291,7 @@ def main() -> int:
     parser.add_argument("--bucket", default=os.environ.get("R2_BUCKET", "diview-market-data"))
     args = parser.parse_args()
 
-    calendar = xcals.get_calendar("XTKS")
+    calendars = {"XTKS": xcals.get_calendar("XTKS"), "XNYS": xcals.get_calendar("XNYS")}
     generated_at = datetime.now(UTC).isoformat()
     client = make_client() if args.upload or not args.input_csv else None
     source_symbols = 0
@@ -177,7 +300,7 @@ def main() -> int:
         source_symbols = len({str(row.get("security_code", "")).upper() for row in input_rows})
     else:
         input_rows, source_symbols = rows_from_r2(client, args.bucket)
-    records, skipped_events = build_records(input_rows, calendar)
+    records, skipped_events = build_records(input_rows, calendars, datetime.now(UTC).date())
     if not records:
         raise RuntimeError("No valid dividend events were available; refusing to publish an empty result")
 
@@ -185,9 +308,9 @@ def main() -> int:
         "schema_version": 1,
         "source": "Yahoo Finance via yfinance",
         "generated_at": generated_at,
-        "calendar": "XTKS",
-        "calculation_method": "previous XTKS session is the last cum-rights date; next XTKS session is the inferred record date",
-        "settlement_rule_note": "Derived from the observed ex-dividend date; this is a calculated historical date, not an issuer-announced future schedule.",
+        "calendar": "XTKS for .T symbols; XNYS for US symbols",
+        "calculation_method": "Recurring ex-dividend month/day is inferred from up to five years of positive historical dividend events when that month appears in at least two distinct years. The nearest session on the applicable exchange calendar is used. The preceding session is the final rights date and the following session is the estimated record date.",
+        "settlement_rule_note": "Historical event dates are used as ex-dividend dates, not payment dates. Future dates are estimates, not issuer-announced schedules. Rights dates are calculated from the applicable exchange calendar and are not issuer-confirmed record dates.",
         "source_symbols": source_symbols,
         "event_count": len(records),
         "skipped_events": skipped_events,
@@ -213,6 +336,7 @@ def main() -> int:
     print(json.dumps({"source": "local_csv" if args.input_csv else "r2_yfinance_v2",
                       "source_symbols": source_symbols, "input_events": len(input_rows),
                       "calculated_events": len(records), "skipped_events": skipped_events,
+                      "history_estimated_events": sum(row.get("estimated_from_history") is True for row in records),
                       "output_key": OUTPUT_KEY if args.upload else None,
                       "generated_at": generated_at}, ensure_ascii=False, indent=2))
     return 0

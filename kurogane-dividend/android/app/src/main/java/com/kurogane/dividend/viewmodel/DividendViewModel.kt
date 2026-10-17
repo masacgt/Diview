@@ -679,7 +679,10 @@ class DividendViewModel @JvmOverloads constructor(
             val exDividendDate = LocalDate.parse(row.optString("ex_dividend_date"))
             val finalRightsDate = runCatching { LocalDate.parse(row.optString("final_rights_date")) }.getOrNull()
             val recordDate = runCatching { LocalDate.parse(row.optString("record_date")) }.getOrNull()
-            CloudflareUpcomingDividendEvent(exDividendDate, finalRightsDate, recordDate)
+            CloudflareUpcomingDividendEvent(
+                exDividendDate, finalRightsDate, recordDate,
+                estimatedFromHistory = row.optBoolean("estimated_from_history", false)
+            )
         }.getOrNull()
         return synchronized(dividendEventCacheLock) {
             upcomingDividendEventCache.getOrPut(normalized) { parsed }
@@ -697,7 +700,8 @@ class DividendViewModel @JvmOverloads constructor(
             marketPreferences.edit().putString("upcoming_dividend_event_$normalized", JSONObject()
                 .put("ex_dividend_date", event.exDividendDate.toString())
                 .put("final_rights_date", event.finalRightsDate?.toString().orEmpty())
-                .put("record_date", event.recordDate?.toString().orEmpty()).toString()).apply()
+                .put("record_date", event.recordDate?.toString().orEmpty())
+                .put("estimated_from_history", event.estimatedFromHistory).toString()).apply()
         }
         synchronized(dividendEventCacheLock) {
             upcomingDividendEventCache[normalized] = event

@@ -223,6 +223,82 @@ test('dividend-months returns sorted recent observed months from R2 for each req
   ]);
 });
 
+test('dividend-months returns the history-based next ex-date before the legacy statistics fallback', async () => {
+  const today = japanToday();
+  const estimatedDate = dateOffset(today, 120);
+  const statisticsDate = dateOffset(today, 60);
+  const symbol = '7203.T';
+  const base = `market/yfinance/v2/securities/${symbol}`;
+  const env = dividendEnvironment(new Map([
+    ['market/yfinance/v2/derived/rights_dates/current.json', {
+      generated_at: '2026-10-17T00:00:00Z',
+      records: [{
+        symbol,
+        ex_dividend_date: estimatedDate,
+        final_rights_date: dateOffset(estimatedDate, -1),
+        record_date: dateOffset(estimatedDate, 1),
+        event_type: 'history_estimated',
+        estimated_from_history: true,
+        source: 'Yahoo Finance historical dividend event dates',
+      }],
+    }],
+    [`${base}/current.json`, {
+      statistics: { exDividendDate: Date.parse(`${statisticsDate}T00:00:00Z`) / 1000 },
+      field_status: { dividend_history: 'empty', statistics_exDividendDate: 'available' },
+    }],
+    [`${base}/dividends/${today.slice(0, 4)}.json`, { records: [] }],
+    [`${base}/dividends/${Number(today.slice(0, 4)) - 1}.json`, { records: [] }],
+  ]));
+
+  const response = await worker.fetch(
+    new Request(`https://example.com/api/v1/dividend-months?symbols=${symbol}`), env);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.items[0].history_status, 'available');
+  assert.deepEqual(data.items[0].upcoming_event, {
+    ex_dividend_date: estimatedDate,
+    final_rights_date: dateOffset(estimatedDate, -1),
+    record_date: dateOffset(estimatedDate, 1),
+    estimated_from_history: true,
+    ex_dividend_date_status: 'estimated_from_dividend_history',
+    source: 'Yahoo Finance historical dividend event dates',
+  });
+});
+
+test('dividend-months keeps a future Ticker.calendar date ahead of a history estimate', async () => {
+  const today = japanToday();
+  const calendarDate = dateOffset(today, 60);
+  const estimatedDate = dateOffset(today, 120);
+  const symbol = '7203.T';
+  const base = `market/yfinance/v2/securities/${symbol}`;
+  const env = dividendEnvironment(new Map([
+    ['market/yfinance/v2/derived/rights_dates/current.json', {
+      records: [{
+        symbol,
+        ex_dividend_date: estimatedDate,
+        final_rights_date: dateOffset(estimatedDate, -1),
+        record_date: dateOffset(estimatedDate, 1),
+        event_type: 'history_estimated',
+        estimated_from_history: true,
+      }],
+    }],
+    [`${base}/current.json`, {
+      calendar: { ex_dividend_date: calendarDate, source: 'Yahoo Finance via yfinance Ticker.calendar' },
+      field_status: { dividend_history: 'empty', upcoming_ex_dividend_date: 'available' },
+    }],
+    [`${base}/dividends/${today.slice(0, 4)}.json`, { records: [] }],
+    [`${base}/dividends/${Number(today.slice(0, 4)) - 1}.json`, { records: [] }],
+  ]));
+
+  const response = await worker.fetch(
+    new Request(`https://example.com/api/v1/dividend-months?symbols=${symbol}`), env);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.items[0].upcoming_event.ex_dividend_date, calendarDate);
+  assert.equal(data.items[0].upcoming_event.estimated_from_history, false);
+  assert.equal(data.items[0].upcoming_event.source, 'Yahoo Finance via yfinance Ticker.calendar');
+});
+
 test('dividend-months validates batches and reports missing R2 storage', async () => {
   assert.equal((await worker.fetch(new Request('https://example.com/api/v1/dividend-months?symbols=7203.T,../secret'), dividendEnvironment(new Map()))).status, 400);
   assert.equal((await worker.fetch(new Request(`https://example.com/api/v1/dividend-months?symbols=${Array.from({ length: 51 }, (_, i) => `T${i}`).join(',')}`), dividendEnvironment(new Map()))).status, 400);
