@@ -64,6 +64,8 @@ jobs:
       - name: Check Tokyo Stock Exchange session
         id: check
         run: python scripts/yfinance_r2/check_market_day.py
+        env:
+          ALLOW_CLOSED_MARKET: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode == 'sync' }}
 
   v2-daily-sync:
     needs: market-calendar
@@ -80,7 +82,13 @@ jobs:
       - name: Install collection dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
       - name: Fetch J-Quants universe and publish the yfinance v2 generation
-        run: python scripts/yfinance_r2/sync_v2.py --publish --workers 24
+        run: |
+          args=(--publish --workers 24)
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            args+=(--reprocess-successful)
+          fi
+          python scripts/yfinance_r2/sync_v2.py "${args[@]}"
+        shell: bash
         env:
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
           YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
