@@ -116,4 +116,7 @@ internal fun JSONObject.number(key: String): Double? =
 fun Double.financialText(digits: Int = 1, suffix: String = ""): String =
     if (isFinite()) String.format(Locale.JAPAN, "%.${digits}f", this) + suffix else "未取得"
 
+fun Double.financialSignedText(digits: Int = 1, suffix: String = ""): String =
+    if (isFinite()) (if (this > 0) "+" else "") + financialText(digits, suffix) else "未取得"
+
 fun Int.financialYears(): String = if (this >= 0) "${this}年" else "未取得"
