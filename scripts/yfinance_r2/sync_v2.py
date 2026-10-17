@@ -270,13 +270,19 @@ INCOME_FIELDS = {
     "Operating Income": "operating_profit",
 }
 BALANCE_FIELDS = {
+    "StockholdersEquity": "stockholders_equity",
     "Stockholders Equity": "stockholders_equity",
-    "Total Equity Gross Minority Interest": "stockholders_equity",
+    "Total Equity Gross Minority Interest": "total_equity_gross_minority_interest",
+    "TotalEquityGrossMinorityInterest": "total_equity_gross_minority_interest",
     "Total Assets": "total_assets",
 }
 CASH_FLOW_FIELDS = {
     "Operating Cash Flow": "operating_cf",
     "Investing Cash Flow": "investing_cf",
+    "CashDividendsPaid": "cash_dividends_paid",
+    "Cash Dividends Paid": "cash_dividends_paid",
+    "CommonStockDividendPaid": "common_stock_dividend_paid",
+    "Common Stock Dividend Paid": "common_stock_dividend_paid",
 }
 
 
@@ -1337,17 +1343,49 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
         fresh_values = {**fresh_income.get(period_end, {}), **fresh_balance.get(period_end, {}), **fresh_cash.get(period_end, {})}
         values = {**old_values, **fresh_values}
         equity = finite_number(values.get("stockholders_equity"))
+        equity_for_ratio = (
+            equity if equity is not None
+            else finite_number(values.get("total_equity_gross_minority_interest"))
+        )
         assets = finite_number(values.get("total_assets"))
-        if equity is not None and assets and assets > 0:
-            values["equity_ratio_computed"] = equity / assets * 100
+        if equity_for_ratio is not None and assets and assets > 0:
+            values["equity_ratio_computed"] = equity_for_ratio / assets * 100
+        fresh_doe_dividend_values = fresh_cash.get(period_end, {})
+        doe_dividend_field = (
+            "common_stock_dividend_paid"
+            if finite_number(fresh_doe_dividend_values.get("common_stock_dividend_paid")) is not None
+            else "cash_dividends_paid"
+        )
+        doe_dividend_total = finite_number(fresh_doe_dividend_values.get(doe_dividend_field))
+        fresh_doe_dividend = doe_dividend_total is not None
+        fresh_stockholders_equity = finite_number(
+            fresh_balance.get(period_end, {}).get("stockholders_equity")
+        )
+        calculated_doe = None
+        if (fresh_doe_dividend and fresh_stockholders_equity is not None
+                and fresh_stockholders_equity > 0 and doe_dividend_total is not None):
+            calculated_doe = abs(doe_dividend_total) / fresh_stockholders_equity * 100
+            values["calculated_doe"] = calculated_doe
+            values["doe_dividend_total"] = abs(doe_dividend_total)
+            values["doe_dividend_source_field"] = doe_dividend_field
+            values["doe_formula"] = "dividend_total_paid / period_end_stockholders_equity * 100"
         annual_field_status = {
             field: "available" if field in fresh_values else "stale" if field in old_values else field_retrieval_status.get(field, "empty")
             for source, fields in (("income_statement", INCOME_FIELDS), ("balance_sheet", BALANCE_FIELDS), ("cash_flow", CASH_FLOW_FIELDS))
             for field in fields.values()
         }
+        if calculated_doe is not None:
+            annual_field_status["calculated_doe"] = "available"
+        elif finite_number(old_values.get("calculated_doe")) is not None:
+            annual_field_status["calculated_doe"] = "stale"
+        elif any(retrieval_status.get(group) == "failed" for group in ("balance_sheet", "cash_flow")):
+            annual_field_status["calculated_doe"] = "failed"
+        else:
+            annual_field_status["calculated_doe"] = "empty"
         if "equity_ratio_computed" in values:
             annual_field_status["equity_ratio_computed"] = (
-                "available" if "stockholders_equity" in fresh_values and "total_assets" in fresh_values
+                "available" if ("stockholders_equity" in fresh_values or "total_equity_gross_minority_interest" in fresh_values)
+                and "total_assets" in fresh_values
                 else "stale" if "equity_ratio_computed" in old_values else "empty"
             )
         statements.append({

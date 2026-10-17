@@ -1766,9 +1766,9 @@ fun StockDetailScreen(
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     Text(stringResource(R.string.stock_detail_text_58), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(profile.doePolicy, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = FontFamily.Monospace)
+                                                    Text(profile.calculatedDoe, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = FontFamily.Monospace)
                                                     Spacer(modifier = Modifier.height(2.dp))
-                                                    Text(profile.doePolicySub, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
+                                                    Text(profile.calculatedDoeSub, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
                                                 }
                                             }
                                         }
