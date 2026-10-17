@@ -11,6 +11,60 @@ import benchmark_v2 as benchmark
 import sync_v2 as sync
 import repair_monthly_price_dates as monthly_date_repair
 import monthly_price_calendar as monthly_calendar
+import audit_split_transition_dividends as split_audit
+
+
+class SplitTransitionAuditTests(TestCase):
+    def test_event_dates_are_grouped_by_reported_fiscal_period_ends(self):
+        period_ends = [date(2020, 3, 31), date(2021, 3, 31), date(2022, 3, 31)]
+        self.assertEqual(split_audit.fiscal_year_for_event(date(2020, 9, 29), period_ends), 2021)
+        self.assertEqual(split_audit.fiscal_year_for_event(date(2021, 3, 30), period_ends), 2021)
+
+    def test_split_adjusted_yfinance_events_match_adjusted_issuer_fiscal_dps(self):
+        comparisons = split_audit.compare_fiscal_dividends(
+            [{"event_type": "annual_reported", "fiscal_year": 2021, "annual_dps_adjusted": 48}],
+            [
+                {"date": "2020-09-29", "amount": 21},
+                {"date": "2021-03-30", "amount": 27},
+                {"date": "2021-03-30", "amount": 27},
+            ],
+            [date(2020, 3, 31), date(2021, 3, 31)],
+            first_year=2021,
+            last_year=2021,
+        )
+        self.assertEqual(comparisons, [{
+            "fiscal_year": 2021,
+            "issuer_adjusted_dps": 48.0,
+            "yfinance_event_total": 48.0,
+            "difference": 0.0,
+            "within_tolerance": True,
+        }])
+
+    def test_positive_issuer_dps_without_events_is_reported_as_mismatch(self):
+        comparisons = split_audit.compare_fiscal_dividends(
+            [{"event_type": "annual_reported", "fiscal_year": 2022, "annual_dps_adjusted": 52.25}],
+            [],
+            [date(2021, 3, 31), date(2022, 3, 31)],
+            first_year=2022,
+            last_year=2022,
+        )
+        self.assertFalse(comparisons[0]["within_tolerance"])
+
+    def test_recent_split_selection_excludes_non_split_share_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            events_path = Path(directory) / "events.csv"
+            events_path.write_text(
+                "code,effective_date,factor,event_type\n"
+                "0001,2026-01-01,2,split\n"
+                "0002,2026-01-01,0.1,reverse_split\n"
+                "0003,2026-01-01,2,share_change\n",
+                encoding="utf-8",
+            )
+            selected = split_audit.recent_current_split_codes(
+                events_path, {"0001", "0002", "0003"}, date(2026, 10, 17),
+            )
+
+        self.assertEqual(set(selected), {"0001", "0002"})
 
 
 class SyncPriceTests(TestCase):
