@@ -1,9 +1,9 @@
-name: Calculate monthly Japanese equity last rights dates
+name: Calculate exchange-calendar dividend rights dates
 
 on:
   schedule:
-    # 00:17 UTC is 09:17 JST on the first calendar day of each month.
-    - cron: "17 0 1 * *"
+    # Recompute the next history-based estimate once a week.
+    - cron: "17 0 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -26,7 +26,7 @@ jobs:
           cache-dependency-path: scripts/yfinance_r2/requirements-rights.txt
       - name: Install rights-date calculation and R2 dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements-rights.txt
-      - name: Calculate rights dates from stored yfinance v2 events
+      - name: Calculate rights dates and history-based ex-dividend estimates
         run: python scripts/yfinance_r2/calculate_rights_dates.py --upload
         env:
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944

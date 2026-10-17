@@ -1583,11 +1583,23 @@ export default {
       try {
         const rightsDatesObject = await env.MARKET_DATA.get(`${YFINANCE_V2_ROOT}/derived/rights_dates/current.json`);
         const rightsDatesDocument = rightsDatesObject ? await rightsDatesObject.json() : null;
-        const rightsDatesByEvent = new Map((rightsDatesDocument?.records || [])
+        const rightsRecords = Array.isArray(rightsDatesDocument?.records) ? rightsDatesDocument.records : [];
+        const rightsDatesByEvent = new Map(rightsRecords
           .map(event => [`${String(event.symbol || '').toUpperCase()}|${String(event.ex_dividend_date || '')}`, {
             finalRightsDate: event.final_rights_date || null,
             recordDate: event.record_date || null,
           }]));
+        const estimatedEventsBySymbol = new Map();
+        for (const event of rightsRecords) {
+          if (event.event_type !== 'history_estimated') continue;
+          const symbol = String(event.symbol || '').toUpperCase();
+          const eventDate = String(event.ex_dividend_date || '');
+          if (!symbol || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || eventDate <= asOf) continue;
+          const current = estimatedEventsBySymbol.get(symbol);
+          if (!current || eventDate < String(current.ex_dividend_date || '')) {
+            estimatedEventsBySymbol.set(symbol, event);
+          }
+        }
         const items = await Promise.all(symbols.map(async symbol => {
           const years = [Number(asOf.slice(0, 4)), Number(asOf.slice(0, 4)) - 1];
           const v2Symbol = yfinanceV2Symbol(symbol);
@@ -1595,26 +1607,39 @@ export default {
             readV2DividendEvents(env, symbol, years),
             v2Symbol ? readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${v2Symbol}/current.json`) : Promise.resolve(null),
           ]);
-          const historyStatus = current?.field_status?.dividend_history
+          const storedHistoryStatus = current?.field_status?.dividend_history
             || (v2Events ? (v2Events.length > 0 ? 'available' : 'empty') : 'not_fetched');
+          const estimatedHistoryEvent = estimatedEventsBySymbol.get(symbol);
+          const historyStatus = estimatedHistoryEvent && ['empty', 'not_fetched'].includes(storedHistoryStatus)
+            ? 'available' : storedHistoryStatus;
           const calendarExDate = String(current?.calendar?.ex_dividend_date || '');
           const rawUpcoming = finiteNumber(current?.statistics?.exDividendDate);
           const statisticsExDate = rawUpcoming ? new Date(rawUpcoming * 1000).toISOString().slice(0, 10) : null;
-          const upcomingExDate = /^\d{4}-\d{2}-\d{2}$/.test(calendarExDate)
-            ? calendarExDate
-            : statisticsExDate;
+          const calendarUpcoming = /^\d{4}-\d{2}-\d{2}$/.test(calendarExDate) && calendarExDate > asOf
+            ? calendarExDate : null;
+          const estimatedHistoryDate = estimatedHistoryEvent?.ex_dividend_date > asOf
+            ? estimatedHistoryEvent.ex_dividend_date : null;
+          const statisticsUpcoming = /^\d{4}-\d{2}-\d{2}$/.test(String(statisticsExDate || '')) && statisticsExDate > asOf
+            ? statisticsExDate : null;
+          const upcomingExDate = calendarUpcoming || estimatedHistoryDate || statisticsUpcoming;
           const upcomingRightsDates = upcomingExDate && upcomingExDate > asOf
             ? rightsDatesByEvent.get(`${symbol}|${upcomingExDate}`) || null
             : null;
-          const usesCalendarDate = Boolean(upcomingExDate && upcomingExDate === calendarExDate);
+          const usesCalendarDate = Boolean(calendarUpcoming && upcomingExDate === calendarUpcoming);
+          const usesHistoryEstimate = Boolean(!usesCalendarDate && estimatedHistoryDate && upcomingExDate === estimatedHistoryDate);
           const upcomingEvent = upcomingExDate && upcomingExDate > asOf ? {
             ex_dividend_date: upcomingExDate,
             final_rights_date: upcomingRightsDates?.finalRightsDate || null,
             record_date: upcomingRightsDates?.recordDate || null,
-            ex_dividend_date_status: usesCalendarDate
+            estimated_from_history: usesHistoryEstimate,
+            ex_dividend_date_status: usesHistoryEstimate
+              ? 'estimated_from_dividend_history'
+              : usesCalendarDate
               ? current?.field_status?.upcoming_ex_dividend_date || 'available'
               : current?.field_status?.statistics_exDividendDate || 'legacy_statistics',
-            source: usesCalendarDate
+            source: usesHistoryEstimate
+              ? estimatedHistoryEvent?.source || 'Yahoo Finance historical dividend event dates'
+              : usesCalendarDate
               ? current?.calendar?.source || 'Yahoo Finance via yfinance Ticker.calendar'
               : 'Yahoo Finance via yfinance Ticker.get_info',
           } : null;

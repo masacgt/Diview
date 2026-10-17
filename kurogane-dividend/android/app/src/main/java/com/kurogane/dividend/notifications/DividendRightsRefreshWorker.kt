@@ -47,6 +47,7 @@ class DividendRightsRefreshWorker(context: Context, parameters: WorkerParameters
                     }
                 }
                 calendar.upcomingEventsBySymbol.forEach upcomingLoop@ { (symbol, event) ->
+                    if (event.estimatedFromHistory) return@upcomingLoop
                     val holding = bySymbol[symbol] ?: return@upcomingLoop
                     val recordDate = event.recordDate ?: return@upcomingLoop
                     records += DividendRightsEvent(
