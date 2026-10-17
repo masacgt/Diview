@@ -112,15 +112,6 @@ function finiteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function firstMetricValue(metrics, keys) {
-  for (const key of keys) {
-    const row = (metrics || []).find(item => item && String(item.key || item.name || '').toLowerCase() === key.toLowerCase());
-    const value = finiteNumber(row?.value ?? row?.current ?? row?.latest);
-    if (value !== null) return value;
-  }
-  return null;
-}
-
 function anomalyFlags(values) {
   const flags = [];
   const add = (code, severity, message, metric, value) => flags.push({ code, severity, message, metric, value });
@@ -390,12 +381,11 @@ async function readV2FinancialPayload(env, code) {
   const symbol = yfinanceV2Symbol(code);
   if (!symbol || !env.MARKET_DATA) return null;
   const base = `${YFINANCE_V2_ROOT}/securities/${symbol}`;
-  const [profile, current, financialDocuments, dividendDocuments, legacyOverview] = await Promise.all([
+  const [profile, current, financialDocuments, dividendDocuments] = await Promise.all([
     readV2Json(env, `${base}/profile.json`),
     readV2Json(env, `${base}/current.json`),
     listV2Documents(env, `${base}/financials/`),
     listV2Documents(env, `${base}/dividends/`),
-    readV2Json(env, `market/irbank/v1/securities/${irbankR2Code(String(code || '').toUpperCase())}/overview.json`),
   ]);
   if (!profile && !current && financialDocuments.length === 0 && dividendDocuments.length === 0) return null;
   financialDocuments.sort((a, b) => String(a.year || '').localeCompare(String(b.year || '')));
@@ -404,44 +394,20 @@ async function readV2FinancialPayload(env, code) {
   let valuation = financialDocuments.map(document => document.valuation).filter(Boolean)
     .sort((a, b) => String(a.fiscal_year || '').localeCompare(String(b.fiscal_year || '')));
   const retrievalStatus = financialDocuments.at(-1)?.retrieval_status || {};
-  const financialFieldStatus = retrievalStatus.fields || current?.field_status?.financial_fields || {};
-  const annualByPeriod = new Map(annual.map(row => [String(row.fiscal_year || ''), row]));
-  for (const legacyRow of legacyOverview?.financials?.annual || []) {
-    const period = String(legacyRow?.fiscal_year || '');
-    if (!/^\d{4}\/\d{2}$/.test(period)) continue;
-    const row = annualByPeriod.get(period) || { fiscal_year: period, field_status: {} };
-    const statuses = { ...(row.field_status || {}) };
-    for (const [field, value] of Object.entries(legacyRow)) {
-      if (field === 'fiscal_year' || field === 'field_status' || value == null || row[field] != null) continue;
-      const state = statuses[field] || financialFieldStatus[field];
-      if (state === 'empty') continue;
-      row[field] = value;
-      statuses[field] = 'legacy_retained';
+  const financialFieldStatus = { ...(retrievalStatus.fields || {}) };
+  for (const row of annual) {
+    for (const [field, state] of Object.entries(row.field_status || {})) {
+      if (!financialFieldStatus[field] || ['empty', 'not_scheduled'].includes(financialFieldStatus[field])) {
+        financialFieldStatus[field] = state;
+      }
     }
-    row.field_status = statuses;
-    annualByPeriod.set(period, row);
   }
-  annual = [...annualByPeriod.values()].sort((a, b) => String(a.fiscal_year || '').localeCompare(String(b.fiscal_year || '')));
-  const valuationByPeriod = new Map(valuation.map(row => [String(row.fiscal_year || ''), row]));
-  const valuationSourceStatus = retrievalStatus.valuation ?? current?.field_status?.financial_valuation;
-  for (const legacyRow of legacyOverview?.valuation?.history || []) {
-    const period = String(legacyRow?.fiscal_year || '');
-    if (!/^\d{4}\/\d{2}$/.test(period)) continue;
-    const row = valuationByPeriod.get(period) || { fiscal_year: period, field_status: {} };
-    const statuses = { ...(row.field_status || {}) };
-    for (const [field, value] of Object.entries(legacyRow)) {
-      if (field === 'fiscal_year' || field === 'field_status' || value == null || row[field] != null) continue;
-      const state = statuses[field] || (field === 'dividend_yield_adjusted'
-        ? current?.field_status?.statistics_dividendYield
-        : field === 'eps_adjusted' ? current?.field_status?.financial_valuation : undefined);
-      if (state === 'empty' || (!state && valuationSourceStatus === 'empty')) continue;
-      row[field] = value;
-      statuses[field] = 'legacy_retained';
-    }
-    row.field_status = statuses;
-    valuationByPeriod.set(period, row);
-  }
-  valuation = [...valuationByPeriod.values()].sort((a, b) => String(a.fiscal_year || '').localeCompare(String(b.fiscal_year || '')));
+  const financialRetrievalStatus = { ...retrievalStatus, fields: financialFieldStatus };
+  const hasMigratedValuation = valuation.some(row => Object.values(row.field_status || {}).includes('legacy_migrated'));
+  const storedValuationStatus = retrievalStatus.valuation || current?.field_status?.financial_valuation;
+  const valuationStatus = storedValuationStatus === 'empty' && hasMigratedValuation
+    ? 'legacy_migrated'
+    : storedValuationStatus || (hasMigratedValuation ? 'legacy_migrated' : valuation.length ? 'available' : 'empty');
   const dividendHistory = yfinanceCalendarYearDividends(
     dividendDocuments.flatMap(document => Array.isArray(document.records) ? document.records : []),
   );
@@ -458,7 +424,7 @@ async function readV2FinancialPayload(env, code) {
       name: profile?.display_name || profile?.short_name || profile?.long_name || profile?.english_name || String(code || ''),
       metrics: [],
     },
-    financials: { annual, field_status: retrievalStatus },
+    financials: { annual, field_status: financialRetrievalStatus },
     dividends: {
       records: dividends,
       history_basis: 'calendar_year_observed_distributions',
@@ -478,7 +444,7 @@ async function readV2FinancialPayload(env, code) {
         payout_ratio: payoutRatio != null ? 'available' : 'empty',
       },
     },
-    valuation: { history: valuation, field_status: retrievalStatus.valuation || current?.field_status?.financial_valuation || 'empty' },
+    valuation: { history: valuation, field_status: valuationStatus },
     market: current ? { price: current.price || null, summary: current.statistics || {} } : null,
     sources: { market: 'Yahoo Finance via yfinance' },
   };
@@ -882,23 +848,13 @@ async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
     latestMarketForSecurity(env, security.security_code_display, marketIndex),
     readV2FinancialPayload(env, security.security_code_display),
   ]);
-  let legacyFinancial = null;
-  if (!v2Payload) {
-    legacyFinancial = await env.DB.prepare(
-        `SELECT fiscal_year, accounting_standard, is_consolidated, data_json
-         FROM financial_periods WHERE security_code = ? AND period_type = 'annual' ORDER BY fiscal_year DESC LIMIT 1`
-      ).bind(security.security_code).first();
-  }
   const latestV2Dividend = v2Payload?.dividends?.records?.at(-1) || null;
   const dividendYear = latestV2Dividend?.calendar_year ?? null;
   const dividendData = v2Payload ? {
     payout_ratio: v2Payload.dividends.payout_ratio,
     consecutive_dividend_increase_years: v2Payload.dividends.consecutive_dividend_increase_years,
   } : null;
-  const financial = v2Payload
-    ? v2Payload.financials.annual.at(-1) || null
-    : legacyFinancial;
-  const metrics = v2Payload ? [] : JSON.parse(security.metrics_json || '[]');
+  const financial = v2Payload?.financials?.annual?.at(-1) || null;
   const financialData = financial
     ? (typeof financial.data_json === 'string' ? JSON.parse(financial.data_json || '{}') : financial)
     : null;
@@ -914,9 +870,9 @@ async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
     per: finiteNumber(summary?.trailingPE),
     pbr: finiteNumber(summary?.priceToBook),
     payout_ratio: finiteNumber(dividendData?.payout_ratio),
-    equity_ratio: finiteNumber(financialData?.equity_ratio_computed ?? financialData?.equity_ratio) ?? firstMetricValue(metrics, ['equity_ratio', '自己資本比率']),
-    operating_margin: operatingMargin ?? firstMetricValue(metrics, ['operating_margin', '営業利益率']),
-    fcf_margin: finiteNumber(financialData?.fcf_margin) ?? (fcf != null && sales > 0 ? fcf / sales * 100 : null) ?? firstMetricValue(metrics, ['fcf_margin', 'fcf余力']),
+    equity_ratio: finiteNumber(financialData?.equity_ratio_computed ?? financialData?.equity_ratio),
+    operating_margin: operatingMargin,
+    fcf_margin: finiteNumber(financialData?.fcf_margin) ?? (fcf != null && sales > 0 ? fcf / sales * 100 : null),
     dividend_growth_years: finiteNumber(dividendData?.consecutive_dividend_increase_years),
   };
   const currentYield = finiteNumber(marketData?.dividend?.yield_rate);
@@ -1982,25 +1938,7 @@ export default {
       const code = financialMatch[1];
       const v2Payload = await readV2FinancialPayload(env, code);
       if (v2Payload) return json(v2Payload);
-      const object = await env.MARKET_DATA.get(`market/irbank/v1/securities/${code}/overview.json`);
-      const document = object ? await object.json() : null;
-      if (!document) return json({ error: 'not_found' }, 404);
-
-      // Legacy annual DPS is not an acceptable fallback for the yfinance event chart.
-      // Until repaired v2 events are published, report history as not fetched.
-      return json({
-        security: document.security,
-        financials: { annual: document.financials?.annual || [] },
-        dividends: {
-          records: [],
-          history_basis: 'calendar_year_observed_distributions',
-          amount_basis: null,
-          source: 'Yahoo Finance via yfinance',
-          field_status: { dividend_history: 'not_fetched', payout_ratio: 'not_fetched' },
-        },
-        valuation: document.valuation || { history: [] },
-        sources: { ...(document.sources || {}), dividend_history: 'Yahoo Finance via yfinance' },
-      });
+      return json({ error: 'not_found' }, 404);
     }
 
     const irbankMatch = url.pathname.match(/^\/api\/v1\/irbank\/securities\/([^/]+)(?:\/(prices|weekly-margin|jsf-margin))?$/);

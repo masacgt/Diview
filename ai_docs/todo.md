@@ -13,6 +13,8 @@
 
 ## Next
 
+- [ ] Run the one-time financial seed into v2, deploy the Worker without legacy financial/valuation fallbacks, and verify the API reads migrated values and reports `legacy_migrated`/yfinance field states. The production sample on 2026-10-17 showed legacy-only annual financial and valuation rows for 7203, 2914, 8056, and 1491; the migration workflow and v2-only API changes are implemented locally but have not been run against production R2 or deployed.
+
 - [ ] Verify V2 calendar-year dividend streak initialization, daily sync updates, Worker API propagation, and Android display. `assembleDebug` succeeded and the APK installed/launched on device `RFCNC0E4H8J`; live Worker/R2 propagation and displayed metric values remain unverified because the changes have not been published.
 
 - [x] Validate the published v2 upcoming ex-dividend path, source/status metadata, and Android detail display. Evidence: production `/api/v1/dividend-months?symbols=2060.T` returned `2027-03-30`, `available`, source `Yahoo Finance via yfinance Ticker.get_info`; the emulator and device displayed `2027年3月30日`. Opening Stock Detail now reads this route for the viewed security, subject to the existing per-JST-day cache. `1326.T` returned `history_status: empty` with no upcoming event and the detail showed `権利落ち日未取得`. Code review confirms that a request failure is logged without replacing cached data or advancing fetch markers, so a later detail view can retry; no live HTTP failure was induced. The current security response still reports `ex_dividend_calendar.status: not_fetched`; the successful date came from `get_info`, not `Ticker.calendar`.
