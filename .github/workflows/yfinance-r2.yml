@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       run_mode:
-        description: Run tests, a benchmark, the full R2 sync, normalize December-price dates, or audit split-transition dividends
+        description: Run tests, a benchmark, the full R2 sync, normalize December-price dates, audit split-transition dividends, or seed app-used financial values into v2
         type: choice
         options:
           - test
@@ -23,6 +23,7 @@ on:
           - sync
           - repair-monthly-prices
           - split-audit
+          - migrate-financials
         default: benchmark
         required: true
       sample_size:
@@ -99,6 +100,36 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: diview-market-data
+
+  legacy-financial-v2-migration:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'migrate-financials'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the R2 client
+        run: python -m pip install "boto3>=1.35,<2"
+      - name: Seed app-used legacy financial values into v2 and verify each write
+        run: set -o pipefail; python scripts/yfinance_r2/migrate_legacy_financials.py --workers 12 --report legacy-financial-migration-report.json 2>&1 | tee legacy-financial-migration.log
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: diview-market-data
+      - name: Save migration report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yfinance-v2-financial-migration-${{ github.run_id }}
+          path: |
+            legacy-financial-migration.log
+            legacy-financial-migration-report.json
+          if-no-files-found: ignore
+          retention-days: 30
 
   yfinance-sample-benchmark:
     if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'benchmark'

@@ -1218,11 +1218,11 @@ def prior_financial_maps(client: Any, bucket: str, symbol: str) -> tuple[dict[st
             if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", period_end):
                 continue
             statements[period_end] = {key: value for key, value in annual.items()
-                                      if key not in {"fiscal_year", "period_end", "field_status"}}
+                                      if key not in {"fiscal_year", "period_end", "field_status", "migration_source"}}
             valuation = document.get("valuation")
             if isinstance(valuation, dict):
                 valuations[period_end] = {key: value for key, value in valuation.items()
-                                          if key not in {"fiscal_year", "period_end", "field_status"}}
+                                          if key not in {"fiscal_year", "period_end", "field_status", "migration_source"}}
     return statements, valuations
 
 
@@ -1310,14 +1310,20 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
         assets = finite_number(values.get("total_assets"))
         if equity is not None and assets and assets > 0:
             values["equity_ratio_computed"] = equity / assets * 100
+        annual_field_status = {
+            field: "available" if field in fresh_values else "stale" if field in old_values else field_retrieval_status.get(field, "empty")
+            for source, fields in (("income_statement", INCOME_FIELDS), ("balance_sheet", BALANCE_FIELDS), ("cash_flow", CASH_FLOW_FIELDS))
+            for field in fields.values()
+        }
+        if "equity_ratio_computed" in values:
+            annual_field_status["equity_ratio_computed"] = (
+                "available" if "stockholders_equity" in fresh_values and "total_assets" in fresh_values
+                else "stale" if "equity_ratio_computed" in old_values else "empty"
+            )
         statements.append({
             "fiscal_year": f"{period_end[:4]}/{period_end[5:7]}",
             "period_end": period_end,
-            "field_status": {
-                field: "available" if field in fresh_values else "stale" if field in old_values else field_retrieval_status.get(field, "empty")
-                for source, fields in (("income_statement", INCOME_FIELDS), ("balance_sheet", BALANCE_FIELDS), ("cash_flow", CASH_FLOW_FIELDS))
-                for field in fields.values()
-            },
+            "field_status": annual_field_status,
             **values,
         })
         fresh_valuation = valuation.get(period_end, {})
