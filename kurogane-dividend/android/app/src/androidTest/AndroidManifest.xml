@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Diagnostic entry point lives only in the test APK, never in release artifacts. -->
+    <instrumentation android:name="com.kurogane.dividend.ReleaseFixtureInstrumentation"
+        android:targetPackage="com.kurogane.dividend" android:label="Disposable AVD acceptance fixtures" />
+</manifest>

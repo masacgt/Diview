@@ -19,11 +19,7 @@ import java.io.IOException
 import com.kurogane.dividend.notifications.NotificationKind
 import com.kurogane.dividend.notifications.NotificationStore
 
-internal class ReviewApplication : Application() {
-    init { attachBaseContext(InstrumentationRegistry.getInstrumentation().targetContext) }
-    override fun getSharedPreferences(name: String, mode: Int): SharedPreferences =
-        baseContext.getSharedPreferences("release_review_$name", mode)
-}
+internal class ReviewApplication : AuditApplication()
 
 @RunWith(AndroidJUnit4::class)
 class PortfolioPersistenceTest {

@@ -36,29 +36,33 @@ class DividendChangeRefreshWorker(context: Context, parameters: WorkerParameters
 
             val repository = CloudflareMarketRepository()
             val slots = Semaphore(4)
-            val failed = coroutineScope {
+            val failures = coroutineScope {
                 codes.map { code -> async {
                     slots.withPermit {
                         try {
-                            val document = repository.financialDocument(code) ?: return@withPermit false
+                            val document = repository.financialDocument(code) ?: return@withPermit null
                             val financial = withContext(Dispatchers.Default) { FinancialData.parse(document, code) }
                             if (store.settings().dividendChangeEnabled) {
                                 store.observeDividendHistory(code, names.getValue(code), financial.dividends.map { it.year to it.dps })
                             }
-                            false
+                            null
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (_: Exception) {
-                            true
+                        } catch (failure: Exception) {
+                            android.util.Log.w("DividendChangeRefresh", "Fetch failed (${failure.javaClass.simpleName})")
+                            failure
                         }
                     }
-                } }.awaitAll().any { it }
+                } }.awaitAll().filterNotNull()
             }
-            if (failed) Result.retry() else Result.success()
+            if (failures.isEmpty()) Result.success()
+            else if (NotificationRetryPolicy.shouldRetry(runAttemptCount, failures)) Result.retry()
+            else Result.failure()
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
-            Result.retry()
+        } catch (failure: Exception) {
+            android.util.Log.w("DividendChangeRefresh", "Refresh failed (${failure.javaClass.simpleName})")
+            if (NotificationRetryPolicy.shouldRetry(runAttemptCount, listOf(failure))) Result.retry() else Result.failure()
         }
     }
 }
