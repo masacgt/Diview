@@ -445,7 +445,10 @@ async function readV2FinancialPayload(env, code) {
   const dividendHistory = yfinanceCalendarYearDividends(
     dividendDocuments.flatMap(document => Array.isArray(document.records) ? document.records : []),
   );
-  const dividends = dividendHistory.records;
+  const calendarYearMetrics = current?.dividend?.calendar_year_metrics || null;
+  const dividends = Array.isArray(calendarYearMetrics?.annual_records)
+    ? calendarYearMetrics.annual_records
+    : dividendHistory.records;
   const dividendHistoryStatus = current?.field_status?.dividend_history;
   const payoutRatio = finiteNumber(current?.statistics?.payoutRatio);
   return {
@@ -460,12 +463,18 @@ async function readV2FinancialPayload(env, code) {
       records: dividends,
       history_basis: 'calendar_year_observed_distributions',
       amount_basis: dividendHistory.amount_basis,
+      consecutive_dividend_increase_years: finiteNumber(calendarYearMetrics?.consecutive_increase_years),
+      no_cut_years: finiteNumber(calendarYearMetrics?.no_cut_years),
+      metrics_status: calendarYearMetrics?.status || 'not_fetched',
+      metrics_as_of_year: finiteNumber(calendarYearMetrics?.latest_completed_year),
       source: 'Yahoo Finance via yfinance',
       current: current?.dividend || null,
       payout_ratio: payoutRatio,
       field_status: {
         ...(current?.field_status || {}),
         dividend_history: dividendHistoryStatus || dividendHistory.status,
+        consecutive_dividend_increase_years: calendarYearMetrics?.status || 'not_fetched',
+        no_cut_years: calendarYearMetrics?.status || 'not_fetched',
         payout_ratio: payoutRatio != null ? 'available' : 'empty',
       },
     },
@@ -882,7 +891,10 @@ async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
   }
   const latestV2Dividend = v2Payload?.dividends?.records?.at(-1) || null;
   const dividendYear = latestV2Dividend?.calendar_year ?? null;
-  const dividendData = v2Payload ? { payout_ratio: v2Payload.dividends.payout_ratio } : null;
+  const dividendData = v2Payload ? {
+    payout_ratio: v2Payload.dividends.payout_ratio,
+    consecutive_dividend_increase_years: v2Payload.dividends.consecutive_dividend_increase_years,
+  } : null;
   const financial = v2Payload
     ? v2Payload.financials.annual.at(-1) || null
     : legacyFinancial;

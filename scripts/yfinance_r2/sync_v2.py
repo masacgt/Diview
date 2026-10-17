@@ -505,6 +505,85 @@ def years_before(day: date, years: int) -> date:
         return day.replace(year=day.year - years, day=28)
 
 
+def calendar_year_dividend_metrics(
+    events: list[dict[str, Any]],
+    previous: dict[str, Any] | None,
+    as_of: date,
+) -> dict[str, Any]:
+    """Build consecutive dividend metrics from complete, observed calendar years."""
+    previous = previous if isinstance(previous, dict) else {}
+    old_records = previous.get("annual_records")
+    annual: dict[int, float] = {}
+    if isinstance(old_records, list):
+        for row in old_records:
+            year = row.get("calendar_year") if isinstance(row, dict) else None
+            amount = finite_number(row.get("calendar_year_distribution_per_share")) if isinstance(row, dict) else None
+            if isinstance(year, int) and 1900 <= year < as_of.year and amount is not None and amount >= 0:
+                annual[year] = amount
+
+    event_totals: dict[int, float] = {}
+    seen: set[tuple[str, float]] = set()
+    for event in events:
+        event_date = date_value(event.get("date")) if isinstance(event, dict) else None
+        amount = finite_number(event.get("amount")) if isinstance(event, dict) else None
+        if event_date is None or event_date.year >= as_of.year or amount is None or amount <= 0:
+            continue
+        key = (event_date.isoformat(), amount)
+        if key in seen:
+            continue
+        seen.add(key)
+        event_totals[event_date.year] = event_totals.get(event_date.year, 0.0) + amount
+    annual.update(event_totals)
+
+    records = [
+        {
+            "calendar_year": year,
+            "calendar_year_distribution_per_share": round(amount, 8),
+            "amount_basis": "yfinance_split_adjusted_assumption",
+            "source": "Yahoo Finance via yfinance",
+        }
+        for year, amount in sorted(annual.items())
+    ]
+    latest_year = as_of.year - 1
+    latest = annual.get(latest_year)
+    streak_increase = 0
+    streak_no_cut = 0
+    status = "insufficient_history"
+    if latest is not None:
+        years = sorted(annual)
+        latest_index = years.index(latest_year)
+        if latest_index > 0 and years[latest_index - 1] == latest_year - 1:
+            status = "available"
+            for index in range(latest_index, 0, -1):
+                year = years[index]
+                previous_year = years[index - 1]
+                if year != previous_year + 1:
+                    break
+                current_amount = annual[year]
+                previous_amount = annual[previous_year]
+                if current_amount > previous_amount:
+                    streak_increase += 1
+                else:
+                    break
+            for index in range(latest_index, 0, -1):
+                year = years[index]
+                previous_year = years[index - 1]
+                if year != previous_year + 1 or annual[year] < annual[previous_year]:
+                    break
+                streak_no_cut += 1
+
+    return {
+        "history_basis": "calendar_year_observed_distributions",
+        "annual_records": records,
+        "latest_completed_year": latest_year if latest is not None else None,
+        "consecutive_increase_years": streak_increase if status == "available" else None,
+        "no_cut_years": streak_no_cut if status == "available" else None,
+        "status": status,
+        "updated_at": iso_now(),
+        "source": "Yahoo Finance via yfinance",
+    }
+
+
 def contains_japanese(value: str) -> bool:
     return bool(re.search(r"[\u3040-\u30ff\u3400-\u9fff]", value))
 
@@ -1521,6 +1600,9 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         forced_repair_expected
         or bool(legacy_dividends or legacy_splits)
         or not prior_action_history.get("candidate_fingerprint")
+        or not isinstance(
+            (prior_current.get("dividend") or {}).get("calendar_year_metrics"), dict,
+        )
     )
     if full_action_history_required:
         prior_dividends = load_all_year_records(client, bucket, symbol, "dividends", include_archive=True)
@@ -1811,6 +1893,27 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         else "stale" if dividend_history_failed and yield_basis == "current_fiscal_year"
         else "empty" if dividend_status == "unknown" else "available"
     )
+    prior_dividend_payload = prior_current.get("dividend")
+    previous_calendar_year_metrics = (prior_dividend_payload.get("calendar_year_metrics")
+                                      if isinstance(prior_dividend_payload, dict) else None)
+    if action_status["dividends"] == "failed":
+        calendar_year_metrics = dict(previous_calendar_year_metrics) if isinstance(previous_calendar_year_metrics, dict) else {
+            "history_basis": "calendar_year_observed_distributions",
+            "annual_records": [],
+            "latest_completed_year": None,
+            "consecutive_increase_years": None,
+            "no_cut_years": None,
+            "status": "failed",
+            "source": "Yahoo Finance via yfinance",
+        }
+        if calendar_year_metrics.get("status") == "available":
+            calendar_year_metrics["status"] = "stale"
+    else:
+        calendar_year_metrics = calendar_year_dividend_metrics(
+            prior_dividends + dividends,
+            previous_calendar_year_metrics,
+            as_of,
+        )
     current = {
         "schema_version": 1,
         "code": code,
@@ -1829,12 +1932,14 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             "event_amount_basis": "yfinance_split_adjusted_assumption",
             "split_adjustment_policy": "assume_yfinance_returned_amounts_are_split_adjusted",
             "dividend_status": dividend_status,
+            "calendar_year_metrics": calendar_year_metrics,
         },
         "statistics": {key: collector.json_safe(info[key]) for key in CURRENT_FIELDS if info.get(key) is not None},
         "calendar": calendar,
         "field_status": {
             "price": price_status,
             "dividend_history": action_status["dividends"],
+            "calendar_year_dividend_metrics": calendar_year_metrics["status"],
             "split_history": action_status["splits"],
             "upcoming_ex_dividend_date": calendar["status"],
             "monthly_prices": monthly_status,
