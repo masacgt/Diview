@@ -1461,7 +1461,7 @@ fun StockDetailScreen(
 
                                         // 2. 2x1 Grid for PER & PBR
                                         AdaptiveRow(
-                                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                                            modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
                                             // PER
@@ -1469,7 +1469,7 @@ fun StockDetailScreen(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
                                                 border = BorderStroke(1.dp, BorderColor),
-                                                modifier = Modifier.weight(1f).fillMaxHeight()
+                                                modifier = Modifier.weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     AdaptiveRow(
@@ -1492,7 +1492,7 @@ fun StockDetailScreen(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
                                                 border = BorderStroke(1.dp, BorderColor),
-                                                modifier = Modifier.weight(1f).fillMaxHeight()
+                                                modifier = Modifier.weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     AdaptiveRow(
@@ -1942,14 +1942,14 @@ fun StockDetailScreen(
                                         verticalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
                                         AdaptiveRow(
-                                            modifier = Modifier.fillMaxWidth(),
+                                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
                                                 border = BorderStroke(1.dp, BorderColor),
-                                                modifier = Modifier.weight(1f)
+                                                modifier = Modifier.weight(1f).fillMaxHeight()
                                             ) {
                                                 Column(Modifier.padding(12.dp)) {
                                                     Text(stringResource(R.string.stock_detail_text_67), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
@@ -1968,7 +1968,7 @@ fun StockDetailScreen(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
                                                 border = BorderStroke(1.dp, BorderColor),
-                                                modifier = Modifier.weight(1f)
+                                                modifier = Modifier.weight(1f).fillMaxHeight()
                                             ) {
                                                 Column(Modifier.padding(12.dp)) {
                                                     Text(stringResource(R.string.stock_detail_text_69), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
