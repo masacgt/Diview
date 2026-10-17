@@ -5,6 +5,7 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.core.content.edit
 import com.kurogane.dividend.model.Category
 import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.MonthlyDividend
@@ -492,7 +493,7 @@ class DividendViewModel @JvmOverloads constructor(
         try {
             val document = financialSlots.withPermit { marketRepository.financialDocument(normalized) }
             if (document == null) {
-                if (generation == dataGeneration.get()) marketPreferences.edit().remove(failureKey).apply()
+                if (generation == dataGeneration.get()) marketPreferences.edit { remove(failureKey) }
                 return null
             }
             val parsed = withContext(Dispatchers.Default) { FinancialData.parse(document, normalized) }
@@ -512,8 +513,9 @@ class DividendViewModel @JvmOverloads constructor(
             throw cancelled
         } catch (failure: Exception) {
             if (generation == dataGeneration.get()) {
-                marketPreferences.edit().putString(failureKey,
-                    com.kurogane.dividend.data.CachedFetchFailure.encode(failure)).apply()
+                marketPreferences.edit {
+                    putString(failureKey, com.kurogane.dividend.data.CachedFetchFailure.encode(failure))
+                }
                 android.util.Log.w("CloudflareMarket", "Financial fetch failed (${failure.javaClass.simpleName})")
             }
             throw failure

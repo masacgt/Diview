@@ -11,6 +11,8 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import queue
+import threading
 import time
 import xml.etree.ElementTree as ET
 
@@ -105,9 +107,10 @@ class Device:
         elif b"Success" not in self.run("install", "-r", apk.resolve(), timeout=120):
             raise RuntimeError("Installation failed")
 
-    def diagnostic(self, operation):
+    def diagnostic(self, operation, *extras):
         result = self.shell("am", "instrument", "-w", "-r", "-e", "allowSyntheticFixture", "true",
                             "-e", "operation", operation,
+                            *extras,
                             PACKAGE + ".test/com.kurogane.dividend.ReleaseFixtureInstrumentation", timeout=90)
         if "completed=true" not in result:
             raise RuntimeError("Synthetic diagnostic failed: " + operation)
@@ -196,7 +199,8 @@ class Device:
         label = self.shell("ls", "-Zd", "/data/user/0/" + PACKAGE + "/cache").split()[0]
         if not uid.isdecimal() or not re.fullmatch(r"u:object_r:app_data_file:s0(?::c\d+(?:,c\d+)*)?", label):
             raise ValueError("Unexpected disposable app filesystem identity")
-        options = 'size=1m,uid=' + uid + ',gid=' + uid + ',mode=0700,context="' + label + '"'
+        options = ('size=1m,uid=' + uid + ',gid=' + uid + ',mode=0700,fscontext=u:object_r:tmpfs:s0,context="'
+                   + label + '"')
         self.shell("mount -t tmpfs -o '" + options + "' tmpfs " + target)
         try:
             volume = self.shell("df", "-k", target)
@@ -247,10 +251,79 @@ class Device:
             self.shell("bmgr", "transport", original_transport)
             self.shell("bmgr", "enable", "true" if original_enabled else "false")
 
+    def interrupt(self):
+        before = self.facts()
+        command = [self.adb, "-s", self.args.device, "shell", "am", "instrument", "-w", "-r",
+                   "-e", "allowSyntheticFixture", "true", "-e", "operation", "interrupt-snapshot",
+                   PACKAGE + ".test/com.kurogane.dividend.ReleaseFixtureInstrumentation"]
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=self.env)
+        lines = queue.Queue()
+        def read_lines():
+            for line in iter(process.stdout.readline, b""):
+                lines.put(line)
+        reader = threading.Thread(target=read_lines, daemon=True)
+        reader.start()
+        opened = False
+        deadline = time.monotonic() + 40
+        try:
+            while time.monotonic() < deadline:
+                try:
+                    if b"phase=atomic-open" in lines.get(timeout=1):
+                        opened = True
+                        break
+                except queue.Empty:
+                    if process.poll() is not None:
+                        break
+            if not opened:
+                raise RuntimeError("The atomic-write interruption point was not reached")
+            self.shell("am", "force-stop", PACKAGE)
+            process.wait(timeout=15)
+        finally:
+            if process.poll() is None:
+                self.shell("am", "force-stop", PACKAGE)
+                process.kill()
+                process.wait(timeout=15)
+        # Require a fresh restore from the interrupted portable file, not the surviving device preferences.
+        base = "/data/user/0/" + PACKAGE + "/shared_prefs/local_import_store.xml"
+        self.shell("rm", "-f", base, base + ".bak")
+        start = self.launch()
+        self.shell("am", "force-stop", PACKAGE)
+        retained = before == self.facts()
+        report = dict(jdk=17, device=self.args.device, atomicWriteInterrupted=opened,
+                      restoredAllSavedFacts=retained, start=start)
+        self.save("interruption-" + self.args.device + ".json", report)
+        print(json.dumps(report), flush=True)
+        if not retained:
+            raise AssertionError("Interrupted write did not retain the complete backup")
+
+    def profile(self):
+        if not self.args.fixture_apk or not self.args.candidate_apk or not self.args.baseline_apk:
+            raise ValueError("Both APKs and the synthetic fixture test APK are required")
+        self.install(self.args.fixture_apk)
+        report = dict(jdk=17, device=self.args.device, environment="local emulator; timings are observational", samples=[])
+        for label, apk in (("baseline", self.args.baseline_apk), ("candidate", self.args.candidate_apk)):
+            self.install(apk)
+            for count in (0, 300, 2000):
+                self.shell("pm", "clear", PACKAGE)
+                self.diagnostic("seed", "-e", "holdingCount", str(count))
+                self.shell("am", "force-stop", PACKAGE)
+                self.shell("dumpsys", "gfxinfo", PACKAGE, "reset")
+                start = self.launch()
+                memory = self.shell("dumpsys", "meminfo", PACKAGE)
+                graphics = self.shell("dumpsys", "gfxinfo", PACKAGE)
+                pss = re.search(r"TOTAL PSS:\s*(\d+)", memory) or re.search(r"^\s*TOTAL\s+(\d+)", memory, re.MULTILINE)
+                frames = re.search(r"Total frames rendered:\s*(\d+)", graphics)
+                janky = re.search(r"Janky frames:\s*(\d+)", graphics)
+                sample = dict(artifact=label, holdings=count, start=start, memoryTotalPssKb=int(pss.group(1)) if pss else None,
+                              frames=int(frames.group(1)) if frames else None, jankyFrames=int(janky.group(1)) if janky else None)
+                report["samples"].append(sample)
+                print(json.dumps(sample), flush=True)
+        self.save("profile-" + self.args.device + ".json", report)
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("update", "restart", "low_space", "quota"))
+    parser.add_argument("mode", choices=("update", "restart", "low_space", "quota", "interrupt", "profile"))
     parser.add_argument("--java-home", required=True, type=Path)
     parser.add_argument("--android-sdk", required=True, type=Path)
     parser.add_argument("--device", required=True)

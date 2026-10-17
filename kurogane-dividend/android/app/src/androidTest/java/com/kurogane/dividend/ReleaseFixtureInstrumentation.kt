@@ -32,13 +32,16 @@ class ReleaseFixtureInstrumentation : Instrumentation() {
             val store = LocalImportStore(targetContext)
             when (arguments.getString("operation")) {
                 "seed" -> {
-                    store.saveHoldings(listOf(Holding(
+                    val fixture = Holding(
                         id = "acceptance-fixture", code = "ZTEST0", name = "移行検証銘柄", sector = "検証", market = "東証",
                         category = Category.JAPAN, price = 2000.0, shares = 100, acqPrice = 1000.0,
                         dps = 80.0, yieldRate = 4.0, yoc = 8.0, nextPayoutTiming = "6月", nextPayoutAmount = "¥4,000",
                         dividendMonths = emptyList(), dividendType = "配当金", accountType = "特定口座",
                         dailyChange = "—", isPositive = true, taxFreeShares = 40
-                    )))
+                    )
+                    val count = arguments.getString("holdingCount")?.toInt() ?: 1
+                    require(count in 0..2000)
+                    store.saveHoldings(List(count) { index -> fixture.copy(id = "acceptance-$index", code = "ZTEST$index", name = "移行検証銘柄 $index") })
                     store.saveWatchlist(listOf(WatchlistStock(
                         code = "ZBACKUP", name = "無配の移行検証", market = "東証", sector = "検証", category = "jp",
                         price = 100.0, dps = 0.0, currentYield = 0.0, targetYield = 4.0, targetPrice = 0.0,
