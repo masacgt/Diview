@@ -100,6 +100,7 @@ def run(max_workers: int = 16) -> int:
     changed_objects = 0
     changed_points = 0
     failures: list[tuple[str, str]] = []
+    completed = 0
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {pool.submit(repair_object, client, bucket, key, updated_at): key for key in keys}
         for future in as_completed(futures):
@@ -110,6 +111,13 @@ def run(max_workers: int = 16) -> int:
                 changed_points += point_count
             except Exception as exc:
                 failures.append((key, f"{type(exc).__name__}: {exc}"[:500]))
+            completed += 1
+            if completed % 500 == 0 or completed == len(keys):
+                print(
+                    f"Progress: {completed}/{len(keys)} partitions; "
+                    f"updated={changed_objects}; points={changed_points}; failures={len(failures)}",
+                    flush=True,
+                )
 
     print(json.dumps({
         "partitions_scanned": len(keys),
