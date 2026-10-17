@@ -168,9 +168,19 @@ def list_financial_keys(client: Any, bucket: str, symbol: str) -> dict[str, str]
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for item in page.get("Contents", []):
             key = str(item.get("Key") or "")
-            match = re.fullmatch(re.escape(prefix) + r"(\d{4})\.json", key)
-            if match:
-                keys[match.group(1)] = key
+            name = key.removeprefix(prefix)
+            if not re.fullmatch(r"\d{4}(?:-\d{2}-\d{2})?\.json", name):
+                continue
+            document = read_json(client, bucket, key)
+            if not document:
+                continue
+            annual = document.get("annual")
+            valuation = document.get("valuation")
+            annual_period = str(annual.get("period_end") or "")[:10] if isinstance(annual, dict) else ""
+            valuation_period = str(valuation.get("period_end") or "")[:10] if isinstance(valuation, dict) else ""
+            for period_end in (annual_period, valuation_period or annual_period):
+                if re.fullmatch(r"\d{4}-\d{2}-\d{2}", period_end):
+                    keys.setdefault(period_end, key)
     return keys
 
 
@@ -200,7 +210,7 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
     for fiscal_year in period_years:
         period_end = (annual_by_period.get(fiscal_year) or valuation_by_period[fiscal_year])[0]
         year = period_end[:4]
-        key = keys.get(year) or f"{V2_ROOT}/securities/{safe_symbol(symbol)}/financials/{year}.json"
+        key = keys.get(period_end) or f"{V2_ROOT}/securities/{safe_symbol(symbol)}/financials/{period_end}.json"
         document = read_json(client, bucket, key) or {
             "schema_version": 1,
             "symbol": symbol,

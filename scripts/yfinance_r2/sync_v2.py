@@ -1203,33 +1203,42 @@ def legacy_valuation_map(old: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return output
 
 
-def prior_financial_maps(client: Any, bucket: str, symbol: str) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+def prior_financial_maps(
+    client: Any, bucket: str, symbol: str,
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, str]]:
     safe = safe_symbol(symbol)
     prefix = object_key("securities", safe, "financials") + "/"
     statements: dict[str, dict[str, Any]] = {}
     valuations: dict[str, dict[str, Any]] = {}
+    document_keys: dict[str, str] = {}
     for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
         for item in page.get("Contents", []):
-            document = read_json(client, bucket, item["Key"])
+            document_key = str(item.get("Key") or "")
+            document = read_json(client, bucket, document_key)
             annual = document.get("annual") if document else None
-            if not isinstance(annual, dict):
-                continue
-            period_end = str(annual.get("period_end") or "")[:10]
-            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", period_end):
-                continue
-            statements[period_end] = {key: value for key, value in annual.items()
-                                      if key not in {"fiscal_year", "period_end", "field_status", "migration_source"}}
+            annual_period_end = str(annual.get("period_end") or "")[:10] if isinstance(annual, dict) else ""
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", annual_period_end):
+                statements[annual_period_end] = {
+                    key: value for key, value in annual.items()
+                    if key not in {"fiscal_year", "period_end", "field_status", "migration_source"}
+                }
+                document_keys.setdefault(annual_period_end, document_key)
             valuation = document.get("valuation")
             if isinstance(valuation, dict):
-                valuations[period_end] = {key: value for key, value in valuation.items()
-                                          if key not in {"fiscal_year", "period_end", "field_status", "migration_source"}}
-    return statements, valuations
+                valuation_period_end = str(valuation.get("period_end") or annual_period_end)[:10]
+                if re.fullmatch(r"\d{4}-\d{2}-\d{2}", valuation_period_end):
+                    valuations[valuation_period_end] = {
+                        key: value for key, value in valuation.items()
+                        if key not in {"fiscal_year", "period_end", "field_status", "migration_source"}
+                    }
+                    document_keys.setdefault(valuation_period_end, document_key)
+    return statements, valuations, document_keys
 
 
 def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: str, symbol: str,
                        *, fetch_groups: set[str] | None = None,
                        previous_status: dict[str, Any] | None = None
-                       ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+                       ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], dict[str, str]]:
     retrieval_status: dict[str, Any] = {}
     requested_groups = set(FINANCIAL_GROUPS) if fetch_groups is None else set(fetch_groups)
     previous_status = previous_status or {}
@@ -1253,7 +1262,7 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
     legacy_income = legacy_frame_map(old, "income_statement", INCOME_FIELDS)
     legacy_balance = legacy_frame_map(old, "balance_sheet", BALANCE_FIELDS)
     legacy_cash = legacy_frame_map(old, "cash_flow", CASH_FLOW_FIELDS)
-    prior_v2, prior_v2_valuation = prior_financial_maps(client, bucket, symbol)
+    prior_v2, prior_v2_valuation, financial_document_keys = prior_financial_maps(client, bucket, symbol)
     valuation_frame = None
     if "valuation" in requested_groups:
         try:
@@ -1331,13 +1340,14 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
         if valuation_values:
             valuation_rows.append({
                 "fiscal_year": f"{period_end[:4]}/{period_end[5:7]}",
+                "period_end": period_end,
                 "field_status": {field: "available" if field in fresh_valuation else "stale" for field in valuation_values},
                 **valuation_values,
             })
     retrieval_status["fields"] = field_retrieval_status
     retrieval_status["requested_groups"] = sorted(requested_groups)
     retrieval_status["legacy_source"] = "migrated" if any((legacy_income, legacy_balance, legacy_cash, legacy_valuation)) else "not_found"
-    return statements, valuation_rows, retrieval_status
+    return statements, valuation_rows, retrieval_status, financial_document_keys
 
 
 def legacy_document(client: Any, bucket: str, symbol: str) -> dict[str, Any]:
@@ -1488,11 +1498,10 @@ def verify_v2_transfer(client: Any, bucket: str, symbol: str, old: dict[str, Any
         stored_months = {str(row.get("month")) for row in read_monthly_points(client, bucket, symbol, point_year)}
         if point.get("month") not in stored_months:
             raise RuntimeError(f"v2 monthly price missing before legacy cleanup: {symbol} {point.get('month')}")
+    stored_statements, _, _ = prior_financial_maps(client, bucket, symbol)
     for row in statements:
-        period_end = str(row.get("period_end") or "")
-        year = period_end[:4]
-        document = read_json(client, bucket, object_key("securities", safe, "financials", f"{year}.json"))
-        if not document or str(document.get("annual", {}).get("period_end") or "") != period_end:
+        period_end = str(row.get("period_end") or "")[:10]
+        if period_end not in stored_statements:
             raise RuntimeError(f"v2 financial record missing before legacy cleanup: {symbol} {period_end}")
 
 
@@ -1821,8 +1830,9 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         failed_groups=failed_financial_groups,
     )
     financial_attempted = bool(financial_groups)
+    financial_document_keys: dict[str, str] = {}
     if financial_attempted:
-        statements, valuation, financial_status = collect_financials(
+        statements, valuation, financial_status, financial_document_keys = collect_financials(
             ticker, old, client, bucket, symbol,
             fetch_groups=financial_groups, previous_status=prior_field_status,
         )
@@ -2013,13 +2023,16 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     if update_monthly_now or legacy_monthly_migration_pending:
         save_monthly_prices(client, bucket, symbol, monthly, as_of=as_of)
     for row in statements:
-        year = str(row.get("period_end", ""))[:4]
-        if year:
-            key = object_key("securities", safe, "financials", f"{year}.json")
+        period_end = str(row.get("period_end", ""))[:10]
+        year = period_end[:4]
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", period_end):
+            key = financial_document_keys.get(period_end) or object_key(
+                "securities", safe, "financials", f"{period_end}.json",
+            )
             put_json_if_changed(client, bucket, key, {
                 "schema_version": 1, "symbol": symbol, "year": year,
                 "annual": row,
-                "valuation": next((item for item in valuation if item.get("fiscal_year") == row.get("fiscal_year")), None),
+                "valuation": next((item for item in valuation if item.get("period_end") == period_end), None),
                 "retrieval_status": financial_status,
                 "updated_at": iso_now(), "source": "Yahoo Finance via yfinance",
             })
@@ -2088,7 +2101,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     put_json_if_changed(client, bucket, object_key("securities", safe, "sync.json"), sync)
     if (old and sync["full_history_initialized"] and sync["financials_initialized"]
             and sync["monthly_history_schema_version"] == 2):
-        stored_statements, _ = prior_financial_maps(client, bucket, symbol)
+        stored_statements, _, _ = prior_financial_maps(client, bucket, symbol)
         verification_statements = [
             {"period_end": period_end, **values}
             for period_end, values in sorted(stored_statements.items())
