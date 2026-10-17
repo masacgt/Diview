@@ -795,7 +795,7 @@ fun StockDetailScreen(
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.Bottom
                             ) {
-                                val history = dividendPeriods.filter { it.annualDividend != null }
+                                val history = dividendPeriods
                                 val maxDps = history.maxOfOrNull { it.annualDividend ?: 0.0 }?.takeIf { it > 0 } ?: 1.0
                                 val prefix = currentHolding.currency
                                 val bars = history.map { point ->
@@ -809,7 +809,6 @@ fun StockDetailScreen(
                                 }
                                 var barsVisible by remember(stockCode) { mutableStateOf(false) }
                                 LaunchedEffect(stockCode, bars.isNotEmpty()) { if (bars.isNotEmpty()) barsVisible = true }
-                                if (bars.isEmpty()) Text(stringResource(R.string.stock_detail_text_9), color = OnSurfaceVariant)
                                 bars.forEachIndexed { index, (term, dpsVal, ratio) ->
                                     val animatedRatio by animateFloatAsState(
                                         targetValue = if (barsVisible) ratio.coerceIn(0f, 0.95f) else 0f,
