@@ -4,6 +4,7 @@ import com.kurogane.dividend.ui.components.AdaptiveRow
 import com.kurogane.dividend.ui.components.DiviewSnackbarHost
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kurogane.dividend.data.financialText
+import com.kurogane.dividend.data.financialSignedText
 import com.kurogane.dividend.data.financialYears
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.core.animateFloatAsState
@@ -866,7 +867,7 @@ fun StockDetailScreen(
                             val legacyGrowth = if (recent.size == 4 && (recent.first().annualDividend ?: 0.0) > 0 && recent.last().year - recent.first().year == 3)
                                 (((recent.last().annualDividend ?: 0.0) / (recent.first().annualDividend ?: 1.0)) - 1) * 100 else Double.NaN
                             val growthLabel = if (isCalendarYearDividendHistory) {
-                                stringResource(R.string.stock_detail_calendar_growth_cagr_detail, profile.growthRate.financialText(1, "%"))
+                                stringResource(R.string.stock_detail_calendar_growth_cagr_detail, profile.growthRate.financialSignedText(1, "%"))
                             } else {
                                 stringResource(R.string.stock_detail_text_10, legacyGrowth.financialText(1, "%"))
                             }
@@ -1002,7 +1003,7 @@ fun StockDetailScreen(
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     val growthSummary = when {
-                                        isCalendarYearDividendHistory -> stringResource(R.string.stock_detail_calendar_growth_cagr, profile.growthRate.financialText(1, "%"))
+                                        isCalendarYearDividendHistory -> stringResource(R.string.stock_detail_calendar_growth_cagr, profile.growthRate.financialSignedText(1, "%"))
                                         profile.consecutiveYears > 0 -> stringResource(R.string.stock_detail_label_10, resources.getString(R.string.stock_detail_label_5, profile.consecutiveYears.toString()), profile.growthRate.financialText(1, "%"))
                                         else -> stringResource(R.string.stock_detail_label_11, profile.growthRate.financialText(1, "%"))
                                     }
@@ -1955,7 +1956,7 @@ fun StockDetailScreen(
                                                     Spacer(Modifier.height(4.dp))
                                                     Text(stringResource(R.string.annual_dividend_1_s , if (profile.consecutiveYears >= 0) resources.getString(R.string.stock_detail_label_5, (profile.consecutiveYears).toString()) else resources.getString(R.string.not_available)), color = PrimaryEmerald, fontWeight = FontWeight.ExtraBold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
                                                     Text(
-                                                        if (isCalendarYearDividendHistory) stringResource(R.string.stock_detail_calendar_growth_cagr_detail, profile.growthRate.financialText(1, "%"))
+                                                        if (isCalendarYearDividendHistory) stringResource(R.string.stock_detail_calendar_growth_cagr_detail, profile.growthRate.financialSignedText(1, "%"))
                                                         else stringResource(R.string.stock_detail_text_68, profile.growthRate.financialText(1, "%")),
                                                         color = PrimaryEmerald,
                                                         fontSize = AppTextSize.dense,
