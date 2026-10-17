@@ -803,8 +803,13 @@ private fun DividendRiskCard(row: DividendChangeSecurity, onClick: () -> Unit) {
         }
         FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
             verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(stringResource(R.string.dividend_change_analysis_cards_text_15 , row.profile?.noCutYears?.takeIf { it >= 0 }?.let { "${it}年" } ?: "未取得")
-                + " / 連続増配${row.profile?.consecutiveYears?.takeIf { it >= 0 }?.let { "${it}年" } ?: "未取得"}",
+            val calendarYearObserved = row.dividendHistoryBasis == "calendar_year_observed_distributions"
+            val noCutYears = row.profile?.noCutYears?.takeIf { it >= 0 }
+                ?: if (calendarYearObserved) 0 else null
+            val consecutiveYears = row.profile?.consecutiveYears?.takeIf { it >= 0 }
+                ?: if (calendarYearObserved) 0 else null
+            Text(stringResource(R.string.dividend_change_analysis_cards_text_15 , noCutYears?.let { "${it}年" } ?: "未取得")
+                + " / 連続増配${consecutiveYears?.let { "${it}年" } ?: "未取得"}",
                 color = OnSurfaceVariant, fontSize = 11.sp, lineHeight = 15.sp)
             Text(when {
                 ratio == null -> "指標未取得"
