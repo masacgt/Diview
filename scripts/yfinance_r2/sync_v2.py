@@ -592,8 +592,24 @@ def load_year_records(client: Any, bucket: str, symbol: str, family: str,
 def load_recent_year_records(client: Any, bucket: str, symbol: str, family: str, as_of: date) -> list[dict[str, Any]]:
     # Three calendar years cover a trailing 12-month period and the current
     # fiscal-year event window, including fiscal years that straddle January.
+    # These years are newer than the 10-year archive cutoff, so archive keys
+    # cannot contain valid rows and should not be requested on every daily run.
     years = set(range(as_of.year - 2, as_of.year + 1))
-    return load_year_records(client, bucket, symbol, family, years)
+    return load_year_records(client, bucket, symbol, family, years, include_archive=False)
+
+
+def preserve_profile_timestamp_if_unchanged(
+    profile: dict[str, Any], previous: dict[str, Any],
+) -> dict[str, Any]:
+    """Avoid rewriting a stable profile just because its collection time changed."""
+    previous_updated_at = previous.get("updated_at")
+    if not previous_updated_at:
+        return profile
+    comparable_profile = {key: value for key, value in profile.items() if key != "updated_at"}
+    comparable_previous = {key: value for key, value in previous.items() if key != "updated_at"}
+    if comparable_profile == comparable_previous:
+        profile["updated_at"] = previous_updated_at
+    return profile
 
 
 def action_partitions_need_persist(
@@ -1693,6 +1709,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         field: ("stale" if field in stale_profile_fields else "available" if profile.get(field) is not None else "empty")
         for field in (*PROFILE_FIELDS, "short_name", "long_name", "display_name", "english_name")
     }
+    profile = preserve_profile_timestamp_if_unchanged(profile, previous_profile)
 
     close = finite_number(latest.get("close"))
     trailing_start = years_before(as_of, 1).isoformat()
