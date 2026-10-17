@@ -548,16 +548,24 @@ def calendar_year_dividend_metrics(
         event_totals[event_date.year] = event_totals.get(event_date.year, 0.0) + amount
     annual.update(event_totals)
 
+    latest_year = as_of.year - 1
+    if annual:
+        # A successful event-history fetch covers the interval from the first
+        # observed dividend through the latest completed calendar year. Any
+        # year without an event in that interval is treated as a confirmed 0
+        # for calendar-year comparisons. Failed fetches bypass this function.
+        for year in range(min(annual), latest_year + 1):
+            annual.setdefault(year, 0.0)
     records = [
         {
             "calendar_year": year,
             "calendar_year_distribution_per_share": round(amount, 8),
             "amount_basis": "yfinance_split_adjusted_assumption",
+            "record_basis": "no_observed_distribution_assumed_zero" if amount == 0 else "observed_distribution_total",
             "source": "Yahoo Finance via yfinance",
         }
         for year, amount in sorted(annual.items())
     ]
-    latest_year = as_of.year - 1
     latest = annual.get(latest_year)
     streak_increase = 0
     streak_no_cut = 0
