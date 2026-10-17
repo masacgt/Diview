@@ -128,15 +128,13 @@ class DividendViewModel @JvmOverloads constructor(
     val watchlistSortSelection: StateFlow<WatchlistSortSelection?> = _watchlistSortSelection.asStateFlow()
     private val dividendMonthRefreshMutex = Mutex()
     private val localImportStore = LocalImportStore(application)
-    private val _shareholderBenefits = MutableStateFlow(runCatching { localImportStore.loadShareholderBenefits() }.getOrDefault(emptyMap()))
+    private val _shareholderBenefits = MutableStateFlow<Map<String, List<ShareholderBenefit>>>(emptyMap())
     val shareholderBenefits: StateFlow<Map<String, List<ShareholderBenefit>>> = _shareholderBenefits.asStateFlow()
     private var shareholderBenefitsSaveJob: Job? = null
-    private val _stockClimateOverrides = MutableStateFlow(runCatching { localImportStore.loadStockClimateOverrides() }.getOrDefault(emptyMap()))
+    private val _stockClimateOverrides = MutableStateFlow<Map<String, StockClimate>>(emptyMap())
     val stockClimateOverrides: StateFlow<Map<String, StockClimate>> = _stockClimateOverrides.asStateFlow()
     private var stockClimateSaveJob: Job? = null
-    private val _dividendHistoryOverrides = MutableStateFlow(runCatching {
-        localImportStore.loadDividendHistoryOverrides()
-    }.getOrDefault(emptyMap()))
+    private val _dividendHistoryOverrides = MutableStateFlow<Map<String, List<DividendHistoryOverride>>>(emptyMap())
     val dividendHistoryOverrides: StateFlow<Map<String, List<DividendHistoryOverride>>> = _dividendHistoryOverrides.asStateFlow()
     private val dividendHistoryOverrideSaveMutex = Mutex()
     private val notificationStore = NotificationStore(application)
@@ -305,7 +303,7 @@ class DividendViewModel @JvmOverloads constructor(
     val financialData = _financialData.asStateFlow()
     private val _stockAnalysisData = MutableStateFlow<Map<String, CloudflareStockAnalysis>>(emptyMap())
     val stockAnalysisData = _stockAnalysisData.asStateFlow()
-    private val _cloudflareSecurityData = MutableStateFlow(loadCachedCloudflareSecurityData())
+    private val _cloudflareSecurityData = MutableStateFlow<Map<String, CloudflareSecurity>>(emptyMap())
     val cloudflareSecurityData = _cloudflareSecurityData.asStateFlow()
     private val stockAnalysisMutex = Mutex()
     private val stockAnalysisLoading = mutableSetOf<String>()
@@ -463,6 +461,7 @@ class DividendViewModel @JvmOverloads constructor(
         val now = System.currentTimeMillis()
         val attemptKey = "financial_fetch_attempt_at_$normalized"
         val attemptDateKey = "financial_fetch_attempt_jst_$normalized"
+        val failureKey = "financial_fetch_failure_$normalized"
         // An explicit retry may bypass a failed attempt. Today's successfully
         // parsed document is still returned by the cache check above.
         if (!force && !PriceRefreshPolicy.shouldFetch(
@@ -478,6 +477,10 @@ class DividendViewModel @JvmOverloads constructor(
                 }.getOrNull()
             }
             if (cached != null) _financialData.update { it + (normalized to cached) }
+            if (cached == null) {
+                com.kurogane.dividend.data.CachedFetchFailure.decode(marketPreferences.getString(failureKey, null))
+                    ?.let { throw it }
+            }
             return cached
         }
         marketPreferences.edit()
@@ -487,7 +490,11 @@ class DividendViewModel @JvmOverloads constructor(
         val allowed = financialMutex.withLock { financialLoading.add(normalized) }
         if (!allowed) return _financialData.value[normalized]
         try {
-            val document = financialSlots.withPermit { marketRepository.financialDocument(normalized) } ?: return null
+            val document = financialSlots.withPermit { marketRepository.financialDocument(normalized) }
+            if (document == null) {
+                if (generation == dataGeneration.get()) marketPreferences.edit().remove(failureKey).apply()
+                return null
+            }
             val parsed = withContext(Dispatchers.Default) { FinancialData.parse(document, normalized) }
             if (generation != dataGeneration.get()) return null
             if (_notificationSettings.value.dividendChangeEnabled) {
@@ -496,10 +503,20 @@ class DividendViewModel @JvmOverloads constructor(
                     ?: normalized, parsed.dividends.map { it.year to it.dps })
             }
             _financialData.update { it + (normalized to parsed) }
-            marketPreferences.edit().putString("financial_$normalized", document.toString()).putString("financial_date_$normalized", today).apply()
+            marketPreferences.edit().putString("financial_$normalized", document.toString())
+                .putString("financial_date_$normalized", today).remove(failureKey).apply()
             refreshRuntimeValues(normalized)
             saveRequests.trySend(Unit)
             return parsed
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            if (generation == dataGeneration.get()) {
+                marketPreferences.edit().putString(failureKey,
+                    com.kurogane.dividend.data.CachedFetchFailure.encode(failure)).apply()
+                android.util.Log.w("CloudflareMarket", "Financial fetch failed (${failure.javaClass.simpleName})")
+            }
+            throw failure
         } finally { financialMutex.withLock { financialLoading.remove(normalized) } }
     }
 
@@ -2660,10 +2677,14 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     init {
-        JPXTickSizeMaster.load(getApplication())
-        hasRestoredLocalHoldings = localImportStore.hasHoldings()
         viewModelScope.launch {
             val (heldResult, watchedResult) = withContext(Dispatchers.IO) {
+                JPXTickSizeMaster.load(getApplication())
+                hasRestoredLocalHoldings = localImportStore.hasHoldings()
+                _shareholderBenefits.value = runCatching { localImportStore.loadShareholderBenefits() }.getOrDefault(emptyMap())
+                _stockClimateOverrides.value = runCatching { localImportStore.loadStockClimateOverrides() }.getOrDefault(emptyMap())
+                _dividendHistoryOverrides.value = runCatching { localImportStore.loadDividendHistoryOverrides() }.getOrDefault(emptyMap())
+                _cloudflareSecurityData.value = loadCachedCloudflareSecurityData()
                 runCatching { localImportStore.loadHoldings() } to runCatching { localImportStore.loadWatchlist() }
             }
             heldResult.onSuccess { restored ->

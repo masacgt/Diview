@@ -64,10 +64,11 @@ class LocalImportStore(context: Context) {
             }
         }
         save("shareholder_benefits", json.toString().toByteArray(Charsets.UTF_8))
+        writeAutoBackupSnapshot(loadHoldings().orEmpty(), loadWatchlist().orEmpty())
     }
 
     fun loadShareholderBenefits(): Map<String, List<ShareholderBenefit>> =
-        load("shareholder_benefits")?.let { bytes ->
+        loadPortableOverride("shareholder_benefits")?.let { bytes ->
             val json = JSONObject(bytes.toString(Charsets.UTF_8))
             buildMap {
                 val codes = json.keys()
@@ -85,10 +86,11 @@ class LocalImportStore(context: Context) {
     fun saveStockClimateOverrides(overrides: Map<String, StockClimate>) {
         val json = JSONObject().apply { overrides.forEach { (code, climate) -> put(code, climate.name) } }
         save("stock_climate_overrides", json.toString().toByteArray(Charsets.UTF_8))
+        writeAutoBackupSnapshot(loadHoldings().orEmpty(), loadWatchlist().orEmpty())
     }
 
     fun loadStockClimateOverrides(): Map<String, StockClimate> =
-        load("stock_climate_overrides")?.let { bytes ->
+        loadPortableOverride("stock_climate_overrides")?.let { bytes ->
             val json = JSONObject(bytes.toString(Charsets.UTF_8))
             buildMap {
                 val codes = json.keys()
@@ -120,10 +122,11 @@ class LocalImportStore(context: Context) {
             }
         }
         save("dividend_history_overrides", json.toString().toByteArray(Charsets.UTF_8))
+        writeAutoBackupSnapshot(loadHoldings().orEmpty(), loadWatchlist().orEmpty())
     }
 
     fun loadDividendHistoryOverrides(): Map<String, List<DividendHistoryOverride>> =
-        load("dividend_history_overrides")?.let { bytes ->
+        loadPortableOverride("dividend_history_overrides")?.let { bytes ->
             val json = JSONObject(bytes.toString(Charsets.UTF_8))
             buildMap {
                 val codes = json.keys()
@@ -180,9 +183,25 @@ class LocalImportStore(context: Context) {
         autoBackup.write(
             JSONArray().apply { holdings.forEach { put(it.toJson()) } },
             JSONArray().apply { watchlist.forEach { put(it.toJson()) } },
-            { kind -> load("dvm_${kind.name}") }
+            overrides = JSONObject().apply {
+                PORTABLE_OVERRIDE_KEYS.forEach { key ->
+                    put(key, loadPortableOverride(key)?.let { JSONObject(it.toString(Charsets.UTF_8)) } ?: JSONObject())
+                }
+            },
+            backup = { kind -> load("dvm_${kind.name}") }
         )
         BackupManager(appContext).dataChanged()
+    }
+
+    private fun loadPortableOverride(key: String): ByteArray? {
+        load(key)?.let { return it }
+        // Restore the complete optional group before any replacement snapshot is started.
+        // Older version-one snapshots without the group intentionally retain empty defaults.
+        val transferred = autoBackup.readOverrides() ?: return null
+        PORTABLE_OVERRIDE_KEYS.filterNot(prefs::contains).forEach { name ->
+            transferred.optJSONObject(name)?.let { json -> save(name, json.toString().toByteArray(Charsets.UTF_8)) }
+        }
+        return load(key)
     }
 
     private fun WatchlistStock.toJson() = JSONObject().apply {
@@ -270,6 +289,7 @@ class LocalImportStore(context: Context) {
             (it.taxFreeShares == null || it.taxFreeShares in 0..it.shares)) { "保存データの保有情報が正しくありません" }
     }
     private companion object {
+        val PORTABLE_OVERRIDE_KEYS = listOf("shareholder_benefits", "stock_climate_overrides", "dividend_history_overrides")
         const val KEY_ALIAS = "diview.local.import.aes"
         val KEY_LOCK = Any()
     }

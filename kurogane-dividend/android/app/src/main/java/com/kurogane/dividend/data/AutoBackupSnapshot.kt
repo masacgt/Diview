@@ -20,6 +20,13 @@ internal class AutoBackupSnapshot(file: File) {
 
     fun readHoldings(): JSONArray? = readField("holdings") { it.readJsonArray() }
     fun readWatchlist(): JSONArray? = readField("watchlist") { it.readJsonArray() }
+    fun readOverrides(): JSONObject? = readField("overrides") {
+        val json = it.readJsonValue() as? JSONObject ?: throw IOException("自動バックアップの形式が正しくありません")
+        for (key in listOf("shareholder_benefits", "stock_climate_overrides", "dividend_history_overrides")) {
+            check(!json.has(key) || json.optJSONObject(key) != null)
+        }
+        json
+    }
 
     fun readBackup(kind: DvmBackupKind): ByteArray? = readField("dvmBackups") { reader ->
         var payload: ByteArray? = null
@@ -41,16 +48,24 @@ internal class AutoBackupSnapshot(file: File) {
             JsonReader(atomicFile.openRead().bufferedReader(Charsets.UTF_8)).use { reader ->
                 var version: Int? = null
                 var value: T? = null
+                val fields = mutableSetOf<String>()
                 reader.beginObject()
                 while (reader.hasNext()) {
-                    when (reader.nextName()) {
+                    val field = reader.nextName()
+                    check(fields.add(field))
+                    when (field) {
+                        "holdings", "watchlist" -> check(reader.peek() == JsonToken.BEGIN_ARRAY)
+                        "dvmBackups", "overrides" -> check(reader.peek() == JsonToken.BEGIN_OBJECT)
+                    }
+                    when (field) {
                         "version" -> version = reader.nextInt()
                         name -> value = read(reader)
                         else -> reader.skipValue()
                     }
                 }
                 reader.endObject()
-                check(version == 1 && reader.peek() == JsonToken.END_DOCUMENT)
+                check(version == 1 && fields.containsAll(listOf("holdings", "watchlist", "dvmBackups")) &&
+                    reader.peek() == JsonToken.END_DOCUMENT)
                 value
             }
         } catch (failure: Exception) {
@@ -60,7 +75,8 @@ internal class AutoBackupSnapshot(file: File) {
         }
     }
 
-    fun write(holdings: JSONArray, watchlist: JSONArray, backup: (DvmBackupKind) -> ByteArray?) = synchronized(LOCK) {
+    fun write(holdings: JSONArray, watchlist: JSONArray, overrides: JSONObject = JSONObject(),
+        backup: (DvmBackupKind) -> ByteArray?) = synchronized(LOCK) {
         val stream = atomicFile.startWrite()
         try {
             // finishWrite/failWrite own the stream, so the buffered writer is flushed before finishing.
@@ -80,7 +96,9 @@ internal class AutoBackupSnapshot(file: File) {
                     separator = ","
                 }
             }
-            writer.write("}}")
+            writer.write("},\"overrides\":")
+            writer.write(overrides.toString())
+            writer.write("}")
             writer.flush()
             atomicFile.finishWrite(stream)
         } catch (failure: Throwable) {
