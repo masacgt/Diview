@@ -30,6 +30,10 @@ SPLIT_EVENTS_PATH = Path(__file__).parents[2] / "data/irbank/catalog/share_split
 ISSUER_DATA_ROOT = Path(__file__).parents[2] / "data/irbank/organized/by_security"
 OUTPUT_ROOT = Path("split-transition-audit")
 FISCAL_PERIOD_RE = re.compile(r"^(\d{4})/(\d{2})$")
+SECURITY_CSV_FIELDS = [
+    "code", "symbol", "name", "as_of", "yfinance_history_status", "yfinance_event_count",
+    "split_events", "issuer_dps_years_compared", "fiscal_years_matched", "fiscal_years_mismatched", "status",
+]
 
 
 def parse_period_end(value: Any) -> date | None:
@@ -111,6 +115,18 @@ def read_optional_json(client: Any, bucket: str, key: str) -> dict[str, Any] | N
         raise
     value = json.loads(response["Body"].read())
     return value if isinstance(value, dict) else None
+
+
+def security_csv_row(result: dict[str, Any]) -> dict[str, Any]:
+    """Return only public per-security CSV columns, excluding nested comparisons."""
+    return {
+        field: (
+            json.dumps(result.get(field, []), ensure_ascii=False)
+            if field == "split_events"
+            else result.get(field, "")
+        )
+        for field in SECURITY_CSV_FIELDS
+    }
 
 
 def recent_current_split_codes(events_path: Path, active_codes: set[str], as_of: date) -> dict[str, list[dict[str, Any]]]:
@@ -278,15 +294,11 @@ def run(*, workers: int, as_of: date, first_year: int, last_year: int, tolerance
         for result in results
         for comparison in result["comparisons"]
     ]
-    security_fields = [
-        "code", "symbol", "name", "as_of", "yfinance_history_status", "yfinance_event_count",
-        "split_events", "issuer_dps_years_compared", "fiscal_years_matched", "fiscal_years_mismatched", "status",
-    ]
     with (OUTPUT_ROOT / "by-security.csv").open("w", encoding="utf-8-sig", newline="") as target:
-        writer = csv.DictWriter(target, fieldnames=security_fields)
+        writer = csv.DictWriter(target, fieldnames=SECURITY_CSV_FIELDS)
         writer.writeheader()
         for result in results:
-            writer.writerow({**result, "split_events": json.dumps(result["split_events"], ensure_ascii=False)})
+            writer.writerow(security_csv_row(result))
     comparison_fields = [
         "code", "name", "status", "fiscal_year", "issuer_adjusted_dps", "yfinance_event_total", "difference", "within_tolerance",
     ]
