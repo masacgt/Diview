@@ -363,6 +363,19 @@ fun AssetManagementScreen(
     }
 
     Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { onOpenAddHolding("") },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shape = CircleShape
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = stringResource(R.string.asset_management_add_asset)
+                )
+            }
+        },
         snackbarHost = {
             if (sharedSnackbarHostState == null) DiviewSnackbarHost(snackbarHostState)
         },
@@ -396,7 +409,7 @@ fun AssetManagementScreen(
                 .padding(innerPadding)
                 .testTag("asset_management_list"),
             state = listState,
-            contentPadding = PaddingValues(horizontal = 14.dp),
+            contentPadding = PaddingValues(start = 14.dp, top = 0.dp, end = 14.dp, bottom = 88.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             if (hasMissingExchangeRate) {
@@ -687,21 +700,6 @@ fun AssetManagementScreen(
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.clickable { viewModel.selectMonth(selectedMonth!!) }
                             )
-                        }
-                        Surface(
-                            onClick = { onOpenAddHolding("") },
-                            shape = CircleShape,
-                            color = NeonGreen,
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Default.Add,
-                                    contentDescription = stringResource(R.string.asset_management_add_asset),
-                                    tint = OnPrimaryContainer,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
                         }
                         Surface(
                             shape = RoundedCornerShape(8.dp),
