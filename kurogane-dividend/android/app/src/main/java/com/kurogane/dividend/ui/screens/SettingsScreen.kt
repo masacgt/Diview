@@ -11,6 +11,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -41,6 +43,8 @@ import kotlin.math.roundToInt
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.kurogane.dividend.data.PortfolioExporter
+import com.kurogane.dividend.ui.screens.GoogleDvmBackupAction
+import com.kurogane.dividend.ui.screens.GoogleDvmBackupCard
 import com.kurogane.dividend.data.runCatchingCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -69,6 +73,9 @@ fun SettingsScreen(
     val oledBlackAvailable = themeMode == "dark" || (themeMode == "system" && systemDarkTheme)
     val isOledBlack by viewModel.isOledBlack.collectAsStateWithLifecycle()
     val selectedAccent by viewModel.selectedAccent.collectAsStateWithLifecycle()
+    val shareholderBenefits by viewModel.shareholderBenefits.collectAsStateWithLifecycle()
+    val stockClimateOverrides by viewModel.stockClimateOverrides.collectAsStateWithLifecycle()
+    val dividendHistoryOverrides by viewModel.dividendHistoryOverrides.collectAsStateWithLifecycle()
     var dataTab by rememberSaveable { mutableStateOf("import") }
     val calcBasis by viewModel.calculationBasis.collectAsStateWithLifecycle()
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
@@ -110,21 +117,6 @@ fun SettingsScreen(
             }
         }
     }
-    val jsonExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri != null) {
-            isExporting = true
-            val stocks = viewModel.holdings.value
-            exportScope.launch {
-                try {
-                    val result = runCatchingCancellable { withContext(Dispatchers.IO) {
-                        context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(PortfolioExporter.json(stocks).toByteArray(Charsets.UTF_8)) }
-                            ?: error(resources.getString(R.string.settings_label_63))
-                    } }
-                    Toast.makeText(context, if (result.isSuccess) context.getString(R.string.settings_message_5) else context.getString(R.string.settings_message_6), Toast.LENGTH_LONG).show()
-                } finally { isExporting = false }
-            }
-        }
-    }
     val accents = listOf("emerald", "cyan", "blue", "amber", "purple").map { accent ->
         accent to accentColorForMode(accent, oledBlackAvailable)
     }
@@ -141,21 +133,36 @@ fun SettingsScreen(
                         Segment(stringResource(R.string.settings_label), dataTab == "import", Modifier.weight(1f)) { dataTab = "import" }
                         Segment(stringResource(R.string.settings_label_2), dataTab == "export", Modifier.weight(1f)) { dataTab = "export" }
                     }
-                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (dataTab == "import") {
-                            BrokerCsvImportCard(onImportCsv = { rows, fields -> viewModel.importCsvRows(rows, fields) })
-                            HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                            Label(stringResource(R.string.csv_import_label_2), 9, OnSurface, true)
-                            DvmBackupFolderImportCard(onImportDvm = { backups -> viewModel.importDvmBackups(backups) })
-                            AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Label(stringResource(R.string.settings_label_9), 7, SettingsMuted)
-                                Label(stringResource(R.string.asset_management_text_6 , viewModel.holdings.collectAsStateWithLifecycle().value.size), 7, SettingsMint)
-                            }
-                        } else {
-                            Label(stringResource(R.string.settings_label_11), 9, SettingsMuted)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ActionButton(stringResource(R.string.settings_label_12), Modifier.weight(1f)) { if (!isExporting) csvExporter.launch("Diview-portfolio.csv") }
-                                ActionButton(stringResource(R.string.settings_label_13), Modifier.weight(1f)) { if (!isExporting) jsonExporter.launch("Diview-portfolio.json") }
+                    Box(Modifier.fillMaxWidth().height(220.dp)) {
+                        Column(
+                            Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (dataTab == "import") {
+                                BrokerCsvImportCard(onImportCsv = { rows, fields -> viewModel.importCsvRows(rows, fields) })
+                                HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
+                                Label(stringResource(R.string.csv_import_label_2), 9, OnSurface, true)
+                                DvmBackupFolderImportCard(onImportDvm = { backups -> viewModel.importDvmBackups(backups) })
+                                GoogleDvmBackupCard(
+                                    action = GoogleDvmBackupAction.IMPORT,
+                                    onImportDvm = { backups -> viewModel.importDvmBackups(backups) }
+                                )
+                                AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Label(stringResource(R.string.settings_label_9), 7, SettingsMuted)
+                                    Label(stringResource(R.string.asset_management_text_6 , viewModel.holdings.collectAsStateWithLifecycle().value.size), 7, SettingsMint)
+                                }
+                            } else {
+                                Label(stringResource(R.string.settings_label_11), 9, SettingsMuted)
+                                ActionButton(stringResource(R.string.settings_label_12), Modifier.fillMaxWidth()) {
+                                    if (!isExporting) csvExporter.launch("Diview-portfolio.csv")
+                                }
+                                GoogleDvmBackupCard(
+                                    action = GoogleDvmBackupAction.EXPORT,
+                                    holdings = viewModel.holdings.value,
+                                    shareholderBenefits = shareholderBenefits,
+                                    stockClimateOverrides = stockClimateOverrides,
+                                    dividendHistoryOverrides = dividendHistoryOverrides
+                                )
                             }
                         }
                     }

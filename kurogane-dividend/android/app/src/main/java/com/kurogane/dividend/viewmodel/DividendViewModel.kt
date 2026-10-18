@@ -1030,9 +1030,19 @@ class DividendViewModel @JvmOverloads constructor(
         val next = PortfolioImporter.importStocks(_holdings.value, stocks).map {
             it.copy(dividendMonths = emptyList()).refreshPayout()
         }
+        val extras = backups.map { it.extras }
+        val nextBenefits = _shareholderBenefits.value.toMutableMap().apply { extras.forEach { putAll(it.shareholderBenefits) } }
+        val nextClimates = _stockClimateOverrides.value.toMutableMap().apply { extras.forEach { putAll(it.stockClimateOverrides) } }
+        val nextDividendHistory = _dividendHistoryOverrides.value.toMutableMap().apply { extras.forEach { putAll(it.dividendHistoryOverrides) } }
         withContext(Dispatchers.IO) {
             backups.forEach { preview -> localImportStore.saveBackup(preview.kind, preview.payload) }
+            localImportStore.saveShareholderBenefits(nextBenefits)
+            localImportStore.saveStockClimateOverrides(nextClimates)
+            localImportStore.saveDividendHistoryOverrides(nextDividendHistory)
         }
+        _shareholderBenefits.value = nextBenefits
+        _stockClimateOverrides.value = nextClimates
+        _dividendHistoryOverrides.value = nextDividendHistory
         holdingsLoadFailed = false
         updatePortfolio(next)
         applyCachedDividendMonths()

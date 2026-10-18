@@ -544,29 +544,35 @@ fun StockDetailScreen(
                                     }
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = PrimaryEmerald.copy(alpha = 0.15f),
-                                            border = BorderStroke(0.5.dp, PrimaryEmerald.copy(alpha = 0.3f))
-                                        ) {
-                                            Text(
-                                                currentHolding.accountType,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                                color = PrimaryEmerald,
-                                                fontSize = AppTextSize.dense,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                        if (!isOwnedHolding) {
-                                            IconButton(
-                                                onClick = { onOpenAddHolding(currentHolding.code) },
-                                                modifier = Modifier.size(28.dp)
+                                        if (isOwnedHolding) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = PrimaryEmerald.copy(alpha = 0.15f),
+                                                border = BorderStroke(0.5.dp, PrimaryEmerald.copy(alpha = 0.3f))
                                             ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Add,
-                                                    contentDescription = "保有銘柄に登録",
-                                                    tint = PrimaryEmerald,
-                                                    modifier = Modifier.size(20.dp)
+                                                Text(
+                                                    currentHolding.accountType,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                                    color = PrimaryEmerald,
+                                                    fontSize = AppTextSize.dense,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        } else {
+                                            Surface(
+                                                modifier = Modifier.clip(CircleShape).clickable {
+                                                    onOpenAddHolding(currentHolding.code)
+                                                },
+                                                shape = CircleShape,
+                                                color = PrimaryEmerald.copy(alpha = 0.15f),
+                                                border = BorderStroke(0.5.dp, PrimaryEmerald.copy(alpha = 0.3f))
+                                            ) {
+                                                Text(
+                                                    stringResource(R.string.stock_detail_add_holding_badge),
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                                    color = PrimaryEmerald,
+                                                    fontSize = AppTextSize.dense,
+                                                    fontWeight = FontWeight.Bold
                                                 )
                                             }
                                         }

@@ -81,6 +81,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.9")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+    implementation("com.google.android.gms:play-services-auth:21.6.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
