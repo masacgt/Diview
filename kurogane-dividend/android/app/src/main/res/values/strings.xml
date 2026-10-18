@@ -83,7 +83,7 @@
     <string name="japanese_stocks">"日本株"</string>
     <string name="us_stocks">"米国株"</string>
     <string name="funds">"投信"</string>
-    <string name="annual_dividend_text_8">"構成銘柄・配当比率"</string>
+    <string name="annual_dividend_text_8">"銘柄別内訳"</string>
     <string name="annual_dividend_text_9">"構成比率"</string>
     <string name="annual_dividend_text_10">"配当比率"</string>
     <string name="annual_dividend_text_11">"配当支払い銘柄がありません。"</string>
