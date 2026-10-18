@@ -952,6 +952,34 @@ fun StockDetailScreen(
                             }
                         }
 
+                        financial?.forecastFiscalYear?.let { forecastFiscalYear ->
+                            val fiscalMonth = financial.period.substringAfterLast('/').toIntOrNull()
+                                ?.takeIf { it in 1..12 }
+                            val forecastPeriodLabel = fiscalMonth?.let { month ->
+                                "${forecastFiscalYear}年${month}月期 予想配当"
+                            } ?: "${forecastFiscalYear}年期 予想配当"
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    forecastPeriodLabel,
+                                    color = OnSurfaceVariant,
+                                    fontSize = AppTextSize.dense,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    financial.forecastAnnualDividend
+                                        ?.let { "¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(it)} / 株" }
+                                        ?: "未取得",
+                                    color = PrimaryEmerald,
+                                    fontSize = AppTextSize.dense,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(8.dp))
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
