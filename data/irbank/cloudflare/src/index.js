@@ -1589,6 +1589,8 @@ export default {
       if (!env.MARKET_DATA) return json({ error: 'market_data_unavailable' }, 503);
       const rawSymbols = String(url.searchParams.get('symbols') || '').split(',').map(value => value.trim());
       const symbols = [...new Set(rawSymbols.map(value => value.toUpperCase()))];
+      const rawEventYear = url.searchParams.get('event_year');
+      const requestedEventYear = rawEventYear == null ? null : Number(rawEventYear);
       if (symbols.length === 0 || symbols.length > 50 || symbols.some(symbol => !/^[A-Z0-9.^_=-]{1,32}$/.test(symbol))) {
         return json({ error: 'invalid_request' }, 400);
       }
@@ -1597,6 +1599,9 @@ export default {
         timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit'
       }).formatToParts(new Date()).map(part => [part.type, part.value]));
       const asOf = `${todayParts.year}-${todayParts.month}-${todayParts.day}`;
+      if (rawEventYear != null && (!Number.isInteger(requestedEventYear) || requestedEventYear < 1900 || requestedEventYear > Number(asOf.slice(0, 4)))) {
+        return json({ error: 'invalid_request' }, 400);
+      }
       const cutoff = new Date(Date.parse(`${asOf}T00:00:00.000Z`) - 365 * 24 * 60 * 60 * 1000)
         .toISOString().slice(0, 10);
       try {
@@ -1620,7 +1625,9 @@ export default {
           }
         }
         const items = await Promise.all(symbols.map(async symbol => {
-          const years = [Number(asOf.slice(0, 4)), Number(asOf.slice(0, 4)) - 1];
+          const years = requestedEventYear != null
+            ? [requestedEventYear]
+            : [Number(asOf.slice(0, 4)), Number(asOf.slice(0, 4)) - 1];
           const v2Symbol = yfinanceV2Symbol(symbol);
           const [v2Events, current] = await Promise.all([
             readV2DividendEvents(env, symbol, years),
@@ -1666,7 +1673,9 @@ export default {
             const events = v2Events.filter(event => {
               const date = String(event?.date || '');
               const amount = finiteNumber(event?.amount);
-              return /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= cutoff && date <= asOf && amount > 0;
+              const matchesRequestedYear = years.length === 1 && date.startsWith(`${years[0]}-`);
+              return /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+                (matchesRequestedYear ? date <= asOf : date >= cutoff && date <= asOf) && amount > 0;
             }).map(event => {
               const eventDate = String(event.date);
               const rightsDates = rightsDatesByEvent.get(`${symbol}|${eventDate}`) || {};
