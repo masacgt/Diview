@@ -786,6 +786,16 @@
     <string name="diview_notifications_message_7">"新しいお知らせがあります"</string>
     <string name="diview_notifications_message_8">"Diviewのテスト通知"</string>
     <string name="diview_notifications_message_9">"通知が有効です。タップすると通知設定を開きます。"</string>
+    <string name="notification_test_note">"各テストは実際の通知条件を判定せず、通知の表示だけを確認します。"</string>
+    <string name="notification_test_button">"この通知をテスト"</string>
+    <string name="notification_test_success">"テスト通知を送信しました。"</string>
+    <string name="notification_test_failure">"送信できません。端末の通知許可と通知チャンネルを確認してください。"</string>
+    <string name="notification_test_price_title">"目標利回り到達通知（テスト）"</string>
+    <string name="notification_test_price_text">"買場シグナル通知の表示確認用です。実際に目標利回りへ到達した銘柄はありません。"</string>
+    <string name="notification_test_dividend_title">"配当権利通知（テスト）"</string>
+    <string name="notification_test_dividend_text">"配当権利通知の表示確認用です。実際の権利日を示すものではありません。"</string>
+    <string name="notification_test_dividend_change_title">"増配・減配通知（テスト）"</string>
+    <string name="notification_test_dividend_change_text">"増配・減配通知の表示確認用です。実際の配当変更を示すものではありません。"</string>
     <string name="notification_dividend_change_title">"増配・減配通知"</string>
     <string name="notification_dividend_change_summary">"保有している日本株の年間1株配当額の変化を朝・夕にお知らせ"</string>
     <string name="notification_dividend_change_description">"保有している日本株の年間1株配当額の増加・減少をお知らせします"</string>
