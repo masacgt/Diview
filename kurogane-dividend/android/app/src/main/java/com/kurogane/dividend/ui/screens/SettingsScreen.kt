@@ -1,6 +1,7 @@
 package com.kurogane.dividend.ui.screens
 
 import com.kurogane.dividend.ui.components.AdaptiveRow
+import com.kurogane.dividend.ui.components.DataManagementActionButton
 import androidx.compose.ui.res.stringResource
 import com.kurogane.dividend.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -11,8 +12,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -76,14 +75,9 @@ fun SettingsScreen(
     val shareholderBenefits by viewModel.shareholderBenefits.collectAsStateWithLifecycle()
     val stockClimateOverrides by viewModel.stockClimateOverrides.collectAsStateWithLifecycle()
     val dividendHistoryOverrides by viewModel.dividendHistoryOverrides.collectAsStateWithLifecycle()
+    val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
     var dataTab by rememberSaveable { mutableStateOf("import") }
-    val calcBasis by viewModel.calculationBasis.collectAsStateWithLifecycle()
-    val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
-    val taxDeduction = taxRateMode == "net"
-    val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
     val biometricEnabled by viewModel.biometricEnabled.collectAsStateWithLifecycle()
-    val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
-    val exchangeRateError by viewModel.exchangeRateError.collectAsStateWithLifecycle()
     val targetYield by viewModel.roadmapTargetYield.collectAsStateWithLifecycle()
     val threshold by viewModel.compositionThreshold.collectAsStateWithLifecycle()
     val compositionOtherEnabled by viewModel.compositionOtherEnabled.collectAsStateWithLifecycle()
@@ -91,17 +85,27 @@ fun SettingsScreen(
     var confirmReset by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
+    fun sendNotificationTest(kind: NotificationKind) {
+        val sent = DiviewNotifications(context).test(kind)
+        Toast.makeText(
+            context,
+            context.getString(if (sent) R.string.notification_test_success else R.string.notification_test_failure),
+            Toast.LENGTH_LONG
+        ).show()
+    }
     val notificationAccess = rememberNotificationAccess { action ->
         when (action) {
             "price" -> viewModel.setNotificationEnabled(NotificationKind.PRICE, true)
             "dividend" -> viewModel.setNotificationEnabled(NotificationKind.DIVIDEND, true)
             "dividend_change" -> viewModel.setNotificationEnabled(NotificationKind.DIVIDEND_CHANGE, true)
+            "test_price" -> sendNotificationTest(NotificationKind.PRICE)
+            "test_dividend" -> sendNotificationTest(NotificationKind.DIVIDEND)
+            "test_dividend_change" -> sendNotificationTest(NotificationKind.DIVIDEND_CHANGE)
             "test" -> Toast.makeText(context, if (DiviewNotifications(context).test()) context.getString(R.string.settings_message) else context.getString(R.string.settings_message_2), Toast.LENGTH_LONG).show()
         }
     }
     val exportScope = rememberCoroutineScope()
     var isExporting by remember { mutableStateOf(false) }
-    var isUpdatingFx by remember { mutableStateOf(false) }
     val csvExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) {
             isExporting = true
@@ -133,37 +137,38 @@ fun SettingsScreen(
                         Segment(stringResource(R.string.settings_label), dataTab == "import", Modifier.weight(1f)) { dataTab = "import" }
                         Segment(stringResource(R.string.settings_label_2), dataTab == "export", Modifier.weight(1f)) { dataTab = "export" }
                     }
-                    Box(Modifier.fillMaxWidth().height(220.dp)) {
-                        Column(
-                            Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (dataTab == "import") {
-                                BrokerCsvImportCard(onImportCsv = { rows, fields -> viewModel.importCsvRows(rows, fields) })
-                                HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                                Label(stringResource(R.string.csv_import_label_2), 9, OnSurface, true)
-                                DvmBackupFolderImportCard(onImportDvm = { backups -> viewModel.importDvmBackups(backups) })
-                                GoogleDvmBackupCard(
-                                    action = GoogleDvmBackupAction.IMPORT,
-                                    onImportDvm = { backups -> viewModel.importDvmBackups(backups) }
-                                )
-                                AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Label(stringResource(R.string.settings_label_9), 7, SettingsMuted)
-                                    Label(stringResource(R.string.asset_management_text_6 , viewModel.holdings.collectAsStateWithLifecycle().value.size), 7, SettingsMint)
-                                }
-                            } else {
-                                Label(stringResource(R.string.settings_label_11), 9, SettingsMuted)
-                                ActionButton(stringResource(R.string.settings_label_12), Modifier.fillMaxWidth()) {
-                                    if (!isExporting) csvExporter.launch("Diview-portfolio.csv")
-                                }
-                                GoogleDvmBackupCard(
-                                    action = GoogleDvmBackupAction.EXPORT,
-                                    holdings = viewModel.holdings.value,
-                                    shareholderBenefits = shareholderBenefits,
-                                    stockClimateOverrides = stockClimateOverrides,
-                                    dividendHistoryOverrides = dividendHistoryOverrides
-                                )
-                            }
+                    Column(
+                        Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (dataTab == "import") {
+                            DataManagementActionButton(
+                                title = stringResource(R.string.backup_csv_import_title),
+                                subtitle = stringResource(R.string.backup_csv_import_subtitle),
+                                icon = Icons.Default.UploadFile,
+                                onClick = onNavigateToCsv
+                            )
+                            GoogleDvmBackupCard(
+                                action = GoogleDvmBackupAction.IMPORT,
+                                onImportDvm = { backups -> viewModel.importDvmBackups(backups) }
+                            )
+                        } else {
+                            DataManagementActionButton(
+                                title = stringResource(R.string.settings_label_12),
+                                subtitle = stringResource(R.string.backup_csv_export_subtitle),
+                                icon = Icons.Default.Save,
+                                enabled = !isExporting,
+                                isWorking = isExporting,
+                                onClick = { if (!isExporting) csvExporter.launch("Diview-portfolio.csv") }
+                            )
+                            GoogleDvmBackupCard(
+                                action = GoogleDvmBackupAction.EXPORT,
+                                holdings = viewModel.holdings.value,
+                                shareholderBenefits = shareholderBenefits,
+                                stockClimateOverrides = stockClimateOverrides,
+                                dividendHistoryOverrides = dividendHistoryOverrides,
+                                watchlist = watchlist
+                            )
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
@@ -233,26 +238,6 @@ fun SettingsScreen(
         item {
             SettingsSection(stringResource(R.string.settings_text_4), Icons.Default.Tune) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Label(stringResource(R.string.settings_label_17), 9, OnSurface, true); Label(stringResource(R.string.settings_label_18), 7, SettingsMuted)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        BasisChoice(stringResource(R.string.settings_text_5), stringResource(R.string.settings_label_47), calcBasis == "eval", Modifier.weight(1f)) { viewModel.setCalculationBasis("eval") }
-                        BasisChoice(stringResource(R.string.settings_text_6), stringResource(R.string.settings_label_48), calcBasis == "cost", Modifier.weight(1f)) { viewModel.setCalculationBasis("cost") }
-                    }
-                    HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle(stringResource(R.string.settings_text_7), stringResource(R.string.settings_label_49), taxDeduction, { viewModel.setTaxRateMode(if (it) "net" else "gross") })
-                    HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle(stringResource(R.string.settings_text_8), stringResource(R.string.settings_label_50), usTaxDeduction, viewModel::setUsTaxDeduction)
-                    Label(stringResource(R.string.settings_label_19), 7, SettingsMuted)
-                    Label(exchangeRate?.let { resources.getString(R.string.settings_label_61, (String.format(java.util.Locale.JAPAN, "%.2f", it.usdJpy)).toString(), (it.date).toString()) } ?: resources.getString(R.string.settings_label_62), 8, SettingsMuted)
-                    exchangeRateError?.let { Label(it, 7, SettingsMuted) }
-                    ActionButton(if (isUpdatingFx) stringResource(R.string.fx_loading) else stringResource(R.string.settings_label_20), Modifier.fillMaxWidth(), enabled = !isUpdatingFx) {
-                        exportScope.launch {
-                            isUpdatingFx = true
-                            try { viewModel.refreshExchangeRate() } finally { isUpdatingFx = false }
-                        }
-                    }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_21), 9, OnSurface, true); Label(stringResource(R.string.settings_label_22 , String.format(java.util.Locale.JAPAN, "%.2f", targetYield)), 8, SettingsMint) }
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -277,17 +262,21 @@ fun SettingsScreen(
         item {
             SettingsSection(stringResource(R.string.settings_text_9), Icons.Default.Notifications) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Label(stringResource(R.string.notification_test_note), 7, SettingsMuted)
                     SettingToggle(stringResource(R.string.settings_text_10), stringResource(R.string.settings_label_54), notificationSettings.dividendEnabled, {
                         if (it) notificationAccess.request("dividend") else viewModel.setNotificationEnabled(NotificationKind.DIVIDEND, false)
                     })
+                    NotificationTestAction { notificationAccess.request("test_dividend") }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     SettingToggle(stringResource(R.string.notification_dividend_change_title), stringResource(R.string.notification_dividend_change_summary), notificationSettings.dividendChangeEnabled, {
                         if (it) notificationAccess.request("dividend_change") else viewModel.setNotificationEnabled(NotificationKind.DIVIDEND_CHANGE, false)
                     })
+                    NotificationTestAction { notificationAccess.request("test_dividend_change") }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     SettingToggle(stringResource(R.string.settings_text_11), stringResource(R.string.settings_label_55), notificationSettings.priceEnabled, {
                         if (it) notificationAccess.request("price") else viewModel.setNotificationEnabled(NotificationKind.PRICE, false)
                     })
+                    NotificationTestAction { notificationAccess.request("test_price") }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) { Label(stringResource(R.string.settings_label_27), 9, OnSurface, true); Label(stringResource(R.string.settings_label_28), 7, SettingsMuted) }
@@ -429,19 +418,19 @@ private fun SettingToggle(title: String, detail: String, checked: Boolean, onCha
 }
 
 @Composable
-private fun BasisChoice(title: String, subtitle: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Column(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(7.dp)).background(if (selected) SettingsMint.copy(alpha = 0.14f) else SettingsInset).border(1.dp, if (selected) SettingsMint else SettingsBorder, RoundedCornerShape(7.dp)).selectable(selected, role = Role.RadioButton, onClick = onClick).padding(7.dp)) {
-        AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Label(title, 8, if (selected) OnSurface else SettingsMuted, true)
-            Icon(if (selected) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked, null, tint = if (selected) SettingsMint else SettingsMuted, modifier = Modifier.size(12.dp))
-        }
-        Label(subtitle, 7, SettingsMuted)
-    }
+private fun ActionButton(label: String, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    Box(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(7.dp)).background(SettingsInset).border(1.dp, SettingsBorder, RoundedCornerShape(7.dp)).clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(6.dp), contentAlignment = Alignment.Center) { Label(label, 8, OnSurface, true) }
 }
 
 @Composable
-private fun ActionButton(label: String, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
-    Box(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(7.dp)).background(SettingsInset).border(1.dp, SettingsBorder, RoundedCornerShape(7.dp)).clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(6.dp), contentAlignment = Alignment.Center) { Label(label, 8, OnSurface, true) }
+private fun NotificationTestAction(onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        ActionButton(
+            stringResource(R.string.notification_test_button),
+            Modifier.width(132.dp),
+            onClick = onClick
+        )
+    }
 }
 
 @Composable
