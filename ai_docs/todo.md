@@ -2,9 +2,6 @@
 
 ## Completed
 
-- [x] Limit portfolio import choices to broker CSV or Google Drive, remove backup-folder selection, and unify the data-management action cards. Evidence: the JDK 17 debug APK builds and installs on SCG01 and the emulator; SCG01 shows both choices and equal-height import/export viewports, and the CSV choice opens its CSV/Google Drive selector.
-- [ ] Verify end-to-end import with a sample CSV and verify Google authorization, Drive upload, and Drive import using a configured account; those data-changing flows were not run during the UI update.
-
 - [x] Preserve the three approved portable override groups without changing snapshot version 1 or including feedback drafts. Evidence: 17 backup cases pass on API 26/35/33, and the final AAB survives offline OS full-backup/clear/restore on API 26 with all three groups and existing saved facts unchanged; see `android-release-acceptance-20261018.md`.
 - [x] Retain financial failure categories across recreation, bound transient dividend-change retries, restore the asset-list scroll position, and move the initial override/security reads into restoration IO. Evidence: JDK 17 passes 142 JVM cases and Lint without errors; the full suite has 89 passes on API 35 and 88 passes plus one existing API-specific assumption on API 26, with all 32 isolated device cases passing and five production files unchanged.
 
