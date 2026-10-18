@@ -937,7 +937,7 @@ fun StockDetailScreen(
                                             .weight(1f)
                                             .fillMaxHeight()
                                             .clickable(onClickLabel = "${term}の配当内訳を表示") {
-                                                selectedDividendYear = if (isSelected) null else history[index].year
+                                                selectedDividendYear = history[index].year
                                             }
                                     ) {
                                         BoxWithConstraints(
