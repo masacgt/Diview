@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pandas as pd
 
 import benchmark_v2 as benchmark
+import refresh_financial_v2 as financial_refresh
 import sync_v2 as sync
 import migrate_legacy_financials as financial_migration
 import repair_monthly_price_dates as monthly_date_repair
@@ -77,6 +78,20 @@ class SplitTransitionAuditTests(TestCase):
             )
 
         self.assertEqual(set(selected), {"0001", "0002"})
+
+
+class FinancialRefreshPartitionTests(TestCase):
+    def test_shards_are_disjoint_and_cover_all_securities(self):
+        securities = ["1301", "1605", "2349", "2914", "7203", "9984"]
+        shards = [financial_refresh.partition_securities(securities, index, 3) for index in range(3)]
+
+        self.assertEqual(len(set().union(*map(set, shards))), len(securities))
+        self.assertEqual(sum(map(len, shards)), len(securities))
+        self.assertEqual([shard for shard in shards], [["1301", "2914"], ["1605", "7203"], ["2349", "9984"]])
+
+    def test_shard_index_must_be_in_range(self):
+        with self.assertRaises(ValueError):
+            financial_refresh.partition_securities(["1301"], 2, 2)
 
 
 class NetDeRatioTests(TestCase):
