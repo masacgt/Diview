@@ -2041,6 +2041,24 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             current["statistics"][field] = value
             current["field_status"][f"statistics_{field}"] = "stale"
 
+    advice_statements = statements
+    if not advice_statements and not isinstance(prior_current.get("income_advice_metrics"), dict):
+        period = date_value(info.get("lastFiscalYearEnd"))
+        if period is not None:
+            safe_period = safe_symbol(symbol)
+            for key in (
+                object_key("securities", safe_period, "financials", f"{period.isoformat()}.json"),
+                object_key("securities", safe_period, "financials", f"{period.year}.json"),
+            ):
+                document = read_json(client, bucket, key)
+                annual = document.get("annual") if isinstance(document, dict) else None
+                if isinstance(annual, dict):
+                    advice_statements = [annual]
+                    break
+    current["income_advice_metrics"] = income_advice_metrics(
+        current, advice_statements, prior_current.get("income_advice_metrics"),
+    )
+
     now = now_utc()
     cutoff10 = years_before(as_of, 10).isoformat()
     for family, rows, event_key in (("dividends", dividends, "date"), ("splits", splits, "date")):
@@ -2170,6 +2188,10 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     catalog_item = catalog_item_from_documents(
         code, universe_entry or {"security_code_display": code}, profile, current, sync,
     )
+    if catalog_item is not None:
+        catalog_item["income_advice"] = income_advice_candidate(
+            code, catalog_item["name"], current, dividends, as_of,
+        )
     return {"code": code, "symbol": symbol, "name": profile["display_name"], "price": close,
             "quote_date": price_date.isoformat() if price_date else None,
             "annual_dividend_per_share": trailing_dividends,
@@ -2217,6 +2239,174 @@ def record_attempt_start(client: Any, bucket: str, code: str, symbol: str,
     # last_attempt_at always changes, so a read-before-write check only adds an R2 request.
     collector.put_json(client, bucket, object_key("securities", safe, "sync.json"), prior)
     return prior
+
+
+def income_advice_metrics(current: dict[str, Any], statements: list[dict[str, Any]],
+                          previous: dict[str, Any] | None) -> dict[str, Any]:
+    """Keep the latest V2 source values and statuses needed by the advice ranking."""
+    prior = previous if isinstance(previous, dict) else {}
+    statistics = current.get("statistics") if isinstance(current.get("statistics"), dict) else {}
+    field_status = current.get("field_status") if isinstance(current.get("field_status"), dict) else {}
+    prior_fields = prior.get("fields") if isinstance(prior.get("fields"), dict) else {}
+    values: dict[str, Any] = {}
+    statuses: dict[str, str] = {}
+
+    payout_ratio = finite_number(statistics.get("payoutRatio"))
+    values["payout_ratio"] = payout_ratio * 100 if payout_ratio is not None else prior.get("payout_ratio")
+    statuses["payout_ratio"] = str(field_status.get("statistics_payoutRatio", "empty"))
+    if statuses["payout_ratio"] in {"empty", "not_scheduled"} and prior.get("payout_ratio") is not None:
+        values["payout_ratio"] = prior.get("payout_ratio")
+        statuses["payout_ratio"] = str(prior_fields.get("payout_ratio", "stale"))
+
+    latest_statement = max(
+        (row for row in statements if isinstance(row, dict) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(row.get("period_end") or ""))),
+        key=lambda row: str(row["period_end"]), default=None,
+    )
+    if latest_statement is not None:
+        annual_status = latest_statement.get("field_status") if isinstance(latest_statement.get("field_status"), dict) else {}
+        equity_ratio = finite_number(latest_statement.get("equity_ratio_computed"))
+        sales = finite_number(latest_statement.get("sales"))
+        operating_profit = finite_number(latest_statement.get("operating_profit"))
+        operating_margin = operating_profit / sales * 100 if sales is not None and sales > 0 and operating_profit is not None else None
+        values.update({"equity_ratio": equity_ratio, "operating_margin": operating_margin})
+        statuses.update({
+            "equity_ratio": str(annual_status.get("equity_ratio_computed", "empty")),
+            "operating_margin": "available" if operating_margin is not None
+            and annual_status.get("sales") == "available"
+            and annual_status.get("operating_profit") == "available" else "empty",
+        })
+        period_end = latest_statement.get("period_end")
+    else:
+        values.update({"equity_ratio": prior.get("equity_ratio"), "operating_margin": prior.get("operating_margin")})
+        statuses.update({
+            "equity_ratio": str(prior_fields.get("equity_ratio", "not_fetched")),
+            "operating_margin": str(prior_fields.get("operating_margin", "not_fetched")),
+        })
+        period_end = prior.get("financial_period_end")
+
+    for metric, statistic in (("per", "trailingPE"), ("pbr", "priceToBook")):
+        value = finite_number(statistics.get(statistic))
+        status = str(field_status.get(f"statistics_{statistic}", "empty"))
+        if status in {"empty", "not_scheduled"} and prior.get(metric) is not None:
+            value = finite_number(prior.get(metric))
+            status = str(prior_fields.get(metric, "stale"))
+        values[metric] = value
+        statuses[metric] = status
+
+    dividend = current.get("dividend") if isinstance(current.get("dividend"), dict) else {}
+    streak = dividend.get("calendar_year_metrics") if isinstance(dividend.get("calendar_year_metrics"), dict) else {}
+    streak_status = str(streak.get("status") or field_status.get("calendar_year_dividend_metrics") or "not_fetched")
+    for metric, source in (("consecutive_increase_years", "consecutive_increase_years"), ("no_cut_years", "no_cut_years")):
+        value = finite_number(streak.get(source))
+        values[metric] = value
+        statuses[metric] = streak_status if value is not None else "empty" if streak_status == "available" else streak_status
+
+    return {
+        "fields": statuses,
+        **values,
+        "financial_period_end": period_end,
+        "source": "Yahoo Finance via yfinance V2",
+    }
+
+
+def income_advice_score(metrics: dict[str, Any]) -> int | None:
+    fields = metrics.get("fields") if isinstance(metrics.get("fields"), dict) else {}
+    required = (
+        "payout_ratio", "equity_ratio", "operating_margin", "per", "pbr",
+        "consecutive_increase_years", "no_cut_years",
+    )
+    if any(fields.get(name) != "available" or finite_number(metrics.get(name)) is None for name in required):
+        return None
+    payout = finite_number(metrics["payout_ratio"])
+    equity = finite_number(metrics["equity_ratio"])
+    margin = finite_number(metrics["operating_margin"])
+    per = finite_number(metrics["per"])
+    pbr = finite_number(metrics["pbr"])
+    increase = finite_number(metrics["consecutive_increase_years"])
+    no_cut = finite_number(metrics["no_cut_years"])
+    assert payout is not None and equity is not None and margin is not None
+    assert per is not None and pbr is not None and increase is not None and no_cut is not None
+
+    payout_points = 20 if 0 <= payout <= 30 else 16 if payout <= 50 and payout >= 0 else 12 if payout <= 70 and payout >= 0 else 6 if payout <= 90 and payout >= 0 else 3 if payout <= 100 and payout >= 0 else 0
+    equity_points = 20 if equity >= 60 else 16 if equity >= 40 else 12 if equity >= 30 else 8 if equity >= 20 else 4 if equity >= 10 else 0
+    margin_points = 15 if margin >= 15 else 12 if margin >= 10 else 9 if margin >= 5 else 5 if margin >= 0 else 0
+    per_points = 10 if 0 < per <= 10 else 8 if per <= 15 and per > 0 else 6 if per <= 20 and per > 0 else 3 if per <= 30 and per > 0 else 0
+    pbr_points = 10 if 0 < pbr <= 1 else 8 if pbr <= 1.5 and pbr > 0 else 6 if pbr <= 2 and pbr > 0 else 3 if pbr <= 3 and pbr > 0 else 0
+    increase_points = 15 if increase >= 5 else 12 if increase >= 4 else 9 if increase >= 3 else 6 if increase >= 2 else 3 if increase >= 1 else 0
+    no_cut_points = 10 if no_cut >= 10 else 8 if no_cut >= 7 else 6 if no_cut >= 4 else 3 if no_cut >= 2 else 1 if no_cut >= 1 else 0
+    return payout_points + equity_points + margin_points + per_points + pbr_points + increase_points + no_cut_points
+
+
+def income_advice_candidate(code: str, name: str, current: dict[str, Any],
+                            dividends: list[dict[str, Any]], as_of: date) -> dict[str, Any] | None:
+    if str((current.get("price") or {}).get("currency") or "") != "JPY":
+        return None
+    if current.get("field_status", {}).get("dividend_history") != "available":
+        return None
+    action_history = current.get("action_history") if isinstance(current.get("action_history"), dict) else {}
+    coverage_end = date_value(action_history.get("full_history_coverage_end"))
+    latest_completed_year = as_of.year - 1
+    if coverage_end is None or coverage_end < date(latest_completed_year, 12, 31):
+        return None
+    years = list(range(latest_completed_year - 2, latest_completed_year + 1))
+    event_month_years: dict[int, set[int]] = {}
+    annual_totals = {year: 0.0 for year in years}
+    for event in dividends:
+        event_date = date_value(event.get("date"))
+        amount = finite_number(event.get("amount"))
+        if event_date is None or event_date.year not in annual_totals or amount is None or amount <= 0:
+            continue
+        event_month_years.setdefault(event_date.month, set()).add(event_date.year)
+        annual_totals[event_date.year] += amount
+    recurring_months = sorted(month for month, observed_years in event_month_years.items()
+                              if len(observed_years.intersection(years)) >= 2)
+    if not recurring_months:
+        return None
+
+    metrics = current.get("income_advice_metrics") if isinstance(current.get("income_advice_metrics"), dict) else {}
+    score = income_advice_score(metrics)
+    if score is None:
+        return None
+    dividend = current.get("dividend") if isinstance(current.get("dividend"), dict) else {}
+    forecast = finite_number(dividend.get("next_fiscal_year_forecast_per_share"))
+    forecast_status = current.get("field_status", {}).get("forecast_dividend")
+    if forecast_status == "available" and forecast is not None and forecast > 0:
+        annual_dps = forecast
+        annual_basis = "next_fiscal_year_forecast"
+    else:
+        annual_dps = annual_totals.get(latest_completed_year, 0.0)
+        annual_basis = "previous_calendar_year_observed_distributions"
+    if annual_dps <= 0:
+        return None
+    return {
+        "code": code,
+        "name": name,
+        "currency": "JPY",
+        "annual_dividend_per_share": annual_dps,
+        "annual_dividend_basis": annual_basis,
+        "observed_months": recurring_months,
+        "monthly_estimate_per_100_shares": round(annual_dps * 100 / len(recurring_months), 2),
+        "score": score,
+        "score_metrics": {key: metrics.get(key) for key in (
+            "payout_ratio", "equity_ratio", "operating_margin", "per", "pbr",
+            "consecutive_increase_years", "no_cut_years",
+        )},
+        "score_metric_status": dict(metrics.get("fields", {})),
+        "score_metric_source": {
+            "payout_ratio": "securities/{symbol}/current.json:statistics.payoutRatio",
+            "equity_ratio": "latest annual financial row:equity_ratio_computed",
+            "operating_margin": "latest annual financial row:operating_profit/sales",
+            "per": "securities/{symbol}/current.json:statistics.trailingPE",
+            "pbr": "securities/{symbol}/current.json:statistics.priceToBook",
+            "consecutive_increase_years": "securities/{symbol}/current.json:dividend.calendar_year_metrics",
+            "no_cut_years": "securities/{symbol}/current.json:dividend.calendar_year_metrics",
+        },
+        "financial_period_end": metrics.get("financial_period_end"),
+        "dividend_history_years": years,
+        "source_catalog_generation": as_of.isoformat(),
+        "computed_at": iso_now(),
+        "source": "Yahoo Finance via yfinance V2",
+    }
 
 
 def catalog_item_from_documents(code: str, security: dict[str, Any], profile: dict[str, Any],
@@ -2544,6 +2734,20 @@ def run(
         client, bucket, fetched, session_date, previous_catalog,
         processed_items=processed_items, failures=failures,
     )
+    income_advice_catalog = {
+        "schema_version": 1,
+        "generation": session_date.isoformat(),
+        "generated_at": iso_now(),
+        "source": "Yahoo Finance via yfinance V2",
+        "amount_basis": "per_share_annual_amount_and_recurring_event_months",
+        "items": [
+            row["income_advice"]
+            for row in catalog["items"]
+            if row.get("code") not in failures
+            and row.get("status") != "failed"
+            and isinstance(row.get("income_advice"), dict)
+        ],
+    }
     phase_seconds["catalog_build"] = round(time.perf_counter() - phase_started, 3)
     phase_started = time.perf_counter()
     put_json_if_changed(client, bucket, object_key("universe", "current.json"), {
@@ -2552,6 +2756,7 @@ def run(
     })
     put_json_if_changed(client, bucket, object_key("catalog", "generations", f"{session_date.isoformat()}.json"), catalog)
     put_json_if_changed(client, bucket, object_key("catalog", "current.json"), catalog)
+    put_json_if_changed(client, bucket, object_key("derived", "income_advice", "current.json"), income_advice_catalog)
     phase_seconds["catalog_publication"] = round(time.perf_counter() - phase_started, 3)
     elapsed_seconds = round(time.perf_counter() - started_at, 3)
     with _YF_CALL_LOCK:

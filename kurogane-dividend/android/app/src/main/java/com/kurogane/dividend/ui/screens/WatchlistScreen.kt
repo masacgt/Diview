@@ -329,6 +329,8 @@ fun WatchlistScreen(
     val feedbackView = LocalView.current
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
+    val incomeAdviceCatalog by viewModel.incomeAdviceCatalog.collectAsStateWithLifecycle()
+    val incomeAdviceFetchFailed by viewModel.incomeAdviceFetchFailed.collectAsStateWithLifecycle()
     val savedSortSelection by viewModel.watchlistSortSelection.collectAsStateWithLifecycle()
     val localDataRestored by viewModel.localDataRestored.collectAsStateWithLifecycle()
     val watchlistMetricsCache = WatchlistDerivedMetricsCacheStore.forViewModel(viewModel)
@@ -472,6 +474,13 @@ fun WatchlistScreen(
         ?: remember { com.kurogane.dividend.model.WatchlistProjection(emptyList()) }
     val projectionNote = resources.getString(R.string.watchlist_projection_note, projection.unallocatedCount) +
         if (projection.missingExchangeRate) resources.getString(R.string.watchlist_projection_fx_missing) else ""
+    val incomeAdviceCandidates = remember(incomeAdviceCatalog, projection.emptyMonths, watchlistCodes) {
+        com.kurogane.dividend.model.rankIncomeAdviceCandidates(
+            candidates = incomeAdviceCatalog?.candidates.orEmpty(),
+            emptyMonths = projection.emptyMonths,
+            watchlistCodes = watchlistCodes.toSet()
+        )
+    }
 
     // Preserve the current Watchlist order unless the user has selected a sort.
     // Wait for local restoration so seeded fallback cards cannot determine it.
@@ -2547,7 +2556,7 @@ fun WatchlistScreen(
                     }
                 }
 
-                // Card 3: Income advice card below the graph
+                // Card 3: V2-backed income-gap advice
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -2564,22 +2573,10 @@ fun WatchlistScreen(
                                 Icon(Icons.Default.Lightbulb, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    stringResource(R.string.watchlist_text_72),
+                                    stringResource(R.string.watchlist_income_advice_title),
                                     color = OnSurface,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = StatusWarning.copy(alpha = 0.12f)
-                            ) {
-                                Text(
-                                    stringResource(R.string.watchlist_text_73),
-                                    color = AccentAmber,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
                         }
@@ -2587,7 +2584,7 @@ fun WatchlistScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = stringResource(R.string.watchlist_suggestion_note),
+                            text = stringResource(R.string.watchlist_income_advice_explanation),
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = OnSurfaceVariant,
                                 fontSize = AppTextSize.dense,
@@ -2596,69 +2593,91 @@ fun WatchlistScreen(
                         )
 
                         Spacer(modifier = Modifier.height(10.dp))
-
-                        // Actionable Sekisui House addition row
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = BackgroundDark,
-                            border = BorderStroke(1.dp, BorderColor),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Surface(
-                                        shape = RoundedCornerShape(4.dp),
-                                        color = SurfaceContainerHighest
-                                    ) {
-                                        Text(
-                                            stringResource(R.string.watchlist_text_75),
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                            color = OnSurface,
-                                            fontSize = AppTextSize.dense,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column {
-                                        Text(stringResource(R.string.watchlist_text_76), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                        Text(watchlist.firstOrNull { it.code == "1928" }?.payoutTiming.orEmpty(), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    }
-                                }
-
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        watchlist.firstOrNull { it.code == "1928" }?.let {
-                                            com.kurogane.dividend.model.formatDividendYieldDisplay(
-                                                it.currentYield,
-                                                it.isNoDividendConfirmed
+                        when {
+                            projection.emptyMonths.isEmpty() -> Text(
+                                stringResource(R.string.watchlist_income_advice_no_gaps),
+                                color = PrimaryEmerald,
+                                fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Bold
+                            )
+                            incomeAdviceCandidates.isNotEmpty() -> incomeAdviceCandidates.forEach { ranked ->
+                                val candidate = ranked.candidate
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = BackgroundDark,
+                                    border = BorderStroke(1.dp, BorderColor),
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                ) {
+                                    Column(Modifier.padding(10.dp)) {
+                                        AdaptiveRow(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(candidate.code, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(candidate.name, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            }
+                                            Text(
+                                                stringResource(R.string.watchlist_income_advice_score, candidate.score),
+                                                color = PrimaryEmerald,
+                                                fontSize = AppTextSize.dense,
+                                                fontWeight = FontWeight.Bold
                                             )
-                                        }.orEmpty(),
-                                        color = PrimaryEmerald,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(end = 8.dp)
-                                    )
-                                    Button(
-                                        onClick = {
-                                            addWatchlist("1928") { showGraphBottomSheet = false }
-                                        },
-                                        enabled = !isAddingWatchlist,
-                                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
-                                        shape = RoundedCornerShape(6.dp),
-                                        modifier = Modifier.height(28.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                                    ) {
-                                        Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(12.dp))
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Text(stringResource(R.string.watchlist_text_79), color = OnPrimary, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                        }
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            stringResource(R.string.watchlist_income_advice_months, ranked.coveredMonths.joinToString("・") { "${it}月" }),
+                                            color = OnSurfaceVariant,
+                                            fontSize = AppTextSize.dense
+                                        )
+                                        Text(
+                                            stringResource(R.string.watchlist_income_advice_monthly_estimate, yen(ranked.estimatedAmountPerCoveredMonth)),
+                                            color = PrimaryEmerald,
+                                            fontSize = AppTextSize.dense,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            stringResource(
+                                                if (candidate.annualDividendBasis == "next_fiscal_year_forecast") R.string.watchlist_income_advice_annual_forecast
+                                                else R.string.watchlist_income_advice_annual_reference,
+                                                yen(candidate.annualDividendPerShare * 100)
+                                            ),
+                                            color = OnSurfaceVariant,
+                                            fontSize = AppTextSize.caption
+                                        )
+                                        Spacer(Modifier.height(6.dp))
+                                        Button(
+                                            onClick = { addWatchlist(candidate.code) { showGraphBottomSheet = false } },
+                                            enabled = !isAddingWatchlist,
+                                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
+                                            shape = RoundedCornerShape(6.dp),
+                                            modifier = Modifier.align(Alignment.End).height(30.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                                        ) {
+                                            Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(14.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text(stringResource(R.string.watchlist_income_advice_add), color = OnPrimary, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
                             }
+                            incomeAdviceCatalog == null && incomeAdviceFetchFailed -> Text(
+                                stringResource(R.string.watchlist_income_advice_fetch_failed),
+                                color = ErrorRed,
+                                fontSize = AppTextSize.dense
+                            )
+                            incomeAdviceCatalog == null -> Text(
+                                stringResource(R.string.watchlist_income_advice_loading),
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense
+                            )
+                            else -> Text(
+                                stringResource(R.string.watchlist_income_advice_no_candidates),
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense
+                            )
                         }
                     }
                 }

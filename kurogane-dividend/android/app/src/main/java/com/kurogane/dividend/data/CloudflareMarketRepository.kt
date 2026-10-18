@@ -87,6 +87,24 @@ data class CloudflarePriceCatalogSnapshot(
     val marketDataDate: String?
 )
 
+data class CloudflareIncomeAdviceCandidate(
+    val code: String,
+    val name: String,
+    val currency: String,
+    val annualDividendPerShare: Double,
+    val annualDividendBasis: String,
+    val observedMonths: List<Int>,
+    val monthlyEstimatePer100Shares: Double,
+    val score: Int
+)
+
+data class CloudflareIncomeAdviceCatalog(
+    val generation: String,
+    val generatedAt: String,
+    val candidates: List<CloudflareIncomeAdviceCandidate>,
+    val rawJson: String
+)
+
 data class CloudflarePopularStock(
     val code: String,
     val name: String,
@@ -396,6 +414,48 @@ class CloudflareMarketRepository(
     suspend fun fetchPriceQuotes(): Map<String, CloudflareMarketQuote> = fetchPriceCatalogSnapshot().quotes
 
     suspend fun fetchPriceCatalog(): Map<String, Double> = fetchPriceQuotes().mapValues { it.value.price }
+
+    fun parseIncomeAdviceCatalog(rawJson: String): CloudflareIncomeAdviceCatalog {
+        val root = JSONObject(rawJson)
+        val generation = root.optString("generation").takeIf(String::isNotBlank)
+            ?: error("候補一覧の世代情報がありません")
+        val generatedAt = root.optString("generated_at").takeIf(String::isNotBlank)
+            ?: error("候補一覧の生成日時がありません")
+        val rows = root.optJSONArray("items") ?: error("候補一覧にitemsがありません")
+        val candidates = (0 until rows.length()).mapNotNull { index ->
+            val row = rows.optJSONObject(index) ?: return@mapNotNull null
+            val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT)
+            val name = row.optString("name").trim()
+            val currency = row.optString("currency").trim().uppercase(java.util.Locale.ROOT)
+            val annualDps = row.numberOrNull("annual_dividend_per_share")
+            val monthlyEstimate = row.numberOrNull("monthly_estimate_per_100_shares")
+            val score = row.optInt("score", -1)
+            if (!isSecurityCode(code) || name.isBlank() || currency != "JPY" ||
+                annualDps == null || annualDps <= 0.0 || monthlyEstimate == null || monthlyEstimate < 0.0 || score !in 0..100) {
+                return@mapNotNull null
+            }
+            val monthRows = row.optJSONArray("observed_months") ?: return@mapNotNull null
+            val months = (0 until monthRows.length()).map { monthRows.optInt(it, -1) }
+                .filter { it in 1..12 }.distinct().sorted()
+            if (months.isEmpty()) return@mapNotNull null
+            CloudflareIncomeAdviceCandidate(
+                code = code,
+                name = name,
+                currency = currency,
+                annualDividendPerShare = annualDps,
+                annualDividendBasis = row.optString("annual_dividend_basis", "unknown"),
+                observedMonths = months,
+                monthlyEstimatePer100Shares = monthlyEstimate,
+                score = score
+            )
+        }
+        return CloudflareIncomeAdviceCatalog(generation, generatedAt, candidates, rawJson)
+    }
+
+    suspend fun fetchIncomeAdviceCatalog(): CloudflareIncomeAdviceCatalog = withContext(ioDispatcher) {
+        val raw = getJson("/api/v1/income-advice-candidates").toString()
+        parseIncomeAdviceCatalog(raw)
+    }
 
     /** Returns a page of R2-ranked stocks with current and five-year reference prices from the database. */
     suspend fun fetchPopularStocks(offset: Int, date: String, limit: Int = 1): CloudflarePopularStocksPage = withContext(ioDispatcher) {

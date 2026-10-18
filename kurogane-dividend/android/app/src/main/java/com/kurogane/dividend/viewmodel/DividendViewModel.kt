@@ -15,6 +15,7 @@ import com.kurogane.dividend.model.WatchlistProjectionCache
 import com.kurogane.dividend.model.ShareholderBenefit
 import com.kurogane.dividend.model.StockClimate
 import com.kurogane.dividend.data.CloudflareMarketRepository
+import com.kurogane.dividend.data.CloudflareIncomeAdviceCatalog
 import com.kurogane.dividend.data.CloudflareDividendEvent
 import com.kurogane.dividend.data.CloudflareUpcomingDividendEvent
 import com.kurogane.dividend.data.CloudflareSecurity
@@ -124,6 +125,11 @@ class DividendViewModel @JvmOverloads constructor(
 
     private val displayPreferences = application.getSharedPreferences("display_preferences", Context.MODE_PRIVATE)
     private val marketPreferences = application.getSharedPreferences("cloudflare_market_cache", Context.MODE_PRIVATE)
+    private val incomeAdviceMutex = Mutex()
+    private val _incomeAdviceCatalog = MutableStateFlow(loadCachedIncomeAdviceCatalog())
+    val incomeAdviceCatalog: StateFlow<CloudflareIncomeAdviceCatalog?> = _incomeAdviceCatalog.asStateFlow()
+    private val _incomeAdviceFetchFailed = MutableStateFlow(marketPreferences.contains("income_advice_fetch_error"))
+    val incomeAdviceFetchFailed: StateFlow<Boolean> = _incomeAdviceFetchFailed.asStateFlow()
     private val _watchlistSortSelection = MutableStateFlow(loadWatchlistSortSelection())
     val watchlistSortSelection: StateFlow<WatchlistSortSelection?> = _watchlistSortSelection.asStateFlow()
     private val dividendMonthRefreshMutex = Mutex()
@@ -644,6 +650,38 @@ class DividendViewModel @JvmOverloads constructor(
             stock.copy(payoutMonths = months,
                 payoutTiming = months.joinToString(" / ") { "${it}月" }.ifBlank { "配当月未取得" })
         } }
+    }
+
+    private fun loadCachedIncomeAdviceCatalog(): CloudflareIncomeAdviceCatalog? = runCatching {
+        marketPreferences.getString("income_advice_catalog", null)?.let(marketRepository::parseIncomeAdviceCatalog)
+    }.getOrNull()
+
+    private suspend fun refreshIncomeAdviceCatalogIfDue() = incomeAdviceMutex.withLock {
+        val now = System.currentTimeMillis()
+        val attemptAt = marketPreferences.getLong("income_advice_fetch_attempt_at", 0L)
+        val attemptDate = marketPreferences.getString("income_advice_fetch_attempt_jst", null)
+        if (!PriceRefreshPolicy.shouldFetch(now, attemptAt, attemptDate)) return@withLock
+
+        marketPreferences.edit()
+            .putLong("income_advice_fetch_attempt_at", now)
+            .putString("income_advice_fetch_attempt_jst", PriceRefreshPolicy.japanDate(now))
+            .apply()
+        runCatchingCancellable { marketRepository.fetchIncomeAdviceCatalog() }
+            .onSuccess { catalog ->
+                marketPreferences.edit()
+                    .putString("income_advice_catalog", catalog.rawJson)
+                    .putLong("income_advice_fetched_at", now)
+                    .putString("income_advice_fetched_jst", PriceRefreshPolicy.japanDate(now))
+                    .remove("income_advice_fetch_error")
+                    .apply()
+                _incomeAdviceCatalog.value = catalog
+                _incomeAdviceFetchFailed.value = false
+            }
+            .onFailure { error ->
+                _incomeAdviceFetchFailed.value = true
+                marketPreferences.edit().putString("income_advice_fetch_error", error::class.java.simpleName).apply()
+                android.util.Log.w("CloudflareMarket", "空白月解消候補の取得に失敗しました", error)
+            }
     }
 
     fun dividendEventsFor(code: String): List<CloudflareDividendEvent> {
@@ -2718,6 +2756,7 @@ class DividendViewModel @JvmOverloads constructor(
                 // Start the payout-month request as soon as local Watchlist data is restored.
                 // The monthly projection observes the Watchlist flow and updates when results arrive.
                 launch { refreshDividendHistoryIfDue() }
+                launch { refreshIncomeAdviceCatalogIfDue() }
                 launch { refreshStockDetailDataForPortfolio() }
                 launch { refreshExchangeRate() }
                 runCatching { notificationScheduler(getApplication(), _notificationSettings.value) }.onFailure {
