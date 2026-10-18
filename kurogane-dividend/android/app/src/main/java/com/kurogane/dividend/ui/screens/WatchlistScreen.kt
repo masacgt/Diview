@@ -660,7 +660,6 @@ fun WatchlistScreen(
             // Hero Card
             item {
                 val holdings by viewModel.holdings.collectAsStateWithLifecycle()
-                val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
                 val heldCodes = remember(holdings.map { it.code }) { holdings.mapTo(mutableSetOf()) { it.code } }
                 val heldCount = remember(watchlistCodes, heldCodes) {
                     watchlistCodes.count { it in heldCodes }
@@ -672,9 +671,9 @@ fun WatchlistScreen(
                     border = BorderStroke(1.dp, BorderBlue)
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
-                        AdaptiveRow(
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.End,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
@@ -704,27 +703,6 @@ fun WatchlistScreen(
                                     )
                                     Text(stringResource(R.string.watchlist_text_2 , watchlist.size), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
-                            }
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(BackgroundDark)
-                                    .border(0.5.dp, BorderBlue, CircleShape)
-                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                            ) {
-                                Text(stringResource(R.string.watchlist_text_3), fontSize = AppTextSize.dense, color = OnSurfaceVariant)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Switch(
-                                    checked = notificationSettings.priceEnabled,
-                                    onCheckedChange = { enabled ->
-                                        if (enabled) notificationAccess.request("price")
-                                        else viewModel.setNotificationEnabled(NotificationKind.PRICE, false)
-                                    },
-                                    modifier = Modifier.scale(0.7f),
-                                    colors = SwitchDefaults.colors(checkedThumbColor = OnSurface, checkedTrackColor = PrimaryEmeraldContainer)
-                                )
                             }
                         }
 
