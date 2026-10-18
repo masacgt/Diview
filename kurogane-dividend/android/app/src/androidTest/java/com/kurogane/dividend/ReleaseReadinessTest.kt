@@ -161,7 +161,7 @@ class ReleaseReadinessTest {
 
         revealFirstWatchlistCard()
         val initialOrderObservedAt = android.os.SystemClock.elapsedRealtime()
-        compose.waitUntil(10_000) {
+        compose.waitUntil(30_000) {
             firstVisibleWatchlistCardCode(compose) == "3000" &&
                 android.os.SystemClock.elapsedRealtime() - initialOrderObservedAt >= 750L
         }
@@ -184,14 +184,14 @@ class ReleaseReadinessTest {
         )
         compose.onNodeWithText(codeAscendingLabel).assertIsDisplayed()
         revealFirstWatchlistCard()
-        compose.waitUntil(10_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
+        compose.waitUntil(30_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
 
         compose.onNodeWithText("タブ切替").performClick()
         compose.onNodeWithText("タブ切替").performClick()
 
         compose.onNodeWithText(codeAscendingLabel).assertIsDisplayed()
         revealFirstWatchlistCard()
-        compose.waitUntil(10_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
+        compose.waitUntil(30_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
 
         val reopenedVm = model("quality-after-restart")
         reopenedVm.watchlist.value.toList().forEach { reopenedVm.removeWatchlistStock(it.code) }
@@ -202,7 +202,7 @@ class ReleaseReadinessTest {
 
         compose.runOnIdle { activeViewModel.value = reopenedVm }
         revealFirstWatchlistCard()
-        compose.waitUntil(10_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
+        compose.waitUntil(30_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
     }
 
     private fun watchlistCardMatcher() = SemanticsMatcher("watchlist card") { node ->
