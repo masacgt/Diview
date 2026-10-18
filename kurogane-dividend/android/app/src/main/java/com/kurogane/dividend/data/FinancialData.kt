@@ -27,7 +27,11 @@ data class FinancialData(
     val values: Map<String, Double?>,
     val dividendHistoryBasis: String = "unknown",
     val issuerDividends: List<IssuerFiscalYearDividend> = emptyList(),
-    val issuerDividendHistoryStatus: String = "empty"
+    val issuerDividendHistoryStatus: String = "empty",
+    val forecastAnnualDividend: Double? = null,
+    val forecastEps: Double? = null,
+    val forecastFiscalYear: Int? = null,
+    val forecastPayoutRatio: Double? = null
 ) {
     companion object {
         fun parse(root: JSONObject, expectedCode: String): FinancialData {
@@ -37,6 +41,14 @@ data class FinancialData(
                 ?.takeIf { it == "calendar_year_observed_distributions" } ?: "unknown"
             val calendarYearEvents = historyBasis == "calendar_year_observed_distributions"
             val dividendPayload = root.optJSONObject("dividends")
+            val forecastAnnualDividend = dividendPayload?.optJSONObject("current")
+                ?.number("next_fiscal_year_forecast_per_share")
+                ?.takeIf { it >= 0 }
+            val forecastEps = root.optJSONObject("market")?.optJSONObject("summary")
+                ?.number("forwardEps")?.takeIf { it > 0 }
+            val forecastPayoutRatio = forecastAnnualDividend?.let { dps ->
+                forecastEps?.let { eps -> dps / eps * 100.0 }
+            }
             val history = dividendPayload?.optJSONArray("records")
             val rows = (0 until (history?.length() ?: 0)).mapNotNull { history?.optJSONObject(it) }
                 .filter { it.optInt("calendar_year") in 1900..2100 }
@@ -66,6 +78,8 @@ data class FinancialData(
                 .filter { it.optString("fiscal_year").matches(Regex("\\d{4}/\\d{2}")) }
                 .maxByOrNull { it.getString("fiscal_year") }
             val period = financial?.optString("fiscal_year").orEmpty()
+            val forecastFiscalYear = period.take(4).toIntOrNull()?.plus(1)
+                ?.takeIf { it in 1900..2100 }
             val doeStatus = financial?.optJSONObject("field_status")?.optString("calculated_doe").orEmpty()
             val calculatedDoe = financial?.number("calculated_doe")
             val valuationRows = root.optJSONObject("valuation")?.optJSONArray("history")
@@ -133,7 +147,8 @@ data class FinancialData(
                 "fcf_margin" to fcfMargin,
                 "dividend_growth_years" to (dividendPayload?.number("consecutive_dividend_increase_years")
                     ?: dividend?.number("consecutive_dividend_increase_years"))
-            ), historyBasis, issuerDividends, issuerDividendHistoryStatus)
+            ), historyBasis, issuerDividends, issuerDividendHistoryStatus,
+                forecastAnnualDividend, forecastEps, forecastFiscalYear, forecastPayoutRatio)
         }
     }
 }

@@ -404,7 +404,7 @@
     <string name="stock_detail_text_5">"税引前"</string>
     <string name="stock_detail_text_6">"取得利回り"</string>
     <string name="stock_detail_text_7">"単価%1$s%2$s"</string>
-    <string name="stock_detail_text_8">"1株配当金の実績（最大8期）"</string>
+    <string name="stock_detail_text_8">"1株配当金の実績・予想"</string>
     <string name="stock_detail_text_9">"配当履歴未取得"</string>
     <string name="stock_detail_text_10">"4期増配率: %1$s"</string>
     <string name="stock_detail_text_11">"配当性向: 約%1$s"</string>
