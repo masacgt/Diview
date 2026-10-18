@@ -707,7 +707,16 @@ class DividendViewModel @JvmOverloads constructor(
         val now = System.currentTimeMillis()
         val attemptAt = marketPreferences.getLong("income_advice_fetch_attempt_at", 0L)
         val attemptDate = marketPreferences.getString("income_advice_fetch_attempt_jst", null)
-        if (!PriceRefreshPolicy.shouldFetch(now, attemptAt, attemptDate)) return@withLock
+        if (!PriceRefreshPolicy.shouldFetch(now, attemptAt, attemptDate)) {
+            if (_incomeAdviceCatalog.value == null) {
+                _incomeAdviceFetchFailed.value = true
+                android.util.Log.w(
+                    "CloudflareMarket",
+                    "空白月解消候補は更新制限中で、表示できるキャッシュもありません"
+                )
+            }
+            return@withLock
+        }
 
         marketPreferences.edit()
             .putLong("income_advice_fetch_attempt_at", now)
