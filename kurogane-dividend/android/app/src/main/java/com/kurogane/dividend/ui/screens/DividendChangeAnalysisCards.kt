@@ -432,10 +432,6 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
                 fontWeight = FontWeight.ExtraBold, color = impactColor, modifier = Modifier.weight(1f, fill = false))
             Text(stringResource(R.string.annual_dividend_text_2), color = OnSurfaceVariant, fontSize = 12.sp, modifier = Modifier.padding(bottom = 5.dp))
         }
-        if (analysis.compared.any { it.dividendHistoryBasis == "calendar_year_observed_distributions" }) {
-            Text("yfinanceの修復済み配当イベントを暦年で合計しています。分割比率の独自換算は加えず、決算期別DPSとは期間・株数基準が異なる場合があります。",
-                color = OnSurfaceVariant, fontSize = 10.sp, lineHeight = 14.sp)
-        }
         AdaptiveRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(stringResource(R.string.dividend_change_analysis_cards_text_3 , total), color = OnSurfaceVariant, fontSize = 11.sp)
             Text(stringResource(R.string.dividend_change_analysis_cards_text_4 , compared.size, total), color = OnSurfaceVariant, fontSize = 11.sp)

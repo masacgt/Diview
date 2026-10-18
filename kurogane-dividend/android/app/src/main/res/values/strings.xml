@@ -729,7 +729,7 @@
     <string name="settings_label_51" formatted="false">"3.50% (堅実)"</string>
     <string name="settings_label_52" formatted="false">"4.00% (標準)"</string>
     <string name="settings_label_53" formatted="false">"4.50% (積極)"</string>
-    <string name="settings_label_54">"取得済みの権利確定日（推定）を過ぎた次の通知時刻にお知らせ"</string>
+    <string name="settings_label_54">"取得済み銘柄の権利確定日をお知らせ"</string>
     <string name="settings_label_55">"ウォッチリストで通知ONの銘柄を対象にし、保有中の同一銘柄にも適用"</string>
     <string name="settings_label_56">"起動時とバックグラウンドからの復帰時に認証"</string>
     <string name="settings_message_7">"この画面では認証を開始できません"</string>
