@@ -144,15 +144,23 @@ def merge_row(
     row["fiscal_year"] = fiscal_year
     row["period_end"] = str(row.get("period_end") or period_end)
     statuses = dict(row.get("field_status") or {})
+    source_values = dict(row.get("source_values") or {})
+    seed_record = dict(source_values.get("seed") or {})
+    seed_values = dict(seed_record.get("values") or {})
     added = 0
     for field, value in values.items():
-        if row.get(field) is not None:
-            continue
-        row[field] = value
-        statuses[field] = "legacy_migrated"
-        added += 1
+        if field not in seed_values:
+            seed_values[field] = value
+            added += 1
+        if row.get(field) is None:
+            row[field] = value
+        statuses.setdefault(field, "legacy_migrated")
+    if seed_values:
+        seed_record.update({"source": "IRBANK", "source_key": source_key, "values": seed_values})
+        source_values["seed"] = seed_record
+        row["source_values"] = source_values
     row["field_status"] = statuses
-    if added:
+    if added and not row.get("migration_source"):
         row["migration_source"] = source_key
     return row, added
 
@@ -260,6 +268,11 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
             for field, value in expected_row.items():
                 if field in (*ANNUAL_FIELDS, *VALUATION_FIELDS) and actual_row.get(field) != value:
                     raise RuntimeError(f"v2 read-back mismatch for {section}.{field}: {key}")
+            expected_seed = ((updated.get(section) or {}).get("source_values") or {}).get("seed", {}).get("values", {})
+            actual_seed = ((actual_row.get("source_values") or {}).get("seed") or {}).get("values", {})
+            for field, value in expected_seed.items():
+                if actual_seed.get(field) != value:
+                    raise RuntimeError(f"v2 read-back seed mismatch for {section}.{field}: {key}")
         changed_documents += 1
 
     return {
