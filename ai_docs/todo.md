@@ -2,6 +2,14 @@
 
 ## Completed
 
+- [x] Prioritize income-gap months not yet represented when selecting the three advice candidates. Evidence: `rankIncomeAdviceCandidates` greedily chooses the candidate covering the most still-uncovered empty months, then applies score and tie-breakers; the JDK 17 debug APK builds and is installed on emulator and SCG01.
+
+- [x] Remove the calendar chart legend and reduce its unused top spacing while preserving monthly amounts and empty-month markers. Evidence: the legend row is removed and the plot/amount labels use a reduced top margin; the JDK 17 debug APK builds and is installed on emulator and SCG01.
+
+- [x] Match the covered-month card's corner radius to the add button at 6dp. Evidence: the income-advice `Surface` uses `RoundedCornerShape(6.dp)`; the JDK 17 debug APK builds and installs on emulator and SCG01.
+
+- [x] Remove the excess vertical gap in income-gap candidate cards and equalize the top, middle, and bottom vertical spacing around the add button and covered-month tile. Evidence: JDK 17 `assembleDebug` succeeds; emulator screenshot confirms the spacing, and the APK installs and opens on emulator and SCG01.
+
 - [x] Group notification reminders into timing, notification types, and device permission, with a collapsible notification list and the device-settings button beside its permission summary. Evidence: JDK 17 debug build succeeds; fresh SCG01 install shows the requested layout and the notification list expands/collapses.
 - [ ] Recheck the notification settings screen on the emulator after resolving its launch ANR; the APK installed, but the first frame took over 73 seconds and input timed out.
 
