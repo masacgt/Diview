@@ -1278,12 +1278,13 @@ def legacy_valuation_map(old: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def prior_financial_maps(
     client: Any, bucket: str, symbol: str,
-) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, str]]:
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, str], dict[str, dict[str, Any]]]:
     safe = safe_symbol(symbol)
     prefix = object_key("securities", safe, "financials") + "/"
     statements: dict[str, dict[str, Any]] = {}
     valuations: dict[str, dict[str, Any]] = {}
     document_keys: dict[str, str] = {}
+    records: dict[str, dict[str, Any]] = {}
     for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
         for item in page.get("Contents", []):
             document_key = str(item.get("Key") or "")
@@ -1291,21 +1292,50 @@ def prior_financial_maps(
             annual = document.get("annual") if document else None
             annual_period_end = str(annual.get("period_end") or "")[:10] if isinstance(annual, dict) else ""
             if re.fullmatch(r"\d{4}-\d{2}-\d{2}", annual_period_end):
+                records.setdefault(annual_period_end, {})["annual"] = annual
                 statements[annual_period_end] = {
                     key: value for key, value in annual.items()
-                    if key not in {"fiscal_year", "period_end", "field_status", "migration_source"}
+                    if key not in {"fiscal_year", "period_end", "field_status", "migration_source", "source_values"}
                 }
                 document_keys.setdefault(annual_period_end, document_key)
             valuation = document.get("valuation")
             if isinstance(valuation, dict):
                 valuation_period_end = str(valuation.get("period_end") or annual_period_end)[:10]
                 if re.fullmatch(r"\d{4}-\d{2}-\d{2}", valuation_period_end):
+                    records.setdefault(valuation_period_end, {})["valuation"] = valuation
                     valuations[valuation_period_end] = {
                         key: value for key, value in valuation.items()
-                        if key not in {"fiscal_year", "period_end", "field_status", "migration_source"}
+                        if key not in {"fiscal_year", "period_end", "field_status", "migration_source", "source_values"}
                     }
                     document_keys.setdefault(valuation_period_end, document_key)
-    return statements, valuations, document_keys
+    return statements, valuations, document_keys, records
+
+
+FINANCIAL_RECORD_METADATA = {"fiscal_year", "period_end", "field_status", "migration_source", "source_values"}
+FINANCIAL_DERIVED_FIELDS = {"equity_ratio_computed"}
+
+
+def financial_source_values(record: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Read retained seed values and yfinance values without collapsing provenance."""
+    if not isinstance(record, dict):
+        return {}, {}
+    explicit = record.get("source_values")
+    seed_record = explicit.get("seed") if isinstance(explicit, dict) else None
+    yfinance_record = explicit.get("yfinance") if isinstance(explicit, dict) else None
+    seed = dict(seed_record.get("values") or {}) if isinstance(seed_record, dict) else {}
+    yfinance = dict(yfinance_record.get("values") or {}) if isinstance(yfinance_record, dict) else {}
+    statuses = record.get("field_status") if isinstance(record.get("field_status"), dict) else {}
+    fields = {key: value for key, value in record.items() if key not in FINANCIAL_RECORD_METADATA}
+    for field, value in fields.items():
+        if field in seed or field in yfinance:
+            continue
+        if field in FINANCIAL_DERIVED_FIELDS:
+            continue
+        if statuses.get(field) == "available" and not record.get("migration_source"):
+            yfinance.setdefault(field, value)
+        else:
+            seed.setdefault(field, value)
+    return seed, yfinance
 
 
 def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: str, symbol: str,
@@ -1335,7 +1365,7 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
     legacy_income = legacy_frame_map(old, "income_statement", INCOME_FIELDS)
     legacy_balance = legacy_frame_map(old, "balance_sheet", BALANCE_FIELDS)
     legacy_cash = legacy_frame_map(old, "cash_flow", CASH_FLOW_FIELDS)
-    prior_v2, prior_v2_valuation, financial_document_keys = prior_financial_maps(client, bucket, symbol)
+    prior_v2, prior_v2_valuation, financial_document_keys, prior_financial_records = prior_financial_maps(client, bucket, symbol)
     valuation_frame = None
     if "valuation" in requested_groups:
         try:
@@ -1384,19 +1414,30 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
     statements: list[dict[str, Any]] = []
     valuation_rows: list[dict[str, Any]] = []
     for period_end in keys:
-        old_values = {**legacy_income.get(period_end, {}), **legacy_balance.get(period_end, {}),
-                      **legacy_cash.get(period_end, {}), **prior_v2.get(period_end, {})}
+        prior_record = prior_financial_records.get(period_end, {})
+        seed_values, prior_yfinance_values = financial_source_values(prior_record.get("annual"))
+        legacy_yfinance_values = {**legacy_income.get(period_end, {}), **legacy_balance.get(period_end, {}),
+                                  **legacy_cash.get(period_end, {})}
+        seed_values = {**seed_values}
+        yfinance_values = {**prior_yfinance_values, **legacy_yfinance_values}
         fresh_values = {**fresh_income.get(period_end, {}), **fresh_balance.get(period_end, {}), **fresh_cash.get(period_end, {})}
-        values = {**old_values, **fresh_values}
+        yfinance_values.update(fresh_values)
+        values = {**seed_values, **yfinance_values}
         net_de_metrics = calculate_net_de_metrics(fresh_balance.get(period_end, {}))
         if net_de_metrics:
+            yfinance_values.update(net_de_metrics)
             values.update(net_de_metrics)
         equity = finite_number(values.get("stockholders_equity"))
         equity_for_ratio = (
             equity if equity is not None
             else finite_number(values.get("total_equity_gross_minority_interest"))
         )
+        equity_source_field = (
+            "stockholders_equity" if equity is not None else "total_equity_gross_minority_interest"
+        )
+        equity_source = "yfinance" if equity_source_field in yfinance_values else "seed"
         assets = finite_number(values.get("total_assets"))
+        assets_source = "yfinance" if "total_assets" in yfinance_values else "seed"
         if equity_for_ratio is not None and assets and assets > 0:
             values["equity_ratio_computed"] = equity_for_ratio / assets * 100
         fresh_doe_dividend_values = fresh_cash.get(period_end, {})
@@ -1418,14 +1459,23 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             values["doe_dividend_total"] = abs(doe_dividend_total)
             values["doe_dividend_source_field"] = doe_dividend_field
             values["doe_formula"] = "dividend_total_paid / period_end_stockholders_equity * 100"
+            yfinance_values.update({
+                "calculated_doe": calculated_doe,
+                "doe_dividend_total": abs(doe_dividend_total),
+                "doe_dividend_source_field": doe_dividend_field,
+                "doe_formula": "dividend_total_paid / period_end_stockholders_equity * 100",
+            })
         annual_field_status = {
-            field: "available" if field in fresh_values else "stale" if field in old_values else field_retrieval_status.get(field, "empty")
+            field: "available" if field in fresh_values or field in net_de_metrics
+            else "stale" if field in yfinance_values
+            else "legacy_migrated" if field in seed_values
+            else field_retrieval_status.get(field, "empty")
             for source, fields in (("income_statement", INCOME_FIELDS), ("balance_sheet", BALANCE_FIELDS), ("cash_flow", CASH_FLOW_FIELDS))
             for field in fields.values()
         }
         if calculated_doe is not None:
             annual_field_status["calculated_doe"] = "available"
-        elif finite_number(old_values.get("calculated_doe")) is not None:
+        elif finite_number(yfinance_values.get("calculated_doe", seed_values.get("calculated_doe"))) is not None:
             annual_field_status["calculated_doe"] = "stale"
         elif any(retrieval_status.get(group) == "failed" for group in ("balance_sheet", "cash_flow")):
             annual_field_status["calculated_doe"] = "failed"
@@ -1434,7 +1484,7 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
         if net_de_metrics:
             annual_field_status["net_debt"] = "available"
             annual_field_status["net_de_ratio"] = "available"
-        elif finite_number(old_values.get("net_de_ratio")) is not None:
+        elif finite_number(yfinance_values.get("net_de_ratio", seed_values.get("net_de_ratio"))) is not None:
             annual_field_status["net_de_ratio"] = "stale"
         elif retrieval_status.get("balance_sheet") == "failed":
             annual_field_status["net_de_ratio"] = "failed"
@@ -1444,21 +1494,62 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             annual_field_status["equity_ratio_computed"] = (
                 "available" if ("stockholders_equity" in fresh_values or "total_equity_gross_minority_interest" in fresh_values)
                 and "total_assets" in fresh_values
-                else "stale" if "equity_ratio_computed" in old_values else "empty"
+                else "stale"
             )
+        prior_annual = prior_record.get("annual") if isinstance(prior_record.get("annual"), dict) else {}
+        seed_source = (
+            (prior_annual.get("source_values") or {}).get("seed", {}).get("source")
+            if isinstance(prior_annual.get("source_values"), dict) else None
+        ) or ("IRBANK migration seed" if prior_annual.get("migration_source") else "existing v2 snapshot")
+        annual_sources = {
+            "seed": {"source": seed_source, "values": seed_values},
+            "yfinance": {
+                "source": "Yahoo Finance via yfinance",
+                "values": yfinance_values,
+                "field_status": {field: "available" if field in fresh_values or field in net_de_metrics else "stale" for field in yfinance_values},
+            },
+            "calculated": {
+                "values": {
+                    "equity_ratio_computed": {
+                        "value": values["equity_ratio_computed"],
+                        "formula": "equity / total_assets * 100",
+                        "input_sources": {
+                            "equity": equity_source,
+                            "total_assets": assets_source,
+                        },
+                    }
+                } if "equity_ratio_computed" in values else {},
+            },
+        }
         statements.append({
             "fiscal_year": f"{period_end[:4]}/{period_end[5:7]}",
             "period_end": period_end,
             "field_status": annual_field_status,
+            "source_values": annual_sources,
             **values,
         })
         fresh_valuation = valuation.get(period_end, {})
-        valuation_values = {**legacy_valuation.get(period_end, {}), **prior_v2_valuation.get(period_end, {}), **fresh_valuation}
+        prior_valuation = prior_record.get("valuation")
+        seed_valuation, prior_yfinance_valuation = financial_source_values(prior_valuation)
+        yfinance_valuation_values = {**prior_yfinance_valuation, **legacy_valuation.get(period_end, {}), **fresh_valuation}
+        valuation_values = {**seed_valuation, **yfinance_valuation_values}
         if valuation_values:
+            valuation_source = (
+                (prior_valuation.get("source_values") or {}).get("seed", {}).get("source")
+                if isinstance(prior_valuation, dict) and isinstance(prior_valuation.get("source_values"), dict) else None
+            ) or ("IRBANK migration seed" if isinstance(prior_valuation, dict) and prior_valuation.get("migration_source") else "existing v2 snapshot")
             valuation_rows.append({
                 "fiscal_year": f"{period_end[:4]}/{period_end[5:7]}",
                 "period_end": period_end,
-                "field_status": {field: "available" if field in fresh_valuation else "stale" for field in valuation_values},
+                "field_status": {field: "available" if field in fresh_valuation else "stale" if field in yfinance_valuation_values else "legacy_migrated" for field in valuation_values},
+                "source_values": {
+                    "seed": {"source": valuation_source, "values": seed_valuation},
+                    "yfinance": {
+                        "source": "Yahoo Finance via yfinance",
+                        "values": yfinance_valuation_values,
+                        "field_status": {field: "available" if field in fresh_valuation else "stale" for field in yfinance_valuation_values},
+                    },
+                },
                 **valuation_values,
             })
     retrieval_status["fields"] = field_retrieval_status
@@ -1615,7 +1706,7 @@ def verify_v2_transfer(client: Any, bucket: str, symbol: str, old: dict[str, Any
         stored_months = {str(row.get("month")) for row in read_monthly_points(client, bucket, symbol, point_year)}
         if point.get("month") not in stored_months:
             raise RuntimeError(f"v2 monthly price missing before legacy cleanup: {symbol} {point.get('month')}")
-    stored_statements, _, _ = prior_financial_maps(client, bucket, symbol)
+    stored_statements, _, _, _ = prior_financial_maps(client, bucket, symbol)
     for row in statements:
         period_end = str(row.get("period_end") or "")[:10]
         if period_end not in stored_statements:
@@ -2238,7 +2329,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     put_json_if_changed(client, bucket, object_key("securities", safe, "sync.json"), sync)
     if (old and sync["full_history_initialized"] and sync["financials_initialized"]
             and sync["monthly_history_schema_version"] == 2):
-        stored_statements, _, _ = prior_financial_maps(client, bucket, symbol)
+        stored_statements, _, _, _ = prior_financial_maps(client, bucket, symbol)
         verification_statements = [
             {"period_end": period_end, **values}
             for period_end, values in sorted(stored_statements.items())
