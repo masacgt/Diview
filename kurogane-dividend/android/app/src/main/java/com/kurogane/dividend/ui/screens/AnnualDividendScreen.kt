@@ -1233,6 +1233,8 @@ private data class SectorCompositionRow(
 private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.model.Holding>, taxRateMode: String, totalAssets: Double, totalAnnualDiv: Double, compositionThreshold: Int, compositionOtherEnabled: Boolean, viewModel: DividendViewModel, onNavigateToDetail: (String) -> Unit) {
     var isVisible by remember { mutableStateOf(false) }
     var chartMode by remember(viewModel) { mutableStateOf(viewModel.compositionChartMode.value) } // "holding", "dividend", or "yield"
+    var yieldBasis by remember { mutableStateOf("current") } // "current" or "cost"
+    var yieldBasisMenuExpanded by remember { mutableStateOf(false) }
     var sectorValueMode by remember { mutableStateOf("valuation") } // "valuation" or "dividend"
     val context = LocalContext.current
     val industriesByCode = remember(context) { Tse33IndustryMaster.industries(context) }
@@ -1258,7 +1260,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
     )
 
     // 1. Group / Map Holdings to expected dividends and valuations in JPY optimized with remember
-    val mappedHoldings = remember(holdings, chartMode, taxRateMode) {
+    val mappedHoldings = remember(holdings, chartMode, yieldBasis, taxRateMode) {
         holdings
             .map { h ->
                 val rate = if (h.currency == "$") 150.0 else 1.0
@@ -1270,24 +1272,24 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                 when (chartMode) {
                     "dividend" -> it.second > 0.0
                     "holding" -> it.third > 0.0
-                    else -> it.first.liveYield > 0.0
+                    else -> (if (yieldBasis == "cost") it.first.liveYoc else it.first.liveYield) > 0.0
                 }
             }
             .sortedByDescending {
                 when (chartMode) {
                     "dividend" -> it.second
                     "holding" -> it.third
-                    else -> it.first.liveYield
+                    else -> if (yieldBasis == "cost") it.first.liveYoc else it.first.liveYield
                 }
             }
     }
 
-    val totalChartValue = remember(mappedHoldings, chartMode) {
+    val totalChartValue = remember(mappedHoldings, chartMode, yieldBasis) {
         mappedHoldings.sumOf {
             when (chartMode) {
                 "dividend" -> it.second
                 "holding" -> it.third
-                else -> it.first.liveYield
+                else -> if (yieldBasis == "cost") it.first.liveYoc else it.first.liveYield
             }
         }
     }
@@ -1307,12 +1309,12 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
     )
 
     // Build Donut Slice Objects
-    val donutSlices = remember(mappedHoldings, chartMode, compositionThreshold, compositionOtherEnabled, totalChartValue, context) {
+    val donutSlices = remember(mappedHoldings, chartMode, yieldBasis, compositionThreshold, compositionOtherEnabled, totalChartValue, context) {
         val compositionValues = mappedHoldings.map {
             when (chartMode) {
                 "dividend" -> it.second
                 "holding" -> it.third
-                else -> it.first.liveYield
+                else -> if (yieldBasis == "cost") it.first.liveYoc else it.first.liveYield
             }
         }
         com.kurogane.dividend.model.PortfolioMath.compositionGroups(compositionValues, compositionThreshold, compositionOtherEnabled)
@@ -1335,7 +1337,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
     var activeStockCode by remember { mutableStateOf<String?>(null) }
 
     // Reset active stock selection on load/mode switch to display totals by default
-    LaunchedEffect(holdings, chartMode, compositionThreshold, compositionOtherEnabled) {
+    LaunchedEffect(holdings, chartMode, yieldBasis, compositionThreshold, compositionOtherEnabled) {
         activeStockCode = null
     }
 
@@ -1461,7 +1463,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 .clickable {
                                     if (viewModel.setCompositionChartMode("holding")) chartMode = "holding"
                                 }
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .padding(horizontal = 6.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 stringResource(R.string.annual_dividend_text_9),
@@ -1480,7 +1482,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 .clickable {
                                     if (viewModel.setCompositionChartMode("dividend")) chartMode = "dividend"
                                 }
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .padding(horizontal = 6.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 stringResource(R.string.annual_dividend_text_10),
@@ -1492,21 +1494,81 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             )
                         }
                         Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(if (chartMode == "yield") PrimaryEmerald else Color.Transparent)
-                                .animateContentSize(animationSpec = tween(190))
-                                .clickable { chartMode = "yield" }
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                            modifier = Modifier.animateContentSize(animationSpec = tween(190))
                         ) {
-                            Text(
-                                "利回り率",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = if (chartMode == "yield") OnPrimary else OnSurfaceVariant,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = AppTextSize.dense
+                            val yieldModeColor = if (chartMode == "yield") PrimaryEmerald else Color.Transparent
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(yieldModeColor)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clickable { chartMode = "yield" }
+                                            .padding(start = 6.dp, top = 3.dp, bottom = 3.dp, end = 0.dp)
+                                    ) {
+                                        Text(
+                                            "利回り率",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = if (chartMode == "yield") OnPrimary else OnSurfaceVariant,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = AppTextSize.dense
+                                            )
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .sizeIn(minWidth = 20.dp, minHeight = 24.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .clickable { yieldBasisMenuExpanded = true }
+                                            .padding(horizontal = 1.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ExpandMore,
+                                            contentDescription = "利回り基準を選択",
+                                            tint = if (chartMode == "yield") OnPrimary else OnSurfaceVariant,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            DropdownMenu(
+                                expanded = yieldBasisMenuExpanded,
+                                onDismissRequest = { yieldBasisMenuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("現在利回り") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = if (yieldBasis == "current") PrimaryEmerald else Color.Transparent
+                                        )
+                                    },
+                                    onClick = {
+                                        yieldBasis = "current"
+                                        chartMode = "yield"
+                                        yieldBasisMenuExpanded = false
+                                    }
                                 )
-                            )
+                                DropdownMenuItem(
+                                    text = { Text("取得利回り") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = if (yieldBasis == "cost") PrimaryEmerald else Color.Transparent
+                                        )
+                                    },
+                                    onClick = {
+                                        yieldBasis = "cost"
+                                        chartMode = "yield"
+                                        yieldBasisMenuExpanded = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -1592,7 +1654,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             Text(
                                 activeSlice?.name ?: when (chartMode) {
                                     "holding" -> "資産総額"
-                                    "yield" -> "利回り構成"
+                                    "yield" -> if (yieldBasis == "cost") "取得利回り構成" else "現在利回り構成"
                                     else -> "年間配当合計"
                                 },
                                 style = MaterialTheme.typography.labelSmall.copy(
@@ -1604,9 +1666,14 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
                             Spacer(modifier = Modifier.height(2.dp))
+                            val yieldBasisAmount = if (yieldBasis == "cost") {
+                                holdings.sumOf { it.totalCost }
+                            } else {
+                                totalAssets
+                            }
                             val centerVal = activeSlice?.expectedDiv ?: when (chartMode) {
                                 "holding" -> totalAssets
-                                "yield" -> if (totalAssets > 0.0) totalPortfolioDividend / totalAssets * 100 else 0.0
+                                "yield" -> if (yieldBasisAmount > 0.0) totalPortfolioDividend / yieldBasisAmount * 100 else 0.0
                                 else -> totalAnnualDiv
                             }
                             Text(
