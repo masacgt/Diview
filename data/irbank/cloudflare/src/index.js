@@ -1951,10 +1951,29 @@ export default {
       }
     }
 
+    if (url.pathname === '/api/v1/income-advice-candidates') {
+      const object = await env.MARKET_DATA?.get(`${YFINANCE_V2_ROOT}/derived/income_advice/current.json`);
+      if (!object) return json({ error: 'income_advice_unavailable' }, 503);
+      try {
+        const catalog = await object.json();
+        if (!Array.isArray(catalog?.items) || !catalog?.generation || !catalog?.generated_at) {
+          return json({ error: 'income_advice_invalid' }, 503);
+        }
+        const response = json(catalog);
+        response.headers.set('cache-control', 'public, max-age=300');
+        return response;
+      } catch {
+        return json({ error: 'income_advice_unavailable' }, 503);
+      }
+    }
+
     if (url.pathname === '/api/v1/search-catalog') {
       const v2Catalog = await readV2Catalog(env);
       if (!v2Catalog) return json({ error: 'search_catalog_unavailable' }, 503);
-      const response = json(v2Catalog);
+      const response = json({
+        ...v2Catalog,
+        items: v2Catalog.items.map(({ income_advice, ...row }) => row),
+      });
       response.headers.set('cache-control', 'public, max-age=300');
       return response;
     }
