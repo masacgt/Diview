@@ -2736,27 +2736,64 @@ fun WatchlistScreen(
                                         }
                                         Spacer(Modifier.height(1.dp))
                                         Text(
-                                            stringResource(R.string.watchlist_income_advice_months, ranked.coveredMonths.joinToString("・") { "${it}月" }),
-                                            color = OnSurfaceVariant,
-                                            fontSize = AppTextSize.dense
-                                        )
-                                        Text(
                                             stringResource(R.string.watchlist_income_advice_monthly_estimate, yen(ranked.estimatedAmountPerCoveredMonth)),
                                             color = PrimaryEmerald,
                                             fontSize = AppTextSize.dense,
                                             fontWeight = FontWeight.Bold
                                         )
-                                        Text(
-                                            stringResource(
-                                                if (candidate.annualDividendBasis == "next_fiscal_year_forecast") R.string.watchlist_income_advice_annual_forecast
-                                                else R.string.watchlist_income_advice_annual_reference,
-                                                yen(candidate.annualDividendPerShare * 100)
-                                            ),
-                                            color = OnSurfaceVariant,
-                                            fontSize = AppTextSize.caption,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
+                                        AdaptiveRow(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                stringResource(
+                                                    if (candidate.annualDividendBasis == "next_fiscal_year_forecast") R.string.watchlist_income_advice_annual_forecast
+                                                    else R.string.watchlist_income_advice_annual_reference,
+                                                    yen(candidate.annualDividendPerShare * 100)
+                                                ),
+                                                modifier = Modifier.weight(1f),
+                                                color = OnSurfaceVariant,
+                                                fontSize = AppTextSize.caption,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(Modifier.width(6.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = SurfaceContainerLow,
+                                                border = BorderStroke(1.dp, BorderColor)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        stringResource(R.string.watchlist_income_advice_covered_months_label),
+                                                        color = OnSurfaceVariant,
+                                                        fontSize = AppTextSize.caption,
+                                                        maxLines = 1
+                                                    )
+                                                    Spacer(Modifier.width(4.dp))
+                                                    ranked.coveredMonths.forEach { month ->
+                                                        Surface(
+                                                            shape = RoundedCornerShape(5.dp),
+                                                            color = PrimaryEmerald.copy(alpha = 0.12f)
+                                                        ) {
+                                                            Text(
+                                                                "${month}月",
+                                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                                                color = PrimaryEmerald,
+                                                                fontSize = AppTextSize.caption,
+                                                                fontWeight = FontWeight.Bold,
+                                                                maxLines = 1
+                                                            )
+                                                        }
+                                                        Spacer(Modifier.width(3.dp))
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

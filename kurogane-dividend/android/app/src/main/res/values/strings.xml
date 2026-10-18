@@ -1066,7 +1066,7 @@
     <string name="watchlist_income_advice_fetch_failed">候補情報を取得できません。</string>
     <string name="watchlist_income_advice_loading">候補情報を読み込み中です。</string>
     <string name="watchlist_income_advice_score">候補比較スコア %1$d点</string>
-    <string name="watchlist_income_advice_months">補える見込みのイベント月: %1$s</string>
+    <string name="watchlist_income_advice_covered_months_label">補える月</string>
     <string name="watchlist_income_advice_monthly_estimate">1単元あたりの月額試算 %1$s</string>
     <string name="watchlist_income_advice_annual_forecast">次期配当予想: %1$s / 100株</string>
     <string name="watchlist_income_advice_annual_reference">前年実績ベース: %1$s / 100株</string>
