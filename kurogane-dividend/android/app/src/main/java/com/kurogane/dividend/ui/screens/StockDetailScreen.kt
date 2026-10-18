@@ -893,7 +893,7 @@ fun StockDetailScreen(
                                     val dpsText = point.annualDividend
                                         ?.let { com.kurogane.dividend.model.formatFinancialAmountDisplay(it) }
                                         ?: "未取得"
-                                    val fiscalPeriodLabel = "${point.year}年期"
+                                    val fiscalPeriodLabel = "${point.year}期"
                                     Triple(
                                         fiscalPeriodLabel,
                                         stringResource(R.string.add_holding_1_s_2_s_2, prefix, dpsText),
