@@ -2707,7 +2707,7 @@ fun WatchlistScreen(
                                         .padding(bottom = 4.dp)
                                         .clickable { onNavigateToDetail(candidate.code) }
                                 ) {
-                                    Column(Modifier.padding(6.dp)) {
+                                    Column(Modifier.padding(horizontal = 6.dp, vertical = 3.dp)) {
                                         AdaptiveRow(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -2727,7 +2727,7 @@ fun WatchlistScreen(
                                                 enabled = !isAddingWatchlist,
                                                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
                                                 shape = RoundedCornerShape(6.dp),
-                                                modifier = Modifier.width(adviceControlWidth).height(36.dp),
+                                                modifier = Modifier.width(adviceControlWidth).height(29.dp),
                                                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
                                             ) {
                                                 Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(12.dp))
@@ -2735,7 +2735,6 @@ fun WatchlistScreen(
                                                 Text(stringResource(R.string.watchlist_income_advice_add), color = OnPrimary, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                                             }
                                         }
-                                        Spacer(Modifier.height(1.dp))
                                         Text(
                                             stringResource(R.string.watchlist_income_advice_monthly_estimate, yen(ranked.estimatedAmountPerCoveredMonth)),
                                             color = PrimaryEmerald,
@@ -2764,7 +2763,7 @@ fun WatchlistScreen(
                                                 shape = RoundedCornerShape(8.dp),
                                                 color = SurfaceContainerLow,
                                                 border = BorderStroke(1.dp, BorderColor),
-                                                modifier = Modifier.width(adviceControlWidth).height(36.dp)
+                                                modifier = Modifier.width(adviceControlWidth).height(29.dp)
                                             ) {
                                                 Row(
                                                     modifier = Modifier
