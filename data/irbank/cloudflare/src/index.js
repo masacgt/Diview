@@ -434,13 +434,15 @@ async function readV2FinancialPayload(env, code) {
   const symbol = yfinanceV2Symbol(code);
   if (!symbol || !env.MARKET_DATA) return null;
   const base = `${YFINANCE_V2_ROOT}/securities/${symbol}`;
-  const [profile, current, financialDocuments, dividendDocuments] = await Promise.all([
+  const [profile, current, financialDocuments, dividendDocuments, issuerDividendDocuments] = await Promise.all([
     readV2Json(env, `${base}/profile.json`),
     readV2Json(env, `${base}/current.json`),
     listV2Documents(env, `${base}/financials/`),
     listV2Documents(env, `${base}/dividends/`),
+    listV2Documents(env, `${base}/issuer_dividends/`),
   ]);
-  if (!profile && !current && financialDocuments.length === 0 && dividendDocuments.length === 0) return null;
+  if (!profile && !current && financialDocuments.length === 0 && dividendDocuments.length === 0
+    && issuerDividendDocuments.length === 0) return null;
   financialDocuments.sort((a, b) => String(a.year || '').localeCompare(String(b.year || '')));
   let annual = financialDocuments.map(document => document.annual).filter(Boolean)
     .sort((a, b) => String(a.fiscal_year || '').localeCompare(String(b.fiscal_year || '')));
@@ -468,6 +470,15 @@ async function readV2FinancialPayload(env, code) {
   const dividends = Array.isArray(calendarYearMetrics?.annual_records)
     ? calendarYearMetrics.annual_records
     : dividendHistory.records;
+  const issuerDividendRecordsByYear = new Map();
+  for (const record of issuerDividendDocuments.flatMap(document => Array.isArray(document.records) ? document.records : [])) {
+    const fiscalYearMatch = String(record?.fiscal_year || '').match(/^(\d{4})(?:\/\d{2})?$/);
+    if (!fiscalYearMatch) continue;
+    issuerDividendRecordsByYear.set(Number(fiscalYearMatch[1]), record);
+  }
+  const issuerDividendRecords = [...issuerDividendRecordsByYear.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, record]) => record);
   const dividendHistoryStatus = current?.field_status?.dividend_history;
   const payoutRatio = finiteNumber(current?.statistics?.payoutRatio);
   return {
@@ -496,6 +507,14 @@ async function readV2FinancialPayload(env, code) {
         no_cut_years: calendarYearMetrics?.status || 'not_fetched',
         payout_ratio: payoutRatio != null ? 'available' : 'empty',
       },
+    },
+    issuer_dividends: {
+      records: issuerDividendRecords,
+      history_basis: 'issuer_reported_fiscal_year',
+      amount_basis: 'irbank_adjusted_fiscal_dps',
+      source: issuerDividendDocuments[0]?.source || 'IRBANK Connect',
+      attribution: issuerDividendDocuments.find(document => document.attribution)?.attribution || null,
+      status: issuerDividendRecords.length ? 'available' : 'empty',
     },
     valuation: { history: valuation, field_status: valuationStatus },
     market: current ? { price: current.price || null, summary: current.statistics || {} } : null,
