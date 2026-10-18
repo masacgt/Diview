@@ -50,6 +50,13 @@ class LocalImportStore(context: Context) {
         ?: autoBackup.readBackup(kind)?.also { bytes ->
             save("dvm_${kind.name}", bytes)
         }
+    fun saveDriveImportUris(uris: List<String>) {
+        save("drive_import_uris", JSONArray(uris.distinct()).toString().toByteArray(Charsets.UTF_8))
+    }
+    fun loadDriveImportUris(): List<String> = load("drive_import_uris")?.let { bytes ->
+        val array = JSONArray(bytes.toString(Charsets.UTF_8))
+        (0 until array.length()).map { array.getString(it) }
+    }.orEmpty()
     fun saveFeedbackDraft(draft: JSONObject) = save("feedback_draft", draft.toString().toByteArray(Charsets.UTF_8))
     fun loadFeedbackDraft(): JSONObject? = load("feedback_draft")?.let { JSONObject(it.toString(Charsets.UTF_8)) }
 
