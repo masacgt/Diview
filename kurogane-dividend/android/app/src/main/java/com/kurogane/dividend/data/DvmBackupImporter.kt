@@ -10,6 +10,7 @@ import javax.crypto.spec.SecretKeySpec
 import com.kurogane.dividend.model.PortfolioMath
 import com.kurogane.dividend.model.ShareholderBenefit
 import com.kurogane.dividend.model.StockClimate
+import com.kurogane.dividend.model.WatchlistStock
 
 enum class DvmBackupKind(val fileName: String, val label: String) {
     STOCKS("BackUpStockInfoAndroid.dvm", "銘柄一覧"),
@@ -28,7 +29,8 @@ data class DvmStock(val code: String, val name: String, val shares: Double, val 
 data class DvmPortableExtras(
     val shareholderBenefits: Map<String, List<ShareholderBenefit>> = emptyMap(),
     val stockClimateOverrides: Map<String, StockClimate> = emptyMap(),
-    val dividendHistoryOverrides: Map<String, List<DividendHistoryOverride>> = emptyMap()
+    val dividendHistoryOverrides: Map<String, List<DividendHistoryOverride>> = emptyMap(),
+    val watchlist: List<WatchlistStock>? = null
 )
 data class DvmBackupPreview(
     val kind: DvmBackupKind,
@@ -68,7 +70,8 @@ object DvmBackupImporter {
         if (kind == DvmBackupKind.DIVIEW_EXTRAS) {
             val root = JSONObject(text)
             val extras = parseExtras(root)
-            val itemCount = extras.shareholderBenefits.size + extras.stockClimateOverrides.size + extras.dividendHistoryOverrides.size
+            val itemCount = extras.shareholderBenefits.size + extras.stockClimateOverrides.size +
+                extras.dividendHistoryOverrides.size + extras.watchlist.orEmpty().size
             return DvmBackupPreview(kind, itemCount, emptyList(), plain, extras)
         }
         val items = when {
@@ -177,7 +180,57 @@ object DvmBackupImporter {
                 if (code.matches(Regex("[A-Z0-9]{4}") ) && rows.isNotEmpty()) put(code, rows)
             }
         }
-        return DvmPortableExtras(benefits, climates, histories)
+        val watchlist = if (!root.has("watchlist")) null else parseWatchlist(
+            root.optJSONArray("watchlist") ?: throw IllegalArgumentException("バックアップの監視銘柄データが正しくありません")
+        )
+        return DvmPortableExtras(benefits, climates, histories, watchlist)
+    }
+
+    private fun parseWatchlist(items: JSONArray): List<WatchlistStock> = (0 until items.length()).map { index ->
+        val item = items.optJSONObject(index) ?: throw IllegalArgumentException("バックアップの監視銘柄データが正しくありません")
+        val code = PortfolioMath.normalizeCode(item.optString("code"))
+        val name = item.optString("name").trim()
+        val category = item.optString("category").lowercase(java.util.Locale.ROOT)
+        val price = item.optDouble("price", Double.NaN)
+        val dps = item.optDouble("dps", Double.NaN)
+        val currentYield = item.optDouble("currentYield", Double.NaN)
+        val targetYield = item.optDouble("targetYield", Double.NaN)
+        val targetPrice = item.optDouble("targetPrice", Double.NaN)
+        val defaultShares = item.optInt("defaultShares", 100)
+        val months = item.optJSONArray("payoutMonths")
+            ?: throw IllegalArgumentException("バックアップの監視銘柄データが正しくありません")
+        val payoutMonths = (0 until months.length()).map { months.getInt(it) }
+        val usdJpyRate = if (item.has("usdJpyRate") && !item.isNull("usdJpyRate")) item.optDouble("usdJpyRate", Double.NaN) else null
+        require(PortfolioMath.validCode(code) && name.isNotBlank() && category in setOf("jp", "us") &&
+            listOf(price, dps, targetPrice).all(PortfolioMath::validMoney) &&
+            currentYield.isFinite() && targetYield.isFinite() && targetYield > 0.0 &&
+            defaultShares > 0 && payoutMonths.all { it in 1..12 } &&
+            (usdJpyRate == null || (usdJpyRate.isFinite() && usdJpyRate > 0.0))) {
+            "バックアップの監視銘柄データが正しくありません"
+        }
+        WatchlistStock(
+            code = code,
+            name = name,
+            market = item.optString("market"),
+            sector = item.optString("sector"),
+            category = category,
+            price = price,
+            currency = item.optString("currency", "¥"),
+            dps = dps,
+            currentYield = currentYield,
+            targetYield = targetYield,
+            targetPrice = targetPrice,
+            dailyChange = item.optString("dailyChange"),
+            isPositive = item.optBoolean("isPositive"),
+            payoutMonths = payoutMonths,
+            payoutTiming = item.optString("payoutTiming"),
+            desc = item.optString("desc"),
+            alertEnabled = item.optBoolean("alertEnabled"),
+            badge = if (item.isNull("badge")) null else item.optString("badge"),
+            defaultShares = defaultShares,
+            usdJpyRate = usdJpyRate,
+            isNoDividendConfirmed = item.optBoolean("isNoDividendConfirmed")
+        )
     }
 
     private fun String.toNumber(): Double {
