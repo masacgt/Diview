@@ -2731,6 +2731,7 @@ def run(
     dry_run: bool,
     reprocess_successful: bool = False,
     allow_one_extra_attempt: bool = False,
+    target_session: date | None = None,
 ) -> int:
     started_at = time.perf_counter()
     with _YF_CALL_LOCK:
@@ -2747,7 +2748,18 @@ def run(
     phase_started = time.perf_counter()
     fetched = fetch_securities(api_key)
     phase_seconds["jquants_universe_fetch"] = round(time.perf_counter() - phase_started, 3)
-    session_date = latest_completed_xtks_session()
+    latest_session = latest_completed_xtks_session()
+    session_date = target_session or latest_session
+    if target_session is not None:
+        import exchange_calendars as xcals
+        import pandas as pd
+
+        if not xcals.get_calendar("XTKS").is_session(pd.Timestamp(target_session)):
+            raise RuntimeError(f"Requested sync date is not an XTKS session: {target_session}")
+        if target_session > latest_session:
+            raise RuntimeError(
+                f"Requested sync date {target_session} is later than the latest completed XTKS session {latest_session}"
+            )
     r2_metrics = R2Metrics()
     client = MeasuredR2Client(collector.get_client(), r2_metrics) if publish else None
     bucket = collector.required_env("R2_BUCKET") if publish else ""
@@ -2763,6 +2775,13 @@ def run(
     schedule_key = object_key("schedules", "current.json")
     schedule_state = read_json(client, bucket, schedule_key) or {}
     phase_seconds["initial_r2_state"] = round(time.perf_counter() - phase_started, 3)
+    active_session = date_value(schedule_state.get("active_session_date"))
+    if active_session is not None and active_session > session_date:
+        print(
+            f"Skipping stale scheduled session {session_date}; R2 already publishes newer session {active_session}.",
+            flush=True,
+        )
+        return 0
     if schedule_state.get("active_session_date") == session_date.isoformat():
         full_history_bucket = int(schedule_state.get("active_full_history_bucket", 0)) % FULL_HISTORY_BUCKETS
         financial_bucket = int(schedule_state.get("active_financial_bucket", 0)) % FINANCIAL_BUCKETS
@@ -3006,6 +3025,10 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Fetch the J-Quants universe only; do not access R2 or yfinance")
     parser.add_argument("--workers", type=int, default=int(os.environ.get("YFINANCE_V2_WORKERS", "8")))
     parser.add_argument(
+        "--session-date", type=date.fromisoformat,
+        help="XTKS session selected by the workflow gate; defaults to the latest completed session",
+    )
+    parser.add_argument(
         "--reprocess-successful", action="store_true",
         help="Re-fetch securities already successful this session; intended for controlled full-universe timing studies",
     )
@@ -3020,6 +3043,7 @@ def main() -> int:
         dry_run=args.dry_run,
         reprocess_successful=args.reprocess_successful,
         allow_one_extra_attempt=args.allow_one_extra_attempt,
+        target_session=args.session_date,
     )
 
 

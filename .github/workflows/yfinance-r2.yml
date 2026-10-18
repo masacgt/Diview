@@ -62,6 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       is_open: ${{ steps.check.outputs.is_open }}
+      session_date: ${{ steps.check.outputs.session_date }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -70,12 +71,16 @@ jobs:
           cache: pip
           cache-dependency-path: scripts/yfinance_r2/requirements.txt
       - name: Install exchange calendar dependency
-        run: python -m pip install "exchange_calendars>=4.7,<5"
+        run: python -m pip install "boto3>=1.35,<2" "exchange_calendars>=4.7,<5"
       - name: Check Tokyo Stock Exchange session
         id: check
         run: python scripts/yfinance_r2/check_market_day.py
         env:
           ALLOW_CLOSED_MARKET: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode == 'sync' }}
+          CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: diview-market-data
 
   v2-daily-sync:
     needs: market-calendar
@@ -93,13 +98,14 @@ jobs:
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
       - name: Fetch J-Quants universe and publish the yfinance v2 generation
         run: |
-          args=(--publish --workers 24)
+          args=(--publish --workers 24 --session-date "$YFINANCE_SESSION_DATE")
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             args+=(--reprocess-successful --allow-one-extra-attempt)
           fi
           python scripts/yfinance_r2/sync_v2.py "${args[@]}"
         shell: bash
         env:
+          YFINANCE_SESSION_DATE: ${{ needs.market-calendar.outputs.session_date }}
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
           YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
           YFINANCE_LIBRARY_RETRIES: "1"
