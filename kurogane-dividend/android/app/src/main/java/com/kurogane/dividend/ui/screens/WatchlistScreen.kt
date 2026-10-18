@@ -2336,28 +2336,17 @@ fun WatchlistScreen(
                                 }
                             }
 
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(PrimaryEmeraldContainer))
-                                Text(stringResource(R.string.watchlist_text_67), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(SecondaryIndigo))
-                                Text(stringResource(R.string.watchlist_text_68), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(ChartNeutral))
-                                Text(stringResource(R.string.watchlist_text_69), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                            }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
 
                         // Match the analysis screen's stacked monthly bars and amount labels.
                         val calendarFontScale = LocalDensity.current.fontScale
                         val calendarChartCanvasHeight = 136.dp
                         val calendarBarAreaBottomFraction = .90f
-                        val calendarBarAreaHeightFraction = .62f
+                        val calendarBarAreaHeightFraction = .73f
                         val calendarPlotHeight = calendarChartCanvasHeight * calendarBarAreaHeightFraction
-                        val calendarAmountLabelTopOffset = 24.dp * calendarFontScale
+                        val calendarAmountLabelTopOffset = 19.dp * calendarFontScale
                         val calendarAmountLabelSlotHeight = 16.dp * calendarFontScale
                         val calendarAxisGap = 3.dp
                         val calendarAxisLabelHeight = calendarAmountLabelSlotHeight
