@@ -76,10 +76,6 @@ fun SettingsScreen(
     val stockClimateOverrides by viewModel.stockClimateOverrides.collectAsStateWithLifecycle()
     val dividendHistoryOverrides by viewModel.dividendHistoryOverrides.collectAsStateWithLifecycle()
     var dataTab by rememberSaveable { mutableStateOf("import") }
-    val calcBasis by viewModel.calculationBasis.collectAsStateWithLifecycle()
-    val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
-    val taxDeduction = taxRateMode == "net"
-    val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
     val biometricEnabled by viewModel.biometricEnabled.collectAsStateWithLifecycle()
     val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
     val exchangeRateError by viewModel.exchangeRateError.collectAsStateWithLifecycle()
@@ -232,17 +228,6 @@ fun SettingsScreen(
         item {
             SettingsSection(stringResource(R.string.settings_text_4), Icons.Default.Tune) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Label(stringResource(R.string.settings_label_17), 9, OnSurface, true); Label(stringResource(R.string.settings_label_18), 7, SettingsMuted)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        BasisChoice(stringResource(R.string.settings_text_5), stringResource(R.string.settings_label_47), calcBasis == "eval", Modifier.weight(1f)) { viewModel.setCalculationBasis("eval") }
-                        BasisChoice(stringResource(R.string.settings_text_6), stringResource(R.string.settings_label_48), calcBasis == "cost", Modifier.weight(1f)) { viewModel.setCalculationBasis("cost") }
-                    }
-                    HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle(stringResource(R.string.settings_text_7), stringResource(R.string.settings_label_49), taxDeduction, { viewModel.setTaxRateMode(if (it) "net" else "gross") })
-                    HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle(stringResource(R.string.settings_text_8), stringResource(R.string.settings_label_50), usTaxDeduction, viewModel::setUsTaxDeduction)
                     Label(stringResource(R.string.settings_label_19), 7, SettingsMuted)
                     Label(exchangeRate?.let { resources.getString(R.string.settings_label_61, (String.format(java.util.Locale.JAPAN, "%.2f", it.usdJpy)).toString(), (it.date).toString()) } ?: resources.getString(R.string.settings_label_62), 8, SettingsMuted)
                     exchangeRateError?.let { Label(it, 7, SettingsMuted) }
@@ -424,17 +409,6 @@ private fun SettingToggle(title: String, detail: String, checked: Boolean, onCha
         Box(Modifier.width(31.dp).height(17.dp).clip(CircleShape).background(if (!enabled) SettingsMuted.copy(alpha = .35f) else if (checked) PrimaryEmeraldContainer else SurfaceContainerHighest).padding(2.dp), contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart) {
             Box(Modifier.size(13.dp).clip(CircleShape).background(if (enabled) OnSurface else SettingsMuted.copy(alpha = .7f)))
         }
-    }
-}
-
-@Composable
-private fun BasisChoice(title: String, subtitle: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Column(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(7.dp)).background(if (selected) SettingsMint.copy(alpha = 0.14f) else SettingsInset).border(1.dp, if (selected) SettingsMint else SettingsBorder, RoundedCornerShape(7.dp)).selectable(selected, role = Role.RadioButton, onClick = onClick).padding(7.dp)) {
-        AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Label(title, 8, if (selected) OnSurface else SettingsMuted, true)
-            Icon(if (selected) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked, null, tint = if (selected) SettingsMint else SettingsMuted, modifier = Modifier.size(12.dp))
-        }
-        Label(subtitle, 7, SettingsMuted)
     }
 }
 
