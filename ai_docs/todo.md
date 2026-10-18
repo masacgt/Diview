@@ -2,7 +2,7 @@
 
 ## Completed
 
-- [x] Remove the excess vertical gap in income-gap candidate cards by placing the monthly estimate and annual reference beside the covered-month tile. Evidence: JDK 17 `assembleDebug` succeeds; emulator screenshot confirms the estimate text and month tile share one compact row, and the APK installs and opens on emulator and SCG01.
+- [x] Remove the excess vertical gap in income-gap candidate cards and equalize the top, middle, and bottom vertical spacing around the add button and covered-month tile. Evidence: JDK 17 `assembleDebug` succeeds; emulator screenshot confirms the spacing, and the APK installs and opens on emulator and SCG01.
 
 - [x] Group notification reminders into timing, notification types, and device permission, with a collapsible notification list and the device-settings button beside its permission summary. Evidence: JDK 17 debug build succeeds; fresh SCG01 install shows the requested layout and the notification list expands/collapses.
 - [ ] Recheck the notification settings screen on the emulator after resolving its launch ANR; the APK installed, but the first frame took over 73 seconds and input timed out.

@@ -2707,24 +2707,42 @@ fun WatchlistScreen(
                                         .padding(bottom = 4.dp)
                                         .clickable { onNavigateToDetail(candidate.code) }
                                 ) {
-                                    Column(
+                                    Row(
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        AdaptiveRow(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
+                                        Column(
+                                            modifier = Modifier.weight(1f),
+                                            verticalArrangement = Arrangement.spacedBy(3.dp)
                                         ) {
-                                            Row(
-                                                modifier = Modifier.weight(1f),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Text(candidate.code, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                                                 Spacer(Modifier.width(8.dp))
                                                 Text(candidate.name, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             }
-                                            Spacer(Modifier.width(6.dp))
+                                            Text(
+                                                stringResource(R.string.watchlist_income_advice_monthly_estimate, yen(ranked.estimatedAmountPerCoveredMonth)),
+                                                color = PrimaryEmerald,
+                                                fontSize = AppTextSize.dense,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                stringResource(
+                                                    if (candidate.annualDividendBasis == "next_fiscal_year_forecast") R.string.watchlist_income_advice_annual_forecast
+                                                    else R.string.watchlist_income_advice_annual_reference,
+                                                    yen(candidate.annualDividendPerShare * 100)
+                                                ),
+                                                color = OnSurfaceVariant,
+                                                fontSize = AppTextSize.caption,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                                            horizontalAlignment = Alignment.End
+                                        ) {
                                             Button(
                                                 onClick = { addWatchlist(candidate.code) { showGraphBottomSheet = false } },
                                                 enabled = !isAddingWatchlist,
@@ -2737,32 +2755,6 @@ fun WatchlistScreen(
                                                 Spacer(Modifier.width(3.dp))
                                                 Text(stringResource(R.string.watchlist_income_advice_add), color = OnPrimary, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                                             }
-                                        }
-                                        AdaptiveRow(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    stringResource(R.string.watchlist_income_advice_monthly_estimate, yen(ranked.estimatedAmountPerCoveredMonth)),
-                                                    color = PrimaryEmerald,
-                                                    fontSize = AppTextSize.dense,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                Text(
-                                                    stringResource(
-                                                        if (candidate.annualDividendBasis == "next_fiscal_year_forecast") R.string.watchlist_income_advice_annual_forecast
-                                                        else R.string.watchlist_income_advice_annual_reference,
-                                                        yen(candidate.annualDividendPerShare * 100)
-                                                    ),
-                                                    color = OnSurfaceVariant,
-                                                    fontSize = AppTextSize.caption,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                            Spacer(Modifier.width(6.dp))
                                             Surface(
                                                 shape = RoundedCornerShape(8.dp),
                                                 color = SurfaceContainerLow,
