@@ -144,7 +144,7 @@ jobs:
       - name: Install V2 and R2 dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
       - name: Build the initial candidate catalog from stored V2 records and verify R2 read-back
-        run: set -o pipefail; python scripts/yfinance_r2/generate_income_advice.py --publish 2>&1 | tee income-advice-initial-generation.log
+        run: set -o pipefail; python scripts/yfinance_r2/generate_income_advice.py --publish --workers 8 2>&1 | tee income-advice-initial-generation.log
         shell: bash
         env:
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944

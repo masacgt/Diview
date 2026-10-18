@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from typing import Any
 
@@ -35,7 +35,33 @@ def latest_annual_statement(client: Any, bucket: str, symbol: str) -> dict[str, 
     return None
 
 
-def build_catalog(client: Any, bucket: str, catalog: dict[str, Any]) -> tuple[dict[str, Any], dict[str, int]]:
+def build_candidate(client: Any, bucket: str, row: dict[str, Any], years: range,
+                    as_of: date) -> dict[str, Any] | None:
+    code = str(row.get("code") or "").strip()
+    symbol = sync.market_symbol(code)
+    safe = sync.safe_symbol(symbol)
+    current = sync.read_json(client, bucket, sync.object_key("securities", safe, "current.json"))
+    if not current:
+        return None
+
+    statements = latest_annual_statement(client, bucket, symbol)
+    metrics = sync.income_advice_metrics(current, [statements] if statements else [], None)
+    current["income_advice_metrics"] = metrics
+    dividends: list[dict[str, Any]] = []
+    for year in years:
+        document = sync.read_json(
+            client, bucket,
+            sync.object_key("securities", safe, "dividends", f"{year}.json"),
+        )
+        if isinstance(document, dict) and isinstance(document.get("records"), list):
+            dividends.extend(item for item in document["records"] if isinstance(item, dict))
+    return sync.income_advice_candidate(
+        code, str(row.get("name") or code), current, dividends, as_of
+    )
+
+
+def build_catalog(client: Any, bucket: str, catalog: dict[str, Any],
+                  workers: int = 8) -> tuple[dict[str, Any], dict[str, int]]:
     generation = str(catalog.get("generation") or "")
     try:
         as_of = date.fromisoformat(generation)
@@ -45,37 +71,44 @@ def build_catalog(client: Any, bucket: str, catalog: dict[str, Any]) -> tuple[di
     years = range(as_of.year - 3, as_of.year)
     items: list[dict[str, Any]] = []
     counts = {"catalog_items": 0, "eligible_currency": 0, "candidate_items": 0, "read_failures": 0}
+    eligible_rows: list[dict[str, Any]] = []
     for row in catalog.get("items", []):
         if not isinstance(row, dict):
             continue
         counts["catalog_items"] += 1
-        code = str(row.get("code") or "").strip()
         if row.get("category") != "jp" or row.get("currency") != "JPY":
             continue
         counts["eligible_currency"] += 1
-        try:
-            symbol = sync.market_symbol(code)
-            safe = sync.safe_symbol(symbol)
-            current = sync.read_json(client, bucket, sync.object_key("securities", safe, "current.json"))
-            if not current:
-                continue
-            statements = latest_annual_statement(client, bucket, symbol)
-            metrics = sync.income_advice_metrics(current, [statements] if statements else [], None)
-            current["income_advice_metrics"] = metrics
-            dividends: list[dict[str, Any]] = []
-            for year in years:
-                document = sync.read_json(
-                    client, bucket,
-                    sync.object_key("securities", safe, "dividends", f"{year}.json"),
-                )
-                if isinstance(document, dict) and isinstance(document.get("records"), list):
-                    dividends.extend(item for item in document["records"] if isinstance(item, dict))
-            candidate = sync.income_advice_candidate(code, str(row.get("name") or code), current, dividends, as_of)
-            if candidate is not None:
-                items.append(candidate)
-        except Exception as exc:
-            counts["read_failures"] += 1
-            print(f"Unable to build candidate {code}: {type(exc).__name__}: {exc}", file=sys.stderr)
+        eligible_rows.append(row)
+
+    print(json.dumps({
+        "phase": "candidate_reads_started",
+        "eligible_currency": len(eligible_rows),
+        "workers": max(1, workers),
+        "generation": generation,
+    }, ensure_ascii=False, sort_keys=True), flush=True)
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        futures = {
+            pool.submit(build_candidate, client, bucket, row, years, as_of): str(row.get("code") or "")
+            for row in eligible_rows
+        }
+        for completed, future in enumerate(as_completed(futures), start=1):
+            code = futures[future]
+            try:
+                candidate = future.result()
+                if candidate is not None:
+                    items.append(candidate)
+            except Exception as exc:
+                counts["read_failures"] += 1
+                print(f"Unable to build candidate {code}: {type(exc).__name__}: {exc}", file=sys.stderr)
+            if completed % 100 == 0 or completed == len(futures):
+                print(json.dumps({
+                    "phase": "candidate_reads_progress",
+                    "completed": completed,
+                    "total": len(futures),
+                    "candidates": len(items),
+                    "read_failures": counts["read_failures"],
+                }, ensure_ascii=False, sort_keys=True), flush=True)
 
     items.sort(key=lambda item: item["code"])
     counts["candidate_items"] = len(items)
@@ -93,6 +126,7 @@ def build_catalog(client: Any, bucket: str, catalog: dict[str, Any]) -> tuple[di
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--publish", action="store_true", help="Write and read back the derived catalog in R2")
+    parser.add_argument("--workers", type=int, default=8, help="Maximum concurrent R2 candidate reads (default: 8)")
     args = parser.parse_args()
     if not args.publish:
         parser.error("--publish is required because this workflow is intended to publish the initial R2 catalog")
@@ -104,7 +138,7 @@ def main() -> int:
     if not catalog or not isinstance(catalog.get("items"), list):
         raise RuntimeError("The published V2 catalog is missing or invalid")
 
-    result, counts = build_catalog(client, bucket, catalog)
+    result, counts = build_catalog(client, bucket, catalog, workers=args.workers)
     print(json.dumps({**counts, "generation": result["generation"]}, ensure_ascii=False, sort_keys=True), flush=True)
     if counts["read_failures"]:
         raise RuntimeError(f"Aborting without publishing because {counts['read_failures']} candidate records failed to read")
