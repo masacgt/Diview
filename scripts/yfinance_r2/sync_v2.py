@@ -2369,39 +2369,66 @@ def income_advice_metrics(current: dict[str, Any], statements: list[dict[str, An
     }
 
 
-def income_advice_score(metrics: dict[str, Any]) -> int | None:
+def income_advice_score_breakdown(metrics: dict[str, Any]) -> tuple[int, dict[str, float]]:
     fields = metrics.get("fields") if isinstance(metrics.get("fields"), dict) else {}
-    required = (
-        "payout_ratio", "equity_ratio", "operating_margin", "per", "pbr",
-        "consecutive_increase_years", "no_cut_years",
-    )
-    if any(fields.get(name) != "available" or finite_number(metrics.get(name)) is None for name in required):
-        return None
-    payout = finite_number(metrics["payout_ratio"])
-    equity = finite_number(metrics["equity_ratio"])
-    margin = finite_number(metrics["operating_margin"])
-    per = finite_number(metrics["per"])
-    pbr = finite_number(metrics["pbr"])
-    increase = finite_number(metrics["consecutive_increase_years"])
-    no_cut = finite_number(metrics["no_cut_years"])
-    assert payout is not None and equity is not None and margin is not None
-    assert per is not None and pbr is not None and increase is not None and no_cut is not None
+    weights = {
+        "payout_ratio": 20,
+        "equity_ratio": 20,
+        "operating_margin": 15,
+        "per": 10,
+        "pbr": 10,
+        "consecutive_increase_years": 15,
+        "no_cut_years": 10,
+    }
+    score_functions = {
+        "payout_ratio": lambda value: 20 if 0 <= value <= 30 else 16 if 0 <= value <= 50 else 12 if 0 <= value <= 70 else 6 if 0 <= value <= 90 else 3 if 0 <= value <= 100 else 0,
+        "equity_ratio": lambda value: 20 if value >= 60 else 16 if value >= 40 else 12 if value >= 30 else 8 if value >= 20 else 4 if value >= 10 else 0,
+        "operating_margin": lambda value: 15 if value >= 15 else 12 if value >= 10 else 9 if value >= 5 else 5 if value >= 0 else 0,
+        "per": lambda value: 10 if 0 < value <= 10 else 8 if 0 < value <= 15 else 6 if 0 < value <= 20 else 3 if 0 < value <= 30 else 0,
+        "pbr": lambda value: 10 if 0 < value <= 1 else 8 if 0 < value <= 1.5 else 6 if 0 < value <= 2 else 3 if 0 < value <= 3 else 0,
+        "consecutive_increase_years": lambda value: 15 if value >= 5 else 12 if value >= 4 else 9 if value >= 3 else 6 if value >= 2 else 3 if value >= 1 else 0,
+        "no_cut_years": lambda value: 10 if value >= 10 else 8 if value >= 7 else 6 if value >= 4 else 3 if value >= 2 else 1 if value >= 1 else 0,
+    }
 
-    payout_points = 20 if 0 <= payout <= 30 else 16 if payout <= 50 and payout >= 0 else 12 if payout <= 70 and payout >= 0 else 6 if payout <= 90 and payout >= 0 else 3 if payout <= 100 and payout >= 0 else 0
-    equity_points = 20 if equity >= 60 else 16 if equity >= 40 else 12 if equity >= 30 else 8 if equity >= 20 else 4 if equity >= 10 else 0
-    margin_points = 15 if margin >= 15 else 12 if margin >= 10 else 9 if margin >= 5 else 5 if margin >= 0 else 0
-    per_points = 10 if 0 < per <= 10 else 8 if per <= 15 and per > 0 else 6 if per <= 20 and per > 0 else 3 if per <= 30 and per > 0 else 0
-    pbr_points = 10 if 0 < pbr <= 1 else 8 if pbr <= 1.5 and pbr > 0 else 6 if pbr <= 2 and pbr > 0 else 3 if pbr <= 3 and pbr > 0 else 0
-    increase_points = 15 if increase >= 5 else 12 if increase >= 4 else 9 if increase >= 3 else 6 if increase >= 2 else 3 if increase >= 1 else 0
-    no_cut_points = 10 if no_cut >= 10 else 8 if no_cut >= 7 else 6 if no_cut >= 4 else 3 if no_cut >= 2 else 1 if no_cut >= 1 else 0
-    return payout_points + equity_points + margin_points + per_points + pbr_points + increase_points + no_cut_points
+    available_points: dict[str, float] = {}
+    for name, score_function in score_functions.items():
+        value = finite_number(metrics.get(name))
+        if fields.get(name) == "available" and value is not None:
+            available_points[name] = float(score_function(value))
+
+    # Average normalized attainment so metrics with different point maxima remain comparable.
+    # With no available metrics, use the neutral midpoint (50% of each metric's weight).
+    average_attainment = (
+        sum(available_points[name] / weights[name] for name in available_points) / len(available_points)
+        if available_points else 0.5
+    )
+    points = {
+        name: available_points.get(name, average_attainment * weight)
+        for name, weight in weights.items()
+    }
+    total = sum(points.values())
+    return int(total + 0.5), {
+        name: round(average_attainment * weights[name], 2)
+        for name in weights if name not in available_points
+    }
+
+
+def income_advice_score(metrics: dict[str, Any]) -> int:
+    return income_advice_score_breakdown(metrics)[0]
 
 
 def income_advice_candidate(code: str, name: str, current: dict[str, Any],
-                            dividends: list[dict[str, Any]], as_of: date) -> dict[str, Any] | None:
+                            dividends: list[dict[str, Any]], as_of: date,
+                            exclusion_counts: dict[str, int] | None = None) -> dict[str, Any] | None:
+    def exclude(reason: str) -> None:
+        if exclusion_counts is not None:
+            exclusion_counts[reason] = exclusion_counts.get(reason, 0) + 1
+
     if str((current.get("price") or {}).get("currency") or "") != "JPY":
+        exclude("currency_not_jpy")
         return None
     if current.get("field_status", {}).get("dividend_history") != "available":
+        exclude("dividend_history_unavailable")
         return None
     latest_completed_year = as_of.year - 1
     years = list(range(latest_completed_year - 2, latest_completed_year + 1))
@@ -2417,12 +2444,11 @@ def income_advice_candidate(code: str, name: str, current: dict[str, Any],
     recurring_months = sorted(month for month, observed_years in event_month_years.items()
                               if len(observed_years.intersection(years)) >= 2)
     if not recurring_months:
+        exclude("no_recurring_dividend_months")
         return None
 
     metrics = current.get("income_advice_metrics") if isinstance(current.get("income_advice_metrics"), dict) else {}
-    score = income_advice_score(metrics)
-    if score is None:
-        return None
+    score, imputed_score_points = income_advice_score_breakdown(metrics)
     dividend = current.get("dividend") if isinstance(current.get("dividend"), dict) else {}
     forecast = finite_number(dividend.get("next_fiscal_year_forecast_per_share"))
     forecast_status = current.get("field_status", {}).get("forecast_dividend")
@@ -2433,10 +2459,12 @@ def income_advice_candidate(code: str, name: str, current: dict[str, Any],
         action_history = current.get("action_history") if isinstance(current.get("action_history"), dict) else {}
         coverage_end = date_value(action_history.get("full_history_coverage_end"))
         if coverage_end is None or coverage_end < date(latest_completed_year, 12, 31):
+            exclude("annual_history_incomplete")
             return None
         annual_dps = annual_totals.get(latest_completed_year, 0.0)
         annual_basis = "previous_calendar_year_observed_distributions"
     if annual_dps <= 0:
+        exclude("annual_dividend_amount_unavailable")
         return None
     return {
         "code": code,
@@ -2447,6 +2475,7 @@ def income_advice_candidate(code: str, name: str, current: dict[str, Any],
         "observed_months": recurring_months,
         "monthly_estimate_per_100_shares": round(annual_dps * 100 / len(recurring_months), 2),
         "score": score,
+        "score_metric_imputed_points": imputed_score_points,
         "score_metrics": {key: metrics.get(key) for key in (
             "payout_ratio", "equity_ratio", "operating_margin", "per", "pbr",
             "consecutive_increase_years", "no_cut_years",

@@ -203,6 +203,12 @@ class DividendViewModel @JvmOverloads constructor(
     val compositionThreshold = _compositionThreshold.asStateFlow()
     private val _compositionOtherEnabled = MutableStateFlow(displayPreferences.getBoolean("composition_other_enabled", true))
     val compositionOtherEnabled = _compositionOtherEnabled.asStateFlow()
+    private val _compositionChartMode = MutableStateFlow(
+        displayPreferences.getString("composition_chart_mode", "dividend")
+            ?.takeIf { it == "holding" || it == "dividend" }
+            ?: "dividend"
+    )
+    val compositionChartMode = _compositionChartMode.asStateFlow()
     private val _roadmapShareTab = MutableStateFlow(displayPreferences.getInt("roadmap_share_tab", 0))
     val roadmapShareTab = _roadmapShareTab.asStateFlow()
     private val _roadmapShareMasked = MutableStateFlow(displayPreferences.getBoolean("roadmap_share_masked", _maskAtStartup.value))
@@ -286,6 +292,17 @@ class DividendViewModel @JvmOverloads constructor(
 
     fun setCompositionOtherEnabled(enabled: Boolean) {
         saveDisplaySetting(displayPreferences.edit().putBoolean("composition_other_enabled", enabled)) { _compositionOtherEnabled.value = enabled }
+    }
+
+    fun setCompositionChartMode(mode: String): Boolean {
+        if (mode !in setOf("holding", "dividend")) return false
+        if (_compositionChartMode.value == mode) return true
+        if (!displayPreferences.edit().putString("composition_chart_mode", mode).commit()) {
+            _saveError.value = getApplication<Application>().getString(R.string.setting_save_failed)
+            return false
+        }
+        _compositionChartMode.value = mode
+        return true
     }
 
     fun setRoadmapShareTab(value: Int) {
@@ -1089,10 +1106,18 @@ class DividendViewModel @JvmOverloads constructor(
             it.copy(dividendMonths = emptyList()).refreshPayout()
         }
         val extras = backups.map { it.extras }
+        val watchlistBackup = extras.mapNotNull { it.watchlist }.lastOrNull()
+        val nextWatchlist = _watchlist.value.toMutableList().apply {
+            watchlistBackup.orEmpty().forEach { imported ->
+                val index = indexOfFirst { it.code.equals(imported.code, ignoreCase = true) }
+                if (index >= 0) this[index] = imported else add(imported)
+            }
+        }
         val nextBenefits = _shareholderBenefits.value.toMutableMap().apply { extras.forEach { putAll(it.shareholderBenefits) } }
         val nextClimates = _stockClimateOverrides.value.toMutableMap().apply { extras.forEach { putAll(it.stockClimateOverrides) } }
         val nextDividendHistory = _dividendHistoryOverrides.value.toMutableMap().apply { extras.forEach { putAll(it.dividendHistoryOverrides) } }
         withContext(Dispatchers.IO) {
+            if (watchlistBackup != null) localImportStore.saveWatchlist(nextWatchlist)
             backups.forEach { preview -> localImportStore.saveBackup(preview.kind, preview.payload) }
             localImportStore.saveShareholderBenefits(nextBenefits)
             localImportStore.saveStockClimateOverrides(nextClimates)
@@ -1101,6 +1126,10 @@ class DividendViewModel @JvmOverloads constructor(
         _shareholderBenefits.value = nextBenefits
         _stockClimateOverrides.value = nextClimates
         _dividendHistoryOverrides.value = nextDividendHistory
+        if (watchlistBackup != null) {
+            watchlistLoadFailed = false
+            _watchlist.value = nextWatchlist
+        }
         holdingsLoadFailed = false
         updatePortfolio(next)
         applyCachedDividendMonths()
@@ -2750,6 +2779,7 @@ class DividendViewModel @JvmOverloads constructor(
             _growthSimulatorDividendYield.value = 4.0
             _compositionThreshold.value = 5
             _compositionOtherEnabled.value = true
+            _compositionChartMode.value = "dividend"
             _roadmapShareTab.value = 0
             _roadmapShareMasked.value = false
             _taxRateMode.value = "gross"

@@ -19,7 +19,6 @@
     <string name="data_loading">データを取得中…</string>
     <string name="financial_empty">この銘柄の財務データはまだありません。</string>
     <string name="financial_update_failed">財務データを更新できませんでした。保存済みデータがある場合は表示しています。</string>
-    <string name="fx_loading">為替を更新中…</string>
     <string name="back">戻る</string>
     <string name="close">閉じる</string>
     <string name="stock_lookup_failed">銘柄情報を取得できませんでした</string>
@@ -232,9 +231,6 @@
     <string name="csv_import_text_4">"数量 %1$s ・ 取得単価 ¥%2$s"</string>
     <string name="csv_import_text_5">"照合できなかった投資信託 (%1$s)"</string>
     <string name="csv_import_text_6">"・%1$s"</string>
-    <string name="csv_import_text_7">"4種類のDVMファイルを個別に選択できます。復号と確認は端末内で行います。"</string>
-    <string name="csv_import_text_8">"%1$s　%2$s件"</string>
-    <string name="csv_import_text_9">"%1$s  %2$s  %3$s株"</string>
     <string name="csv_import_text_10">"CSVファイルの解析・銘柄照合・保存は端末内で行われ、ファイルの内容は外部サービスへ送信されません。"</string>
     <string name="dividend_change_analysis_cards_text">"年間配当総増減"</string>
     <string name="dividend_change_analysis_cards_text_2">"%1$s・現在の保有株数で最新2期の実績を比較"</string>
@@ -347,12 +343,13 @@
     <string name="settings_label_6">"CSVファイルを選択またはドロップ"</string>
     <string name="settings_label_7">".csv形式 (UTF-8・Shift-JIS自動判定 / 最大10MB)"</string>
     <string name="settings_label_8">"▱  ウィザードへ"</string>
-    <string name="settings_label_9">"◉ 登録中の保有データ"</string>
     <string name="settings_label_10">"ⓘ  各証券会社CSVのダウンロード手順   保存データ上書き/追加"</string>
-    <string name="settings_label_11">"保有銘柄・配当情報・取得単価データを保存します。"</string>
-    <string name="settings_label_12">"端末にCSVを保存（無暗号化）"</string>
+    <string name="settings_label_12">"CSVを端末に保存"</string>
     <string name="settings_label_13">"暗号化バックアップ（Googleドライブに保存）"</string>
-    <string name="settings_label_14">"CSVは選択した端末の保存先に無暗号化で保存します。DVMはAES-256-GCMで暗号化してGoogleドライブに保存します。どちらの形式もインポートできます。"</string>
+    <string name="settings_label_14">"CSVは端末に保存し、暗号化バックアップはGoogleドライブに保存します。どちらからもデータをインポートできます。"</string>
+    <string name="backup_csv_import_title">"CSVからインポート"</string>
+    <string name="backup_csv_import_subtitle">"証券会社のCSVから銘柄を取り込みます"</string>
+    <string name="backup_csv_export_subtitle">"保有銘柄をCSVファイルとして保存します"</string>
     <string name="settings_text_2">"外観・テーマ設定"</string>
     <string name="settings_label_15">"カラーテーマ"</string>
     <string name="settings_label_16">"アクセントカラー"</string>
@@ -364,8 +361,6 @@
     <string name="settings_text_6">"取得額基準"</string>
     <string name="settings_text_7">"税金計算設定"</string>
     <string name="settings_text_8" formatted="false">"米国株 現地源泉徴収控除 (10%)"</string>
-    <string name="settings_label_19" formatted="false">"国内税20.315%は課税部分のみ。外国税額控除・還付・特殊な分配金は含みません。"</string>
-    <string name="settings_label_20">"為替を更新"</string>
     <string name="settings_label_21">"目標利回り (ロードマップ試算)"</string>
     <string name="settings_label_22">"シミュレーション基準   %1$s%%"</string>
     <string name="settings_label_23">"構成比「その他」集約閾値"</string>
@@ -406,7 +401,7 @@
     <string name="stock_detail_text_5">"税引前"</string>
     <string name="stock_detail_text_6">"取得利回り"</string>
     <string name="stock_detail_text_7">"単価%1$s%2$s"</string>
-    <string name="stock_detail_text_8">"1株配当金の実績（最大8期）"</string>
+    <string name="stock_detail_text_8">"1株配当金の実績・予想"</string>
     <string name="stock_detail_text_9">"配当履歴未取得"</string>
     <string name="stock_detail_text_10">"4期増配率: %1$s"</string>
     <string name="stock_detail_text_11">"配当性向: 約%1$s"</string>
@@ -586,6 +581,7 @@
     <string name="csv_guide_matsui">ログイン後、資産状況の「保有証券一覧」から日本株または米国株のCSVを保存します。</string>
     <string name="csv_guide_mitsubishi">三菱UFJ eスマート証券の残高一覧から、現物株式・米国株式・投資信託のCSVを保存します。</string>
     <string name="csv_guide_nomura">野村證券の「預り資産（預り証券）」CSVを保存して選択します。日本株と投資信託に対応します。</string>
+    <string name="csv_guide_diview">Diviewから出力したCSVバックアップです。銘柄名・保有数量などの見出しから自動判定して取り込みます。</string>
     <string name="csv_guide_steps">CSVを端末に保存 → 証券会社を選択 → CSVを読み込み、内容を確認して取り込み</string>
     <string name="watchlist_text_19">"詳細"</string>
     <string name="watchlist_text_20">"新しい銘柄をウォッチリストに追加"</string>
@@ -687,16 +683,14 @@
     <string name="contact_feedback_message_11">"送信できませんでした。"</string>
     <string name="csv_import_message">"CSVを解析中…"</string>
     <string name="csv_import_label">"証券CSVインポート"</string>
-    <string name="csv_import_label_2">"DVMバックアップ復元"</string>
-    <string name="csv_import_label_3">"証券CSV"</string>
-    <string name="csv_import_label_4">"DVMバックアップ"</string>
+    <string name="csv_import_label_2">"Googleドライブからインポート"</string>
+    <string name="csv_import_label_3">"CSVから"</string>
+    <string name="csv_import_label_4">"Googleドライブから"</string>
     <string name="csv_import_label_5">"保有数量"</string>
     <string name="csv_import_label_7">"口座区分"</string>
     <string name="csv_import_message_2">"取り込む銘柄を選択してください"</string>
     <string name="csv_import_label_9">"取込済み"</string>
     <string name="csv_import_label_10">"選択した銘柄を取り込む"</string>
-    <string name="csv_import_label_11">"端末内に保存しました"</string>
-    <string name="csv_import_label_12">"確認したバックアップを保存"</string>
     <string name="dividend_change_analysis_cards_label">"配当性向順"</string>
     <string name="dividend_change_analysis_cards_label_2">"非減配年数順"</string>
     <string name="dividend_change_analysis_cards_label_3">"上位5銘柄に戻す"</string>
@@ -735,7 +729,7 @@
     <string name="settings_label_51" formatted="false">"3.50% (堅実)"</string>
     <string name="settings_label_52" formatted="false">"4.00% (標準)"</string>
     <string name="settings_label_53" formatted="false">"4.50% (積極)"</string>
-    <string name="settings_label_54">"取得済みの権利確定日（推定）を過ぎた次の通知時刻にお知らせ"</string>
+    <string name="settings_label_54">"取得済み銘柄の権利確定日をお知らせ"</string>
     <string name="settings_label_55">"ウォッチリストで通知ONの銘柄を対象にし、保有中の同一銘柄にも適用"</string>
     <string name="settings_label_56">"起動時とバックグラウンドからの復帰時に認証"</string>
     <string name="settings_message_7">"この画面では認証を開始できません"</string>
@@ -790,6 +784,16 @@
     <string name="diview_notifications_message_7">"新しいお知らせがあります"</string>
     <string name="diview_notifications_message_8">"Diviewのテスト通知"</string>
     <string name="diview_notifications_message_9">"通知が有効です。タップすると通知設定を開きます。"</string>
+    <string name="notification_test_note">"各テストは実際の通知条件を判定せず、通知の表示だけを確認します。"</string>
+    <string name="notification_test_button">"この通知をテスト"</string>
+    <string name="notification_test_success">"テスト通知を送信しました。"</string>
+    <string name="notification_test_failure">"送信できません。端末の通知許可と通知チャンネルを確認してください。"</string>
+    <string name="notification_test_price_title">"目標利回り到達通知（テスト）"</string>
+    <string name="notification_test_price_text">"買場シグナル通知の表示確認用です。実際に目標利回りへ到達した銘柄はありません。"</string>
+    <string name="notification_test_dividend_title">"配当権利通知（テスト）"</string>
+    <string name="notification_test_dividend_text">"配当権利通知の表示確認用です。実際の権利日を示すものではありません。"</string>
+    <string name="notification_test_dividend_change_title">"増配・減配通知（テスト）"</string>
+    <string name="notification_test_dividend_change_text">"増配・減配通知の表示確認用です。実際の配当変更を示すものではありません。"</string>
     <string name="notification_dividend_change_title">"増配・減配通知"</string>
     <string name="notification_dividend_change_summary">"保有している日本株の年間1株配当額の変化を朝・夕にお知らせ"</string>
     <string name="notification_dividend_change_description">"保有している日本株の年間1株配当額の増加・減少をお知らせします"</string>
@@ -908,8 +912,6 @@
     <string name="settings_dark_active">"ダーク適用中"</string>
     <string name="settings_label_59">"ライト"</string>
     <string name="settings_label_60">"システム連動"</string>
-    <string name="settings_label_61">"為替：1 USD = %1$s円（%2$s）"</string>
-    <string name="settings_label_62">"為替未取得：米ドル資産は円換算合計の対象外"</string>
     <string name="stock_detail_label_14">"（更新失敗・保存済みデータを表示）"</string>
     <string name="stock_detail_label_15">"税引後概算・現在の非課税割合で試算"</string>
     <string name="stock_detail_label_16">"税引前の目安"</string>
@@ -966,7 +968,6 @@
     <string name="csv_import_label_15">"バックアップを解析できませんでした"</string>
     <string name="csv_import_label_16">"UTF-8 / Shift-JIS / EUC-JPを端末内で判定"</string>
     <string name="csv_import_label_17">"保存できませんでした"</string>
-    <string name="csv_import_label_18">"DVMファイルを選択"</string>
     <string name="csv_import_label_19">"銘柄・推移・カスタム銘柄・アラート"</string>
     <string name="roadmap_label_12">"新NISA 成長投資枠"</string>
     <string name="roadmap_label_13">"新NISA つみたて枠"</string>
@@ -1001,22 +1002,15 @@
     <string name="csv_broker_auto_detected">%1$sのCSVと判定しました</string>
     <string name="csv_broker_auto_unknown">CSVから証券会社を特定できませんでした。会社を選択してください。</string>
     <string name="csv_broker_manual_selection">%1$sを選択中</string>
-    <string name="settings_csv_auto_detection_hint">SBI・楽天・マネックス・松井・三菱UFJ eスマート・野村のCSVを判定します。</string>
-    <string name="settings_csv_unknown_broker_hint">証券会社を判定できないCSVは、対応会社を選択して解析します。</string>
-    <string name="dvm_drive_backup_subtitle">銘柄とDiview編集データをAPKと同じAES-256-GCM方式で暗号化して保存</string>
-    <string name="dvm_drive_restore_title">GoogleドライブからDVMを復元</string>
-    <string name="dvm_drive_restore_subtitle">バックアップに使ったGoogleアカウントを選択して読み込み</string>
-    <string name="dvm_drive_backup_success">暗号化DVMバックアップをGoogleドライブに保存しました。</string>
-    <string name="dvm_drive_restore_success">Googleドライブから%1$d件の銘柄を復元しました。</string>
-    <string name="dvm_drive_backup_missing">GoogleドライブにDVMバックアップが見つかりませんでした。</string>
+    <string name="dvm_drive_backup_subtitle">銘柄と編集データをGoogleドライブに保存します</string>
+    <string name="dvm_drive_restore_title">Googleドライブからインポート</string>
+    <string name="dvm_drive_restore_subtitle">Googleアカウントを選択してバックアップを読み込みます</string>
+    <string name="dvm_drive_backup_success">暗号化バックアップをGoogleドライブに保存しました。</string>
+    <string name="dvm_drive_restore_success">Googleドライブから%1$d件の銘柄をインポートしました。</string>
+    <string name="dvm_drive_backup_missing">Googleドライブにバックアップが見つかりませんでした。</string>
     <string name="dvm_drive_auth_failed">Googleアカウントを認証できませんでした。Google Play開発者サービスとアカウント設定を確認してください。</string>
     <string name="dvm_drive_auth_cancelled">Googleアカウントの認証をキャンセルしました。</string>
-    <string name="dvm_drive_action_failed">Googleドライブの操作に失敗しました。通信設定を確認して再試行してください。</string>
-    <string name="csv_dvm_folder_title">DVMバックアップのフォルダを選択</string>
-    <string name="csv_dvm_folder_subtitle">フォルダ内の対応する.DVMファイルを探して自動で取り込みます</string>
-    <string name="csv_dvm_folder_empty">フォルダ内に対応するDVMバックアップが見つかりませんでした</string>
-    <string name="csv_dvm_folder_skipped">対応するDVMファイルを%1$d件取り込みました。対応外または破損したファイルはスキップしました。</string>
-    <string name="csv_dvm_folder_imported">DVMバックアップを%1$d種類取り込みました</string>
+    <string name="dvm_drive_action_failed">バックアップの処理に失敗しました。Googleアカウントや保存先を確認して再試行してください。</string>
     <string name="all">すべて</string>
     <string name="setting_save_failed">設定を保存できませんでした。再試行してください。</string>
     <string name="review_open_failed">レビュー画面を開けませんでした。ストアまたはブラウザを確認してください。</string>

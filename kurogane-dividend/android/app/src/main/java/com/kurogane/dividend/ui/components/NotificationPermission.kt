@@ -42,6 +42,9 @@ fun rememberNotificationAccess(onAllowed: (String) -> Unit): NotificationAccess 
         "price" -> DiviewNotifications.PRICE_CHANNEL
         "dividend" -> DiviewNotifications.DIVIDEND_CHANNEL
         "dividend_change" -> DiviewNotifications.DIVIDEND_CHANGE_CHANNEL
+        "test_price" -> DiviewNotifications.PRICE_CHANNEL
+        "test_dividend" -> DiviewNotifications.DIVIDEND_CHANNEL
+        "test_dividend_change" -> DiviewNotifications.DIVIDEND_CHANGE_CHANNEL
         else -> DiviewNotifications.TEST_CHANNEL
     } }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
