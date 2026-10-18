@@ -74,6 +74,7 @@ fun SettingsScreen(
     val shareholderBenefits by viewModel.shareholderBenefits.collectAsStateWithLifecycle()
     val stockClimateOverrides by viewModel.stockClimateOverrides.collectAsStateWithLifecycle()
     val dividendHistoryOverrides by viewModel.dividendHistoryOverrides.collectAsStateWithLifecycle()
+    val holdings by viewModel.holdings.collectAsStateWithLifecycle()
     val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
     var dataTab by rememberSaveable { mutableStateOf("import") }
     val biometricEnabled by viewModel.biometricEnabled.collectAsStateWithLifecycle()
@@ -151,7 +152,7 @@ fun SettingsScreen(
                             )
                             GoogleDvmBackupCard(
                                 action = GoogleDvmBackupAction.EXPORT,
-                                holdings = viewModel.holdings.value,
+                                holdings = holdings,
                                 shareholderBenefits = shareholderBenefits,
                                 stockClimateOverrides = stockClimateOverrides,
                                 dividendHistoryOverrides = dividendHistoryOverrides,
