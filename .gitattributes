@@ -1,0 +1,2 @@
+# APK-extracted brokerage samples may use CP932 or EUC-JP and must remain byte-for-byte intact.
+ai_docs/samples/**/*.csv -text -diff
