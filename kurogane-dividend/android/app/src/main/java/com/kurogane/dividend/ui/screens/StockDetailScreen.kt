@@ -237,7 +237,11 @@ fun StockDetailScreen(
     val fiscalMonth = financial?.period?.substringAfterLast('/')?.toIntOrNull()?.takeIf { it in 1..12 }
     val currentCalendarYear = java.time.Year.now(ZoneId.of("Asia/Tokyo")).value
     val currentCalendarDate = java.time.LocalDate.now(ZoneId.of("Asia/Tokyo"))
-    val dividendHistoryYears = (currentCalendarYear - 7..currentCalendarYear).toList()
+    val chartForecastYear = financial?.takeIf {
+        it.forecastAnnualDividend != null &&
+            it.forecastFiscalYear?.let { year -> year >= currentCalendarYear } == true
+    }?.forecastFiscalYear ?: currentCalendarYear
+    val dividendHistoryYears = (chartForecastYear - 7..chartForecastYear).toList()
     val chartDividendEvents = remember(currentHolding.code, dividendEventRevision) {
         viewModel.dividendEventsFor(currentHolding.code)
     }
@@ -284,14 +288,26 @@ fun StockDetailScreen(
         yearEndPrices = com.kurogane.dividend.data.runCatchingCancellable {
             viewModel.loadMonthlyPriceHistory(
                 listOf(normalizedDividendCode),
-                dividendHistoryYears.map { "$it-12" }
+                dividendHistoryYears.filter { it < chartForecastYear }.map { "$it-12" }
             ).firstOrNull()?.prices.orEmpty().associate { price ->
                 price.month.take(4).toInt() to price.close
             }
         }.getOrDefault(emptyMap())
     }
     val defaultDividendPeriods = dividendHistoryYears.map { year ->
-        StockDetailDividendPeriod(year, yearEndPrices[year], sourceDividendsByYear[year], false)
+        val isForecast = year == chartForecastYear
+        val annualDividend = if (isForecast) {
+            financial?.takeIf { it.forecastFiscalYear == year }?.forecastAnnualDividend
+                ?: currentYearForecastDps
+        } else {
+            sourceDividendsByYear[year]
+        }
+        StockDetailDividendPeriod(
+            year,
+            if (isForecast) null else yearEndPrices[year],
+            annualDividend,
+            isForecast
+        )
     }
     val dividendPeriods = defaultDividendPeriods.map { period ->
         val override = savedDividendOverrides[period.year]
