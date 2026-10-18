@@ -1918,7 +1918,6 @@ fun WatchlistScreen(
                             Text(projection.paymentCount.toString(), color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
                             Text(stringResource(R.string.watchlist_text_29), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
-                        Text(stringResource(R.string.watchlist_known_months), color = PrimaryEmerald, fontSize = AppTextSize.dense)
                     }
 
                     // Card 2
@@ -1939,12 +1938,13 @@ fun WatchlistScreen(
                             fontSize = AppTextSize.section,
                             fontWeight = FontWeight.Bold
                         )
-                        Text(
-                            if (latestCalculatedRightsDate != null) stringResource(R.string.watchlist_next_ex_date_source)
-                            else stringResource(R.string.watchlist_ex_date_missing),
-                            color = OnSurfaceVariant,
-                            fontSize = AppTextSize.dense
-                        )
+                        if (latestCalculatedRightsDate == null) {
+                            Text(
+                                stringResource(R.string.watchlist_ex_date_missing),
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense
+                            )
+                        }
                     }
 
                     // Card 3
