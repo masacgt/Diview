@@ -97,6 +97,13 @@ test('security API exposes yfinance retrieval metadata and stored dividend histo
     last_attempt_at: '2026-10-17T00:00:00Z',
     processing_status: 'partial',
     failure_reason: 'Field fetch failed: price',
+    ex_dividend_calendar: {
+      date: null,
+      status: 'not_fetched',
+      last_attempt_status: null,
+      fetched_at: null,
+      source: null,
+    },
     dividend_history: {
       status: 'available',
       last_attempt_status: 'success',
@@ -162,6 +169,37 @@ test('financial API returns calculated DOE and net D/E from the stored annual ro
   assert.deepEqual(data.financials.annual, [annual]);
 });
 
+test('financial API exposes retained seed values separately from newer yfinance values', async () => {
+  const code = '7203';
+  const base = `market/yfinance/v2/securities/${code}.T`;
+  const annual = {
+    fiscal_year: '2025/03',
+    period_end: '2025-03-31',
+    sales: 120,
+    equity_ratio_computed: 24,
+    field_status: { sales: 'available' },
+    source_values: {
+      seed: { source: 'IRBANK', source_key: 'market/irbank/v1/securities/7203/overview.json', values: { sales: 100 } },
+      yfinance: { source: 'Yahoo Finance via yfinance', values: { sales: 120 }, field_status: { sales: 'available' } },
+      calculated: { values: { equity_ratio_computed: { value: 24, input_sources: { equity: 'seed', total_assets: 'yfinance' } } } },
+    },
+  };
+  const env = dividendEnvironment(new Map([
+    [`${base}/profile.json`, { display_name: 'トヨタ自動車' }],
+    [`${base}/current.json`, { field_status: { dividend_history: 'empty' } }],
+    [`${base}/financials/2025-03-31.json`, { year: '2025', annual }],
+  ]));
+
+  const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.financials.annual[0].sales, 120);
+  assert.equal(data.financials.annual[0].equity_ratio_computed, 24);
+  assert.equal(data.financials.seed_annual[0].values.sales, 100);
+  assert.equal(Object.hasOwn(data.financials.seed_annual[0].values, 'equity_ratio_computed'), false);
+  assert.equal(data.financials.seed_annual[0].source, 'IRBANK');
+});
+
 test('financial API keeps observed event history separate from legacy fiscal-year DPS', async () => {
   const code = '1306';
   const currentYear = Number(new Intl.DateTimeFormat('en', { timeZone: 'Asia/Tokyo', year: 'numeric' }).format(new Date()));
@@ -193,12 +231,17 @@ test('financial API keeps observed event history separate from legacy fiscal-yea
 
 test('financial API does not substitute legacy DPS when v2 event history is unavailable', async () => {
   const code = '1306';
-  const env = dividendEnvironment(new Map([[`market/irbank/v1/securities/${code}/overview.json`, {
+  const base = `market/yfinance/v2/securities/${code}.T`;
+  const env = dividendEnvironment(new Map([
+    [`${base}/profile.json`, { display_name: 'ETF', symbol: `${code}.T` }],
+    [`${base}/current.json`, { field_status: { dividend_history: 'not_fetched' } }],
+    [`market/irbank/v1/securities/${code}/overview.json`, {
     security: { code, name: 'ETF' },
     financials: { annual: [] },
     dividends: { records: [{ fiscal_year: '2025/03', annual_dps_adjusted: 999 }] },
     valuation: { history: [] },
-  }]]));
+    }],
+  ]));
   const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
   assert.equal(response.status, 200);
   const data = await response.json();

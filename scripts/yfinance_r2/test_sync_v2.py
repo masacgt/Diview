@@ -9,6 +9,7 @@ import pandas as pd
 
 import benchmark_v2 as benchmark
 import sync_v2 as sync
+import migrate_legacy_financials as financial_migration
 import repair_monthly_price_dates as monthly_date_repair
 import monthly_price_calendar as monthly_calendar
 import audit_split_transition_dividends as split_audit
@@ -79,6 +80,71 @@ class SplitTransitionAuditTests(TestCase):
 
 
 class NetDeRatioTests(TestCase):
+    def test_financial_source_values_keep_seed_and_yfinance_rows_separate(self):
+        seed, yfinance = sync.financial_source_values({
+            "period_end": "2025-03-31",
+            "field_status": {"sales": "legacy_migrated", "operating_income": "available"},
+            "sales": 100.0,
+            "operating_income": 12.0,
+        })
+
+        self.assertEqual(seed, {"sales": 100.0})
+        self.assertEqual(yfinance, {"operating_income": 12.0})
+
+    def test_financial_source_values_preserve_explicit_seed_when_yfinance_changes_value(self):
+        seed, yfinance = sync.financial_source_values({
+            "sales": 120.0,
+            "source_values": {
+                "seed": {"source": "IRBANK", "values": {"sales": 100.0}},
+                "yfinance": {"source": "Yahoo Finance via yfinance", "values": {"sales": 120.0}},
+            },
+        })
+
+        self.assertEqual(seed, {"sales": 100.0})
+        self.assertEqual(yfinance, {"sales": 120.0})
+
+    def test_financial_source_values_do_not_mislabel_computed_equity_ratio(self):
+        seed, yfinance = sync.financial_source_values({
+            "equity_ratio_computed": 24.0,
+            "field_status": {"equity_ratio_computed": "available"},
+            "source_values": {
+                "calculated": {
+                    "values": {
+                        "equity_ratio_computed": {
+                            "value": 24.0,
+                            "formula": "equity / total_assets * 100",
+                            "input_sources": {"equity": "seed", "total_assets": "yfinance"},
+                        },
+                    },
+                },
+            },
+        })
+
+        self.assertEqual(seed, {})
+        self.assertEqual(yfinance, {})
+
+    def test_financial_migration_retains_seed_when_flat_yfinance_value_exists(self):
+        row, added = financial_migration.merge_row(
+            {
+                "fiscal_year": "2025/03",
+                "period_end": "2025-03-31",
+                "sales": 120.0,
+                "field_status": {"sales": "available"},
+                "source_values": {
+                    "yfinance": {"source": "Yahoo Finance via yfinance", "values": {"sales": 120.0}},
+                },
+            },
+            "2025/03",
+            "2025-03-31",
+            {"sales": 100.0},
+            source_key="market/irbank/v1/securities/72030/overview.json",
+        )
+
+        self.assertEqual(added, 1)
+        self.assertEqual(row["sales"], 120.0)
+        self.assertEqual(row["source_values"]["seed"]["values"]["sales"], 100.0)
+        self.assertEqual(row["source_values"]["yfinance"]["values"]["sales"], 120.0)
+
     def test_calculates_net_de_ratio_from_total_debt_and_cash_for_one_period(self):
         result = sync.calculate_net_de_metrics({
             "stockholders_equity": 100.0,
