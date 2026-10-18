@@ -152,7 +152,7 @@ jobs:
       - name: Install the R2 client
         run: python -m pip install "boto3>=1.35,<2"
       - name: Copy legacy IRBANK fiscal-year dividend records into v2 and verify each write
-        run: set -o pipefail; python scripts/yfinance_r2/migrate_legacy_dividends.py --workers 12 --report legacy-dividend-migration-report.json 2>&1 | tee legacy-dividend-migration.log
+        run: set -o pipefail; python scripts/yfinance_r2/migrate_legacy_dividends.py --workers 32 --report legacy-dividend-migration-report.json 2>&1 | tee legacy-dividend-migration.log
         shell: bash
         env:
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
