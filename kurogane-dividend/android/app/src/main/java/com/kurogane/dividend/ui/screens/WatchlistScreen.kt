@@ -1899,14 +1899,18 @@ fun WatchlistScreen(
                 HorizontalDivider(color = BorderColor)
 
                 // KPI Sub-Grid Row (3 Cards)
+                val kpiCardsInSingleRow = LocalDensity.current.fontScale < 1.4f
                 AdaptiveRow(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (kpiCardsInSingleRow) Modifier.height(IntrinsicSize.Min) else Modifier),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     // Card 1
                     Column(
                         modifier = Modifier
                             .weight(1f)
+                            .then(if (kpiCardsInSingleRow) Modifier.fillMaxHeight() else Modifier)
                             .clip(RoundedCornerShape(10.dp))
                             .background(SurfaceContainerHigh)
                             .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
@@ -1924,6 +1928,7 @@ fun WatchlistScreen(
                     Column(
                         modifier = Modifier
                             .weight(1.1f)
+                            .then(if (kpiCardsInSingleRow) Modifier.fillMaxHeight() else Modifier)
                             .clip(RoundedCornerShape(10.dp))
                             .background(SurfaceContainerHigh)
                             .border(1.dp, PrimaryEmerald.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
@@ -1951,6 +1956,7 @@ fun WatchlistScreen(
                     Column(
                         modifier = Modifier
                             .weight(1.1f)
+                            .then(if (kpiCardsInSingleRow) Modifier.fillMaxHeight() else Modifier)
                             .clip(RoundedCornerShape(10.dp))
                             .background(SurfaceContainerHigh)
                             .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
@@ -1959,7 +1965,14 @@ fun WatchlistScreen(
                         Text(stringResource(R.string.watchlist_text_34), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(yen(projection.annualTotal), color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
-                        Text(percent(com.kurogane.dividend.model.PortfolioMath.portfolioYield(projection.annualTotal, projection.investment, 0.0, "eval")), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                        Text(
+                            stringResource(
+                                R.string.watchlist_potential_yield,
+                                percent(com.kurogane.dividend.model.PortfolioMath.portfolioYield(projection.annualTotal, projection.investment, 0.0, "eval"))
+                            ),
+                            color = OnSurfaceVariant,
+                            fontSize = AppTextSize.dense
+                        )
                     }
                 }
 
