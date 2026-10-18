@@ -282,7 +282,12 @@ fun StockDetailScreen(
     }
     val normalizedDividendCode = currentHolding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T")
     val savedDividendOverrides = dividendHistoryOverrides[normalizedDividendCode].orEmpty().associateBy { it.year }
-    val sourceDividendsByYear = financial?.dividends.orEmpty().associate { it.year to it.dps }
+    val issuerFiscalDividendsByYear = financial?.issuerDividends.orEmpty().mapNotNull { dividend ->
+        dividend.displayDps?.let { dividend.fiscalYear to it }
+    }.toMap()
+    val sourceDividendsByYear = issuerFiscalDividendsByYear.ifEmpty {
+        financial?.dividends.orEmpty().associate { it.year to it.dps }
+    }
     var yearEndPrices by remember(currentHolding.code) { mutableStateOf<Map<Int, Double>>(emptyMap()) }
     LaunchedEffect(currentHolding.code, dividendHistoryYears) {
         yearEndPrices = com.kurogane.dividend.data.runCatchingCancellable {
