@@ -882,7 +882,7 @@ fun StockDetailScreen(
                                         ?.let { com.kurogane.dividend.model.formatFinancialAmountDisplay(it) }
                                         ?: "未取得"
                                     Triple(
-                                        if (point.isForecast) "${point.year}年" else stringResource(R.string.stock_detail_label_5, point.year.toString()),
+                                        "${point.year}年",
                                         stringResource(R.string.add_holding_1_s_2_s_2, prefix, dpsText),
                                         (dps / maxDps * 0.95).toFloat()
                                     )
