@@ -1,7 +1,7 @@
 package com.kurogane.dividend.ui.screens
 
 import android.app.Activity
-import android.content.Intent
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +32,7 @@ import com.kurogane.dividend.data.DvmBackupPreview
 import com.kurogane.dividend.data.DvmBackupExporter
 import com.kurogane.dividend.data.GoogleDriveBackupClient
 import com.kurogane.dividend.data.LocalImportStore
+import com.kurogane.dividend.data.readBoundedBytes
 import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.ShareholderBenefit
 import com.kurogane.dividend.model.StockClimate
@@ -64,39 +65,63 @@ fun GoogleDvmBackupCard(
     var status by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val authorizationClient = remember(context) { Identity.getAuthorizationClient(context) }
+    val latestImport by rememberUpdatedState(onImportDvm)
 
-    val authorizedAction: suspend (String) -> String = { accessToken ->
-        when (action) {
-            GoogleDvmBackupAction.EXPORT -> {
-                val encrypted = withContext(Dispatchers.IO) { DvmBackupExporter.export(holdings) }
-                val encryptedExtras = withContext(Dispatchers.IO) {
-                    DvmBackupExporter.exportExtras(shareholderBenefits, stockClimateOverrides, dividendHistoryOverrides, watchlist)
+    val exportAction: suspend (String) -> String = { accessToken ->
+        val encrypted = withContext(Dispatchers.IO) { DvmBackupExporter.export(holdings) }
+        val encryptedExtras = withContext(Dispatchers.IO) {
+            DvmBackupExporter.exportExtras(shareholderBenefits, stockClimateOverrides, dividendHistoryOverrides, watchlist)
+        }
+        withContext(Dispatchers.IO) {
+            GoogleDriveBackupClient.upload(accessToken, DvmBackupKind.STOCKS.fileName, encrypted)
+            GoogleDriveBackupClient.upload(accessToken, DvmBackupKind.DIVIEW_EXTRAS.fileName, encryptedExtras)
+            LocalImportStore(context).saveBackup(DvmBackupKind.STOCKS, DvmBackupImporter.decrypt(encrypted))
+            LocalImportStore(context).saveBackup(DvmBackupKind.DIVIEW_EXTRAS, DvmBackupImporter.decrypt(encryptedExtras))
+        }
+        resources.getString(R.string.dvm_drive_backup_success)
+    }
+    val latestExportAction by rememberUpdatedState(exportAction)
+
+    val dvmFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty() && !isWorking) {
+            isWorking = true
+            status = null
+            error = null
+            scope.launch {
+                try {
+                    val backups = withContext(Dispatchers.IO) {
+                        uris.map { uri ->
+                            val fileName = context.contentResolver.query(
+                                uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
+                            )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                                ?: uri.lastPathSegment?.substringAfterLast('/')
+                                ?: throw IllegalArgumentException(resources.getString(R.string.dvm_drive_import_failed))
+                            require(fileName.endsWith(".dvm", ignoreCase = true)) {
+                                resources.getString(R.string.dvm_drive_import_failed)
+                            }
+                            val bytes = context.contentResolver.openInputStream(uri)?.use {
+                                it.readBoundedBytes(50 * 1024 * 1024)
+                            } ?: throw IllegalArgumentException(resources.getString(R.string.dvm_drive_import_failed))
+                            DvmBackupImporter.parse(fileName, bytes).also { preview ->
+                                require(preview.kind == DvmBackupKind.STOCKS || preview.kind == DvmBackupKind.DIVIEW_EXTRAS) {
+                                    resources.getString(R.string.dvm_drive_import_failed)
+                                }
+                            }
+                        }
+                    }
+                    latestImport(backups)
+                    val importedCount = backups.filter { it.kind == DvmBackupKind.STOCKS }.sumOf { it.itemCount } +
+                        backups.sumOf { it.extras.watchlist.orEmpty().size }
+                    status = resources.getString(R.string.dvm_drive_restore_success, importedCount)
+                } catch (failure: Throwable) {
+                    if (failure is kotlinx.coroutines.CancellationException) throw failure
+                    error = resources.getString(R.string.dvm_drive_import_failed)
+                } finally {
+                    isWorking = false
                 }
-                withContext(Dispatchers.IO) {
-                    GoogleDriveBackupClient.upload(accessToken, DvmBackupKind.STOCKS.fileName, encrypted)
-                    GoogleDriveBackupClient.upload(accessToken, DvmBackupKind.DIVIEW_EXTRAS.fileName, encryptedExtras)
-                    LocalImportStore(context).saveBackup(DvmBackupKind.STOCKS, DvmBackupImporter.decrypt(encrypted))
-                    LocalImportStore(context).saveBackup(DvmBackupKind.DIVIEW_EXTRAS, DvmBackupImporter.decrypt(encryptedExtras))
-                }
-                resources.getString(R.string.dvm_drive_backup_success)
-            }
-            GoogleDvmBackupAction.IMPORT -> {
-                val backups = withContext(Dispatchers.IO) {
-                    listOfNotNull(
-                        GoogleDriveBackupClient.download(accessToken, DvmBackupKind.STOCKS.fileName)
-                            ?.let { DvmBackupImporter.parse(DvmBackupKind.STOCKS.fileName, it) },
-                        GoogleDriveBackupClient.download(accessToken, DvmBackupKind.DIVIEW_EXTRAS.fileName)
-                            ?.let { DvmBackupImporter.parse(DvmBackupKind.DIVIEW_EXTRAS.fileName, it) }
-                    ).also { if (it.isEmpty()) throw IllegalStateException(resources.getString(R.string.dvm_drive_backup_missing)) }
-                }
-                onImportDvm(backups)
-                val importedCount = backups.filter { it.kind == DvmBackupKind.STOCKS }.sumOf { it.itemCount } +
-                    backups.sumOf { it.extras.watchlist.orEmpty().size }
-                resources.getString(R.string.dvm_drive_restore_success, importedCount)
             }
         }
     }
-    val latestAction by rememberUpdatedState(authorizedAction)
 
     fun executeWithToken(accessToken: String) {
         if (accessToken.isBlank()) {
@@ -106,7 +131,7 @@ fun GoogleDvmBackupCard(
         }
         scope.launch {
             try {
-                status = latestAction(accessToken)
+                status = latestExportAction(accessToken)
             } catch (failure: Throwable) {
                 if (failure is kotlinx.coroutines.CancellationException) throw failure
                 error = resources.getString(R.string.dvm_drive_action_failed)
@@ -130,7 +155,7 @@ fun GoogleDvmBackupCard(
         }
     }
 
-    fun authorize() {
+    fun authorizeExport() {
         if (isWorking) return
         isWorking = true
         status = null
@@ -172,7 +197,10 @@ fun GoogleDvmBackupCard(
     val title = stringResource(if (action == GoogleDvmBackupAction.EXPORT) R.string.settings_label_13 else R.string.dvm_drive_restore_title)
     val subtitle = stringResource(if (action == GoogleDvmBackupAction.EXPORT) R.string.dvm_drive_backup_subtitle else R.string.dvm_drive_restore_subtitle)
     DataManagementActionButton(
-        onClick = ::authorize,
+        onClick = {
+            if (action == GoogleDvmBackupAction.EXPORT) authorizeExport()
+            else dvmFilePicker.launch(arrayOf("*/*"))
+        },
         enabled = !isWorking,
         modifier = modifier.fillMaxWidth(),
         title = title,
