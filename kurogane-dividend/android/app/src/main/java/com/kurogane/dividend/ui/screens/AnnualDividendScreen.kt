@@ -1508,11 +1508,14 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                     }
                 }
 
-                if (chartMode == "yield") {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(32.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (chartMode == "yield") {
                         Row(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
