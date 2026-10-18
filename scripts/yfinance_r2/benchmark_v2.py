@@ -281,16 +281,30 @@ def measure_security(index: int, total: int, entry: dict[str, str], session_date
         flush=True,
     )
     sync.count_yfinance_call("ticker_get_info")
-    attempt("ticker_get_info", ticker.get_info, failures)
-    sync.count_yfinance_call("history_latest_daily_5d")
-    attempt("history_latest_daily_5d", lambda: collector.history_rows(ticker, "1d", "5d"), failures)
+
+    def fetch_info():
+        info = ticker.get_info()
+        if not isinstance(info, dict) or not info:
+            raise RuntimeError("yfinance returned no company profile")
+
+    info_succeeded = attempt("ticker_get_info", fetch_info, failures)
+
+    quote_succeeded = False
+
+    def daily_quote_and_candidate():
+        nonlocal quote_succeeded
+        period = "5d" if is_long_history else "1y"
+        daily, frame = sync.fetch_daily_history_with_actions(ticker, session_date, period=period)
+        sync.completed_close_for_session(daily, session_date)
+        quote_succeeded = True
+        if not is_long_history:
+            sync.action_candidate_from_history(frame, session_date)
+
+    history_succeeded = attempt("daily_quote_and_action_history_1y", daily_quote_and_candidate, failures)
 
     if is_long_history:
         attempt("history_actions_max", lambda: sync.fetch_repaired_action_history(ticker, session_date, period="max"), failures)
         attempt("history_year_end_prices_initial_8y", lambda: sync.monthly_history_rows(ticker, initial=True, as_of=session_date), failures)
-    else:
-        sync.count_yfinance_call("actions_accessor_1y")
-        attempt("actions_accessor_1y", lambda: ticker.get_actions(period="1y"), failures)
 
     if is_financial:
         for name, request in (
@@ -301,7 +315,14 @@ def measure_security(index: int, total: int, entry: dict[str, str], session_date
         ):
             sync.count_yfinance_call(name)
             attempt(name, request, failures)
-    return {"code": code, "symbol": symbol, "failures": dict(failures)}
+    return {
+        "code": code,
+        "symbol": symbol,
+        "profile_succeeded": info_succeeded,
+        "quote_succeeded": quote_succeeded,
+        "core_succeeded": info_succeeded and history_succeeded,
+        "failures": dict(failures),
+    }
 
 
 def measure_action_method(symbol: str, method: str, session_date) -> dict[str, object]:
@@ -399,6 +420,12 @@ def compare_action_methods(sample: list[dict[str, str]], session_date) -> tuple[
         "note": "response_body_bytes counts decoded HTTP response bodies, not TLS/compression wire bytes; comparison is diagnostic, and repaired history remains authoritative whenever an event change is detected.",
     }
     return summary, results
+
+
+def benchmark_session_date(now=None, latest_yahoo_date: date | None = None) -> date:
+    """Bound the benchmark date by both the latest XTKS session and Yahoo's available close."""
+    latest_session = sync.latest_completed_xtks_session(now)
+    return min(latest_session, latest_yahoo_date) if latest_yahoo_date else latest_session
 
 
 def benchmark_session_date(now=None, latest_yahoo_date: date | None = None) -> date:
