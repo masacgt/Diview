@@ -38,6 +38,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.CornerRadius
@@ -2350,84 +2351,134 @@ fun WatchlistScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Canvas Graph Custom drawing exactly as shown in Image 3
-                        val calendarEmptyMonthColor = BorderColor
-                        val calendarDividendColor = PrimaryEmeraldContainer
-                        val calendarUsColor = SecondaryIndigo
-                        // Monthly amounts are shown above the bars, aligned to each month.
-                        AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Start
-                        ) {
-                            (1..12).forEach { m ->
-                                val amount = projection.monthlyTotals[m - 1]
-                                val amountLabel = if (amount > 0) yen(amount) else "—"
-                                Text(
-                                    text = amountLabel,
-                                    modifier = Modifier.weight(1f),
-                                    color = if (amount > 0) OnSurfaceVariant else OnSurfaceVariant.copy(alpha = 0.7f),
-                                    fontSize = 6.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    textAlign = TextAlign.Center
+                        // Match the analysis screen's stacked monthly bars and amount labels.
+                        val calendarFontScale = LocalDensity.current.fontScale
+                        val calendarChartCanvasHeight = 136.dp
+                        val calendarBarAreaBottomFraction = .90f
+                        val calendarBarAreaHeightFraction = .62f
+                        val calendarPlotHeight = calendarChartCanvasHeight * calendarBarAreaHeightFraction
+                        val calendarAmountLabelTopOffset = 24.dp * calendarFontScale
+                        val calendarAmountLabelSlotHeight = 16.dp * calendarFontScale
+                        val calendarAxisGap = 3.dp
+                        val calendarAxisLabelHeight = calendarAmountLabelSlotHeight
+                        val calendarMaximumAmount = projection.monthlyTotals.maxOrNull()?.coerceAtLeast(1.0) ?: 1.0
+                        val calendarGridTargetStep = calendarMaximumAmount / 3.0
+                        val calendarGridMagnitude = Math.pow(10.0, kotlin.math.floor(kotlin.math.log10(calendarGridTargetStep)))
+                        val calendarNormalizedGridStep = calendarGridTargetStep / calendarGridMagnitude
+                        val calendarGridStepMultiplier = when {
+                            calendarNormalizedGridStep >= 5.0 -> 5.0
+                            calendarNormalizedGridStep >= 2.0 -> 2.0
+                            else -> 1.0
+                        }
+                        val calendarGridStep = calendarGridMagnitude * calendarGridStepMultiplier
+                        val calendarGridCount = kotlin.math.floor(calendarMaximumAmount / calendarGridStep).toInt()
+                        val calendarGridColor = BorderColor
+                        val calendarMonthlyByCategory = remember(projection, watchlist) {
+                            (1..12).map { month ->
+                                listOf(
+                                    watchlist.filter { it.category != "us" }.sumOf { projection.monthly(it, month) },
+                                    watchlist.filter { it.category == "us" }.sumOf { projection.monthly(it, month) }
                                 )
                             }
                         }
-
-                        Canvas(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(100.dp)
-                        ) {
-                            val maxBarVal = projection.monthlyTotals.maxOrNull()?.toFloat()?.coerceAtLeast(1f) ?: 1f
-                            val numMonths = 12
-                            val monthCellWidth = size.width / numMonths
-                            val barWidth = minOf(14.dp.toPx(), monthCellWidth * 0.58f)
-
-                            for (m in 1..12) {
-                                val monthLeft = (m - 1) * monthCellWidth + (monthCellWidth - barWidth) / 2f
-                                val barVal = projection.monthlyTotals[m - 1].toFloat()
-                                val color = if (watchlist.any { it.category != "us" && projection.monthly(it, m) > 0 }) calendarDividendColor else calendarUsColor
-
-                                if (barVal > 0f) {
-                                    val barHeight = size.height * (barVal / maxBarVal) * 0.85f
-                                    val barTop = size.height - barHeight
-                                    drawRoundRect(
-                                        color = color,
-                                        topLeft = Offset(monthLeft, barTop),
-                                        size = Size(barWidth, barHeight),
-                                        cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
-                                    )
-                                } else {
-                                    // Empty month box
-                                    drawRoundRect(
-                                        color = calendarEmptyMonthColor,
-                                        topLeft = Offset(monthLeft, size.height - 12.dp.toPx()),
-                                        size = Size(barWidth, 12.dp.toPx()),
-                                        style = Stroke(width = 1.dp.toPx()),
-                                        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
-                                    )
-                                }
-                            }
-                        }
-
-                        // Month labels remain below the bars.
                         AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.Start
+                            modifier = Modifier.fillMaxWidth().drawBehind {
+                                val plotBottom = calendarChartCanvasHeight.toPx() * calendarBarAreaBottomFraction
+                                val plotHeight = calendarPlotHeight.toPx()
+                                (0..calendarGridCount).forEach { guideIndex ->
+                                    val guideAmount = guideIndex * calendarGridStep
+                                    val y = plotBottom - plotHeight * (guideAmount / calendarMaximumAmount).toFloat()
+                                    drawLine(calendarGridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+                                }
+                            },
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.Top
                         ) {
-                            (1..12).forEach { m ->
-                                Box(
-                                    modifier = Modifier.weight(1f),
-                                    contentAlignment = Alignment.Center
+                            (1..12).forEach { month ->
+                                val amount = projection.monthlyTotals[month - 1]
+                                val amountLabel = when {
+                                    amount >= 1_000_000 -> String.format(Locale.JAPAN, "%.0f万", amount / 10_000.0)
+                                    amount >= 10_000 -> String.format(Locale.JAPAN, "%.1f万", amount / 10_000.0)
+                                    amount > 0 -> String.format(Locale.JAPAN, "%.1f千", amount / 1_000.0)
+                                    else -> "—"
+                                }
+                                val heightFraction = (amount / calendarMaximumAmount).toFloat().coerceIn(0f, 1f)
+
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                        .height(calendarChartCanvasHeight + calendarAxisGap + calendarAxisLabelHeight),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Bottom
                                 ) {
-                                    Text(
-                                        stringResource(R.string.annual_dividend_1_s, m),
-                                        color = OnSurface,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Box(modifier = Modifier.fillMaxWidth().height(calendarChartCanvasHeight)) {
+                                        Box(
+                                            modifier = Modifier.fillMaxWidth()
+                                                .height(calendarChartCanvasHeight * calendarBarAreaBottomFraction)
+                                                .align(Alignment.TopCenter),
+                                            contentAlignment = Alignment.BottomCenter
+                                        ) {
+                                            if (amount > 0.0) {
+                                                Column(
+                                                    modifier = Modifier.widthIn(max = 32.dp)
+                                                        .fillMaxWidth()
+                                                        .height(calendarPlotHeight * heightFraction)
+                                                        .clip(RoundedCornerShape(4.dp)),
+                                                    verticalArrangement = Arrangement.Bottom
+                                                ) {
+                                                    val categories = calendarMonthlyByCategory[month - 1]
+                                                    listOf(1, 0).forEach { categoryIndex ->
+                                                        val categoryAmount = categories[categoryIndex]
+                                                        if (categoryAmount > 0.0) {
+                                                            val categoryColor = if (categoryIndex == 0) PrimaryEmeraldContainer else SecondaryIndigo
+                                                            Box(
+                                                                Modifier.fillMaxWidth()
+                                                                    .weight((categoryAmount / amount).toFloat())
+                                                                    .background(Brush.verticalGradient(listOf(categoryColor, categoryColor.copy(alpha = .45f))))
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                // Preserve the existing empty-month marker when no payout is projected.
+                                                Box(
+                                                    modifier = Modifier.widthIn(max = 32.dp)
+                                                        .fillMaxWidth()
+                                                        .height(12.dp)
+                                                        .align(Alignment.BottomCenter)
+                                                        .border(1.dp, BorderColor, RoundedCornerShape(2.dp))
+                                                )
+                                            }
+                                        }
+                                        Text(
+                                            text = amountLabel,
+                                            modifier = Modifier.fillMaxWidth()
+                                                .height(calendarAmountLabelSlotHeight)
+                                                .align(Alignment.TopCenter)
+                                                .offset(y = calendarChartCanvasHeight * (calendarBarAreaBottomFraction - heightFraction * calendarBarAreaHeightFraction) - calendarAmountLabelTopOffset),
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = OnSurfaceVariant,
+                                            textAlign = TextAlign.Center,
+                                            maxLines = if (calendarFontScale >= 1.4f) Int.MAX_VALUE else 1,
+                                            softWrap = false
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(calendarAxisGap))
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().height(calendarAxisLabelHeight),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.annual_dividend_1_s, month),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            fontSize = AppTextSize.dense,
+                                            fontWeight = FontWeight.Bold,
+                                            color = OnSurfaceVariant,
+                                            textAlign = TextAlign.Center,
+                                            maxLines = if (calendarFontScale >= 1.4f) Int.MAX_VALUE else 1,
+                                            softWrap = false
+                                        )
+                                    }
                                 }
                             }
                         }
