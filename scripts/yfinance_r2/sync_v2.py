@@ -37,6 +37,7 @@ MAX_DAILY_ATTEMPTS = 4
 FULL_HISTORY_BUCKETS = 20
 FINANCIAL_BUCKETS = 5
 FINANCIAL_REFRESH_MAX_AGE_DAYS = 45
+FINANCIAL_REFRESH_POLICY_VERSION = 2
 FINANCIAL_GROUPS = ("income_statement", "balance_sheet", "cash_flow", "valuation")
 # Latest company guidance replaces Yahoo's stale dividendRate while it still
 # reports the audited old amount. AOKI: https://ir.aoki-hd.co.jp/ja/news/news/auto_20260508520915/pdfFile.pdf
@@ -274,6 +275,19 @@ BALANCE_FIELDS = {
     "Stockholders Equity": "stockholders_equity",
     "Total Equity Gross Minority Interest": "total_equity_gross_minority_interest",
     "TotalEquityGrossMinorityInterest": "total_equity_gross_minority_interest",
+    "NetDebt": "net_debt",
+    "Net Debt": "net_debt",
+    "TotalDebt": "total_debt",
+    "Total Debt": "total_debt",
+    "CashCashEquivalentsAndShortTermInvestments": "cash_and_short_term_investments",
+    "Cash Cash Equivalents And Short Term Investments": "cash_and_short_term_investments",
+    "CashCashEquivalentsAndFederalFundsSold": "cash_and_equivalents",
+    "Cash And Cash Equivalents": "cash_and_equivalents",
+    "CashAndCashEquivalents": "cash_and_equivalents",
+    "CashEquivalents": "cash_equivalents",
+    "Cash Equivalents": "cash_equivalents",
+    "CashFinancial": "cash_equivalents",
+    "Cash Financial": "cash_equivalents",
     "Total Assets": "total_assets",
 }
 CASH_FLOW_FIELDS = {
@@ -650,6 +664,38 @@ def frame_metric_map(frame: Any, allowed: dict[str, str]) -> dict[str, dict[str,
         if values:
             records[fiscal_key] = values
     return records
+
+
+def calculate_net_de_metrics(values: dict[str, Any]) -> dict[str, Any]:
+    """Calculate net debt/equity only from complete inputs for one fiscal period."""
+    equity_field = next((field for field in (
+        "stockholders_equity", "total_equity_gross_minority_interest",
+    ) if finite_number(values.get(field)) is not None
+        and finite_number(values.get(field)) > 0), None)
+    if equity_field is None:
+        return {}
+
+    net_debt = finite_number(values.get("net_debt"))
+    debt_source = "net_debt"
+    if net_debt is None:
+        total_debt = finite_number(values.get("total_debt"))
+        cash_field = next((field for field in (
+            "cash_and_short_term_investments", "cash_and_equivalents",
+            "cash_equivalents",
+        ) if finite_number(values.get(field)) is not None), None)
+        if total_debt is None or cash_field is None:
+            return {}
+        net_debt = total_debt - finite_number(values.get(cash_field))
+        debt_source = f"total_debt_minus_{cash_field}"
+
+    equity = finite_number(values.get(equity_field))
+    return {
+        "net_debt": net_debt,
+        "net_debt_source_field": debt_source,
+        "net_de_equity_source_field": equity_field,
+        "net_de_ratio": net_debt / equity,
+        "net_de_formula": f"{debt_source} / {equity_field}",
+    }
 
 
 def merge_year_documents(
@@ -1342,6 +1388,9 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
                       **legacy_cash.get(period_end, {}), **prior_v2.get(period_end, {})}
         fresh_values = {**fresh_income.get(period_end, {}), **fresh_balance.get(period_end, {}), **fresh_cash.get(period_end, {})}
         values = {**old_values, **fresh_values}
+        net_de_metrics = calculate_net_de_metrics(fresh_balance.get(period_end, {}))
+        if net_de_metrics:
+            values.update(net_de_metrics)
         equity = finite_number(values.get("stockholders_equity"))
         equity_for_ratio = (
             equity if equity is not None
@@ -1382,6 +1431,15 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             annual_field_status["calculated_doe"] = "failed"
         else:
             annual_field_status["calculated_doe"] = "empty"
+        if net_de_metrics:
+            annual_field_status["net_debt"] = "available"
+            annual_field_status["net_de_ratio"] = "available"
+        elif finite_number(old_values.get("net_de_ratio")) is not None:
+            annual_field_status["net_de_ratio"] = "stale"
+        elif retrieval_status.get("balance_sheet") == "failed":
+            annual_field_status["net_de_ratio"] = "failed"
+        else:
+            annual_field_status["net_de_ratio"] = "empty"
         if "equity_ratio_computed" in values:
             annual_field_status["equity_ratio_computed"] = (
                 "available" if ("stockholders_equity" in fresh_values or "total_equity_gross_minority_interest" in fresh_values)
@@ -2149,7 +2207,9 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             financial_attempted and not financial_retry_pending
         ),
         "financial_refresh_policy_version": (
-            1 if financial_attempted or prior_sync.get("financial_refresh_policy_version") == 1 else None
+            FINANCIAL_REFRESH_POLICY_VERSION
+            if financial_attempted or prior_sync.get("financial_refresh_policy_version") == FINANCIAL_REFRESH_POLICY_VERSION
+            else None
         ),
         "financial_period_marker": (
             current_financial_marker if financial_attempted and current_financial_marker
@@ -2640,7 +2700,7 @@ def run(
         retry_financials = previous_sync.get("financial_retry_pending") is True
         initialize_financials = (
             bucket_for(code, FINANCIAL_BUCKETS) == financial_bucket
-            and previous_sync.get("financial_refresh_policy_version") != 1
+            and previous_sync.get("financial_refresh_policy_version") != FINANCIAL_REFRESH_POLICY_VERSION
         )
         previous_monthly = previous_sync.get("monthly_history_schema_version") == 2
         initialize_monthly = bucket_for(code, FULL_HISTORY_BUCKETS) == full_history_bucket

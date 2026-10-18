@@ -78,6 +78,43 @@ class SplitTransitionAuditTests(TestCase):
         self.assertEqual(set(selected), {"0001", "0002"})
 
 
+class NetDeRatioTests(TestCase):
+    def test_calculates_net_de_ratio_from_total_debt_and_cash_for_one_period(self):
+        result = sync.calculate_net_de_metrics({
+            "stockholders_equity": 100.0,
+            "total_debt": 40.0,
+            "cash_and_short_term_investments": 62.0,
+        })
+
+        self.assertEqual(result["net_debt"], -22.0)
+        self.assertEqual(result["net_de_ratio"], -0.22)
+        self.assertEqual(result["net_debt_source_field"], "total_debt_minus_cash_and_short_term_investments")
+        self.assertEqual(result["net_de_equity_source_field"], "stockholders_equity")
+
+    def test_prefers_yahoo_net_debt_and_accepts_gross_equity_fallback(self):
+        result = sync.calculate_net_de_metrics({
+            "net_debt": 30.0,
+            "total_debt": 100.0,
+            "cash_and_equivalents": 90.0,
+            "total_equity_gross_minority_interest": 150.0,
+        })
+
+        self.assertEqual(result["net_debt"], 30.0)
+        self.assertEqual(result["net_debt_source_field"], "net_debt")
+        self.assertEqual(result["net_de_ratio"], 0.2)
+        self.assertEqual(result["net_de_equity_source_field"], "total_equity_gross_minority_interest")
+
+    def test_does_not_assume_missing_cash_is_zero_or_use_nonpositive_equity(self):
+        self.assertEqual(sync.calculate_net_de_metrics({
+            "stockholders_equity": 100.0,
+            "total_debt": 20.0,
+        }), {})
+        self.assertEqual(sync.calculate_net_de_metrics({
+            "stockholders_equity": 0.0,
+            "net_debt": 20.0,
+        }), {})
+
+
 class SyncPriceTests(TestCase):
     def test_monthly_price_point_date_is_normalized_without_changing_close(self):
         point = {"month": "2024-12", "date": "2024-12-01", "close": 3146.0}
@@ -689,7 +726,7 @@ class SyncPolicyTests(TestCase):
         info = {"lastFiscalYearEnd": "2025-03-31", "mostRecentQuarter": "2025-12-31"}
         prior = {
             "financials_initialized": True,
-            "financial_refresh_policy_version": 1,
+            "financial_refresh_policy_version": sync.FINANCIAL_REFRESH_POLICY_VERSION,
             "financial_period_marker": sync.financial_period_marker(info),
             "financials_last_checked_session_date": "2026-01-01",
         }
