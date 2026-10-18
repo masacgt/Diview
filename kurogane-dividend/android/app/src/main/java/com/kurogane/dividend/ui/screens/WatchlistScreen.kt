@@ -1825,12 +1825,24 @@ fun WatchlistScreen(
             scrimColor = Color.Black.copy(alpha = 0.6f)
         ) {
             val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
-            val latestCalculatedRightsDate = remember(watchlistCodes, dividendEventRevision) {
-                watchlistCodes.asSequence()
-                    .flatMap { code -> viewModel.dividendEventsFor(code).asSequence() }
+            val latestRightsDateInfo = remember(watchlist, dividendEventRevision) {
+                val eventsByStock = watchlist.map { stock ->
+                    stock to viewModel.dividendEventsFor(stock.code)
+                }
+                val date = eventsByStock.asSequence()
+                    .flatMap { (_, events) -> events.asSequence() }
                     .mapNotNull { it.finalRightsDate }
                     .maxOrNull()
+                val stockNames = date?.let { latestDate ->
+                    eventsByStock
+                        .filter { (_, events) -> events.any { it.finalRightsDate == latestDate } }
+                        .map { (stock, _) -> stock.name }
+                        .distinct()
+                }.orEmpty()
+                date to stockNames
             }
+            val latestCalculatedRightsDate = latestRightsDateInfo.first
+            val latestCalculatedRightsStockNames = latestRightsDateInfo.second
             val totalAmountTextMeasurer = rememberTextMeasurer()
             val totalAmountCellWidthPx = with(LocalDensity.current) { 52.dp.roundToPx() }
             val totalAmountTextStyle = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold)
@@ -1900,6 +1912,10 @@ fun WatchlistScreen(
 
                 // KPI Sub-Grid Row (3 Cards)
                 val kpiCardsInSingleRow = LocalDensity.current.fontScale < 1.4f
+                val kpiValueColor = OnSurface
+                val kpiValueFontSize = AppTextSize.section
+                val kpiValueFontWeight = FontWeight.Bold
+                val kpiValueFontFamily = AppNumericFontFamily
                 AdaptiveRow(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1919,8 +1935,20 @@ fun WatchlistScreen(
                         Text(stringResource(R.string.watchlist_text_27), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(projection.paymentCount.toString(), color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
-                            Text(stringResource(R.string.watchlist_text_29), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text(
+                                projection.paymentCount.toString(),
+                                color = kpiValueColor,
+                                fontSize = kpiValueFontSize,
+                                fontWeight = kpiValueFontWeight,
+                                fontFamily = kpiValueFontFamily
+                            )
+                            Text(
+                                stringResource(R.string.watchlist_text_29),
+                                color = kpiValueColor,
+                                fontSize = kpiValueFontSize,
+                                fontWeight = kpiValueFontWeight,
+                                fontFamily = kpiValueFontFamily
+                            )
                         }
                     }
 
@@ -1939,15 +1967,25 @@ fun WatchlistScreen(
                         Text(
                             latestCalculatedRightsDate?.let { stringResource(R.string.watchlist_next_ex_date_value, it.monthValue, it.dayOfMonth) }
                                 ?: stringResource(R.string.not_available),
-                            color = PrimaryEmerald,
-                            fontSize = AppTextSize.section,
-                            fontWeight = FontWeight.Bold
+                            color = kpiValueColor,
+                            fontSize = kpiValueFontSize,
+                            fontWeight = kpiValueFontWeight,
+                            fontFamily = kpiValueFontFamily
                         )
                         if (latestCalculatedRightsDate == null) {
                             Text(
                                 stringResource(R.string.watchlist_ex_date_missing),
                                 color = OnSurfaceVariant,
                                 fontSize = AppTextSize.dense
+                            )
+                        } else if (latestCalculatedRightsStockNames.isNotEmpty()) {
+                            Text(
+                                latestCalculatedRightsStockNames.joinToString("、"),
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -1964,7 +2002,13 @@ fun WatchlistScreen(
                     ) {
                         Text(stringResource(R.string.watchlist_text_34), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(yen(projection.annualTotal), color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
+                        Text(
+                            yen(projection.annualTotal),
+                            color = kpiValueColor,
+                            fontSize = kpiValueFontSize,
+                            fontWeight = kpiValueFontWeight,
+                            fontFamily = kpiValueFontFamily
+                        )
                         Text(
                             stringResource(
                                 R.string.watchlist_potential_yield,
