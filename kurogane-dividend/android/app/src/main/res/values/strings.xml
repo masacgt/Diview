@@ -1012,13 +1012,14 @@
     <string name="csv_broker_manual_selection">%1$sを選択中</string>
     <string name="dvm_drive_backup_subtitle">銘柄と編集データをGoogleドライブに保存します</string>
     <string name="dvm_drive_restore_title">Googleドライブからインポート</string>
-    <string name="dvm_drive_restore_subtitle">Googleアカウントを選択してバックアップを読み込みます</string>
+    <string name="dvm_drive_restore_subtitle">Googleドライブで暗号化バックアップを選択して読み込みます</string>
     <string name="dvm_drive_backup_success">暗号化バックアップをGoogleドライブに保存しました。</string>
     <string name="dvm_drive_restore_success">Googleドライブから%1$d件の銘柄をインポートしました。</string>
     <string name="dvm_drive_backup_missing">Googleドライブにバックアップが見つかりませんでした。</string>
     <string name="dvm_drive_auth_failed">Googleアカウントを認証できませんでした。Google Play開発者サービスとアカウント設定を確認してください。</string>
     <string name="dvm_drive_auth_cancelled">Googleアカウントの認証をキャンセルしました。</string>
     <string name="dvm_drive_action_failed">バックアップの処理に失敗しました。Googleアカウントや保存先を確認して再試行してください。</string>
+    <string name="dvm_drive_import_failed">選択したファイルを読み込めませんでした。暗号化バックアップファイルを選び直してください。</string>
     <string name="all">すべて</string>
     <string name="setting_save_failed">設定を保存できませんでした。再試行してください。</string>
     <string name="review_open_failed">レビュー画面を開けませんでした。ストアまたはブラウザを確認してください。</string>

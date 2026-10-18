@@ -20,7 +20,20 @@ enum class DvmBackupKind(val fileName: String, val label: String) {
     DIVIEW_EXTRAS("DiviewPortableData.dvm", "Diview編集データ");
 
     companion object {
-        fun fromName(name: String): DvmBackupKind? = entries.firstOrNull { name.equals(it.fileName, true) }
+        fun fromName(name: String): DvmBackupKind? {
+            val baseName = name.substringAfterLast('/').substringAfterLast('\\')
+                .replace(Regex("\\s*\\(\\d+\\)(?=\\.dvm$)", RegexOption.IGNORE_CASE), "")
+            val normalized = baseName.substringBeforeLast('.', baseName)
+                .filter(Char::isLetterOrDigit).lowercase(java.util.Locale.ROOT)
+            return when (normalized) {
+                "backupstockinfoandroid", "backupstockinfo" -> STOCKS
+                "backuprecordinfoandroid", "backuprecordinfo", "backuptransitiongraph" -> RECORDS
+                "backupcustomstockinfoandroid", "backupcustomstock" -> CUSTOM_STOCKS
+                "backupyieldalertandroid", "backupyieldalert" -> YIELD_ALERTS
+                "diviewportabledata" -> DIVIEW_EXTRAS
+                else -> null
+            }
+        }
     }
 }
 
@@ -64,9 +77,9 @@ object DvmBackupImporter {
     }
 
     fun parse(fileName: String, bytes: ByteArray): DvmBackupPreview {
-        val kind = requireNotNull(DvmBackupKind.fromName(fileName)) { "未対応のDVMバックアップです" }
         val plain = decrypt(bytes)
         val text = plain.toString(StandardCharsets.UTF_8).trim()
+        val kind = DvmBackupKind.fromName(fileName) ?: inferKind(text)
         if (kind == DvmBackupKind.DIVIEW_EXTRAS) {
             val root = JSONObject(text)
             val extras = parseExtras(root)
@@ -132,6 +145,27 @@ object DvmBackupImporter {
             stock
         } else emptyList()
         return DvmBackupPreview(kind, items.length(), stocks, plain, DvmPortableExtras(shareholderBenefits = stockBenefits))
+    }
+
+    private fun inferKind(text: String): DvmBackupKind {
+        val root = runCatching { JSONObject(text) }.getOrNull()
+        if (root != null && (root.has("shareholderBenefits") || root.has("stockClimateOverrides") ||
+                root.has("dividendHistoryOverrides") || root.has("watchlist"))) {
+            return DvmBackupKind.DIVIEW_EXTRAS
+        }
+        val items = runCatching {
+            when {
+                text.startsWith("[") -> JSONArray(text)
+                root != null -> listOf("stocks", "stockInfo", "data").firstNotNullOfOrNull { root.optJSONArray(it) }
+                else -> null
+            }
+        }.getOrNull() ?: throw IllegalArgumentException("未対応の暗号化バックアップです")
+        val hasStockFields = (0 until items.length()).any { index ->
+            val item = items.optJSONObject(index) ?: return@any false
+            item.has("corporateCode") || item.has("numOfStocksHeld") || item.has("numOfStocksHeldNisa")
+        }
+        require(hasStockFields) { "未対応の暗号化バックアップです" }
+        return DvmBackupKind.STOCKS
     }
 
     private fun parseExtras(root: JSONObject): DvmPortableExtras {
