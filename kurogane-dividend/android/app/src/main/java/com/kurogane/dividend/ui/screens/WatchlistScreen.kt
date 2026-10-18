@@ -2756,7 +2756,7 @@ fun WatchlistScreen(
                                                 Text(stringResource(R.string.watchlist_income_advice_add), color = OnPrimary, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                                             }
                                             Surface(
-                                                shape = RoundedCornerShape(8.dp),
+                                                shape = RoundedCornerShape(6.dp),
                                                 color = SurfaceContainerLow,
                                                 border = BorderStroke(1.dp, BorderColor),
                                                 modifier = Modifier.width(adviceControlWidth).height(29.dp)
