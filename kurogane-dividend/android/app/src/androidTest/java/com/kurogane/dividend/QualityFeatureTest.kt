@@ -20,11 +20,12 @@ class QualityFeatureTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private lateinit var app: ReviewApplication
     private val stores = mutableListOf<ViewModelStore>()
-    private val document = """{"security":{"code":"7203"},"financials":{"annual":[{"fiscal_year":"2026/03","sales":1000,"operating_profit":100,"equity_ratio_computed":45}]},"dividends":{"records":[{"fiscal_year":2026,"annual_dps_adjusted":95,"payout_ratio":35}]},"valuation":{"history":[{"fiscal_year":"2026/03","eps_adjusted":250,"bps_adjusted":2000}]}}"""
+    private val document = """{"security":{"code":"7203"},"financials":{"annual":[{"fiscal_year":"2026/03","sales":1000,"operating_profit":100,"equity_ratio_computed":45}]},"dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"calendar_year":2025,"calendar_year_distribution_per_share":95}]},"valuation":{"history":[{"fiscal_year":"2026/03","eps_adjusted":250,"bps_adjusted":2000}]}}"""
 
     @Before fun prepare() {
         app = ReviewApplication()
         clear()
+        seedReviewPortfolio(app)
     }
     private fun clear() = listOf("local_import_store", "display_preferences", "cloudflare_market_cache", "notification_preferences", "notification_delivery").forEach {
         app.getSharedPreferences(it, Context.MODE_PRIVATE).edit().clear().commit()
@@ -32,6 +33,7 @@ class QualityFeatureTest {
     @After fun cleanup() {
         instrumentation.runOnMainSync { stores.forEach(ViewModelStore::clear) }
         clear()
+        app.cleanUp()
     }
     private fun model(): DividendViewModel {
         lateinit var vm: DividendViewModel
@@ -52,7 +54,11 @@ class QualityFeatureTest {
     @Test fun allDomesticHoldingsAndWatchlistUseJapaneseNamesAndTse33Master() {
         val vm = model()
         val master = Tse33IndustryMaster.identities(app)
-        assertEquals(33, master.values.map { it.industry }.distinct().size)
+        val classified = app.assets.open("tse33_industry_master.tsv").bufferedReader().useLines { lines ->
+            lines.drop(1).map { it.split('\t')[3] }.toSet()
+        }
+        assertEquals(33, classified.size)
+        assertEquals(classified + "東証33業種未分類", master.values.map { it.industry }.toSet())
         for (holding in vm.holdings.value.filter { it.category == Category.JAPAN }) {
             assertEquals(master.getValue(holding.code).name, holding.name)
             assertEquals(master.getValue(holding.code).industry, holding.sector)
@@ -72,13 +78,15 @@ class QualityFeatureTest {
         assertFalse(restoredUsd.usWithholdingEnabled)
         assertEquals(restoredUsd.annualDividend * .79685, restoredUsd.getEffectiveAnnualDividend("net"), .001)
     }
-    @Test fun actualFinancialDataReplacesReferenceDpsAndCanBeRestoredOffline() = runBlocking {
+    @Test fun actualFinancialDataIsRestoredOfflineWithoutReplacingCurrentDpsWithHistoryTotals() = runBlocking {
         val vm = model()
         val data = vm.fetchFinancialData("7203", true)!!
         assertEquals("2026/03", data.period)
-        assertEquals(95.0, vm.holdings.value.first { it.code == "7203" }.dps, 0.0)
+        assertEquals(95.0, data.dividends.single().dps, 0.0)
+        assertEquals(75.0, vm.holdings.value.first { it.code == "7203" }.dps, 0.0)
         val restored = model()
-        assertEquals(95.0, restored.holdings.value.first { it.code == "7203" }.dps, 0.0)
+        assertEquals(75.0, restored.holdings.value.first { it.code == "7203" }.dps, 0.0)
+        assertEquals(95.0, restored.financialData.value.getValue("7203").dividends.single().dps, 0.0)
         assertEquals(45.0, restored.financialData.value.getValue("7203").profile.equityRatio, 0.0)
     }
     @Test fun lockPreferenceDefaultsOffAndPersistsWhenSet() {

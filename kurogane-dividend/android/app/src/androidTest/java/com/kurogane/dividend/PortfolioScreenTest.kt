@@ -92,7 +92,7 @@ class PortfolioScreenTest {
                 (0 until 30).map { index -> CloudflareSearchHit((3000 + index).toString(), "検索結果 $index") }
             })
         } }
-        compose.onNodeWithText("7203 トヨタ").performClick()
+        compose.onNode(hasSetTextAction()).performTextInput("7203")
         compose.waitUntil(10_000) { compose.onAllNodesWithText("検索結果 0").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("stock_search_results").performTouchInput { swipeUp(durationMillis = 300) }
         compose.onNodeWithText("銘柄検索・絞り込み").assertIsDisplayed()
@@ -113,7 +113,11 @@ class PortfolioScreenTest {
                 onRegisterCollective = { _, _, _ -> requests++; pending.await() }
             )
         } }
+        // Account quantities default to zero; enter valid data before testing duplicate taps.
+        compose.onAllNodes(hasSetTextAction())[1].performScrollTo().performTextReplacement("1000")
+        compose.onAllNodes(hasSetTextAction())[2].performScrollTo().performTextReplacement("100")
         compose.onNodeWithText("すべての口座にまとめて登録する").performScrollTo().performClick()
+        compose.waitUntil(10_000) { requests == 1 }
         compose.onNodeWithText("銘柄情報を確認中…").assertIsDisplayed()
         compose.onNodeWithText("銘柄情報を確認中…").performClick()
         compose.runOnIdle { assertEquals(1, requests); pending.complete(false) }
