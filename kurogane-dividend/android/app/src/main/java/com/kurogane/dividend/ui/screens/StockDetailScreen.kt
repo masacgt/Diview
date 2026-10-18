@@ -275,20 +275,14 @@ fun StockDetailScreen(
         yearEndPrices = com.kurogane.dividend.data.runCatchingCancellable {
             viewModel.loadMonthlyPriceHistory(
                 listOf(normalizedDividendCode),
-                dividendHistoryYears.filter { it < currentCalendarYear }.map { "$it-12" }
+                dividendHistoryYears.map { "$it-12" }
             ).firstOrNull()?.prices.orEmpty().associate { price ->
                 price.month.take(4).toInt() to price.close
             }
         }.getOrDefault(emptyMap())
     }
     val defaultDividendPeriods = dividendHistoryYears.map { year ->
-        val isForecast = year == currentCalendarYear
-        StockDetailDividendPeriod(
-            year,
-            if (isForecast) null else yearEndPrices[year],
-            if (isForecast) currentYearForecastDps else sourceDividendsByYear[year],
-            isForecast
-        )
+        StockDetailDividendPeriod(year, yearEndPrices[year], sourceDividendsByYear[year], false)
     }
     val dividendPeriods = defaultDividendPeriods.map { period ->
         val override = savedDividendOverrides[period.year]
