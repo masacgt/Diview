@@ -19,7 +19,6 @@
     <string name="data_loading">データを取得中…</string>
     <string name="financial_empty">この銘柄の財務データはまだありません。</string>
     <string name="financial_update_failed">財務データを更新できませんでした。保存済みデータがある場合は表示しています。</string>
-    <string name="fx_loading">為替を更新中…</string>
     <string name="back">戻る</string>
     <string name="close">閉じる</string>
     <string name="stock_lookup_failed">銘柄情報を取得できませんでした</string>
@@ -362,8 +361,6 @@
     <string name="settings_text_6">"取得額基準"</string>
     <string name="settings_text_7">"税金計算設定"</string>
     <string name="settings_text_8" formatted="false">"米国株 現地源泉徴収控除 (10%)"</string>
-    <string name="settings_label_19" formatted="false">"国内税20.315%は課税部分のみ。外国税額控除・還付・特殊な分配金は含みません。"</string>
-    <string name="settings_label_20">"為替を更新"</string>
     <string name="settings_label_21">"目標利回り (ロードマップ試算)"</string>
     <string name="settings_label_22">"シミュレーション基準   %1$s%%"</string>
     <string name="settings_label_23">"構成比「その他」集約閾値"</string>
@@ -914,8 +911,6 @@
     <string name="settings_dark_active">"ダーク適用中"</string>
     <string name="settings_label_59">"ライト"</string>
     <string name="settings_label_60">"システム連動"</string>
-    <string name="settings_label_61">"為替：1 USD = %1$s円（%2$s）"</string>
-    <string name="settings_label_62">"為替未取得：米ドル資産は円換算合計の対象外"</string>
     <string name="stock_detail_label_14">"（更新失敗・保存済みデータを表示）"</string>
     <string name="stock_detail_label_15">"税引後概算・現在の非課税割合で試算"</string>
     <string name="stock_detail_label_16">"税引前の目安"</string>

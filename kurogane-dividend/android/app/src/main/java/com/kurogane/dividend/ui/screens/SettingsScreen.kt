@@ -77,8 +77,6 @@ fun SettingsScreen(
     val dividendHistoryOverrides by viewModel.dividendHistoryOverrides.collectAsStateWithLifecycle()
     var dataTab by rememberSaveable { mutableStateOf("import") }
     val biometricEnabled by viewModel.biometricEnabled.collectAsStateWithLifecycle()
-    val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
-    val exchangeRateError by viewModel.exchangeRateError.collectAsStateWithLifecycle()
     val targetYield by viewModel.roadmapTargetYield.collectAsStateWithLifecycle()
     val threshold by viewModel.compositionThreshold.collectAsStateWithLifecycle()
     val compositionOtherEnabled by viewModel.compositionOtherEnabled.collectAsStateWithLifecycle()
@@ -107,7 +105,6 @@ fun SettingsScreen(
     }
     val exportScope = rememberCoroutineScope()
     var isExporting by remember { mutableStateOf(false) }
-    var isUpdatingFx by remember { mutableStateOf(false) }
     val csvExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) {
             isExporting = true
@@ -239,15 +236,6 @@ fun SettingsScreen(
         item {
             SettingsSection(stringResource(R.string.settings_text_4), Icons.Default.Tune) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Label(stringResource(R.string.settings_label_19), 7, SettingsMuted)
-                    Label(exchangeRate?.let { resources.getString(R.string.settings_label_61, (String.format(java.util.Locale.JAPAN, "%.2f", it.usdJpy)).toString(), (it.date).toString()) } ?: resources.getString(R.string.settings_label_62), 8, SettingsMuted)
-                    exchangeRateError?.let { Label(it, 7, SettingsMuted) }
-                    ActionButton(if (isUpdatingFx) stringResource(R.string.fx_loading) else stringResource(R.string.settings_label_20), Modifier.fillMaxWidth(), enabled = !isUpdatingFx) {
-                        exportScope.launch {
-                            isUpdatingFx = true
-                            try { viewModel.refreshExchangeRate() } finally { isUpdatingFx = false }
-                        }
-                    }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Label(stringResource(R.string.settings_label_21), 9, OnSurface, true); Label(stringResource(R.string.settings_label_22 , String.format(java.util.Locale.JAPAN, "%.2f", targetYield)), 8, SettingsMint) }
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
