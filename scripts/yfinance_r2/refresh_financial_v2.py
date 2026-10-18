@@ -84,9 +84,16 @@ def refresh(code: str) -> int:
         annual = saved.get("annual") if isinstance(saved, dict) else None
         if not isinstance(annual, dict):
             raise RuntimeError(f"Financial record read-back failed: {symbol} {period_end}")
-        for field in ("doe_dividend_total", "stockholders_equity", "calculated_doe"):
+        for field in (
+            "doe_dividend_total", "stockholders_equity", "calculated_doe",
+            "net_debt", "net_debt_source_field", "net_de_equity_source_field",
+            "net_de_ratio", "net_de_formula",
+        ):
             if annual.get(field) != row.get(field):
                 raise RuntimeError(f"Financial field read-back mismatch: {symbol} {period_end} {field}")
+        if (annual.get("field_status", {}).get("net_de_ratio")
+                != row.get("field_status", {}).get("net_de_ratio")):
+            raise RuntimeError(f"Financial field status read-back mismatch: {symbol} {period_end} net_de_ratio")
         verified += 1
 
     marker = sync.financial_period_marker(info)
@@ -97,7 +104,7 @@ def refresh(code: str) -> int:
         "code": code,
         "symbol": symbol,
         "financials_initialized": bool(prior_sync.get("financials_initialized")) or not failed_groups,
-        "financial_refresh_policy_version": 1,
+        "financial_refresh_policy_version": sync.FINANCIAL_REFRESH_POLICY_VERSION,
         "financial_period_marker": marker or prior_sync.get("financial_period_marker"),
         "financials_last_checked_session_date": as_of.isoformat(),
         "financial_retry_pending": bool(failed_groups),
@@ -119,6 +126,7 @@ def refresh(code: str) -> int:
         })
 
     doe_rows = [row for row in statements if row.get("calculated_doe") is not None]
+    net_de_rows = [row for row in statements if row.get("net_de_ratio") is not None]
     print(json.dumps({
         "code": code,
         "symbol": symbol,
@@ -133,6 +141,14 @@ def refresh(code: str) -> int:
             "calculated_doe": row.get("calculated_doe"),
             "field_status": row.get("field_status", {}).get("calculated_doe"),
         } for row in doe_rows],
+        "net_de_rows": [{
+            "period_end": row.get("period_end"),
+            "net_debt": row.get("net_debt"),
+            "net_debt_source_field": row.get("net_debt_source_field"),
+            "net_de_equity_source_field": row.get("net_de_equity_source_field"),
+            "net_de_ratio": row.get("net_de_ratio"),
+            "field_status": row.get("field_status", {}).get("net_de_ratio"),
+        } for row in net_de_rows],
         "financial_status": financial_status,
     }, ensure_ascii=False, sort_keys=True))
     return 1 if failed_groups else 0

@@ -82,6 +82,7 @@ data class FinancialData(
                 ?.takeIf { it in 1900..2100 }
             val doeStatus = financial?.optJSONObject("field_status")?.optString("calculated_doe").orEmpty()
             val calculatedDoe = financial?.number("calculated_doe")
+            val netDeRatio = financial?.number("net_de_ratio")
             val valuationRows = root.optJSONObject("valuation")?.optJSONArray("history")
             val valuation = (0 until (valuationRows?.length() ?: 0)).mapNotNull { valuationRows?.optJSONObject(it) }
                 .filter { it.optString("fiscal_year") == period }.firstOrNull()
@@ -128,6 +129,7 @@ data class FinancialData(
                 operatingMargin = operating ?: Double.NaN, fcfMargin = fcfMargin,
                 fcfStatus = when { cf == null -> "未取得"; cf >= 0 -> "フリーCF黒字"; else -> "フリーCF赤字" },
                 calculatedDoe = calculatedDoe?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: "未取得",
+                netDeRatio = netDeRatio?.let { String.format(Locale.JAPAN, "%.2f倍", it) } ?: "未取得",
                 calculatedDoeSub = when {
                     calculatedDoe != null && doeStatus == "stale" -> "$period 更新確認中"
                     calculatedDoe != null -> "$period 計算値"
@@ -145,6 +147,7 @@ data class FinancialData(
             return FinancialData(code, period, profile, dividends, mapOf(
                 "payout_ratio" to payout, "equity_ratio" to equity, "operating_margin" to operating,
                 "fcf_margin" to fcfMargin,
+                "net_de_ratio" to netDeRatio,
                 "dividend_growth_years" to (dividendPayload?.number("consecutive_dividend_increase_years")
                     ?: dividend?.number("consecutive_dividend_increase_years"))
             ), historyBasis, issuerDividends, issuerDividendHistoryStatus,
