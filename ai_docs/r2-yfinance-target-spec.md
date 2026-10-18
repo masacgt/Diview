@@ -89,6 +89,7 @@ market/yfinance/v2/
     current.json
     prices/monthly/{year}.json
     dividends/{year}.json
+    issuer_dividends/{fiscal-year}.json
     splits/{year}.json
     financials/{period-end}.json
     sync.json
@@ -110,6 +111,8 @@ market/yfinance/v2/
 `prices/monthly/{year}.json` は直近8確定年の12月価格を年ごとに最大1点格納する。初回取得では対象8年の yfinance 月間足を取得して12月分だけ残し、以後は12月の最終XTKS営業日後に当年12月価格を更新する。12月以外の月次価格、8年の対象期間より古い価格は保存しない。直近13か月に入る最新の12月価格は `securities/{symbol}/prices/monthly/{year}.json`、それ以前の対象年は `archive/prices/monthly/{symbol}/{year}.json` に置く。価格日はXTKSの12月最終営業日とし、`Close` は株式分割調整済み・配当再投資調整なしである。既存R2月次履歴は銘柄の初回v2年末価格同期時に12月価格だけへ整理し、通常領域から不要月を削除する。
 
 `dividends/{year}.json` と `splits/{year}.json` はイベント日をキーに保存する。日次同期では固定したyfinance 1.7.0、SciPy 1.18.1、scikit-learn 1.9.1を使い、価格取得と同じ `history(period="1y", interval="1d", actions=True)` のイベント列を変更検知候補として使う。この日次応答は `repair=False` であり、未修復の候補値を保存済みイベントへ反映しない。候補に変更があれば、該当期間を `history(actions=True, repair=True)` で取り直し、成功した範囲を修復済みの応答で置き換える。全期間の修復済み履歴は銘柄コードのハッシュで20群に分けて順番に再取得し、新しい分割・併合を検出した銘柄は同日に全期間を再取得する。SciPyは単位混同検出、scikit-learnは破損価格区間の再構成でyfinanceから利用される。イベント金額は修復処理後にyfinanceが返した値を分割調整済みとして扱い、アプリ側・Worker側で株式分割比率を再適用しない。取得失敗時は前回イベントを保持し、失敗状態を記録して次回以降のジョブで再試行する。通常領域から10年を超えたイベントを `archive/events/` へ移し、アーカイブは無期限で保持する。取得条件、ライブラリバージョン、対象期間、イベント金額基準は銘柄の `current.json` と各イベントオブジェクトに記録する。
+
+旧IRBANKの年度別配当記録は `issuer_dividends/{fiscal-year}.json` に別保存し、`dividends/{year}.json` の日付付きyfinanceイベントへ混在させない。移行処理は旧 `market/irbank/v1/securities/{code}/dividends.json` を優先し、空または未配置なら旧統合銘柄オブジェクトのIRBANK記録を使う。決算期、調整済みDPS、出典メタデータを保持し、既存v2年度記録があれば上書きしない。`/api/v1/financial-data/{code}` は暦年yfinance履歴と区別した `issuer_dividends` を追加で返す。
 
 配当履歴グラフは修復済みyfinance配当イベントをイベント日が属する暦年ごとに合計する。yfinanceが返す配当額と株価は分割調整済みとして扱い、独自の分割比率換算は加えない。IRBANKの `annual_dps_adjusted` や会社公表の決算期DPSを配当イベント値として混在させない。画面のタイトルは「1株配当金の実績（最大8期）」とし、yfinance由来であることを示す追加ラベルは表示しない。8期分の株価と年間配当金は銘柄情報画面の編集アイコンから編集できる。株価の初期値は各年12月の最終営業日終値、年間配当金の初期値はR2のyfinanceイベント暦年合計とする。編集画面は他の検索シートと同様に下から表示するボトムシートとし、8期を8行で並べ、縦スクロールなしで株価・年間配当金を入力できる。`/api/v1/share-split-history` から同じ8年間の分割・併合日と比率を読み、イベントが属する年の行に併記する。比率が1より大きいイベントを株式分割、1未満を株式併合として表示し、未取得・取得失敗・イベントなしを区別する。株価と配当金額は項目ごとに「初期値」または「ユーザー編集」と表示する。編集差分は暗号化して端末内に保存し、R2の共有値は変更しない。「初期値に戻す」は編集中の値を初期値に戻し、「保存」を押すと端末内の編集差分を削除して最新の取得値を表示する。
 
@@ -167,7 +170,7 @@ R2バケットは非公開のままにし、AndroidアプリはWorker APIを通�
 | `/api/v1/monthly-price-history` | `prices/monthly/` と直近8確定年の12月価格アーカイブ |
 | `/api/v1/dividend-months` | 直近365日の配当イベントと権利日派生データ |
 | `/api/v1/securities/{code}` | `profile.json` と `current.json` |
-| `/api/v1/financial-data/{code}` | v2の `financials/`、配当履歴、評価入力値。未取得項目は状態付きで返す。旧IRBANK概要へフォールバックしない |
+| `/api/v1/financial-data/{code}` | v2の `financials/`、暦年yfinance配当履歴、`issuer_dividends/` の決算期IRBANK記録、評価入力値。未取得項目は状態付きで返す。旧領域への実行時フォールバックはしない |
 | `/api/v1/analysis/{code}` | 銘柄の財務・配当・価格入力はv2のみを使い、分析定義と分析履歴は現行D1/KVを使う。財務期間・指標JSONへフォールバックしない |
 
 ## 現行コードの確認先
