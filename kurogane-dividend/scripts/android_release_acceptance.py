@@ -180,13 +180,21 @@ class Device:
         before = self.facts()
         self.launch()
         self.shell("input", "keyevent", "KEYCODE_HOME")
-        self.shell("am", "kill", PACKAGE)
-        time.sleep(2)
+        pids = self.shell("pidof", PACKAGE).strip()
+        if not re.fullmatch(r"\d+(?: \d+)*", pids):
+            raise RuntimeError("The disposable app process was not identified")
+        # am kill may retain a perceptible/busy process. Root is restricted to these
+        # disposable AVDs; SIGKILL actually exercises abrupt process recreation.
+        self.shell("kill", "-9", *pids.split())
+        deadline = time.monotonic() + 10
+        while self.shell("pidof", PACKAGE, check=False).strip() and time.monotonic() < deadline:
+            time.sleep(.2)
         killed = not self.shell("pidof", PACKAGE, check=False).strip()
         self.launch()
         self.shell("am", "force-stop", PACKAGE)
         after = self.facts()
-        report = dict(jdk=17, device=self.args.device, backgroundProcessKilled=killed, savedFactsPreserved=before == after)
+        report = dict(jdk=17, device=self.args.device, method="SIGKILL on disposable AVD",
+                      backgroundProcessKilled=killed, savedFactsPreserved=before == after)
         self.save("restart-" + self.args.device + ".json", report)
         print(json.dumps(report), flush=True)
         if not killed or before != after:
@@ -209,7 +217,7 @@ class Device:
             result = self.shell("am", "instrument", "-w", "-r", "-e", "class",
                                 PACKAGE + ".BackupCompatibilityRegressionTest#aFailedSnapshotReplacementKeepsThePreviousCompleteBackup",
                                 "-e", "lowSpaceDirectory", target,
-                                PACKAGE + ".test/androidx.test.runner.AndroidJUnitRunner", timeout=90)
+                                PACKAGE + ".test/com.kurogane.dividend.ReleaseFixtureInstrumentation", timeout=90)
             (self.evidence / ("low-space-" + self.args.device + ".log")).write_text(result, encoding="utf-8")
             passed = "OK (1 test)" in result
             self.save("low-space-" + self.args.device + ".json", dict(jdk=17, device=self.args.device,
