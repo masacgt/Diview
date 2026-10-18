@@ -444,10 +444,37 @@ async function readV2FinancialPayload(env, code) {
   if (!profile && !current && financialDocuments.length === 0 && dividendDocuments.length === 0
     && issuerDividendDocuments.length === 0) return null;
   financialDocuments.sort((a, b) => String(a.year || '').localeCompare(String(b.year || '')));
-  let annual = financialDocuments.map(document => document.annual).filter(Boolean)
-    .sort((a, b) => String(a.fiscal_year || '').localeCompare(String(b.fiscal_year || '')));
-  let valuation = financialDocuments.map(document => document.valuation).filter(Boolean)
-    .sort((a, b) => String(a.fiscal_year || '').localeCompare(String(b.fiscal_year || '')));
+  const sourceRows = (section) => financialDocuments.map(document => {
+    const row = document[section];
+    if (!row || typeof row !== 'object') return null;
+    const explicit = row.source_values && typeof row.source_values === 'object' ? row.source_values : null;
+    const seedValues = { ...(explicit?.seed?.values && typeof explicit.seed.values === 'object' ? explicit.seed.values : {}) };
+    const yfinanceValues = { ...(explicit?.yfinance?.values && typeof explicit.yfinance.values === 'object' ? explicit.yfinance.values : {}) };
+    const calculatedValues = explicit?.calculated?.values && typeof explicit.calculated.values === 'object' ? explicit.calculated.values : {};
+    for (const [key, value] of Object.entries(row)) {
+      if (['fiscal_year', 'period_end', 'field_status', 'migration_source', 'source_values'].includes(key)
+        || Object.hasOwn(seedValues, key) || Object.hasOwn(yfinanceValues, key)
+        || Object.hasOwn(calculatedValues, key)) continue;
+      if (row.field_status?.[key] === 'available' && !row.migration_source) yfinanceValues[key] = value;
+      else seedValues[key] = value;
+    }
+    return {
+      row: { ...row, ...seedValues, ...yfinanceValues },
+      seed: Object.keys(seedValues).length ? {
+        fiscal_year: row.fiscal_year,
+        period_end: row.period_end,
+        source: explicit?.seed?.source || (row.migration_source ? 'IRBANK' : 'existing v2 snapshot'),
+        source_key: explicit?.seed?.source_key || row.migration_source || null,
+        values: seedValues,
+      } : null,
+    };
+  }).filter(Boolean);
+  const annualSources = sourceRows('annual').sort((a, b) => String(a.row.fiscal_year || '').localeCompare(String(b.row.fiscal_year || '')));
+  const valuationSources = sourceRows('valuation').sort((a, b) => String(a.row.fiscal_year || '').localeCompare(String(b.row.fiscal_year || '')));
+  const annual = annualSources.map(item => item.row);
+  const seedAnnual = annualSources.map(item => item.seed).filter(Boolean);
+  const valuation = valuationSources.map(item => item.row);
+  const seedValuation = valuationSources.map(item => item.seed).filter(Boolean);
   const retrievalStatus = financialDocuments.at(-1)?.retrieval_status || {};
   const financialFieldStatus = { ...(retrievalStatus.fields || {}) };
   for (const row of annual) {
@@ -488,7 +515,7 @@ async function readV2FinancialPayload(env, code) {
       name: profile?.display_name || profile?.short_name || profile?.long_name || profile?.english_name || String(code || ''),
       metrics: [],
     },
-    financials: { annual, field_status: financialRetrievalStatus },
+    financials: { annual, seed_annual: seedAnnual, field_status: financialRetrievalStatus },
     dividends: {
       records: dividends,
       history_basis: 'calendar_year_observed_distributions',
@@ -516,7 +543,7 @@ async function readV2FinancialPayload(env, code) {
       attribution: issuerDividendDocuments.find(document => document.attribution)?.attribution || null,
       status: issuerDividendRecords.length ? 'available' : 'empty',
     },
-    valuation: { history: valuation, field_status: valuationStatus },
+    valuation: { history: valuation, seed_history: seedValuation, field_status: valuationStatus },
     market: current ? { price: current.price || null, summary: current.statistics || {} } : null,
     sources: { market: 'Yahoo Finance via yfinance' },
   };
