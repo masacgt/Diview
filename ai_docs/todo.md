@@ -2,7 +2,7 @@
 
 ## Completed
 
-- [x] Show the selected forecast-period DPS in the dividend-event row and remove the always-visible forecast row. Evidence: JDK 17 debug build and SCG01/emulator installs succeed; tapping Takeda 4502's 2027期 bar shows `2027年の配当イベント` with `予想¥204/株`, and the standalone 2027年3月期 forecast row is absent.
+- [x] Show the selected forecast-period DPS in the dividend-event row, keep it visible when the selected bar is tapped again, and remove the always-visible forecast row. Evidence: JDK 17 debug build and SCG01/emulator installs succeed; tapping Takeda 4502's 2027期 bar twice leaves `2027年の配当イベント` with `予想¥204/株` visible, and the standalone 2027年3月期 forecast row is absent.
 
 - [x] Source fiscal-period dividend bars from issuer-reported fiscal DPS when available. Evidence: the production 4502 payload has FY2026 DPS ¥200 and next-year forecast ¥204; the JDK 17 debug APK builds and installs on SCG01 and the emulator, and SCG01 shows ¥200 at 2026期 and ¥204 at 2027期 while its calendar-year 2026 event row remains separate.
 
