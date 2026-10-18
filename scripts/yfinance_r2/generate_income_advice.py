@@ -50,7 +50,7 @@ def build_catalog(client: Any, bucket: str, catalog: dict[str, Any]) -> tuple[di
             continue
         counts["catalog_items"] += 1
         code = str(row.get("code") or "").strip()
-        if row.get("category") != "jp" or row.get("currency") != "JPY" or row.get("status") == "failed":
+        if row.get("category") != "jp" or row.get("currency") != "JPY":
             continue
         counts["eligible_currency"] += 1
         try:
@@ -105,6 +105,7 @@ def main() -> int:
         raise RuntimeError("The published V2 catalog is missing or invalid")
 
     result, counts = build_catalog(client, bucket, catalog)
+    print(json.dumps({**counts, "generation": result["generation"]}, ensure_ascii=False, sort_keys=True), flush=True)
     if counts["read_failures"]:
         raise RuntimeError(f"Aborting without publishing because {counts['read_failures']} candidate records failed to read")
     if not result["items"]:
