@@ -27,8 +27,24 @@ class FinancialDataTest {
         assertTrue(data.profile.payoutRatio.isNaN())
         assertEquals(-1, data.profile.healthScore)
         assertEquals("未取得", data.profile.getPer(1000.0))
+        assertEquals("未取得", data.profile.netDeRatio)
         assertEquals("未取得", data.profile.payoutRatio.financialText())
         assertTrue(data.dividends.isEmpty())
+    }
+    @Test fun readsCalculatedDoeAndNetDeFromTheLatestAnnualFinancialRecord() {
+        val root = document()
+        val annual = root.getJSONObject("financials").getJSONArray("annual").getJSONObject(0)
+            .put("calculated_doe", 3.25)
+            .put("net_de_ratio", -0.22)
+            .put("field_status", JSONObject().put("calculated_doe", "available").put("net_de_ratio", "available"))
+
+        val data = FinancialData.parse(root, "7203")
+
+        assertEquals("3.25%", data.profile.calculatedDoe)
+        assertEquals("2025/03 計算値", data.profile.calculatedDoeSub)
+        assertEquals("-0.22倍", data.profile.netDeRatio)
+        assertEquals(-0.22, data.values["net_de_ratio"]!!, 0.0)
+        assertEquals("2025/03", annual.getString("fiscal_year"))
     }
     @Test fun convertsCurrentYahooPayoutRatioFractionToPercentagePoints() {
         val root = JSONObject("""{"security":{"code":"7203"},"dividends":{"payout_ratio":0.25}}""")

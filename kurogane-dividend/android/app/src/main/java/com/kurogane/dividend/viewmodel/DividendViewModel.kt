@@ -452,7 +452,16 @@ class DividendViewModel @JvmOverloads constructor(
         val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
         if (!normalized.matches(Regex("[A-Z0-9]{4}"))) return null
         val today = PriceRefreshPolicy.japanDate(System.currentTimeMillis())
-        if (marketPreferences.getString("financial_date_$normalized", null) == today) {
+        val contractVersionKey = "financial_contract_version_$normalized"
+        val contractAttemptVersionKey = "financial_contract_attempt_version_$normalized"
+        val requiresContractRefresh = marketPreferences.getInt(contractVersionKey, 0) < FINANCIAL_PAYLOAD_VERSION
+        val attemptKey = "financial_fetch_attempt_at_$normalized"
+        val attemptDateKey = "financial_fetch_attempt_jst_$normalized"
+        val failureKey = "financial_fetch_failure_$normalized"
+        val contractRefreshAttemptedToday = requiresContractRefresh
+            && marketPreferences.getInt(contractAttemptVersionKey, 0) >= FINANCIAL_PAYLOAD_VERSION
+            && marketPreferences.getString(attemptDateKey, null) == today
+        if (!requiresContractRefresh && marketPreferences.getString("financial_date_$normalized", null) == today) {
             _financialData.value[normalized]?.let { return it }
             val cached = withContext(Dispatchers.IO) {
                 runCatching {
@@ -466,9 +475,6 @@ class DividendViewModel @JvmOverloads constructor(
             }
         }
         val now = System.currentTimeMillis()
-        val attemptKey = "financial_fetch_attempt_at_$normalized"
-        val attemptDateKey = "financial_fetch_attempt_jst_$normalized"
-        val failureKey = "financial_fetch_failure_$normalized"
         // An explicit retry may bypass a failed attempt. Today's successfully
         // parsed document is still returned by the cache check above.
         if (!force && !PriceRefreshPolicy.shouldFetch(
@@ -476,7 +482,7 @@ class DividendViewModel @JvmOverloads constructor(
                 marketPreferences.getLong(attemptKey, 0L),
                 marketPreferences.getString(attemptDateKey, null)
                     ?: marketPreferences.getString("financial_date_$normalized", null)
-            )) {
+            ) && (!requiresContractRefresh || contractRefreshAttemptedToday)) {
             val cached = _financialData.value[normalized] ?: withContext(Dispatchers.IO) {
                 runCatching {
                     marketPreferences.getString("financial_$normalized", null)
@@ -493,6 +499,7 @@ class DividendViewModel @JvmOverloads constructor(
         marketPreferences.edit()
             .putLong(attemptKey, now)
             .putString(attemptDateKey, PriceRefreshPolicy.japanDate(now))
+            .putInt(contractAttemptVersionKey, FINANCIAL_PAYLOAD_VERSION)
             .apply()
         val allowed = financialMutex.withLock { financialLoading.add(normalized) }
         if (!allowed) return _financialData.value[normalized]
@@ -511,7 +518,9 @@ class DividendViewModel @JvmOverloads constructor(
             }
             _financialData.update { it + (normalized to parsed) }
             marketPreferences.edit().putString("financial_$normalized", document.toString())
-                .putString("financial_date_$normalized", today).remove(failureKey).apply()
+                .putString("financial_date_$normalized", today)
+                .putInt(contractVersionKey, FINANCIAL_PAYLOAD_VERSION)
+                .remove(failureKey).apply()
             refreshRuntimeValues(normalized)
             saveRequests.trySend(Unit)
             return parsed
@@ -2808,6 +2817,7 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     private companion object {
+        const val FINANCIAL_PAYLOAD_VERSION = 2
         val WATCHLIST_SORT_CRITERIA = setOf("ach", "yield", "price", "code")
         val WATCHLIST_SORT_DIRECTIONS = setOf("asc", "desc")
         val SAMPLE_HOLDING_IDS = setOf("h-7203", "h-2914", "h-8306", "h-8316", "h-8058", "h-9432", "h-9433", "h-8766", "h-8031", "h-4502", "h-apple", "h-emaxis")
