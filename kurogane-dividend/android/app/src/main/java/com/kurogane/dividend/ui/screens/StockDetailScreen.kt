@@ -217,8 +217,8 @@ fun StockDetailScreen(
     var newBenefitName by rememberSaveable(currentHolding.code) { mutableStateOf("") }
     var newBenefitValue by rememberSaveable(currentHolding.code) { mutableStateOf("") }
 
-    // Selected status tab: default to "risk" to highlight the user requested detailed mock
-    var selectedStatusTab by rememberSaveable(stockCode) { mutableStateOf("risk") }
+    // Start the diagnosis details on health; retain the user's selection while this screen is saved.
+    var selectedStatusTab by rememberSaveable(stockCode) { mutableStateOf("health") }
     var simAddedSharesInput by rememberSaveable(stockCode) { mutableStateOf("100") }
     var showBuyUpSimulator by rememberSaveable(stockCode) { mutableStateOf(false) }
     val simAddedShares = simAddedSharesInput.toIntOrNull() ?: 0
