@@ -847,6 +847,34 @@ class DividendViewModel @JvmOverloads constructor(
         viewModelScope.launch { refreshDividendMonths(listOf(symbol)) }
     }
 
+    fun refreshDividendEventsForYear(category: Category, code: String, year: Int) {
+        if (!refreshOnStart || year !in 1900..LocalDate.now(ZoneId.of("Asia/Tokyo")).year) return
+        val symbol = yahooSymbol(category, code) ?: return
+        val fetchedKey = "dividend_year_events_fetched_jst_${symbol}_$year"
+        val today = LocalDate.now(ZoneId.of("Asia/Tokyo")).toString()
+        if (marketPreferences.getString(fetchedKey, null) == today) return
+        val attemptKey = "dividend_year_events_attempt_at_${symbol}_$year"
+        val now = System.currentTimeMillis()
+        val previousAttempt = marketPreferences.getLong(attemptKey, 0L)
+        if (now - previousAttempt < 30_000L) return
+        marketPreferences.edit().putLong(attemptKey, now).apply()
+        viewModelScope.launch {
+            val result = runCatchingCancellable {
+                marketRepository.fetchDividendMonths(listOf(symbol), eventYear = year)
+            }
+            result.onFailure { error ->
+                android.util.Log.w("CloudflareMarket", "${year}年の配当イベント取得に失敗しました", error)
+            }.onSuccess { history ->
+                val fetched = history.eventsBySymbol[symbol].orEmpty()
+                storeDividendEvents(
+                    symbol,
+                    (dividendEventsFor(code) + fetched).distinctBy { it.date to it.amountPerShare }.sortedBy { it.date }
+                )
+                marketPreferences.edit().putString(fetchedKey, today).apply()
+            }
+        }
+    }
+
     private var dividendHistoryRefreshStarted = false
 
     private val _selectedMonth = MutableStateFlow<Int?>(null)
