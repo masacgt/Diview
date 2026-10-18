@@ -321,6 +321,7 @@ fun StockDetailScreen(
         ((backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())).filterKeys { it == "per" || it == "pbr" }
     }
     val valuationNarrative = remember(valuationValues) { StockAnalysisNarrativeGenerator.generate(valuationValues) }
+    val missingValuationLabels = valuationNarrative.missingLabels.filter { it == "PER" || it == "PBR" }
     val profile = baseProfile.copy(
         healthGrade = healthNarrative.grade ?: "未判定", healthScore = healthNarrative.score ?: -1,
         healthEvaluation = healthNarrative.title, healthDiagnosisComment = healthNarrative.findings.joinToString(" ") { it.text }.ifBlank { "財務指標未取得" },
@@ -331,7 +332,7 @@ fun StockDetailScreen(
     val healthDiagnosisItems = healthNarrative.findings.map { it.text }.ifEmpty { listOf("財務指標未取得") }
     val buySignalDiagnosisItems = buildList {
         if (currentDpsUnavailable) {
-            add("配当利回り：DPS未取得のため過去の利回り実績と比較できません。現在利回りの表示は0.00%です。")
+            add("配当利回り：1株当たり配当（DPS）が未取得のため、現在利回りと過去実績の比較はできません。画面上の0.00%表示は未取得データによるもので、無配が確認された状態を意味しません。")
         } else if (profile.yieldRangeMin.isFinite() && profile.yieldRangeAvg.isFinite() && profile.yieldRangeMax.isFinite()) {
             val yieldPosition = when {
                 currentHolding.yieldRate < profile.yieldRangeMin -> "過去の最低水準を下回っています"
@@ -339,25 +340,30 @@ fun StockDetailScreen(
                 currentHolding.yieldRate >= profile.yieldRangeAvg -> "過去平均以上です"
                 else -> "過去平均を下回っています"
             }
-            add("配当利回り：現在${com.kurogane.dividend.model.formatDividendYieldDisplay(currentHolding.yieldRate, currentHolding.isNoDividendConfirmed)}、過去実績は最低${profile.yieldRangeMin.financialText(2, "%")}・平均${profile.yieldRangeAvg.financialText(2, "%")}・最高${profile.yieldRangeMax.financialText(2, "%")}です。$yieldPosition。")
+            add("配当利回り：現在${com.kurogane.dividend.model.formatDividendYieldDisplay(currentHolding.yieldRate, currentHolding.isNoDividendConfirmed)}、取得できた直近最大5期の過去実績は最低${profile.yieldRangeMin.financialText(2, "%")}・平均${profile.yieldRangeAvg.financialText(2, "%")}・最高${profile.yieldRangeMax.financialText(2, "%")}です。$yieldPosition。利回りは株価と予想配当の両方で変動し、高い利回りだけで割安や配当継続が確定するわけではありません。")
         } else {
-            add("配当利回り：過去の利回り実績が不足しているため、過去平均との差は判定できません。現在値は${com.kurogane.dividend.model.formatDividendYieldDisplay(currentHolding.yieldRate, currentHolding.isNoDividendConfirmed)}です。")
+            add("配当利回り：現在値は${com.kurogane.dividend.model.formatDividendYieldDisplay(currentHolding.yieldRate, currentHolding.isNoDividendConfirmed)}ですが、過去の比較可能な利回り実績が不足しているため、過去平均との差や水準の位置は判定できません。履歴不足は利回り0%や無配確定を意味しません。利回りは株価と予想配当の両方で変動するため、配当の継続性も合わせて確認します。")
         }
         valuationNarrative.findings.forEach { add(it.text) }
-        if (valuationNarrative.missingLabels.isNotEmpty()) {
-            add("未取得の株価指標：${valuationNarrative.missingLabels.joinToString("・")}。取得できた指標のみで評価しています。")
+        if (missingValuationLabels.isNotEmpty()) {
+            add("株価指標の取得状況：${missingValuationLabels.joinToString("・")}は未取得です。評価コメントとスコアは取得できたPER・PBRだけを対象としており、未取得値は補完していません。")
         }
+        add(if (valuationNarrative.score != null) {
+            "スコアの見方：表示スコアは取得できたPER・PBRの評価をまとめたものです。配当利回りや増配実績、財務の健全性は含まれないため、各指標の診断と合わせて判断してください。"
+        } else {
+            "スコアの見方：PER・PBRが取得できないため、株価指標のスコアは算出できません。配当利回りも履歴と照らして確認し、データがそろってから評価してください。"
+        })
     }
     val growthDurabilityDiagnosisItems = listOf(
         when {
-            profile.consecutiveYears > 0 -> "連続増配実績：${profile.consecutiveYears}期連続で増配しています。長期の継続性を見る材料ですが、今後の利益・キャッシュの裏付けも確認が必要です。"
-            profile.consecutiveYears == 0 -> "連続増配実績：直近の連続増配は確認できません。増配年数だけでなく、減配の有無や配当水準の推移も合わせて見ます。"
-            else -> "連続増配実績：データ未取得のため、連続増配年数は判定できません。"
+            profile.consecutiveYears > 0 -> "連続増配実績：取得データ上、${profile.consecutiveYears}期連続で1株当たり配当が増えています。過去に増配を続けた実績は還元姿勢を見る材料ですが、増配率と利益・キャッシュの伸びが釣り合っているかも重要です。この記録だけで今後の増配や配当維持が保証されるものではありません。"
+            profile.consecutiveYears == 0 -> "連続増配実績：直近の連続増配は確認できません。これは増配が続いていないことを示し、無配や減配があったと直ちに断定するものではありません。配当額の推移と減配しなかった期間を分けて確認します。"
+            else -> "連続増配実績：増配年数のデータが未取得のため、連続増配の有無は判定できません。未取得を増配年数0年として扱わず、配当履歴や利益・キャッシュの推移と合わせて確認してください。"
         },
         when {
-            profile.noCutYears > 0 -> "減配しなかった期間：${profile.noCutYears}年です。記録期間内に減配がないことを示しますが、将来の配当を保証するものではありません。"
-            profile.noCutYears == 0 -> "減配しなかった期間：直近の連続記録はありません。過去の配当推移を確認してください。"
-            else -> "減配しなかった期間：比較できる配当履歴が不足しています。"
+            profile.noCutYears > 0 -> "減配しなかった期間：取得データでは${profile.noCutYears}年間、配当を減らしていません。横ばいの期間も含み得るため、連続増配年数とは別の指標です。過去の記録は参考になりますが、将来の配当を保証するものではありません。"
+            profile.noCutYears == 0 -> "減配しなかった期間：直近の連続記録は確認できません。連続増配の有無とは別に、どの時期に配当が変化したかを履歴で確認すると、還元の安定度を把握しやすくなります。"
+            else -> "減配しなかった期間：比較できる配当履歴が不足しており、期間を判定できません。未取得は減配記録が0年という意味ではありません。履歴が確認できる範囲を連続増配年数と区別して見ます。"
         },
         if (profile.growthRate.isFinite()) {
             val growthDirection = when {
@@ -366,19 +372,19 @@ fun StockDetailScreen(
                 else -> "横ばい"
             }
             val basis = if (isCalendarYearDividendHistory) "暦年配当合計" else "年間配当額"
-            val note = if (isCalendarYearDividendHistory) "（参考値）" else ""
-            "配当成長率：${basis}を使った直近最大5年の年平均成長率（CAGR）は${profile.growthRate.financialText(1, "%")}で、${growthDirection}です。$note"
+            val basisNote = if (isCalendarYearDividendHistory) "暦年中に観測された配当の合計による参考値で、決算期ごとの年間配当額とは集計期間が異なる場合があります。" else ""
+            "配当成長率：${basis}を使った直近最大5年の年平均成長率（CAGR）は${profile.growthRate.financialText(1, "%")}で、期間の始点から終点まででは${growthDirection}です。CAGRは期間全体を年率換算した値で、毎年同じ率で増減したことを示すものではありません。$basisNote"
         } else {
-            "配当成長率：連続した複数期の比較データが不足しているため算出できません。"
+            "配当成長率：連続する複数期の比較に必要なデータが不足しているため、算出できません。これは成長率0%を意味しません。配当額の履歴がそろうと、期間全体の増減を年率で比較できます。"
         },
         when {
-            !profile.payoutRatio.isFinite() -> "配当性向：未取得のため、利益に対する配当負担は判定できません。"
-            profile.payoutRatio > 100.0 -> "配当性向：約${profile.payoutRatio.financialText(1, "%")}で利益を上回っています。利益以外の資金に依存していないか注意が必要です。"
-            profile.payoutRatio > 70.0 -> "配当性向：約${profile.payoutRatio.financialText(1, "%")}と高めです。利益が落ちると配当維持の余裕が縮む可能性があります。"
-            profile.payoutRatio >= 0.0 -> "配当性向：約${profile.payoutRatio.financialText(1, "%")}です。利益のうち配当に回していない部分もあり、利益変動への余地を確認する材料になります。"
-            else -> "配当性向：約${profile.payoutRatio.financialText(1, "%")}です。赤字や特殊要因の影響を含む可能性があるため、決算内容の確認が必要です。"
+            !profile.payoutRatio.isFinite() -> "配当性向：利益に対する配当負担のデータが未取得のため判定できません。未取得を0%とみなすことはできず、利益と配当の実績がそろってから評価できます。"
+            profile.payoutRatio > 100.0 -> "配当性向：約${profile.payoutRatio.financialText(1, "%")}で、当期利益を上回る水準です。利益の一時的な落ち込みや特別要因、利益以外の資金による配当の有無を決算で確認してください。1期の比率だけでは、配当原資や継続性までは判断できません。"
+            profile.payoutRatio > 70.0 -> "配当性向：約${profile.payoutRatio.financialText(1, "%")}と高めで、利益の多くを配当に充てています。利益が減少すると配当を維持する余裕が縮む可能性があるため、利益の安定性と複数期の推移を確認してください。"
+            profile.payoutRatio >= 0.0 -> "配当性向：約${profile.payoutRatio.financialText(1, "%")}です。当期利益のうち配当に回した割合を示し、残りがそのまま現金として残ることを意味するわけではありません。利益の変動、投資や負債返済も含めて配当余力を見ます。"
+            else -> "配当性向：約${profile.payoutRatio.financialText(1, "%")}です。負の値は赤字や計算元の特殊要因を含む可能性があり、通常の配当負担として単純比較できません。利益の内訳と配当原資を決算で確認してください。"
         },
-        "財務面の支え：自己資本比率${profile.equityRatio.financialText(1, "%")}、営業利益率${profile.operatingMargin.financialText(1, "%")}、${profile.fcfStatus}です。未取得の指標は評価に含めていません。"
+        "財務面の支え：自己資本比率${profile.equityRatio.financialText(1, "%")}は資本構成、営業利益率${profile.operatingMargin.financialText(1, "%")}は本業の採算、${profile.fcfStatus}は営業活動と投資後の現金収支を見る材料です。指標が未取得の場合はその項目を評価できず、黒字や高い比率だけで配当継続が確定するわけではありません。複数期の推移と配当額を合わせて確認してください。"
     )
     val liveYield = if (currentPrice > 0 && dps > 0.0) (dps / currentPrice) * 100.0 else currentHolding.yieldRate
     val liveYoc = if (currentHolding.acqPrice > 0) (dps / currentHolding.acqPrice) * 100.0 else liveYield
@@ -418,31 +424,47 @@ fun StockDetailScreen(
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
     val detailListState = rememberLazyListState()
     val riskDiagnosisItems = listOf(
-        if (totalPortfolioDiv > 0) {
+        if (currentDpsUnavailable) {
+            "銘柄配当依存度：${currentHolding.name}のDPSが未取得のため、保有銘柄の年間配当合計に占める割合は判定できません。未取得を依存度0%とはみなさず、配当データの確認後に比較します。"
+        } else if (totalPortfolioDiv > 0) {
             val stockRisk = when {
-                divDependency > 25.0 -> "目安の10%を大きく上回っています"
-                divDependency > 10.0 -> "目安の10%を上回っています"
-                else -> "目安の10%以内です"
+                divDependency > 25.0 -> "目安の10%を大きく上回り、1銘柄への配当依存が強い状態です"
+                divDependency > 10.0 -> "目安の10%を上回っており、配当源の偏りに注意が必要です"
+                else -> "目安の10%以内で、配当源の偏りは比較的小さい状態です"
             }
-            "銘柄配当依存度：年間配当の約${divDependencyStr}%を${currentHolding.name}が占めています。$stockRisk。"
+            "銘柄配当依存度：税引設定に応じた保有銘柄の取得済み年間配当合計のうち、約${divDependencyStr}%を${currentHolding.name}が占めています。$stockRisk。比率が高いほど、この銘柄の減配がポートフォリオ全体の受取配当に与える影響も大きくなります。"
         } else {
-            "銘柄配当依存度：年間配当データがないため、構成比を算出できません。"
+            "銘柄配当依存度：保有銘柄の年間配当合計に正の値がないため、構成比を算出できません。配当データ未取得とは限らず、分母がない状態を依存度0%や低リスクとは解釈できません。"
         },
         if (totalPortfolioVal > 0) {
-            "セクター集中度：${cleanSectorName}の評価額比率は約${sectorDependencyStr}%で、${sectorRiskText}の状態です。"
+            val concentrationGuide = when {
+                sectorDependency > 30.0 -> "30%を超えており、高集中の目安に該当します"
+                sectorDependency > 20.0 -> "20%を超えており、やや集中の目安に該当します"
+                else -> "20%以内で、分散された範囲の目安です"
+            }
+            "セクター集中度：保有資産の評価額合計に占める${cleanSectorName}の割合は約${sectorDependencyStr}%で、${sectorRiskText}です。${concentrationGuide}。これは配当額ではなく評価額で測った偏りであり、株価変動に応じて比率も変わります。"
         } else {
-            "セクター集中度：評価額データがないため、構成比を算出できません。"
+            "セクター集中度：保有資産の評価額合計に正の値がないため、構成比を算出できません。評価額比率が未取得または算出不能な状態を、集中度0%や分散済みとは判定できません。"
         },
-        if (totalPortfolioDiv > 0) {
-            "減配時の影響：${currentHolding.name}の配当が50%減ると、年間配当は約¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(displayCutImpact)}（全体の約${String.format(Locale.JAPAN, "%.1f", cutImpactRatio)}%）減る試算です。"
+        if (currentDpsUnavailable) {
+            "減配時の影響：${currentHolding.name}のDPSが未取得のため、減配による受取配当の変化を試算できません。未取得は無配確定ではなく、取得後に保有数量と選択中の税引設定を反映して再評価できます。"
+        } else if (totalPortfolioDiv > 0) {
+            "減配時の影響：${currentHolding.name}の年間配当が50%減ると仮定した場合、選択中の税引設定で年間受取配当は約¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(displayCutImpact)}（現在のポートフォリオ年間配当合計の約${String.format(Locale.JAPAN, "%.1f", cutImpactRatio)}%）減る試算です。保有数量と現在の配当額を固定した単純計算であり、減配の予測ではありません。"
         } else {
-            "減配時の影響：年間配当データがないため、試算できません。"
+            "減配時の影響：保有銘柄の年間配当合計に正の値がないため、全体に占める影響割合を算出できません。分母がない状態のため、影響0%や減配リスクなしとは解釈できません。"
         },
         when {
-            currentDpsUnavailable -> "見直しの目安：配当データ未取得のため銘柄配当依存度は判定できません。評価額に基づくセクター集中度を確認してください。"
-            divDependency > 25.0 || sectorDependency > 30.0 -> "見直しの目安：追加投資を別銘柄・別セクターへ分散し、集中度を少しずつ下げる方法があります。"
-            divDependency > 10.0 || sectorDependency > 20.0 -> "見直しの目安：今後の追加投資先を分散すると、特定銘柄やセクターへの依存を抑えられます。"
-            else -> "現在は銘柄・セクターの集中が比較的小さい状態です。複数の投資先への分散を続けると、偏りを抑えやすくなります。"
+            currentDpsUnavailable -> if (totalPortfolioVal > 0) {
+                "見直しの目安：${currentHolding.name}の配当依存度はDPS未取得のため保留です。評価額で測るセクター比率は約${sectorDependencyStr}%（20%超でやや集中、30%超で高集中の目安）なので、配当データとは分けて確認してください。"
+            } else {
+                "見直しの目安：DPS未取得のため銘柄配当依存度は保留で、評価額合計にも正の値がなくセクター集中度も算出できません。データがそろうまでは集中リスクを低いとは判定できません。"
+            }
+            totalPortfolioDiv <= 0 && totalPortfolioVal <= 0 -> "見直しの目安：年間配当と評価額のどちらも構成比を算出する分母がありません。集中度を低リスクと判断せず、保有データがそろった後に銘柄別・セクター別の比率を確認してください。"
+            totalPortfolioDiv <= 0 -> "見直しの目安：年間配当合計に正の値がないため銘柄配当依存度は判定できません。評価額ベースの${cleanSectorName}比率は約${sectorDependencyStr}%です（20%超でやや集中、30%超で高集中の目安）。"
+            totalPortfolioVal <= 0 -> "見直しの目安：評価額合計に正の値がないためセクター集中度は判定できません。年間配当ベースでは${currentHolding.name}が約${divDependencyStr}%を占めています（10%超で偏りに注意、25%超で強い集中の目安）。"
+            divDependency > 25.0 || sectorDependency > 30.0 -> "見直しの目安：銘柄配当比率が25%超またはセクター評価額比率が30%超の集中目安に該当します。追加投資先を他銘柄・他セクターへ分けると、特定の配当源や値動きへの依存を抑えられます。"
+            divDependency > 10.0 || sectorDependency > 20.0 -> "見直しの目安：銘柄配当比率が10%超またはセクター評価額比率が20%超の注意目安に該当します。今後の追加投資先を分散し、比率の変化を継続して確認してください。"
+            else -> "見直しの目安：計算できた銘柄配当比率は10%以内、セクター評価額比率は20%以内で、いずれも集中目安を下回っています。比率は保有額や株価で変わるため、定期的に確認してください。"
         }
     )
     val growthStatusBadge = when {
