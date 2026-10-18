@@ -38,7 +38,14 @@ class DiviewNotifications(private val context: Context) {
     fun canPost(channel: String): Boolean = permissionGranted() && NotificationManagerCompat.from(context).areNotificationsEnabled() &&
         manager.getNotificationChannel(channel)?.importance != NotificationManager.IMPORTANCE_NONE
 
-    fun post(id: Int, channel: String, title: String, text: String, destination: String): Boolean {
+    fun post(
+        id: Int,
+        channel: String,
+        title: String,
+        text: String,
+        destination: String,
+        recordInHistory: Boolean = true
+    ): Boolean {
         require(destination in destinations)
         createChannels()
         if (!canPost(channel)) return false
@@ -58,11 +65,23 @@ class DiviewNotifications(private val context: Context) {
             .setCategory(NotificationCompat.CATEGORY_REMINDER).build()
         return try {
             NotificationManagerCompat.from(context).notify(id, notification)
-            historyKind(channel)?.let { kind ->
-                runCatching { NotificationStore(context).recordNotification(kind, title, text) }
+            if (recordInHistory) {
+                historyKind(channel)?.let { kind ->
+                    runCatching { NotificationStore(context).recordNotification(kind, title, text) }
+                }
             }
             true
         } catch (_: SecurityException) { false }
+    }
+
+    fun test(kind: NotificationKind): Boolean {
+        val (id, titleId, textId, destination) = when (kind) {
+            NotificationKind.PRICE -> TestNotification(PRICE_TEST_ID, R.string.notification_test_price_title, R.string.notification_test_price_text, "watchlist")
+            NotificationKind.DIVIDEND -> TestNotification(DIVIDEND_TEST_ID, R.string.notification_test_dividend_title, R.string.notification_test_dividend_text, "annual")
+            NotificationKind.DIVIDEND_CHANGE -> TestNotification(DIVIDEND_CHANGE_TEST_ID, R.string.notification_test_dividend_change_title, R.string.notification_test_dividend_change_text, "annual")
+        }
+        manager.cancel(id)
+        return post(id, channel(kind), context.getString(titleId), context.getString(textId), destination, recordInHistory = false)
     }
 
     fun test(): Boolean = post(TEST_ID, TEST_CHANNEL, context.getString(R.string.diview_notifications_message_8), context.getString(R.string.diview_notifications_message_9), "settings")
@@ -71,7 +90,15 @@ class DiviewNotifications(private val context: Context) {
         NotificationKind.DIVIDEND -> DIVIDEND_ID
         NotificationKind.DIVIDEND_CHANGE -> DIVIDEND_CHANGE_ID
     })
-    fun clear() { manager.cancel(PRICE_ID); manager.cancel(DIVIDEND_ID); manager.cancel(DIVIDEND_CHANGE_ID); manager.cancel(TEST_ID) }
+    fun clear() {
+        manager.cancel(PRICE_ID)
+        manager.cancel(DIVIDEND_ID)
+        manager.cancel(DIVIDEND_CHANGE_ID)
+        manager.cancel(TEST_ID)
+        manager.cancel(PRICE_TEST_ID)
+        manager.cancel(DIVIDEND_TEST_ID)
+        manager.cancel(DIVIDEND_CHANGE_TEST_ID)
+    }
 
     companion object {
         const val PRICE_CHANNEL = "diview_price_alerts"
@@ -82,8 +109,18 @@ class DiviewNotifications(private val context: Context) {
         const val DIVIDEND_ID = 8102
         const val DIVIDEND_CHANGE_ID = 8104
         const val TEST_ID = 8103
+        const val PRICE_TEST_ID = 8105
+        const val DIVIDEND_TEST_ID = 8106
+        const val DIVIDEND_CHANGE_TEST_ID = 8107
         const val ACTION_OPEN = "com.kurogane.dividend.OPEN_NOTIFICATION"
         private val destinations = setOf("watchlist", "annual", "settings")
+
+        private data class TestNotification(
+            val id: Int,
+            val titleId: Int,
+            val textId: Int,
+            val destination: String
+        )
 
         fun channel(kind: NotificationKind): String = when (kind) {
             NotificationKind.PRICE -> PRICE_CHANNEL

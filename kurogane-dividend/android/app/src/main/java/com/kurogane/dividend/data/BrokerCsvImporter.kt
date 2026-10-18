@@ -14,7 +14,8 @@ enum class CsvBroker(val label: String, val legacyCharset: String) {
     MONEX("マネックス証券", "MS932"),
     MATSUI("松井証券", "MS932"),
     MITSUBISHI_UFJ("三菱UFJ eスマート証券", "MS932"),
-    NOMURA("野村證券", "MS932")
+    NOMURA("野村證券", "MS932"),
+    DIVIEW("Diview CSVバックアップ", "UTF-8")
 }
 
 enum class CsvEncoding(val charset: Charset) { UTF8(StandardCharsets.UTF_8), SHIFT_JIS(Charset.forName("MS932")), EUC_JP(Charset.forName("EUC-JP")) }
@@ -50,6 +51,7 @@ object BrokerCsvImporter {
         val name = normalizeDetectionText(fileName)
         val text = runCatching { decode(bytes, CsvBroker.SBI).first }.getOrDefault("")
         val body = normalizeDetectionText(text)
+        if (isDiviewPortfolioCsv(text)) return CsvBroker.DIVIEW
         return when {
             listOf("stockposition", "usspotbalance", "fundsellamountposition", "マネックス", "monex").any(name::contains) -> CsvBroker.MONEX
             listOf("残高一覧現物株式", "残高一覧米国株式", "残高一覧投資信託", "三菱ufj", "eスマート証券").any(name::contains) -> CsvBroker.MITSUBISHI_UFJ
@@ -60,6 +62,12 @@ object BrokerCsvImporter {
             "保有証券一覧" in body && "ファンド名" in body && "株式特定預り" in body -> CsvBroker.SBI
             else -> null
         }
+    }
+
+    private fun isDiviewPortfolioCsv(text: String): Boolean {
+        val header = runCatching { CsvTokenizer.parse(text.removePrefix("\uFEFF")).firstOrNull() }.getOrNull() ?: return false
+        val expected = listOf("銘柄コード", "銘柄名", "保有数量", "平均取得価額", "現在値", "口座区分")
+        return header.map(::normHeader) == expected.map(::normHeader)
     }
 
     private fun normalizeDetectionText(value: String): String =
