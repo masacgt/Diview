@@ -660,7 +660,6 @@ fun WatchlistScreen(
             // Hero Card
             item {
                 val holdings by viewModel.holdings.collectAsStateWithLifecycle()
-                val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
                 val heldCodes = remember(holdings.map { it.code }) { holdings.mapTo(mutableSetOf()) { it.code } }
                 val heldCount = remember(watchlistCodes, heldCodes) {
                     watchlistCodes.count { it in heldCodes }
@@ -672,9 +671,9 @@ fun WatchlistScreen(
                     border = BorderStroke(1.dp, BorderBlue)
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
-                        AdaptiveRow(
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.End,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
@@ -704,27 +703,6 @@ fun WatchlistScreen(
                                     )
                                     Text(stringResource(R.string.watchlist_text_2 , watchlist.size), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
-                            }
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(BackgroundDark)
-                                    .border(0.5.dp, BorderBlue, CircleShape)
-                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                            ) {
-                                Text(stringResource(R.string.watchlist_text_3), fontSize = AppTextSize.dense, color = OnSurfaceVariant)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Switch(
-                                    checked = notificationSettings.priceEnabled,
-                                    onCheckedChange = { enabled ->
-                                        if (enabled) notificationAccess.request("price")
-                                        else viewModel.setNotificationEnabled(NotificationKind.PRICE, false)
-                                    },
-                                    modifier = Modifier.scale(0.7f),
-                                    colors = SwitchDefaults.colors(checkedThumbColor = OnSurface, checkedTrackColor = PrimaryEmeraldContainer)
-                                )
                             }
                         }
 
@@ -1847,12 +1825,24 @@ fun WatchlistScreen(
             scrimColor = Color.Black.copy(alpha = 0.6f)
         ) {
             val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
-            val latestCalculatedRightsDate = remember(watchlistCodes, dividendEventRevision) {
-                watchlistCodes.asSequence()
-                    .flatMap { code -> viewModel.dividendEventsFor(code).asSequence() }
+            val latestRightsDateInfo = remember(watchlist, dividendEventRevision) {
+                val eventsByStock = watchlist.map { stock ->
+                    stock to viewModel.dividendEventsFor(stock.code)
+                }
+                val date = eventsByStock.asSequence()
+                    .flatMap { (_, events) -> events.asSequence() }
                     .mapNotNull { it.finalRightsDate }
                     .maxOrNull()
+                val stockNames = date?.let { latestDate ->
+                    eventsByStock
+                        .filter { (_, events) -> events.any { it.finalRightsDate == latestDate } }
+                        .map { (stock, _) -> stock.name }
+                        .distinct()
+                }.orEmpty()
+                date to stockNames
             }
+            val latestCalculatedRightsDate = latestRightsDateInfo.first
+            val latestCalculatedRightsStockNames = latestRightsDateInfo.second
             val totalAmountTextMeasurer = rememberTextMeasurer()
             val totalAmountCellWidthPx = with(LocalDensity.current) { 52.dp.roundToPx() }
             val totalAmountTextStyle = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold)
@@ -1921,14 +1911,22 @@ fun WatchlistScreen(
                 HorizontalDivider(color = BorderColor)
 
                 // KPI Sub-Grid Row (3 Cards)
+                val kpiCardsInSingleRow = LocalDensity.current.fontScale < 1.4f
+                val kpiValueColor = OnSurface
+                val kpiValueFontSize = AppTextSize.section
+                val kpiValueFontWeight = FontWeight.Bold
+                val kpiValueFontFamily = AppNumericFontFamily
                 AdaptiveRow(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (kpiCardsInSingleRow) Modifier.height(IntrinsicSize.Min) else Modifier),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     // Card 1
                     Column(
                         modifier = Modifier
                             .weight(1f)
+                            .then(if (kpiCardsInSingleRow) Modifier.fillMaxHeight() else Modifier)
                             .clip(RoundedCornerShape(10.dp))
                             .background(SurfaceContainerHigh)
                             .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
@@ -1937,16 +1935,28 @@ fun WatchlistScreen(
                         Text(stringResource(R.string.watchlist_text_27), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(projection.paymentCount.toString(), color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
-                            Text(stringResource(R.string.watchlist_text_29), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                            Text(
+                                projection.paymentCount.toString(),
+                                color = kpiValueColor,
+                                fontSize = kpiValueFontSize,
+                                fontWeight = kpiValueFontWeight,
+                                fontFamily = kpiValueFontFamily
+                            )
+                            Text(
+                                stringResource(R.string.watchlist_text_29),
+                                color = kpiValueColor,
+                                fontSize = kpiValueFontSize,
+                                fontWeight = kpiValueFontWeight,
+                                fontFamily = kpiValueFontFamily
+                            )
                         }
-                        Text(stringResource(R.string.watchlist_known_months), color = PrimaryEmerald, fontSize = AppTextSize.dense)
                     }
 
                     // Card 2
                     Column(
                         modifier = Modifier
                             .weight(1.1f)
+                            .then(if (kpiCardsInSingleRow) Modifier.fillMaxHeight() else Modifier)
                             .clip(RoundedCornerShape(10.dp))
                             .background(SurfaceContainerHigh)
                             .border(1.dp, PrimaryEmerald.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
@@ -1957,22 +1967,34 @@ fun WatchlistScreen(
                         Text(
                             latestCalculatedRightsDate?.let { stringResource(R.string.watchlist_next_ex_date_value, it.monthValue, it.dayOfMonth) }
                                 ?: stringResource(R.string.not_available),
-                            color = PrimaryEmerald,
-                            fontSize = AppTextSize.section,
-                            fontWeight = FontWeight.Bold
+                            color = kpiValueColor,
+                            fontSize = kpiValueFontSize,
+                            fontWeight = kpiValueFontWeight,
+                            fontFamily = kpiValueFontFamily
                         )
-                        Text(
-                            if (latestCalculatedRightsDate != null) stringResource(R.string.watchlist_next_ex_date_source)
-                            else stringResource(R.string.watchlist_ex_date_missing),
-                            color = OnSurfaceVariant,
-                            fontSize = AppTextSize.dense
-                        )
+                        if (latestCalculatedRightsDate == null) {
+                            Text(
+                                stringResource(R.string.watchlist_ex_date_missing),
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense
+                            )
+                        } else if (latestCalculatedRightsStockNames.isNotEmpty()) {
+                            Text(
+                                latestCalculatedRightsStockNames.joinToString("、"),
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
 
                     // Card 3
                     Column(
                         modifier = Modifier
                             .weight(1.1f)
+                            .then(if (kpiCardsInSingleRow) Modifier.fillMaxHeight() else Modifier)
                             .clip(RoundedCornerShape(10.dp))
                             .background(SurfaceContainerHigh)
                             .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
@@ -1980,8 +2002,21 @@ fun WatchlistScreen(
                     ) {
                         Text(stringResource(R.string.watchlist_text_34), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(yen(projection.annualTotal), color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
-                        Text(percent(com.kurogane.dividend.model.PortfolioMath.portfolioYield(projection.annualTotal, projection.investment, 0.0, "eval")), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                        Text(
+                            yen(projection.annualTotal),
+                            color = kpiValueColor,
+                            fontSize = kpiValueFontSize,
+                            fontWeight = kpiValueFontWeight,
+                            fontFamily = kpiValueFontFamily
+                        )
+                        Text(
+                            stringResource(
+                                R.string.watchlist_potential_yield,
+                                percent(com.kurogane.dividend.model.PortfolioMath.portfolioYield(projection.annualTotal, projection.investment, 0.0, "eval"))
+                            ),
+                            color = OnSurfaceVariant,
+                            fontSize = AppTextSize.dense
+                        )
                     }
                 }
 
