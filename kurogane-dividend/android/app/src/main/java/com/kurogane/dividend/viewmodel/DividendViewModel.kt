@@ -1069,10 +1069,18 @@ class DividendViewModel @JvmOverloads constructor(
             it.copy(dividendMonths = emptyList()).refreshPayout()
         }
         val extras = backups.map { it.extras }
+        val watchlistBackup = extras.mapNotNull { it.watchlist }.lastOrNull()
+        val nextWatchlist = _watchlist.value.toMutableList().apply {
+            watchlistBackup.orEmpty().forEach { imported ->
+                val index = indexOfFirst { it.code.equals(imported.code, ignoreCase = true) }
+                if (index >= 0) this[index] = imported else add(imported)
+            }
+        }
         val nextBenefits = _shareholderBenefits.value.toMutableMap().apply { extras.forEach { putAll(it.shareholderBenefits) } }
         val nextClimates = _stockClimateOverrides.value.toMutableMap().apply { extras.forEach { putAll(it.stockClimateOverrides) } }
         val nextDividendHistory = _dividendHistoryOverrides.value.toMutableMap().apply { extras.forEach { putAll(it.dividendHistoryOverrides) } }
         withContext(Dispatchers.IO) {
+            if (watchlistBackup != null) localImportStore.saveWatchlist(nextWatchlist)
             backups.forEach { preview -> localImportStore.saveBackup(preview.kind, preview.payload) }
             localImportStore.saveShareholderBenefits(nextBenefits)
             localImportStore.saveStockClimateOverrides(nextClimates)
@@ -1081,6 +1089,10 @@ class DividendViewModel @JvmOverloads constructor(
         _shareholderBenefits.value = nextBenefits
         _stockClimateOverrides.value = nextClimates
         _dividendHistoryOverrides.value = nextDividendHistory
+        if (watchlistBackup != null) {
+            watchlistLoadFailed = false
+            _watchlist.value = nextWatchlist
+        }
         holdingsLoadFailed = false
         updatePortfolio(next)
         applyCachedDividendMonths()

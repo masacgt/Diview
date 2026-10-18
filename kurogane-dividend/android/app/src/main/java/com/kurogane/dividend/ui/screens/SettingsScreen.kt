@@ -75,6 +75,7 @@ fun SettingsScreen(
     val shareholderBenefits by viewModel.shareholderBenefits.collectAsStateWithLifecycle()
     val stockClimateOverrides by viewModel.stockClimateOverrides.collectAsStateWithLifecycle()
     val dividendHistoryOverrides by viewModel.dividendHistoryOverrides.collectAsStateWithLifecycle()
+    val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
     var dataTab by rememberSaveable { mutableStateOf("import") }
     val biometricEnabled by viewModel.biometricEnabled.collectAsStateWithLifecycle()
     val targetYield by viewModel.roadmapTargetYield.collectAsStateWithLifecycle()
@@ -165,7 +166,8 @@ fun SettingsScreen(
                                 holdings = viewModel.holdings.value,
                                 shareholderBenefits = shareholderBenefits,
                                 stockClimateOverrides = stockClimateOverrides,
-                                dividendHistoryOverrides = dividendHistoryOverrides
+                                dividendHistoryOverrides = dividendHistoryOverrides,
+                                watchlist = watchlist
                             )
                         }
                     }
