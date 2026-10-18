@@ -581,6 +581,7 @@
     <string name="csv_guide_matsui">ログイン後、資産状況の「保有証券一覧」から日本株または米国株のCSVを保存します。</string>
     <string name="csv_guide_mitsubishi">三菱UFJ eスマート証券の残高一覧から、現物株式・米国株式・投資信託のCSVを保存します。</string>
     <string name="csv_guide_nomura">野村證券の「預り資産（預り証券）」CSVを保存して選択します。日本株と投資信託に対応します。</string>
+    <string name="csv_guide_diview">Diviewから出力したCSVバックアップです。銘柄名・保有数量などの見出しから自動判定して取り込みます。</string>
     <string name="csv_guide_steps">CSVを端末に保存 → 証券会社を選択 → CSVを読み込み、内容を確認して取り込み</string>
     <string name="watchlist_text_19">"詳細"</string>
     <string name="watchlist_text_20">"新しい銘柄をウォッチリストに追加"</string>
