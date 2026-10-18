@@ -892,7 +892,7 @@ fun StockDetailScreen(
                                         ?.let { com.kurogane.dividend.model.formatFinancialAmountDisplay(it) }
                                         ?: "未取得"
                                     Triple(
-                                        "${point.year}年",
+                                        "${point.year}期",
                                         stringResource(R.string.add_holding_1_s_2_s_2, prefix, dpsText),
                                         (dps / maxDps * 0.95).toFloat()
                                     )
