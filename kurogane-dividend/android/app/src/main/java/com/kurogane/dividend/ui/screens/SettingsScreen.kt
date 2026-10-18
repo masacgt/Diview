@@ -12,8 +12,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -134,39 +132,37 @@ fun SettingsScreen(
                         Segment(stringResource(R.string.settings_label), dataTab == "import", Modifier.weight(1f)) { dataTab = "import" }
                         Segment(stringResource(R.string.settings_label_2), dataTab == "export", Modifier.weight(1f)) { dataTab = "export" }
                     }
-                    Box(Modifier.fillMaxWidth().height(220.dp)) {
-                        Column(
-                            Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (dataTab == "import") {
-                                DataManagementActionCard(
-                                    title = stringResource(R.string.backup_csv_import_title),
-                                    subtitle = stringResource(R.string.backup_csv_import_subtitle),
-                                    icon = Icons.Default.UploadFile,
-                                    onClick = onNavigateToCsv
-                                )
-                                GoogleDvmBackupCard(
-                                    action = GoogleDvmBackupAction.IMPORT,
-                                    onImportDvm = { backups -> viewModel.importDvmBackups(backups) }
-                                )
-                            } else {
-                                DataManagementActionCard(
-                                    title = stringResource(R.string.settings_label_12),
-                                    subtitle = stringResource(R.string.backup_csv_export_subtitle),
-                                    icon = Icons.Default.Save,
-                                    enabled = !isExporting,
-                                    isWorking = isExporting,
-                                    onClick = { if (!isExporting) csvExporter.launch("Diview-portfolio.csv") }
-                                )
-                                GoogleDvmBackupCard(
-                                    action = GoogleDvmBackupAction.EXPORT,
-                                    holdings = viewModel.holdings.value,
-                                    shareholderBenefits = shareholderBenefits,
-                                    stockClimateOverrides = stockClimateOverrides,
-                                    dividendHistoryOverrides = dividendHistoryOverrides
-                                )
-                            }
+                    Column(
+                        Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (dataTab == "import") {
+                            DataManagementActionCard(
+                                title = stringResource(R.string.backup_csv_import_title),
+                                subtitle = stringResource(R.string.backup_csv_import_subtitle),
+                                icon = Icons.Default.UploadFile,
+                                onClick = onNavigateToCsv
+                            )
+                            GoogleDvmBackupCard(
+                                action = GoogleDvmBackupAction.IMPORT,
+                                onImportDvm = { backups -> viewModel.importDvmBackups(backups) }
+                            )
+                        } else {
+                            DataManagementActionCard(
+                                title = stringResource(R.string.settings_label_12),
+                                subtitle = stringResource(R.string.backup_csv_export_subtitle),
+                                icon = Icons.Default.Save,
+                                enabled = !isExporting,
+                                isWorking = isExporting,
+                                onClick = { if (!isExporting) csvExporter.launch("Diview-portfolio.csv") }
+                            )
+                            GoogleDvmBackupCard(
+                                action = GoogleDvmBackupAction.EXPORT,
+                                holdings = viewModel.holdings.value,
+                                shareholderBenefits = shareholderBenefits,
+                                stockClimateOverrides = stockClimateOverrides,
+                                dividendHistoryOverrides = dividendHistoryOverrides
+                            )
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
