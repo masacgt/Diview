@@ -93,7 +93,7 @@ class OperationCompletionTest {
         val watched = vm.watchlist.value
         runBlocking(Dispatchers.Main) {
             // 9999 is present in the bundled security catalog; use an absent code.
-            assertTrue(runCatching { vm.registerWatchlistStock("0000") }.isFailure)
+            assertFalse(vm.registerWatchlistStock("0000"))
         }
         assertEquals(watched, vm.watchlist.value)
         assertEquals(before, vm.holdings.value)

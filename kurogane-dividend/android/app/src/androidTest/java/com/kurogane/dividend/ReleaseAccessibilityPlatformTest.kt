@@ -75,10 +75,12 @@ class ReleaseAccessibilityPlatformTest {
         }
         // Compose requires touch exploration before accepting accessibility focus.
         // UiAutomation does not request it by default; restore its flags in @After.
-        val serviceInfo = automation.serviceInfo
-        originalAutomationFlags = serviceInfo.flags
-        serviceInfo.flags = serviceInfo.flags or AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE
-        automation.serviceInfo = serviceInfo
+        if (!manager.isTouchExplorationEnabled) {
+            val serviceInfo = automation.serviceInfo
+            originalAutomationFlags = serviceInfo.flags
+            serviceInfo.flags = serviceInfo.flags or AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE
+            automation.serviceInfo = serviceInfo
+        }
         compose.waitUntil(10_000) { manager.isTouchExplorationEnabled }
         compose.waitUntil(10_000) { slider(automation.rootInActiveWindow) != null }
         val focusNode = slider(automation.rootInActiveWindow)!!
@@ -104,5 +106,19 @@ class ReleaseAccessibilityPlatformTest {
         setProgress(10f)
         assertTrue(readySlider().performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD))
         compose.waitUntil(10_000) { vm.compositionThreshold.value == 9 }
+        if (InstrumentationRegistry.getArguments().getString("talkBackGestures") == "true") {
+            setProgress(5f)
+            val node = readySlider()
+            assertTrue(node.isAccessibilityFocused || node.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS))
+            val bounds = android.graphics.Rect().also(node::getBoundsInScreen)
+            instrumentation.sendStatus(1, Bundle().apply {
+                putString("sliderBounds", bounds.toShortString())
+                putString("phase", "talkback-first-swipe")
+            })
+            compose.waitUntil(15_000) { vm.compositionThreshold.value != 5 }
+            assertEquals(1, kotlin.math.abs(vm.compositionThreshold.value - 5))
+            instrumentation.sendStatus(1, Bundle().apply { putString("phase", "talkback-opposite-swipe") })
+            compose.waitUntil(15_000) { vm.compositionThreshold.value == 5 }
+        }
     }
 }
