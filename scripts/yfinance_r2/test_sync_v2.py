@@ -180,6 +180,18 @@ class NetDeRatioTests(TestCase):
             "net_debt": 20.0,
         }), {})
 
+    def test_financial_metric_missing_reasons_name_required_inputs(self):
+        reasons = sync.financial_metric_missing_reasons(
+            fresh_balance={"stockholders_equity": 100.0, "total_debt": 20.0},
+            fresh_cash={},
+            retrieval_status={"balance_sheet": "available", "cash_flow": "available"},
+            calculated_doe=None,
+            net_de_metrics={},
+        )
+
+        self.assertEqual(reasons["calculated_doe"], ["dividend_paid_missing"])
+        self.assertEqual(reasons["net_de_ratio"], ["cash_input_missing"])
+
 
 class SyncPriceTests(TestCase):
     def test_monthly_price_point_date_is_normalized_without_changing_close(self):
