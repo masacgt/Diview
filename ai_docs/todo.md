@@ -41,7 +41,7 @@
 
 ## Next
 
-- [ ] Verify restore of the user's existing Google Drive `.dvm` on device. The importer now opens the system document picker and recognizes original APK filenames and stock-shaped payloads; the connected Drive search did not expose a `.dvm` to validate against.
+- [ ] Verify automatic restore of the user's existing Google Drive `.dvm` on device. The first successful picker import now stores persistable document access and later taps read the saved URI; actual access to the user's Drive file still needs device confirmation.
 
 - [ ] Verify the five-session `Ticker.get_info()` rotation on a normal XTKS sync. `sync_v2.py` now shares the five-bucket financial rotation, preserves cached company/statistical fields on other sessions, records fetch dates, and retries failed refreshes; deterministic rotation tests pass within the 67-test yfinance suite. A normal scheduled Actions run has not yet measured `company_info_refresh_attempt_count` / `company_info_refreshed_count` / `company_info_refresh_failed_count` or confirmed the cadence in R2; the next scheduled run is 2026-10-19 at 21:17 JST.
 - [ ] Run the eight-shard `refresh-all-financials` workflow for all active V2 securities and inspect the reports plus production API read-back. Evidence so far: the first sequential production attempt was cancelled at 200/4,016 securities after 35 minutes with zero failed or partial records; `.github/workflows/yfinance-r2.yml` now splits work into eight shards, each with per-record R2 read-back and a separate report artifact.
