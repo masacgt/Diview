@@ -46,6 +46,8 @@ jobs:
           java -version
           test "$(java -XshowSettings:properties -version 2>&1 | sed -n 's/.*java.specification.version = //p')" = 17
           sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - name: Acceptance tool refuses unrelated devices and non-JDK17 runtimes
+        run: python -m unittest discover -s ../scripts -p test_android_release_acceptance.py
       - name: Unit tests, lint, debug tests and unsigned release APK/AAB
         run: >-
           bash ./gradlew --no-daemon --console plain --max-workers=1

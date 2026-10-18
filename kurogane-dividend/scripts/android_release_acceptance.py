@@ -58,8 +58,9 @@ class Device:
             raise ValueError("JDK 17 is required")
         if args.device not in AVDS:
             raise ValueError("Only the task-owned disposable AVD serials are accepted")
-        self.adb = str(args.android_sdk / "platform-tools/adb")
-        if AVDS[args.device] not in self.run("emu", "avd", "name").decode():
+        self.adb = str(args.android_sdk / "platform-tools" / ("adb.exe" if os.name == "nt" else "adb"))
+        avd_name = self.run("emu", "avd", "name").decode().splitlines()[0].strip()
+        if avd_name != AVDS[args.device]:
             raise ValueError("The AVD does not match the task-owned target")
         # Non-debuggable local release APKs need root readback on these disposable images.
         self.run("root")
