@@ -35,6 +35,7 @@ import com.kurogane.dividend.data.LocalImportStore
 import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.ShareholderBenefit
 import com.kurogane.dividend.model.StockClimate
+import com.kurogane.dividend.model.WatchlistStock
 import com.kurogane.dividend.data.DividendHistoryOverride
 import com.kurogane.dividend.ui.theme.OnSurfaceVariant
 import com.kurogane.dividend.ui.theme.PrimaryEmerald
@@ -52,6 +53,7 @@ fun GoogleDvmBackupCard(
     shareholderBenefits: Map<String, List<ShareholderBenefit>> = emptyMap(),
     stockClimateOverrides: Map<String, StockClimate> = emptyMap(),
     dividendHistoryOverrides: Map<String, List<DividendHistoryOverride>> = emptyMap(),
+    watchlist: List<WatchlistStock> = emptyList(),
     onImportDvm: suspend (List<DvmBackupPreview>) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -68,7 +70,7 @@ fun GoogleDvmBackupCard(
             GoogleDvmBackupAction.EXPORT -> {
                 val encrypted = withContext(Dispatchers.IO) { DvmBackupExporter.export(holdings) }
                 val encryptedExtras = withContext(Dispatchers.IO) {
-                    DvmBackupExporter.exportExtras(shareholderBenefits, stockClimateOverrides, dividendHistoryOverrides)
+                    DvmBackupExporter.exportExtras(shareholderBenefits, stockClimateOverrides, dividendHistoryOverrides, watchlist)
                 }
                 withContext(Dispatchers.IO) {
                     GoogleDriveBackupClient.upload(accessToken, DvmBackupKind.STOCKS.fileName, encrypted)
@@ -88,7 +90,9 @@ fun GoogleDvmBackupCard(
                     ).also { if (it.isEmpty()) throw IllegalStateException(resources.getString(R.string.dvm_drive_backup_missing)) }
                 }
                 onImportDvm(backups)
-                resources.getString(R.string.dvm_drive_restore_success, backups.firstOrNull { it.kind == DvmBackupKind.STOCKS }?.itemCount ?: 0)
+                val importedCount = backups.filter { it.kind == DvmBackupKind.STOCKS }.sumOf { it.itemCount } +
+                    backups.sumOf { it.extras.watchlist.orEmpty().size }
+                resources.getString(R.string.dvm_drive_restore_success, importedCount)
             }
         }
     }
