@@ -7,6 +7,10 @@ import kotlin.math.pow
 
 data class CalendarYearDividend(val year: Int, val dps: Double)
 
+data class IssuerFiscalYearDividend(val fiscalYear: Int, val reportedDps: Double?, val adjustedDps: Double?) {
+    val displayDps: Double? get() = adjustedDps ?: reportedDps
+}
+
 data class DividendHistoryOverride(
     val year: Int,
     val stockPrice: Double?,
@@ -21,7 +25,9 @@ data class FinancialData(
     val profile: StockFinancialProfile,
     val dividends: List<CalendarYearDividend>,
     val values: Map<String, Double?>,
-    val dividendHistoryBasis: String = "unknown"
+    val dividendHistoryBasis: String = "unknown",
+    val issuerDividends: List<IssuerFiscalYearDividend> = emptyList(),
+    val issuerDividendHistoryStatus: String = "empty"
 ) {
     companion object {
         fun parse(root: JSONObject, expectedCode: String): FinancialData {
@@ -40,6 +46,21 @@ data class FinancialData(
                     ?.takeIf { it >= 0 }
                 ?.let { CalendarYearDividend(row.getInt("calendar_year"), it) } }
                 .associateBy { it.year }.values.sortedBy { it.year }
+            val issuerDividendPayload = root.optJSONObject("issuer_dividends")
+            val issuerDividendRecords = issuerDividendPayload?.optJSONArray("records")
+            val issuerDividends = (0 until (issuerDividendRecords?.length() ?: 0))
+                .mapNotNull { issuerDividendRecords?.optJSONObject(it) }
+                .mapNotNull { row ->
+                    val fiscalYear = row.optInt("fiscal_year", -1)
+                    if (fiscalYear !in 1900..2100) return@mapNotNull null
+                    val reportedDps = row.number("annual_dps")?.takeIf { it >= 0 }
+                    val adjustedDps = row.number("annual_dps_adjusted")?.takeIf { it >= 0 }
+                    if (reportedDps == null && adjustedDps == null) return@mapNotNull null
+                    IssuerFiscalYearDividend(fiscalYear, reportedDps, adjustedDps)
+                }
+                .associateBy { it.fiscalYear }.values.sortedBy { it.fiscalYear }
+            val issuerDividendHistoryStatus = issuerDividendPayload?.optString("status")
+                ?.takeIf { it.isNotBlank() } ?: if (issuerDividends.isNotEmpty()) "available" else "empty"
             val annual = root.optJSONObject("financials")?.optJSONArray("annual")
             val financial = (0 until (annual?.length() ?: 0)).mapNotNull { annual?.optJSONObject(it) }
                 .filter { it.optString("fiscal_year").matches(Regex("\\d{4}/\\d{2}")) }
@@ -112,7 +133,7 @@ data class FinancialData(
                 "fcf_margin" to fcfMargin,
                 "dividend_growth_years" to (dividendPayload?.number("consecutive_dividend_increase_years")
                     ?: dividend?.number("consecutive_dividend_increase_years"))
-            ), historyBasis)
+            ), historyBasis, issuerDividends, issuerDividendHistoryStatus)
         }
     }
 }
