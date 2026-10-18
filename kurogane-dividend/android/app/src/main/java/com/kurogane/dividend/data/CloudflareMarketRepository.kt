@@ -561,14 +561,15 @@ class CloudflareMarketRepository(
     }
 
     /** Returns dividend months observed in the last 365 days from the Cloudflare R2 history. */
-    suspend fun fetchDividendMonths(symbols: List<String>): CloudflareDividendMonths = withContext(ioDispatcher) {
+    suspend fun fetchDividendMonths(symbols: List<String>, eventYear: Int? = null): CloudflareDividendMonths = withContext(ioDispatcher) {
         val normalizedSymbols = symbols.map { it.trim().uppercase(java.util.Locale.ROOT) }.distinct()
         require(normalizedSymbols.isNotEmpty() && normalizedSymbols.size <= 50 &&
             normalizedSymbols.all { it.matches(Regex("[A-Z0-9.^_=-]{1,32}")) }) {
             "配当履歴の銘柄コードは1〜50件で指定してください"
         }
         val encodedSymbols = URLEncoder.encode(normalizedSymbols.joinToString(","), Charsets.UTF_8.name())
-        val root = getJson("/api/v1/dividend-months?symbols=$encodedSymbols")
+        val eventYearQuery = eventYear?.let { "&event_year=$it" }.orEmpty()
+        val root = getJson("/api/v1/dividend-months?symbols=$encodedSymbols$eventYearQuery")
         val asOf = runCatching { LocalDate.parse(root.optString("as_of")) }
             .getOrElse { throw IOException("Cloudflareの配当履歴日付が正しくありません", it) }
         val rows = root.optJSONArray("items") ?: throw IOException("Cloudflareの配当履歴にitemsがありません")
