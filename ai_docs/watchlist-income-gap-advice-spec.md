@@ -108,6 +108,6 @@ V2 配当イベントの合計は暦年実績であり、決算期の年間 DPS 
 
 ## 実装状態
 
-ローカルコードには、V2 同期時の候補スコア・候補用派生オブジェクト生成、Worker の `GET /api/v1/income-advice-candidates`、Android の起動時取得・日付/12時間ゲート付きキャッシュ・空白月に応じた最大3件の表示を実装した。アプリへの候補登録は既存の WatchList 登録処理を使う。
+ローカルコードには、V2 同期時の候補スコア・候補用派生オブジェクト生成、既存V2データだけを読む初回R2再集計workflow、Worker の `GET /api/v1/income-advice-candidates`、Android の起動時取得・日付/12時間ゲート付きキャッシュ・空白月に応じた最大3件の表示を実装した。初回再集計はYahoo/J-Quantsへ問い合わせず、既存V2 catalog・current・財務・配当イベントを使って候補一覧を作り、R2へ保存して読戻し確認する。アプリへの候補登録は既存の WatchList 登録処理を使う。
 
-本番 Worker へのデプロイと、R2 の `derived/income_advice/current.json` 初回生成・読戻しは未実施である。したがって本番環境で候補を表示するには、その公開と生成の確認が必要。
+本番Workerは2026-10-18にversion `ad1c9ff2-2dd5-4e18-996a-261f7d622eaf`をデプロイ済み。専用APIは動作するが、現在はR2の `derived/income_advice/current.json` が無いため503となる。専用workflowの初回生成・読戻し後に本番候補表示を確認する。
