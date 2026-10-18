@@ -32,6 +32,7 @@
 
 ## Next
 
+- [ ] Verify the new five-session `Ticker.get_info()` rotation on normal XTKS syncs. Evidence so far: `sync_v2.py` now shares the five-bucket financial rotation, preserves cached company/statistical fields on other sessions, records fetch dates and retries failed refreshes; source documentation is updated. No scheduled Actions run has yet measured `company_info_refresh_attempt_count` / `company_info_refreshed_count` / `company_info_refresh_failed_count` or confirmed the cadence in R2.
 - [ ] Run the new `refresh-all-financials` server workflow for all active V2 securities and inspect the report plus production API read-back. Evidence so far: `.github/workflows/yfinance-r2.yml` and `scripts/yfinance_r2/refresh_financial_v2.py` implement a sequential V2 batch with per-record R2 read-back; all 60 local collector tests pass, but production execution remains pending.
 - [ ] Confirm `field_status_reason` appears in the production financial-data API after the V2 refresh. Evidence so far: all 60 existing V2 collector tests pass, including the new missing-input reason case; production R2 refresh and API read-back remain pending.
 

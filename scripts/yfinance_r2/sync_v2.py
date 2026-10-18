@@ -36,6 +36,7 @@ OLD_ROOT = "market/yfinance"
 MAX_DAILY_ATTEMPTS = 4
 FULL_HISTORY_BUCKETS = 20
 FINANCIAL_BUCKETS = 5
+COMPANY_INFO_REFRESH_POLICY_VERSION = 1
 FINANCIAL_REFRESH_MAX_AGE_DAYS = 45
 FINANCIAL_REFRESH_POLICY_VERSION = 2
 FINANCIAL_GROUPS = ("income_statement", "balance_sheet", "cash_flow", "valuation")
@@ -1772,6 +1773,7 @@ def verify_v2_transfer(client: Any, bucket: str, symbol: str, old: dict[str, Any
 def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date,
                    *, attempt_count: int = 1, refresh_full_history: bool = False,
                    refresh_financials: bool = False, refresh_monthly: bool = False,
+                   refresh_info: bool = False,
                    initialize_monthly: bool = False, retry_monthly: bool = False,
                    universe_entry: dict[str, Any] | None = None,
                    prior_sync_document: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1799,15 +1801,67 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         or prior_sync.get("long_history_retry_pending") is True
         or bool(prior_repair_period)
     )
-    if same_session_retry and prior_profile and prior_current.get("statistics"):
-        info = {**prior_profile, **prior_current["statistics"]}
-        info["shortName"] = prior_profile.get("short_name") or prior_profile.get("display_name")
-        info["longName"] = prior_profile.get("long_name")
-    else:
+    prior_statistics = prior_current.get("statistics")
+    if not isinstance(prior_statistics, dict):
+        prior_statistics = {}
+    cached_info_available = bool(
+        prior_profile.get("display_name")
+        or prior_profile.get("short_name")
+        or prior_profile.get("long_name")
+        or prior_statistics
+    )
+
+    def cached_company_info() -> dict[str, Any]:
+        cached = {**prior_profile, **prior_statistics}
+        cached["shortName"] = prior_profile.get("short_name") or prior_profile.get("display_name")
+        cached["longName"] = prior_profile.get("long_name")
+        cached["currency"] = (prior_current.get("price") or {}).get("currency") or "JPY"
+        return cached
+
+    info_refresh_pending_before_attempt = prior_sync.get("info_refresh_pending") is True
+    info_last_fetched_session_date = (
+        prior_sync.get("info_last_fetched_session_date")
+        or (prior_sync.get("last_success_session_date") if cached_info_available else None)
+    )
+    info_last_fetched_at = (
+        prior_sync.get("info_last_fetched_at")
+        or (prior_sync.get("last_success_at") if cached_info_available else None)
+    )
+    refresh_info_now = refresh_info or info_refresh_pending_before_attempt or not cached_info_available
+    already_fetched_this_session = (
+        same_session_retry
+        and info_last_fetched_session_date == as_of.isoformat()
+        and not info_refresh_pending_before_attempt
+    )
+    info_attempted = False
+    info_fetched = False
+    info_refresh_failed = False
+    info_last_attempt_at = prior_sync.get("info_last_attempt_at")
+    if already_fetched_this_session:
+        info = cached_company_info()
+    elif refresh_info_now:
+        info_attempted = True
+        info_last_attempt_at = iso_now()
         count_yfinance_call("ticker_get_info")
-        info = ticker.get_info()
-    if not isinstance(info, dict) or not info:
-        raise RuntimeError("yfinance returned no company profile")
+        try:
+            info = ticker.get_info()
+            if not isinstance(info, dict) or not info:
+                raise RuntimeError("yfinance returned no company profile")
+            info_fetched = True
+            info_last_fetched_session_date = as_of.isoformat()
+            info_last_fetched_at = iso_now()
+        except Exception as exc:
+            if not cached_info_available:
+                raise
+            info = cached_company_info()
+            info_refresh_failed = True
+            print(
+                f"Company information refresh failed for {symbol}; retaining cached values: "
+                f"{type(exc).__name__}: {exc}"[:500],
+                file=sys.stderr,
+            )
+    else:
+        info = cached_company_info()
     previous_calendar = prior_current.get("calendar", {})
     if not isinstance(previous_calendar, dict):
         previous_calendar = {}
@@ -2128,10 +2182,14 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         if profile.get(field) is None and value is not None:
             profile[field] = value
             stale_profile_fields.add(field)
-    profile["field_status"] = {
-        field: ("stale" if field in stale_profile_fields else "available" if profile.get(field) is not None else "empty")
-        for field in (*PROFILE_FIELDS, "short_name", "long_name", "display_name", "english_name")
-    }
+    previous_profile_status = previous_profile.get("field_status")
+    if not info_fetched and isinstance(previous_profile_status, dict):
+        profile["field_status"] = dict(previous_profile_status)
+    else:
+        profile["field_status"] = {
+            field: ("stale" if field in stale_profile_fields else "available" if profile.get(field) is not None else "empty")
+            for field in (*PROFILE_FIELDS, "short_name", "long_name", "display_name", "english_name")
+        }
     profile = preserve_profile_timestamp_if_unchanged(profile, previous_profile)
 
     close = finite_number(latest.get("close"))
@@ -2215,6 +2273,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             "calendar_year_metrics": calendar_year_metrics,
         },
         "statistics": {key: collector.json_safe(info[key]) for key in CURRENT_FIELDS if info.get(key) is not None},
+        "statistics_last_fetched_session_date": info_last_fetched_session_date,
+        "statistics_last_fetched_at": info_last_fetched_at,
         "calendar": calendar,
         "field_status": {
             "price": price_status,
@@ -2237,7 +2297,10 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "source": "Yahoo Finance via yfinance",
     }
     current["field_status"].update({
-        f"statistics_{field}": "available" if current["statistics"].get(field) is not None else "empty"
+        f"statistics_{field}": (
+            "stale" if current["statistics"].get(field) is not None and not info_fetched
+            else "available" if current["statistics"].get(field) is not None else "empty"
+        )
         for field in CURRENT_FIELDS
     })
     previous_statistics = prior_current.get("statistics", {})
@@ -2245,6 +2308,9 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         if current["statistics"].get(field) is None and value is not None:
             current["statistics"][field] = value
             current["field_status"][f"statistics_{field}"] = "stale"
+    current["field_status"]["statistics_refresh"] = (
+        "failed" if info_refresh_failed else "available" if info_fetched else "stale"
+    )
 
     advice_statements = statements
     if not advice_statements and not isinstance(prior_current.get("income_advice_metrics"), dict):
@@ -2353,6 +2419,15 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "financials_initialized": bool(prior_sync.get("financials_initialized")) or (
             financial_attempted and not financial_retry_pending
         ),
+        "info_refresh_policy_version": COMPANY_INFO_REFRESH_POLICY_VERSION,
+        "info_last_fetched_session_date": info_last_fetched_session_date,
+        "info_last_fetched_at": info_last_fetched_at,
+        "info_last_attempt_session_date": as_of.isoformat() if info_attempted else prior_sync.get("info_last_attempt_session_date"),
+        "info_last_attempt_at": info_last_attempt_at,
+        "info_refresh_status": "failed_using_cache" if info_refresh_failed else "updated" if info_fetched else "cached",
+        "info_refresh_pending": info_refresh_failed or (
+            info_refresh_pending_before_attempt and not info_fetched
+        ),
         "financial_refresh_policy_version": (
             FINANCIAL_REFRESH_POLICY_VERSION
             if financial_attempted or prior_sync.get("financial_refresh_policy_version") == FINANCIAL_REFRESH_POLICY_VERSION
@@ -2403,13 +2478,15 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             "quote_date": price_date.isoformat() if price_date else None,
             "annual_dividend_per_share": trailing_dividends,
             "yield_rate": current["dividend"]["yield_rate"], "currency": current["price"]["currency"],
+            "info_refreshed": info_fetched, "info_refresh_failed": info_refresh_failed,
             "field_status": current["field_status"], "field_failures": field_failures,
             "status": "partial" if field_failures else "ok", "catalog_item": catalog_item}
 
 
 def save_failure(client: Any, bucket: str, code: str, symbol: str, session_date: date, error: Exception,
                  *, attempt_count: int, retry_full_history: bool = False,
-                 retry_financials: bool = False, retry_monthly: bool = False) -> None:
+                 retry_financials: bool = False, retry_monthly: bool = False,
+                 retry_info: bool = False) -> None:
     safe = safe_symbol(symbol)
     prior = read_json(client, bucket, object_key("securities", safe, "sync.json")) or {}
     failure_class = classify_yfinance_error(error)
@@ -2426,6 +2503,7 @@ def save_failure(client: Any, bucket: str, code: str, symbol: str, session_date:
         "long_history_retry_pending": bool(prior.get("long_history_retry_pending")) or retry_full_history,
         "financial_retry_pending": bool(prior.get("financial_retry_pending")) or retry_financials,
         "monthly_retry_pending": bool(prior.get("monthly_retry_pending")) or retry_monthly,
+        "info_refresh_pending": bool(prior.get("info_refresh_pending")) or retry_info,
     })
     put_json_if_changed(client, bucket, object_key("securities", safe, "sync.json"), prior)
 
@@ -2849,6 +2927,7 @@ def run(
     print(
         f"Rotation: long_history={full_history_bucket + 1}/{FULL_HISTORY_BUCKETS}, "
         f"financials={financial_bucket + 1}/{FINANCIAL_BUCKETS}, "
+        f"company_info={financial_bucket + 1}/{FINANCIAL_BUCKETS}, "
         f"december_price_refresh={december_end_session}",
         flush=True,
     )
@@ -2893,6 +2972,11 @@ def run(
         retry_full_history = (bucket_for(code, FULL_HISTORY_BUCKETS) == full_history_bucket
                               or previous_sync.get("long_history_retry_pending") is True)
         retry_financials = previous_sync.get("financial_retry_pending") is True
+        refresh_info = (
+            previous_sync.get("info_refresh_pending") is True
+            or bucket_for(code, FINANCIAL_BUCKETS) == financial_bucket
+            or not previous_sync.get("last_success_session_date")
+        )
         initialize_financials = (
             not previous_sync
             or (bucket_for(code, FINANCIAL_BUCKETS) == financial_bucket
@@ -2915,6 +2999,7 @@ def run(
                 attempt_count=attempt_count,
                 refresh_full_history=retry_full_history,
                 refresh_financials=initialize_financials,
+                refresh_info=refresh_info,
                 refresh_monthly=december_end_session,
                 initialize_monthly=initialize_monthly,
                 retry_monthly=retry_monthly,
@@ -2926,6 +3011,7 @@ def run(
                 client, bucket, code, symbol, session_date, exc,
                 attempt_count=attempt_count, retry_full_history=retry_full_history,
                 retry_financials=retry_financials, retry_monthly=retry_monthly,
+                retry_info=refresh_info,
             )
             raise
 
@@ -3017,6 +3103,8 @@ def run(
     elapsed_seconds = round(time.perf_counter() - started_at, 3)
     with _YF_CALL_LOCK:
         yfinance_calls = dict(sorted(_YF_CALLS.items()))
+    company_info_refresh_attempt_count = yfinance_calls.get("ticker_get_info", 0)
+    company_info_refreshed_count = sum(1 for row in results.values() if row.get("info_refreshed"))
     publication = {
         "schema_version": 1,
         "yfinance_version": yf.__version__,
@@ -3027,6 +3115,11 @@ def run(
         "success_count": len(results),
         "partial_count": sum(1 for row in results.values() if row.get("status") == "partial"),
         "failure_count": len(failures),
+        "company_info_refresh_attempt_count": company_info_refresh_attempt_count,
+        "company_info_refreshed_count": company_info_refreshed_count,
+        "company_info_refresh_failed_count": max(
+            0, company_info_refresh_attempt_count - company_info_refreshed_count,
+        ),
         "catalog_count": len(catalog["items"]),
         "elapsed_seconds": elapsed_seconds,
         "yfinance_call_count": sum(yfinance_calls.values()),
@@ -3042,6 +3135,9 @@ def run(
             "full_history_bucket_count": FULL_HISTORY_BUCKETS,
             "financial_bucket": financial_bucket,
             "financial_bucket_count": FINANCIAL_BUCKETS,
+            "company_info_bucket": financial_bucket,
+            "company_info_bucket_count": FINANCIAL_BUCKETS,
+            "company_info_refresh_policy_version": COMPANY_INFO_REFRESH_POLICY_VERSION,
             "december_end_session": december_end_session,
         },
     }
