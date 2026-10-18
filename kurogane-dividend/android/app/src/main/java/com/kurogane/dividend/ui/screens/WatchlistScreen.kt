@@ -2703,22 +2703,38 @@ fun WatchlistScreen(
                                     border = BorderStroke(1.dp, BorderColor),
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(bottom = 6.dp)
+                                        .padding(bottom = 4.dp)
                                         .clickable { onNavigateToDetail(candidate.code) }
                                 ) {
-                                    Column(Modifier.padding(8.dp)) {
+                                    Column(Modifier.padding(6.dp)) {
                                         AdaptiveRow(
                                             modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.Start,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Row(
+                                                modifier = Modifier.weight(1f),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
                                                 Text(candidate.code, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                                                 Spacer(Modifier.width(8.dp))
                                                 Text(candidate.name, color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             }
+                                            Spacer(Modifier.width(6.dp))
+                                            Button(
+                                                onClick = { addWatchlist(candidate.code) { showGraphBottomSheet = false } },
+                                                enabled = !isAddingWatchlist,
+                                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
+                                                shape = RoundedCornerShape(6.dp),
+                                                modifier = Modifier.height(24.dp),
+                                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                                            ) {
+                                                Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(12.dp))
+                                                Spacer(Modifier.width(3.dp))
+                                                Text(stringResource(R.string.watchlist_income_advice_add), color = OnPrimary, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
+                                            }
                                         }
-                                        Spacer(Modifier.height(2.dp))
+                                        Spacer(Modifier.height(1.dp))
                                         Text(
                                             stringResource(R.string.watchlist_income_advice_months, ranked.coveredMonths.joinToString("・") { "${it}月" }),
                                             color = OnSurfaceVariant,
@@ -2730,37 +2746,17 @@ fun WatchlistScreen(
                                             fontSize = AppTextSize.dense,
                                             fontWeight = FontWeight.Bold
                                         )
-                                        AdaptiveRow(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                stringResource(
-                                                    if (candidate.annualDividendBasis == "next_fiscal_year_forecast") R.string.watchlist_income_advice_annual_forecast
-                                                    else R.string.watchlist_income_advice_annual_reference,
-                                                    yen(candidate.annualDividendPerShare * 100)
-                                                ),
-                                                modifier = Modifier.weight(1f),
-                                                color = OnSurfaceVariant,
-                                                fontSize = AppTextSize.caption,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Spacer(Modifier.width(6.dp))
-                                            Button(
-                                                onClick = { addWatchlist(candidate.code) { showGraphBottomSheet = false } },
-                                                enabled = !isAddingWatchlist,
-                                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
-                                                shape = RoundedCornerShape(6.dp),
-                                                modifier = Modifier.height(28.dp),
-                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                                            ) {
-                                                Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(14.dp))
-                                                Spacer(Modifier.width(4.dp))
-                                                Text(stringResource(R.string.watchlist_income_advice_add), color = OnPrimary, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
+                                        Text(
+                                            stringResource(
+                                                if (candidate.annualDividendBasis == "next_fiscal_year_forecast") R.string.watchlist_income_advice_annual_forecast
+                                                else R.string.watchlist_income_advice_annual_reference,
+                                                yen(candidate.annualDividendPerShare * 100)
+                                            ),
+                                            color = OnSurfaceVariant,
+                                            fontSize = AppTextSize.caption,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
                                     }
                                 }
                             }
