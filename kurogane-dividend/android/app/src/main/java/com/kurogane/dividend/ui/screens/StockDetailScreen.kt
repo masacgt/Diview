@@ -73,7 +73,8 @@ import kotlinx.coroutines.launch
 private data class StockDetailDividendPeriod(
     val year: Int,
     val stockPrice: Double?,
-    val annualDividend: Double?
+    val annualDividend: Double?,
+    val isForecast: Boolean = false
 )
 
 private data class DividendHistoryEditValue(
@@ -233,8 +234,39 @@ fun StockDetailScreen(
     val currentPrice = currentHolding.price
     val dps = currentHolding.dps
     val financial = financialData[currentHolding.code]
-    val latestCompleteCalendarYear = java.time.Year.now(ZoneId.of("Asia/Tokyo")).value - 1
-    val dividendHistoryYears = (latestCompleteCalendarYear - 7..latestCompleteCalendarYear).toList()
+    val currentCalendarYear = java.time.Year.now(ZoneId.of("Asia/Tokyo")).value
+    val currentCalendarDate = java.time.LocalDate.now(ZoneId.of("Asia/Tokyo"))
+    val dividendHistoryYears = (currentCalendarYear - 7..currentCalendarYear).toList()
+    val chartDividendEvents = remember(currentHolding.code, dividendEventRevision) {
+        viewModel.dividendEventsFor(currentHolding.code)
+    }
+    var selectedDividendYear by rememberSaveable(currentHolding.code) { mutableStateOf<Int?>(null) }
+    val selectedYearMonthlyDividends = remember(selectedDividendYear, chartDividendEvents) {
+        selectedDividendYear?.let { year ->
+            chartDividendEvents
+                .filter { it.date.year == year }
+                .groupBy { it.date.monthValue }
+                .toSortedMap()
+                .map { (month, events) -> month to events.sumOf { it.amountPerShare } }
+        }
+    }
+    val chartUpcomingDividend = remember(currentHolding.code, dividendEventRevision) {
+        viewModel.upcomingDividendEventFor(currentHolding.code)
+    }
+    val currentYearObservedDps = chartDividendEvents
+        .filter { it.date.year == currentCalendarYear && !it.date.isAfter(currentCalendarDate) }
+        .sumOf { it.amountPerShare }
+    val lastObservedDividendAmount = chartDividendEvents
+        .filter { !it.date.isAfter(currentCalendarDate) }
+        .maxByOrNull { it.date }
+        ?.amountPerShare
+    val currentYearForecastDps = when {
+        chartUpcomingDividend == null -> null
+        chartUpcomingDividend.exDividendDate.year > currentCalendarYear -> currentYearObservedDps
+        chartUpcomingDividend.exDividendDate.year == currentCalendarYear && lastObservedDividendAmount != null ->
+            currentYearObservedDps + lastObservedDividendAmount
+        else -> null
+    }
     val normalizedDividendCode = currentHolding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T")
     val savedDividendOverrides = dividendHistoryOverrides[normalizedDividendCode].orEmpty().associateBy { it.year }
     val sourceDividendsByYear = financial?.dividends.orEmpty().associate { it.year to it.dps }
@@ -243,14 +275,20 @@ fun StockDetailScreen(
         yearEndPrices = com.kurogane.dividend.data.runCatchingCancellable {
             viewModel.loadMonthlyPriceHistory(
                 listOf(normalizedDividendCode),
-                dividendHistoryYears.map { "$it-12" }
+                dividendHistoryYears.filter { it < currentCalendarYear }.map { "$it-12" }
             ).firstOrNull()?.prices.orEmpty().associate { price ->
                 price.month.take(4).toInt() to price.close
             }
         }.getOrDefault(emptyMap())
     }
     val defaultDividendPeriods = dividendHistoryYears.map { year ->
-        StockDetailDividendPeriod(year, yearEndPrices[year], sourceDividendsByYear[year])
+        val isForecast = year == currentCalendarYear
+        StockDetailDividendPeriod(
+            year,
+            if (isForecast) null else yearEndPrices[year],
+            if (isForecast) currentYearForecastDps else sourceDividendsByYear[year],
+            isForecast
+        )
     }
     val dividendPeriods = defaultDividendPeriods.map { period ->
         val override = savedDividendOverrides[period.year]
@@ -714,7 +752,7 @@ fun StockDetailScreen(
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text(stringResource(R.string.stock_detail_text_6), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     Text(
-                                        if (currentDpsUnavailable) "未取得 YOC" else "${com.kurogane.dividend.model.formatDividendYieldDisplay(currentHolding.liveYoc, currentHolding.isNoDividendConfirmed)} YOC",
+                                        if (currentDpsUnavailable) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(currentHolding.liveYoc, currentHolding.isNoDividendConfirmed),
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryEmerald,
                                         fontSize = AppTextSize.caption,
@@ -833,7 +871,7 @@ fun StockDetailScreen(
 
                         // 4 Bars Container
                         val chartFontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
-                        val chartHeight = (120f + 80f * (chartFontScale - 1f).coerceAtLeast(0f)).dp
+                        val chartHeight = (132f + 80f * (chartFontScale - 1f).coerceAtLeast(0f)).dp
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = BackgroundDark,
@@ -850,9 +888,11 @@ fun StockDetailScreen(
                                 val prefix = currentHolding.currency
                                 val bars = history.map { point ->
                                     val dps = point.annualDividend ?: 0.0
-                                    val dpsText = com.kurogane.dividend.model.formatFinancialAmountDisplay(dps)
+                                    val dpsText = point.annualDividend
+                                        ?.let { com.kurogane.dividend.model.formatFinancialAmountDisplay(it) }
+                                        ?: "未取得"
                                     Triple(
-                                        stringResource(R.string.stock_detail_label_5, point.year.toString()),
+                                        "${point.year}年",
                                         stringResource(R.string.add_holding_1_s_2_s_2, prefix, dpsText),
                                         (dps / maxDps * 0.95).toFloat()
                                     )
@@ -865,21 +905,49 @@ fun StockDetailScreen(
                                         animationSpec = tween(durationMillis = 560, delayMillis = index * 30),
                                         label = "Dividend bar height"
                                     )
-                                    val isProjected = term == bars.lastOrNull()?.first
+                                    val isProjected = history[index].isForecast || term == bars.lastOrNull()?.first
+                                    val isSelected = selectedDividendYear == history[index].year
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier.weight(1f).fillMaxHeight()
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .clickable(onClickLabel = "${term}の配当内訳を表示") {
+                                                selectedDividendYear = if (isSelected) null else history[index].year
+                                                if (!isSelected) {
+                                                    viewModel.refreshDividendEventsForYear(
+                                                        currentHolding.category,
+                                                        currentHolding.code,
+                                                        history[index].year
+                                                    )
+                                                }
+                                            }
                                     ) {
                                         BoxWithConstraints(
                                             modifier = Modifier.weight(1f).fillMaxWidth(),
                                             contentAlignment = Alignment.BottomCenter
                                         ) {
-                                            val barHeight = maxHeight * animatedRatio.coerceIn(0f, 0.95f) * 0.72f
+                                            val barHeight = maxHeight * animatedRatio.coerceIn(0f, 0.95f) * 0.52f
+                                            if (history[index].isForecast) {
+                                                Text(
+                                                    "予想",
+                                                    modifier = Modifier
+                                                        .align(Alignment.BottomCenter)
+                                                        .offset(y = -(barHeight + 30.dp))
+                                                        .fillMaxWidth(),
+                                                    color = PrimaryEmerald,
+                                                    fontSize = AppTextSize.dense * 0.85f,
+                                                    fontWeight = FontWeight.Bold,
+                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                                    maxLines = 1,
+                                                    softWrap = false
+                                                )
+                                            }
                                             Text(
                                                 dpsVal,
                                                 modifier = Modifier
                                                     .align(Alignment.BottomCenter)
-                                                    .offset(y = -(barHeight + 2.dp))
+                                                    .offset(y = -(barHeight + 15.dp))
                                                     .fillMaxWidth(),
                                                 color = if (isProjected) PrimaryEmerald else OnSurfaceVariant,
                                                 fontSize = if (dpsVal.length >= 6) AppTextSize.dense * 0.8f else AppTextSize.dense,
@@ -901,9 +969,62 @@ fun StockDetailScreen(
                                             )
                                         }
                                         Spacer(modifier = Modifier.height(4.dp))
-                                        Text(term, color = if (isProjected) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                        Text(
+                                            term,
+                                            color = if (isSelected || isProjected) PrimaryEmerald else OnSurfaceVariant,
+                                            fontSize = AppTextSize.dense,
+                                            fontWeight = FontWeight.Bold
+                                        )
                                     }
                                 }
+                            }
+                        }
+
+                        selectedDividendYear?.let { year ->
+                            val monthlyAmounts = selectedYearMonthlyDividends.orEmpty()
+                                .joinToString("・") { (month, amount) ->
+                                    "${month}月 ${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(amount)}/株"
+                                }
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    "${year}年の配当イベント（月別・権利落ち月）",
+                                    color = OnSurfaceVariant,
+                                    fontSize = AppTextSize.dense
+                                )
+                                Text(
+                                    monthlyAmounts.ifBlank { "取得できる配当履歴がありません" },
+                                    color = OnSurface,
+                                    fontSize = AppTextSize.body,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        financial?.forecastFiscalYear?.let { forecastFiscalYear ->
+                            val fiscalMonth = financial.period.substringAfterLast('/').toIntOrNull()
+                                ?.takeIf { it in 1..12 }
+                            val forecastPeriodLabel = fiscalMonth?.let { month ->
+                                "${forecastFiscalYear}年${month}月期 予想配当"
+                            } ?: "${forecastFiscalYear}年期 予想配当"
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    forecastPeriodLabel,
+                                    color = OnSurfaceVariant,
+                                    fontSize = AppTextSize.dense,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    financial.forecastAnnualDividend
+                                        ?.let { "¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(it)} / 株" }
+                                        ?: "未取得",
+                                    color = PrimaryEmerald,
+                                    fontSize = AppTextSize.dense,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
 
@@ -921,55 +1042,12 @@ fun StockDetailScreen(
                                 stringResource(R.string.stock_detail_text_10, legacyGrowth.financialText(1, "%"))
                             }
                             Text(growthLabel, color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text(stringResource(R.string.stock_detail_text_11 , profile.payoutRatio.financialText(1, "%")), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-
-            if (financial?.issuerDividends?.isNotEmpty() == true) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-                        border = BorderStroke(1.dp, BorderColor)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
                             Text(
-                                "決算期別DPS（参考）",
+                                "予想配当性向 ${financial?.forecastPayoutRatio?.financialText(1, "%") ?: "未取得"}",
                                 color = OnSurface,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = AppTextSize.body
-                            )
-                            Text(
-                                "決算期ごとの年間配当額です。上の暦年配当履歴とは集計期間が異なります。",
-                                color = OnSurfaceVariant,
                                 fontSize = AppTextSize.dense,
-                                lineHeight = 15.sp
+                                fontWeight = FontWeight.Bold
                             )
-                            financial.issuerDividends.takeLast(8).forEach { record ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        "FY${record.fiscalYear}",
-                                        color = OnSurfaceVariant,
-                                        fontSize = AppTextSize.dense
-                                    )
-                                    Text(
-                                        "¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(record.displayDps ?: 0.0)} / 株",
-                                        color = OnSurface,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
                         }
                     }
                 }
@@ -1035,7 +1113,7 @@ fun StockDetailScreen(
                                             Text(profile.healthEvaluation, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp), color = healthBadgeColor, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                         }
                                     }
-                                    Text(stringResource(R.string.stock_detail_health_payout, profile.payoutRatio.financialText(1, "%")), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    Text("予想配当性向 ${financial?.forecastPayoutRatio?.financialText(1, "%") ?: "未取得"}", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
 
@@ -1818,7 +1896,7 @@ fun StockDetailScreen(
                                                             border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
                                                         ) {
                                                             Text(
-                                                                profile.payoutStatusBadge,
+                                                                if (financial?.forecastPayoutRatio != null) "予想" else "予想未取得",
                                                                 color = PrimaryEmerald,
                                                                 fontSize = AppTextSize.dense,
                                                                 fontWeight = FontWeight.Bold,
@@ -1827,7 +1905,7 @@ fun StockDetailScreen(
                                                         }
                                                     }
                                                     Text(
-                                                        stringResource(R.string.stock_detail_text_53 , profile.payoutRatio.financialText(1, "%")),
+                                                        financial?.forecastPayoutRatio?.financialText(1, "%") ?: "未取得",
                                                         color = PrimaryEmerald,
                                                         fontWeight = FontWeight.ExtraBold,
                                                         fontSize = AppTextSize.metric,

@@ -4,6 +4,7 @@ import com.kurogane.dividend.model.Category
 import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.ShareholderBenefit
 import com.kurogane.dividend.model.StockClimate
+import com.kurogane.dividend.model.WatchlistStock
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -48,10 +49,38 @@ object DvmBackupExporter {
     fun exportExtras(
         shareholderBenefits: Map<String, List<ShareholderBenefit>>,
         stockClimateOverrides: Map<String, StockClimate>,
-        dividendHistoryOverrides: Map<String, List<DividendHistoryOverride>>
+        dividendHistoryOverrides: Map<String, List<DividendHistoryOverride>>,
+        watchlist: List<WatchlistStock> = emptyList()
     ): ByteArray {
         val payload = JSONObject().apply {
             put("format", "diview-portable-data-v1")
+            put("watchlist", JSONArray().apply {
+                watchlist.forEach { stock ->
+                    put(JSONObject().apply {
+                        put("code", stock.code)
+                        put("name", stock.name)
+                        put("market", stock.market)
+                        put("sector", stock.sector)
+                        put("category", stock.category)
+                        put("price", stock.price)
+                        put("currency", stock.currency)
+                        put("dps", stock.dps)
+                        put("currentYield", stock.currentYield)
+                        put("targetYield", stock.targetYield)
+                        put("targetPrice", stock.targetPrice)
+                        put("dailyChange", stock.dailyChange)
+                        put("isPositive", stock.isPositive)
+                        put("payoutMonths", JSONArray(stock.payoutMonths))
+                        put("payoutTiming", stock.payoutTiming)
+                        put("desc", stock.desc)
+                        put("alertEnabled", stock.alertEnabled)
+                        put("badge", stock.badge ?: JSONObject.NULL)
+                        put("defaultShares", stock.defaultShares)
+                        stock.usdJpyRate?.let { put("usdJpyRate", it) }
+                        put("isNoDividendConfirmed", stock.isNoDividendConfirmed)
+                    })
+                }
+            })
             put("shareholderBenefits", JSONObject().apply {
                 shareholderBenefits.forEach { (code, benefits) ->
                     put(code, JSONArray().apply {
