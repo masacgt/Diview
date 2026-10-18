@@ -84,6 +84,7 @@ fun SettingsScreen(
     var confirmReset by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
+    var notificationTypesExpanded by rememberSaveable { mutableStateOf(true) }
     val notificationAccess = rememberNotificationAccess { action ->
         when (action) {
             "price" -> viewModel.setNotificationEnabled(NotificationKind.PRICE, true)
@@ -249,28 +250,91 @@ fun SettingsScreen(
         item {
             SettingsSection(stringResource(R.string.settings_text_9), Icons.Default.Notifications) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Label(stringResource(R.string.settings_label_27), 9, OnSurface, true)
+                    NotificationSubsection {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                NotificationStepNumber(1)
+                                Label(stringResource(R.string.settings_notification_timing_title), 9, OnSurface, true)
+                                Spacer(Modifier.weight(1f))
+                                Label(stringResource(R.string.settings_label_29), 8, SettingsMint)
+                            }
                             Label(stringResource(R.string.settings_label_28), 7, SettingsMuted)
+                            Label(stringResource(R.string.settings_label_30), 7, SettingsMuted)
                         }
-                        Label(stringResource(R.string.settings_label_29), 8, SettingsMint)
                     }
-                    Label(stringResource(R.string.settings_label_30), 7, SettingsMuted)
-                    SettingToggle(stringResource(R.string.settings_text_10), stringResource(R.string.settings_label_54), notificationSettings.dividendEnabled, {
-                        if (it) notificationAccess.request("dividend") else viewModel.setNotificationEnabled(NotificationKind.DIVIDEND, false)
-                    })
-                    HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle(stringResource(R.string.notification_dividend_change_title), stringResource(R.string.notification_dividend_change_summary), notificationSettings.dividendChangeEnabled, {
-                        if (it) notificationAccess.request("dividend_change") else viewModel.setNotificationEnabled(NotificationKind.DIVIDEND_CHANGE, false)
-                    })
-                    HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    SettingToggle(stringResource(R.string.settings_text_11), stringResource(R.string.settings_label_55), notificationSettings.priceEnabled, {
-                        if (it) notificationAccess.request("price") else viewModel.setNotificationEnabled(NotificationKind.PRICE, false)
-                    })
-                    HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    Label(stringResource(R.string.settings_label_31 , if (notificationAccess.dividendAllowed) "ON" else "OFF", if (notificationAccess.priceAllowed) "ON" else "OFF", if (notificationAccess.dividendChangeAllowed) "ON" else "OFF"), 8, SettingsMuted)
-                    ActionButton(stringResource(R.string.settings_label_33), Modifier.fillMaxWidth()) { notificationAccess.openSettings() }
+
+                    NotificationSubsection {
+                        Column {
+                            val notificationTypesStateDescription = stringResource(
+                                if (notificationTypesExpanded) R.string.settings_notification_expanded else R.string.settings_notification_collapsed
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth()
+                                    .heightIn(min = 40.dp)
+                                    .clickable(role = Role.Button) { notificationTypesExpanded = !notificationTypesExpanded }
+                                    .semantics { stateDescription = notificationTypesStateDescription },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                NotificationStepNumber(2)
+                                Label(stringResource(R.string.settings_notification_types_title), 9, OnSurface, true)
+                                Spacer(Modifier.weight(1f))
+                                Icon(
+                                    if (notificationTypesExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    tint = SettingsMuted,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            if (notificationTypesExpanded) {
+                                Column {
+                                    SettingToggle(stringResource(R.string.settings_text_10), stringResource(R.string.settings_label_54), notificationSettings.dividendEnabled, {
+                                        if (it) notificationAccess.request("dividend") else viewModel.setNotificationEnabled(NotificationKind.DIVIDEND, false)
+                                    })
+                                    HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
+                                    SettingToggle(stringResource(R.string.notification_dividend_change_title), stringResource(R.string.notification_dividend_change_summary), notificationSettings.dividendChangeEnabled, {
+                                        if (it) notificationAccess.request("dividend_change") else viewModel.setNotificationEnabled(NotificationKind.DIVIDEND_CHANGE, false)
+                                    })
+                                    HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
+                                    SettingToggle(stringResource(R.string.settings_text_11), stringResource(R.string.settings_label_55), notificationSettings.priceEnabled, {
+                                        if (it) notificationAccess.request("price") else viewModel.setNotificationEnabled(NotificationKind.PRICE, false)
+                                    })
+                                }
+                            }
+                        }
+                    }
+
+                    val allNotificationsAllowed = notificationAccess.dividendAllowed && notificationAccess.priceAllowed && notificationAccess.dividendChangeAllowed
+                    NotificationSubsection {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                NotificationStepNumber(3)
+                                Label(stringResource(R.string.settings_notification_permission_title), 9, OnSurface, true)
+                                Spacer(Modifier.weight(1f))
+                                NotificationStatusBadge(
+                                    text = stringResource(if (allNotificationsAllowed) R.string.settings_notification_permission_allowed else R.string.settings_notification_permission_unavailable),
+                                    allowed = allNotificationsAllowed
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Label(
+                                    stringResource(
+                                        R.string.settings_label_31,
+                                        if (notificationAccess.dividendAllowed) "ON" else "OFF",
+                                        if (notificationAccess.priceAllowed) "ON" else "OFF",
+                                        if (notificationAccess.dividendChangeAllowed) "ON" else "OFF"
+                                    ),
+                                    7,
+                                    SettingsMuted,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                ActionButton(
+                                    stringResource(R.string.settings_label_33),
+                                    Modifier.widthIn(min = 112.dp)
+                                ) { notificationAccess.openSettings() }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -355,8 +419,38 @@ private fun SettingsSection(title: String, icon: androidx.compose.ui.graphics.ve
 }
 
 @Composable
-private fun Label(text: String, size: Int, color: Color, bold: Boolean = false) {
-    Text(text, color = color, fontSize = (size + 3).sp, lineHeight = (size + 6).sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
+private fun NotificationSubsection(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(SettingsInset)
+            .border(1.dp, SettingsBorder.copy(alpha = .75f), RoundedCornerShape(8.dp))
+            .padding(8.dp),
+        content = content
+    )
+}
+
+@Composable
+private fun NotificationStepNumber(number: Int) {
+    Box(
+        Modifier.size(26.dp).clip(CircleShape).border(1.dp, SettingsBorder, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(number.toString(), color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun NotificationStatusBadge(text: String, allowed: Boolean) {
+    val color = if (allowed) SettingsMint else ErrorRed
+    Box(Modifier.clip(RoundedCornerShape(5.dp)).background(color.copy(alpha = .16f)).padding(horizontal = 7.dp, vertical = 3.dp)) {
+        Label(text, 7, color, true)
+    }
+}
+
+@Composable
+private fun Label(text: String, size: Int, color: Color, bold: Boolean = false, modifier: Modifier = Modifier) {
+    Text(text, modifier = modifier, color = color, fontSize = (size + 3).sp, lineHeight = (size + 6).sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
 }
 
 @Composable

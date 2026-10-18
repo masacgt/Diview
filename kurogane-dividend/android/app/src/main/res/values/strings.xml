@@ -378,6 +378,13 @@
     <string name="settings_label_31">"端末の許可：配当 %1$s / 株価 %2$s / 増配・減配 %3$s"</string>
     <string name="settings_label_32">"テスト通知"</string>
     <string name="settings_label_33">"端末の通知設定"</string>
+    <string name="settings_notification_timing_title">"配信タイミング"</string>
+    <string name="settings_notification_types_title">"受け取る通知"</string>
+    <string name="settings_notification_permission_title">"端末の通知許可"</string>
+    <string name="settings_notification_permission_allowed">"許可済み"</string>
+    <string name="settings_notification_permission_unavailable">"未許可"</string>
+    <string name="settings_notification_expanded">"展開中"</string>
+    <string name="settings_notification_collapsed">"折りたたみ中"</string>
     <string name="settings_text_12">"セキュリティ＆プライバシー"</string>
     <string name="settings_text_13">"生体認証 (顔・指紋認証)"</string>
     <string name="settings_text_14">"起動時の金額伏字マスク"</string>
