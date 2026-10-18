@@ -235,7 +235,14 @@ async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
       const current = await currentObject.json();
       const profile = profileObject ? await profileObject.json() : {};
       const price = current.price || {};
-      const summary = { ...(current.statistics || {}), symbol, shortName: profile.display_name || profile.short_name || null };
+      const valuation = calculateDailyValuation(current);
+      const summary = {
+        ...(current.statistics || {}),
+        trailingPE: valuation.per,
+        priceToBook: valuation.pbr,
+        symbol,
+        shortName: profile.display_name || profile.short_name || null,
+      };
       return { summary, dividend: current.dividend || null, price: {
         symbol,
         date: price.date ?? null,
@@ -245,8 +252,8 @@ async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
         close: price.close ?? null,
         adjusted_close: price.close ?? null,
         volume: null,
-        change: current.statistics?.regularMarketChange ?? null,
-        change_percent: current.statistics?.regularMarketChangePercent ?? null,
+        change: price.change ?? null,
+        change_percent: price.change_percent ?? null,
         source: current.source || 'Yahoo Finance via yfinance',
         generated_at: current.updated_at ?? null,
       }};
@@ -292,6 +299,24 @@ async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
 }
 
 const YFINANCE_V2_ROOT = 'market/yfinance/v2';
+
+function calculateDailyValuation(current) {
+  const price = finiteNumber(current?.price?.close);
+  const statistics = current?.statistics || {};
+  const eps = finiteNumber(statistics.trailingEps);
+  const bookValue = finiteNumber(statistics.bookValue);
+  return {
+    per: price > 0 && eps > 0 ? Math.round(price / eps * 1e6) / 1e6 : null,
+    pbr: price > 0 && bookValue > 0 ? Math.round(price / bookValue * 1e6) / 1e6 : null,
+    source: 'daily_close_divided_by_latest_yfinance_eps_bps',
+    price_date: current?.price?.date || null,
+    statistics_last_fetched_session_date: current?.statistics_last_fetched_session_date || null,
+    formulas: {
+      per: 'price.close / statistics.trailingEps',
+      pbr: 'price.close / statistics.bookValue',
+    },
+  };
+}
 
 // Company forecasts checked against issuer disclosures on 2026-10-17.
 // AOKI: https://ir.aoki-hd.co.jp/ja/news/news/auto_20260508520915/pdfFile.pdf
@@ -2064,6 +2089,19 @@ export default {
         || syncFieldStatus.dividend_history
         || null;
       const selectedDps = selectedAnnualDividendPerShare(code, dividend, current.updated_at);
+      const valuation = calculateDailyValuation(current);
+      const infoFailure = sync?.info_refresh_failure || {};
+      const companyInfoHasData = Boolean(
+        profile.display_name || profile.short_name || profile.long_name
+        || Object.keys(current.statistics || {}).length,
+      );
+      const companyInfoHasExactFetchDate = Boolean(
+        sync?.info_last_fetched_session_date || current.statistics_last_fetched_session_date,
+      );
+      const companyInfoLastFetchedSessionDate = sync?.info_last_fetched_session_date
+        || current.statistics_last_fetched_session_date
+        || (companyInfoHasData ? sync?.last_success_session_date : null)
+        || null;
       return json({
         code,
         name: profile.display_name || profile.short_name || profile.long_name || profile.english_name || code,
@@ -2077,6 +2115,14 @@ export default {
         market_price: current.price || null,
         market_yield_rate: yieldFromDividend(current.price?.close, selectedDps) ?? finiteNumber(dividend.yield_rate),
         dividend_status: dividend.dividend_status || 'unknown',
+        valuation: {
+          per: valuation.per,
+          pbr: valuation.pbr,
+          source: valuation.source,
+          price_date: valuation.price_date,
+          statistics_last_fetched_session_date: valuation.statistics_last_fetched_session_date,
+          formulas: valuation.formulas,
+        },
         data_retrieval: {
           yfinance_ticker: profile.symbol || current.symbol || symbol,
           source: current.source || profile.source || null,
@@ -2084,6 +2130,24 @@ export default {
           last_attempt_at: sync?.last_attempt_at || null,
           processing_status: sync?.status || null,
           failure_reason: sync?.failure_reason || null,
+          company_info: {
+            status: current.field_status?.statistics_refresh
+              || sync?.info_refresh_status
+              || (companyInfoHasData ? 'stale' : 'not_fetched'),
+            last_fetched_session_date: companyInfoLastFetchedSessionDate,
+            last_fetched_at: companyInfoHasExactFetchDate
+              ? sync?.info_last_fetched_at || current.statistics_last_fetched_at || null
+              : null,
+            fetch_date_basis: companyInfoHasExactFetchDate
+              ? 'company_info_fetch'
+              : companyInfoLastFetchedSessionDate ? 'last_successful_sync_fallback' : null,
+            last_attempt_session_date: sync?.info_last_attempt_session_date || null,
+            last_attempt_at: sync?.info_last_attempt_at || null,
+            last_attempt_status: sync?.info_last_attempt_status || null,
+            refresh_pending: sync?.info_refresh_pending === true,
+            failure_class: infoFailure.failure_class || null,
+            failure_reason: infoFailure.reason || null,
+          },
           dividend_history: {
             status: dividendHistoryStatus,
             last_attempt_status: actionHistory.status || null,
@@ -2252,6 +2316,7 @@ export default {
       if (!v2Profile || !v2Current) return json({ error: 'not_found' }, 404);
       const includeMarket = url.searchParams.get('include_market') !== 'false';
       const stats = v2Current.statistics || {};
+      const valuation = calculateDailyValuation(v2Current);
       return json({
         code,
         canonical_code: `${code}0`,
@@ -2268,7 +2333,14 @@ export default {
         dividend_status: v2Current.dividend?.dividend_status || 'unknown',
         financial: null,
         market_price: includeMarket ? v2Current.price || null : null,
-        valuation: includeMarket ? { per: stats.trailingPE ?? null, pbr: stats.priceToBook ?? null } : null,
+        valuation: includeMarket ? {
+          per: valuation.per,
+          pbr: valuation.pbr,
+          source: valuation.source,
+          price_date: valuation.price_date,
+          statistics_last_fetched_session_date: valuation.statistics_last_fetched_session_date,
+          formulas: valuation.formulas,
+        } : null,
         field_status: v2Current.field_status || {},
       });
     }

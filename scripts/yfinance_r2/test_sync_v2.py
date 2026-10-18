@@ -194,6 +194,53 @@ class NetDeRatioTests(TestCase):
 
 
 class SyncPriceTests(TestCase):
+    def test_daily_valuation_uses_close_and_latest_eps_or_book_value(self):
+        self.assertEqual(
+            sync.calculate_daily_valuation(3000, 200, 1000),
+            {"trailingPE": 15.0, "priceToBook": 3.0},
+        )
+        self.assertEqual(
+            sync.calculate_daily_valuation(3000, -10, 0),
+            {"trailingPE": None, "priceToBook": None},
+        )
+
+    def test_daily_price_change_uses_previous_close_from_same_chart(self):
+        index = pd.DatetimeIndex(["2026-10-14", "2026-10-15"], tz="Asia/Tokyo")
+        frame = pd.DataFrame({"Close": [99.0, 100.0]}, index=index)
+
+        self.assertEqual(
+            sync.daily_price_change(frame, date(2026, 10, 15), 100),
+            {"change": 1.0, "change_percent": 1.01010101, "previous_close": 99.0},
+        )
+
+    def test_v2_current_fields_keep_only_used_inputs_and_update_markers(self):
+        self.assertEqual(set(sync.CURRENT_FIELDS), {
+            "trailingEps", "forwardEps", "bookValue", "dividendRate", "dividendYield",
+            "payoutRatio", "exDividendDate", "lastFiscalYearEnd", "mostRecentQuarter",
+        })
+        self.assertTrue({"trailingPE", "priceToBook"}.isdisjoint(sync.CURRENT_FIELDS))
+
+    def test_company_info_failure_is_stored_with_class_and_reason(self):
+        error = TimeoutError("request timed out")
+        self.assertEqual(sync.company_info_failure_metadata(error), {
+            "failure_class": "transient",
+            "exception_type": "TimeoutError",
+            "reason": "request timed out",
+        })
+
+    def test_unused_previous_statistics_are_archived_once(self):
+        previous = {"trailingPE": 12.5, "enterpriseValue": 1000, "forwardEps": 42.0}
+        with patch.object(sync, "read_json", return_value=None), \
+             patch.object(sync, "put_json_if_changed") as write:
+            sync.archive_unused_statistics(object(), "bucket", "7203.T", previous)
+
+        self.assertEqual(write.call_count, 1)
+        archived = write.call_args.args[3]
+        self.assertEqual(archived["statistics"], {
+            "trailingPE": 12.5,
+            "enterpriseValue": 1000,
+        })
+
     def test_monthly_price_point_date_is_normalized_without_changing_close(self):
         point = {"month": "2024-12", "date": "2024-12-01", "close": 3146.0}
         with patch.object(monthly_calendar, "last_xtks_session_in_december", return_value=date(2024, 12, 30)):
@@ -635,6 +682,23 @@ class EventPartitionPersistenceTests(TestCase):
 
 
 class SyncPolicyTests(TestCase):
+    def test_company_info_rotation_selects_each_security_once_per_five_sessions(self):
+        for number in range(1000, 1020):
+            code = str(number)
+            selected = [
+                bucket for bucket in range(sync.FINANCIAL_BUCKETS)
+                if sync.should_refresh_company_info(code, bucket, True, False)
+            ]
+            self.assertEqual(selected, [sync.bucket_for(code, sync.FINANCIAL_BUCKETS)])
+            self.assertTrue(all(
+                sync.should_refresh_company_info(code, bucket, False, False)
+                for bucket in range(sync.FINANCIAL_BUCKETS)
+            ))
+            self.assertTrue(all(
+                sync.should_refresh_company_info(code, bucket, True, True)
+                for bucket in range(sync.FINANCIAL_BUCKETS)
+            ))
+
     def test_yahoo_missing_data_and_transient_errors_are_classified(self):
         class YFPricesMissingError(Exception):
             pass
@@ -686,6 +750,24 @@ class SyncPolicyTests(TestCase):
         self.assertEqual(saved["retry_policy"], "next_market_session")
         self.assertEqual(saved["last_success_session_date"], "2026-10-15")
         self.assertEqual(saved["attempt_count_today"], 1)
+
+    def test_first_company_info_failure_is_recorded_with_structured_reason(self):
+        with patch.object(sync, "read_json", return_value={}), \
+             patch.object(sync, "put_json_if_changed") as write:
+            sync.save_failure(
+                object(), "bucket", "7203", "7203.T", date(2026, 10, 19),
+                TimeoutError("Yahoo request timed out"), attempt_count=1, retry_info=True,
+            )
+
+        saved = write.call_args.args[3]
+        self.assertEqual(saved["info_last_attempt_session_date"], "2026-10-19")
+        self.assertEqual(saved["info_last_attempt_status"], "failed")
+        self.assertTrue(saved["info_refresh_pending"])
+        self.assertEqual(saved["info_refresh_failure"], {
+            "failure_class": "transient",
+            "exception_type": "TimeoutError",
+            "reason": "Yahoo request timed out",
+        })
 
     def test_action_sample_includes_recent_split_and_reverse_split_codes(self):
         universe = [

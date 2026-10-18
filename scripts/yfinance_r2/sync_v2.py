@@ -261,11 +261,10 @@ class GlobalHttpRateLimiter:
 # current quote, where app calculations and display consume it.
 PROFILE_FIELDS: tuple[str, ...] = ()
 CURRENT_FIELDS = (
-    "regularMarketChange", "regularMarketChangePercent", "trailingPE", "forwardPE",
-    "priceToBook", "enterpriseValue", "trailingEps", "forwardEps", "bookValue",
-    "dividendRate", "dividendYield", "payoutRatio", "fiveYearAvgDividendYield", "lastDividendValue",
-    "lastDividendDate", "exDividendDate", "beta", "lastFiscalYearEnd", "mostRecentQuarter",
+    "trailingEps", "forwardEps", "bookValue", "dividendRate", "dividendYield",
+    "payoutRatio", "exDividendDate", "lastFiscalYearEnd", "mostRecentQuarter",
 )
+DERIVED_STATISTIC_FIELDS = ("trailingPE", "priceToBook")
 INCOME_FIELDS = {
     "Total Revenue": "sales",
     "Operating Revenue": "sales",
@@ -360,6 +359,14 @@ def count_yfinance_call(name: str) -> None:
 def bucket_for(code: str, count: int) -> int:
     digest = hashlib.sha256(code.encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "big") % count
+
+
+def should_refresh_company_info(code: str, active_bucket: int, has_previous_success: bool, retry_pending: bool) -> bool:
+    return (
+        retry_pending
+        or not has_previous_success
+        or bucket_for(code, FINANCIAL_BUCKETS) == active_bucket
+    )
 
 
 def is_last_market_session(day: date) -> bool:
@@ -483,6 +490,75 @@ def finite_number(value: Any) -> float | None:
         return None
     result = float(value)
     return result if math.isfinite(result) else None
+
+
+def calculate_daily_valuation(close: Any, trailing_eps: Any, book_value: Any) -> dict[str, float | None]:
+    """Calculate valuation multiples from the latest close and latest available yfinance inputs."""
+    price = finite_number(close)
+    eps = finite_number(trailing_eps)
+    bps = finite_number(book_value)
+    return {
+        "trailingPE": round(price / eps, 6) if price is not None and price > 0 and eps is not None and eps > 0 else None,
+        "priceToBook": round(price / bps, 6) if price is not None and price > 0 and bps is not None and bps > 0 else None,
+    }
+
+
+def daily_price_change(frame: Any, price_date: date | None, close: Any) -> dict[str, float | None]:
+    """Calculate the close-to-close change from the same daily chart used for the quote."""
+    price = finite_number(close)
+    if frame is None or getattr(frame, "empty", True) or "Close" not in getattr(frame, "columns", ()):
+        return {"change": None, "change_percent": None, "previous_close": None}
+    rows: list[tuple[date, float]] = []
+    for index, raw_close in frame["Close"].items():
+        row_date = date_value(index)
+        row_close = finite_number(raw_close)
+        if row_date is not None and row_close is not None:
+            rows.append((row_date, row_close))
+    rows.sort(key=lambda item: item[0])
+    target = next((position for position, item in enumerate(rows) if item[0] == price_date), None)
+    if target is None or target == 0 or price is None or price <= 0:
+        return {"change": None, "change_percent": None, "previous_close": None}
+    previous_close = rows[target - 1][1]
+    if previous_close <= 0:
+        return {"change": None, "change_percent": None, "previous_close": previous_close}
+    change = price - previous_close
+    return {
+        "change": round(change, 8),
+        "change_percent": round(change / previous_close * 100, 8),
+        "previous_close": previous_close,
+    }
+
+
+def company_info_failure_metadata(error: Exception) -> dict[str, str]:
+    return {
+        "failure_class": classify_yfinance_error(error),
+        "exception_type": type(error).__name__,
+        "reason": str(error)[:300],
+    }
+
+
+def archive_unused_statistics(client: Any, bucket: str, symbol: str, previous_statistics: Any) -> None:
+    if not isinstance(previous_statistics, dict):
+        return
+    unused = {key: value for key, value in previous_statistics.items() if key not in CURRENT_FIELDS}
+    if not unused:
+        return
+    key = object_key("archive", "unused_statistics", safe_symbol(symbol), "statistics.json")
+    previous = read_json(client, bucket, key) or {}
+    archived_values = previous.get("statistics") if isinstance(previous.get("statistics"), dict) else {}
+    merged = dict(archived_values)
+    for field, value in unused.items():
+        merged.setdefault(field, value)
+    if merged == archived_values:
+        return
+    put_json_if_changed(client, bucket, key, {
+        "schema_version": 1,
+        "symbol": symbol,
+        "statistics": merged,
+        "reason": "fields no longer consumed by the application or daily calculations",
+        "updated_at": iso_now(),
+        "source": "Yahoo Finance via yfinance; prior V2 current snapshot",
+    })
 
 
 def next_fiscal_year_forecast_dps(code: str, reported_value: Any, as_of: date) -> float | None:
@@ -1837,17 +1913,22 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     info_fetched = False
     info_refresh_failed = False
     info_last_attempt_at = prior_sync.get("info_last_attempt_at")
+    info_last_attempt_status = prior_sync.get("info_last_attempt_status")
+    info_refresh_failure = prior_sync.get("info_refresh_failure")
     if already_fetched_this_session:
         info = cached_company_info()
     elif refresh_info_now:
         info_attempted = True
         info_last_attempt_at = iso_now()
+        info_last_attempt_status = "attempting"
         count_yfinance_call("ticker_get_info")
         try:
             info = ticker.get_info()
             if not isinstance(info, dict) or not info:
                 raise RuntimeError("yfinance returned no company profile")
             info_fetched = True
+            info_last_attempt_status = "success"
+            info_refresh_failure = None
             info_last_fetched_session_date = as_of.isoformat()
             info_last_fetched_at = iso_now()
         except Exception as exc:
@@ -1855,6 +1936,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                 raise
             info = cached_company_info()
             info_refresh_failed = True
+            info_last_attempt_status = "failed"
+            info_refresh_failure = company_info_failure_metadata(exc)
             print(
                 f"Company information refresh failed for {symbol}; retaining cached values: "
                 f"{type(exc).__name__}: {exc}"[:500],
@@ -2193,6 +2276,13 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     profile = preserve_profile_timestamp_if_unchanged(profile, previous_profile)
 
     close = finite_number(latest.get("close"))
+    price_change = daily_price_change(market_history_frame, price_date, close)
+    if price_change["change"] is None and str(prior_price.get("date") or "")[:10] == (price_date.isoformat() if price_date else ""):
+        price_change = {
+            "change": finite_number(prior_price.get("change")),
+            "change_percent": finite_number(prior_price.get("change_percent")),
+            "previous_close": finite_number(prior_price.get("previous_close")),
+        }
     trailing_start = years_before(as_of, 1).isoformat()
     trailing_dividends = round(sum(
         finite_number(row.get("amount")) or 0.0 for row in dividends
@@ -2256,7 +2346,12 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "schema_version": 1,
         "code": code,
         "symbol": symbol,
-        "price": {"close": close, "date": price_date.isoformat() if price_date else None, "currency": str(info.get("currency") or "JPY")},
+        "price": {
+            "close": close,
+            "date": price_date.isoformat() if price_date else None,
+            "currency": str(info.get("currency") or "JPY"),
+            **price_change,
+        },
         "dividend": {
             "trailing_12_month_per_share": trailing_dividends,
             "trailing_12_month_period": {
@@ -2304,10 +2399,31 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         for field in CURRENT_FIELDS
     })
     previous_statistics = prior_current.get("statistics", {})
+    archive_unused_statistics(client, bucket, symbol, previous_statistics)
     for field, value in (previous_statistics.items() if isinstance(previous_statistics, dict) else []):
-        if current["statistics"].get(field) is None and value is not None:
+        if field in CURRENT_FIELDS and current["statistics"].get(field) is None and value is not None:
             current["statistics"][field] = value
             current["field_status"][f"statistics_{field}"] = "stale"
+    valuation = calculate_daily_valuation(
+        close,
+        current["statistics"].get("trailingEps"),
+        current["statistics"].get("bookValue"),
+    )
+    valuation_status = (
+        "available" if price_status == "available" else "stale"
+    )
+    for field, value in valuation.items():
+        if value is not None:
+            current["statistics"][field] = value
+        current["field_status"][f"statistics_{field}"] = (
+            valuation_status if value is not None else "empty"
+        )
+    current["valuation_calculation"] = {
+        "source": "yfinance_v2_daily_calculation",
+        "price_date": price_date.isoformat() if price_date else None,
+        "statistics_last_fetched_session_date": info_last_fetched_session_date,
+        "formulas": {"trailingPE": "price.close / statistics.trailingEps", "priceToBook": "price.close / statistics.bookValue"},
+    }
     current["field_status"]["statistics_refresh"] = (
         "failed" if info_refresh_failed else "available" if info_fetched else "stale"
     )
@@ -2424,6 +2540,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "info_last_fetched_at": info_last_fetched_at,
         "info_last_attempt_session_date": as_of.isoformat() if info_attempted else prior_sync.get("info_last_attempt_session_date"),
         "info_last_attempt_at": info_last_attempt_at,
+        "info_last_attempt_status": info_last_attempt_status,
+        "info_refresh_failure": info_refresh_failure,
         "info_refresh_status": "failed_using_cache" if info_refresh_failed else "updated" if info_fetched else "cached",
         "info_refresh_pending": info_refresh_failed or (
             info_refresh_pending_before_attempt and not info_fetched
@@ -2490,6 +2608,7 @@ def save_failure(client: Any, bucket: str, code: str, symbol: str, session_date:
     safe = safe_symbol(symbol)
     prior = read_json(client, bucket, object_key("securities", safe, "sync.json")) or {}
     failure_class = classify_yfinance_error(error)
+    first_company_info_attempt_failed = retry_info and not prior.get("last_success_session_date")
     prior.update({
         "schema_version": 1, "code": code, "symbol": symbol,
         "status": "failed", "last_attempt_at": iso_now(),
@@ -2504,6 +2623,18 @@ def save_failure(client: Any, bucket: str, code: str, symbol: str, session_date:
         "financial_retry_pending": bool(prior.get("financial_retry_pending")) or retry_financials,
         "monthly_retry_pending": bool(prior.get("monthly_retry_pending")) or retry_monthly,
         "info_refresh_pending": bool(prior.get("info_refresh_pending")) or retry_info,
+        "info_last_attempt_session_date": (
+            session_date.isoformat() if first_company_info_attempt_failed
+            else prior.get("info_last_attempt_session_date")
+        ),
+        "info_last_attempt_at": iso_now() if first_company_info_attempt_failed else prior.get("info_last_attempt_at"),
+        "info_last_attempt_status": (
+            "failed" if first_company_info_attempt_failed else prior.get("info_last_attempt_status")
+        ),
+        "info_refresh_failure": (
+            company_info_failure_metadata(error) if first_company_info_attempt_failed
+            else prior.get("info_refresh_failure")
+        ),
     })
     put_json_if_changed(client, bucket, object_key("securities", safe, "sync.json"), prior)
 
@@ -2570,13 +2701,8 @@ def income_advice_metrics(current: dict[str, Any], statements: list[dict[str, An
         period_end = prior.get("financial_period_end")
 
     for metric, statistic in (("per", "trailingPE"), ("pbr", "priceToBook")):
-        value = finite_number(statistics.get(statistic))
-        status = str(field_status.get(f"statistics_{statistic}", "empty"))
-        if status in {"empty", "not_scheduled"} and prior.get(metric) is not None:
-            value = finite_number(prior.get(metric))
-            status = str(prior_fields.get(metric, "stale"))
-        values[metric] = value
-        statuses[metric] = status
+        values[metric] = finite_number(statistics.get(statistic))
+        statuses[metric] = str(field_status.get(f"statistics_{statistic}", "empty"))
 
     dividend = current.get("dividend") if isinstance(current.get("dividend"), dict) else {}
     streak = dividend.get("calendar_year_metrics") if isinstance(dividend.get("calendar_year_metrics"), dict) else {}
@@ -2972,10 +3098,11 @@ def run(
         retry_full_history = (bucket_for(code, FULL_HISTORY_BUCKETS) == full_history_bucket
                               or previous_sync.get("long_history_retry_pending") is True)
         retry_financials = previous_sync.get("financial_retry_pending") is True
-        refresh_info = (
-            previous_sync.get("info_refresh_pending") is True
-            or bucket_for(code, FINANCIAL_BUCKETS) == financial_bucket
-            or not previous_sync.get("last_success_session_date")
+        refresh_info = should_refresh_company_info(
+            code,
+            financial_bucket,
+            bool(previous_sync.get("last_success_session_date")),
+            previous_sync.get("info_refresh_pending") is True,
         )
         initialize_financials = (
             not previous_sync
