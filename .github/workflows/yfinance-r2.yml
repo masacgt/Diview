@@ -20,6 +20,7 @@ on:
         options:
           - test
           - benchmark
+          - check-calendar
           - sync
           - generate-income-advice
           - refresh-financials
@@ -58,7 +59,7 @@ concurrency:
 
 jobs:
   market-calendar:
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'sync')
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'sync') || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'check-calendar')
     runs-on: ubuntu-latest
     outputs:
       is_open: ${{ steps.check.outputs.is_open }}
