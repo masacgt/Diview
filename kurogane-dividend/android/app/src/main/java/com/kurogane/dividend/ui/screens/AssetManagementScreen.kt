@@ -256,7 +256,8 @@ fun AssetManagementScreen(
     val listItemsFlow = remember(viewModel, sortCriteria) {
         viewModel.assetManagementListItems(sortCriteria)
     }
-    val listItems by listItemsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val listItemsSnapshot by listItemsFlow.collectAsStateWithLifecycle(initialValue = null)
+    val listItems = listItemsSnapshot.orEmpty()
     val categoryCounts = remember(listItems) { listItems.groupingBy { it.category }.eachCount() }
     val hasMissingExchangeRate = remember(listItems) { listItems.any { it.missingExchangeRate } }
 
@@ -386,7 +387,14 @@ fun AssetManagementScreen(
             initialFirstVisibleItemIndex = viewModel.assetScrollIndex,
             initialFirstVisibleItemScrollOffset = viewModel.assetScrollOffset
         )
-        LaunchedEffect(listState) {
+        // Header-only measurements must not overwrite a restored position while the cold flow loads.
+        // Capture LazyListState too, so saved-instance-state restoration keeps precedence.
+        val initialScroll = remember(listState) {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }
+        LaunchedEffect(listState, listItemsSnapshot != null) {
+            if (listItemsSnapshot == null) return@LaunchedEffect
+            listState.scrollToItem(initialScroll.first, initialScroll.second)
             snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
                 .collect { (index, offset) ->
                     viewModel.assetScrollIndex = index

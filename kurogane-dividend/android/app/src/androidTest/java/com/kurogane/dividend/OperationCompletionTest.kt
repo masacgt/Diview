@@ -40,11 +40,12 @@ class OperationCompletionTest {
     private fun clear() = listOf("local_import_store", "display_preferences", "cloudflare_market_cache", "notification_preferences", "notification_delivery").forEach {
         app.getSharedPreferences(it, Context.MODE_PRIVATE).edit().clear().commit()
     }
-    @Before fun prepare() { clear() }
+    @Before fun prepare() { clear(); seedReviewPortfolio(app) }
     @After fun cleanup() {
         compose.runOnIdle { stores.forEach(ViewModelStore::clear) }
         imagesToDelete.forEach { context.contentResolver.delete(it, null, null) }
         clear()
+        app.cleanUp()
     }
     private fun model(application: android.app.Application = app): DividendViewModel {
         lateinit var vm: DividendViewModel
@@ -91,7 +92,8 @@ class OperationCompletionTest {
         assertEquals(1, model().watchlist.value.count { it.code == "7203" })
         val watched = vm.watchlist.value
         runBlocking(Dispatchers.Main) {
-            assertTrue(runCatching { vm.registerWatchlistStock("9999") }.isFailure)
+            // 9999 is present in the bundled security catalog; use an absent code.
+            assertFalse(vm.registerWatchlistStock("0000"))
         }
         assertEquals(watched, vm.watchlist.value)
         assertEquals(before, vm.holdings.value)
@@ -145,6 +147,8 @@ class OperationCompletionTest {
         val fail = java.util.concurrent.atomic.AtomicBoolean(false)
         val failingApp = object : android.app.Application() {
             init { attachBaseContext(context) }
+            override fun getApplicationContext(): Context = this
+            override fun getFilesDir(): File = app.filesDir
             override fun getSharedPreferences(name: String, mode: Int): android.content.SharedPreferences {
                 val prefs = app.getSharedPreferences(name, mode)
                 if (name != "local_import_store") return prefs
