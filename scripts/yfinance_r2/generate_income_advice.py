@@ -36,13 +36,13 @@ def latest_annual_statement(client: Any, bucket: str, symbol: str) -> dict[str, 
 
 
 def build_candidate(client: Any, bucket: str, row: dict[str, Any], years: range,
-                    as_of: date) -> dict[str, Any] | None:
+                    as_of: date) -> tuple[dict[str, Any] | None, str | None]:
     code = str(row.get("code") or "").strip()
     symbol = sync.market_symbol(code)
     safe = sync.safe_symbol(symbol)
     current = sync.read_json(client, bucket, sync.object_key("securities", safe, "current.json"))
     if not current:
-        return None
+        return None, "current_record_missing"
 
     statements = latest_annual_statement(client, bucket, symbol)
     metrics = sync.income_advice_metrics(current, [statements] if statements else [], None)
@@ -55,13 +55,16 @@ def build_candidate(client: Any, bucket: str, row: dict[str, Any], years: range,
         )
         if isinstance(document, dict) and isinstance(document.get("records"), list):
             dividends.extend(item for item in document["records"] if isinstance(item, dict))
-    return sync.income_advice_candidate(
-        code, str(row.get("name") or code), current, dividends, as_of
+    exclusions: dict[str, int] = {}
+    candidate = sync.income_advice_candidate(
+        code, str(row.get("name") or code), current, dividends, as_of, exclusions
     )
+    reason = next(iter(exclusions), None)
+    return candidate, reason
 
 
 def build_catalog(client: Any, bucket: str, catalog: dict[str, Any],
-                  workers: int = 8) -> tuple[dict[str, Any], dict[str, int]]:
+                  workers: int = 8) -> tuple[dict[str, Any], dict[str, Any]]:
     generation = str(catalog.get("generation") or "")
     try:
         as_of = date.fromisoformat(generation)
@@ -70,7 +73,13 @@ def build_catalog(client: Any, bucket: str, catalog: dict[str, Any],
 
     years = range(as_of.year - 3, as_of.year)
     items: list[dict[str, Any]] = []
-    counts = {"catalog_items": 0, "eligible_currency": 0, "candidate_items": 0, "read_failures": 0}
+    counts = {
+        "catalog_items": 0,
+        "eligible_currency": 0,
+        "candidate_items": 0,
+        "read_failures": 0,
+        "excluded": {},
+    }
     eligible_rows: list[dict[str, Any]] = []
     for row in catalog.get("items", []):
         if not isinstance(row, dict):
@@ -95,9 +104,11 @@ def build_catalog(client: Any, bucket: str, catalog: dict[str, Any],
         for completed, future in enumerate(as_completed(futures), start=1):
             code = futures[future]
             try:
-                candidate = future.result()
+                candidate, reason = future.result()
                 if candidate is not None:
                     items.append(candidate)
+                elif reason:
+                    counts["excluded"][reason] = counts["excluded"].get(reason, 0) + 1
             except Exception as exc:
                 counts["read_failures"] += 1
                 print(f"Unable to build candidate {code}: {type(exc).__name__}: {exc}", file=sys.stderr)
@@ -142,9 +153,6 @@ def main() -> int:
     print(json.dumps({**counts, "generation": result["generation"]}, ensure_ascii=False, sort_keys=True), flush=True)
     if counts["read_failures"]:
         raise RuntimeError(f"Aborting without publishing because {counts['read_failures']} candidate records failed to read")
-    if not result["items"]:
-        raise RuntimeError("Aborting without publishing an empty candidate catalog")
-
     key = sync.object_key("derived", "income_advice", "current.json")
     sync.put_json_if_changed(client, bucket, key, result)
     saved = sync.read_json(client, bucket, key)
