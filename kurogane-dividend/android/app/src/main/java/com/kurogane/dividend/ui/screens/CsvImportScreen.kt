@@ -6,20 +6,16 @@ import androidx.compose.ui.res.stringResource
 import com.kurogane.dividend.R
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import android.provider.DocumentsContract
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.ExpandMore
@@ -65,8 +61,6 @@ fun CsvImportScreen(
     var csvBytes by remember { mutableStateOf<ByteArray?>(null) }
     var csvResult by remember { mutableStateOf<CsvImportResult?>(null) }
     var selectedFile by remember { mutableStateOf("") }
-    var dvmFiles by remember { mutableStateOf<List<DvmBackupPreview>>(emptyList()) }
-    var dvmFileNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var error by remember { mutableStateOf<String?>(null) }
     var complete by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf("csv") }
@@ -140,37 +134,6 @@ fun CsvImportScreen(
             }
         }
     }
-    val dvmFolderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) {
-            fileReadJob?.cancel()
-            isReading = true
-            isImporting = false
-            complete = false
-            error = null
-            dvmFiles = emptyList()
-            fileReadJob = scope.launch {
-                try { runCatchingCancellable {
-                    withContext(Dispatchers.IO) { scanDvmBackupFolder(context, uri) }
-                }.onSuccess { result ->
-                    val (previews, names, skipped) = result
-                    if (previews.isEmpty()) {
-                        error = resources.getString(R.string.csv_dvm_folder_empty)
-                    } else {
-                        dvmFiles = previews
-                        dvmFileNames = names
-                        isImporting = true
-                        runCatchingCancellable { onImportDvm(previews) }
-                            .onSuccess { complete = true }
-                            .onFailure { error = reportImportFailure(it, resources.getString(R.string.csv_import_label_17)) }
-                        if (skipped > 0 && complete) error = resources.getString(R.string.csv_dvm_folder_skipped, skipped)
-                    }
-                }.onFailure { error = reportImportFailure(it, resources.getString(R.string.csv_import_label_15)) }
-                } finally { isReading = false }
-                isImporting = false
-            }
-        }
-    }
-
     Scaffold(topBar = {
         AdaptiveTopAppBar(title = { Text(if (mode == "csv") stringResource(R.string.csv_import_label) else stringResource(R.string.csv_import_label_2), color = OnSurface, fontWeight = FontWeight.Bold) },
             navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = OnSurface) } },
@@ -179,7 +142,7 @@ fun CsvImportScreen(
         LazyColumn(Modifier.fillMaxSize().padding(insets).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
             item {
                 AdaptiveRow(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurfaceContainer).padding(4.dp)) {
-                    listOf("csv" to stringResource(R.string.csv_import_label_3), "dvm" to stringResource(R.string.csv_import_label_4)).forEach { (id, label) ->
+                    listOf("csv" to stringResource(R.string.csv_import_label_3), "drive" to stringResource(R.string.csv_import_label_4)).forEach { (id, label) ->
                         Text(label, Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(if (mode == id) PrimaryEmerald else Color.Transparent).clickable(enabled = !isReading && !isImporting) { mode = id; error = null }.padding(11.dp), color = if (mode == id) OnPrimary else OnSurfaceVariant, fontWeight = FontWeight.Bold)
                     }
                 }
@@ -295,290 +258,11 @@ fun CsvImportScreen(
                     }
                 }
             } else {
-                item { Text(stringResource(R.string.csv_import_text_7), color = OnSurfaceVariant) }
-                item { ImportCard(onClick = { if (!isReading && !isImporting) dvmFolderPicker.launch(null) }, title = resources.getString(R.string.csv_dvm_folder_title), subtitle = resources.getString(R.string.csv_dvm_folder_subtitle), icon = Icons.Default.FolderOpen) }
                 item { GoogleDvmBackupCard(action = GoogleDvmBackupAction.IMPORT, onImportDvm = onImportDvm) }
-                items(dvmFiles, key = { it.kind.name }) { backup ->
-                    Card(colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow), shape = RoundedCornerShape(12.dp)) {
-                        Column(Modifier.padding(14.dp)) {
-                            Text(stringResource(R.string.csv_import_text_8 , backup.kind.label, backup.itemCount), color = OnSurface, fontWeight = FontWeight.Bold)
-                            Text(dvmFileNames[backup.kind.name].orEmpty(), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                            if (backup.kind == DvmBackupKind.STOCKS) backup.stocks.take(30).forEach { stock ->
-                                Text(stringResource(R.string.csv_import_text_9 , stock.code, stock.name, stock.shares.toInt()), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                            }
-                        }
-                    }
-                }
-                if (complete) item { Text(stringResource(R.string.csv_import_label_11), color = PrimaryEmerald, fontWeight = FontWeight.Bold) }
             }
             error?.let { item { Text(it, color = ErrorRed, fontSize = AppTextSize.caption) } }
-            item { Text(stringResource(R.string.csv_import_text_10), color = OnSurfaceVariant, fontSize = AppTextSize.dense) }
+            if (mode == "csv") item { Text(stringResource(R.string.csv_import_text_10), color = OnSurfaceVariant, fontSize = AppTextSize.dense) }
         }
-    }
-}
-
-@Composable
-fun DvmBackupFolderImportCard(onImportDvm: suspend (List<DvmBackupPreview>) -> Unit) {
-    val context = LocalContext.current
-    val resources = context.resources
-    val scope = rememberCoroutineScope()
-    var isWorking by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf<String?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) {
-            isWorking = true
-            status = null
-            error = null
-            scope.launch {
-                try {
-                    val (backups, _, skipped) = withContext(Dispatchers.IO) { scanDvmBackupFolder(context, uri) }
-                    if (backups.isEmpty()) error = resources.getString(R.string.csv_dvm_folder_empty)
-                    else {
-                        runCatchingCancellable { onImportDvm(backups) }
-                            .onSuccess {
-                                status = resources.getString(R.string.csv_dvm_folder_imported, backups.size)
-                                if (skipped > 0) error = resources.getString(R.string.csv_dvm_folder_skipped, skipped)
-                            }
-                            .onFailure { error = reportImportFailure(it, resources.getString(R.string.csv_import_label_17)) }
-                    }
-                } catch (failure: Exception) {
-                    if (failure is kotlinx.coroutines.CancellationException) throw failure
-                    error = reportImportFailure(failure, resources.getString(R.string.csv_import_label_15))
-                } finally { isWorking = false }
-            }
-        }
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ImportCard(
-            onClick = { if (!isWorking) picker.launch(null) },
-            title = resources.getString(R.string.csv_dvm_folder_title),
-            subtitle = resources.getString(R.string.csv_dvm_folder_subtitle),
-            icon = Icons.Default.FolderOpen
-        )
-        if (isWorking) LinearProgressIndicator(Modifier.fillMaxWidth(), color = PrimaryEmerald)
-        status?.let { Text(it, color = PrimaryEmerald, fontWeight = FontWeight.Bold) }
-        error?.let { Text(it, color = ErrorRed, fontSize = AppTextSize.caption) }
-    }
-}
-
-private fun scanDvmBackupFolder(
-    context: android.content.Context,
-    treeUri: android.net.Uri
-): Triple<List<DvmBackupPreview>, Map<String, String>, Int> {
-    runCatching {
-        context.contentResolver.takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    val resolver = context.contentResolver
-    val previews = linkedMapOf<DvmBackupKind, DvmBackupPreview>()
-    val names = linkedMapOf<String, String>()
-    var skipped = 0
-    var visited = 0
-
-    fun visit(documentId: String, depth: Int) {
-        if (depth > 12 || visited >= 3000) return
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId)
-        val projection = arrayOf(
-            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-            DocumentsContract.Document.COLUMN_MIME_TYPE
-        )
-        val children = mutableListOf<Triple<String, String, String>>()
-        resolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-            val idIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-            val nameIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
-            val mimeIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
-            while (cursor.moveToNext() && visited < 3000) {
-                visited++
-                children += Triple(cursor.getString(idIndex), cursor.getString(nameIndex).orEmpty(), cursor.getString(mimeIndex).orEmpty())
-            }
-        }
-        children.forEach { (id, name, mime) ->
-            if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
-                visit(id, depth + 1)
-            } else if (name.endsWith(".dvm", ignoreCase = true)) {
-                val kind = DvmBackupKind.fromName(name)
-                if (kind == null || previews.containsKey(kind)) {
-                    skipped++
-                } else {
-                    runCatching {
-                        val fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, id)
-                        val bytes = resolver.openInputStream(fileUri)?.use { it.readBoundedBytes(50 * 1024 * 1024) }
-                            ?: error("DVMファイルを読み込めません")
-                        DvmBackupImporter.parse(name, bytes)
-                    }.onSuccess { preview ->
-                        previews[kind] = preview
-                        names[kind.name] = name
-                    }.onFailure { skipped++ }
-                }
-            }
-        }
-    }
-
-    visit(DocumentsContract.getTreeDocumentId(treeUri), 0)
-    return Triple(previews.values.toList(), names, skipped)
-}
-
-@Composable
-fun BrokerCsvImportCard(onImportCsv: suspend (List<CsvHoldingRow>, Set<String>) -> Unit) {
-    val context = LocalContext.current
-    val resources = context.resources
-    val scope = rememberCoroutineScope()
-    var broker by remember { mutableStateOf<CsvBroker?>(null) }
-    var brokerWasAutoDetected by remember { mutableStateOf(false) }
-    var csvBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var csvResult by remember { mutableStateOf<CsvImportResult?>(null) }
-    var selectedFile by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-    var isReading by remember { mutableStateOf(false) }
-    var isImporting by remember { mutableStateOf(false) }
-    var complete by remember { mutableStateOf(false) }
-    var selectedRowIndexes by remember { mutableStateOf<Set<Int>>(emptySet()) }
-    val selectedFields = remember { mutableStateListOf("shares", "averageCost", "account") }
-    var csvParseJob by remember { mutableStateOf<Job?>(null) }
-
-    fun parseCsvAs(selectedBroker: CsvBroker, bytes: ByteArray, detected: Boolean = false) {
-        csvParseJob?.cancel()
-        broker = selectedBroker
-        brokerWasAutoDetected = detected
-        csvResult = null
-        selectedRowIndexes = emptySet()
-        complete = false
-        error = null
-        isReading = true
-        csvParseJob = scope.launch {
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    BrokerCsvImporter.parse(bytes, selectedBroker, LocalSecurityCatalog.names(context), LocalSecurityCatalog.fundNames(context))
-                }
-                csvResult = result
-                selectedRowIndexes = result.rows.indices.toSet()
-            } catch (failure: Throwable) {
-                if (failure is kotlinx.coroutines.CancellationException) throw failure
-                error = failure.message ?: resources.getString(R.string.csv_import_label_8)
-            } finally {
-                isReading = false
-            }
-        }
-    }
-
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            val preselectedBroker = broker?.takeUnless { brokerWasAutoDetected }
-            csvParseJob?.cancel()
-            broker = null
-            brokerWasAutoDetected = false
-            csvBytes = null
-            isReading = true
-            csvResult = null
-            selectedRowIndexes = emptySet()
-            complete = false
-            error = null
-            scope.launch {
-                try {
-                    runCatchingCancellable {
-                        selectedFile = withContext(Dispatchers.IO) {
-                            context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
-                                ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
-                        } ?: uri.lastPathSegment ?: "CSV"
-                        val bytes = withContext(Dispatchers.IO) {
-                            context.contentResolver.openInputStream(uri)?.use { it.readBoundedBytes(10 * 1024 * 1024) }
-                                ?: error(resources.getString(R.string.csv_import_label_6))
-                        }
-                        csvBytes = bytes
-                        val detected = withContext(Dispatchers.IO) { BrokerCsvImporter.detectBroker(bytes, selectedFile) }
-                        val selectedBroker = detected ?: preselectedBroker
-                        broker = selectedBroker
-                        brokerWasAutoDetected = detected != null
-                        if (selectedBroker == null) null
-                        else withContext(Dispatchers.IO) {
-                            BrokerCsvImporter.parse(bytes, selectedBroker, LocalSecurityCatalog.names(context), LocalSecurityCatalog.fundNames(context))
-                        }
-                    }.onSuccess { result ->
-                        csvResult = result
-                        selectedRowIndexes = result?.rows?.indices?.toSet().orEmpty()
-                    }.onFailure { error = it.message ?: resources.getString(R.string.csv_import_label_8) }
-                } finally { isReading = false }
-            }
-        }
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            text = when {
-                selectedFile.isBlank() -> stringResource(R.string.settings_csv_auto_detection_hint)
-                brokerWasAutoDetected -> resources.getString(R.string.csv_broker_auto_detected, broker?.label.orEmpty())
-                else -> stringResource(R.string.settings_csv_unknown_broker_hint)
-            },
-            color = if (brokerWasAutoDetected) PrimaryEmerald else OnSurfaceVariant,
-            fontWeight = FontWeight.Bold
-        )
-        ImportCard(
-            onClick = { if (!isReading && !isImporting) picker.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel")) },
-            title = selectedFile.ifBlank { resources.getString(R.string.csv_select_file) },
-            subtitle = resources.getString(R.string.csv_import_label_16), icon = Icons.Default.UploadFile
-        )
-        if (selectedFile.isNotBlank()) {
-            Text(stringResource(R.string.csv_import_text), color = OnSurface, fontWeight = FontWeight.Bold)
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                CsvBroker.entries.forEach { item ->
-                    Text(
-                        item.label,
-                        Modifier.clip(RoundedCornerShape(9.dp))
-                            .background(if (broker == item) SurfaceContainerHighest else SurfaceContainer)
-                            .clickable(enabled = !isReading && !isImporting) {
-                                val bytes = csvBytes
-                                if (bytes == null) broker = item else parseCsvAs(item, bytes)
-                            }
-                            .padding(horizontal = 10.dp, vertical = 9.dp),
-                        color = if (broker == item) PrimaryEmerald else OnSurface,
-                        fontSize = AppTextSize.dense,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-        if (isReading || isImporting) LinearProgressIndicator(Modifier.fillMaxWidth(), color = PrimaryEmerald)
-        csvResult?.let { result ->
-            Text(stringResource(R.string.csv_import_text_2, result.encoding.name, result.rows.size), color = PrimaryEmerald, fontWeight = FontWeight.Bold)
-            Text(stringResource(R.string.csv_import_text_3), color = OnSurface, fontWeight = FontWeight.Bold)
-            listOf("shares" to stringResource(R.string.csv_import_label_5), "averageCost" to stringResource(R.string.add_holding_text_15),
-                "account" to stringResource(R.string.csv_import_label_7), "currentPrice" to stringResource(R.string.asset_management_text_23)).forEach { (key, label) ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = key in selectedFields, onCheckedChange = { checked -> if (checked) selectedFields.add(key) else selectedFields.remove(key) })
-                    Text(label, color = OnSurface)
-                }
-            }
-            result.errors.take(5).forEach { Text(it, color = ErrorRed, fontSize = AppTextSize.caption) }
-            result.rows.forEachIndexed { index, row ->
-                val checked = index in selectedRowIndexes
-                Card(colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow), shape = RoundedCornerShape(12.dp)) {
-                    AdaptiveRow(Modifier.fillMaxWidth().clickable { selectedRowIndexes = if (checked) selectedRowIndexes - index else selectedRowIndexes + index }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = checked, onCheckedChange = { value -> selectedRowIndexes = if (value) selectedRowIndexes + index else selectedRowIndexes - index })
-                        Column(Modifier.weight(1f)) {
-                            Text(stringResource(R.string.csv_import_1_s_2_s, if (row.isFund) resources.getString(R.string.csv_import_label_13) else row.code, row.name), color = OnSurface, fontWeight = FontWeight.Bold)
-                            Text(stringResource(R.string.csv_import_text_4, row.shares ?: 0, row.averageCost ?: 0.0), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                        }
-                        if (row.matchedName != null) Icon(Icons.Default.CheckCircle, null, tint = PrimaryEmerald)
-                    }
-                }
-            }
-            if (result.unmatchedFunds.isNotEmpty()) Text(stringResource(R.string.csv_import_text_5, result.unmatchedFunds.size), color = ErrorRed, fontWeight = FontWeight.Bold)
-            Button(onClick = {
-                val chosen = result.rows.filterIndexed { index, _ -> index in selectedRowIndexes }
-                if (chosen.isEmpty()) error = context.getString(R.string.csv_import_message_2) else {
-                    isImporting = true
-                    scope.launch {
-                        try { runCatchingCancellable { onImportCsv(chosen, selectedFields.toSet()) }
-                            .onSuccess { complete = true }.onFailure { error = reportImportFailure(it, resources.getString(R.string.csv_import_label_17)) }
-                        } finally { isImporting = false }
-                    }
-                }
-            }, enabled = broker != null && !isReading && !isImporting && !complete, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald)) {
-                Text(if (complete) stringResource(R.string.csv_import_label_9) else stringResource(R.string.csv_import_label_10), color = OnPrimary, fontWeight = FontWeight.Bold)
-            }
-        }
-        error?.let { Text(it, color = ErrorRed, fontSize = AppTextSize.caption) }
     }
 }
 

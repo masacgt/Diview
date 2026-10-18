@@ -5,23 +5,10 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,12 +17,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
@@ -51,10 +36,9 @@ import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.ShareholderBenefit
 import com.kurogane.dividend.model.StockClimate
 import com.kurogane.dividend.data.DividendHistoryOverride
-import com.kurogane.dividend.ui.theme.OnSurface
 import com.kurogane.dividend.ui.theme.OnSurfaceVariant
 import com.kurogane.dividend.ui.theme.PrimaryEmerald
-import com.kurogane.dividend.ui.theme.SurfaceContainerLow
+import com.kurogane.dividend.ui.components.DataManagementActionCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -121,7 +105,7 @@ fun GoogleDvmBackupCard(
                 status = latestAction(accessToken)
             } catch (failure: Throwable) {
                 if (failure is kotlinx.coroutines.CancellationException) throw failure
-                error = failure.message ?: resources.getString(R.string.dvm_drive_action_failed)
+                error = resources.getString(R.string.dvm_drive_action_failed)
             } finally {
                 isWorking = false
             }
@@ -134,7 +118,7 @@ fun GoogleDvmBackupCard(
                 .onSuccess { token -> latestExecute(token.orEmpty()) }
                 .onFailure {
                     isWorking = false
-                    error = it.message ?: resources.getString(R.string.dvm_drive_auth_failed)
+                    error = resources.getString(R.string.dvm_drive_auth_failed)
                 }
         } else {
             isWorking = false
@@ -163,7 +147,7 @@ fun GoogleDvmBackupCard(
                             authorizationLauncher.launch(IntentSenderRequest.Builder(pendingIntent.intentSender).build())
                         }.onFailure {
                             isWorking = false
-                            error = it.message ?: resources.getString(R.string.dvm_drive_auth_failed)
+                            error = resources.getString(R.string.dvm_drive_auth_failed)
                         }
                     }
                 } else {
@@ -172,7 +156,7 @@ fun GoogleDvmBackupCard(
             }
             .addOnFailureListener { failure ->
                 isWorking = false
-                error = failure.message ?: resources.getString(R.string.dvm_drive_auth_failed)
+                error = resources.getString(R.string.dvm_drive_auth_failed)
             }
     }
 
@@ -183,28 +167,16 @@ fun GoogleDvmBackupCard(
 
     val title = stringResource(if (action == GoogleDvmBackupAction.EXPORT) R.string.settings_label_13 else R.string.dvm_drive_restore_title)
     val subtitle = stringResource(if (action == GoogleDvmBackupAction.EXPORT) R.string.dvm_drive_backup_subtitle else R.string.dvm_drive_restore_subtitle)
-    Card(
+    DataManagementActionCard(
         onClick = ::authorize,
         enabled = !isWorking,
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-        shape = RoundedCornerShape(12.dp)
+        title = title,
+        subtitle = subtitle,
+        icon = if (action == GoogleDvmBackupAction.EXPORT) Icons.Default.CloudUpload else Icons.Default.CloudDownload,
+        isWorking = isWorking
     ) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    if (action == GoogleDvmBackupAction.EXPORT) Icons.Default.CloudUpload else Icons.Default.CloudDownload,
-                    contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(25.dp)
-                )
-                Spacer(Modifier.width(9.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(title, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Text(subtitle, color = OnSurfaceVariant, fontSize = 11.sp, lineHeight = 14.sp)
-                }
-                if (isWorking) CircularProgressIndicator(color = PrimaryEmerald, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-            }
-            status?.let { Text(it, color = PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-            error?.let { Text(it, color = OnSurfaceVariant, fontSize = 11.sp) }
-        }
+        status?.let { androidx.compose.material3.Text(it, color = PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+        error?.let { androidx.compose.material3.Text(it, color = OnSurfaceVariant, fontSize = 11.sp) }
     }
 }

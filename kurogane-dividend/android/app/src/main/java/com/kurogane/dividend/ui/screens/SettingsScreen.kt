@@ -1,6 +1,7 @@
 package com.kurogane.dividend.ui.screens
 
 import com.kurogane.dividend.ui.components.AdaptiveRow
+import com.kurogane.dividend.ui.components.DataManagementActionCard
 import androidx.compose.ui.res.stringResource
 import com.kurogane.dividend.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -139,23 +140,25 @@ fun SettingsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             if (dataTab == "import") {
-                                BrokerCsvImportCard(onImportCsv = { rows, fields -> viewModel.importCsvRows(rows, fields) })
-                                HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                                Label(stringResource(R.string.csv_import_label_2), 9, OnSurface, true)
-                                DvmBackupFolderImportCard(onImportDvm = { backups -> viewModel.importDvmBackups(backups) })
+                                DataManagementActionCard(
+                                    title = stringResource(R.string.backup_csv_import_title),
+                                    subtitle = stringResource(R.string.backup_csv_import_subtitle),
+                                    icon = Icons.Default.UploadFile,
+                                    onClick = onNavigateToCsv
+                                )
                                 GoogleDvmBackupCard(
                                     action = GoogleDvmBackupAction.IMPORT,
                                     onImportDvm = { backups -> viewModel.importDvmBackups(backups) }
                                 )
-                                AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Label(stringResource(R.string.settings_label_9), 7, SettingsMuted)
-                                    Label(stringResource(R.string.asset_management_text_6 , viewModel.holdings.collectAsStateWithLifecycle().value.size), 7, SettingsMint)
-                                }
                             } else {
-                                Label(stringResource(R.string.settings_label_11), 9, SettingsMuted)
-                                ActionButton(stringResource(R.string.settings_label_12), Modifier.fillMaxWidth()) {
-                                    if (!isExporting) csvExporter.launch("Diview-portfolio.csv")
-                                }
+                                DataManagementActionCard(
+                                    title = stringResource(R.string.settings_label_12),
+                                    subtitle = stringResource(R.string.backup_csv_export_subtitle),
+                                    icon = Icons.Default.Save,
+                                    enabled = !isExporting,
+                                    isWorking = isExporting,
+                                    onClick = { if (!isExporting) csvExporter.launch("Diview-portfolio.csv") }
+                                )
                                 GoogleDvmBackupCard(
                                     action = GoogleDvmBackupAction.EXPORT,
                                     holdings = viewModel.holdings.value,
