@@ -1232,7 +1232,7 @@ private data class SectorCompositionRow(
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.model.Holding>, taxRateMode: String, totalAssets: Double, totalAnnualDiv: Double, compositionThreshold: Int, compositionOtherEnabled: Boolean, viewModel: DividendViewModel, onNavigateToDetail: (String) -> Unit) {
     var isVisible by remember { mutableStateOf(false) }
-    var chartMode by remember { mutableStateOf("dividend") } // "holding" or "dividend"
+    var chartMode by remember { mutableStateOf("dividend") } // "holding", "dividend", or "yield"
     var sectorValueMode by remember { mutableStateOf("valuation") } // "valuation" or "dividend"
     val context = LocalContext.current
     val industriesByCode = remember(context) { Tse33IndustryMaster.industries(context) }
@@ -1266,11 +1266,31 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                 val valuation = h.totalValuation
                 Triple(h, expectedDiv, valuation)
             }
-            .filter { if (chartMode == "dividend") it.second > 0.0 else it.third > 0.0 }
-            .sortedByDescending { if (chartMode == "dividend") it.second else it.third }
+            .filter {
+                when (chartMode) {
+                    "dividend" -> it.second > 0.0
+                    "holding" -> it.third > 0.0
+                    else -> it.first.liveYield > 0.0
+                }
+            }
+            .sortedByDescending {
+                when (chartMode) {
+                    "dividend" -> it.second
+                    "holding" -> it.third
+                    else -> it.first.liveYield
+                }
+            }
     }
 
-    val totalChartValue = remember(mappedHoldings, chartMode) { mappedHoldings.sumOf { if (chartMode == "dividend") it.second else it.third } }
+    val totalChartValue = remember(mappedHoldings, chartMode) {
+        mappedHoldings.sumOf {
+            when (chartMode) {
+                "dividend" -> it.second
+                "holding" -> it.third
+                else -> it.first.liveYield
+            }
+        }
+    }
     val totalPortfolioDividend = remember(mappedHoldings) { mappedHoldings.sumOf { it.second } }
 
     // Color definitions
@@ -1288,7 +1308,13 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
 
     // Build Donut Slice Objects
     val donutSlices = remember(mappedHoldings, chartMode, compositionThreshold, compositionOtherEnabled, totalChartValue, context) {
-        val compositionValues = mappedHoldings.map { if (chartMode == "dividend") it.second else it.third }
+        val compositionValues = mappedHoldings.map {
+            when (chartMode) {
+                "dividend" -> it.second
+                "holding" -> it.third
+                else -> it.first.liveYield
+            }
+        }
         com.kurogane.dividend.model.PortfolioMath.compositionGroups(compositionValues, compositionThreshold, compositionOtherEnabled)
             .mapIndexed { index, group ->
                 val itemVal = group.sumOf { compositionValues[it] }
@@ -1420,7 +1446,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                         )
                     }
 
-                    // Pill Toggle Switch: 構成比率 vs 配当比率
+                    // Pill Toggle Switch: 構成比率 / 配当比率 / 利回り率
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
@@ -1456,6 +1482,23 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 stringResource(R.string.annual_dividend_text_10),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = if (chartMode == "dividend") OnPrimary else OnSurfaceVariant,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = AppTextSize.dense
+                                )
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (chartMode == "yield") PrimaryEmerald else Color.Transparent)
+                                .animateContentSize(animationSpec = tween(190))
+                                .clickable { chartMode = "yield" }
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                "利回り率",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = if (chartMode == "yield") OnPrimary else OnSurfaceVariant,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = AppTextSize.dense
                                 )
@@ -1543,7 +1586,11 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                         // Centered Focus text (Default is portfolio totals, toggleable to active stock on selection)
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                activeSlice?.name ?: if (chartMode == "holding") "資産総額" else "年間配当合計",
+                                activeSlice?.name ?: when (chartMode) {
+                                    "holding" -> "資産総額"
+                                    "yield" -> "利回り構成"
+                                    else -> "年間配当合計"
+                                },
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = OnSurfaceVariant,
                                     fontSize = AppTextSize.dense,
@@ -1553,9 +1600,14 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
                             Spacer(modifier = Modifier.height(2.dp))
-                            val centerVal = activeSlice?.expectedDiv ?: if (chartMode == "holding") totalAssets else totalAnnualDiv
+                            val centerVal = activeSlice?.expectedDiv ?: when (chartMode) {
+                                "holding" -> totalAssets
+                                "yield" -> if (totalAssets > 0.0) totalPortfolioDividend / totalAssets * 100 else 0.0
+                                else -> totalAnnualDiv
+                            }
                             Text(
-                                text = stringResource(R.string.add_holding_1_s , NumberFormat.getNumberInstance(Locale.JAPAN).format(centerVal.toLong())),
+                                text = if (chartMode == "yield") String.format(Locale.JAPAN, "%.2f%%", centerVal)
+                                    else stringResource(R.string.add_holding_1_s , NumberFormat.getNumberInstance(Locale.JAPAN).format(centerVal.toLong())),
                                 style = MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.ExtraBold,
                                     color = OnSurface,
@@ -1577,7 +1629,9 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = if (activeSlice != null) activeSlice.percentage else "${mappedHoldings.size}銘柄分散中",
+                                    text = if (activeSlice != null) {
+                                        if (chartMode == "yield") "構成比 ${activeSlice.percentage}" else activeSlice.percentage
+                                    } else "${mappedHoldings.size}銘柄分散中",
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         color = activeSlice?.color ?: PrimaryEmerald,
                                         fontWeight = FontWeight.Bold,
