@@ -918,7 +918,7 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                                                 horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
                                                 Text(label, fontSize = AppTextSize.dense, color = if (yield == targetYield) PrimaryEmerald else OnSurfaceVariant)
-                                                Text(stringResource(R.string.roadmap_text_31 , capital), fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, color = if (yield == targetYield) PrimaryEmerald else OnSurface)
+                                                Text(stringResource(R.string.roadmap_text_31, currencyFormat.format(capital)), fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold, color = if (yield == targetYield) PrimaryEmerald else OnSurface)
                                             }
                                         }
                                     }
