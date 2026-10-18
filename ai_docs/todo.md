@@ -2,6 +2,13 @@
 
 ## Completed
 
+- [x] Preserve the three approved portable override groups without changing snapshot version 1 or including feedback drafts. Evidence: 17 backup cases pass on API 26/35/33, and the final AAB survives offline OS full-backup/clear/restore on API 26 with all three groups and existing saved facts unchanged; see `android-release-acceptance-20261018.md`.
+- [x] Retain financial failure categories across recreation, bound transient dividend-change retries, restore the asset-list scroll position, and move the initial override/security reads into restoration IO. Evidence: JDK 17 passes 142 JVM cases and Lint without errors; the full suite has 89 passes on API 35 and 88 passes plus one existing API-specific assumption on API 26, with all 32 isolated device cases passing and five production files unchanged.
+
+- [x] Fix the reproduced API 26 Keystore chunk loss, missing no-dividend flag, and damaged auto-backup replacement path while retaining legacy DVM import and portable version-one JSON. Evidence: JDK 17 passes 137 JVM tests, Lint with zero errors, debug/test/release builds, 15 isolated regressions on API 26/33/35, and 6 existing UI cases on API 26/35; an 11,185,690-byte snapshot survives an offline OS full-backup/clear/restore and minified release startup preserves backup facts. See `android-backup-followup-20261018.md` for the unresolved limits.
+
+- [x] Fix the confirmed Android release-audit error, retry, lifecycle, StateFlow, and threshold accessibility regressions without changing rendered UI. Evidence: the JDK 17 build passes 137 JVM tests, Lint with zero errors, debug/test APK assembly and unsigned R8 release assembly; API 26/35 each pass five new regressions plus six existing UI cases, and SCG01 API 33 passes all five new cases with five existing production-file hashes unchanged. See `android-release-audit-20261018.md`.
+
 - [x] Correct the annual DPS field contract, stop TTM totals from inflating the 2026 portfolio chart, and migrate held-security cache values. Evidence: all 43 yfinance sync tests and 3 focused Worker tests pass; the JDK 17 repository unit test and debug APK build pass; Worker version `f154c6b2-85e1-408b-9474-862c745dc3a0` returns 8214/8058/6493/6721/2914/8306 at ¥90/¥125/¥20/¥0/¥272/¥96 per share with TTM totals separate; SCG01 cache contract v2 stores those six values and the chart displays ¥693,000 for 2026.
 
 - [x] Calculate and label Stock Detail's calendar-year dividend-total CAGR from yfinance events. Evidence: `FinancialData.kt` selects the latest two to five consecutive annual totals, and the JDK 17 debug APK displayed `暦年配当合計CAGR 13.7%` for 2914 on device `RFCNC0E4H8J`; consecutive-increase and no-cut counts remain unavailable for this history basis.

@@ -15,6 +15,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.security.KeyStore
 import java.io.File
+import java.io.ByteArrayOutputStream
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -24,10 +25,10 @@ import javax.crypto.spec.GCMParameterSpec
 class LocalImportStore(context: Context) {
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences("local_import_store", Context.MODE_PRIVATE)
-    private val autoBackupFile = File(appContext.filesDir, "diview_auto_backup.json")
+    private val autoBackup = AutoBackupSnapshot(File(appContext.filesDir, "diview_auto_backup.json"))
     private var cachedKey: SecretKey? = null
 
-    fun hasHoldings(): Boolean = prefs.contains("holdings") || autoBackupFile.isFile
+    fun hasHoldings(): Boolean = prefs.contains("holdings") || autoBackup.exists()
 
     fun saveHoldings(holdings: List<Holding>) {
         save("holdings", JSONArray().apply { holdings.forEach { put(it.toJson()) } }.toString().toByteArray())
@@ -36,7 +37,7 @@ class LocalImportStore(context: Context) {
     fun loadHoldings(): List<Holding>? = load("holdings")?.let { bytes ->
         val array = JSONArray(bytes.toString(Charsets.UTF_8))
         (0 until array.length()).map { array.getJSONObject(it).toHolding() }
-    } ?: readAutoBackupSnapshot()?.optJSONArray("holdings")?.let { array ->
+    } ?: autoBackup.readHoldings()?.let { array ->
         (0 until array.length()).map { array.getJSONObject(it).toHolding() }.also { restored ->
             save("holdings", JSONArray().apply { restored.forEach { put(it.toJson()) } }.toString().toByteArray())
         }
@@ -46,8 +47,8 @@ class LocalImportStore(context: Context) {
         writeAutoBackupSnapshot(loadHoldings().orEmpty(), loadWatchlist().orEmpty())
     }
     fun readBackup(kind: DvmBackupKind): ByteArray? = load("dvm_${kind.name}")
-        ?: readAutoBackupSnapshot()?.optJSONObject("dvmBackups")?.optString(kind.name)?.takeIf(String::isNotBlank)?.let {
-            android.util.Base64.decode(it, android.util.Base64.NO_WRAP).also { bytes -> save("dvm_${kind.name}", bytes) }
+        ?: autoBackup.readBackup(kind)?.also { bytes ->
+            save("dvm_${kind.name}", bytes)
         }
     fun saveFeedbackDraft(draft: JSONObject) = save("feedback_draft", draft.toString().toByteArray(Charsets.UTF_8))
     fun loadFeedbackDraft(): JSONObject? = load("feedback_draft")?.let { JSONObject(it.toString(Charsets.UTF_8)) }
@@ -63,10 +64,11 @@ class LocalImportStore(context: Context) {
             }
         }
         save("shareholder_benefits", json.toString().toByteArray(Charsets.UTF_8))
+        writeAutoBackupSnapshot(loadHoldings().orEmpty(), loadWatchlist().orEmpty())
     }
 
     fun loadShareholderBenefits(): Map<String, List<ShareholderBenefit>> =
-        load("shareholder_benefits")?.let { bytes ->
+        loadPortableOverride("shareholder_benefits")?.let { bytes ->
             val json = JSONObject(bytes.toString(Charsets.UTF_8))
             buildMap {
                 val codes = json.keys()
@@ -84,10 +86,11 @@ class LocalImportStore(context: Context) {
     fun saveStockClimateOverrides(overrides: Map<String, StockClimate>) {
         val json = JSONObject().apply { overrides.forEach { (code, climate) -> put(code, climate.name) } }
         save("stock_climate_overrides", json.toString().toByteArray(Charsets.UTF_8))
+        writeAutoBackupSnapshot(loadHoldings().orEmpty(), loadWatchlist().orEmpty())
     }
 
     fun loadStockClimateOverrides(): Map<String, StockClimate> =
-        load("stock_climate_overrides")?.let { bytes ->
+        loadPortableOverride("stock_climate_overrides")?.let { bytes ->
             val json = JSONObject(bytes.toString(Charsets.UTF_8))
             buildMap {
                 val codes = json.keys()
@@ -119,10 +122,11 @@ class LocalImportStore(context: Context) {
             }
         }
         save("dividend_history_overrides", json.toString().toByteArray(Charsets.UTF_8))
+        writeAutoBackupSnapshot(loadHoldings().orEmpty(), loadWatchlist().orEmpty())
     }
 
     fun loadDividendHistoryOverrides(): Map<String, List<DividendHistoryOverride>> =
-        load("dividend_history_overrides")?.let { bytes ->
+        loadPortableOverride("dividend_history_overrides")?.let { bytes ->
             val json = JSONObject(bytes.toString(Charsets.UTF_8))
             buildMap {
                 val codes = json.keys()
@@ -150,21 +154,13 @@ class LocalImportStore(context: Context) {
 
     fun clear() {
         check(prefs.edit().clear().commit()) { "データを初期化できませんでした" }
-        autoBackupFile.delete()
+        autoBackup.delete()
         BackupManager(appContext).dataChanged()
     }
 
     fun saveWatchlist(stocks: List<WatchlistStock>) {
-        save("watchlist", JSONArray().apply {
-        stocks.forEach { stock -> put(JSONObject().apply {
-            put("code", stock.code); put("name", stock.name); put("market", stock.market); put("sector", stock.sector)
-            put("category", stock.category); put("price", stock.price); put("currency", stock.currency); put("dps", stock.dps)
-            put("currentYield", stock.currentYield); put("targetYield", stock.targetYield); put("targetPrice", stock.targetPrice)
-            put("dailyChange", stock.dailyChange); put("isPositive", stock.isPositive); put("payoutMonths", JSONArray(stock.payoutMonths))
-            put("payoutTiming", stock.payoutTiming); put("desc", stock.desc); put("alertEnabled", stock.alertEnabled)
-            put("badge", stock.badge); put("defaultShares", stock.defaultShares)
-        }) }
-        }.toString().toByteArray(Charsets.UTF_8))
+        save("watchlist", JSONArray().apply { stocks.forEach { put(it.toJson()) } }
+            .toString().toByteArray(Charsets.UTF_8))
         writeAutoBackupSnapshot(loadHoldings().orEmpty(), stocks)
     }
 
@@ -172,37 +168,41 @@ class LocalImportStore(context: Context) {
         val array = JSONArray(bytes.toString(Charsets.UTF_8))
         (0 until array.length()).map { index ->
             val row = array.getJSONObject(index)
-            row.toWatchlistStock().also {
-                require(PortfolioMath.validCode(it.code) && listOf(it.price, it.dps, it.targetPrice).all(PortfolioMath::validMoney) &&
-                    it.currentYield.isFinite() && it.targetYield.isFinite() && it.targetYield > 0) { "監視銘柄の保存データが正しくありません" }
-            }
+            row.toWatchlistStock()
         }
-    } ?: readAutoBackupSnapshot()?.optJSONArray("watchlist")?.let { array ->
+    } ?: autoBackup.readWatchlist()?.let { array ->
         (0 until array.length()).map { array.getJSONObject(it).toWatchlistStock() }.also { restored ->
             save("watchlist", JSONArray().apply { restored.forEach { put(it.toJson()) } }.toString().toByteArray(Charsets.UTF_8))
         }
     }
 
     private fun writeAutoBackupSnapshot(holdings: List<Holding>, watchlist: List<WatchlistStock>) {
-        val snapshot = JSONObject().put("version", 1)
-            .put("holdings", JSONArray().apply { holdings.forEach { put(it.toJson()) } })
-            .put("watchlist", JSONArray().apply { watchlist.forEach { put(it.toJson()) } })
-            .put("dvmBackups", JSONObject().apply {
-                DvmBackupKind.entries.forEach { kind -> readBackup(kind)?.let { put(kind.name, android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP)) } }
-            })
-        val tempFile = File(appContext.filesDir, "diview_auto_backup.tmp")
-        tempFile.writeText(snapshot.toString(), Charsets.UTF_8)
-        if (!tempFile.renameTo(autoBackupFile)) {
-            autoBackupFile.writeText(snapshot.toString(), Charsets.UTF_8)
-            tempFile.delete()
-        }
+        // Recover transferred payloads before AtomicFile starts a replacement. In particular,
+        // API 26 openRead() must not recover its .bak file in the middle of startWrite().
+        DvmBackupKind.entries.filterNot { prefs.contains("dvm_${it.name}") }.forEach { readBackup(it) }
+        autoBackup.write(
+            JSONArray().apply { holdings.forEach { put(it.toJson()) } },
+            JSONArray().apply { watchlist.forEach { put(it.toJson()) } },
+            overrides = JSONObject().apply {
+                PORTABLE_OVERRIDE_KEYS.forEach { key ->
+                    put(key, loadPortableOverride(key)?.let { JSONObject(it.toString(Charsets.UTF_8)) } ?: JSONObject())
+                }
+            },
+            backup = { kind -> load("dvm_${kind.name}") }
+        )
         BackupManager(appContext).dataChanged()
     }
 
-    private fun readAutoBackupSnapshot(): JSONObject? = runCatching {
-        if (!autoBackupFile.isFile || autoBackupFile.length() > 10 * 1024 * 1024) return null
-        JSONObject(autoBackupFile.readText(Charsets.UTF_8)).takeIf { it.optInt("version") == 1 }
-    }.getOrNull()
+    private fun loadPortableOverride(key: String): ByteArray? {
+        load(key)?.let { return it }
+        // Restore the complete optional group before any replacement snapshot is started.
+        // Older version-one snapshots without the group intentionally retain empty defaults.
+        val transferred = autoBackup.readOverrides() ?: return null
+        PORTABLE_OVERRIDE_KEYS.filterNot(prefs::contains).forEach { name ->
+            transferred.optJSONObject(name)?.let { json -> save(name, json.toString().toByteArray(Charsets.UTF_8)) }
+        }
+        return load(key)
+    }
 
     private fun WatchlistStock.toJson() = JSONObject().apply {
         put("code", code); put("name", name); put("market", market); put("sector", sector); put("category", category)
@@ -221,11 +221,14 @@ class LocalImportStore(context: Context) {
         getString("payoutTiming"), getString("desc"), optBoolean("alertEnabled"),
         if (isNull("badge")) null else optString("badge"), optInt("defaultShares", 100),
         isNoDividendConfirmed = optBoolean("isNoDividendConfirmed", false)
-    )
+    ).also {
+        require(PortfolioMath.validCode(it.code) && listOf(it.price, it.dps, it.targetPrice).all(PortfolioMath::validMoney) &&
+            it.currentYield.isFinite() && it.targetYield.isFinite() && it.targetYield > 0) { "監視銘柄の保存データが正しくありません" }
+    }
 
     private fun save(key: String, clear: ByteArray) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, secretKey()) }
-        val sealed = cipher.iv + cipher.doFinal(clear)
+        val sealed = cipher.iv + cipher.processChunks(clear)
         check(prefs.edit().putString(key, Base64.encodeToString(sealed, Base64.NO_WRAP)).commit()) { "端末にデータを保存できませんでした" }
     }
     private fun load(key: String): ByteArray? {
@@ -233,7 +236,23 @@ class LocalImportStore(context: Context) {
         require(data.size >= 28) { "保存データが破損しています" }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(128, data, 0, 12))
-        return cipher.doFinal(data, 12, data.size - 12)
+        return cipher.processChunks(data, 12, data.size - 12)
+    }
+
+    private fun Cipher.processChunks(input: ByteArray, offset: Int = 0, length: Int = input.size): ByteArray {
+        // Android 8.0's Keystore streamer can drop intermediate output when one call
+        // spans multiple 64 KiB chunks. Keep the same IV/ciphertext/tag format and
+        // collect every update; doFinal still authenticates the complete message.
+        val output = ByteArrayOutputStream(length + 16)
+        var position = offset
+        val end = offset + length
+        while (position < end) {
+            val count = minOf(64 * 1024, end - position)
+            update(input, position, count)?.let(output::write)
+            position += count
+        }
+        output.write(doFinal())
+        return output.toByteArray()
     }
 
     private fun secretKey(): SecretKey = synchronized(KEY_LOCK) {
@@ -270,6 +289,7 @@ class LocalImportStore(context: Context) {
             (it.taxFreeShares == null || it.taxFreeShares in 0..it.shares)) { "保存データの保有情報が正しくありません" }
     }
     private companion object {
+        val PORTABLE_OVERRIDE_KEYS = listOf("shareholder_benefits", "stock_climate_overrides", "dividend_history_overrides")
         const val KEY_ALIAS = "diview.local.import.aes"
         val KEY_LOCK = Any()
     }

@@ -609,10 +609,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         // Add Asset / Joint Portfolio Matrix Sheet Overlay
                         val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
                         val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
+                        val existingHoldings by viewModel.holdings.collectAsStateWithLifecycle()
                         AddHoldingSheet(
                             usdJpyRate = exchangeRate?.usdJpy,
                             usWithholdingEnabled = usTaxDeduction,
-                            existingHoldings = viewModel.holdings.value,
+                            existingHoldings = existingHoldings,
                             visible = showAddHoldingSheet,
                             prefilledCode = prefilledAddHoldingCode,
                             onDismiss = {

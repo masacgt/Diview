@@ -30,11 +30,7 @@ import java.io.IOException
 class AssetManagementPerformanceTest {
     @get:Rule val compose = createComposeRule()
     private val models = ViewModelStore()
-    private val app = object : Application() {
-        init { attachBaseContext(InstrumentationRegistry.getInstrumentation().targetContext) }
-        override fun getSharedPreferences(name: String, mode: Int): SharedPreferences =
-            baseContext.getSharedPreferences("asset_performance_$name", mode)
-    }
+    private val app = AuditApplication()
     private val preferences = listOf("local_import_store", "display_preferences", "cloudflare_market_cache", "notification_preferences", "notification_delivery")
     private lateinit var model: DividendViewModel
 
@@ -64,6 +60,7 @@ class AssetManagementPerformanceTest {
     @After fun clean() {
         compose.runOnIdle { models.clear() }
         clearPreferences()
+        app.cleanUp()
     }
 
     private fun clearPreferences() {

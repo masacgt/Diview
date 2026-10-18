@@ -467,7 +467,7 @@ private fun ThresholdSlider(
     val disabledColor = SettingsMuted
     Canvas(Modifier.fillMaxWidth().height(48.dp).semantics {
         contentDescription = label
-        if (enabled) progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), 1f..10f, value - 1)
+        if (enabled) progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), 1f..10f, 8)
         else disabled()
         setProgress { requested ->
             if (!enabled || !requested.isFinite()) false else {

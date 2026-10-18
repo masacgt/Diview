@@ -19,11 +19,7 @@ import java.io.IOException
 import com.kurogane.dividend.notifications.NotificationKind
 import com.kurogane.dividend.notifications.NotificationStore
 
-internal class ReviewApplication : Application() {
-    init { attachBaseContext(InstrumentationRegistry.getInstrumentation().targetContext) }
-    override fun getSharedPreferences(name: String, mode: Int): SharedPreferences =
-        baseContext.getSharedPreferences("release_review_$name", mode)
-}
+internal class ReviewApplication : AuditApplication()
 
 @RunWith(AndroidJUnit4::class)
 class PortfolioPersistenceTest {
@@ -36,6 +32,7 @@ class PortfolioPersistenceTest {
         listOf("local_import_store", "display_preferences", "cloudflare_market_cache", "notification_preferences", "notification_delivery").forEach {
             application.getSharedPreferences(it, Context.MODE_PRIVATE).edit().clear().commit()
         }
+        seedReviewPortfolio(application)
     }
 
     @After fun cleanUp() {
@@ -43,6 +40,7 @@ class PortfolioPersistenceTest {
         listOf("local_import_store", "display_preferences", "cloudflare_market_cache", "notification_preferences", "notification_delivery").forEach {
             application.getSharedPreferences(it, Context.MODE_PRIVATE).edit().clear().commit()
         }
+        application.cleanUp()
     }
 
     private fun model(): DividendViewModel {
@@ -113,7 +111,7 @@ class PortfolioPersistenceTest {
     @Test fun watchlistTargetsAndMembershipSurviveRecreation() {
         val model = model()
         instrumentation.runOnMainSync {
-            model.updateTargetYield("7203", 0.5)
+            repeat(10) { model.updateTargetYield("7203", 1.0) }
             model.toggleWatchlistStock("7203")
             model.toggleWatchlistMembership(model.holdings.value.first { it.code == "2914" })
         }
