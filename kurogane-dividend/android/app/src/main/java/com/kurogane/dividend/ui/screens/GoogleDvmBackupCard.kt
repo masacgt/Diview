@@ -38,7 +38,7 @@ import com.kurogane.dividend.model.StockClimate
 import com.kurogane.dividend.data.DividendHistoryOverride
 import com.kurogane.dividend.ui.theme.OnSurfaceVariant
 import com.kurogane.dividend.ui.theme.PrimaryEmerald
-import com.kurogane.dividend.ui.components.DataManagementActionCard
+import com.kurogane.dividend.ui.components.DataManagementActionButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -167,7 +167,7 @@ fun GoogleDvmBackupCard(
 
     val title = stringResource(if (action == GoogleDvmBackupAction.EXPORT) R.string.settings_label_13 else R.string.dvm_drive_restore_title)
     val subtitle = stringResource(if (action == GoogleDvmBackupAction.EXPORT) R.string.dvm_drive_backup_subtitle else R.string.dvm_drive_restore_subtitle)
-    DataManagementActionCard(
+    DataManagementActionButton(
         onClick = ::authorize,
         enabled = !isWorking,
         modifier = modifier.fillMaxWidth(),

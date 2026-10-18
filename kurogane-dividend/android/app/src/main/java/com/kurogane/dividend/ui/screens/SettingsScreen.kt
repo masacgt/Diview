@@ -1,7 +1,7 @@
 package com.kurogane.dividend.ui.screens
 
 import com.kurogane.dividend.ui.components.AdaptiveRow
-import com.kurogane.dividend.ui.components.DataManagementActionCard
+import com.kurogane.dividend.ui.components.DataManagementActionButton
 import androidx.compose.ui.res.stringResource
 import com.kurogane.dividend.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -133,7 +133,7 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         if (dataTab == "import") {
-                            DataManagementActionCard(
+                            DataManagementActionButton(
                                 title = stringResource(R.string.backup_csv_import_title),
                                 subtitle = stringResource(R.string.backup_csv_import_subtitle),
                                 icon = Icons.Default.UploadFile,
@@ -144,7 +144,7 @@ fun SettingsScreen(
                                 onImportDvm = { backups -> viewModel.importDvmBackups(backups) }
                             )
                         } else {
-                            DataManagementActionCard(
+                            DataManagementActionButton(
                                 title = stringResource(R.string.settings_label_12),
                                 subtitle = stringResource(R.string.backup_csv_export_subtitle),
                                 icon = Icons.Default.Save,
