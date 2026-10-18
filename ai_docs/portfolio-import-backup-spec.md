@@ -36,17 +36,17 @@ The export action requests a Google account authorization and saves two encrypte
 
 Both files use the reference APK's exact encryption procedure: AES-256-GCM with `AES/GCM/NoPadding`, a 32-byte fixed ASCII compatibility key, a fresh 12-byte `SecureRandom` nonce, and a 128-bit authentication tag. File bytes are `DVMV1` (ASCII) + nonce + ciphertext and tag; the plaintext is UTF-8 JSON. The fixed key is embedded in the APK, so this format provides compatibility and integrity but not strong secrecy from someone who can inspect the application package. Google OAuth credentials and the Drive access token are not stored in the backup file.
 
-The Google Drive action requests the `drive.file` scope. It can create, replace, and import Diview's own backup files. The Google Cloud project must have the Drive API enabled and an OAuth Android client registered for package `com.kurogane.dividend` and the signing certificate SHA-1. Those account/project settings are external to this repository; see Google's [Drive authorization scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth) and [Android AuthorizationClient reference](https://developers.google.com/android/reference/com/google/android/gms/auth/api/identity/AuthorizationClient). The import action downloads the latest matching Diview stock and extension files; an absent extension file is allowed so a legacy stock backup can still be imported. Only stock holdings and Diview extension data are applied to the current portfolio. Local backup-folder selection is not offered.
+Drive export requests the `drive.file` scope and creates or replaces Diview's own backup files. Drive import uses Android's document picker so the user can select an existing `.dvm` in Google Drive, including files that were not created by Diview. The selected URI is read through the document provider; the app does not list all Drive files or request broad Drive access. The Google Cloud project must have the Drive API enabled and an OAuth Android client registered for package `com.kurogane.dividend` and the signing certificate SHA-1 for export. Those account/project settings are external to this repository; see Google's [Drive authorization scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth) and [Android document access](https://developer.android.com/training/data-storage/shared/documents-files). Only stock holdings and Diview extension data are applied to the current portfolio. Local backup-folder selection is not offered.
 
-The settings screen offers two import actions: **CSVからインポート** opens the broker CSV flow, and **Googleドライブからインポート** starts account authorization and reads the Drive backup. The CSV flow also offers a two-option selector (**CSVから** / **Googleドライブから**). The settings import and export segments share the same fixed-height 220 dp content viewport and action-card layout.
+The settings screen offers two import actions: **CSVからインポート** opens the broker CSV flow, and **Googleドライブからインポート** opens Android's document picker for selecting Drive backup files. The CSV flow also offers a two-option selector (**CSVから** / **Googleドライブから**). The settings import and export segments share the same fixed-height 220 dp content viewport and action-card layout.
 
 ### Save and restore steps
 
 1. Open **設定 → データ管理＆バックアップ → エクスポート（保存）**.
 2. Tap **暗号化バックアップ（Googleドライブに保存）**.
 3. On first use, select a Google account and approve the requested Drive file access. The app uploads or updates the two DVM files in that account's Drive root and displays a completion message.
-4. To import, open **設定 → データ管理＆バックアップ → インポート（取込）**, tap **Googleドライブからインポート**, and select the account used for backup.
-5. The app reads the latest matching stock and optional Diview extension files, authenticates and decrypts each file, then applies valid holdings and included portable edit data.
+4. To import, open **設定 → データ管理＆バックアップ → インポート（取込）**, tap **Googleドライブからインポート**, browse to the backup in Google Drive, and select one or more `.dvm` files.
+5. The app reads the selected files, authenticates and decrypts each file, identifies supported legacy filenames or stock/Diview payload structure, then applies valid holdings and included portable edit data.
 
 ## Google Drive backup import behavior
 
