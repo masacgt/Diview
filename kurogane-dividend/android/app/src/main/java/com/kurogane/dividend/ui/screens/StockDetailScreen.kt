@@ -234,8 +234,9 @@ fun StockDetailScreen(
     val currentPrice = currentHolding.price
     val dps = currentHolding.dps
     val financial = financialData[currentHolding.code]
-    val latestCompleteCalendarYear = java.time.Year.now(ZoneId.of("Asia/Tokyo")).value - 1
-    val dividendHistoryYears = (latestCompleteCalendarYear - 7..latestCompleteCalendarYear).toList()
+    val currentCalendarYear = java.time.Year.now(ZoneId.of("Asia/Tokyo")).value
+    val currentCalendarDate = java.time.LocalDate.now(ZoneId.of("Asia/Tokyo"))
+    val dividendHistoryYears = (currentCalendarYear - 7..currentCalendarYear).toList()
     val chartDividendEvents = remember(currentHolding.code, dividendEventRevision) {
         viewModel.dividendEventsFor(currentHolding.code)
     }
@@ -248,6 +249,23 @@ fun StockDetailScreen(
                 .toSortedMap()
                 .map { (month, events) -> month to events.sumOf { it.amountPerShare } }
         }
+    }
+    val chartUpcomingDividend = remember(currentHolding.code, dividendEventRevision) {
+        viewModel.upcomingDividendEventFor(currentHolding.code)
+    }
+    val currentYearObservedDps = chartDividendEvents
+        .filter { it.date.year == currentCalendarYear && !it.date.isAfter(currentCalendarDate) }
+        .sumOf { it.amountPerShare }
+    val lastObservedDividendAmount = chartDividendEvents
+        .filter { !it.date.isAfter(currentCalendarDate) }
+        .maxByOrNull { it.date }
+        ?.amountPerShare
+    val currentYearForecastDps = when {
+        chartUpcomingDividend == null -> null
+        chartUpcomingDividend.exDividendDate.year > currentCalendarYear -> currentYearObservedDps
+        chartUpcomingDividend.exDividendDate.year == currentCalendarYear && lastObservedDividendAmount != null ->
+            currentYearObservedDps + lastObservedDividendAmount
+        else -> null
     }
     val normalizedDividendCode = currentHolding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T")
     val savedDividendOverrides = dividendHistoryOverrides[normalizedDividendCode].orEmpty().associateBy { it.year }
@@ -975,6 +993,7 @@ fun StockDetailScreen(
                                 )
                             }
                         }
+
                         financial?.forecastFiscalYear?.let { forecastFiscalYear ->
                             val fiscalMonth = financial.period.substringAfterLast('/').toIntOrNull()
                                 ?.takeIf { it in 1..12 }
@@ -1002,6 +1021,7 @@ fun StockDetailScreen(
                                 )
                             }
                         }
+
                         Spacer(modifier = Modifier.height(8.dp))
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
