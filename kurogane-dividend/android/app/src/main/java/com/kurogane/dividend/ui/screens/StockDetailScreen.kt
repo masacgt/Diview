@@ -999,7 +999,6 @@ fun StockDetailScreen(
                                 )
                             }
                         }
-
                         financial?.forecastFiscalYear?.let { forecastFiscalYear ->
                             val fiscalMonth = financial.period.substringAfterLast('/').toIntOrNull()
                                 ?.takeIf { it in 1..12 }
@@ -1027,7 +1026,6 @@ fun StockDetailScreen(
                                 )
                             }
                         }
-
                         Spacer(modifier = Modifier.height(8.dp))
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
