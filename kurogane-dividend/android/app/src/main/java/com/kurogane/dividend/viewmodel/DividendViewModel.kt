@@ -730,14 +730,13 @@ class DividendViewModel @JvmOverloads constructor(
         val dueSymbols = symbols.map { it.trim().uppercase(java.util.Locale.ROOT) }
             .distinct()
             .filter { symbol ->
-                PriceRefreshPolicy.shouldFetch(
-                    now,
-                    marketPreferences.getLong("dividend_fetch_attempt_at_$symbol", 0L),
-                    marketPreferences.getString("dividend_fetch_attempt_jst_$symbol", null)
-                        ?: marketPreferences.getString("dividend_events_fetched_jst_$symbol", null)
-                        ?: marketPreferences.getString("dividend_months_fetched_jst_$symbol", null)
-                ) && (marketPreferences.getString("dividend_months_fetched_jst_$symbol", null) != today ||
-                    marketPreferences.getString("dividend_events_fetched_jst_$symbol", null) != today)
+                val attemptDate = marketPreferences.getString("dividend_fetch_attempt_jst_$symbol", null)
+                val monthsDate = marketPreferences.getString("dividend_months_fetched_jst_$symbol", null)
+                val eventsDate = marketPreferences.getString("dividend_events_fetched_jst_$symbol", null)
+                // The startup refresh is once per Japan-local date. An attempt is
+                // recorded before networking, so a failed request is not retried
+                // repeatedly during the same day and becomes eligible tomorrow.
+                attemptDate != today && (monthsDate != today || eventsDate != today)
             }
         if (dueSymbols.isEmpty()) return@withLock
         val attemptEditor = marketPreferences.edit()
