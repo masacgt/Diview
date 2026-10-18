@@ -1234,6 +1234,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
     var isVisible by remember { mutableStateOf(false) }
     var chartMode by remember { mutableStateOf("dividend") } // "holding", "dividend", or "yield"
     var yieldBasis by remember { mutableStateOf("current") } // "current" or "cost"
+    var yieldBasisMenuExpanded by remember { mutableStateOf(false) }
     var sectorValueMode by remember { mutableStateOf("valuation") } // "valuation" or "dividend"
     val context = LocalContext.current
     val industriesByCode = remember(context) { Tse33IndustryMaster.industries(context) }
@@ -1460,7 +1461,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 .background(if (chartMode == "holding") PrimaryEmerald else Color.Transparent)
                                 .animateContentSize(animationSpec = tween(190))
                                 .clickable { chartMode = "holding" }
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .padding(horizontal = 6.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 stringResource(R.string.annual_dividend_text_9),
@@ -1477,7 +1478,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 .background(if (chartMode == "dividend") PrimaryEmerald else Color.Transparent)
                                 .animateContentSize(animationSpec = tween(190))
                                 .clickable { chartMode = "dividend" }
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .padding(horizontal = 6.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 stringResource(R.string.annual_dividend_text_10),
@@ -1489,71 +1490,79 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                             )
                         }
                         Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(if (chartMode == "yield") PrimaryEmerald else Color.Transparent)
-                                .animateContentSize(animationSpec = tween(190))
-                                .clickable { chartMode = "yield" }
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                            modifier = Modifier.animateContentSize(animationSpec = tween(190))
                         ) {
-                            Text(
-                                "利回り率",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = if (chartMode == "yield") OnPrimary else OnSurfaceVariant,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = AppTextSize.dense
-                                )
-                            )
-                        }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(32.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (chartMode == "yield") {
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(SurfaceContainerHigh)
-                                .padding(2.dp)
-                        ) {
+                            val yieldModeColor = if (chartMode == "yield") PrimaryEmerald else Color.Transparent
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
-                                    .background(if (yieldBasis == "current") PrimaryEmerald else Color.Transparent)
-                                    .animateContentSize(animationSpec = tween(190))
-                                    .clickable { yieldBasis = "current" }
-                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    .background(yieldModeColor)
                             ) {
-                                Text(
-                                    "現在利回り",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = if (yieldBasis == "current") OnPrimary else OnSurfaceVariant,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = AppTextSize.dense
-                                    )
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clickable { chartMode = "yield" }
+                                            .padding(start = 6.dp, top = 3.dp, bottom = 3.dp, end = 0.dp)
+                                    ) {
+                                        Text(
+                                            "利回り率",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = if (chartMode == "yield") OnPrimary else OnSurfaceVariant,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = AppTextSize.dense
+                                            )
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .sizeIn(minWidth = 20.dp, minHeight = 24.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .clickable { yieldBasisMenuExpanded = true }
+                                            .padding(horizontal = 1.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ExpandMore,
+                                            contentDescription = "利回り基準を選択",
+                                            tint = if (chartMode == "yield") OnPrimary else OnSurfaceVariant,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
                             }
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(if (yieldBasis == "cost") PrimaryEmerald else Color.Transparent)
-                                    .animateContentSize(animationSpec = tween(190))
-                                    .clickable { yieldBasis = "cost" }
-                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            DropdownMenu(
+                                expanded = yieldBasisMenuExpanded,
+                                onDismissRequest = { yieldBasisMenuExpanded = false }
                             ) {
-                                Text(
-                                    "取得利回り",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = if (yieldBasis == "cost") OnPrimary else OnSurfaceVariant,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = AppTextSize.dense
-                                    )
+                                DropdownMenuItem(
+                                    text = { Text("現在利回り") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = if (yieldBasis == "current") PrimaryEmerald else Color.Transparent
+                                        )
+                                    },
+                                    onClick = {
+                                        yieldBasis = "current"
+                                        chartMode = "yield"
+                                        yieldBasisMenuExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("取得利回り") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = if (yieldBasis == "cost") PrimaryEmerald else Color.Transparent
+                                        )
+                                    },
+                                    onClick = {
+                                        yieldBasis = "cost"
+                                        chartMode = "yield"
+                                        yieldBasisMenuExpanded = false
+                                    }
                                 )
                             }
                         }
