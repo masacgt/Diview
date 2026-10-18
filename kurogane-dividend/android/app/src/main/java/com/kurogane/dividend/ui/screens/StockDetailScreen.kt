@@ -235,6 +235,19 @@ fun StockDetailScreen(
     val financial = financialData[currentHolding.code]
     val latestCompleteCalendarYear = java.time.Year.now(ZoneId.of("Asia/Tokyo")).value - 1
     val dividendHistoryYears = (latestCompleteCalendarYear - 7..latestCompleteCalendarYear).toList()
+    val chartDividendEvents = remember(currentHolding.code, dividendEventRevision) {
+        viewModel.dividendEventsFor(currentHolding.code)
+    }
+    var selectedDividendYear by rememberSaveable(currentHolding.code) { mutableStateOf<Int?>(null) }
+    val selectedYearMonthlyDividends = remember(selectedDividendYear, chartDividendEvents) {
+        selectedDividendYear?.let { year ->
+            chartDividendEvents
+                .filter { it.date.year == year }
+                .groupBy { it.date.monthValue }
+                .toSortedMap()
+                .map { (month, events) -> month to events.sumOf { it.amountPerShare } }
+        }
+    }
     val normalizedDividendCode = currentHolding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T")
     val savedDividendOverrides = dividendHistoryOverrides[normalizedDividendCode].orEmpty().associateBy { it.year }
     val sourceDividendsByYear = financial?.dividends.orEmpty().associate { it.year to it.dps }
@@ -866,9 +879,22 @@ fun StockDetailScreen(
                                         label = "Dividend bar height"
                                     )
                                     val isProjected = term == bars.lastOrNull()?.first
+                                    val isSelected = selectedDividendYear == history[index].year
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier.weight(1f).fillMaxHeight()
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .clickable(onClickLabel = "${term}の配当内訳を表示") {
+                                                selectedDividendYear = if (isSelected) null else history[index].year
+                                                if (!isSelected) {
+                                                    viewModel.refreshDividendEventsForYear(
+                                                        currentHolding.category,
+                                                        currentHolding.code,
+                                                        history[index].year
+                                                    )
+                                                }
+                                            }
                                     ) {
                                         BoxWithConstraints(
                                             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -901,12 +927,36 @@ fun StockDetailScreen(
                                             )
                                         }
                                         Spacer(modifier = Modifier.height(4.dp))
-                                        Text(term, color = if (isProjected) PrimaryEmerald else OnSurfaceVariant, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                        Text(
+                                            term,
+                                            color = if (isSelected || isProjected) PrimaryEmerald else OnSurfaceVariant,
+                                            fontSize = AppTextSize.dense,
+                                            fontWeight = FontWeight.Bold
+                                        )
                                     }
                                 }
                             }
                         }
 
+                        selectedDividendYear?.let { year ->
+                            val monthlyAmounts = selectedYearMonthlyDividends.orEmpty()
+                                .joinToString("・") { (month, amount) ->
+                                    "${month}月 ${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(amount)}/株"
+                                }
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    "${year}年の配当イベント（月別・権利落ち月）",
+                                    color = OnSurfaceVariant,
+                                    fontSize = AppTextSize.dense
+                                )
+                                Text(
+                                    monthlyAmounts.ifBlank { "取得できる配当履歴がありません" },
+                                    color = OnSurface,
+                                    fontSize = AppTextSize.body,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
