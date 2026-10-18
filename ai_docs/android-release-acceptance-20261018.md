@@ -25,6 +25,7 @@
 | R5-M | `AutoBackupSnapshot.readBackup` と `LocalImportStore.saveBackup`。API 26 で約 50 MiB の旧 DVM 相当 payload を複数種類保存すると OOM | 高・確認 | 未修正。ユーザー判断により記録で終了。下記の再現と設計案を参照 |
 | R1 | `DvmBackupImporter.kt` の鍵定義、`DvmBackupImporterTest.kt`、`docs/release-quality-review-full.md` | 高・確認 | 旧互換性のため残す。共有固定の旧ファイル暗号鍵であり、サーバー用 API トークンではない。値は本書・PR に記載しない |
 | R4/R5 | `LocalImportStore.writeAutoBackupSnapshot` と backup XML。移行 JSON はアプリ専用領域の平文。OS クラウドにはアプリごとの容量制約 | 高・確認 | 自動復元を維持。端末固有の暗号化 preferences のバックアップ除外、API 31 以降のクラウド暗号化能力条件を維持。全端末・全データの安全なクラウド復元を保証したものではない |
+| V1 | `ReleaseReadinessTest.watchlistSortOrderSurvivesLeavingAndReturningToTab` と `WatchlistScreen` のソートシート。CI API 26 は初期カード待機で timeout。480×800/密度240 でも再現し、viewport の補正案では並べ替え完了に到達できない。シートの Column に縦スクロールがない | 中・再現とコード確認 | 未修正。通常画面の既存テストは成功。元依頼の「操作方法を維持」に対し、通常の見た目を保った縦スクロール追加か、今回は記録のみとするかを確認中。試作のテスト補正は採用せず、期待値・timeout・既存テストを維持 |
 
 主なコードは [AutoBackupSnapshot](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/data/AutoBackupSnapshot.kt)、[LocalImportStore](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/data/LocalImportStore.kt)、[CachedFetchFailure](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/data/CachedFetchFailure.kt)、[DividendViewModel](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/viewmodel/DividendViewModel.kt)、[AssetManagementScreen](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/ui/screens/AssetManagementScreen.kt)、[NotificationRetryPolicy](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/notifications/NotificationRetryPolicy.kt)。差分全体は PR を参照する。
 
@@ -70,6 +71,8 @@
 | TalkBack | 過去の盲目的な操作では対象値の変更を確認できなかった | API 35 で設定画面から実サービスを有効化し、接続と対象の focus・setProgress・増減・上下限を検証。タッチスワイプの追加試験 2 回は値の変更を待つ箇所で各 15 秒の timeout。スワイプの成功・音声評価は確認できていない |
 
 既存テストの修正は製品コードを期待値へ合わせるものではない。空の新規インストールを前提に、必要な 7203/2914/AAPL と監視データをテスト内で明示保存する。取得拒否時は現行 API の戻り値 false と保存データ不変を確認し、0.05 刻みの操作、現行の暦年配当 JSON、削除済みの検索候補に依存しない入力、API 33 以降だけの通知権限を使う。TSE の分類済み 33 業種と、銘柄名マスターから補った未分類の扱いを別々に確認する。assertion の削除、失敗の除外、`continue-on-error` の追加はない。既存の API 29 未満の画像保存テストの assumption はそのまま残す。
+
+ローカル全件成功は通常構成（API 26 は 1080×1920/密度420）の結果であり、CI API 26 の成功を意味しない。`08cbf5aa` の CI は build と API 35 が成功、API 26 は上記の並び順テスト 1 件が失敗（89 件中、失敗1・既存 skip1）。[68124e27 の再実行](https://github.com/masacgt/Diview/actions/runs/39085855666) でも build（JVM 142 件とホスト guard 4 件を含む）は成功し、API 26 の同じ 1 件が失敗した。さらに小画面で同クラス 6 件を確認したところ、検索再試行・設定のスクロール・ソートの 3 件が失敗した。これらを除外したり、大きな画面へ CI を変更したりして成功扱いにはしていない。小画面のソート補正案 2 回は元の問題を解消するだけでは操作を完了できず、UI の変更方針が必要と判断して保留した。初期カード待機の timeout と、その後のソート操作未完了がすべて同じ原因とは断定しない。試作差分と失敗ログはローカルの evidence に保存し、テストソースと生成 test APK は採用済みの状態へ戻した。
 
 画像は 9 画面（資産、年間配当、ロードマップ、監視、設定、銘柄詳細、CSV、問い合わせ、利用規約）の light/dark/OLED と、資産・設定・監視の 1.3/2.0 倍文字の初期 viewport、合計 33 枚。全スクロール位置、全モーダル、全状態、全 OS・メーカーの網羅ではない。
 
@@ -133,4 +136,4 @@ adb -s emulator-5558 install -r app\build\outputs\apk\androidTest\debug\app-debu
 adb -s emulator-5558 shell am instrument -w -r com.kurogane.dividend.test/com.kurogane.dividend.ReleaseFixtureInstrumentation
 ```
 
-未完了の判断は、最大 DVM の保存方式、固定鍵と移行データの保護、小さな同期保存の完了保証、実際の別端末クラウド復元、Play 配信、TalkBack のスワイプ・音声と端末での人による操作、API 26 の画像保存（既存テストの assumption 対象）、長期の通知配送・省電力、全画面・全状態・全機種の網羅。これらを解決済み、またはリリース許可済みとは記載しない。本番デプロイ・公開・署名済み APK の配布は行っていない。すべての不具合を検出したという意味でもない。
+未完了の判断は、小画面のソート操作と CI API 26 の失敗（V1）、最大 DVM の保存方式、固定鍵と移行データの保護、小さな同期保存の完了保証、実際の別端末クラウド復元、Play 配信、TalkBack のスワイプ・音声と端末での人による操作、API 26 の画像保存（既存テストの assumption 対象）、長期の通知配送・省電力、全画面・全状態・全機種の網羅。これらを解決済み、またはリリース許可済みとは記載しない。本番デプロイ・公開・署名済み APK の配布は行っていない。すべての不具合を検出したという意味でもない。
