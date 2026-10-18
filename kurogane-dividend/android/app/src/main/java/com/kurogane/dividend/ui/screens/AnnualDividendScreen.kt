@@ -1463,7 +1463,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 .clickable {
                                     if (viewModel.setCompositionChartMode("holding")) chartMode = "holding"
                                 }
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .padding(horizontal = 6.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 stringResource(R.string.annual_dividend_text_9),
@@ -1482,7 +1482,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 .clickable {
                                     if (viewModel.setCompositionChartMode("dividend")) chartMode = "dividend"
                                 }
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .padding(horizontal = 6.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 stringResource(R.string.annual_dividend_text_10),
