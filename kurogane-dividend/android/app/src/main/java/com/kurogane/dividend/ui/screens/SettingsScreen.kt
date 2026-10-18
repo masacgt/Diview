@@ -49,7 +49,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.kurogane.dividend.notifications.NotificationKind
-import com.kurogane.dividend.notifications.DiviewNotifications
 import com.kurogane.dividend.ui.components.rememberNotificationAccess
 
 private val SettingsCard: Color @Composable get() = SurfaceContainerLow
@@ -85,23 +84,11 @@ fun SettingsScreen(
     var confirmReset by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
-    fun sendNotificationTest(kind: NotificationKind) {
-        val sent = DiviewNotifications(context).test(kind)
-        Toast.makeText(
-            context,
-            context.getString(if (sent) R.string.notification_test_success else R.string.notification_test_failure),
-            Toast.LENGTH_LONG
-        ).show()
-    }
     val notificationAccess = rememberNotificationAccess { action ->
         when (action) {
             "price" -> viewModel.setNotificationEnabled(NotificationKind.PRICE, true)
             "dividend" -> viewModel.setNotificationEnabled(NotificationKind.DIVIDEND, true)
             "dividend_change" -> viewModel.setNotificationEnabled(NotificationKind.DIVIDEND_CHANGE, true)
-            "test_price" -> sendNotificationTest(NotificationKind.PRICE)
-            "test_dividend" -> sendNotificationTest(NotificationKind.DIVIDEND)
-            "test_dividend_change" -> sendNotificationTest(NotificationKind.DIVIDEND_CHANGE)
-            "test" -> Toast.makeText(context, if (DiviewNotifications(context).test()) context.getString(R.string.settings_message) else context.getString(R.string.settings_message_2), Toast.LENGTH_LONG).show()
         }
     }
     val exportScope = rememberCoroutineScope()
@@ -262,32 +249,28 @@ fun SettingsScreen(
         item {
             SettingsSection(stringResource(R.string.settings_text_9), Icons.Default.Notifications) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Label(stringResource(R.string.notification_test_note), 7, SettingsMuted)
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Label(stringResource(R.string.settings_label_27), 9, OnSurface, true)
+                            Label(stringResource(R.string.settings_label_28), 7, SettingsMuted)
+                        }
+                        Label(stringResource(R.string.settings_label_29), 8, SettingsMint)
+                    }
+                    Label(stringResource(R.string.settings_label_30), 7, SettingsMuted)
                     SettingToggle(stringResource(R.string.settings_text_10), stringResource(R.string.settings_label_54), notificationSettings.dividendEnabled, {
                         if (it) notificationAccess.request("dividend") else viewModel.setNotificationEnabled(NotificationKind.DIVIDEND, false)
                     })
-                    NotificationTestAction { notificationAccess.request("test_dividend") }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     SettingToggle(stringResource(R.string.notification_dividend_change_title), stringResource(R.string.notification_dividend_change_summary), notificationSettings.dividendChangeEnabled, {
                         if (it) notificationAccess.request("dividend_change") else viewModel.setNotificationEnabled(NotificationKind.DIVIDEND_CHANGE, false)
                     })
-                    NotificationTestAction { notificationAccess.request("test_dividend_change") }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
                     SettingToggle(stringResource(R.string.settings_text_11), stringResource(R.string.settings_label_55), notificationSettings.priceEnabled, {
                         if (it) notificationAccess.request("price") else viewModel.setNotificationEnabled(NotificationKind.PRICE, false)
                     })
-                    NotificationTestAction { notificationAccess.request("test_price") }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) { Label(stringResource(R.string.settings_label_27), 9, OnSurface, true); Label(stringResource(R.string.settings_label_28), 7, SettingsMuted) }
-                        Label(stringResource(R.string.settings_label_29), 8, SettingsMint)
-                    }
-                    Label(stringResource(R.string.settings_label_30), 7, SettingsMuted)
                     Label(stringResource(R.string.settings_label_31 , if (notificationAccess.dividendAllowed) "ON" else "OFF", if (notificationAccess.priceAllowed) "ON" else "OFF", if (notificationAccess.dividendChangeAllowed) "ON" else "OFF"), 8, SettingsMuted)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ActionButton(stringResource(R.string.settings_label_32), Modifier.weight(1f)) { notificationAccess.request("test") }
-                        ActionButton(stringResource(R.string.settings_label_33), Modifier.weight(1f)) { notificationAccess.openSettings() }
-                    }
+                    ActionButton(stringResource(R.string.settings_label_33), Modifier.fillMaxWidth()) { notificationAccess.openSettings() }
                 }
             }
         }
@@ -420,17 +403,6 @@ private fun SettingToggle(title: String, detail: String, checked: Boolean, onCha
 @Composable
 private fun ActionButton(label: String, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     Box(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(7.dp)).background(SettingsInset).border(1.dp, SettingsBorder, RoundedCornerShape(7.dp)).clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(6.dp), contentAlignment = Alignment.Center) { Label(label, 8, OnSurface, true) }
-}
-
-@Composable
-private fun NotificationTestAction(onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        ActionButton(
-            stringResource(R.string.notification_test_button),
-            Modifier.width(132.dp),
-            onClick = onClick
-        )
-    }
 }
 
 @Composable
