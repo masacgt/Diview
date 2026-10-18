@@ -234,13 +234,26 @@ fun StockDetailScreen(
     val currentPrice = currentHolding.price
     val dps = currentHolding.dps
     val financial = financialData[currentHolding.code]
+    val fiscalMonth = financial?.period?.substringAfterLast('/')?.toIntOrNull()?.takeIf { it in 1..12 }
     val currentCalendarYear = java.time.Year.now(ZoneId.of("Asia/Tokyo")).value
     val currentCalendarDate = java.time.LocalDate.now(ZoneId.of("Asia/Tokyo"))
-    val dividendHistoryYears = (currentCalendarYear - 7..currentCalendarYear).toList()
+    val chartForecastYear = financial?.takeIf {
+        it.forecastAnnualDividend != null &&
+            it.forecastFiscalYear?.let { year -> year >= currentCalendarYear } == true
+    }?.forecastFiscalYear ?: currentCalendarYear
+    val dividendHistoryYears = (chartForecastYear - 7..chartForecastYear).toList()
     val chartDividendEvents = remember(currentHolding.code, dividendEventRevision) {
         viewModel.dividendEventsFor(currentHolding.code)
     }
-    var selectedDividendYear by rememberSaveable(currentHolding.code) { mutableStateOf<Int?>(null) }
+    var selectedDividendYear by rememberSaveable(currentHolding.code) { mutableStateOf<Int?>(currentCalendarYear) }
+    LaunchedEffect(currentHolding.code, currentCalendarYear) {
+        if (selectedDividendYear == null) selectedDividendYear = currentCalendarYear
+    }
+    LaunchedEffect(currentHolding.code, selectedDividendYear) {
+        selectedDividendYear?.let { year ->
+            viewModel.refreshDividendEventsForYear(currentHolding.category, currentHolding.code, year)
+        }
+    }
     val selectedYearMonthlyDividends = remember(selectedDividendYear, chartDividendEvents) {
         selectedDividendYear?.let { year ->
             chartDividendEvents
@@ -269,24 +282,35 @@ fun StockDetailScreen(
     }
     val normalizedDividendCode = currentHolding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T")
     val savedDividendOverrides = dividendHistoryOverrides[normalizedDividendCode].orEmpty().associateBy { it.year }
-    val sourceDividendsByYear = financial?.dividends.orEmpty().associate { it.year to it.dps }
+    val issuerFiscalDividendsByYear = financial?.issuerDividends.orEmpty().mapNotNull { dividend ->
+        dividend.displayDps?.let { dividend.fiscalYear to it }
+    }.toMap()
+    val sourceDividendsByYear = issuerFiscalDividendsByYear.ifEmpty {
+        financial?.dividends.orEmpty().associate { it.year to it.dps }
+    }
     var yearEndPrices by remember(currentHolding.code) { mutableStateOf<Map<Int, Double>>(emptyMap()) }
     LaunchedEffect(currentHolding.code, dividendHistoryYears) {
         yearEndPrices = com.kurogane.dividend.data.runCatchingCancellable {
             viewModel.loadMonthlyPriceHistory(
                 listOf(normalizedDividendCode),
-                dividendHistoryYears.filter { it < currentCalendarYear }.map { "$it-12" }
+                dividendHistoryYears.filter { it < chartForecastYear }.map { "$it-12" }
             ).firstOrNull()?.prices.orEmpty().associate { price ->
                 price.month.take(4).toInt() to price.close
             }
         }.getOrDefault(emptyMap())
     }
     val defaultDividendPeriods = dividendHistoryYears.map { year ->
-        val isForecast = year == currentCalendarYear
+        val isForecast = year == chartForecastYear
+        val annualDividend = if (isForecast) {
+            financial?.takeIf { it.forecastFiscalYear == year }?.forecastAnnualDividend
+                ?: currentYearForecastDps
+        } else {
+            sourceDividendsByYear[year]
+        }
         StockDetailDividendPeriod(
             year,
             if (isForecast) null else yearEndPrices[year],
-            if (isForecast) currentYearForecastDps else sourceDividendsByYear[year],
+            annualDividend,
             isForecast
         )
     }
@@ -329,7 +353,6 @@ fun StockDetailScreen(
             }
         } finally { shareSplitHistoryLoading = false }
     }
-    val fiscalMonth = financial?.period?.substringAfterLast('/')?.toIntOrNull()?.takeIf { it in 1..12 }
     val isCalendarYearDividendHistory = financial?.dividendHistoryBasis == "calendar_year_observed_distributions"
     val baseProfile = financial?.profile ?: com.kurogane.dividend.model.StockFinancialProfile()
     var financialError by remember(currentHolding.code) { mutableStateOf(false) }
@@ -891,8 +914,9 @@ fun StockDetailScreen(
                                     val dpsText = point.annualDividend
                                         ?.let { com.kurogane.dividend.model.formatFinancialAmountDisplay(it) }
                                         ?: "未取得"
+                                    val fiscalPeriodLabel = "${point.year}期"
                                     Triple(
-                                        "${point.year}期",
+                                        fiscalPeriodLabel,
                                         stringResource(R.string.add_holding_1_s_2_s_2, prefix, dpsText),
                                         (dps / maxDps * 0.95).toFloat()
                                     )
@@ -913,14 +937,7 @@ fun StockDetailScreen(
                                             .weight(1f)
                                             .fillMaxHeight()
                                             .clickable(onClickLabel = "${term}の配当内訳を表示") {
-                                                selectedDividendYear = if (isSelected) null else history[index].year
-                                                if (!isSelected) {
-                                                    viewModel.refreshDividendEventsForYear(
-                                                        currentHolding.category,
-                                                        currentHolding.code,
-                                                        history[index].year
-                                                    )
-                                                }
+                                                selectedDividendYear = history[index].year
                                             }
                                     ) {
                                         BoxWithConstraints(
@@ -981,73 +998,43 @@ fun StockDetailScreen(
                         }
 
                         selectedDividendYear?.let { year ->
+                            val selectedForecastDps = dividendPeriods
+                                .firstOrNull { it.year == year && it.isForecast }
+                                ?.annualDividend
                             val monthlyAmounts = selectedYearMonthlyDividends.orEmpty()
-                                .joinToString("・") { (month, amount) ->
-                                    "${month}月 ${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(amount)}/株"
+                                .joinToString("　") { (month, amount) ->
+                                    "${month}月${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(amount)}/株"
                                 }
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Text(
-                                    "${year}年の配当イベント（月別・権利落ち月）",
-                                    color = OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense
-                                )
-                                Text(
-                                    monthlyAmounts.ifBlank { "取得できる配当履歴がありません" },
-                                    color = OnSurface,
-                                    fontSize = AppTextSize.body,
-                                    fontWeight = FontWeight.SemiBold
-                                )
+                            val selectedYearAmount = if (selectedForecastDps != null) {
+                                "予想${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(selectedForecastDps)}/株"
+                            } else {
+                                monthlyAmounts.ifBlank { "配当履歴なし" }
                             }
-                        }
-
-                        financial?.forecastFiscalYear?.let { forecastFiscalYear ->
-                            val fiscalMonth = financial.period.substringAfterLast('/').toIntOrNull()
-                                ?.takeIf { it in 1..12 }
-                            val forecastPeriodLabel = fiscalMonth?.let { month ->
-                                "${forecastFiscalYear}年${month}月期 予想配当"
-                            } ?: "${forecastFiscalYear}年期 予想配当"
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    forecastPeriodLabel,
+                                    "${year}年の配当イベント",
                                     color = OnSurfaceVariant,
                                     fontSize = AppTextSize.dense,
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    financial.forecastAnnualDividend
-                                        ?.let { "¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(it)} / 株" }
-                                        ?: "未取得",
-                                    color = PrimaryEmerald,
+                                    selectedYearAmount,
+                                    color = OnSurface,
                                     fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.weight(1.35f),
+                                    textAlign = TextAlign.End,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            val recent = dividendPeriods.filter { it.annualDividend != null }.takeLast(4)
-                            val legacyGrowth = if (recent.size == 4 && (recent.first().annualDividend ?: 0.0) > 0 && recent.last().year - recent.first().year == 3)
-                                (((recent.last().annualDividend ?: 0.0) / (recent.first().annualDividend ?: 1.0)) - 1) * 100 else Double.NaN
-                            val growthLabel = if (isCalendarYearDividendHistory) {
-                                stringResource(R.string.stock_detail_calendar_growth_cagr_detail, profile.growthRate.financialSignedText(1, "%"))
-                            } else {
-                                stringResource(R.string.stock_detail_text_10, legacyGrowth.financialText(1, "%"))
-                            }
-                            Text(growthLabel, color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text(
-                                "予想配当性向 ${financial?.forecastPayoutRatio?.financialText(1, "%") ?: "未取得"}",
-                                color = OnSurface,
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Bold
-                            )
                         }
                     }
                 }

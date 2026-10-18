@@ -2,8 +2,12 @@
 
 ## Completed
 
-- [x] Limit portfolio import choices to broker CSV or Google Drive, remove backup-folder selection, and unify the data-management action cards. Evidence: the JDK 17 debug APK builds and installs on SCG01 and the emulator; SCG01 shows both choices and equal-height import/export viewports, and the CSV choice opens its CSV/Google Drive selector.
-- [ ] Verify end-to-end import with a sample CSV and verify Google authorization, Drive upload, and Drive import using a configured account; those data-changing flows were not run during the UI update.
+- [x] Group notification reminders into timing, notification types, and device permission, with a collapsible notification list and the device-settings button beside its permission summary. Evidence: JDK 17 debug build succeeds; fresh SCG01 install shows the requested layout and the notification list expands/collapses.
+- [ ] Recheck the notification settings screen on the emulator after resolving its launch ANR; the APK installed, but the first frame took over 73 seconds and input timed out.
+
+- [x] Show the selected forecast-period DPS in the dividend-event row, keep it visible when the selected bar is tapped again, and remove the always-visible forecast row. Evidence: JDK 17 debug build and SCG01/emulator installs succeed; tapping Takeda 4502's 2027期 bar twice leaves `2027年の配当イベント` with `予想¥204/株` visible, and the standalone 2027年3月期 forecast row is absent.
+
+- [x] Source fiscal-period dividend bars from issuer-reported fiscal DPS when available. Evidence: the production 4502 payload has FY2026 DPS ¥200 and next-year forecast ¥204; the JDK 17 debug APK builds and installs on SCG01 and the emulator, and SCG01 shows ¥200 at 2026期 and ¥204 at 2027期 while its calendar-year 2026 event row remains separate.
 
 - [x] Preserve the three approved portable override groups without changing snapshot version 1 or including feedback drafts. Evidence: 17 backup cases pass on API 26/35/33, and the final AAB survives offline OS full-backup/clear/restore on API 26 with all three groups and existing saved facts unchanged; see `android-release-acceptance-20261018.md`.
 - [x] Retain financial failure categories across recreation, bound transient dividend-change retries, restore the asset-list scroll position, and move the initial override/security reads into restoration IO. Evidence: JDK 17 passes 142 JVM cases and Lint without errors; the full suite has 89 passes on API 35 and 88 passes plus one existing API-specific assumption on API 26, with all 32 isolated device cases passing and five production files unchanged.
@@ -13,6 +17,8 @@
 - [x] Fix the confirmed Android release-audit error, retry, lifecycle, StateFlow, and threshold accessibility regressions without changing rendered UI. Evidence: the JDK 17 build passes 137 JVM tests, Lint with zero errors, debug/test APK assembly and unsigned R8 release assembly; API 26/35 each pass five new regressions plus six existing UI cases, and SCG01 API 33 passes all five new cases with five existing production-file hashes unchanged. See `android-release-audit-20261018.md`.
 
 - [x] Correct the annual DPS field contract, stop TTM totals from inflating the 2026 portfolio chart, and migrate held-security cache values. Evidence: all 43 yfinance sync tests and 3 focused Worker tests pass; the JDK 17 repository unit test and debug APK build pass; Worker version `f154c6b2-85e1-408b-9474-862c745dc3a0` returns 8214/8058/6493/6721/2914/8306 at ¥90/¥125/¥20/¥0/¥272/¥96 per share with TTM totals separate; SCG01 cache contract v2 stores those six values and the chart displays ¥693,000 for 2026.
+
+- [x] Show each security's next fiscal-year DPS forecast in the final Stock Detail chart bar. Evidence: the JDK 17 debug build succeeds; SCG01 displays `予想 ¥272` at `2026期` for 2914, and emulator UI state displays `予想 ¥82.5` at `2027期` for 4626.
 
 - [x] Calculate and label Stock Detail's calendar-year dividend-total CAGR from yfinance events. Evidence: `FinancialData.kt` selects the latest two to five consecutive annual totals, and the JDK 17 debug APK displayed `暦年配当合計CAGR 13.7%` for 2914 on device `RFCNC0E4H8J`; consecutive-increase and no-cut counts remain unavailable for this history basis.
 - [x] Publish yfinance retrieval metadata through the security API and show it on Android Stock Detail. Evidence: Worker version `3cdc544d-c1f4-404b-9246-76c5a04b46ca` returned the added ticker, currency, source/status, and dividend-history bounds in production; all 20 Worker tests passed, and the JDK 17 debug APK installed and displayed the information card on device `RFCNC0E4H8J` and emulator `emulator-5554`.
@@ -26,8 +32,10 @@
 
 ## Next
 
-- [x] Run the policy-v2 financial refresh and verify DOE and net D/E in R2, API, and Android for 7203. Evidence: Actions run #121 (`39113944848`) wrote and read back 10 annual rows; production API returns DOE and net D/E as available for 2023/03–2026/03; after a one-time reset of 7203's daily cache markers, SCG01 displayed 3.10% DOE and 0.75倍 net D/E for 2026/03. The existing stale total-assets value and resulting equity-ratio display remain a separate data-quality follow-up.
-- [x] Run the full yfinance collector test suite in its pinned Python environment. Evidence: Actions run #120 (`39113930370`) passed all 55 deterministic tests, including net D/E coverage.
+- [x] Add annual net debt-to-equity collection and expose it through the financial API and Android. Evidence: targeted refresh run #121 wrote and read back 10 rows for 7203; production API reports DOE and net D/E available for 2023/03–2026/03, and SCG01 displays 3.10% DOE and 0.75倍 net D/E for 2026/03; JDK 17 passed 143 Android unit tests and the debug APK build/install, and Actions run #124 passed 55 yfinance collector tests.
+- [ ] Complete the policy-v2 first pass across all securities over five successful scheduled Tokyo-market sessions; verify a non-7203 security's financial values in R2, API, and Android.
+- [ ] Repair the stale 7203 total-assets value and verify the equity-ratio display; the current screen shows 37,829,768.9%.
+- [x] Run the full yfinance collector test suite in its pinned Python environment. Evidence: Actions run #124 (`39115343966`) passed all 55 deterministic tests.
 
 - [ ] Deploy the income-advice Worker API and verify the first V2-derived R2 candidate catalog is published and read back; then check ranked candidates on Android. Local implementation and JDK 17 APK install are complete, but production publication is pending. Specification: `ai_docs/watchlist-income-gap-advice-spec.md`.
 
