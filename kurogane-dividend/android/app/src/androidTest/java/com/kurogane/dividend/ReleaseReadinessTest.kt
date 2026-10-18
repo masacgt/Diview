@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -158,6 +159,7 @@ class ReleaseReadinessTest {
             }
         }
 
+        revealFirstWatchlistCard()
         val initialOrderObservedAt = android.os.SystemClock.elapsedRealtime()
         compose.waitUntil(10_000) {
             firstVisibleWatchlistCardCode(compose) == "3000" &&
@@ -169,10 +171,11 @@ class ReleaseReadinessTest {
             app.getString(R.string.watchlist_label_15),
             app.getString(R.string.watchlist_label_19)
         )
+        revealWatchlistListItem(hasText(defaultSortLabel))
         compose.onNodeWithText(defaultSortLabel).performClick()
-        compose.onNodeWithText(app.getString(R.string.watchlist_label_4)).performClick()
-        compose.onNodeWithText(app.getString(R.string.watchlist_label_14)).performClick()
-        compose.onNodeWithText(app.getString(R.string.apply)).performClick()
+        compose.onNodeWithText(app.getString(R.string.watchlist_label_4)).performScrollTo().performClick()
+        compose.onNodeWithText(app.getString(R.string.watchlist_label_14)).performScrollTo().performClick()
+        compose.onNodeWithText(app.getString(R.string.apply)).performScrollTo().performClick()
 
         val codeAscendingLabel = app.getString(
             R.string.watchlist_1_s_2_s,
@@ -180,12 +183,14 @@ class ReleaseReadinessTest {
             app.getString(R.string.watchlist_label_20)
         )
         compose.onNodeWithText(codeAscendingLabel).assertIsDisplayed()
+        revealFirstWatchlistCard()
         compose.waitUntil(10_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
 
         compose.onNodeWithText("タブ切替").performClick()
         compose.onNodeWithText("タブ切替").performClick()
 
         compose.onNodeWithText(codeAscendingLabel).assertIsDisplayed()
+        revealFirstWatchlistCard()
         compose.waitUntil(10_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
 
         val reopenedVm = model("quality-after-restart")
@@ -196,17 +201,31 @@ class ReleaseReadinessTest {
         assertEquals("asc", reopenedVm.watchlistSortSelection.value?.direction)
 
         compose.runOnIdle { activeViewModel.value = reopenedVm }
+        revealFirstWatchlistCard()
         compose.waitUntil(10_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
+    }
+
+    private fun watchlistCardMatcher() = SemanticsMatcher("watchlist card") { node ->
+        node.config.contains(SemanticsProperties.TestTag) &&
+            node.config[SemanticsProperties.TestTag].startsWith("watchlist_card_")
+    }
+
+    private fun revealFirstWatchlistCard() {
+        revealWatchlistListItem(watchlistCardMatcher())
+    }
+
+    private fun revealWatchlistListItem(matcher: SemanticsMatcher) {
+        compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
+            .performScrollToIndex(0)
+            .performScrollToNode(matcher)
     }
 
     private fun firstVisibleWatchlistCardCode(compose: androidx.compose.ui.test.junit4.ComposeTestRule): String? =
         compose.onAllNodes(
-            SemanticsMatcher("watchlist card") { node ->
-                node.config.contains(SemanticsProperties.TestTag) &&
-                    node.config[SemanticsProperties.TestTag].startsWith("watchlist_card_")
-            },
+            watchlistCardMatcher(),
             useUnmergedTree = true
-        ).fetchSemanticsNodes().firstOrNull()?.let { node ->
+        ).fetchSemanticsNodes().filter { it.boundsInRoot.height > 0f }
+            .minByOrNull { it.boundsInRoot.top }?.let { node ->
             node.config[SemanticsProperties.TestTag].removePrefix("watchlist_card_")
         }
 

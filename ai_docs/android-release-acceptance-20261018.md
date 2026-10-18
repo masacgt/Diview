@@ -4,11 +4,11 @@
 
 ## 対象と判断
 
-- 隔離 worktree `C:\dv-ra-1017`、branch `codex/android-release-audit-20261017`。製品コードの検証候補は `d0681f21`（取り込んだ main は `cf22ffb1`）、テストは `2bebaf93`、CI 起動修正は `08cbf5aa`。その後は検証ツール・文書だけを更新した。元の checkout の未コミット変更は取り込んでいない。
-- Android のビルド元は `kurogane-dividend/android/`。すべて JDK 17 (`C:\Users\htdn\.jdks\ms-17.0.20.1`) を明示し、Gradle は直列実行した。API 26 以上、既存の依存バージョン、画面のデザイン、操作方法、API、通知設定、既存の保存キーを維持した。main 側の並行した画面変更も保持している。
+- 隔離 worktree `C:\dv-ra-1017`、branch `codex/android-release-audit-20261017`。基準の製品コードは `d0681f21`（取り込んだ main は `cf22ffb1`）、テスト基盤は `2bebaf93`、CI 起動修正は `08cbf5aa`。その後、承認された小画面ソート修正を追加し、再ビルド・再テストした。元 checkout の未コミット変更は取り込んでいない。
+- Android のビルド元は `kurogane-dividend/android/`。すべて JDK 17 (`C:\Users\htdn\.jdks\ms-17.0.20.1`) を明示し、Gradle は直列実行した。API 26 以上、既存の依存バージョン、通常画面のデザイン・操作方法、API、通知設定、既存の保存キーを維持した。ユーザー判断により小画面のソートシートだけ縦スクロールを許可した。main 側の並行した画面変更も保持している。
 - ユーザー判断により旧 DVM 読み込みと OS 自動復元を維持する。株主優待・景気区分上書き・配当履歴上書きの 3 項目を移行対象へ追加した。問い合わせ下書きは対象外。
 - 追加の検証用実機・Google アカウントと Play Console は用意できないとの回答を受領。実際のクラウドによる別端末復元と Play 内部テストは実施していない。既存の SCG01 API 33 は途中で再接続されたため、隔離テストを実施した。
-- 並行作業の main `cf1be44c` には配当取得間隔の更新がある。検証した製品候補との merge-tree は競合なし。実機は現在のアプリ・テスト APK を保存して候補を一時インストールし、テスト後に両 APK を復元した。候補の通常 MainActivity は実機で起動していない。実機データの初期化・root 化はしていない。
+- 並行作業の main `cf1be44c` には配当取得間隔の更新があり、最新 fetch の `d736c216` には R2 専用 income advice 起動処理が加わっている。検証ブランチを最新 main と仮統合した merge-tree は競合なし。今回それらを候補へ取り込まず、元実機のアプリ・テスト APK は保存・復元して実データを保持した。候補の通常 MainActivity は実機で起動していない。実機データの初期化・root 化はしていない。
 - API 26 の最大 DVM 負荷で確認したメモリ不足については、ユーザーが「再現結果と設計案を記録し、他の修正・検証を完了する」を選択した。保存方式・受け付け上限の変更と追加の最大負荷試験は行わない。
 
 ## 指摘と差分
@@ -25,9 +25,9 @@
 | R5-M | `AutoBackupSnapshot.readBackup` と `LocalImportStore.saveBackup`。API 26 で約 50 MiB の旧 DVM 相当 payload を複数種類保存すると OOM | 高・確認 | 未修正。ユーザー判断により記録で終了。下記の再現と設計案を参照 |
 | R1 | `DvmBackupImporter.kt` の鍵定義、`DvmBackupImporterTest.kt`、`docs/release-quality-review-full.md` | 高・確認 | 旧互換性のため残す。共有固定の旧ファイル暗号鍵であり、サーバー用 API トークンではない。値は本書・PR に記載しない |
 | R4/R5 | `LocalImportStore.writeAutoBackupSnapshot` と backup XML。移行 JSON はアプリ専用領域の平文。OS クラウドにはアプリごとの容量制約 | 高・確認 | 自動復元を維持。端末固有の暗号化 preferences のバックアップ除外、API 31 以降のクラウド暗号化能力条件を維持。全端末・全データの安全なクラウド復元を保証したものではない |
-| V1 | `ReleaseReadinessTest.watchlistSortOrderSurvivesLeavingAndReturningToTab` と `WatchlistScreen` のソートシート。CI API 26 は初期カード待機で timeout。480×800/密度240 でも再現し、viewport の補正案では並べ替え完了に到達できない。シートの Column に縦スクロールがない | 中・再現とコード確認 | 未修正。通常画面の既存テストは成功。元依頼の「操作方法を維持」に対し、通常の見た目を保った縦スクロール追加か、今回は記録のみとするかを確認中。試作のテスト補正は採用せず、期待値・timeout・既存テストを維持 |
+| V1 | `ReleaseReadinessTest.watchlistSortOrderSurvivesLeavingAndReturningToTab` と `WatchlistScreen` のソートシート。API 26 の小画面でカードとシート末尾が見切れる。CI/全件 suite では初期カード順の待機が timeout | 中・小画面操作は再現、全件失敗は確認 | 部分修正。ユーザー承認によりソートシート Column だけ縦スクロールを追加。480×800/密度240 の対象テストは1/1成功し、適用・タブ再表示・ViewModel再生成後の順序復元まで確認。全件 API 26 は89件中1件失敗し、同じテストのシート表示前の初期カード待機（164行）で timeout。標準画面の表示は API 35 の33枚すべて一致、API 26 は Watchlist の全5枚一致し、別画面3枚だけ各1–2ピクセル・最大色差1/255。CI の API 26 結果は未解決として追跡 |
 
-主なコードは [AutoBackupSnapshot](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/data/AutoBackupSnapshot.kt)、[LocalImportStore](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/data/LocalImportStore.kt)、[CachedFetchFailure](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/data/CachedFetchFailure.kt)、[DividendViewModel](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/viewmodel/DividendViewModel.kt)、[AssetManagementScreen](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/ui/screens/AssetManagementScreen.kt)、[NotificationRetryPolicy](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/notifications/NotificationRetryPolicy.kt)。差分全体は PR を参照する。
+主なコードは [AutoBackupSnapshot](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/data/AutoBackupSnapshot.kt)、[LocalImportStore](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/data/LocalImportStore.kt)、[CachedFetchFailure](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/data/CachedFetchFailure.kt)、[DividendViewModel](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/viewmodel/DividendViewModel.kt)、[AssetManagementScreen](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/ui/screens/AssetManagementScreen.kt)、[WatchlistScreen](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/ui/screens/WatchlistScreen.kt)、[ReleaseReadinessTest](../kurogane-dividend/android/app/src/androidTest/java/com/kurogane/dividend/ReleaseReadinessTest.kt)、[NotificationRetryPolicy](../kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/notifications/NotificationRetryPolicy.kt)。差分全体は PR を参照する。
 
 重要な変更前後は次のとおり。鍵やファイル全体は再掲しない。
 
@@ -45,6 +45,12 @@
  // スクロール復元
 -ヘッダーだけの初期状態から現在位置を保存
 +初回 list flow の値を待ち、保存位置を復元してから現在位置を保存
+
+ // 小画面のソートシート
+ .fillMaxWidth()
+- .padding(16.dp)
++ .verticalScroll(rememberScrollState())
++ .padding(16.dp)
 ```
 
 失敗種別は timeout/offline/HTTP status/generic のみで、レスポンス本文・例外文・保有銘柄・認証情報を含めない。ユーザー表示は既存のエラー領域と日本語メッセージを利用する。保存を非同期化した箇所では、既存の `awaitRestoration` と最初の永続保存の順序を維持している。
@@ -57,11 +63,11 @@
 |---|---|---|
 | JVM | main `2479fb59`: 131 件中 1 件失敗（暦年 CAGR の古い期待値） | 142/142 成功 |
 | Lint | 初回調査では 1 error | 最終 main 取込後 0 errors / 240 warnings / 3 hints。検査抑制なし |
-| ビルド | 旧候補とは別に実施 | debug、androidTest、R8・resource shrink を含む未署名 release APK、release AAB 成功 |
+| ビルド | 旧候補とは別に実施 | 最終 UI 修正後も JDK 17 で debug、androidTest、R8・resource shrink を含む未署名 release APK、release AAB 成功。AAB bundletool validate 成功 |
 | 財務エラー回帰 | 6 件中 4 件の失敗を変更前に再現 | API 26/35/実機 API 33 の各 6 件成功。最終全件にも含む |
-| 全 instrumentation | 最初の API 35: 89 件中 16 失敗、API 26: 17 失敗。うち既存 15 件は変更前 main APK でも同じ失敗 | API 35: 89 成功・0 失敗。API 26: 88 成功・既存 assumption 1 件・0 失敗。すべてのテストを選択して実行 |
+| 全 instrumentation | 最初の API 35: 89 件中 16 失敗、API 26: 17 失敗。うち既存 15 件は変更前 main APK でも同じ失敗 | 修正後 API 35: 89/89 成功。API 26 通常 viewport: 89 件中1失敗（ソート画面前の初期カード順待機）。別途480×800/密度240 の対象ソートテストは1/1成功。API 26 の全件失敗を成功扱いにはしない |
 | 実機 | 実データを保持して対象を限定 | SCG01 API 33 の隔離 32 件成功。通常データ 5 ファイルのハッシュがテスト前後・元 APK 復元後とも一致し、スリープ抑止設定も復元 |
-| 画面画像 | main `cf22ffb1` と同じ API・構成・合成データで比較 | API 35: 33/33 ピクセル一致。API 26: 29/33 完全一致。4 枚に各 1〜3 画素、各色成分最大 1/255 の差。完全一致として数えない |
+| 画面画像 | main `cf22ffb1` と同じ API・構成・合成データで比較 | 修正後 API 35: 33/33 完全一致。API 26: Watchlist の全5枚を含む30/33 完全一致。別画面3枚に各1–2画素、最大色差1/255。完全一致として数えない |
 | debug 更新 | 旧候補 `e17fea41` を検証用データで実行 | API 26/35 で上書きインストール・起動・資産画面を確認。保有／監視／無配フラグ／4 種 DVM／表示設定を維持し、3 項目の移行 JSON への保存も確認 |
 | プロセス・書込中断 | 通常の `am kill` では終了せず未成立 | 専用 AVD で SIGKILL による再生成、および AtomicFile 置換中の終了を API 26/35 で実施。端末 preferences を除去して JSON から復元しても件数・ハッシュ・3 項目が一致 |
 | 容量不足 | エラー注入とは別に実施 | API 26/35 のアプリ cache に限定した 1 MiB tmpfs で実際の ENOSPC を再現。失敗後も以前の完全な snapshot が残る。試験用 mount は解除済み |
@@ -72,11 +78,11 @@
 
 既存テストの修正は製品コードを期待値へ合わせるものではない。空の新規インストールを前提に、必要な 7203/2914/AAPL と監視データをテスト内で明示保存する。取得拒否時は現行 API の戻り値 false と保存データ不変を確認し、0.05 刻みの操作、現行の暦年配当 JSON、削除済みの検索候補に依存しない入力、API 33 以降だけの通知権限を使う。TSE の分類済み 33 業種と、銘柄名マスターから補った未分類の扱いを別々に確認する。assertion の削除、失敗の除外、`continue-on-error` の追加はない。既存の API 29 未満の画像保存テストの assumption はそのまま残す。
 
-ローカル全件成功は通常構成（API 26 は 1080×1920/密度420）の結果であり、CI API 26 の成功を意味しない。`08cbf5aa` の CI は build と API 35 が成功、API 26 は上記の並び順テスト 1 件が失敗（89 件中、失敗1・既存 skip1）。[68124e27 の再実行](https://github.com/masacgt/Diview/actions/runs/39085855666) でも build（JVM 142 件とホスト guard 4 件を含む）は成功し、API 26 の同じ 1 件が失敗した。さらに小画面で同クラス 6 件を確認したところ、検索再試行・設定のスクロール・ソートの 3 件が失敗した。これらを除外したり、大きな画面へ CI を変更したりして成功扱いにはしていない。小画面のソート補正案 2 回は元の問題を解消するだけでは操作を完了できず、UI の変更方針が必要と判断して保留した。初期カード待機の timeout と、その後のソート操作未完了がすべて同じ原因とは断定しない。試作差分と失敗ログはローカルの evidence に保存し、テストソースと生成 test APK は採用済みの状態へ戻した。
+修正前の CI `08cbf5aa` / `68124e27` は API 26 の並べ替えテストが失敗した。ユーザー承認後、ソートシート Column だけへ縦スクロールを加え、既定の画面寸法・期待順・10秒 timeout は維持した。対象テストは専用 API 26 AVD の480×800/密度240で成功し、銘柄コード昇順の選択・適用・タブ再表示・ViewModel 再生成後の復元を通した。API 35 全件は89/89成功した。一方、修正後の API 26 全件は89件中1件が同じテストで失敗し、行164の初期カード順待機で timeout した。これはソートシートを開く前の失敗であり、小画面の対象テスト成功とは分けて扱う。さらに、画面寸法を変えた同クラス全件では検索再試行・設定スクロールの別テストも失敗したため、該当する UI やテスト順序を新たな証拠なしに推測修正しない。テストを除外したり、CI を大きな画面へ変更したりして成功扱いにはしていない。リモート CI は今回の commit を含む PR Checks を正本とする。
 
 画像は 9 画面（資産、年間配当、ロードマップ、監視、設定、銘柄詳細、CSV、問い合わせ、利用規約）の light/dark/OLED と、資産・設定・監視の 1.3/2.0 倍文字の初期 viewport、合計 33 枚。全スクロール位置、全モーダル、全状態、全 OS・メーカーの網羅ではない。
 
-API 26 の画像差は `assets_dark_1.0`（1 画素）、`assets_oled_1.0`（2 画素）、`feedback_light_1.0`（3 画素）、`feedback_oled_1.0`（1 画素）で、すべて最大色成分差 1。ラスタライズによる微小差の可能性はあるが、原因を断定したり許容閾値で完全一致へ置き換えたりしていない。差分の座標と値はローカル `final-visual-comparisons.json` に残した。
+最終比較での API 26 の画像差は `assets_dark_1.0`（1 画素）、`assets_oled_1.0`（1 画素）、`feedback_light_1.0`（2 画素）で、すべて最大色成分差 1。Watchlist の5画像はすべて一致。ラスタライズによる微小差の可能性はあるが、原因を断定したり許容閾値で完全一致へ置き換えたりしていない。初回比較と最終比較はローカル `final-visual-comparisons.json`、`visual-scroll-fix-26-comparison.json`、`visual-scroll-fix-35-comparison.json` に残した。
 
 実機の 32 件は、元の回帰 5 件、バックアップ 17 件、財務失敗 6 件、起動時復元 1 件、300 銘柄の表示・再表示 3 件。各テストの Application/preferences/files を隔離し、実ユーザーの画面設定・通知操作を伴う全スイートは実機で実行していない。
 
@@ -95,9 +101,9 @@ API 26 の画像差は `assets_dark_1.0`（1 画素）、`assets_oled_1.0`（2 �
 
 ## AAB・機密情報・依存関係・CI
 
-- bundletool 1.18.3 で AAB validate と、ローカル検証用の debug 証明書を用いた APK set 作成に成功。API 26/35 でこの APK set への更新インストール、非 debuggable、通常 MainActivity 起動、資産・分析・ロードマップ・Watchlist・設定・銘柄詳細、タブ復帰・戻る操作、7 秒後の生存を確認し、保存データのハッシュ・3 項目も不変。本番署名情報は使用していない。Play から配信された split やストア審査の検証ではない。
-- 生成 manifest は minSdk 26 / targetSdk 36、非 debuggable、`usesCleartextTraffic=false`。FileProvider は非公開で roadmap cache の一時 URI 読取権限を使用。公開された WorkManager/ProfileInstaller コンポーネントには system 権限が付き、BootReceiver は BOOT_COMPLETED を検査する。診断 runner はテスト APK のみで、release に instrumentation はない。
-- 同梱 4 ABI の `libandroidx.graphics.path.so` の全 LOAD segment は 16,384-byte alignment。AAB 設定は `PAGE_ALIGNMENT_16K`、生成された 4 ABI の native split は `zipalign -c -P 16` 成功。実際の 16 KiB OS での実行は未検証。[公式の検査方法](https://developer.android.com/guide/practices/page-sizes)
+- bundletool 1.18.3 で最終 UI 修正後の release AAB を validate し、manifest minSdk 26 / targetSdk 36 と `PAGE_ALIGNMENT_16K` を確認。ローカル debug 証明書の APK set を API 26/35 に更新インストールし、両方で release MainActivity 起動・非 debuggable・資産画面表示を確認。現 AAB の全画面操作・保存事実維持の再確認は未実施。前回候補では主要画面 smoke と保存事実を確認済み。本番署名情報は使用していない。Play から配信された split やストア審査の検証ではない。
+- 最終 AAB の manifest は minSdk 26 / targetSdk 36、debuggable 属性なし（Android の既定 false）、`usesCleartextTraffic=false`。FileProvider は非公開で roadmap cache の一時 URI 読取権限を使用。公開された WorkManager/ProfileInstaller コンポーネントには system 権限が付き、BootReceiver は BOOT_COMPLETED を検査する。診断 runner はテスト APK のみで、release に instrumentation はない。
+- 最終 AAB の設定は `PAGE_ALIGNMENT_16K`。前回候補に同梱された4 ABI の `libandroidx.graphics.path.so` は全 LOAD segment が16,384-byte alignmentで、生成 native split は `zipalign -c -P 16` 成功。今回の変更は Kotlin UI のみで native library は変わらない。実際の16 KiB OS での実行は未検証。[公式の検査方法](https://developer.android.com/guide/practices/page-sizes)
 - Gitleaks 8.30.1 の redacted 走査では、現行 `kurogane-dividend/`・`.github/`・AGENTS の追跡済み 201 ファイル（約 5.44 MB）と、Android 関連の履歴 263 commit にルール一致はなかった。ただし既知の旧 DVM 固定鍵も検出できない。配列や独自形式、未追跡ファイル、他 branch、全履歴、実行環境、サーバー側を網羅した証明ではない。値を転載せず、鍵の種類と場所のみ記録した。
 - 解決済み release runtime Maven artifact 87 件を OSV API と 2026-10-18 00:42 UTC に照合し、登録された該当項目は返らなかった。OSV にない欠陥、利用方法に起因する欠陥、build/test 専用依存や OS 自体はこの結果で保証しない。[OSV API](https://google.github.io/osv.dev/api/)。依存の更新はしていない。
 - [Android release checks](../.github/workflows/android-release-checks.yml) を追加。JDK 17、JVM、Lint、未署名 release APK/AAB、API 26/35 の全 instrumentation を実行する。action は commit に固定し、repository permission は read のみ。APK・署名情報・raw Lint report は upload せず、source snippet と例外文を除いた件数・場所の JSON だけを artifact にする。初回は `sdkmanager` が PATH になく Gradle 実行前に失敗し、CLI tools 16.0 を明示して修正。[08cbf5aa の build job](https://github.com/masacgt/Diview/actions/runs/39084186727/job/117547200286) は成功した。更新ごとのリモート CI 結果は PR の Checks と PR 本文を正本とする。
@@ -106,9 +112,9 @@ API 26 の画像差は `assets_dark_1.0`（1 画素）、`assets_oled_1.0`（2 �
 
 | 成果物 | SHA-256 |
 |---|---|
-| debug APK | `926c402bffbb9d9204139ddb33de9867cb0c784480e8c7a801aff68a38c99975` |
-| 未署名 release APK | `26c958e14f7cd0192492e8645e3490df578023fd31e6ecb12f9383a1fe1e060f` |
-| release AAB | `82f9e8bd308eab1746bb2a5ffa2d927ccd16826182f3df2628a6444d9ef6c56c` |
+| debug APK | `9466045edc8de0698c19b080383d1f7ec335d133919d5d3a3332c74139fdc84b` |
+| 未署名 release APK | `db433528f8f1c2f3a378839b1ab710b0654d301fc840fdcca225573cd514967c` |
+| release AAB | `3ca08f793076918612b7c0706fc5936b67d0bf374926ba6107a060a927f3ae99` |
 
 ## 最大 DVM と復元の残る制約
 
@@ -136,4 +142,4 @@ adb -s emulator-5558 install -r app\build\outputs\apk\androidTest\debug\app-debu
 adb -s emulator-5558 shell am instrument -w -r com.kurogane.dividend.test/com.kurogane.dividend.ReleaseFixtureInstrumentation
 ```
 
-未完了の判断は、小画面のソート操作と CI API 26 の失敗（V1）、最大 DVM の保存方式、固定鍵と移行データの保護、小さな同期保存の完了保証、実際の別端末クラウド復元、Play 配信、TalkBack のスワイプ・音声と端末での人による操作、API 26 の画像保存（既存テストの assumption 対象）、長期の通知配送・省電力、全画面・全状態・全機種の網羅。これらを解決済み、またはリリース許可済みとは記載しない。本番デプロイ・公開・署名済み APK の配布は行っていない。すべての不具合を検出したという意味でもない。
+未完了の判断は、API 26 全件テストの初期カード待機失敗（V1）、最大 DVM の保存方式、固定鍵と移行データの保護、小さな同期保存の完了保証、実際の別端末クラウド復元、Play 配信、現 AAB の全画面操作と保存事実の再検証、TalkBack のスワイプ・音声と端末での人による操作、API 26 の画像保存（既存テストの assumption 対象）、長期の通知配送・省電力、全画面・全状態・全機種の網羅。これらを解決済み、またはリリース許可済みとは記載しない。本番デプロイ・公開・署名済み APK の配布は行っていない。すべての不具合を検出したという意味でもない。
