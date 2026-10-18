@@ -90,19 +90,26 @@ class ReleaseFixtureInstrumentation : AndroidJUnitRunner() {
                     }
                     sendStatus(1, Bundle().apply { putString("activeWorkIds", ids.joinToString(",")) })
                 }
-                "interrupt-snapshot" -> {
-                    AutoBackupSnapshot(File(targetContext.filesDir, "diview_auto_backup.json"))
-                        .write(JSONArray().put(JSONObject().put("id", "uncommitted")), JSONArray()) {
-                            sendStatus(1, Bundle().apply { putString("phase", "atomic-open") })
-                            Thread.sleep(30_000)
-                            null
-                        }
-                }
+                "interrupt-snapshot" -> SnapshotInterruptDiagnostic.write(this)
                 else -> error("Unknown diagnostic operation")
             }
             finish(Activity.RESULT_OK, Bundle().apply { putBoolean("completed", true) })
         } catch (failure: Exception) {
             finish(Activity.RESULT_CANCELED, Bundle().apply { putString("failureCategory", failure.javaClass.simpleName) })
+        } catch (failure: LinkageError) {
+            finish(Activity.RESULT_CANCELED, Bundle().apply { putString("failureCategory", failure.javaClass.simpleName) })
         }
+    }
+}
+
+/** Keep the new snapshot API out of the runner verifier when profiling the pre-audit APK. */
+private object SnapshotInterruptDiagnostic {
+    fun write(instrumentation: ReleaseFixtureInstrumentation) {
+        AutoBackupSnapshot(File(instrumentation.targetContext.filesDir, "diview_auto_backup.json"))
+            .write(JSONArray().put(JSONObject().put("id", "uncommitted")), JSONArray()) {
+                instrumentation.sendStatus(1, Bundle().apply { putString("phase", "atomic-open") })
+                Thread.sleep(30_000)
+                null
+            }
     }
 }

@@ -112,6 +112,7 @@ class Device:
                             "-e", "operation", operation,
                             *extras,
                             PACKAGE + ".test/com.kurogane.dividend.ReleaseFixtureInstrumentation", timeout=90)
+        (self.evidence / ("diagnostic-" + self.args.device + "-" + operation + ".log")).write_text(result, encoding="utf-8")
         if "completed=true" not in result:
             raise RuntimeError("Synthetic diagnostic failed: " + operation)
 
@@ -242,6 +243,13 @@ class Device:
             self.shell("am", "force-stop", PACKAGE)
             if "Success" not in self.shell("pm", "clear", PACKAGE):
                 raise RuntimeError("Could not clear the disposable quota fixture")
+            # Android does not back up a never-launched, stopped package.
+            self.launch()
+            self.shell("input", "keyevent", "KEYCODE_HOME")
+            pids = self.shell("pidof", PACKAGE).strip()
+            if not re.fullmatch(r"\d+(?: \d+)*", pids):
+                raise RuntimeError("Disposable quota process was not identified")
+            self.shell("kill", "-9", *pids.split())
             contents = fixture(21 * 1024 * 1024)
             self.write_private("files/diview_auto_backup.json", contents)
             output = self.shell("bmgr", "backupnow", PACKAGE, timeout=180)
@@ -304,12 +312,63 @@ class Device:
         if not retained:
             raise AssertionError("Interrupted write did not retain the complete backup")
 
+    def notifications(self):
+        def operation(name):
+            result = self.shell("am", "instrument", "-w", "-r", "-e", "allowSyntheticFixture", "true",
+                                "-e", "operation", name,
+                                PACKAGE + ".test/com.kurogane.dividend.ReleaseFixtureInstrumentation", timeout=90)
+            match = re.search(r"activeWorkIds=([a-f0-9,\-]*)", result)
+            if "completed=true" not in result or not match:
+                raise AssertionError("Notification diagnostic did not complete: " + name)
+            return match.group(1).split(",")
+
+        before = operation("schedule-notifications")
+        def system_jobs():
+            dump = self.shell("dumpsys", "jobscheduler", PACKAGE)
+            # Android 8 redacts parcelled JobInfo extras; match the OS job headers
+            # instead of assuming the dump exposes WorkManager's UUID extras.
+            return set(re.findall(r"^\s*JOB #([^\s:]+):[^\n]*" + re.escape(PACKAGE) +
+                                  r"/androidx[.]work[.]impl[.]background[.]systemjob[.]SystemJobService", dump, re.MULTILINE))
+        registered_before = system_jobs()
+        try:
+            self.shell("dumpsys", "battery", "unplug")
+            self.shell("input", "keyevent", "KEYCODE_SLEEP")
+            self.shell("dumpsys", "deviceidle", "force-idle")
+            idle = self.shell("dumpsys", "deviceidle", "get", "deep").strip()
+            retained_in_idle = len(registered_before) == 2 and system_jobs() == registered_before
+        finally:
+            self.shell("dumpsys", "deviceidle", "unforce")
+            self.shell("dumpsys", "battery", "reset")
+            self.shell("input", "keyevent", "KEYCODE_WAKEUP")
+        self.run("reboot")
+        self.run("wait-for-device", timeout=120)
+        deadline = time.monotonic() + 120
+        while self.shell("getprop", "sys.boot_completed").strip() != "1":
+            if time.monotonic() > deadline:
+                raise RuntimeError("Disposable emulator did not finish rebooting")
+            time.sleep(1)
+        try:
+            after = operation("verify-notifications")
+            report = dict(jdk=17, device=self.args.device, forcedIdleState=idle,
+                          registeredJobCountBeforeIdle=len(registered_before),
+                          registeredJobsRetainedInIdle=retained_in_idle,
+                          sameUniqueWorkIdsAfterReboot=before == after,
+                          notificationDeliveryTimingVerified=False)
+            self.save("notification-lifecycle-" + self.args.device + ".json", report)
+            print(json.dumps(report), flush=True)
+            if idle != "IDLE" or not retained_in_idle or before != after:
+                raise AssertionError("Idle/reboot job retention was not verified")
+        finally:
+            operation("disable-notifications")
+
     def profile(self):
-        if not self.args.fixture_apk or not self.args.candidate_apk or not self.args.baseline_apk:
-            raise ValueError("Both APKs and the synthetic fixture test APK are required")
+        if not self.args.fixture_apk or not self.args.candidate_apk or (self.args.profile_variant == "both" and not self.args.baseline_apk):
+            raise ValueError("The selected APK paths and the synthetic fixture test APK are required")
         self.install(self.args.fixture_apk)
         report = dict(jdk=17, device=self.args.device, environment="local emulator; timings are observational", samples=[])
-        for label, apk in (("baseline", self.args.baseline_apk), ("candidate", self.args.candidate_apk)):
+        artifacts = (("baseline", self.args.baseline_apk), ("candidate", self.args.candidate_apk)) if self.args.profile_variant == "both" else (("candidate", self.args.candidate_apk),)
+        report["requestedArtifacts"] = self.args.profile_variant
+        for label, apk in artifacts:
             self.install(apk)
             for count in (0, 300, 2000):
                 self.shell("pm", "clear", PACKAGE)
@@ -317,12 +376,16 @@ class Device:
                 self.shell("am", "force-stop", PACKAGE)
                 self.shell("dumpsys", "gfxinfo", PACKAGE, "reset")
                 start = self.launch()
+                saved_count = self.facts()["holdings"]
+                if saved_count != count:
+                    raise AssertionError("Profile launch did not retain every synthetic holding")
                 memory = self.shell("dumpsys", "meminfo", PACKAGE)
                 graphics = self.shell("dumpsys", "gfxinfo", PACKAGE)
                 pss = re.search(r"TOTAL PSS:\s*(\d+)", memory) or re.search(r"^\s*TOTAL\s+(\d+)", memory, re.MULTILINE)
                 frames = re.search(r"Total frames rendered:\s*(\d+)", graphics)
                 janky = re.search(r"Janky frames:\s*(\d+)", graphics)
-                sample = dict(artifact=label, holdings=count, start=start, memoryTotalPssKb=int(pss.group(1)) if pss else None,
+                sample = dict(artifact=label, holdings=count, savedHoldingsAfterLaunch=saved_count,
+                              start=start, memoryTotalPssKb=int(pss.group(1)) if pss else None,
                               frames=int(frames.group(1)) if frames else None, jankyFrames=int(janky.group(1)) if janky else None)
                 report["samples"].append(sample)
                 print(json.dumps(sample), flush=True)
@@ -331,7 +394,7 @@ class Device:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("update", "restart", "low_space", "quota", "interrupt", "profile"))
+    parser.add_argument("mode", choices=("update", "restart", "low_space", "quota", "interrupt", "notifications", "profile"))
     parser.add_argument("--java-home", required=True, type=Path)
     parser.add_argument("--android-sdk", required=True, type=Path)
     parser.add_argument("--device", required=True)
@@ -340,6 +403,7 @@ def main():
     parser.add_argument("--candidate-apk", type=Path)
     parser.add_argument("--fixture-apk", type=Path)
     parser.add_argument("--bundletool", type=Path)
+    parser.add_argument("--profile-variant", choices=("both", "candidate"), default="both")
     args = parser.parse_args()
     device = Device(args)
     getattr(device, args.mode)()
