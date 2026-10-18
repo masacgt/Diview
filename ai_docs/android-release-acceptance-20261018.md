@@ -59,6 +59,8 @@
 
 以下は別々の検証段階である。ビルドだけでインストール・起動・操作の成功とは扱わない。
 
+GitHub Actions run `39089999129` の完了結果は build 成功、API 26 が89件・failure 1・error 0・skip 1、API 35 が89件・failure 1・error 0・skip 0。秘匿済みログでは両方とも `watchlistSortOrderSurvivesLeavingAndReturningToTab` の `ComposeTimeoutException` を確認したが、どの待機条件かは特定できない。ローカル API 26 全件では初期カード順待機（テスト行164）、SCG01 API 33 では Apply 操作（テスト行178）で失敗し、各環境で待機箇所が一致するとは断定しない。この CI は製品コード commit `9952cd7a` を検証し、後続の `0485440c` はレポート更新のみ。
+
 追加の SCG01 API 33 確認では、候補 debug APK と計装 APK を一時インストールし、`watchlistSortOrderSurvivesLeavingAndReturningToTab` を実行した。実機の物理解像度は 1440×3200、density override は 460（論理サイズは約502×1113）で、480×800 条件ではない。テストは「適用」ボタンの `performScrollTo()`（テスト行178）で `AssertionError` となり、実機でのソート完了は確認できなかった。元のアプリ／計装 APK は保存した各 SHA-256 と一致する状態へ復元した。確認したアプリデータ7項目のうち6項目はハッシュ一致し、`files/profileInstalled` のみ変化した。プロファイル導入時のランタイムマーカーである可能性はあるが、原因は未確定として扱う。通常 MainActivity の手動起動や小画面の実機操作はしていない。
 
 | 項目 | 変更前／切り分け | 今回の候補 |
