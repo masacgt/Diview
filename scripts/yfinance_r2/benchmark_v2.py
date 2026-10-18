@@ -247,6 +247,63 @@ def measure_security(index: int, total: int, entry: dict[str, str], session_date
     }
 
 
+def ensure_workload_coverage(universe: list[dict[str, str]], sample: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Include one full-history rotation and one financial refresh in the sample."""
+    selected = list(sample)
+    for bucket_count in (sync.FULL_HISTORY_BUCKETS, sync.FINANCIAL_BUCKETS):
+        if any(sync.bucket_for(row["security_code_display"], bucket_count) == 0 for row in selected):
+            continue
+        selected_codes = {row["security_code_display"] for row in selected}
+        candidate = next((row for row in universe
+                          if sync.bucket_for(row["security_code_display"], bucket_count) == 0
+                          and row["security_code_display"] not in selected_codes), None)
+        if candidate is None:
+            continue
+        replace_index = next((index for index, row in enumerate(selected)
+                              if row.get("security_type") == candidate.get("security_type")
+                              and sync.bucket_for(row["security_code_display"], sync.FULL_HISTORY_BUCKETS) != 0
+                              and sync.bucket_for(row["security_code_display"], sync.FINANCIAL_BUCKETS) != 0), None)
+        selected[replace_index if replace_index is not None else len(selected) - 1] = candidate
+    return selected
+
+
+def measure_security(index: int, total: int, entry: dict[str, str], session_date) -> dict[str, object]:
+    """Measure one security using the production collector's per-ticker workload."""
+    code = entry["security_code_display"]
+    symbol = sync.market_symbol(code)
+    ticker = yf.Ticker(symbol)
+    is_long_history = sync.bucket_for(code, sync.FULL_HISTORY_BUCKETS) == 0
+    is_financial = sync.bucket_for(code, sync.FINANCIAL_BUCKETS) == 0
+    failures: Counter[str] = Counter()
+    print(
+        f"[{index}/{total}] {code} ({entry.get('security_type', 'listed_security')}): "
+        f"long_history={is_long_history}, financials={is_financial}",
+        flush=True,
+    )
+    sync.count_yfinance_call("ticker_get_info")
+    attempt("ticker_get_info", ticker.get_info, failures)
+    sync.count_yfinance_call("history_latest_daily_5d")
+    attempt("history_latest_daily_5d", lambda: collector.history_rows(ticker, "1d", "5d"), failures)
+
+    if is_long_history:
+        attempt("history_actions_max", lambda: sync.fetch_repaired_action_history(ticker, session_date, period="max"), failures)
+        attempt("history_year_end_prices_initial_8y", lambda: sync.monthly_history_rows(ticker, initial=True, as_of=session_date), failures)
+    else:
+        sync.count_yfinance_call("actions_accessor_1y")
+        attempt("actions_accessor_1y", lambda: ticker.get_actions(period="1y"), failures)
+
+    if is_financial:
+        for name, request in (
+            ("income_statement_yearly", lambda: ticker.get_income_stmt(freq="yearly")),
+            ("balance_sheet_yearly", lambda: ticker.get_balance_sheet(freq="yearly")),
+            ("cash_flow_yearly", lambda: ticker.get_cash_flow(freq="yearly")),
+            ("valuation_measures_yearly", lambda: ticker.get_valuation_measures(freq="yearly", periods=10)),
+        ):
+            sync.count_yfinance_call(name)
+            attempt(name, request, failures)
+    return {"code": code, "symbol": symbol, "failures": dict(failures)}
+
+
 def measure_action_method(symbol: str, method: str, session_date) -> dict[str, object]:
     """Compare unrepaired daily-chart action candidates with repaired history."""
     ticker = yf.Ticker(symbol)
