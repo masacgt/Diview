@@ -1012,7 +1012,8 @@
     <string name="csv_broker_manual_selection">%1$sを選択中</string>
     <string name="dvm_drive_backup_subtitle">銘柄と編集データをGoogleドライブに保存します</string>
     <string name="dvm_drive_restore_title">Googleドライブからインポート</string>
-    <string name="dvm_drive_restore_subtitle">Googleドライブで暗号化バックアップを選択して読み込みます</string>
+    <string name="dvm_drive_restore_subtitle">初回に選択すると、次回から保存済みのファイルを自動で読み込みます</string>
+    <string name="dvm_drive_import_not_remembered">読み込みました。ファイルのアクセス権を保存できなかったため、次回は再選択してください。</string>
     <string name="dvm_drive_backup_success">暗号化バックアップをGoogleドライブに保存しました。</string>
     <string name="dvm_drive_restore_success">Googleドライブから%1$d件の銘柄をインポートしました。</string>
     <string name="dvm_drive_backup_missing">Googleドライブにバックアップが見つかりませんでした。</string>

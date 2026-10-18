@@ -1,7 +1,10 @@
 package com.kurogane.dividend.ui.screens
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.provider.OpenableColumns
+import java.io.IOException
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -47,6 +50,8 @@ import kotlinx.coroutines.withContext
 
 enum class GoogleDvmBackupAction { EXPORT, IMPORT }
 
+private class DriveDvmFileUnavailableException : IllegalStateException()
+
 @Composable
 fun GoogleDvmBackupCard(
     action: GoogleDvmBackupAction,
@@ -82,39 +87,69 @@ fun GoogleDvmBackupCard(
     }
     val latestExportAction by rememberUpdatedState(exportAction)
 
+    suspend fun importDvmUris(uris: List<Uri>) {
+        val backups = withContext(Dispatchers.IO) {
+            uris.map { uri ->
+                val fileName = try {
+                    context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                        ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                } catch (_: Exception) {
+                    throw DriveDvmFileUnavailableException()
+                }
+                    ?: uri.lastPathSegment?.substringAfterLast('/')
+                    ?: throw IllegalArgumentException(resources.getString(R.string.dvm_drive_import_failed))
+                require(fileName.endsWith(".dvm", ignoreCase = true)) {
+                    resources.getString(R.string.dvm_drive_import_failed)
+                }
+                val input = try {
+                    context.contentResolver.openInputStream(uri)
+                } catch (_: Exception) {
+                    throw DriveDvmFileUnavailableException()
+                }
+                    ?: throw DriveDvmFileUnavailableException()
+                val bytes = try {
+                    input.use { it.readBoundedBytes(50 * 1024 * 1024) }
+                } catch (_: IOException) {
+                    throw DriveDvmFileUnavailableException()
+                }
+                DvmBackupImporter.parse(fileName, bytes).also { preview ->
+                    require(preview.kind == DvmBackupKind.STOCKS || preview.kind == DvmBackupKind.DIVIEW_EXTRAS) {
+                        resources.getString(R.string.dvm_drive_import_failed)
+                    }
+                }
+            }
+        }
+        latestImport(backups)
+        val importedCount = backups.filter { it.kind == DvmBackupKind.STOCKS }.sumOf { it.itemCount } +
+            backups.sumOf { it.extras.watchlist.orEmpty().size }
+        status = resources.getString(R.string.dvm_drive_restore_success, importedCount)
+    }
+
     val dvmFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty() && !isWorking) {
             isWorking = true
             status = null
             error = null
             scope.launch {
+                val store = LocalImportStore(context)
+                val oldUris = store.loadDriveImportUris().mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }
+                val persistentUris = uris.filter { uri ->
+                    runCatching {
+                        context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }.isSuccess
+                }
                 try {
-                    val backups = withContext(Dispatchers.IO) {
-                        uris.map { uri ->
-                            val fileName = context.contentResolver.query(
-                                uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
-                            )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
-                                ?: uri.lastPathSegment?.substringAfterLast('/')
-                                ?: throw IllegalArgumentException(resources.getString(R.string.dvm_drive_import_failed))
-                            require(fileName.endsWith(".dvm", ignoreCase = true)) {
-                                resources.getString(R.string.dvm_drive_import_failed)
-                            }
-                            val bytes = context.contentResolver.openInputStream(uri)?.use {
-                                it.readBoundedBytes(50 * 1024 * 1024)
-                            } ?: throw IllegalArgumentException(resources.getString(R.string.dvm_drive_import_failed))
-                            DvmBackupImporter.parse(fileName, bytes).also { preview ->
-                                require(preview.kind == DvmBackupKind.STOCKS || preview.kind == DvmBackupKind.DIVIEW_EXTRAS) {
-                                    resources.getString(R.string.dvm_drive_import_failed)
-                                }
-                            }
-                        }
+                    importDvmUris(uris)
+                    store.saveDriveImportUris(persistentUris.map(Uri::toString))
+                    oldUris.filterNot(persistentUris::contains).forEach { oldUri ->
+                        runCatching { context.contentResolver.releasePersistableUriPermission(oldUri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
                     }
-                    latestImport(backups)
-                    val importedCount = backups.filter { it.kind == DvmBackupKind.STOCKS }.sumOf { it.itemCount } +
-                        backups.sumOf { it.extras.watchlist.orEmpty().size }
-                    status = resources.getString(R.string.dvm_drive_restore_success, importedCount)
+                    if (persistentUris.isEmpty()) status = resources.getString(R.string.dvm_drive_import_not_remembered)
                 } catch (failure: Throwable) {
                     if (failure is kotlinx.coroutines.CancellationException) throw failure
+                    persistentUris.forEach { uri ->
+                        runCatching { context.contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                    }
                     error = resources.getString(R.string.dvm_drive_import_failed)
                 } finally {
                     isWorking = false
@@ -122,6 +157,8 @@ fun GoogleDvmBackupCard(
             }
         }
     }
+
+    fun openDvmPicker() = dvmFilePicker.launch(arrayOf("*/*"))
 
     fun executeWithToken(accessToken: String) {
         if (accessToken.isBlank()) {
@@ -199,7 +236,38 @@ fun GoogleDvmBackupCard(
     DataManagementActionButton(
         onClick = {
             if (action == GoogleDvmBackupAction.EXPORT) authorizeExport()
-            else dvmFilePicker.launch(arrayOf("*/*"))
+            else if (isWorking) Unit else {
+                isWorking = true
+                status = null
+                error = null
+                val storedUris = LocalImportStore(context).loadDriveImportUris()
+                    .mapNotNull { rawUri -> runCatching { Uri.parse(rawUri) }.getOrNull() }
+                val grants = context.contentResolver.persistedUriPermissions
+                    .filter { it.isReadPermission }.map { it.uri }.toSet()
+                if (storedUris.isEmpty() || storedUris.any { it !in grants }) {
+                    isWorking = false
+                    openDvmPicker()
+                } else {
+                    scope.launch {
+                        try {
+                            importDvmUris(storedUris)
+                        } catch (failure: Throwable) {
+                            if (failure is kotlinx.coroutines.CancellationException) throw failure
+                            if (failure is DriveDvmFileUnavailableException) {
+                                LocalImportStore(context).saveDriveImportUris(emptyList())
+                                storedUris.forEach { uri ->
+                                    runCatching { context.contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                                }
+                                openDvmPicker()
+                            } else {
+                                error = resources.getString(R.string.dvm_drive_import_failed)
+                            }
+                        } finally {
+                            isWorking = false
+                        }
+                    }
+                }
+            }
         },
         enabled = !isWorking,
         modifier = modifier.fillMaxWidth(),
