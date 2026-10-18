@@ -1,5 +1,7 @@
 # Trouble
 
+- A scheduled Actions run can start after the JST date changes. On 2026-10-17 the `market-calendar` job evaluated Saturday and skipped the sync even though the run had been scheduled after Friday's close. The gate now compares the latest completed XTKS session with the R2 active session on closed days, catches up only an unpublished session, and passes its date to the collector. The scheduled catch-up path remains unverified until a delayed or closed-day run exercises it.
+
 - The yfinance R2 workflow had duplicate declarations for `yfinance-capacity-study` and `yfinance-full-universe-study`; push run #123 failed before creating jobs. Keep one definition for each job. After removing the duplicate blocks in commit `06c6faae`, push run #124 started normally and passed all 55 collector tests.
 - GitHub Actions run `39089999129` passed its build job but reported one instrumentation failure on both API 26 and API 35. Sanitized logs identify `watchlistSortOrderSurvivesLeavingAndReturningToTab` and `ComposeTimeoutException`, without identifying which wait condition timed out. Local API 35 passed all 89 tests, and the API 26 480x800 focused sort test passed; preserve these as separate results and do not infer one shared root cause from the CI summary.
 
