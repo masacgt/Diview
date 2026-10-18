@@ -162,7 +162,15 @@ def refresh(code: str) -> dict[str, Any]:
     return {"exit_code": 1 if failed_groups else 0, "code": code, "financial_rows_processed": wrote}
 
 
-def refresh_all(report_path: str) -> int:
+def partition_securities(securities: list[str], shard_index: int, shard_count: int) -> list[str]:
+    if shard_count < 1:
+        raise ValueError("Shard count must be at least 1")
+    if shard_index < 0 or shard_index >= shard_count:
+        raise ValueError("Shard index must be between 0 and shard_count - 1")
+    return [code for index, code in enumerate(securities) if index % shard_count == shard_index]
+
+
+def refresh_all(report_path: str, *, shard_index: int = 0, shard_count: int = 1) -> int:
     collector.configure_yfinance()
     client = collector.get_client()
     bucket = collector.required_env("R2_BUCKET")
@@ -175,6 +183,10 @@ def refresh_all(report_path: str) -> int:
     securities = sorted({code for code in securities if re.fullmatch(r"\d{4,5}[A-Z]?", code)})
     if not securities:
         raise RuntimeError("No active securities found in the published V2 universe")
+    universe_security_count = len(securities)
+    securities = partition_securities(securities, shard_index, shard_count)
+    if not securities:
+        raise RuntimeError(f"No active securities assigned to shard {shard_index}/{shard_count}")
 
     results: list[dict[str, Any]] = []
     failed = 0
@@ -209,10 +221,18 @@ def refresh_all(report_path: str) -> int:
             failed += 1
         results.append(record)
         if index % 25 == 0 or index == len(securities):
-            print(f"Progress {index}/{len(securities)}: failed_or_partial={failed}", flush=True)
+            print(
+                f"Progress shard={shard_index}/{shard_count} "
+                f"{index}/{len(securities)} (universe={universe_security_count}): "
+                f"failed_or_partial={failed}",
+                flush=True,
+            )
 
     report = {
         "security_count": len(securities),
+        "universe_security_count": universe_security_count,
+        "shard_index": shard_index,
+        "shard_count": shard_count,
         "success_count": sum(row["status"] == "success" for row in results),
         "partial_count": sum(row["status"] == "partial" for row in results),
         "failure_count": sum(row["status"] == "failed" for row in results),
@@ -229,8 +249,14 @@ def main() -> int:
     target.add_argument("--code", help="One security code to refresh")
     target.add_argument("--all", action="store_true", help="Refresh every active security in the R2 V2 universe")
     parser.add_argument("--report", default="financial-refresh-report.json", help="JSON report output path for --all")
+    parser.add_argument("--shard-index", type=int, default=0, help="Zero-based shard index for --all")
+    parser.add_argument("--shard-count", type=int, default=1, help="Number of disjoint shards for --all")
     args = parser.parse_args()
-    return refresh_all(args.report) if args.all else refresh(args.code)["exit_code"]
+    if args.all:
+        return refresh_all(args.report, shard_index=args.shard_index, shard_count=args.shard_count)
+    if args.shard_index != 0 or args.shard_count != 1:
+        parser.error("--shard-index and --shard-count can only be used with --all")
+    return refresh(args.code)["exit_code"]
 
 
 if __name__ == "__main__":
