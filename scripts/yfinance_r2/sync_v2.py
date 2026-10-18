@@ -2343,11 +2343,7 @@ def income_advice_candidate(code: str, name: str, current: dict[str, Any],
         return None
     if current.get("field_status", {}).get("dividend_history") != "available":
         return None
-    action_history = current.get("action_history") if isinstance(current.get("action_history"), dict) else {}
-    coverage_end = date_value(action_history.get("full_history_coverage_end"))
     latest_completed_year = as_of.year - 1
-    if coverage_end is None or coverage_end < date(latest_completed_year, 12, 31):
-        return None
     years = list(range(latest_completed_year - 2, latest_completed_year + 1))
     event_month_years: dict[int, set[int]] = {}
     annual_totals = {year: 0.0 for year in years}
@@ -2374,6 +2370,10 @@ def income_advice_candidate(code: str, name: str, current: dict[str, Any],
         annual_dps = forecast
         annual_basis = "next_fiscal_year_forecast"
     else:
+        action_history = current.get("action_history") if isinstance(current.get("action_history"), dict) else {}
+        coverage_end = date_value(action_history.get("full_history_coverage_end"))
+        if coverage_end is None or coverage_end < date(latest_completed_year, 12, 31):
+            return None
         annual_dps = annual_totals.get(latest_completed_year, 0.0)
         annual_basis = "previous_calendar_year_observed_distributions"
     if annual_dps <= 0:
