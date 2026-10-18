@@ -1020,27 +1020,6 @@ fun StockDetailScreen(
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            val recent = dividendPeriods.filter { it.annualDividend != null }.takeLast(4)
-                            val legacyGrowth = if (recent.size == 4 && (recent.first().annualDividend ?: 0.0) > 0 && recent.last().year - recent.first().year == 3)
-                                (((recent.last().annualDividend ?: 0.0) / (recent.first().annualDividend ?: 1.0)) - 1) * 100 else Double.NaN
-                            val growthLabel = if (isCalendarYearDividendHistory) {
-                                stringResource(R.string.stock_detail_calendar_growth_cagr_detail, profile.growthRate.financialSignedText(1, "%"))
-                            } else {
-                                stringResource(R.string.stock_detail_text_10, legacyGrowth.financialText(1, "%"))
-                            }
-                            Text(growthLabel, color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                            Text(
-                                "予想配当性向 ${financial?.forecastPayoutRatio?.financialText(1, "%") ?: "未取得"}",
-                                color = OnSurface,
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
                     }
                 }
             }
