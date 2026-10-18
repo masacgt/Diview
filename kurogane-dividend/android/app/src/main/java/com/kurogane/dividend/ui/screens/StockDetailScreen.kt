@@ -234,13 +234,22 @@ fun StockDetailScreen(
     val currentPrice = currentHolding.price
     val dps = currentHolding.dps
     val financial = financialData[currentHolding.code]
+    val fiscalMonth = financial?.period?.substringAfterLast('/')?.toIntOrNull()?.takeIf { it in 1..12 }
     val currentCalendarYear = java.time.Year.now(ZoneId.of("Asia/Tokyo")).value
     val currentCalendarDate = java.time.LocalDate.now(ZoneId.of("Asia/Tokyo"))
     val dividendHistoryYears = (currentCalendarYear - 7..currentCalendarYear).toList()
     val chartDividendEvents = remember(currentHolding.code, dividendEventRevision) {
         viewModel.dividendEventsFor(currentHolding.code)
     }
-    var selectedDividendYear by rememberSaveable(currentHolding.code) { mutableStateOf<Int?>(null) }
+    var selectedDividendYear by rememberSaveable(currentHolding.code) { mutableStateOf<Int?>(currentCalendarYear) }
+    LaunchedEffect(currentHolding.code, currentCalendarYear) {
+        if (selectedDividendYear == null) selectedDividendYear = currentCalendarYear
+    }
+    LaunchedEffect(currentHolding.code, selectedDividendYear) {
+        selectedDividendYear?.let { year ->
+            viewModel.refreshDividendEventsForYear(currentHolding.category, currentHolding.code, year)
+        }
+    }
     val selectedYearMonthlyDividends = remember(selectedDividendYear, chartDividendEvents) {
         selectedDividendYear?.let { year ->
             chartDividendEvents
@@ -323,7 +332,6 @@ fun StockDetailScreen(
             }
         } finally { shareSplitHistoryLoading = false }
     }
-    val fiscalMonth = financial?.period?.substringAfterLast('/')?.toIntOrNull()?.takeIf { it in 1..12 }
     val isCalendarYearDividendHistory = financial?.dividendHistoryBasis == "calendar_year_observed_distributions"
     val baseProfile = financial?.profile ?: com.kurogane.dividend.model.StockFinancialProfile()
     var financialError by remember(currentHolding.code) { mutableStateOf(false) }
@@ -885,8 +893,9 @@ fun StockDetailScreen(
                                     val dpsText = point.annualDividend
                                         ?.let { com.kurogane.dividend.model.formatFinancialAmountDisplay(it) }
                                         ?: "未取得"
+                                    val fiscalPeriodLabel = "${point.year}期"
                                     Triple(
-                                        "${point.year}年",
+                                        fiscalPeriodLabel,
                                         stringResource(R.string.add_holding_1_s_2_s_2, prefix, dpsText),
                                         (dps / maxDps * 0.95).toFloat()
                                     )
@@ -908,13 +917,6 @@ fun StockDetailScreen(
                                             .fillMaxHeight()
                                             .clickable(onClickLabel = "${term}の配当内訳を表示") {
                                                 selectedDividendYear = if (isSelected) null else history[index].year
-                                                if (!isSelected) {
-                                                    viewModel.refreshDividendEventsForYear(
-                                                        currentHolding.category,
-                                                        currentHolding.code,
-                                                        history[index].year
-                                                    )
-                                                }
                                             }
                                     ) {
                                         BoxWithConstraints(
@@ -976,20 +978,32 @@ fun StockDetailScreen(
 
                         selectedDividendYear?.let { year ->
                             val monthlyAmounts = selectedYearMonthlyDividends.orEmpty()
-                                .joinToString("・") { (month, amount) ->
-                                    "${month}月 ${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(amount)}/株"
+                                .joinToString("　") { (month, amount) ->
+                                    "${month}月${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(amount)}/株"
                                 }
-                            Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    "${year}年の配当イベント（月別・権利落ち月）",
+                                    "${year}年の配当イベント",
                                     color = OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense
+                                    fontSize = AppTextSize.dense,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    monthlyAmounts.ifBlank { "取得できる配当履歴がありません" },
+                                    monthlyAmounts.ifBlank { "配当履歴なし" },
                                     color = OnSurface,
-                                    fontSize = AppTextSize.body,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontSize = AppTextSize.dense,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.weight(1.35f),
+                                    textAlign = TextAlign.End,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
