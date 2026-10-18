@@ -448,6 +448,7 @@ fun WatchlistScreen(
     val matrixSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var showGraphBottomSheet by remember { mutableStateOf(false) }
+    var selectedProjectionQuarterIndex by remember { mutableStateOf<Int?>(null) }
     var showCalendarInfo by remember { mutableStateOf(false) }
     var showHeatmapInfo by remember { mutableStateOf(false) }
     val graphSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
@@ -2488,7 +2489,12 @@ fun WatchlistScreen(
                     }
                 }
 
-                // Card 1: Quarter comparison matching Image 3
+                // Quarterly cash-flow comparison aligned with the analysis screen.
+                val projectionQuarterColors = listOf(PrimaryEmeraldContainer, SecondaryIndigo, SkyBlue, AccentAmber)
+                val projectionQuarterTotal = projection.quarterlyTotals.sum()
+                val projectionMaxMonthShare = if (projectionQuarterTotal > 0.0) {
+                    projection.monthlyTotals.maxOrNull()?.div(projectionQuarterTotal)?.times(100.0) ?: 0.0
+                } else 0.0
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -2504,35 +2510,58 @@ fun WatchlistScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.PieChart, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(R.string.watchlist_text_56), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.annual_dividend_quarterly_cashflow_title), modifier = Modifier.weight(1f), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                             }
                             Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = SecondaryIndigo.copy(alpha = 0.15f)
+                                shape = RoundedCornerShape(8.dp),
+                                color = SecondaryIndigo.copy(alpha = 0.14f)
                             ) {
                                 Text(
-                                    stringResource(R.string.watchlist_peak_share, percent(projection.peakShare)),
+                                    stringResource(R.string.annual_dividend_quarterly_max_month_share, String.format(Locale.JAPAN, "%.1f%%", projectionMaxMonthShare)),
                                     color = SecondaryIndigo,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                        // Multi-color segmented row representing quarters proportion
-                        Row(
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(8.dp)
+                                .height(15.dp)
                                 .clip(CircleShape)
-                                .background(BorderColor)
+                                .background(BorderBlue)
                         ) {
-                            projection.quarterlyTotals.forEachIndexed { index, amount ->
-                                Box(Modifier.fillMaxHeight().weight(if (projection.scheduledTotal > 0) (amount / projection.scheduledTotal).toFloat().coerceAtLeast(0.0001f) else 1f)
-                                    .background(if (index % 2 == 0) SecondaryIndigo else PrimaryEmerald))
+                            if (projectionQuarterTotal > 0.0) {
+                                Row(Modifier.fillMaxSize()) {
+                                    projection.quarterlyTotals.forEachIndexed { index, amount ->
+                                        if (amount > 0.0) {
+                                            val isSelected = selectedProjectionQuarterIndex == index
+                                            val emphasisProgress by animateFloatAsState(
+                                                targetValue = if (isSelected) 1f else 0f,
+                                                label = "Watchlist quarterly cash flow emphasis $index"
+                                            )
+                                            Box(
+                                                Modifier.weight((amount / projectionQuarterTotal).toFloat())
+                                                    .fillMaxHeight()
+                                                    .padding(horizontal = 0.5.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Box(
+                                                    Modifier.fillMaxWidth()
+                                                        .height((9f + 6f * emphasisProgress).dp)
+                                                        .clip(CircleShape)
+                                                        .background(projectionQuarterColors[index])
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -2540,16 +2569,30 @@ fun WatchlistScreen(
 
                         AdaptiveRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             projection.quarterlyTotals.forEachIndexed { index, amount ->
-                                Column(
-                                    Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(BackgroundDark).padding(8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                val firstMonth = index * 3 + 1
+                                val lastMonth = firstMonth + 2
+                                val sharePercent = if (projectionQuarterTotal > 0.0) amount / projectionQuarterTotal * 100.0 else 0.0
+                                Surface(
+                                    modifier = Modifier.weight(1f).clickable {
+                                        selectedProjectionQuarterIndex = if (selectedProjectionQuarterIndex == index) null else index
+                                    },
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = BackgroundDark,
+                                    border = BorderStroke(0.5.dp, BorderColor)
                                 ) {
-                                    Text("Q${index + 1} (${index * 3 + 1}-${index * 3 + 3}月)", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                    Text(yen(amount), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                    Text(percent(if (projection.scheduledTotal > 0) amount / projection.scheduledTotal * 100 else 0.0), color = PrimaryEmerald, fontSize = AppTextSize.dense)
+                                    Column(
+                                    Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 2.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(stringResource(R.string.annual_dividend_quarterly_quarter_label, index + 1, firstMonth, lastMonth), color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = 1, softWrap = false)
+                                        Spacer(Modifier.height(2.dp))
+                                        Text("¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(amount)}", color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily, textAlign = TextAlign.Center, maxLines = 1, softWrap = false)
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(String.format(Locale.JAPAN, "%.1f%%", sharePercent), color = projectionQuarterColors[index], fontSize = AppTextSize.dense, fontWeight = FontWeight.Medium, maxLines = 1, softWrap = false)
+                                    }
                                 }
                             }
                         }
