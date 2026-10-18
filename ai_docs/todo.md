@@ -2,6 +2,8 @@
 
 ## Completed
 
+- [x] Show the selected forecast-period DPS in the dividend-event row and remove the always-visible forecast row. Evidence: JDK 17 debug build and SCG01/emulator installs succeed; tapping Takeda 4502's 2027期 bar shows `2027年の配当イベント` with `予想¥204/株`, and the standalone 2027年3月期 forecast row is absent.
+
 - [x] Source fiscal-period dividend bars from issuer-reported fiscal DPS when available. Evidence: the production 4502 payload has FY2026 DPS ¥200 and next-year forecast ¥204; the JDK 17 debug APK builds and installs on SCG01 and the emulator, and SCG01 shows ¥200 at 2026期 and ¥204 at 2027期 while its calendar-year 2026 event row remains separate.
 
 - [x] Preserve the three approved portable override groups without changing snapshot version 1 or including feedback drafts. Evidence: 17 backup cases pass on API 26/35/33, and the final AAB survives offline OS full-backup/clear/restore on API 26 with all three groups and existing saved facts unchanged; see `android-release-acceptance-20261018.md`.
