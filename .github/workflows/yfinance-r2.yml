@@ -15,12 +15,13 @@ on:
   workflow_dispatch:
     inputs:
       run_mode:
-        description: Run tests, a benchmark, the full R2 sync, reaggregate stored dividend streaks, normalize December-price dates, audit split-transition dividends, or seed app-used financial values into v2
+        description: Run tests, a benchmark, the full R2 sync, refresh one security's annual financials, reaggregate stored dividend streaks, normalize December-price dates, audit split-transition dividends, or seed app-used financial values into v2
         type: choice
         options:
           - test
           - benchmark
           - sync
+          - refresh-financials
           - reaggregate-dividend-streaks
           - repair-monthly-prices
           - split-audit
@@ -39,6 +40,11 @@ on:
           - "16"
           - "24"
         default: "16"
+        required: true
+      target_code:
+        description: Security code for refresh-financials mode
+        type: string
+        default: "7203"
         required: true
 
 permissions:
@@ -121,6 +127,7 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: diview-market-data
+
       - name: Save migration report
         if: always()
         uses: actions/upload-artifact@v4
@@ -129,6 +136,40 @@ jobs:
           path: |
             legacy-financial-migration.log
             legacy-financial-migration-report.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  yfinance-targeted-financial-refresh:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'refresh-financials'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/yfinance_r2/requirements.txt
+      - name: Install yfinance and R2 dependencies
+        run: python -m pip install -r scripts/yfinance_r2/requirements.txt
+      - name: Refresh one security's annual V2 financial records
+        run: set -o pipefail; python scripts/yfinance_r2/refresh_financial_v2.py --code "${TARGET_CODE}" 2>&1 | tee targeted-financial-refresh.log
+        shell: bash
+        env:
+          TARGET_CODE: ${{ inputs.target_code }}
+          YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
+          YFINANCE_LIBRARY_RETRIES: "1"
+          YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND: "8"
+          CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: diview-market-data
+      - name: Save targeted financial refresh report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yfinance-targeted-financial-refresh-${{ github.run_id }}
+          path: targeted-financial-refresh.log
           if-no-files-found: ignore
           retention-days: 30
 
