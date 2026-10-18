@@ -2697,6 +2697,7 @@ fun WatchlistScreen(
                             )
                             incomeAdviceCandidates.isNotEmpty() -> incomeAdviceCandidates.forEach { ranked ->
                                 val candidate = ranked.candidate
+                                val adviceControlWidth = maxOf(140.dp, (78 + 31 * ranked.coveredMonths.size).dp)
                                 Surface(
                                     shape = RoundedCornerShape(10.dp),
                                     color = BackgroundDark,
@@ -2726,7 +2727,7 @@ fun WatchlistScreen(
                                                 enabled = !isAddingWatchlist,
                                                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryEmerald),
                                                 shape = RoundedCornerShape(6.dp),
-                                                modifier = Modifier.height(24.dp),
+                                                modifier = Modifier.width(adviceControlWidth).height(36.dp),
                                                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
                                             ) {
                                                 Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, tint = OnPrimary, modifier = Modifier.size(12.dp))
@@ -2762,10 +2763,14 @@ fun WatchlistScreen(
                                             Surface(
                                                 shape = RoundedCornerShape(8.dp),
                                                 color = SurfaceContainerLow,
-                                                border = BorderStroke(1.dp, BorderColor)
+                                                border = BorderStroke(1.dp, BorderColor),
+                                                modifier = Modifier.width(adviceControlWidth).height(36.dp)
                                             ) {
                                                 Row(
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(horizontal = 6.dp),
+                                                    horizontalArrangement = Arrangement.Center,
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
                                                     Text(
