@@ -998,10 +998,18 @@ fun StockDetailScreen(
                         }
 
                         selectedDividendYear?.let { year ->
+                            val selectedForecastDps = dividendPeriods
+                                .firstOrNull { it.year == year && it.isForecast }
+                                ?.annualDividend
                             val monthlyAmounts = selectedYearMonthlyDividends.orEmpty()
                                 .joinToString("　") { (month, amount) ->
                                     "${month}月${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(amount)}/株"
                                 }
+                            val selectedYearAmount = if (selectedForecastDps != null) {
+                                "予想${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(selectedForecastDps)}/株"
+                            } else {
+                                monthlyAmounts.ifBlank { "配当履歴なし" }
+                            }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1016,7 +1024,7 @@ fun StockDetailScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    monthlyAmounts.ifBlank { "配当履歴なし" },
+                                    selectedYearAmount,
                                     color = OnSurface,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.SemiBold,
@@ -1025,33 +1033,6 @@ fun StockDetailScreen(
                                     maxLines = 1,
                                     softWrap = false,
                                     overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                        financial?.forecastFiscalYear?.let { forecastFiscalYear ->
-                            val fiscalMonth = financial.period.substringAfterLast('/').toIntOrNull()
-                                ?.takeIf { it in 1..12 }
-                            val forecastPeriodLabel = fiscalMonth?.let { month ->
-                                "${forecastFiscalYear}年${month}月期 予想配当"
-                            } ?: "${forecastFiscalYear}年期 予想配当"
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    forecastPeriodLabel,
-                                    color = OnSurfaceVariant,
-                                    fontSize = AppTextSize.dense,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    financial.forecastAnnualDividend
-                                        ?.let { "¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(it)} / 株" }
-                                        ?: "未取得",
-                                    color = PrimaryEmerald,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
