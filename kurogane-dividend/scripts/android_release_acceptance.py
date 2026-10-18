@@ -263,6 +263,8 @@ class Device:
             print(json.dumps(report), flush=True)
             if not unchanged:
                 raise AssertionError("The backup attempt changed the snapshot")
+            if not rejected:
+                raise AssertionError("Quota rejection was not observed; inspect the per-package result")
         finally:
             self.shell("bmgr", "transport", original_transport)
             self.shell("bmgr", "enable", "true" if original_enabled else "false")
