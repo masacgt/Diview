@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import re
 import sys
+from pathlib import Path
 from typing import Any
 
 import yfinance as yf
@@ -14,7 +17,7 @@ import fetch_and_upload as collector
 import sync_v2 as sync
 
 
-def refresh(code: str) -> int:
+def refresh(code: str) -> dict[str, Any]:
     code = code.strip().upper()
     if not re.fullmatch(r"\d{4,5}[A-Z]?", code):
         raise ValueError("Security code must be a 4-5 digit code, optionally followed by a letter")
@@ -87,13 +90,13 @@ def refresh(code: str) -> int:
         for field in (
             "doe_dividend_total", "stockholders_equity", "calculated_doe",
             "net_debt", "net_debt_source_field", "net_de_equity_source_field",
-            "net_de_ratio", "net_de_formula",
+            "net_de_ratio", "net_de_formula", "field_status_reason",
         ):
             if annual.get(field) != row.get(field):
                 raise RuntimeError(f"Financial field read-back mismatch: {symbol} {period_end} {field}")
-        if (annual.get("field_status", {}).get("net_de_ratio")
-                != row.get("field_status", {}).get("net_de_ratio")):
-            raise RuntimeError(f"Financial field status read-back mismatch: {symbol} {period_end} net_de_ratio")
+        for metric in ("calculated_doe", "net_de_ratio"):
+            if annual.get("field_status", {}).get(metric) != row.get("field_status", {}).get(metric):
+                raise RuntimeError(f"Financial field status read-back mismatch: {symbol} {period_end} {metric}")
         verified += 1
 
     marker = sync.financial_period_marker(info)
@@ -150,15 +153,84 @@ def refresh(code: str) -> int:
             "field_status": row.get("field_status", {}).get("net_de_ratio"),
         } for row in net_de_rows],
         "financial_status": financial_status,
+        "missing_reasons": {
+            row.get("period_end"): row.get("field_status_reason", {})
+            for row in statements
+            if row.get("field_status_reason")
+        },
     }, ensure_ascii=False, sort_keys=True))
-    return 1 if failed_groups else 0
+    return {"exit_code": 1 if failed_groups else 0, "code": code, "financial_rows_processed": wrote}
+
+
+def refresh_all(report_path: str) -> int:
+    collector.configure_yfinance()
+    client = collector.get_client()
+    bucket = collector.required_env("R2_BUCKET")
+    universe = sync.read_json(client, bucket, sync.object_key("universe", "current.json")) or {}
+    securities = [
+        str(row.get("code") or row.get("security_code_display") or "").strip()
+        for row in universe.get("securities", [])
+        if isinstance(row, dict) and row.get("status", "active") == "active"
+    ]
+    securities = sorted({code for code in securities if re.fullmatch(r"\d{4,5}[A-Z]?", code)})
+    if not securities:
+        raise RuntimeError("No active securities found in the published V2 universe")
+
+    results: list[dict[str, Any]] = []
+    failed = 0
+    for index, code in enumerate(securities, start=1):
+        output = io.StringIO()
+        errors = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                result = refresh(code)
+            payload = next(
+                (json.loads(line) for line in reversed(output.getvalue().splitlines())
+                 if line.lstrip().startswith("{")),
+                {},
+            )
+            record = {
+                "code": code,
+                "status": "partial" if result["exit_code"] else "success",
+                "financial_rows_processed": result["financial_rows_processed"],
+                "doe_rows_available": len(payload.get("doe_rows", [])),
+                "net_de_rows_available": len(payload.get("net_de_rows", [])),
+                "missing_reasons": payload.get("missing_reasons", {}),
+                "financial_status": payload.get("financial_status", {}),
+            }
+            failed += int(result["exit_code"] != 0)
+        except Exception as exc:
+            record = {
+                "code": code,
+                "status": "failed",
+                "error": f"{type(exc).__name__}: {exc}"[:500],
+                "diagnostics": errors.getvalue()[-2000:],
+            }
+            failed += 1
+        results.append(record)
+        if index % 25 == 0 or index == len(securities):
+            print(f"Progress {index}/{len(securities)}: failed_or_partial={failed}", flush=True)
+
+    report = {
+        "security_count": len(securities),
+        "success_count": sum(row["status"] == "success" for row in results),
+        "partial_count": sum(row["status"] == "partial" for row in results),
+        "failure_count": sum(row["status"] == "failed" for row in results),
+        "results": results,
+    }
+    Path(report_path).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({key: value for key, value in report.items() if key != "results"}, ensure_ascii=False))
+    return 1 if failed else 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--code", required=True, help="One security code to refresh")
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument("--code", help="One security code to refresh")
+    target.add_argument("--all", action="store_true", help="Refresh every active security in the R2 V2 universe")
+    parser.add_argument("--report", default="financial-refresh-report.json", help="JSON report output path for --all")
     args = parser.parse_args()
-    return refresh(args.code)
+    return refresh_all(args.report) if args.all else refresh(args.code)["exit_code"]
 
 
 if __name__ == "__main__":

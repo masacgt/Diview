@@ -32,6 +32,9 @@
 
 ## Next
 
+- [ ] Run the new `refresh-all-financials` server workflow for all active V2 securities and inspect the report plus production API read-back. Evidence so far: `.github/workflows/yfinance-r2.yml` and `scripts/yfinance_r2/refresh_financial_v2.py` implement a sequential V2 batch with per-record R2 read-back; all 60 local collector tests pass, but production execution remains pending.
+- [ ] Confirm `field_status_reason` appears in the production financial-data API after the V2 refresh. Evidence so far: all 60 existing V2 collector tests pass, including the new missing-input reason case; production R2 refresh and API read-back remain pending.
+
 - [x] Add annual net debt-to-equity collection and expose it through the financial API and Android. Evidence: targeted refresh run #121 wrote and read back 10 rows for 7203; production API reports DOE and net D/E available for 2023/03–2026/03, and SCG01 displays 3.10% DOE and 0.75倍 net D/E for 2026/03; JDK 17 passed 143 Android unit tests and the debug APK build/install, and Actions run #124 passed 55 yfinance collector tests.
 - [ ] Complete the policy-v2 first pass across all securities over five successful scheduled Tokyo-market sessions; verify a non-7203 security's financial values in R2, API, and Android.
 - [ ] Repair the stale 7203 total-assets value and verify the equity-ratio display; the current screen shows 37,829,768.9%.

@@ -698,6 +698,54 @@ def calculate_net_de_metrics(values: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def financial_metric_missing_reasons(
+    *, fresh_balance: dict[str, Any], fresh_cash: dict[str, Any],
+    retrieval_status: dict[str, Any], calculated_doe: float | None,
+    net_de_metrics: dict[str, Any],
+) -> dict[str, list[str]]:
+    """Explain which fresh same-period source inputs prevent each metric."""
+    reasons: dict[str, list[str]] = {"calculated_doe": [], "net_de_ratio": []}
+    if calculated_doe is None:
+        doe_reasons = reasons["calculated_doe"]
+        if retrieval_status.get("cash_flow") == "failed":
+            doe_reasons.append("cash_flow_fetch_failed")
+        if retrieval_status.get("balance_sheet") == "failed":
+            doe_reasons.append("balance_sheet_fetch_failed")
+        if not any(finite_number(fresh_cash.get(field)) is not None for field in (
+            "common_stock_dividend_paid", "cash_dividends_paid",
+        )):
+            doe_reasons.append("dividend_paid_missing")
+        equity = finite_number(fresh_balance.get("stockholders_equity"))
+        if equity is None:
+            doe_reasons.append("stockholders_equity_missing")
+        elif equity <= 0:
+            doe_reasons.append("stockholders_equity_non_positive")
+
+    if not net_de_metrics:
+        net_reasons = reasons["net_de_ratio"]
+        if retrieval_status.get("balance_sheet") == "failed":
+            net_reasons.append("balance_sheet_fetch_failed")
+        equity = next((finite_number(fresh_balance.get(field)) for field in (
+            "stockholders_equity", "total_equity_gross_minority_interest",
+        ) if finite_number(fresh_balance.get(field)) is not None
+            and finite_number(fresh_balance.get(field)) > 0), None)
+        if equity is None:
+            if any(finite_number(fresh_balance.get(field)) is not None for field in (
+                "stockholders_equity", "total_equity_gross_minority_interest",
+            )):
+                net_reasons.append("equity_non_positive")
+            else:
+                net_reasons.append("equity_missing")
+        if finite_number(fresh_balance.get("net_debt")) is None:
+            if finite_number(fresh_balance.get("total_debt")) is None:
+                net_reasons.append("net_debt_and_total_debt_missing")
+            elif not any(finite_number(fresh_balance.get(field)) is not None for field in (
+                "cash_and_short_term_investments", "cash_and_equivalents", "cash_equivalents",
+            )):
+                net_reasons.append("cash_input_missing")
+    return reasons
+
+
 def merge_year_documents(
     client: Any,
     bucket: str,
@@ -1295,7 +1343,7 @@ def prior_financial_maps(
                 records.setdefault(annual_period_end, {})["annual"] = annual
                 statements[annual_period_end] = {
                     key: value for key, value in annual.items()
-                    if key not in {"fiscal_year", "period_end", "field_status", "migration_source", "source_values"}
+                    if key not in {"fiscal_year", "period_end", "field_status", "field_status_reason", "migration_source", "source_values"}
                 }
                 document_keys.setdefault(annual_period_end, document_key)
             valuation = document.get("valuation")
@@ -1305,13 +1353,13 @@ def prior_financial_maps(
                     records.setdefault(valuation_period_end, {})["valuation"] = valuation
                     valuations[valuation_period_end] = {
                         key: value for key, value in valuation.items()
-                        if key not in {"fiscal_year", "period_end", "field_status", "migration_source", "source_values"}
+                        if key not in {"fiscal_year", "period_end", "field_status", "field_status_reason", "migration_source", "source_values"}
                     }
                     document_keys.setdefault(valuation_period_end, document_key)
     return statements, valuations, document_keys, records
 
 
-FINANCIAL_RECORD_METADATA = {"fiscal_year", "period_end", "field_status", "migration_source", "source_values"}
+FINANCIAL_RECORD_METADATA = {"fiscal_year", "period_end", "field_status", "field_status_reason", "migration_source", "source_values"}
 FINANCIAL_DERIVED_FIELDS = {"equity_ratio_computed"}
 
 
@@ -1496,6 +1544,13 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
                 and "total_assets" in fresh_values
                 else "stale"
             )
+        annual_field_status_reason = financial_metric_missing_reasons(
+            fresh_balance=fresh_balance.get(period_end, {}),
+            fresh_cash=fresh_cash.get(period_end, {}),
+            retrieval_status=retrieval_status,
+            calculated_doe=calculated_doe,
+            net_de_metrics=net_de_metrics,
+        )
         prior_annual = prior_record.get("annual") if isinstance(prior_record.get("annual"), dict) else {}
         seed_source = (
             (prior_annual.get("source_values") or {}).get("seed", {}).get("source")
@@ -1525,6 +1580,7 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             "fiscal_year": f"{period_end[:4]}/{period_end[5:7]}",
             "period_end": period_end,
             "field_status": annual_field_status,
+            "field_status_reason": annual_field_status_reason,
             "source_values": annual_sources,
             **values,
         })
@@ -2838,8 +2894,9 @@ def run(
                               or previous_sync.get("long_history_retry_pending") is True)
         retry_financials = previous_sync.get("financial_retry_pending") is True
         initialize_financials = (
-            bucket_for(code, FINANCIAL_BUCKETS) == financial_bucket
-            and previous_sync.get("financial_refresh_policy_version") != FINANCIAL_REFRESH_POLICY_VERSION
+            not previous_sync
+            or (bucket_for(code, FINANCIAL_BUCKETS) == financial_bucket
+                and previous_sync.get("financial_refresh_policy_version") != FINANCIAL_REFRESH_POLICY_VERSION)
         )
         previous_monthly = previous_sync.get("monthly_history_schema_version") == 2
         initialize_monthly = bucket_for(code, FULL_HISTORY_BUCKETS) == full_history_bucket
