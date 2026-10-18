@@ -752,7 +752,7 @@ fun StockDetailScreen(
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text(stringResource(R.string.stock_detail_text_6), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     Text(
-                                        if (currentDpsUnavailable) "未取得 YOC" else "${com.kurogane.dividend.model.formatDividendYieldDisplay(currentHolding.liveYoc, currentHolding.isNoDividendConfirmed)} YOC",
+                                        if (currentDpsUnavailable) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(currentHolding.liveYoc, currentHolding.isNoDividendConfirmed),
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryEmerald,
                                         fontSize = AppTextSize.caption,
@@ -1048,54 +1048,6 @@ fun StockDetailScreen(
                                 fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold
                             )
-                        }
-                    }
-                }
-            }
-
-            if (financial?.issuerDividends?.isNotEmpty() == true) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
-                        border = BorderStroke(1.dp, BorderColor)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                "決算期別DPS（参考）",
-                                color = OnSurface,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = AppTextSize.body
-                            )
-                            Text(
-                                "決算期ごとの年間配当額です。上の暦年配当履歴とは集計期間が異なります。",
-                                color = OnSurfaceVariant,
-                                fontSize = AppTextSize.dense,
-                                lineHeight = 15.sp
-                            )
-                            financial.issuerDividends.takeLast(8).forEach { record ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        "FY${record.fiscalYear}",
-                                        color = OnSurfaceVariant,
-                                        fontSize = AppTextSize.dense
-                                    )
-                                    Text(
-                                        "¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(record.displayDps ?: 0.0)} / 株",
-                                        color = OnSurface,
-                                        fontSize = AppTextSize.dense,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
                         }
                     }
                 }
