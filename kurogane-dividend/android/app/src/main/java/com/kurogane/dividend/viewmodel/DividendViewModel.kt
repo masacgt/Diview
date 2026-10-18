@@ -203,6 +203,12 @@ class DividendViewModel @JvmOverloads constructor(
     val compositionThreshold = _compositionThreshold.asStateFlow()
     private val _compositionOtherEnabled = MutableStateFlow(displayPreferences.getBoolean("composition_other_enabled", true))
     val compositionOtherEnabled = _compositionOtherEnabled.asStateFlow()
+    private val _compositionChartMode = MutableStateFlow(
+        displayPreferences.getString("composition_chart_mode", "dividend")
+            ?.takeIf { it == "holding" || it == "dividend" }
+            ?: "dividend"
+    )
+    val compositionChartMode = _compositionChartMode.asStateFlow()
     private val _roadmapShareTab = MutableStateFlow(displayPreferences.getInt("roadmap_share_tab", 0))
     val roadmapShareTab = _roadmapShareTab.asStateFlow()
     private val _roadmapShareMasked = MutableStateFlow(displayPreferences.getBoolean("roadmap_share_masked", _maskAtStartup.value))
@@ -286,6 +292,17 @@ class DividendViewModel @JvmOverloads constructor(
 
     fun setCompositionOtherEnabled(enabled: Boolean) {
         saveDisplaySetting(displayPreferences.edit().putBoolean("composition_other_enabled", enabled)) { _compositionOtherEnabled.value = enabled }
+    }
+
+    fun setCompositionChartMode(mode: String): Boolean {
+        if (mode !in setOf("holding", "dividend")) return false
+        if (_compositionChartMode.value == mode) return true
+        if (!displayPreferences.edit().putString("composition_chart_mode", mode).commit()) {
+            _saveError.value = getApplication<Application>().getString(R.string.setting_save_failed)
+            return false
+        }
+        _compositionChartMode.value = mode
+        return true
     }
 
     fun setRoadmapShareTab(value: Int) {
@@ -2713,6 +2730,7 @@ class DividendViewModel @JvmOverloads constructor(
             _growthSimulatorDividendYield.value = 4.0
             _compositionThreshold.value = 5
             _compositionOtherEnabled.value = true
+            _compositionChartMode.value = "dividend"
             _roadmapShareTab.value = 0
             _roadmapShareMasked.value = false
             _taxRateMode.value = "gross"

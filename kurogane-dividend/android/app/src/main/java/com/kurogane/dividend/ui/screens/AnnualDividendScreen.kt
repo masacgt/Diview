@@ -1232,7 +1232,7 @@ private data class SectorCompositionRow(
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.model.Holding>, taxRateMode: String, totalAssets: Double, totalAnnualDiv: Double, compositionThreshold: Int, compositionOtherEnabled: Boolean, viewModel: DividendViewModel, onNavigateToDetail: (String) -> Unit) {
     var isVisible by remember { mutableStateOf(false) }
-    var chartMode by remember { mutableStateOf("dividend") } // "holding", "dividend", or "yield"
+    var chartMode by remember(viewModel) { mutableStateOf(viewModel.compositionChartMode.value) } // "holding", "dividend", or "yield"
     var sectorValueMode by remember { mutableStateOf("valuation") } // "valuation" or "dividend"
     val context = LocalContext.current
     val industriesByCode = remember(context) { Tse33IndustryMaster.industries(context) }
@@ -1458,7 +1458,9 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(if (chartMode == "holding") PrimaryEmerald else Color.Transparent)
                                 .animateContentSize(animationSpec = tween(190))
-                                .clickable { chartMode = "holding" }
+                                .clickable {
+                                    if (viewModel.setCompositionChartMode("holding")) chartMode = "holding"
+                                }
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Text(
@@ -1475,7 +1477,9 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(if (chartMode == "dividend") PrimaryEmerald else Color.Transparent)
                                 .animateContentSize(animationSpec = tween(190))
-                                .clickable { chartMode = "dividend" }
+                                .clickable {
+                                    if (viewModel.setCompositionChartMode("dividend")) chartMode = "dividend"
+                                }
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Text(
