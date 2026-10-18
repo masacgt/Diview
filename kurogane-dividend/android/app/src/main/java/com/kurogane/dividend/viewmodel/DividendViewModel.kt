@@ -25,6 +25,7 @@ import com.kurogane.dividend.data.CloudflareSearchHit
 import com.kurogane.dividend.data.CloudflareSearchQuote
 import com.kurogane.dividend.data.CloudflareMonthlyPriceSeries
 import com.kurogane.dividend.data.CloudflareDataRetrieval
+import com.kurogane.dividend.data.CloudflareCompanyInfoRetrieval
 import com.kurogane.dividend.data.CloudflareDividendHistoryRetrieval
 import com.kurogane.dividend.data.CloudflareShareSplitEvent
 import com.kurogane.dividend.data.CloudflareShareSplitHistory
@@ -1914,6 +1915,7 @@ class DividendViewModel @JvmOverloads constructor(
             if (!has(key) || isNull(key)) null else optDouble(key).takeIf(Double::isFinite)
         val retrievalJson = json.optJSONObject("data_retrieval")
         val historyJson = retrievalJson?.optJSONObject("dividend_history")
+        val companyInfoJson = retrievalJson?.optJSONObject("company_info")
         val retrieval = retrievalJson?.let {
             CloudflareDataRetrieval(
                 yfinanceTicker = it.stringOrNull("yfinance_ticker"),
@@ -1922,6 +1924,20 @@ class DividendViewModel @JvmOverloads constructor(
                 lastAttemptAt = it.stringOrNull("last_attempt_at"),
                 processingStatus = it.stringOrNull("processing_status"),
                 failureReason = it.stringOrNull("failure_reason"),
+                companyInfo = companyInfoJson?.let { info ->
+                    CloudflareCompanyInfoRetrieval(
+                        status = info.stringOrNull("status"),
+                        lastFetchedSessionDate = info.stringOrNull("last_fetched_session_date"),
+                        lastFetchedAt = info.stringOrNull("last_fetched_at"),
+                        fetchDateBasis = info.stringOrNull("fetch_date_basis"),
+                        lastAttemptSessionDate = info.stringOrNull("last_attempt_session_date"),
+                        lastAttemptAt = info.stringOrNull("last_attempt_at"),
+                        lastAttemptStatus = info.stringOrNull("last_attempt_status"),
+                        refreshPending = info.optBoolean("refresh_pending"),
+                        failureClass = info.stringOrNull("failure_class"),
+                        failureReason = info.stringOrNull("failure_reason")
+                    )
+                },
                 dividendHistory = historyJson?.let { history ->
                     CloudflareDividendHistoryRetrieval(
                         status = history.stringOrNull("status"),
@@ -1971,6 +1987,20 @@ class DividendViewModel @JvmOverloads constructor(
                 put("last_attempt_at", value.lastAttemptAt ?: JSONObject.NULL)
                 put("processing_status", value.processingStatus ?: JSONObject.NULL)
                 put("failure_reason", value.failureReason ?: JSONObject.NULL)
+                put("company_info", value.companyInfo?.let { info ->
+                    JSONObject().apply {
+                        put("status", info.status ?: JSONObject.NULL)
+                        put("last_fetched_session_date", info.lastFetchedSessionDate ?: JSONObject.NULL)
+                        put("last_fetched_at", info.lastFetchedAt ?: JSONObject.NULL)
+                        put("fetch_date_basis", info.fetchDateBasis ?: JSONObject.NULL)
+                        put("last_attempt_session_date", info.lastAttemptSessionDate ?: JSONObject.NULL)
+                        put("last_attempt_at", info.lastAttemptAt ?: JSONObject.NULL)
+                        put("last_attempt_status", info.lastAttemptStatus ?: JSONObject.NULL)
+                        put("refresh_pending", info.refreshPending)
+                        put("failure_class", info.failureClass ?: JSONObject.NULL)
+                        put("failure_reason", info.failureReason ?: JSONObject.NULL)
+                    }
+                } ?: JSONObject.NULL)
                 put("dividend_history", history ?: JSONObject.NULL)
             }
         }
@@ -2003,12 +2033,13 @@ class DividendViewModel @JvmOverloads constructor(
             cached = _cloudflareSecurityData.value[normalized]
                 ?: marketPreferences.getString(cacheKey, null)?.let(::parseCloudflareSecuritySnapshot)
             val now = System.currentTimeMillis()
-            if (!PriceRefreshPolicy.shouldFetch(
+            val missingCompanyInfoMetadata = cached?.dataRetrieval?.companyInfo == null
+            if ((!missingCompanyInfoMetadata && !PriceRefreshPolicy.shouldFetch(
                     now,
                     marketPreferences.getLong(attemptKey, 0L),
                     marketPreferences.getString(attemptDateKey, null)
                         ?: marketPreferences.getString("cloudflare_security_fetched_jst_$normalized", null)
-                ) || !cloudflareSecurityLoading.add(normalized)) {
+                )) || !cloudflareSecurityLoading.add(normalized)) {
                 false
             } else {
                 marketPreferences.edit().putLong(attemptKey, now)
@@ -2047,7 +2078,12 @@ class DividendViewModel @JvmOverloads constructor(
 
     suspend fun resolveCloudflareSecurity(code: String): CloudflareSecurity? {
         val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
-        val security = cachedCloudflareSecurity(normalized) ?: fetchCloudflareSecurityIfDue(normalized) ?: return null
+        val cached = cachedCloudflareSecurity(normalized)
+        val security = if (cached?.dataRetrieval?.companyInfo == null) {
+            fetchCloudflareSecurityIfDue(normalized) ?: cached
+        } else {
+            cached
+        } ?: return null
         if ((security.annualDividendPerShare ?: 0.0) <= 0.0) {
             runCatchingCancellable { fetchFinancialData(security.code) }
         }

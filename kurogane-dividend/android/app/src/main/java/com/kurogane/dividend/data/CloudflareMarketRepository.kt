@@ -57,7 +57,21 @@ data class CloudflareDataRetrieval(
     val lastAttemptAt: String?,
     val processingStatus: String?,
     val failureReason: String?,
-    val dividendHistory: CloudflareDividendHistoryRetrieval?
+    val dividendHistory: CloudflareDividendHistoryRetrieval?,
+    val companyInfo: CloudflareCompanyInfoRetrieval? = null
+)
+
+data class CloudflareCompanyInfoRetrieval(
+    val status: String?,
+    val lastFetchedSessionDate: String?,
+    val lastFetchedAt: String?,
+    val fetchDateBasis: String?,
+    val lastAttemptSessionDate: String?,
+    val lastAttemptAt: String?,
+    val lastAttemptStatus: String?,
+    val refreshPending: Boolean,
+    val failureClass: String?,
+    val failureReason: String?
 )
 
 data class CloudflareDividendHistoryRetrieval(
@@ -327,6 +341,7 @@ class CloudflareMarketRepository(
                 (detailQuoteDate == null || catalogQuote.quoteDate > detailQuoteDate)))
         val retrievalJson = root.optJSONObject("data_retrieval")
         val dividendHistoryJson = retrievalJson?.optJSONObject("dividend_history")
+        val companyInfoJson = retrievalJson?.optJSONObject("company_info")
         CloudflareSecurity(
             code = root.optString("code", normalized).ifBlank { normalized }.also {
                 require(it.equals(normalized, true)) { "応答の銘柄コードが一致しません" }
@@ -352,6 +367,20 @@ class CloudflareMarketRepository(
                     lastAttemptAt = retrieval.stringOrNull("last_attempt_at"),
                     processingStatus = retrieval.stringOrNull("processing_status"),
                     failureReason = retrieval.stringOrNull("failure_reason"),
+                    companyInfo = companyInfoJson?.let { info ->
+                        CloudflareCompanyInfoRetrieval(
+                            status = info.stringOrNull("status"),
+                            lastFetchedSessionDate = info.stringOrNull("last_fetched_session_date"),
+                            lastFetchedAt = info.stringOrNull("last_fetched_at"),
+                            fetchDateBasis = info.stringOrNull("fetch_date_basis"),
+                            lastAttemptSessionDate = info.stringOrNull("last_attempt_session_date"),
+                            lastAttemptAt = info.stringOrNull("last_attempt_at"),
+                            lastAttemptStatus = info.stringOrNull("last_attempt_status"),
+                            refreshPending = info.optBoolean("refresh_pending"),
+                            failureClass = info.stringOrNull("failure_class"),
+                            failureReason = info.stringOrNull("failure_reason")
+                        )
+                    },
                     dividendHistory = dividendHistoryJson?.let { history ->
                         CloudflareDividendHistoryRetrieval(
                             status = history.stringOrNull("status"),

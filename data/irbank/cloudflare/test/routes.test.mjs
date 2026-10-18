@@ -65,8 +65,10 @@ test('security API exposes yfinance retrieval metadata and stored dividend histo
     [`${base}/current.json`, {
       code: '7203', symbol: '7203.T', source: 'Yahoo Finance via yfinance',
       price: { close: 3000, currency: 'JPY' },
+      statistics: { trailingEps: 200, bookValue: 1000, trailingPE: 4, priceToBook: 0.5 },
+      statistics_last_fetched_session_date: '2026-10-15',
       dividend: { dividend_status: 'has_dividend' },
-      field_status: { dividend_history: 'available' },
+      field_status: { dividend_history: 'available', statistics_refresh: 'failed' },
       action_history: {
         status: 'success', source: 'yfinance_history', yfinance_version: '1.7.0',
         coverage_start: '2025-01-01', coverage_end: '2025-12-31',
@@ -76,6 +78,15 @@ test('security API exposes yfinance retrieval metadata and stored dividend histo
     [`${base}/sync.json`, {
       last_attempt_at: '2026-10-17T00:00:00Z', status: 'partial',
       failure_reason: 'Field fetch failed: price', yfinance_version: '1.7.0',
+      info_last_fetched_session_date: '2026-10-15',
+      info_last_fetched_at: '2026-10-15T12:00:00Z',
+      info_last_attempt_session_date: '2026-10-17',
+      info_last_attempt_at: '2026-10-17T12:00:00Z',
+      info_last_attempt_status: 'failed',
+      info_refresh_pending: true,
+      info_refresh_failure: {
+        failure_class: 'transient', exception_type: 'TimeoutError', reason: 'timed out',
+      },
     }],
     [`${base}/dividends/2025.json`, { records: [
       { date: '2025-03-31', amount: 20 }, { date: '2025-09-30', amount: 30 },
@@ -90,6 +101,17 @@ test('security API exposes yfinance retrieval metadata and stored dividend histo
   assert.equal(response.status, 200);
   const data = await response.json();
   assert.equal(data.code, '7203');
+  assert.deepEqual(data.valuation, {
+    per: 15,
+    pbr: 3,
+    source: 'daily_close_divided_by_latest_yfinance_eps_bps',
+    price_date: null,
+    statistics_last_fetched_session_date: '2026-10-15',
+    formulas: {
+      per: 'price.close / statistics.trailingEps',
+      pbr: 'price.close / statistics.bookValue',
+    },
+  });
   assert.deepEqual(data.data_retrieval, {
     yfinance_ticker: '7203.T',
     source: 'Yahoo Finance via yfinance',
@@ -97,6 +119,18 @@ test('security API exposes yfinance retrieval metadata and stored dividend histo
     last_attempt_at: '2026-10-17T00:00:00Z',
     processing_status: 'partial',
     failure_reason: 'Field fetch failed: price',
+    company_info: {
+      status: 'failed',
+      last_fetched_session_date: '2026-10-15',
+      last_fetched_at: '2026-10-15T12:00:00Z',
+      fetch_date_basis: 'company_info_fetch',
+      last_attempt_session_date: '2026-10-17',
+      last_attempt_at: '2026-10-17T12:00:00Z',
+      last_attempt_status: 'failed',
+      refresh_pending: true,
+      failure_class: 'transient',
+      failure_reason: 'timed out',
+    },
     ex_dividend_calendar: {
       date: null,
       status: 'not_fetched',
@@ -119,6 +153,34 @@ test('security API exposes yfinance retrieval metadata and stored dividend histo
       period: 'max',
     },
   });
+});
+
+test('security API labels legacy company-information dates as sync-date fallbacks', async () => {
+  const base = 'market/yfinance/v2/securities/7203.T';
+  const documents = new Map([
+    ['market/yfinance/v2/catalog/current.json', { items: [{ code: '7203' }] }],
+    [`${base}/profile.json`, { code: '7203', display_name: 'トヨタ自動車' }],
+    [`${base}/current.json`, {
+      code: '7203',
+      price: { close: 3000, date: '2026-10-16', currency: 'JPY' },
+      statistics: { trailingEps: 200, bookValue: 1000 },
+      field_status: { dividend_history: 'available' },
+      dividend: {},
+    }],
+    [`${base}/sync.json`, {
+      last_success_session_date: '2026-10-16',
+      last_success_at: '2026-10-16T12:00:00Z',
+    }],
+  ]);
+  const response = await worker.fetch(
+    new Request('https://example.com/api/v1/securities/7203'), dividendEnvironment(documents),
+  );
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.data_retrieval.company_info.status, 'stale');
+  assert.equal(data.data_retrieval.company_info.last_fetched_session_date, '2026-10-16');
+  assert.equal(data.data_retrieval.company_info.last_fetched_at, null);
+  assert.equal(data.data_retrieval.company_info.fetch_date_basis, 'last_successful_sync_fallback');
 });
 
 test('financial API aggregates only published v2 yfinance calendar-year events', async () => {

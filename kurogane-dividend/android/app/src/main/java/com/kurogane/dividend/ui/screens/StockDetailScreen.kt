@@ -139,6 +139,11 @@ fun StockDetailScreen(
             resolvedSecurity = cachedSecurity
             lookupFinished = true
             lookupError = null
+            if (cachedSecurity.dataRetrieval?.companyInfo == null) {
+                com.kurogane.dividend.data.runCatchingCancellable {
+                    viewModel.resolveCloudflareSecurity(stockCode)
+                }.getOrNull()?.let { resolvedSecurity = it }
+            }
             return@LaunchedEffect
         }
         val isTracked = holdings.any { it.code.equals(stockCode, true) } || watchlist.any { it.code.equals(stockCode, true) }
@@ -717,6 +722,29 @@ fun StockDetailScreen(
                                     fontSize = AppTextSize.dense
                                 )
                             }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        resolvedSecurity?.dataRetrieval?.companyInfo?.let { companyInfo ->
+                            val failed = companyInfo.refreshPending
+                                || companyInfo.status == "failed"
+                                || companyInfo.lastAttemptStatus == "failed"
+                            val lastFetched = when {
+                                companyInfo.fetchDateBasis == "last_successful_sync_fallback" ->
+                                    companyInfo.lastFetchedSessionDate
+                                        ?.let { "取得日時未記録（最終同期 $it）" }
+                                        ?: "取得日時未記録"
+                                companyInfo.lastFetchedSessionDate != null ->
+                                    "最終取得 ${companyInfo.lastFetchedSessionDate}"
+                                else -> "未取得"
+                            }
+                            Text(
+                                if (failed) "会社情報・指標: $lastFetched（更新失敗・再取得予定）"
+                                else "会社情報・指標: $lastFetched",
+                                color = if (failed) ErrorRed else OnSurfaceVariant,
+                                fontSize = AppTextSize.dense
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(14.dp))
