@@ -140,6 +140,28 @@ test('financial API aggregates only published v2 yfinance calendar-year events',
   ]);
 });
 
+test('financial API returns calculated DOE and net D/E from the stored annual row', async () => {
+  const code = '7203';
+  const base = `market/yfinance/v2/securities/${code}.T`;
+  const annual = {
+    fiscal_year: '2026/03',
+    period_end: '2026-03-31',
+    calculated_doe: 3.25,
+    net_de_ratio: -0.22,
+    field_status: { calculated_doe: 'available', net_de_ratio: 'available' },
+  };
+  const env = dividendEnvironment(new Map([
+    [`${base}/profile.json`, { display_name: 'トヨタ自動車' }],
+    [`${base}/current.json`, { field_status: { dividend_history: 'empty' } }],
+    [`${base}/financials/2026-03-31.json`, { year: '2026', annual }],
+  ]));
+
+  const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.deepEqual(data.financials.annual, [annual]);
+});
+
 test('financial API keeps observed event history separate from legacy fiscal-year DPS', async () => {
   const code = '1306';
   const currentYear = Number(new Intl.DateTimeFormat('en', { timeZone: 'Asia/Tokyo', year: 'numeric' }).format(new Date()));
