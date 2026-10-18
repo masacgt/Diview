@@ -23,8 +23,10 @@
 
 ## Next
 
-- [ ] Run the first policy-v2 financial refresh and verify net D/E in R2, API, and Android; the current 7203 API row has no `net_de_ratio` and retains a stale total-assets value.
-- [ ] Run the full yfinance collector test suite in its pinned Python environment; the local Python installation lacks pandas.
+- [x] Add annual net debt-to-equity collection and expose it through the financial API and Android. Evidence: targeted refresh run #121 wrote and read back 10 rows for 7203; production API reports DOE and net D/E available for 2023/03–2026/03, and SCG01 displays 3.10% DOE and 0.75倍 net D/E for 2026/03; JDK 17 passed 143 Android unit tests and the debug APK build/install, and Actions run #124 passed 55 yfinance collector tests.
+- [ ] Complete the policy-v2 first pass across all securities over five successful scheduled Tokyo-market sessions; verify a non-7203 security's financial values in R2, API, and Android.
+- [ ] Repair the stale 7203 total-assets value and verify the equity-ratio display; the current screen shows 37,829,768.9%.
+- [x] Run the full yfinance collector test suite in its pinned Python environment. Evidence: Actions run #124 (`39115343966`) passed all 55 deterministic tests.
 
 - [ ] Deploy the income-advice Worker API and verify the first V2-derived R2 candidate catalog is published and read back; then check ranked candidates on Android. Local implementation and JDK 17 APK install are complete, but production publication is pending. Specification: `ai_docs/watchlist-income-gap-advice-spec.md`.
 

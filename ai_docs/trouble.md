@@ -1,5 +1,6 @@
 # Trouble
 
+- The yfinance R2 workflow had duplicate declarations for `yfinance-capacity-study` and `yfinance-full-universe-study`; push run #123 failed before creating jobs. Keep one definition for each job. After removing the duplicate blocks in commit `06c6faae`, push run #124 started normally and passed all 55 collector tests.
 - GitHub Actions run `39089999129` passed its build job but reported one instrumentation failure on both API 26 and API 35. Sanitized logs identify `watchlistSortOrderSurvivesLeavingAndReturningToTab` and `ComposeTimeoutException`, without identifying which wait condition timed out. Local API 35 passed all 89 tests, and the API 26 480x800 focused sort test passed; preserve these as separate results and do not infer one shared root cause from the CI summary.
 
 - The targeted API 26 Watchlist test passes on the 480x800/density240 AVD, but the same test on physical SCG01 API 33 failed at `performScrollTo()` for Apply (test line 178). The phone's logical viewport was about 502x1113, so this is neither proof of the small-screen behavior nor a confirmed product defect. Original app/test APKs were restored by hash; six of seven app-data hashes matched. `files/profileInstalled` changed during the run; cause is unconfirmed. Do not infer the control's touch behavior from this semantics-action failure.
