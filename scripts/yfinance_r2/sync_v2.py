@@ -2338,10 +2338,17 @@ def income_advice_score(metrics: dict[str, Any]) -> int | None:
 
 
 def income_advice_candidate(code: str, name: str, current: dict[str, Any],
-                            dividends: list[dict[str, Any]], as_of: date) -> dict[str, Any] | None:
+                            dividends: list[dict[str, Any]], as_of: date,
+                            exclusion_counts: dict[str, int] | None = None) -> dict[str, Any] | None:
+    def exclude(reason: str) -> None:
+        if exclusion_counts is not None:
+            exclusion_counts[reason] = exclusion_counts.get(reason, 0) + 1
+
     if str((current.get("price") or {}).get("currency") or "") != "JPY":
+        exclude("currency_not_jpy")
         return None
     if current.get("field_status", {}).get("dividend_history") != "available":
+        exclude("dividend_history_unavailable")
         return None
     latest_completed_year = as_of.year - 1
     years = list(range(latest_completed_year - 2, latest_completed_year + 1))
@@ -2357,11 +2364,13 @@ def income_advice_candidate(code: str, name: str, current: dict[str, Any],
     recurring_months = sorted(month for month, observed_years in event_month_years.items()
                               if len(observed_years.intersection(years)) >= 2)
     if not recurring_months:
+        exclude("no_recurring_dividend_months")
         return None
 
     metrics = current.get("income_advice_metrics") if isinstance(current.get("income_advice_metrics"), dict) else {}
     score = income_advice_score(metrics)
     if score is None:
+        exclude("score_metrics_incomplete")
         return None
     dividend = current.get("dividend") if isinstance(current.get("dividend"), dict) else {}
     forecast = finite_number(dividend.get("next_fiscal_year_forecast_per_share"))
@@ -2373,10 +2382,12 @@ def income_advice_candidate(code: str, name: str, current: dict[str, Any],
         action_history = current.get("action_history") if isinstance(current.get("action_history"), dict) else {}
         coverage_end = date_value(action_history.get("full_history_coverage_end"))
         if coverage_end is None or coverage_end < date(latest_completed_year, 12, 31):
+            exclude("annual_history_incomplete")
             return None
         annual_dps = annual_totals.get(latest_completed_year, 0.0)
         annual_basis = "previous_calendar_year_observed_distributions"
     if annual_dps <= 0:
+        exclude("annual_dividend_amount_unavailable")
         return None
     return {
         "code": code,
