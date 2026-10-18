@@ -2,6 +2,8 @@
 
 ## Completed
 
+- [x] Source fiscal-period dividend bars from issuer-reported fiscal DPS when available. Evidence: the production 4502 payload has FY2026 DPS ¥200 and next-year forecast ¥204; the JDK 17 debug APK builds and installs on SCG01 and the emulator, and SCG01 shows ¥200 at 2026期 and ¥204 at 2027期 while its calendar-year 2026 event row remains separate.
+
 - [x] Preserve the three approved portable override groups without changing snapshot version 1 or including feedback drafts. Evidence: 17 backup cases pass on API 26/35/33, and the final AAB survives offline OS full-backup/clear/restore on API 26 with all three groups and existing saved facts unchanged; see `android-release-acceptance-20261018.md`.
 - [x] Retain financial failure categories across recreation, bound transient dividend-change retries, restore the asset-list scroll position, and move the initial override/security reads into restoration IO. Evidence: JDK 17 passes 142 JVM cases and Lint without errors; the full suite has 89 passes on API 35 and 88 passes plus one existing API-specific assumption on API 26, with all 32 isolated device cases passing and five production files unchanged.
 
