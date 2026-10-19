@@ -21,7 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.Scope
@@ -37,6 +36,7 @@ import com.kurogane.dividend.model.ShareholderBenefit
 import com.kurogane.dividend.model.StockClimate
 import com.kurogane.dividend.model.WatchlistStock
 import com.kurogane.dividend.data.DividendHistoryOverride
+import com.kurogane.dividend.ui.theme.AppTextSize
 import com.kurogane.dividend.ui.theme.OnSurfaceVariant
 import com.kurogane.dividend.ui.theme.PrimaryEmerald
 import com.kurogane.dividend.ui.components.DataManagementActionButton
@@ -180,7 +180,7 @@ fun GoogleDvmBackupCard(
         icon = if (action == GoogleDvmBackupAction.EXPORT) Icons.Default.CloudUpload else Icons.Default.CloudDownload,
         isWorking = isWorking
     ) {
-        status?.let { androidx.compose.material3.Text(it, color = PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-        error?.let { androidx.compose.material3.Text(it, color = OnSurfaceVariant, fontSize = 11.sp) }
+        status?.let { androidx.compose.material3.Text(it, color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold) }
+        error?.let { androidx.compose.material3.Text(it, color = OnSurfaceVariant, fontSize = AppTextSize.dense) }
     }
 }

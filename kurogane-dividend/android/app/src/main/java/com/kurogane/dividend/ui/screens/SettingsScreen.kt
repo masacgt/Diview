@@ -437,7 +437,7 @@ private fun NotificationStepNumber(number: Int) {
         Modifier.size(26.dp).clip(CircleShape).border(1.dp, SettingsBorder, CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Text(number.toString(), color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(number.toString(), color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
     }
 }
 

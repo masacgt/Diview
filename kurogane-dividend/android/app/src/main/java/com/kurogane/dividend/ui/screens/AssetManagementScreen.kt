@@ -1021,7 +1021,7 @@ fun AssetManagementScreen(
                                                         compactAccountLabel(holding.accountType),
                                                         modifier = Modifier.padding(start = 5.dp, top = 0.dp, end = 5.dp, bottom = 1.6.dp),
                                                         color = SecondaryIndigo,
-                                                        fontSize = 8.sp,
+                                                        fontSize = AppTextSize.tiny,
                                                         fontWeight = FontWeight.Medium,
                                                         maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1
                                                     )
@@ -1774,7 +1774,7 @@ private fun HoldingMetricTile(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(label, color = SoftGray, fontSize = 9.sp, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
+            Text(label, color = SoftGray, fontSize = AppTextSize.chartLabel, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
             if (showEditHint) {
                 Icon(
                     Icons.Default.Edit,
@@ -1784,8 +1784,8 @@ private fun HoldingMetricTile(
                 )
             }
         }
-        Text(value, color = valueColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
-        Text(detail, color = detailColor, fontSize = 8.sp, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
+        Text(value, color = valueColor, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
+        Text(detail, color = detailColor, fontSize = AppTextSize.tiny, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
     }
 }
 
