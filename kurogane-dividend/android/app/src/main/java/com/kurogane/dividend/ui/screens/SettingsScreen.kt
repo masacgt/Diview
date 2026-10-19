@@ -122,9 +122,12 @@ fun SettingsScreen(
         item {
             SettingsSection(stringResource(R.string.settings_text), Icons.Default.Storage) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(SettingsInset).padding(3.dp)) {
-                        Segment(stringResource(R.string.settings_label), dataTab == "import", Modifier.weight(1f)) { dataTab = "import" }
-                        Segment(stringResource(R.string.settings_label_2), dataTab == "export", Modifier.weight(1f)) { dataTab = "export" }
+                    val splitSegmentLabels = androidx.compose.ui.platform.LocalDensity.current.fontScale >= 2f
+                    val importSegmentLabel = stringResource(R.string.settings_label).let { if (splitSegmentLabels) it.replace(" (", "\n(") else it }
+                    val exportSegmentLabel = stringResource(R.string.settings_label_2).let { if (splitSegmentLabels) it.replace(" (", "\n(") else it }
+                    AdaptiveRow(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(SettingsInset).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), stackAtFontScale = 2.2f) {
+                        Segment(importSegmentLabel, dataTab == "import", Modifier.weight(1f)) { dataTab = "import" }
+                        Segment(exportSegmentLabel, dataTab == "export", Modifier.weight(1f)) { dataTab = "export" }
                     }
                     Column(
                         Modifier.fillMaxWidth(),
@@ -169,21 +172,21 @@ fun SettingsScreen(
         item {
             SettingsSection(stringResource(R.string.settings_text_2), Icons.Default.Palette) {
                 Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, stackAtFontScale = 2.2f) {
                         Label(stringResource(R.string.settings_label_15), 9, OnSurface, true)
                         Label(if (themeMode == "dark") resources.getString(R.string.settings_dark_active) else if (themeMode == "light") resources.getString(R.string.settings_label_59) else resources.getString(R.string.settings_label_60), 8, SettingsMint)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp), stackAtFontScale = 2.2f) {
                         listOf("system" to stringResource(R.string.settings_label_44), "light" to stringResource(R.string.settings_label_43), "dark" to stringResource(R.string.settings_label_42)).forEach { (mode, name) ->
                             Segment(name, themeMode == mode, Modifier.weight(1f)) { viewModel.setThemeMode(mode) }
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
-                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, stackAtFontScale = 2.2f) {
                         Label(stringResource(R.string.settings_label_16), 9, OnSurface, true)
                         Label(selectedAccent.replaceFirstChar { it.uppercase() }, 8, SettingsMint)
                     }
-                    AdaptiveRow(Modifier.fillMaxWidth().padding(horizontal = 5.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    AdaptiveRow(Modifier.fillMaxWidth().padding(horizontal = 5.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically, stackAtFontScale = 2.2f) {
                         accents.forEach { (name, color) ->
                             val accentLabel = stringResource(when (name) {
                                 "cyan" -> R.string.accent_cyan
@@ -437,7 +440,7 @@ private fun NotificationStepNumber(number: Int) {
         Modifier.size(26.dp).clip(CircleShape).border(1.dp, SettingsBorder, CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Text(number.toString(), color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(number.toString(), color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
     }
 }
 
