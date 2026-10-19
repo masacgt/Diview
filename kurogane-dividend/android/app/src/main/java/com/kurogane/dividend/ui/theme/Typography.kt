@@ -59,7 +59,7 @@ object AppTextWeight {
 
 /** Tabular numeric style for amounts and financial metrics. */
 val AppNumericTextStyle = TextStyle(
-    fontFamily = FontFamily.Monospace,
+    fontFamily = FontFamily.SansSerif,
     fontWeight = AppTextWeight.numeric,
     fontFeatureSettings = APP_NUMERIC_FONT_FEATURE_SETTINGS
 )

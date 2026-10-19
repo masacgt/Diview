@@ -805,7 +805,7 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                                     color = if (isCleared || isCurrent) PrimaryEmerald else OnSurfaceVariant,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Black,
-                                    fontFamily = FontFamily.Monospace
+                                    fontFamily = AppNumericFontFamily
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(
@@ -1177,7 +1177,7 @@ private fun GrowthSimulatorStepper(label: String, value: String, onDecrease: () 
             IconButton(onClick = onDecrease, modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(SurfaceContainerHighest)) {
                 Icon(Icons.Default.Remove, contentDescription = "$label を下げる", tint = OnSurface)
             }
-            Text(value, modifier = Modifier.weight(1f), color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontFamily = FontFamily.Monospace, maxLines = 1)
+            Text(value, modifier = Modifier.weight(1f), color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontFamily = AppNumericFontFamily, maxLines = 1)
             IconButton(onClick = onIncrease, modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(SurfaceContainerHighest)) {
                 Icon(Icons.Default.Add, contentDescription = "$label を上げる", tint = OnSurface)
             }
