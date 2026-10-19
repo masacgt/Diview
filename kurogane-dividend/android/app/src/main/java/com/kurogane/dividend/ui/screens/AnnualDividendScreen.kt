@@ -534,7 +534,8 @@ fun AnnualDividendScreen(
                       .onSizeChanged { subtabRowHeightPx = it.height }
                       .selectableGroup(),
                   horizontalArrangement = Arrangement.spacedBy(6.dp),
-                  verticalAlignment = Alignment.CenterVertically
+                  verticalAlignment = Alignment.CenterVertically,
+                  stackAtFontScale = 2.2f
               ) {
                   AnnualDividendTab(
                       label = resources.getString(R.string.annual_dividend_label_19),

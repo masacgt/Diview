@@ -14,9 +14,10 @@ fun AdaptiveRow(
     modifier: Modifier = Modifier,
     horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
     verticalAlignment: Alignment.Vertical = Alignment.Top,
+    stackAtFontScale: Float = 1.8f,
     content: @Composable RowScope.() -> Unit
 ) {
-    if (LocalDensity.current.fontScale >= 1.8f) {
+    if (LocalDensity.current.fontScale >= stackAtFontScale) {
         FlowRow(modifier, horizontalArrangement = horizontalArrangement,
             verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 1) { content() }
     } else Row(modifier, horizontalArrangement, verticalAlignment, content)

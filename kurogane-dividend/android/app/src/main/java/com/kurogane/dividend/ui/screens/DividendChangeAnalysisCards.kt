@@ -402,6 +402,9 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
     val impactCellHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
         maxOf(18.dp, 15.sp.toDp()) + 19.sp.toDp() + 16.dp
     }
+    val distributionCellHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
+        maxOf(52.dp, 15.sp.toDp() + 19.sp.toDp() + 8.dp)
+    }
     MonitorCard(compact = true, tight = true) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -443,7 +446,7 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
             val unknown = total - compared.size
             if (unknown > 0) Box(Modifier.weight(unknown.toFloat()).fillMaxHeight().background(SurfaceContainerHighest))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(52.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(distributionCellHeight)) {
             DistributionCell("増配", increased, compared.size, PrimaryEmerald, Modifier.weight(1f).fillMaxHeight(), compact = true)
             DistributionCell("維持", maintained, compared.size, OnSurfaceVariant, Modifier.weight(1f).fillMaxHeight(), compact = true)
             DistributionCell("減配", decreased, compared.size, ErrorRed, Modifier.weight(1f).fillMaxHeight(), compact = true)
