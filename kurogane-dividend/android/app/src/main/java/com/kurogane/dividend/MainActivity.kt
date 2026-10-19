@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -136,6 +137,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         if (savedInstanceState == null) notificationDestination.value = DiviewNotifications.destination(intent)
         setContent {
             val resources = androidx.compose.ui.platform.LocalContext.current.resources
+            val fontScale = LocalDensity.current.fontScale
             val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
             val isOledBlack by viewModel.isOledBlack.collectAsStateWithLifecycle()
             val selectedAccent by viewModel.selectedAccent.collectAsStateWithLifecycle()
@@ -454,10 +456,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             )
                                             Spacer(modifier = Modifier.height(2.dp))
                                             Text(
-                                                text = label,
+                                                text = if (route == "roadmap" && fontScale >= 1.6f) "ロード\nマップ" else label,
                                                 fontSize = AppTextSize.dense,
                                                 color = if (selected) PrimaryEmerald else OnSurfaceVariant,
-                                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                                maxLines = 2
                                             )
                                         }
                                     }

@@ -402,6 +402,9 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
     val impactCellHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
         maxOf(18.dp, 15.sp.toDp()) + 19.sp.toDp() + 16.dp
     }
+    val distributionCellHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
+        maxOf(52.dp, 15.sp.toDp() + 19.sp.toDp() + 8.dp)
+    }
     MonitorCard(compact = true, tight = true) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -415,7 +418,7 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(stringResource(R.string.dividend_change_analysis_cards_text), color = OnSurface, fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp)
+                    fontSize = AppTextSize.caption)
                 AnnualImpactInfo(
                     stringResource(
                         R.string.dividend_change_analysis_cards_text_2,
@@ -428,13 +431,13 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
             MonitorBadge(percent(analysis.growthRate, signed = true), impactColor)
         }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(money(analysis.impact, privacy, signed = true), fontSize = 24.sp,
+            Text(money(analysis.impact, privacy, signed = true), fontSize = AppTextSize.metric,
                 fontWeight = FontWeight.ExtraBold, color = impactColor, modifier = Modifier.weight(1f, fill = false))
-            Text(stringResource(R.string.annual_dividend_text_2), color = OnSurfaceVariant, fontSize = 12.sp, modifier = Modifier.padding(bottom = 5.dp))
+            Text(stringResource(R.string.annual_dividend_text_2), color = OnSurfaceVariant, fontSize = AppTextSize.caption, modifier = Modifier.padding(bottom = 5.dp))
         }
         AdaptiveRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(stringResource(R.string.dividend_change_analysis_cards_text_3 , total), color = OnSurfaceVariant, fontSize = 11.sp)
-            Text(stringResource(R.string.dividend_change_analysis_cards_text_4 , compared.size, total), color = OnSurfaceVariant, fontSize = 11.sp)
+            Text(stringResource(R.string.dividend_change_analysis_cards_text_3 , total), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+            Text(stringResource(R.string.dividend_change_analysis_cards_text_4 , compared.size, total), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
         }
         Row(modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(SurfaceContainerHigh)) {
             listOf(increased to PrimaryEmerald, maintained to TextMuted, decreased to ErrorRed).forEach { (count, color) ->
@@ -443,7 +446,7 @@ private fun AnnualImpactCard(analysis: DividendChangeAnalysis, privacy: Boolean,
             val unknown = total - compared.size
             if (unknown > 0) Box(Modifier.weight(unknown.toFloat()).fillMaxHeight().background(SurfaceContainerHighest))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(52.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(distributionCellHeight)) {
             DistributionCell("増配", increased, compared.size, PrimaryEmerald, Modifier.weight(1f).fillMaxHeight(), compact = true)
             DistributionCell("維持", maintained, compared.size, OnSurfaceVariant, Modifier.weight(1f).fillMaxHeight(), compact = true)
             DistributionCell("減配", decreased, compared.size, ErrorRed, Modifier.weight(1f).fillMaxHeight(), compact = true)
@@ -629,13 +632,13 @@ private fun ImpactCell(
         ) {
             icon()
             Spacer(Modifier.width(4.dp))
-            Text(label, color = OnSurfaceVariant, fontSize = 10.sp, lineHeight = 15.sp, maxLines = 1)
+            Text(label, color = OnSurfaceVariant, fontSize = AppTextSize.compact, lineHeight = 15.sp, maxLines = 1)
         }
         Text(
             value,
             modifier = Modifier.fillMaxWidth(),
             color = color,
-            fontSize = 14.sp,
+            fontSize = AppTextSize.body,
             lineHeight = 19.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -664,9 +667,9 @@ private fun KpiCell(title: String, value: String, detail: String, color: Color, 
     Card(modifier, shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SurfaceContainerLow),
         border = BorderStroke(1.dp, BorderColor)) {
         Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(title, color = OnSurfaceVariant, fontSize = 9.sp, lineHeight = 11.sp)
-            Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 17.sp)
-            Text(detail, color = color, fontSize = 9.sp, lineHeight = 11.sp)
+            Text(title, color = OnSurfaceVariant, fontSize = AppTextSize.chartLabel, lineHeight = 11.sp)
+            Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body, lineHeight = 17.sp)
+            Text(detail, color = color, fontSize = AppTextSize.chartLabel, lineHeight = 11.sp)
         }
     }
 }
@@ -691,27 +694,27 @@ private fun PayoutHealthCard(analysis: DividendChangeAnalysis) {
             PayoutHealthInfo()
         }
         Text(stringResource(R.string.dividend_change_analysis_cards_text_10 , analysis.headroomScore?.let { "$it/100" } ?: resources.getString(R.string.not_available)), color = PrimaryEmerald,
-            fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            fontSize = AppTextSize.compactBody, fontWeight = FontWeight.Bold)
         zones.forEach { (label, count, color) ->
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(6.dp).background(color, CircleShape))
-                    Text(label, color = OnSurfaceVariant, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    Text(stringResource(R.string.dividend_change_analysis_cards_text_8 , count), color = OnSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(label, color = OnSurfaceVariant, fontSize = AppTextSize.dense, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.dividend_change_analysis_cards_text_8 , count), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.SemiBold)
                 }
                 MonitorProgress(if (covered.isEmpty()) 0f else count.toFloat() / covered.size, color)
             }
         }
-        Text(stringResource(R.string.dividend_change_analysis_cards_text_12 , covered.size, analysis.securities.size), color = TextMuted, fontSize = 10.sp)
+        Text(stringResource(R.string.dividend_change_analysis_cards_text_12 , covered.size, analysis.securities.size), color = TextMuted, fontSize = AppTextSize.compact)
         analysis.highPayout.maxByOrNull { it.payoutRatio?.let { ratio -> if (ratio < 0) Double.POSITIVE_INFINITY else ratio } ?: 0.0 }?.let { row ->
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ErrorRed.copy(alpha = 0.08f))
                 .border(0.5.dp, BorderBlue, RoundedCornerShape(10.dp)).padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(stringResource(R.string.dividend_change_analysis_cards_1_s_2_s , row.name, row.code), color = ErrorRed, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text(stringResource(R.string.dividend_change_analysis_cards_1_s_2_s , row.name, row.code), color = ErrorRed, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
                 Text(stringResource(R.string.dividend_change_analysis_cards_text_13 , percent(row.payoutRatio), if (row.payoutRatio!! < 0) resources.getString(R.string.dividend_change_analysis_cards_label_19) else resources.getString(R.string.dividend_change_analysis_cards_label_20)),
-                    color = ErrorRed, fontSize = 11.sp)
+                    color = ErrorRed, fontSize = AppTextSize.dense)
                 Text(stringResource(R.string.dividend_change_analysis_cards_text_14 , row.profile?.fcfStatus?.takeUnless { it == "未取得" } ?: resources.getString(R.string.dividend_change_analysis_cards_label_21)),
-                    color = OnSurfaceVariant, fontSize = 11.sp)
+                    color = OnSurfaceVariant, fontSize = AppTextSize.dense)
             }
         }
     }
@@ -792,9 +795,9 @@ private fun DividendRiskCard(row: DividendChangeSecurity, onClick: () -> Unit) {
     }
     MonitorCard(onClick = onClick, compact = true) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(row.code, color = TextMuted, fontSize = 10.sp, lineHeight = 14.sp)
+            Text(row.code, color = TextMuted, fontSize = AppTextSize.compact, lineHeight = 14.sp)
             Text(row.name, modifier = Modifier.weight(1f), color = OnSurface,
-                fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 18.sp)
+                fontWeight = FontWeight.Bold, fontSize = AppTextSize.body, lineHeight = 18.sp)
             MonitorBadge("配当性向 ${percent(ratio)}", color, compact = true)
         }
         FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
@@ -806,14 +809,14 @@ private fun DividendRiskCard(row: DividendChangeSecurity, onClick: () -> Unit) {
                 ?: if (calendarYearObserved) 0 else null
             Text(stringResource(R.string.dividend_change_analysis_cards_text_15 , noCutYears?.let { "${it}年" } ?: "未取得")
                 + " / 連続増配${consecutiveYears?.let { "${it}年" } ?: "未取得"}",
-                color = OnSurfaceVariant, fontSize = 11.sp, lineHeight = 15.sp)
+                color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
             Text(when {
                 ratio == null -> "指標未取得"
                 ratio < 0 -> "赤字決算・要監視"
                 ratio > 80 -> "高配当性向・要監視"
                 ratio > 70 -> "配当性向を確認"
                 else -> "配当性向は標準範囲"
-            } + " ›", color = color, fontSize = 11.sp, lineHeight = 15.sp, fontWeight = FontWeight.SemiBold)
+            } + " ›", color = color, fontSize = AppTextSize.dense, lineHeight = 15.sp, fontWeight = FontWeight.SemiBold)
         }
         MonitorProgress(when { ratio == null -> 0f; ratio < 0 -> 1f; else -> (ratio / 100).toFloat() }, color)
     }
@@ -837,7 +840,7 @@ private fun DividendChangeCard(row: DividendChangeSecurity, privacy: Boolean, on
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             MonitorBadge(row.code, PrimaryEmerald, compact = true)
             Text(row.name, modifier = Modifier.weight(1f), color = OnSurface,
-                fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 18.sp)
+                fontWeight = FontWeight.Bold, fontSize = AppTextSize.body, lineHeight = 18.sp)
             val label = when (row.change) {
                 DividendChangeStatus.INCREASE -> "増配"
                 DividendChangeStatus.DECREASE -> "減配"
@@ -850,11 +853,11 @@ private fun DividendChangeCard(row: DividendChangeSecurity, privacy: Boolean, on
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             val streak = row.profile?.consecutiveYears?.takeIf { it > 0 }?.let { "・${it}年連続増配" }.orEmpty()
             Text(stringResource(R.string.dividend_change_analysis_cards_text_16 , row.sector, if (privacy) "•••" else number(row.shares.toDouble()), streak),
-                modifier = Modifier.weight(1f), color = OnSurfaceVariant, fontSize = 10.sp, lineHeight = 14.sp)
+                modifier = Modifier.weight(1f), color = OnSurfaceVariant, fontSize = AppTextSize.compact, lineHeight = 14.sp)
             val muted = OnSurfaceVariant
             Text(buildAnnotatedString {
-                withStyle(SpanStyle(color = muted, fontSize = 10.sp)) { append(resources.getString(R.string.dividend_change_analysis_cards_label_22)) }
-                withStyle(SpanStyle(color = color, fontSize = 17.sp, fontWeight = FontWeight.Bold)) {
+                withStyle(SpanStyle(color = muted, fontSize = AppTextSize.compact)) { append(resources.getString(R.string.dividend_change_analysis_cards_label_22)) }
+                withStyle(SpanStyle(color = color, fontSize = AppTextSize.emphasizedSection, fontWeight = FontWeight.Bold)) {
                     append(money(annualImpact, privacy, signed = true))
                 }
             }, lineHeight = 21.sp)
@@ -875,16 +878,16 @@ private fun InlineDividendValue(year: Int?, value: Double?, privacy: Boolean, fa
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     val muted = TextMuted
     Text(buildAnnotatedString {
-        withStyle(SpanStyle(color = muted, fontSize = 10.sp)) { append(year?.let { resources.getString(R.string.dividend_change_analysis_cards_label_23, (it).toString()) } ?: "$fallback ") }
-        withStyle(SpanStyle(color = color, fontSize = 12.sp, fontWeight = FontWeight.Medium)) { append(dps(value, privacy)) }
-    }, modifier = modifier, fontSize = 12.sp, lineHeight = 16.sp)
+        withStyle(SpanStyle(color = muted, fontSize = AppTextSize.compact)) { append(year?.let { resources.getString(R.string.dividend_change_analysis_cards_label_23, (it).toString()) } ?: "$fallback ") }
+        withStyle(SpanStyle(color = color, fontSize = AppTextSize.caption, fontWeight = FontWeight.Medium)) { append(dps(value, privacy)) }
+    }, modifier = modifier, fontSize = AppTextSize.caption, lineHeight = 16.sp)
 }
 
 @Composable
 private fun MonitorSelectors(label: String?, options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (label != null) Text(label, color = TextMuted, fontSize = 10.sp)
+        if (label != null) Text(label, color = TextMuted, fontSize = AppTextSize.compact)
         options.forEach { (id, text) ->
             val active = selected == id
             val color = if (active) PrimaryEmerald else OnSurfaceVariant
@@ -892,7 +895,7 @@ private fun MonitorSelectors(label: String?, options: List<Pair<String, String>>
                 border = BorderStroke(1.dp, if (active) PrimaryEmerald.copy(alpha = 0.4f) else BorderColor)) {
                 Box(Modifier.selectable(selected = active, onClick = { onSelect(id) }, role = Role.Tab)
                     .heightIn(min = 29.dp).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
-                    Text(text, color = color, fontSize = 11.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Normal)
+                    Text(text, color = color, fontSize = AppTextSize.dense, fontWeight = if (active) FontWeight.Bold else FontWeight.Normal)
                 }
             }
         }
@@ -927,14 +930,14 @@ private fun MonitorCard(onClick: (() -> Unit)? = null, compact: Boolean = false,
 
 @Composable
 private fun MonitorEmptyCard(message: String) {
-    MonitorCard { Text(message, color = OnSurfaceVariant, fontSize = 12.sp) }
+    MonitorCard { Text(message, color = OnSurfaceVariant, fontSize = AppTextSize.caption) }
 }
 
 @Composable
 private fun MonitorHeading(title: String, icon: ImageVector) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
-        Text(title, color = OnSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text(title, color = OnSurface, fontSize = AppTextSize.emphasizedBody, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -942,7 +945,7 @@ private fun MonitorHeading(title: String, icon: ImageVector) {
 private fun MonitorBadge(text: String, color: Color, compact: Boolean = false) {
     Surface(shape = RoundedCornerShape(5.dp), color = color.copy(alpha = 0.10f), border = BorderStroke(0.5.dp, color.copy(alpha = 0.24f))) {
         Text(text, modifier = Modifier.padding(horizontal = 6.dp, vertical = if (compact) 2.dp else 4.dp),
-            color = color, fontSize = 10.sp, lineHeight = if (compact) 13.sp else TextUnit.Unspecified, fontWeight = FontWeight.SemiBold)
+            color = color, fontSize = AppTextSize.compact, lineHeight = if (compact) 13.sp else TextUnit.Unspecified, fontWeight = FontWeight.SemiBold)
     }
 }
 

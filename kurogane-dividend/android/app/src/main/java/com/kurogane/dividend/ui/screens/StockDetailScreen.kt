@@ -2392,7 +2392,7 @@ fun StockDetailScreen(
                                         Text(
                                             if (currentDpsUnavailable) "未取得" else "${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(estimatedAmount)}",
                                             color = if (currentDpsUnavailable) OnSurfaceVariant else PrimaryEmerald,
-                                            fontSize = 20.sp,
+                                            fontSize = AppTextSize.screenTitle,
                                             fontWeight = FontWeight.Black
                                         )
                                         Text(
@@ -2523,7 +2523,7 @@ fun StockDetailScreen(
                                     Text(
                                         "${selectedClimate?.label ?: "景気特性未設定"} / ${if (hasSavedBenefit) "優待あり" else "優待未登録"}",
                                         color = PrimaryEmerald,
-                                        fontSize = 11.sp,
+                                        fontSize = AppTextSize.dense,
                                         lineHeight = 15.sp,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
@@ -2559,7 +2559,7 @@ fun StockDetailScreen(
                                                 if (hasClimateOverride) "手動" else "自動",
                                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                                 color = if (hasClimateOverride) PrimaryEmerald else OnSurfaceVariant,
-                                                fontSize = 11.sp,
+                                                fontSize = AppTextSize.dense,
                                                 fontWeight = FontWeight.SemiBold
                                             )
                                         }
@@ -2626,7 +2626,7 @@ fun StockDetailScreen(
                                             Text(
                                                 "${cleanSectorName}の標準分類",
                                                 color = OnSurfaceVariant,
-                                                fontSize = 12.sp,
+                                                fontSize = AppTextSize.caption,
                                                 maxLines = 1,
                                                 softWrap = false,
                                                 overflow = TextOverflow.Ellipsis
@@ -2735,11 +2735,11 @@ fun StockDetailScreen(
                                     Text(
                                         "優待利回り ${benefitYield?.let { "+${String.format(Locale.JAPAN, "%.2f", it)}%" } ?: "—"}",
                                         color = PrimaryEmerald,
-                                        fontSize = 12.sp,
+                                        fontSize = AppTextSize.caption,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
-                                Text("優待の名前と相場金額を記録できます。", color = OnSurfaceVariant, fontSize = 12.sp)
+                                Text("優待の名前と相場金額を記録できます。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
 
                                 displayedBenefits.forEachIndexed { index, benefit ->
                                     Row(
@@ -2762,12 +2762,12 @@ fun StockDetailScreen(
                                             verticalArrangement = Arrangement.spacedBy(2.dp)
                                         ) {
                                             Text(benefit.name.ifBlank { "優待名未設定" }, color = OnSurface, fontWeight = FontWeight.Bold, maxLines = 1)
-                                            Text("年間相当額", color = OnSurfaceVariant, fontSize = 12.sp)
+                                            Text("年間相当額", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
                                         }
                                         Text(
                                             "¥${benefit.marketValue.toLongOrNull()?.let { yenFormat.format(it) } ?: "0"}",
                                             color = PrimaryEmerald,
-                                            fontSize = 14.sp,
+                                            fontSize = AppTextSize.body,
                                             fontWeight = FontWeight.Bold
                                         )
                                         IconButton(
@@ -2793,7 +2793,7 @@ fun StockDetailScreen(
                                                     viewModel.setShareholderBenefits(currentHolding.code, updated)
                                                 },
                                                 modifier = Modifier.fillMaxWidth(),
-                                                placeholder = { Text("優待名", fontSize = 14.sp) },
+                                                placeholder = { Text("優待名", fontSize = AppTextSize.body) },
                                                 singleLine = true,
                                                 shape = RoundedCornerShape(12.dp)
                                             )
@@ -2805,7 +2805,7 @@ fun StockDetailScreen(
                                                     viewModel.setShareholderBenefits(currentHolding.code, updated)
                                                 },
                                                 modifier = Modifier.fillMaxWidth(),
-                                                placeholder = { Text("相場金額（円）", fontSize = 14.sp) },
+                                                placeholder = { Text("相場金額（円）", fontSize = AppTextSize.body) },
                                                 singleLine = true,
                                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                                 shape = RoundedCornerShape(12.dp)
@@ -2819,7 +2819,7 @@ fun StockDetailScreen(
                                     onValueChange = { newBenefitName = it },
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                                     textStyle = MaterialTheme.typography.bodyMedium,
-                                    placeholder = { Text("優待名", fontSize = 14.sp) },
+                                    placeholder = { Text("優待名", fontSize = AppTextSize.body) },
                                     singleLine = true,
                                     shape = RoundedCornerShape(14.dp)
                                 )
@@ -2828,7 +2828,7 @@ fun StockDetailScreen(
                                     onValueChange = { newBenefitValue = it.filter(Char::isDigit) },
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                                     textStyle = MaterialTheme.typography.bodyMedium,
-                                    placeholder = { Text("相場金額（円）", fontSize = 14.sp) },
+                                    placeholder = { Text("相場金額（円）", fontSize = AppTextSize.body) },
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     shape = RoundedCornerShape(14.dp)
@@ -2867,18 +2867,18 @@ fun StockDetailScreen(
                                         Icon(Icons.Default.Percent, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
                                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text("配当＋優待 合計実質利回り ", color = OnSurface, fontSize = 11.sp)
+                                                Text("配当＋優待 合計実質利回り ", color = OnSurface, fontSize = AppTextSize.dense)
                                                 Text(
                                                     combinedYield?.let { "${String.format(Locale.JAPAN, "%.2f", it)}%" } ?: if (currentDpsUnavailable) "未取得" else "—",
                                                     color = PrimaryEmerald,
-                                                    fontSize = 15.sp,
+                                                    fontSize = AppTextSize.emphasizedBody,
                                                     fontWeight = FontWeight.Bold
                                                 )
                                             }
                                             Text(
                                                 if (currentDpsUnavailable) "配当データ未取得のため合計未取得" else "年間 ¥${yenFormat.format(combinedAnnualValue.coerceAtLeast(0.0).toLong())} 相当",
                                                 color = OnSurfaceVariant,
-                                                fontSize = 11.sp
+                                                fontSize = AppTextSize.dense
                                             )
                                         }
                                     }
@@ -3458,7 +3458,7 @@ private fun DividendHistoryEditorSheet(
                                 Text(
                                     if (edited) "ユーザー編集" else "初期値",
                                     color = if (edited) PrimaryEmerald else OnSurfaceVariant,
-                                    fontSize = 9.sp,
+                                    fontSize = AppTextSize.chartLabel,
                                     lineHeight = 10.sp,
                                     maxLines = 1
                                 )
@@ -3475,7 +3475,7 @@ private fun DividendHistoryEditorSheet(
                                 Text(
                                     if (edited) "ユーザー編集" else "初期値",
                                     color = if (edited) PrimaryEmerald else OnSurfaceVariant,
-                                    fontSize = 9.sp,
+                                    fontSize = AppTextSize.chartLabel,
                                     lineHeight = 10.sp,
                                     maxLines = 1
                                 )
@@ -3560,11 +3560,11 @@ private fun DividendHistoryCompactInput(
             onValueChange = onValueChange,
             modifier = Modifier.fillMaxWidth().semantics { this.contentDescription = contentDescription },
             singleLine = true,
-            textStyle = TextStyle(color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+            textStyle = TextStyle(color = OnSurface, fontSize = AppTextSize.caption, fontWeight = FontWeight.SemiBold),
             cursorBrush = SolidColor(PrimaryEmerald),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             decorationBox = { innerTextField ->
-                if (value.isBlank()) Text("未入力", color = OnSurfaceVariant, fontSize = 11.sp, maxLines = 1)
+                if (value.isBlank()) Text("未入力", color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = 1)
                 innerTextField()
             }
         )

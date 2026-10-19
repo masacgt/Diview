@@ -869,12 +869,17 @@ fun WatchlistScreen(
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                stringResource(R.string.watchlist_text_10),
+                                stringResource(R.string.watchlist_text_10).let { title ->
+                                    if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.7f) {
+                                        title.replace("一括シミュレーション", "一括\nシミュレーション")
+                                    } else title
+                                },
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
                                     fontSize = AppTextSize.body
-                                )
+                                ),
+                                maxLines = 2
                             )
                         }
 
@@ -1240,7 +1245,7 @@ fun WatchlistScreen(
                         ) {
                             Icon(Icons.Default.AddCircle, contentDescription = null, modifier = Modifier.size(13.dp), tint = OnPrimary)
                             Spacer(modifier = Modifier.width(3.dp))
-                            Text(stringResource(R.string.watchlist_text_18), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = OnPrimary, maxLines = 1, softWrap = false)
+                            Text(stringResource(R.string.watchlist_text_18), fontSize = AppTextSize.chartLabel, fontWeight = FontWeight.Bold, color = OnPrimary, maxLines = 1, softWrap = false)
                         }
                         Spacer(modifier = Modifier.width(4.dp))
                         Button(
@@ -1289,7 +1294,7 @@ fun WatchlistScreen(
                             Text(
                                 stringResource(R.string.watchlist_alert_short),
                                 color = if (stock.alertEnabled) PrimaryEmerald else OnSurfaceVariant,
-                                fontSize = 9.sp,
+                                fontSize = AppTextSize.chartLabel,
                                 fontWeight = if (stock.alertEnabled) FontWeight.Bold else FontWeight.Normal,
                                 maxLines = 1,
                                 softWrap = false
@@ -2479,7 +2484,7 @@ fun WatchlistScreen(
                                                 .height(calendarAmountLabelSlotHeight)
                                                 .align(Alignment.TopCenter)
                                                 .offset(y = calendarChartCanvasHeight * (calendarBarAreaBottomFraction - heightFraction * calendarBarAreaHeightFraction) - calendarAmountLabelTopOffset),
-                                            fontSize = 9.sp,
+                                            fontSize = AppTextSize.chartLabel,
                                             fontWeight = FontWeight.SemiBold,
                                             color = OnSurfaceVariant,
                                             textAlign = TextAlign.Center,
@@ -3040,7 +3045,7 @@ private fun HeatmapRow(
                     Text(
                         text = cellData.first,
                         color = OnSurface,
-                        fontSize = 8.sp,
+                        fontSize = AppTextSize.tiny,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
