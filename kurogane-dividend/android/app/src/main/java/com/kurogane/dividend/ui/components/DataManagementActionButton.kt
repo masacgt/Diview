@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +45,7 @@ fun DataManagementActionButton(
     content: @Composable ColumnScope.() -> Unit = {}
 ) {
     val shape = RoundedCornerShape(12.dp)
+    val largeFontScale = LocalDensity.current.fontScale >= 1.7f
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
@@ -59,15 +61,27 @@ fun DataManagementActionButton(
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)
     ) {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(25.dp))
-                Spacer(Modifier.width(9.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(title, color = if (enabled) OnSurface else OnSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = AppTextSize.compactBody)
-                    Text(subtitle, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 14.sp)
+            if (largeFontScale) {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Icon(icon, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(25.dp))
+                        if (isWorking) CircularProgressIndicator(color = PrimaryEmerald, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                        else Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = if (enabled) PrimaryEmerald else OnSurfaceVariant, modifier = Modifier.size(18.dp))
+                    }
+                    Text(title, color = if (enabled) OnSurface else OnSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = AppTextSize.compactBody, modifier = Modifier.fillMaxWidth())
+                    Text(subtitle, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 14.sp, modifier = Modifier.fillMaxWidth())
                 }
-                if (isWorking) CircularProgressIndicator(color = PrimaryEmerald, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-                else Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = if (enabled) PrimaryEmerald else OnSurfaceVariant, modifier = Modifier.size(18.dp))
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(icon, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(25.dp))
+                    Spacer(Modifier.width(9.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(title, color = if (enabled) OnSurface else OnSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = AppTextSize.compactBody)
+                        Text(subtitle, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 14.sp)
+                    }
+                    if (isWorking) CircularProgressIndicator(color = PrimaryEmerald, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                    else Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = if (enabled) PrimaryEmerald else OnSurfaceVariant, modifier = Modifier.size(18.dp))
+                }
             }
             content()
         }

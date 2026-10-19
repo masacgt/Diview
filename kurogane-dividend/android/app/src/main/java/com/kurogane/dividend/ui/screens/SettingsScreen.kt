@@ -122,7 +122,7 @@ fun SettingsScreen(
         item {
             SettingsSection(stringResource(R.string.settings_text), Icons.Default.Storage) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(SettingsInset).padding(3.dp)) {
+                    AdaptiveRow(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(SettingsInset).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Segment(stringResource(R.string.settings_label), dataTab == "import", Modifier.weight(1f)) { dataTab = "import" }
                         Segment(stringResource(R.string.settings_label_2), dataTab == "export", Modifier.weight(1f)) { dataTab = "export" }
                     }
@@ -173,7 +173,7 @@ fun SettingsScreen(
                         Label(stringResource(R.string.settings_label_15), 9, OnSurface, true)
                         Label(if (themeMode == "dark") resources.getString(R.string.settings_dark_active) else if (themeMode == "light") resources.getString(R.string.settings_label_59) else resources.getString(R.string.settings_label_60), 8, SettingsMint)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         listOf("system" to stringResource(R.string.settings_label_44), "light" to stringResource(R.string.settings_label_43), "dark" to stringResource(R.string.settings_label_42)).forEach { (mode, name) ->
                             Segment(name, themeMode == mode, Modifier.weight(1f)) { viewModel.setThemeMode(mode) }
                         }
