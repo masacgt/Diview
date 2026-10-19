@@ -1093,6 +1093,19 @@ def replace_dated_history(
     return collector.merge_dated(retained, fresh, key)
 
 
+def has_duplicate_event_dates(rows: list[dict[str, Any]], key: str = "date") -> bool:
+    """Detect repeated event dates that require rebuilding the partition from Yahoo."""
+    seen: set[str] = set()
+    for row in rows:
+        event_date = str(row.get(key) or "")[:10]
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", event_date):
+            continue
+        if event_date in seen:
+            return True
+        seen.add(event_date)
+    return False
+
+
 def monthly_history_rows(ticker: Any, *, initial: bool, as_of: date) -> list[dict[str, Any]]:
     first_year, latest_year = year_end_price_years(as_of)
     if initial:
@@ -1440,6 +1453,56 @@ FINANCIAL_RECORD_METADATA = {"fiscal_year", "period_end", "field_status", "field
 FINANCIAL_DERIVED_FIELDS = {"equity_ratio_computed"}
 
 
+def equity_ratio_result(seed_values: dict[str, Any], yfinance_values: dict[str, Any]) -> dict[str, Any]:
+    """Calculate equity ratio only from inputs with a shared source and unit basis."""
+    equity_field = next((
+        field for field in ("stockholders_equity", "total_equity_gross_minority_interest")
+        if finite_number(yfinance_values.get(field)) is not None
+    ), None)
+    equity_source = "yfinance" if equity_field else None
+    if equity_field is None:
+        equity_field = next((
+            field for field in ("stockholders_equity", "total_equity_gross_minority_interest")
+            if finite_number(seed_values.get(field)) is not None
+        ), None)
+        equity_source = "seed" if equity_field else None
+
+    if finite_number(yfinance_values.get("total_assets")) is not None:
+        assets_source = "yfinance"
+        assets = finite_number(yfinance_values.get("total_assets"))
+    else:
+        assets_source = "seed" if finite_number(seed_values.get("total_assets")) is not None else None
+        assets = finite_number(seed_values.get("total_assets"))
+
+    equity_values = yfinance_values if equity_source == "yfinance" else seed_values
+    equity = finite_number(equity_values.get(equity_field)) if equity_field else None
+    if equity is not None and assets is not None and assets > 0 and equity_source == assets_source:
+        return {
+            "value": equity / assets * 100,
+            "source": "calculated",
+            "input_sources": {"equity": equity_source, "total_assets": assets_source},
+            "reason": None,
+        }
+
+    # IRBANK seed balance-sheet amounts are stored in million JPY, while
+    # yfinance balance-sheet amounts are JPY. Keep the seed's same-source
+    # ratio when one input has been refreshed from a different provider.
+    seed_ratio = finite_number(seed_values.get("equity_ratio_computed"))
+    if seed_ratio is not None:
+        return {
+            "value": seed_ratio,
+            "source": "seed",
+            "input_sources": {"equity": "seed", "total_assets": "seed"},
+            "reason": "mixed_source_inputs_not_recalculated",
+        }
+    return {
+        "value": None,
+        "source": None,
+        "input_sources": {"equity": equity_source, "total_assets": assets_source},
+        "reason": "mixed_source_inputs_not_comparable" if equity_source and assets_source else "required_input_missing",
+    }
+
+
 def financial_source_values(record: Any) -> tuple[dict[str, Any], dict[str, Any]]:
     """Read retained seed values and yfinance values without collapsing provenance."""
     if not isinstance(record, dict):
@@ -1552,19 +1615,11 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
         if net_de_metrics:
             yfinance_values.update(net_de_metrics)
             values.update(net_de_metrics)
-        equity = finite_number(values.get("stockholders_equity"))
-        equity_for_ratio = (
-            equity if equity is not None
-            else finite_number(values.get("total_equity_gross_minority_interest"))
-        )
-        equity_source_field = (
-            "stockholders_equity" if equity is not None else "total_equity_gross_minority_interest"
-        )
-        equity_source = "yfinance" if equity_source_field in yfinance_values else "seed"
-        assets = finite_number(values.get("total_assets"))
-        assets_source = "yfinance" if "total_assets" in yfinance_values else "seed"
-        if equity_for_ratio is not None and assets and assets > 0:
-            values["equity_ratio_computed"] = equity_for_ratio / assets * 100
+        equity_ratio = equity_ratio_result(seed_values, yfinance_values)
+        if equity_ratio["value"] is not None:
+            values["equity_ratio_computed"] = equity_ratio["value"]
+        else:
+            values.pop("equity_ratio_computed", None)
         fresh_doe_dividend_values = fresh_cash.get(period_end, {})
         doe_dividend_field = (
             "common_stock_dividend_paid"
@@ -1617,7 +1672,8 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             annual_field_status["net_de_ratio"] = "empty"
         if "equity_ratio_computed" in values:
             annual_field_status["equity_ratio_computed"] = (
-                "available" if ("stockholders_equity" in fresh_values or "total_equity_gross_minority_interest" in fresh_values)
+                "legacy_migrated" if equity_ratio["input_sources"] == {"equity": "seed", "total_assets": "seed"}
+                else "available" if ("stockholders_equity" in fresh_values or "total_equity_gross_minority_interest" in fresh_values)
                 and "total_assets" in fresh_values
                 else "stale"
             )
@@ -1628,6 +1684,8 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             calculated_doe=calculated_doe,
             net_de_metrics=net_de_metrics,
         )
+        if equity_ratio["reason"]:
+            annual_field_status_reason["equity_ratio_computed"] = [equity_ratio["reason"]]
         prior_annual = prior_record.get("annual") if isinstance(prior_record.get("annual"), dict) else {}
         seed_source = (
             (prior_annual.get("source_values") or {}).get("seed", {}).get("source")
@@ -1645,12 +1703,9 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
                     "equity_ratio_computed": {
                         "value": values["equity_ratio_computed"],
                         "formula": "equity / total_assets * 100",
-                        "input_sources": {
-                            "equity": equity_source,
-                            "total_assets": assets_source,
-                        },
+                        "input_sources": equity_ratio["input_sources"],
                     }
-                } if "equity_ratio_computed" in values else {},
+                } if "equity_ratio_computed" in values and equity_ratio["source"] == "calculated" else {},
             },
         }
         statements.append({
@@ -2028,6 +2083,27 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         prior_splits = load_recent_year_records(client, bucket, symbol, "splits", as_of)
     prior_dividends.extend(legacy_dividends)
     prior_splits.extend(legacy_splits)
+    stored_duplicate_events = (
+        has_duplicate_event_dates(prior_dividends)
+        or has_duplicate_event_dates(prior_splits)
+    )
+    if stored_duplicate_events and not full_action_history_required:
+        # Load every hot/archive partition before a full Yahoo rebuild so rows
+        # outside the recent three-year window are retained or repaired too.
+        full_action_history_required = True
+        prior_dividends = load_all_year_records(client, bucket, symbol, "dividends", include_archive=True)
+        prior_splits = load_all_year_records(client, bucket, symbol, "splits", include_archive=True)
+        prior_dividends.extend(legacy_dividends)
+        prior_splits.extend(legacy_splits)
+        stored_duplicate_events = (
+            has_duplicate_event_dates(prior_dividends)
+            or has_duplicate_event_dates(prior_splits)
+        )
+    if stored_duplicate_events:
+        # Corrupt stored partitions must bypass same-session reuse and refresh
+        # the complete Yahoo history before their derived totals are published.
+        skip_action_retry = False
+        forced_repair_expected = True
     action_status: dict[str, str] = {}
     action_retrieval: dict[str, Any] = {
         "source": "yfinance_history_chart",
@@ -2041,7 +2117,12 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "dividend_amount_basis": "yfinance_split_adjusted_assumption",
         "split_ratio_reapplied_to_dividends": False,
     }
-    full_history_attempted = refresh_full_history or prior_sync.get("long_history_retry_pending") is True or prior_repair_period == "max"
+    full_history_attempted = (
+        refresh_full_history
+        or prior_sync.get("long_history_retry_pending") is True
+        or prior_repair_period == "max"
+        or stored_duplicate_events
+    )
     full_history_refreshed = False
     new_split_detected = False
     forced_repair = False
@@ -2049,6 +2130,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     actions_changed = False
     fresh_dividends: list[dict[str, Any]] | None = None
     fresh_splits: list[dict[str, Any]] | None = None
+    if stored_duplicate_events:
+        action_retrieval["repair_reason"] = "duplicate_stored_event_dates"
     if skip_action_retry:
         dividends = prior_dividends
         splits = prior_splits
@@ -2058,8 +2141,18 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         action_retrieval["retry_status"] = "reused_successful_same_session"
     else:
         try:
-            forced_repair = refresh_full_history or prior_sync.get("long_history_retry_pending") is True or bool(prior_repair_period)
-            repair_period = "max" if (refresh_full_history or prior_sync.get("long_history_retry_pending") is True or prior_repair_period == "max") else "1y"
+            forced_repair = (
+                refresh_full_history
+                or prior_sync.get("long_history_retry_pending") is True
+                or bool(prior_repair_period)
+                or stored_duplicate_events
+            )
+            repair_period = "max" if (
+                refresh_full_history
+                or prior_sync.get("long_history_retry_pending") is True
+                or prior_repair_period == "max"
+                or stored_duplicate_events
+            ) else "1y"
             prior_full_coverage_end = str(prior_action_history.get("full_history_coverage_end") or "")
             if forced_repair:
                 fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(

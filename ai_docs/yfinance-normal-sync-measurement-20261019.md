@@ -8,41 +8,41 @@
 
 | 項目 | 記録 |
 |---|---|
-| Actions run URL / ID | 未実施 |
-| workflow / job | `yfinance-r2.yml` / `sync-v2` |
-| commit SHA | 未実施 |
+| Actions run URL / ID | [run #159 / 39304823002](https://github.com/masacgt/Diview/actions/runs/39304823002) |
+| workflow / job | `yfinance-r2.yml` / `market-calendar` + `v2-daily-sync` |
+| commit SHA | `f172861b4cd060ebde1bc0b28322e9af270f4861` |
 | 起動種別 | scheduledであることを確認 |
-| 日本市場営業日 | XTKSカレンダー判定結果 |
-| 対象価格日 | 期待する直近の完了営業日 |
-| workflow結果 | success / partial / failure |
-| GitHub Actions実行時間 | 分。Actions run画面のジョブ実測 |
-| 同月のrunner minutes累計 | 分。今回分を含む全対象workflow |
+| 日本市場営業日 | 2026-10-20 JSTをXTKS営業日・市場OPENと判定 |
+| 対象価格日 | 2026-10-19 |
+| workflow結果 | 部分失敗。全ユニバース処理・公開後、ticker失敗で終了コード1 |
+| GitHub Actions実行時間 | 同期job 666秒、calendar job 25秒。job実行時間合計11分31秒。run timing APIのworkflow wallは697秒、`billable.UBUNTU.total_ms=0`（公開リポジトリの課金値であり、処理時間の代用にはしない） |
+| 同月のrunner minutes累計 | 未取得。run #159単独のwall時間だけでは月合計を判定しない |
 
 ## 同期計測
 
 | 指標 | 実測値 |
 |---|---:|
-| J-Quantsユニバース銘柄数 | 未実施 |
-| 銘柄収集スクリプト時間 | 秒 |
-| 銘柄ごとのyfinance取得時間 | 秒 |
-| R2取得専用時間 | 秒 |
-| yfinance/R2重複時間 | 秒 |
-| yfinance取得専用時間 | 秒 |
-| 待機・その他時間 | 秒 |
-| カタログ生成時間 | 秒 |
-| R2公開時間 | 秒 |
-| 高水準yfinance呼び出し数（メソッド別） | ログから転記 |
-| R2操作数（get/list/put別） | ログから転記 |
-| R2操作時間（合計） | 秒 |
-| HTTP 429件数 | 件 |
-| 期待価格日で終値取得成功 | 件 / 銘柄数 |
-| 取得成功 / 部分失敗 / 全失敗 | 件数 |
-| no_data / transient / unknown | 件数 |
-| 年次財務の更新対象 / 実取得 | 銘柄数 |
-| 12月株価の更新対象 / 実取得 | 銘柄数 |
-| 配当・分割履歴のローテーション対象 / 実取得 | 銘柄数 |
-| 同一営業日データ再利用 | 件数。通常の新鮮な日次価格と分けて記録 |
-| 公開カタログ件数 | 件 |
+| J-Quantsユニバース銘柄数 | 4,442 |
+| 銘柄収集スクリプト時間 | 624.886秒 |
+| 銘柄ごとのyfinance取得時間 | yfinance active wall 89.907秒（R2との重複を除いた時間は0秒） |
+| R2取得専用時間 | 420.313秒 |
+| yfinance/R2重複時間 | 89.907秒 |
+| yfinance取得専用時間 | 0秒 |
+| 待機・その他時間 | 0.012秒 |
+| カタログ生成時間 | 97.985秒 |
+| R2公開時間 | 9.130秒 |
+| 高水準yfinance呼び出し数（メソッド別） | 合計622。daily 5d+actions 237、ticker_get_info 55、year-end 8y初回43、daily 1y+actions 41、actions max 19、annual income/balance/cashflow/valuation各55、actions 1y 7 |
+| R2操作数（get/list/put別） | get_object 12,114、get_body 10,398、list_objects_v2 1,945、put_object 5,192、delete_object 7 |
+| R2操作時間（合計） | active wall 510.220秒（R2操作durationの並列合算は11,344.899秒） |
+| HTTP 429件数 | 0 |
+| 期待価格日で終値取得成功 | 68銘柄で対象日の終値未取得ログ。成功件数の独立した要約値はログにない |
+| 取得成功 / 部分失敗 / 全失敗 | 成功4,335、失敗107（部分失敗状態を含むカタログを公開） |
+| no_data / transient / unknown | 同一日の404再試行抑止52件、AttributeError不明分類55件 |
+| 年次財務の更新対象 / 実取得 | ローテーション3/5。yfinance各財務系統呼び出し55回（成功数の要約なし） |
+| 12月株価の更新対象 / 実取得 | 年末一括更新なし。初回8年価格取得43回 |
+| 配当・分割履歴のローテーション対象 / 実取得 | ローテーション3/20。全期間actions max 19回、1年actions 7回 |
+| 同一営業日データ再利用 | 手動run #158が同じセッション2026-10-19を先に公開していた。run #159は独立した新規セッション負荷の測定対象外 |
+| 公開カタログ件数 | 4,356（generation `2026-10-19`） |
 
 ## 月間2,000分判定
 
@@ -50,8 +50,8 @@
 
 | 算定 | 値 |
 |---|---:|
-| 今月の実行済みrunner minutes（今回を除く） | 未実施 |
-| 10月19日通常同期runner minutes | 未実施 |
+| 今月の実行済みrunner minutes（今回を除く） | 未取得 |
+| 10月19日通常同期runner minutes | active job時間11分31秒。run timing APIはworkflow wall 697秒、`billable.UBUNTU.total_ms=0`。同一セッション再実行のため月間推定には不採用 |
 | 今月の合計runner minutes | 未実施 |
 | 2,000分までの残り | 未実施 |
 | 残る営業日の実測基準予測 | 未実施 |
@@ -67,4 +67,53 @@
 
 ## 実施状態
 
-2026-10-18時点では通常営業日の次回実行前であり、測定値はない。実行後に上記の `未実施` をActions記録から更新する。
+run #159は2026-10-20 JSTに通常scheduleでカレンダーゲートを通過し、全4,442コードを走査して公開した。ただし同じセッションを先行する手動run #158が処理済みだったため、複数の独立した通常営業日実測が揃うまで月2,000分の判定は保留する。HTTP 429は0件。2060.Tの `Ticker.calendar` は保存元・状態・日付を確認できたが、最終取得日時は2026-10-17のままで、run #159による再取得ではない。
+
+## 2026-10-20 追跡実測（手動run #161、月間通常同期の標本外）
+
+| 項目 | 実測 |
+|---|---:|
+| Actions | [run #161 / 39328353180](https://github.com/masacgt/Diview/actions/runs/39328353180) |
+| 起動種別 / 対象セッション | workflow_dispatch / 2026-10-19 |
+| J-Quantsコード数 | 4,442 |
+| 成功 / 失敗 / カタログ | 4,335 / 107 / 4,356 |
+| yfinance高水準呼び出し | 454、HTTP 429は0 |
+| 同期job / カレンダーjob | 5,133秒（85分33秒）/ 25秒 |
+| 合計active runner time | 5,158秒（85分58秒） |
+| workflow wall | 5,795秒（96分35秒）、billable.UBUNTU.total_msは0 |
+| 同期スクリプト / security collection | 5,089.015秒 / 4,954.814秒 |
+| catalog build / publication | 116.187秒 / 11.310秒 |
+| R2 active wall / R2-only / yfinance-active overlap | 4,954.798秒 / 4,851.527秒 / 103.271秒 |
+| R2操作数 | get_object 84,531、get_body 79,601、list_objects_v2 14,173、put_object 66,874 |
+| 失敗内訳 | AttributeError 55件、同一営業日HTTP 404再試行抑止52件 |
+| 高水準呼び出し内訳 | 年次財務4系統各55、ticker_get_info 51、daily 5d+actions 83、year-end 8y 39、daily 1y+actions 40、actions max 16、actions 1y 5 |
+
+この手動runはrun #159と同じ対象セッション日を再処理している。公開自体は完了したが、ticker失敗によりjob結論はfailureとなったため、月間の通常schedule計測には数えない。85分58秒を23営業日で単純換算すると1,977.2 runner minutesだが、独立した通常営業日複数回の結果ではない。360分のtimeoutを維持し、月2,000分の判定を保留する。
+
+## run #161後の2060.T読み戻しとsplit/dividend監査
+
+本番security APIからcurrent.json由来のTicker.calendarを確認した。日付2027-03-30、状態available、取得元Yahoo Finance via yfinance Ticker.calendar、fetched_atは2026-10-17T14:31:41+09:00。run #161のyfinance呼び出し内にticker_calendarはなく、再取得されていない。general last_attempt_atは2026-10-20T06:50:51+09:00。画面用dividend-months APIは同じ将来日をhistory eventからestimated_from_dividend_historyとして返し、Ticker.get_info fallbackとは別経路。
+
+`Ticker.calendar` は前回取得から30日経過した銘柄だけ更新する。2060.Tの前回取得日2026-10-17からみて通常同期での次回確認は最短2026-11-16以降となるため、それ以前のrunで `ticker_calendar` 呼び出しがないことは取得失敗を意味しない。
+
+同じ本番APIの2060.T event_year=2026応答は、3月30日¥24.5と9月29日¥26を各10行返した。この要求は2026年partitionだけを読み込むため、重複はそのpartition内の返却行に存在する。current.jsonのtrailing_12_month_per_share=505は重複行合計と一致する。追跡済みの2026-10-09時点の `data/market/yfinance/ex_dividend_history_20261009.csv` には各日1行ずつ同額がある。同期コードは日次候補に変化がないと保存済みイベントを再利用し、partitionを書き直さないため、通常の無変更同期では重複が残る。最初に重複を保存した実行は未特定。yfinanceから該当partitionを再構築し、本番R2/APIで再確認する。
+
+ローカルcollectorには重複イベント日検出を追加し、検出した銘柄だけ全期間履歴をyfinanceから再取得する修正を入れた。固定データのcollector test 65件とPython構文確認は通過。コードは未公開のため、この修復によるR2の書換えやWorker APIの正常化はまだ確認していない。
+
+read-only Actions run #162（[実行](https://github.com/masacgt/Diview/actions/runs/39331846984)、[監査artifact](https://github.com/masacgt/Diview/actions/runs/39331846984/artifacts/12227883474)）は2026-10-20のactive universe 4,435銘柄から分割対象1,068銘柄・1,270イベントを監査した。7,345件のissuer fiscal-year比較中、6,206件一致、1,139件不一致、160銘柄はissuer DPS unavailable、技術的失敗0件。スクリプトのR2操作はget_objectのみ。
+
+## 先行する手動全銘柄同期との比較
+
+| 項目 | run #158 |
+|---|---:|
+| Actions | [run #158 / 39258489241](https://github.com/masacgt/Diview/actions/runs/39258489241) |
+| 実行種別・対象日 | 手動 `sync`、2026-10-19 |
+| J-Quants銘柄数 | 4,444 |
+| 成功 / 失敗 | 4,331 / 113 |
+| yfinance高水準呼び出し | 6,186 |
+| active job時間 | 同期job 4,395秒 + calendar job 22秒 = 4,417秒（73分37秒） |
+| workflow wall time | `run_duration_ms=4,508,000`（75分08秒） |
+| `billable.UBUNTU.total_ms` | 0 |
+| 23営業日換算 | active job時間が毎回同じと仮定した場合1,693.2分。ただし手動の単一runなので予算達成の判定には使わない |
+
+run #158はrun #159と同じ対象セッション日を先に公開している。#158の所要時間と呼び出し数は新規セッションの手動同期実測として記録するが、通常scheduleの複数回測定や月間実績とは分ける。GitHub timing APIの `billable.UBUNTU.total_ms=0` は課金量であり、active job時間の代替値として扱わない。
