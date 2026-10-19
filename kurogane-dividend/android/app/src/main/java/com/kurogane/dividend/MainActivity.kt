@@ -23,6 +23,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -456,12 +458,15 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             )
                                             Spacer(modifier = Modifier.height(2.dp))
                                             Text(
-                                                text = if (route == "roadmap" && fontScale >= 1.6f) "ロード\nマップ" else label,
+                                                text = if (route == "roadmap" && fontScale >= 1.6f) "道筋" else label,
+                                                modifier = if (route == "roadmap" && fontScale >= 1.6f) {
+                                                    Modifier.semantics { contentDescription = label }
+                                                } else Modifier,
                                                 fontSize = AppTextSize.dense,
                                                 color = if (selected) PrimaryEmerald else OnSurfaceVariant,
                                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                                maxLines = 2
+                                                maxLines = 1
                                             )
                                         }
                                     }
