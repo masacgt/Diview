@@ -3,6 +3,7 @@
 ## Runtime and storage
 
 - The current app source is `kurogane-dividend/`; Android builds come from `kurogane-dividend/android/`.
+- Android Compose typography uses the platform sans-serif family for interface text and financial figures; shared numeric styles enable tabular figures (`tnum`). Monospace is reserved for identifiers and technical literals. No custom font files are bundled.
 - Android portfolio CSV import supports six broker labels and keeps CSV export unencrypted at a user-selected device destination. Encrypted Drive backup uses the reference APK's AES-256-GCM DVM format for holdings plus a Diview DVM sidecar for shareholder-benefit, stock-climate, and dividend-history overrides; OAuth/Drive setup is external. See `ai_docs/portfolio-import-backup-spec.md` for file formats, restore behavior, and limits.
 - The Cloudflare Worker API is in `data/irbank/cloudflare/src/index.js` and uses D1 for operational records and R2 bucket `diview-market-data` for market snapshots.
 - The Worker binds R2 as `MARKET_DATA`. R2 public URLs remain disabled; selected objects are served by explicit Worker routes.

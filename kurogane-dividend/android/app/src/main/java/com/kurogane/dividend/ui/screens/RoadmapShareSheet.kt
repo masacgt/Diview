@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -366,7 +365,7 @@ internal fun RoadmapShareSheet(viewModel: DividendViewModel, achievement: Roadma
                                         color = OnSurface,
                                         fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
+                                        fontFamily = AppNumericFontFamily
                                     )
                                 }
                             }
@@ -475,7 +474,7 @@ internal fun RoadmapShareSheet(viewModel: DividendViewModel, achievement: Roadma
                                         color = OnSurface,
                                         fontSize = AppTextSize.dense,
                                         fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
+                                        fontFamily = AppNumericFontFamily
                                     )
                                 }
                             }
