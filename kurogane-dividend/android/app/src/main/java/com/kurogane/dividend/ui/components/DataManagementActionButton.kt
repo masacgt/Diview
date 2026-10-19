@@ -45,7 +45,7 @@ fun DataManagementActionButton(
     content: @Composable ColumnScope.() -> Unit = {}
 ) {
     val shape = RoundedCornerShape(12.dp)
-    val largeFontScale = LocalDensity.current.fontScale >= 1.7f
+    val largeFontScale = LocalDensity.current.fontScale >= 1.8f
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
