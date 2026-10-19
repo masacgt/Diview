@@ -891,12 +891,17 @@ fun WatchlistScreen(
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                stringResource(R.string.watchlist_text_10),
+                                stringResource(R.string.watchlist_text_10).let { title ->
+                                    if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.7f) {
+                                        title.replace("一括シミュレーション", "一括\nシミュレーション")
+                                    } else title
+                                },
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
                                     fontSize = AppTextSize.body
-                                )
+                                ),
+                                maxLines = 2
                             )
                         }
 
