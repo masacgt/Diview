@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kurogane.dividend.ui.theme.AppTextSize
 import com.kurogane.dividend.ui.theme.OnSurface
 import com.kurogane.dividend.ui.theme.OnSurfaceVariant
 import com.kurogane.dividend.ui.theme.BorderColor
@@ -62,8 +63,8 @@ fun DataManagementActionButton(
                 Icon(icon, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(25.dp))
                 Spacer(Modifier.width(9.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(title, color = if (enabled) OnSurface else OnSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Text(subtitle, color = OnSurfaceVariant, fontSize = 11.sp, lineHeight = 14.sp)
+                    Text(title, color = if (enabled) OnSurface else OnSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = AppTextSize.compactBody)
+                    Text(subtitle, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 14.sp)
                 }
                 if (isWorking) CircularProgressIndicator(color = PrimaryEmerald, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                 else Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = if (enabled) PrimaryEmerald else OnSurfaceVariant, modifier = Modifier.size(18.dp))

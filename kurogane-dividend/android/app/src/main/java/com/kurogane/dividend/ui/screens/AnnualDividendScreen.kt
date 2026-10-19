@@ -888,7 +888,7 @@ private fun MonthlyDividendEstimateCard(
                                     .height(monthlyAmountLabelSlotHeight)
                                     .align(Alignment.TopCenter)
                                     .offset(y = monthlyChartCanvasHeight * (monthlyBarAreaBottomFraction - animatedHeightFraction * monthlyBarAreaHeightFraction) - monthlyAmountLabelTopOffset),
-                                fontSize = 9.sp,
+                                fontSize = AppTextSize.chartLabel,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (isSelected) PrimaryEmerald else OnSurfaceVariant,
                                 textAlign = TextAlign.Center,
@@ -2618,7 +2618,7 @@ private fun CompoundingSimulationSection(
                                     )
                                     .width(56.dp),
                                 color = if (index == selectedIndex) PrimaryEmerald else OnSurfaceVariant,
-                                fontSize = 9.sp,
+                                fontSize = AppTextSize.chartLabel,
                                 fontWeight = FontWeight.SemiBold,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                 maxLines = 1,
@@ -2647,7 +2647,7 @@ private fun CompoundingSimulationSection(
                                     Text(
                                         compactSignedMoney(yearChange),
                                         color = if ((yearChange ?: 0.0) >= 0.0) StatusSuccess else ErrorRed,
-                                        fontSize = 10.sp,
+                                        fontSize = AppTextSize.compact,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         softWrap = false,
