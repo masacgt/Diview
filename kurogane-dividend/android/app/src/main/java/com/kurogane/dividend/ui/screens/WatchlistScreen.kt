@@ -1110,7 +1110,7 @@ fun WatchlistScreen(
                     stock.currentYield,
                     stock.isNoDividendConfirmed
                 )
-                val useStackedYieldLabel = LocalDensity.current.fontScale >= 1.8f
+                val useCompactYieldValue = LocalDensity.current.fontScale >= 1.8f
                 val isReached = currentYield >= stock.targetYield
                 val isClose = !isReached && (currentYield >= (stock.targetYield - 0.25))
                 val yieldAchievement = (currentYield / stock.targetYield * 100.0).coerceIn(0.0, 100.0)
@@ -1389,32 +1389,17 @@ fun WatchlistScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        if (useStackedYieldLabel) {
-                                            Column {
-                                                Text(currentYieldLabel, color = OnSurfaceVariant, fontSize = AppTextSize.dense)
-                                                Text(
-                                                    currentYieldDisplay,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (stock.isReady) PrimaryEmerald else OnSurface,
-                                                    fontSize = AppTextSize.body,
-                                                    fontFamily = AppNumericFontFamily,
-                                                    maxLines = 1,
-                                                    softWrap = false
-                                                )
-                                            }
-                                        } else {
-                                            Text(currentYieldLabel, color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = 1)
-                                            Spacer(modifier = Modifier.width(5.dp))
-                                            Text(
-                                                currentYieldDisplay,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (stock.isReady) PrimaryEmerald else OnSurface,
-                                                fontSize = AppTextSize.body,
-                                                fontFamily = AppNumericFontFamily,
-                                                maxLines = 1,
-                                                softWrap = false
-                                            )
-                                        }
+                                        Text(currentYieldLabel, color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = 1)
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text(
+                                            currentYieldDisplay,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (stock.isReady) PrimaryEmerald else OnSurface,
+                                            fontSize = if (useCompactYieldValue) AppTextSize.dense else AppTextSize.body,
+                                            fontFamily = AppNumericFontFamily,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
                                         Icon(
                                             Icons.AutoMirrored.Filled.ArrowForward,
                                             contentDescription = stringResource(R.string.watchlist_a11y),

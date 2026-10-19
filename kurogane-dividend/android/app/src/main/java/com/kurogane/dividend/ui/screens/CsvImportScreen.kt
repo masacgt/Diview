@@ -171,7 +171,7 @@ fun CsvImportScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(stringResource(R.string.csv_import_text), color = OnSurface, fontWeight = FontWeight.Bold)
-                    AdaptiveRow(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         CsvBroker.entries.filter { it != CsvBroker.DIVIEW }.forEach { item ->
                             Text(item.label, Modifier.clip(RoundedCornerShape(9.dp)).background(if (broker == item) SurfaceContainerHighest else SurfaceContainer).clickable(enabled = !isReading && !isImporting) {
                                 broker = item
@@ -194,7 +194,7 @@ fun CsvImportScreen(
                                 Icon(Icons.Default.ExpandMore, null, tint = OnSurfaceVariant)
                             }
                             if (guideExpanded) {
-                                AdaptiveRow(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     CsvBroker.entries.filter { it != CsvBroker.DIVIEW }.forEach { item ->
                                         Text(item.label, Modifier.clip(RoundedCornerShape(50)).background(if (broker == item) PrimaryEmerald else SurfaceContainerHighest).clickable(enabled = !isReading && !isImporting) {
                                             csvBytes?.let { reparseCsvAs(item, it) } ?: run { broker = item; brokerWasAutoDetected = false }
