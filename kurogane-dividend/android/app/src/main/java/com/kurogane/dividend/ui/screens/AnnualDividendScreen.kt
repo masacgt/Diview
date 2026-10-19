@@ -342,14 +342,19 @@ fun AnnualDividendScreen(
                         HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
                         Spacer(modifier = Modifier.height(8.dp))
 
+                        val compactYieldCards = androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.8f
                         AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                            modifier = Modifier.fillMaxWidth().then(
+                                if (compactYieldCards) Modifier else Modifier.height(IntrinsicSize.Min)
+                            ),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Column(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
+                                    .then(
+                                        if (compactYieldCards) Modifier.fillMaxWidth()
+                                        else Modifier.weight(1f).fillMaxHeight()
+                                    )
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(SurfaceContainerHigh)
                                     .border(0.5.dp, BorderColor, RoundedCornerShape(14.dp))
@@ -383,8 +388,10 @@ fun AnnualDividendScreen(
 
                             Column(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
+                                    .then(
+                                        if (compactYieldCards) Modifier.fillMaxWidth()
+                                        else Modifier.weight(1f).fillMaxHeight()
+                                    )
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(SurfaceContainerHigh)
                                     .border(0.5.dp, BorderColor, RoundedCornerShape(14.dp))
