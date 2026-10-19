@@ -527,15 +527,20 @@ fun AssetManagementScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // Sub-Grid 2 Columns
+                        val compactMetricCards = LocalDensity.current.fontScale >= 1.8f
                         AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                            modifier = Modifier.fillMaxWidth().then(
+                                if (compactMetricCards) Modifier else Modifier.height(IntrinsicSize.Min)
+                            ),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             // Expected Dividend Card
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
+                                    .then(
+                                        if (compactMetricCards) Modifier.fillMaxWidth()
+                                        else Modifier.weight(1f).fillMaxHeight()
+                                    )
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(SurfaceContainer)
                                     .border(0.5.dp, BorderBlue, RoundedCornerShape(14.dp))
@@ -562,8 +567,10 @@ fun AssetManagementScreen(
                             // Dividend Yield Card
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
+                                    .then(
+                                        if (compactMetricCards) Modifier.fillMaxWidth()
+                                        else Modifier.weight(1f).fillMaxHeight()
+                                    )
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(SurfaceContainer)
                                     .border(0.5.dp, BorderBlue, RoundedCornerShape(14.dp))
