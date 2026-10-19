@@ -95,6 +95,38 @@ class FinancialRefreshPartitionTests(TestCase):
 
 
 class NetDeRatioTests(TestCase):
+    def test_equity_ratio_keeps_seed_ratio_when_refreshed_yfinance_input_has_a_different_unit_basis(self):
+        result = sync.equity_ratio_result(
+            {
+                "total_assets": 105_522_331,
+                "equity_ratio_computed": 37.829768942,
+            },
+            {"stockholders_equity": 39_918_854_000_000},
+        )
+
+        self.assertEqual(result["value"], 37.829768942)
+        self.assertEqual(result["source"], "seed")
+        self.assertEqual(result["reason"], "mixed_source_inputs_not_recalculated")
+
+    def test_equity_ratio_is_calculated_when_both_inputs_share_yfinance_source(self):
+        result = sync.equity_ratio_result(
+            {"total_assets": 100},
+            {"stockholders_equity": 40, "total_assets": 200},
+        )
+
+        self.assertEqual(result["value"], 20)
+        self.assertEqual(result["source"], "calculated")
+        self.assertEqual(result["input_sources"], {"equity": "yfinance", "total_assets": "yfinance"})
+
+    def test_equity_ratio_stays_unavailable_for_mixed_sources_without_same_source_seed_ratio(self):
+        result = sync.equity_ratio_result(
+            {"total_assets": 100},
+            {"stockholders_equity": 40},
+        )
+
+        self.assertIsNone(result["value"])
+        self.assertEqual(result["reason"], "mixed_source_inputs_not_comparable")
+
     def test_financial_source_values_keep_seed_and_yfinance_rows_separate(self):
         seed, yfinance = sync.financial_source_values({
             "period_end": "2025-03-31",
@@ -636,6 +668,16 @@ class R2MetricsTests(TestCase):
 
 
 class EventPartitionPersistenceTests(TestCase):
+    def test_duplicate_event_dates_are_detected_for_yfinance_rebuild(self):
+        self.assertTrue(sync.has_duplicate_event_dates([
+            {"date": "2026-03-30", "amount": 24.5},
+            {"date": "2026-03-30", "amount": 24.5},
+        ]))
+        self.assertFalse(sync.has_duplicate_event_dates([
+            {"date": "2026-03-30", "amount": 24.5},
+            {"date": "2026-09-29", "amount": 26.0},
+        ]))
+
     def test_unchanged_daily_chart_does_not_rewrite_event_partitions(self):
         self.assertFalse(sync.action_partitions_need_persist(None, None, [], []))
 
