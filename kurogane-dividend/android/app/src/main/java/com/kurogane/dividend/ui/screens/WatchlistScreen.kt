@@ -1386,7 +1386,7 @@ fun WatchlistScreen(
                                             fontWeight = FontWeight.Bold,
                                             color = if (stock.isReady) PrimaryEmerald else OnSurface,
                                             fontSize = AppTextSize.body,
-                                            fontFamily = FontFamily.Monospace
+                                            fontFamily = AppNumericFontFamily
                                         )
                                         Icon(
                                             Icons.AutoMirrored.Filled.ArrowForward,
@@ -1416,7 +1416,7 @@ fun WatchlistScreen(
                                             color = PrimaryEmerald,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = AppTextSize.section,
-                                            fontFamily = FontFamily.Monospace,
+                                            fontFamily = AppNumericFontFamily,
                                             modifier = Modifier.padding(horizontal = 4.dp)
                                         )
                                         TargetYieldAdjustButton(
