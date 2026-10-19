@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -70,6 +71,7 @@ fun CsvImportScreen(
     var isReading by remember { mutableStateOf(false) }
     var isImporting by remember { mutableStateOf(false) }
     var guideExpanded by remember { mutableStateOf(true) }
+    val useStackedModeSelector = LocalDensity.current.fontScale >= 1.4f
 
     fun reparseCsvAs(selectedBroker: CsvBroker, bytes: ByteArray) {
         fileReadJob?.cancel()
@@ -141,9 +143,19 @@ fun CsvImportScreen(
     }, containerColor = BackgroundDark) { insets ->
         LazyColumn(Modifier.fillMaxSize().padding(insets).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
             item {
-                AdaptiveRow(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurfaceContainer).padding(4.dp)) {
-                    listOf("csv" to stringResource(R.string.csv_import_label_3), "drive" to stringResource(R.string.csv_import_label_4)).forEach { (id, label) ->
-                        Text(label, Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(if (mode == id) PrimaryEmerald else Color.Transparent).clickable(enabled = !isReading && !isImporting) { mode = id; error = null }.padding(11.dp), color = if (mode == id) OnPrimary else OnSurfaceVariant, fontWeight = FontWeight.Bold)
+                val options = listOf("csv" to stringResource(R.string.csv_import_label_3), "drive" to stringResource(R.string.csv_import_label_4))
+                val selectorModifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurfaceContainer).padding(4.dp)
+                if (useStackedModeSelector) {
+                    Column(selectorModifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        options.forEach { (id, label) ->
+                            Text(label, Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(if (mode == id) PrimaryEmerald else Color.Transparent).clickable(enabled = !isReading && !isImporting) { mode = id; error = null }.padding(11.dp), color = if (mode == id) OnPrimary else OnSurfaceVariant, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    Row(selectorModifier) {
+                        options.forEach { (id, label) ->
+                            Text(label, Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(if (mode == id) PrimaryEmerald else Color.Transparent).clickable(enabled = !isReading && !isImporting) { mode = id; error = null }.padding(11.dp), color = if (mode == id) OnPrimary else OnSurfaceVariant, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
