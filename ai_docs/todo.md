@@ -41,6 +41,9 @@
 
 ## Next
 
+- [ ] Unify Android financial-number typography as sans-serif with tabular figures, keeping monospace for identifiers and technical literals. Evidence: the shared numeric style and financial-value overrides are updated; JDK 17 debug build succeeds and the APK installs and launches on SCG01 and the emulator. Screen-specific visual comparison remains pending.
+- [ ] Visually compare Watchlist and Total Assets numerals, then review the changed financial values and numeric inputs on device.
+
 - [ ] Verify automatic restore of the user's existing Google Drive `.dvm` on device. The first successful picker import now stores persistable document access and later taps read the saved URI; actual access to the user's Drive file still needs device confirmation.
 
 - [ ] Verify the five-session `Ticker.get_info()` rotation on a normal XTKS sync. `sync_v2.py` now shares the five-bucket financial rotation, preserves cached company/statistical fields on other sessions, records fetch dates, and retries failed refreshes; deterministic rotation tests pass within the 67-test yfinance suite. A normal scheduled Actions run has not yet measured `company_info_refresh_attempt_count` / `company_info_refreshed_count` / `company_info_refresh_failed_count` or confirmed the cadence in R2; the next scheduled run is 2026-10-19 at 21:17 JST.

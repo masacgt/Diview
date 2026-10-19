@@ -997,7 +997,7 @@ fun StockDetailScreen(
                                                 color = if (isProjected) PrimaryEmerald else OnSurfaceVariant,
                                                 fontSize = if (dpsVal.length >= 6) AppTextSize.dense * 0.8f else AppTextSize.dense,
                                                 fontWeight = FontWeight.Bold,
-                                                fontFamily = FontFamily.Monospace,
+                                                fontFamily = AppNumericFontFamily,
                                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                                 maxLines = 1,
                                                 softWrap = false
@@ -1329,7 +1329,7 @@ fun StockDetailScreen(
                                             color = if (currentDpsUnavailable) OnSurfaceVariant else if (isHighRisk) AccentAmber else PrimaryEmerald,
                                             fontSize = AppTextSize.screenTitle,
                                             fontWeight = FontWeight.Black,
-                                            fontFamily = FontFamily.Monospace
+                                            fontFamily = AppNumericFontFamily
                                         )
                                     }
 
@@ -1393,7 +1393,7 @@ fun StockDetailScreen(
                                             Column(modifier = Modifier.padding(10.dp)) {
                                                 Text(stringResource(R.string.stock_detail_text_35), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                 Spacer(modifier = Modifier.height(2.dp))
-                                                Text(stringResource(R.string.settings_1_s , sectorDependencyStr), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = FontFamily.Monospace)
+                                                Text(stringResource(R.string.settings_1_s , sectorDependencyStr), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = AppNumericFontFamily)
                                                 Spacer(modifier = Modifier.height(2.dp))
                                                 Text(stringResource(R.string.stock_detail_text_36 , cleanSectorName, sectorRiskText), color = AccentAmber, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                             }
@@ -1992,7 +1992,7 @@ fun StockDetailScreen(
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     Text(stringResource(R.string.stock_detail_text_58), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(profile.calculatedDoe, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = FontFamily.Monospace)
+                                                    Text(profile.calculatedDoe, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.headline, fontFamily = AppNumericFontFamily)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(profile.calculatedDoeSub, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
                                                 }
@@ -2013,7 +2013,7 @@ fun StockDetailScreen(
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     Text(stringResource(R.string.stock_detail_text_59), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(profile.netDeRatio, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = FontFamily.Monospace)
+                                                    Text(profile.netDeRatio, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = AppNumericFontFamily)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(stringResource(R.string.stock_detail_text_60), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                 }
@@ -3139,7 +3139,7 @@ fun StockDetailScreen(
                                             color = OnSurface,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = AppTextSize.body,
-                                            fontFamily = FontFamily.Monospace,
+                                            fontFamily = AppNumericFontFamily,
                                             fontFeatureSettings = LocalTextStyle.current.fontFeatureSettings
                                         ),
                                         cursorBrush = SolidColor(PrimaryEmerald),
