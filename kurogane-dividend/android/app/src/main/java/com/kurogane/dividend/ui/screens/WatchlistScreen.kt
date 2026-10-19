@@ -725,14 +725,19 @@ fun WatchlistScreen(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
+                        val compactSummaryMetricCards = LocalDensity.current.fontScale >= 1.8f
                         AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                            modifier = Modifier.fillMaxWidth().then(
+                                if (compactSummaryMetricCards) Modifier else Modifier.height(IntrinsicSize.Min)
+                            ),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
+                                    .then(
+                                        if (compactSummaryMetricCards) Modifier.fillMaxWidth()
+                                        else Modifier.weight(1f).fillMaxHeight()
+                                    )
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(BackgroundDark.copy(alpha = 0.7f))
                                     .border(0.5.dp, BorderBlue, RoundedCornerShape(12.dp))
@@ -756,8 +761,10 @@ fun WatchlistScreen(
 
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
+                                    .then(
+                                        if (compactSummaryMetricCards) Modifier.fillMaxWidth()
+                                        else Modifier.weight(1f).fillMaxHeight()
+                                    )
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(BackgroundDark.copy(alpha = 0.7f))
                                     .border(0.5.dp, BorderBlue, RoundedCornerShape(12.dp))
