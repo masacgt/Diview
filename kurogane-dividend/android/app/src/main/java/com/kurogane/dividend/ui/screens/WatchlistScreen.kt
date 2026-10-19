@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import com.kurogane.dividend.model.WatchlistStock
 import com.kurogane.dividend.ui.theme.*
@@ -868,18 +869,19 @@ fun WatchlistScreen(
                                 Icon(Icons.Default.Calculate, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
                             }
                             Spacer(modifier = Modifier.width(8.dp))
+                            val batchSimulationTitle = stringResource(R.string.watchlist_text_10)
+                            val compactBatchSimulationTitle = androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.7f
                             Text(
-                                stringResource(R.string.watchlist_text_10).let { title ->
-                                    if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.7f) {
-                                        title.replace("一括シミュレーション", "一括\nシミュレーション")
-                                    } else title
-                                },
+                                text = if (compactBatchSimulationTitle) "一括シミュレーション" else batchSimulationTitle,
+                                modifier = if (compactBatchSimulationTitle) {
+                                    Modifier.semantics { contentDescription = batchSimulationTitle }
+                                } else Modifier,
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
                                     fontSize = AppTextSize.body
                                 ),
-                                maxLines = 2
+                                maxLines = 1
                             )
                         }
 
