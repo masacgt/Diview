@@ -8,6 +8,7 @@ import io
 import json
 import re
 import sys
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -17,18 +18,33 @@ import fetch_and_upload as collector
 import sync_v2 as sync
 
 
-def refresh(code: str) -> dict[str, Any]:
-    code = code.strip().upper()
-    if not re.fullmatch(r"\d{4,5}[A-Z]?", code):
-        raise ValueError("Security code must be a 4-5 digit code, optionally followed by a letter")
+def normalize_security_code(code: str) -> str:
+    """Use the same display-code contract as the normal universe sync."""
+    return sync.market_symbol(code).removesuffix(".T")
 
+
+def refresh(code: str) -> dict[str, Any]:
+    code = normalize_security_code(code)
     configure = getattr(collector, "configure_yfinance", None)
     if configure:
         configure()
-    symbol = sync.market_symbol(code)
-    as_of = sync.latest_completed_xtks_session()
     bucket = collector.required_env("R2_BUCKET")
     client = collector.get_client()
+    # Publish a new change token even if a later write/read-back fails: some
+    # annual rows may already have changed and must invalidate D1 analysis.
+    try:
+        return refresh_with_client(code, client, bucket)
+    finally:
+        sync.put_json_if_changed(client, bucket, sync.object_key("financial_revision.json"), {
+            "schema_version": 1,
+            "revision": uuid.uuid4().hex,
+            "updated_at": sync.iso_now(),
+        })
+
+
+def refresh_with_client(code: str, client: Any, bucket: str) -> dict[str, Any]:
+    symbol = sync.market_symbol(code)
+    as_of = sync.latest_completed_xtks_session()
     safe = sync.safe_symbol(symbol)
     ticker = yf.Ticker(symbol)
 
@@ -180,7 +196,9 @@ def refresh_all(report_path: str, *, shard_index: int = 0, shard_count: int = 1)
         for row in universe.get("securities", [])
         if isinstance(row, dict) and row.get("status", "active") == "active"
     ]
-    securities = sorted({code for code in securities if re.fullmatch(r"\d{4,5}[A-Z]?", code)})
+    # Reject malformed active rows instead of silently excluding them from a
+    # run reported as a successful full-universe refresh.
+    securities = sorted({normalize_security_code(code) for code in securities})
     if not securities:
         raise RuntimeError("No active securities found in the published V2 universe")
     universe_security_count = len(securities)

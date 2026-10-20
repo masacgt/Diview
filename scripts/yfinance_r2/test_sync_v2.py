@@ -1,9 +1,11 @@
+from contextlib import ExitStack
+from copy import deepcopy
 from datetime import date, datetime
 import json
 import tempfile
 from pathlib import Path
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pandas as pd
 
@@ -95,6 +97,38 @@ class FinancialRefreshPartitionTests(TestCase):
 
 
 class NetDeRatioTests(TestCase):
+    def test_equity_ratio_keeps_seed_ratio_when_refreshed_yfinance_input_has_a_different_unit_basis(self):
+        result = sync.equity_ratio_result(
+            {
+                "total_assets": 105_522_331,
+                "equity_ratio_computed": 37.829768942,
+            },
+            {"stockholders_equity": 39_918_854_000_000},
+        )
+
+        self.assertEqual(result["value"], 37.829768942)
+        self.assertEqual(result["source"], "seed")
+        self.assertEqual(result["reason"], "mixed_source_inputs_not_recalculated")
+
+    def test_equity_ratio_is_calculated_when_both_inputs_share_yfinance_source(self):
+        result = sync.equity_ratio_result(
+            {"total_assets": 100},
+            {"stockholders_equity": 40, "total_assets": 200},
+        )
+
+        self.assertEqual(result["value"], 20)
+        self.assertEqual(result["source"], "calculated")
+        self.assertEqual(result["input_sources"], {"equity": "yfinance", "total_assets": "yfinance"})
+
+    def test_equity_ratio_stays_unavailable_for_mixed_sources_without_same_source_seed_ratio(self):
+        result = sync.equity_ratio_result(
+            {"total_assets": 100},
+            {"stockholders_equity": 40},
+        )
+
+        self.assertIsNone(result["value"])
+        self.assertEqual(result["reason"], "mixed_source_inputs_not_comparable")
+
     def test_financial_source_values_keep_seed_and_yfinance_rows_separate(self):
         seed, yfinance = sync.financial_source_values({
             "period_end": "2025-03-31",
@@ -933,7 +967,7 @@ class SyncPolicyTests(TestCase):
             due=True,
             failed_groups={"cash_flow"},
         )
-        self.assertEqual(requested, {"cash_flow"})
+        self.assertEqual(requested, {"balance_sheet", "cash_flow"})
 
     def test_retry_of_failed_financial_groups_does_not_repeat_successful_groups(self):
         self.assertEqual(
@@ -982,3 +1016,270 @@ if __name__ == "__main__":
     import unittest
 
     unittest.main()
+
+class OfflineFinancialSyncTests(TestCase):
+    class Store:
+        def __init__(self, documents=None):
+            self.documents = deepcopy(documents or {})
+            self.writes = []
+
+        def read(self, client, bucket, key):
+            return deepcopy(self.documents.get(key))
+
+        def write(self, client, bucket, key, value):
+            self.documents[key] = deepcopy(value)
+            self.writes.append(key)
+            return True
+
+        def get_paginator(self, name):
+            return self
+
+        def paginate(self, *, Bucket, Prefix):
+            return [{"Contents": [{"Key": key} for key in self.documents if key.startswith(Prefix)]}]
+
+    @staticmethod
+    def ticker():
+        ticker = Mock()
+        ticker.get_income_stmt.return_value = pd.DataFrame({"2026-03-31": {
+            "TotalRevenue": 1000, "OperatingIncome": 100, "BasicEPS": 99,
+        }})
+        ticker.get_balance_sheet.return_value = pd.DataFrame({"2026-03-31": {
+            "TotalAssets": 800, "StockholdersEquity": 400,
+        }})
+        ticker.get_cash_flow.return_value = pd.DataFrame({"2026-03-31": {
+            "OperatingCashFlow": 120, "InvestingCashFlow": -30, "CashDividendsPaid": -20,
+        }})
+        ticker.get_valuation_measures.side_effect = AssertionError("unsupported valuation route")
+        return ticker
+
+    def test_compact_statement_keys_and_unsupported_valuation(self):
+        ticker = self.ticker()
+        with patch.object(sync, "read_json", return_value=None):
+            annual, valuations, status, _ = sync.collect_financials(ticker, {}, self.Store(), "b", "7203.T")
+        row = annual[0]
+        for field, value in {"sales": 1000, "operating_profit": 100, "total_assets": 800,
+                             "operating_cf": 120, "investing_cf": -30, "calculated_doe": 5}.items():
+            self.assertEqual(row[field], value)
+            self.assertEqual(row["field_status"][field], "available")
+        self.assertEqual(status["valuation"], "unsupported")
+        self.assertEqual(valuations[0]["field_status"]["eps_adjusted"], "unsupported")
+        self.assertNotIn("eps_adjusted", valuations[0])
+        ticker.get_valuation_measures.assert_not_called()
+        for mapping in (sync.INCOME_FIELDS, sync.BALANCE_FIELDS, sync.CASH_FLOW_FIELDS):
+            for key, value in mapping.items():
+                self.assertEqual(mapping[key.replace(" ", "")], value)
+
+    def test_slash_dates_and_legacy_valuation_are_retained_stale(self):
+        old = {"valuation_history": {"yearly": [{"period_end": "03/31/2026", "values": {
+            "EPS": 12, "Book Value": 200, "Dividend Yield": 2.5,
+        }}]}}
+        self.assertEqual(sync.date_value("2026/03/31"), date(2026, 3, 31))
+        self.assertIsNone(sync.date_value("02/30/2026"))
+        annual, valuations, status, _ = sync.collect_financials(self.ticker(), old, self.Store(), "b", "7203.T")
+        self.assertEqual(len(annual), 1)
+        for field, value in {"eps_adjusted": 12, "bps_adjusted": 200, "dividend_yield_adjusted": 2.5}.items():
+            self.assertEqual(valuations[0][field], value)
+            self.assertEqual(valuations[0]["field_status"][field], "stale")
+        self.assertEqual(status["valuation"], "unsupported")
+
+    def test_doe_retry_fetches_both_fresh_inputs_and_recovers(self):
+        for failed in ("balance_sheet", "cash_flow"):
+            for same_session in (False, True):
+                with self.subTest(failed=failed, same_session=same_session):
+                    ticker = self.ticker()
+                    groups = sync.financial_groups_to_fetch(
+                        same_session_retry=same_session, retry_pending=True,
+                        due=False, failed_groups={failed},
+                    )
+                    self.assertEqual(groups, {"balance_sheet", "cash_flow"})
+                    rows, _, _, _ = sync.collect_financials(
+                        ticker, {}, self.Store(), "b", "7203.T", fetch_groups=groups,
+                    )
+                    self.assertEqual(rows[0]["calculated_doe"], 5)
+                    self.assertEqual(rows[0]["field_status"]["calculated_doe"], "available")
+                    ticker.get_balance_sheet.assert_called_once()
+                    ticker.get_cash_flow.assert_called_once()
+                    ticker.get_income_stmt.assert_not_called()
+        self.assertEqual(sync.financial_groups_to_fetch(
+            same_session_retry=True, retry_pending=True, due=True,
+            failed_groups={"income_statement"},
+        ), {"income_statement"})
+
+    def test_doe_does_not_combine_different_periods_or_failed_fresh_inputs(self):
+        ticker = self.ticker()
+        ticker.get_cash_flow.return_value.columns = ["2025-03-31"]
+        rows, _, _, _ = sync.collect_financials(ticker, {}, self.Store(), "b", "7203.T")
+        self.assertTrue(all("calculated_doe" not in row for row in rows))
+        prefix = sync.object_key("securities", "7203.T", "financials", "2026-03-31.json")
+        store = self.Store({prefix: {"annual": {
+            "period_end": "2026-03-31", "calculated_doe": 4,
+            "stockholders_equity": 500, "cash_dividends_paid": -20,
+        }}})
+        ticker = self.ticker()
+        ticker.get_balance_sheet.side_effect = RuntimeError("offline simulated failure")
+        with patch.object(sync, "read_json", side_effect=store.read):
+            rows, _, status, _ = sync.collect_financials(ticker, {}, store, "b", "7203.T")
+        self.assertEqual(rows[0]["calculated_doe"], 4)
+        self.assertEqual(rows[0]["field_status"]["calculated_doe"], "stale")
+        self.assertEqual(status["balance_sheet"], "failed")
+
+    def test_margin_guard_preserves_all_seed_amounts(self):
+        seed = {"source": "IRBANK", "source_key": "legacy/7203.json", "unit": "million_JPY",
+                "values": {"sales": 1000, "operating_profit": 100,
+                           "operating_cf": 120, "investing_cf": -30}}
+        key = sync.object_key("securities", "7203.T", "financials", "2026-03-31.json")
+        store = self.Store({key: {"annual": {
+            "period_end": "2026-03-31", "source_values": {"seed": seed}, **seed["values"],
+        }}})
+        with patch.object(sync, "read_json", side_effect=store.read):
+            rows, _, _, _ = sync.collect_financials(
+                self.ticker(), {}, store, "b", "7203.T", fetch_groups=set(),
+            )
+        for field, value in seed["values"].items():
+            self.assertEqual(rows[0][field], value)
+            self.assertEqual(rows[0]["field_status"][field], "legacy_migrated")
+        self.assertEqual(rows[0]["source_values"]["seed"], seed)
+
+    def test_margin_guard_nulls_seed_in_both_failure_directions_and_survives_reread(self):
+        for failed, guarded in (
+            ("cash_flow", ("operating_cf", "investing_cf")),
+            ("income_statement", ("sales", "operating_profit")),
+        ):
+            with self.subTest(failed=failed):
+                seed = {"source": "IRBANK", "source_key": "legacy/7203.json",
+                        "unit": "million_JPY",
+                        "values": {"sales": 1000, "operating_profit": 100,
+                                   "operating_cf": 120, "investing_cf": -30}}
+                key = sync.object_key("securities", "7203.T", "financials", "2026-03-31.json")
+                store = self.Store({key: {"annual": {
+                    "period_end": "2026-03-31", "source_values": {"seed": seed},
+                    **seed["values"],
+                }}})
+                ticker = self.ticker()
+                method = ticker.get_cash_flow if failed == "cash_flow" else ticker.get_income_stmt
+                method.side_effect = RuntimeError("offline simulated failure")
+                with patch.object(sync, "read_json", side_effect=store.read):
+                    for attempt in range(2):
+                        rows, _, status, _ = sync.collect_financials(ticker, {}, store, "b", "7203.T")
+                        row = rows[0]
+                        self.assertEqual(status[failed], "failed")
+                        self.assertEqual(row["source_values"]["seed"], seed)
+                        for field in guarded:
+                            self.assertIn(field, row)
+                            self.assertIsNone(row[field])
+                            self.assertEqual(row["field_status"][field], "unsupported")
+                            self.assertEqual(row["field_status_reason"][field],
+                                             ["mixed_source_units_not_comparable"])
+                        for field in set(seed["values"]) - set(guarded):
+                            self.assertIsNotNone(row[field])
+                            self.assertEqual(row["field_status"][field], "available")
+                        store.documents[key] = {"annual": deepcopy(row)}
+                    # A later unscheduled run must not resurrect the flat seed amounts.
+                    rows, _, _, _ = sync.collect_financials(
+                        ticker, {}, store, "b", "7203.T", fetch_groups=set(),
+                    )
+                    for field in guarded:
+                        self.assertIsNone(rows[0][field])
+                    self.assertEqual(rows[0]["source_values"]["seed"], seed)
+
+    def test_margin_guard_handles_partial_statement_and_zero_yahoo_amount(self):
+        seed = {"source": "IRBANK", "source_key": "legacy/7203.json",
+                "values": {"sales": 1000, "operating_profit": 100}}
+        key = sync.object_key("securities", "7203.T", "financials", "2026-03-31.json")
+        store = self.Store({key: {"annual": {
+            "period_end": "2026-03-31", "source_values": {"seed": seed}, **seed["values"],
+        }}})
+        ticker = self.ticker()
+        ticker.get_income_stmt.return_value = pd.DataFrame({"2026-03-31": {"OperatingIncome": 0}})
+        with patch.object(sync, "read_json", side_effect=store.read):
+            rows, _, _, _ = sync.collect_financials(
+                ticker, {}, store, "b", "7203.T", fetch_groups={"income_statement"},
+            )
+        self.assertIsNone(rows[0]["sales"])
+        self.assertEqual(rows[0]["operating_profit"], 0)
+        self.assertEqual(rows[0]["source_values"]["seed"], seed)
+
+    def test_collect_symbol_persists_annual_valuation_and_daily_multiples(self):
+        prefix = sync.object_key("securities", "7203.T")
+        store = self.Store({
+            prefix + "/profile.json": {"display_name": "Toyota"},
+            prefix + "/current.json": {
+                "price": {"date": "2026-10-19", "close": 2000, "currency": "JPY"},
+                "statistics": {"trailingEps": 100, "bookValue": 1000},
+                "field_status": {"price": "available", "financial_cash_flow": "failed"},
+            },
+            prefix + "/financials/2026-03-31.json": {
+                "annual": {"period_end": "2026-03-31", "sales": 900},
+                "valuation": {"period_end": "2026-03-31", "eps_adjusted": 12},
+            },
+        })
+        ticker = self.ticker()
+        ticker.calendar = {}
+        prior_sync = {
+            "status": "partial", "retry_session_date": "2026-10-19",
+            "last_success_session_date": "2026-10-19", "financial_retry_pending": True,
+            "monthly_history_schema_version": 2,
+        }
+        with patch.object(sync.yf, "Ticker", return_value=ticker), \
+             patch.object(sync, "read_json", side_effect=store.read), \
+             patch.object(sync, "put_json_if_changed", side_effect=store.write), \
+             patch.object(sync, "legacy_document", return_value={}):
+            result = sync.collect_symbol(store, "b", "7203", "7203.T", date(2026, 10, 19),
+                                         prior_sync_document=prior_sync)
+        saved = store.documents[prefix + "/financials/2026-03-31.json"]
+        self.assertEqual(saved["valuation"]["eps_adjusted"], 12)
+        self.assertEqual(saved["valuation"]["field_status"]["eps_adjusted"], "stale")
+        self.assertEqual(saved["annual"]["calculated_doe"], 5)
+        current = store.documents[prefix + "/current.json"]
+        self.assertEqual(current["statistics"]["trailingPE"], 20)
+        self.assertEqual(current["statistics"]["priceToBook"], 2)
+        self.assertFalse(store.documents[prefix + "/sync.json"]["financial_retry_pending"])
+        self.assertEqual(result["status"], "ok")
+
+    def test_repeated_publication_keeps_immutable_generations_and_consistent_references(self):
+        legacy_key = sync.object_key("catalog", "generations", "2026-10-19.json")
+        old_item = {"code": "7203", "name": "Toyota", "status": "ok",
+                    "income_advice": {"code": "7203", "source_catalog_generation": "2026-10-19"}}
+        legacy = {"generation": "2026-10-19", "items": [old_item]}
+        store = self.Store({
+            legacy_key: legacy,
+            sync.object_key("catalog", "current.json"): legacy,
+            sync.object_key("securities", "7203.T", "sync.json"): {
+                "status": "ok", "last_success_session_date": "2026-10-19",
+            },
+        })
+        limiter = Mock(requests_per_second=8, request_count=0, http_429_count=0)
+        limiter.__enter__ = Mock(return_value=limiter)
+        limiter.__exit__ = Mock(return_value=False)
+        with ExitStack() as stack:
+            stack.enter_context(patch.dict(sync.os.environ, {"JQUANTS_API_KEY": "offline"}))
+            stack.enter_context(patch.object(sync.collector, "configure_yfinance", create=True))
+            stack.enter_context(patch.object(sync.collector, "get_client", return_value=store))
+            stack.enter_context(patch.object(sync.collector, "required_env", return_value="b"))
+            stack.enter_context(patch.object(sync, "fetch_securities", return_value=[{"security_code_display": "7203"}]))
+            stack.enter_context(patch.object(sync, "latest_completed_xtks_session", return_value=date(2026, 10, 19)))
+            stack.enter_context(patch.object(sync, "is_last_market_session", return_value=False))
+            stack.enter_context(patch.object(sync, "GlobalHttpRateLimiter", return_value=limiter))
+            stack.enter_context(patch.object(sync, "read_json", side_effect=store.read))
+            stack.enter_context(patch.object(sync, "put_json_if_changed", side_effect=store.write))
+            generations = []
+            for _ in range(2):
+                self.assertEqual(sync.run(publish=True, max_workers=1, dry_run=False), 0)
+                catalog = store.documents[sync.object_key("catalog", "current.json")]
+                generation = catalog["generation"]
+                generations.append(generation)
+                self.assertRegex(generation, r"^2026-10-19-[0-9a-f]{32}$")
+                self.assertEqual(store.documents[sync.object_key("catalog", "generations", generation + ".json")], catalog)
+                self.assertEqual(store.documents[sync.object_key("publications", "current.json")]["generation"], generation)
+                self.assertEqual(store.documents[sync.object_key("manifest.json")]["active_generation"], generation)
+                advice = store.documents[sync.object_key("derived", "income_advice", "current.json")]
+                self.assertEqual(advice["generation"], generation)
+                self.assertEqual(advice["items"][0]["source_catalog_generation"], generation)
+                self.assertEqual(catalog["items"][0]["income_advice"]["source_catalog_generation"], generation)
+            self.assertNotEqual(*generations)
+        self.assertEqual(store.documents[legacy_key], legacy)
+        self.assertNotIn(legacy_key, store.writes)
+        for generation in generations:
+            key = sync.object_key("catalog", "generations", generation + ".json")
+            self.assertEqual(store.writes.count(key), 1)
+            self.assertEqual(store.documents[key]["generation"], generation)

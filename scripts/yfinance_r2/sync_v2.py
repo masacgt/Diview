@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
+from uuid import uuid4
 
 import yfinance as yf
 
@@ -266,8 +267,11 @@ CURRENT_FIELDS = (
 )
 DERIVED_STATISTIC_FIELDS = ("trailingPE", "priceToBook")
 INCOME_FIELDS = {
+    "TotalRevenue": "sales",
     "Total Revenue": "sales",
+    "OperatingRevenue": "sales",
     "Operating Revenue": "sales",
+    "OperatingIncome": "operating_profit",
     "Operating Income": "operating_profit",
 }
 BALANCE_FIELDS = {
@@ -288,10 +292,13 @@ BALANCE_FIELDS = {
     "Cash Equivalents": "cash_equivalents",
     "CashFinancial": "cash_equivalents",
     "Cash Financial": "cash_equivalents",
+    "TotalAssets": "total_assets",
     "Total Assets": "total_assets",
 }
 CASH_FLOW_FIELDS = {
+    "OperatingCashFlow": "operating_cf",
     "Operating Cash Flow": "operating_cf",
+    "InvestingCashFlow": "investing_cf",
     "Investing Cash Flow": "investing_cf",
     "CashDividendsPaid": "cash_dividends_paid",
     "Cash Dividends Paid": "cash_dividends_paid",
@@ -578,7 +585,13 @@ def date_value(value: Any) -> date | None:
             return datetime.fromtimestamp(float(value), UTC).date()
         if hasattr(value, "date"):
             return value.date()
-        return date.fromisoformat(str(value)[:10])
+        text = str(value).strip()
+        for pattern in ("%Y/%m/%d", "%m/%d/%Y"):
+            try:
+                return datetime.strptime(text, pattern).date()
+            except ValueError:
+                pass
+        return date.fromisoformat(text[:10])
     except (ValueError, TypeError, OSError, OverflowError):
         return None
 
@@ -1212,10 +1225,15 @@ def financial_groups_to_fetch(
     *, same_session_retry: bool, retry_pending: bool, due: bool, failed_groups: set[str],
 ) -> set[str]:
     if same_session_retry:
-        return set(failed_groups)
-    if retry_pending:
-        return set(failed_groups) or set(FINANCIAL_GROUPS)
-    return set(FINANCIAL_GROUPS) if due else set()
+        groups = set(failed_groups)
+    elif retry_pending:
+        groups = set(failed_groups) or set(FINANCIAL_GROUPS)
+    else:
+        groups = set(FINANCIAL_GROUPS) if due else set()
+    # DOE must use balance and dividends from the same fresh collection attempt.
+    if groups & {"balance_sheet", "cash_flow"}:
+        groups.update({"balance_sheet", "cash_flow"})
+    return groups
 
 
 def financial_refresh_due(
@@ -1453,6 +1471,56 @@ def financial_source_values(record: Any) -> tuple[dict[str, Any], dict[str, Any]
     fields = {key: value for key, value in record.items() if key not in FINANCIAL_RECORD_METADATA}
     for field, value in fields.items():
         if field in seed or field in yfinance:
+def equity_ratio_result(seed_values: dict[str, Any], yfinance_values: dict[str, Any]) -> dict[str, Any]:
+    """Calculate equity ratio only from inputs with a shared source and unit basis."""
+    equity_field = next((
+        field for field in ("stockholders_equity", "total_equity_gross_minority_interest")
+        if finite_number(yfinance_values.get(field)) is not None
+    ), None)
+    equity_source = "yfinance" if equity_field else None
+    if equity_field is None:
+        equity_field = next((
+            field for field in ("stockholders_equity", "total_equity_gross_minority_interest")
+            if finite_number(seed_values.get(field)) is not None
+        ), None)
+        equity_source = "seed" if equity_field else None
+
+    if finite_number(yfinance_values.get("total_assets")) is not None:
+        assets_source = "yfinance"
+        assets = finite_number(yfinance_values.get("total_assets"))
+    else:
+        assets_source = "seed" if finite_number(seed_values.get("total_assets")) is not None else None
+        assets = finite_number(seed_values.get("total_assets"))
+
+    equity_values = yfinance_values if equity_source == "yfinance" else seed_values
+    equity = finite_number(equity_values.get(equity_field)) if equity_field else None
+    if equity is not None and assets is not None and assets > 0 and equity_source == assets_source:
+        return {
+            "value": equity / assets * 100,
+            "source": "calculated",
+            "input_sources": {"equity": equity_source, "total_assets": assets_source},
+            "reason": None,
+        }
+
+    # IRBANK seed balance-sheet amounts are stored in million JPY, while
+    # yfinance balance-sheet amounts are JPY. Keep the seed's same-source
+    # ratio when one input has been refreshed from a different provider.
+    seed_ratio = finite_number(seed_values.get("equity_ratio_computed"))
+    if seed_ratio is not None:
+        return {
+            "value": seed_ratio,
+            "source": "seed",
+            "input_sources": {"equity": "seed", "total_assets": "seed"},
+            "reason": "mixed_source_inputs_not_recalculated",
+        }
+    return {
+        "value": None,
+        "source": None,
+        "input_sources": {"equity": equity_source, "total_assets": assets_source},
+        "reason": "mixed_source_inputs_not_comparable" if equity_source and assets_source else "required_input_missing",
+    }
+
+
             continue
         if field in FINANCIAL_DERIVED_FIELDS:
             continue
@@ -1491,31 +1559,14 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
     legacy_balance = legacy_frame_map(old, "balance_sheet", BALANCE_FIELDS)
     legacy_cash = legacy_frame_map(old, "cash_flow", CASH_FLOW_FIELDS)
     prior_v2, prior_v2_valuation, financial_document_keys, prior_financial_records = prior_financial_maps(client, bucket, symbol)
-    valuation_frame = None
-    if "valuation" in requested_groups:
-        try:
-            count_yfinance_call("valuation_measures_yearly")
-            valuation_frame = ticker.get_valuation_measures(freq="yearly", periods=10)
-            retrieval_status["valuation"] = "available" if valuation_frame is not None and not getattr(valuation_frame, "empty", True) else "empty"
-        except Exception as exc:
-            retrieval_status["valuation"] = "failed"
-            print(f"Financial field valuation unavailable: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
+    # valuation_measures contains valuation multiples, not split-adjusted fiscal
+    # EPS/BPS or dividend yield. Do not infer these from unrelated TTM values or
+    # unadjusted statement EPS. Retain historical values with explicit stale status.
+    unsupported_valuation_fields = (
+        "eps_adjusted", "bps_adjusted", "dividend_yield_adjusted",
+    )
+    retrieval_status["valuation"] = "unsupported"
     valuation: dict[str, dict[str, Any]] = {}
-    if valuation_frame is not None and not getattr(valuation_frame, "empty", True):
-        for period in valuation_frame.columns:
-            period_date = date_value(period)
-            if not period_date:
-                continue
-            values: dict[str, Any] = {}
-            for source, target in (
-                ("EPS", "eps_adjusted"), ("Book Value", "bps_adjusted"),
-                ("Dividend Yield", "dividend_yield_adjusted"),
-            ):
-                if source in valuation_frame.index:
-                    value = finite_number(valuation_frame.loc[source, period])
-                    if value is not None:
-                        values[target] = value
-            valuation[period_date.isoformat()] = values
 
     legacy_valuation = legacy_valuation_map(old)
     fresh_groups = {
@@ -1546,25 +1597,19 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
         seed_values = {**seed_values}
         yfinance_values = {**prior_yfinance_values, **legacy_yfinance_values}
         fresh_values = {**fresh_income.get(period_end, {}), **fresh_balance.get(period_end, {}), **fresh_cash.get(period_end, {})}
+    field_retrieval_status.update({field: "unsupported" for field in unsupported_valuation_fields})
+
         yfinance_values.update(fresh_values)
         values = {**seed_values, **yfinance_values}
         net_de_metrics = calculate_net_de_metrics(fresh_balance.get(period_end, {}))
         if net_de_metrics:
             yfinance_values.update(net_de_metrics)
             values.update(net_de_metrics)
-        equity = finite_number(values.get("stockholders_equity"))
-        equity_for_ratio = (
-            equity if equity is not None
-            else finite_number(values.get("total_equity_gross_minority_interest"))
-        )
-        equity_source_field = (
-            "stockholders_equity" if equity is not None else "total_equity_gross_minority_interest"
-        )
-        equity_source = "yfinance" if equity_source_field in yfinance_values else "seed"
-        assets = finite_number(values.get("total_assets"))
-        assets_source = "yfinance" if "total_assets" in yfinance_values else "seed"
-        if equity_for_ratio is not None and assets and assets > 0:
-            values["equity_ratio_computed"] = equity_for_ratio / assets * 100
+        equity_ratio = equity_ratio_result(seed_values, yfinance_values)
+        if equity_ratio["value"] is not None:
+            values["equity_ratio_computed"] = equity_ratio["value"]
+        else:
+            values.pop("equity_ratio_computed", None)
         fresh_doe_dividend_values = fresh_cash.get(period_end, {})
         doe_dividend_field = (
             "common_stock_dividend_paid"
@@ -1617,7 +1662,8 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             annual_field_status["net_de_ratio"] = "empty"
         if "equity_ratio_computed" in values:
             annual_field_status["equity_ratio_computed"] = (
-                "available" if ("stockholders_equity" in fresh_values or "total_equity_gross_minority_interest" in fresh_values)
+                "legacy_migrated" if equity_ratio["input_sources"] == {"equity": "seed", "total_assets": "seed"}
+                else "available" if ("stockholders_equity" in fresh_values or "total_equity_gross_minority_interest" in fresh_values)
                 and "total_assets" in fresh_values
                 else "stale"
             )
@@ -1634,23 +1680,34 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             if isinstance(prior_annual.get("source_values"), dict) else None
         ) or ("IRBANK migration seed" if prior_annual.get("migration_source") else "existing v2 snapshot")
         annual_sources = {
-            "seed": {"source": seed_source, "values": seed_values},
+            "seed": {**prior_seed, "source": seed_source, "values": seed_values},
             "yfinance": {
                 "source": "Yahoo Finance via yfinance",
                 "values": yfinance_values,
                 "field_status": {field: "available" if field in fresh_values or field in net_de_metrics else "stale" for field in yfinance_values},
             },
             "calculated": {
+        if equity_ratio["reason"]:
+            annual_field_status_reason["equity_ratio_computed"] = [equity_ratio["reason"]]
+        # Flat-row consumers calculate margins without consulting provenance.
+        # Preserve raw seed amounts, but never mix their units with Yahoo amounts.
+        margin_fields = ("sales", "operating_profit", "operating_cf", "investing_cf")
+        if any(finite_number(yfinance_values.get(field)) is not None for field in margin_fields):
+            for field in margin_fields:
+                if field in seed_values and finite_number(yfinance_values.get(field)) is None:
+                    values[field] = None
+                    annual_field_status[field] = "unsupported"
+                    annual_field_status_reason[field] = ["mixed_source_units_not_comparable"]
                 "values": {
+        prior_sources = prior_annual.get("source_values")
+        prior_seed = prior_sources.get("seed") if isinstance(prior_sources, dict) else None
+        prior_seed = prior_seed if isinstance(prior_seed, dict) else {}
                     "equity_ratio_computed": {
                         "value": values["equity_ratio_computed"],
                         "formula": "equity / total_assets * 100",
-                        "input_sources": {
-                            "equity": equity_source,
-                            "total_assets": assets_source,
-                        },
+                        "input_sources": equity_ratio["input_sources"],
                     }
-                } if "equity_ratio_computed" in values else {},
+                } if "equity_ratio_computed" in values and equity_ratio["source"] == "calculated" else {},
             },
         }
         statements.append({
@@ -1666,7 +1723,7 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
         seed_valuation, prior_yfinance_valuation = financial_source_values(prior_valuation)
         yfinance_valuation_values = {**prior_yfinance_valuation, **legacy_valuation.get(period_end, {}), **fresh_valuation}
         valuation_values = {**seed_valuation, **yfinance_valuation_values}
-        if valuation_values:
+        if valuation_values or "valuation" in requested_groups:
             valuation_source = (
                 (prior_valuation.get("source_values") or {}).get("seed", {}).get("source")
                 if isinstance(prior_valuation, dict) and isinstance(prior_valuation.get("source_values"), dict) else None
@@ -1674,7 +1731,14 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             valuation_rows.append({
                 "fiscal_year": f"{period_end[:4]}/{period_end[5:7]}",
                 "period_end": period_end,
-                "field_status": {field: "available" if field in fresh_valuation else "stale" if field in yfinance_valuation_values else "legacy_migrated" for field in valuation_values},
+                "field_status": {
+                    field: "stale" if field in valuation_values else "unsupported"
+                    for field in set(valuation_values) | set(unsupported_valuation_fields)
+                },
+                "field_status_reason": {
+                    field: ["split_adjusted_fiscal_source_unavailable"]
+                    for field in unsupported_valuation_fields
+                },
                 "source_values": {
                     "seed": {"source": valuation_source, "values": seed_valuation},
                     "yfinance": {
@@ -2404,7 +2468,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         if field in CURRENT_FIELDS and current["statistics"].get(field) is None and value is not None:
             current["statistics"][field] = value
             current["field_status"][f"statistics_{field}"] = "stale"
-    valuation = calculate_daily_valuation(
+    daily_valuation = calculate_daily_valuation(
         close,
         current["statistics"].get("trailingEps"),
         current["statistics"].get("bookValue"),
@@ -2412,7 +2476,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     valuation_status = (
         "available" if price_status == "available" else "stale"
     )
-    for field, value in valuation.items():
+    for field, value in daily_valuation.items():
         if value is not None:
             current["statistics"][field] = value
         current["field_status"][f"statistics_{field}"] = (
@@ -2843,7 +2907,7 @@ def income_advice_candidate(code: str, name: str, current: dict[str, Any],
         },
         "financial_period_end": metrics.get("financial_period_end"),
         "dividend_history_years": years,
-        "source_catalog_generation": as_of.isoformat(),
+        "source_catalog_generation": None,  # Bound when included in a catalog generation.
         "computed_at": iso_now(),
         "source": "Yahoo Finance via yfinance V2",
     }
@@ -2951,8 +3015,9 @@ def publish_catalog(client: Any, bucket: str, universe: list[dict[str, str]], se
     if len(items) != len({item["code"] for item in items}):
         raise RuntimeError("v2 search catalog contains duplicate security codes")
     return {
+    generation = f"{session_date.isoformat()}-{uuid4().hex}"
         "schema_version": 1,
-        "generation": session_date.isoformat(),
+        "generation": generation,
         "generated_at": iso_now(),
         "market_data_date": session_date.isoformat(),
         "ranking": "security_code",
@@ -2994,6 +3059,10 @@ def run(
     target_session: date | None = None,
 ) -> int:
     started_at = time.perf_counter()
+        if isinstance(item.get("income_advice"), dict):
+            item["income_advice"] = {
+                **item["income_advice"], "source_catalog_generation": generation,
+            }
     with _YF_CALL_LOCK:
         _YF_CALLS.clear()
     if not publish and not dry_run:
@@ -3205,7 +3274,7 @@ def run(
     )
     income_advice_catalog = {
         "schema_version": 1,
-        "generation": session_date.isoformat(),
+        "generation": generation,
         "generated_at": iso_now(),
         "source": "Yahoo Finance via yfinance V2",
         "amount_basis": "per_share_annual_amount_and_recurring_event_months",
@@ -3223,7 +3292,7 @@ def run(
         "schema_version": 1, "updated_at": iso_now(), "source": "J-Quants API v2",
         "session_date": session_date.isoformat(), "security_count": len(fetched), "securities": universe_rows,
     })
-    put_json_if_changed(client, bucket, object_key("catalog", "generations", f"{session_date.isoformat()}.json"), catalog)
+    put_json_if_changed(client, bucket, object_key("catalog", "generations", f"{generation}.json"), catalog)
     put_json_if_changed(client, bucket, object_key("catalog", "current.json"), catalog)
     put_json_if_changed(client, bucket, object_key("derived", "income_advice", "current.json"), income_advice_catalog)
     phase_seconds["catalog_publication"] = round(time.perf_counter() - phase_started, 3)
@@ -3235,7 +3304,7 @@ def run(
     publication = {
         "schema_version": 1,
         "yfinance_version": yf.__version__,
-        "generation": session_date.isoformat(),
+        "generation": generation,
         "market_data_date": session_date.isoformat(),
         "last_completed_at": iso_now(),
         "security_count": len(fetched),
@@ -3254,6 +3323,7 @@ def run(
         "http_max_requests_per_second": rate_limiter.requests_per_second,
         "http_request_count": rate_limiter.request_count,
         "http_429_count": rate_limiter.http_429_count,
+    generation = catalog["generation"]
         "phase_seconds": phase_seconds,
         "security_collection_activity": collection_activity,
         "r2_metrics_before_publication_record": r2_metrics.snapshot(),
@@ -3270,7 +3340,7 @@ def run(
     }
     put_json_if_changed(client, bucket, object_key("publications", "current.json"), publication)
     put_json_if_changed(client, bucket, object_key("manifest.json"), {
-        "schema_version": 1, "active_generation": session_date.isoformat(),
+        "schema_version": 1, "active_generation": generation,
         "generated_at": iso_now(), "source": "Yahoo Finance via yfinance",
         "yfinance_version": yf.__version__,
         "universe_source": "J-Quants API v2", "security_count": len(fetched),
@@ -3286,7 +3356,7 @@ def run(
         "updated_at": iso_now(),
     })
     print(
-        f"Published v2 generation {session_date}: success={len(results)}, failed={len(failures)}, "
+        f"Published v2 generation {generation}: success={len(results)}, failed={len(failures)}, "
         f"catalog={len(catalog['items'])}, elapsed={elapsed_seconds}s, "
         f"yfinance_calls={sum(yfinance_calls.values())} {json.dumps(yfinance_calls, ensure_ascii=False, sort_keys=True)}"
     )
