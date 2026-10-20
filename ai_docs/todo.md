@@ -126,3 +126,8 @@
 - [x] Verify manual sync #166 repaired duplicate 8303.T and 2060.T 2026 dividend events. Evidence: production returned one 8303 event each at ¥42 and ¥10 (TTM ¥52), and one 2060 event each at ¥24.5 and ¥26 (TTM ¥50.5); this replaced duplicated sums of ¥468 and ¥505.
 - [x] Retrieve exact yfinance dividend histories for all seven active five-character class-share codes without substituting parent common-share values. Evidence: pinned yfinance 1.7.0 returned dated history for 25935.T, 50765.T, 75505.T, 92015.T, 92025.T, 94345.T, and 94346.T; 92015 returned no event rows.
 - [x] Publish and read back exact five-character histories through the production Worker. Evidence: the 2026-10-20 `dividend-months?event_year=2026` response returned exact-code events for six securities and `history_status: empty` with zero events for 92015.T; values included 25935 ¥30, 50765 ¥65, 75505 ¥99.72/¥100.27, 92025 ¥52.73/¥87.50, 94345 ¥50/¥50, and 94346 ¥128/¥128.
+
+## 2026-10-20 follow-up rollout
+
+- [ ] Complete production rollout of follow-up consistency fixes. Local evidence: Python 91, Worker/D1 50, repair planner 1, Android JVM 154 passed and JDK 17 debug build succeeded. Production backup and guarded offline repair are prepared; live repair/deployment/read-back remain to verify.
+- [ ] Verify revised financial/cache behavior visually on device, including same-year multiple fiscal periods and split-adjusted history.

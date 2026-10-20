@@ -9,7 +9,10 @@ import kotlin.math.pow
 
 data class CalendarYearDividend(val year: Int, val dps: Double)
 
-data class IssuerFiscalYearDividend(val fiscalYear: Int, val reportedDps: Double?, val adjustedDps: Double?) {
+data class IssuerFiscalYearDividend(
+    val fiscalYear: Int, val reportedDps: Double?, val adjustedDps: Double?,
+    val fiscalPeriod: String = fiscalYear.toString()
+) {
     val displayDps: Double? get() = adjustedDps ?: reportedDps
 }
 
@@ -76,9 +79,12 @@ data class FinancialData(
                     val reportedDps = row.number("annual_dps")?.takeIf { it >= 0 }
                     val adjustedDps = row.number("annual_dps_adjusted")?.takeIf { it >= 0 }
                     if (reportedDps == null && adjustedDps == null) return@mapNotNull null
-                    IssuerFiscalYearDividend(fiscalYear, reportedDps, adjustedDps)
+                    val periodKey = listOf("period_end", "fiscal_period", "period", "fiscal_year")
+                        .firstNotNullOfOrNull { key -> row.optString(key).takeIf { it.isNotBlank() && it != "null" } }
+                        ?.replace('/', '-') ?: fiscalYear.toString()
+                    IssuerFiscalYearDividend(fiscalYear, reportedDps, adjustedDps, periodKey)
                 }
-                .associateBy { it.fiscalYear }.values.sortedBy { it.fiscalYear }
+                .associateBy { it.fiscalPeriod }.values.sortedBy { it.fiscalPeriod }
             val issuerDividendHistoryStatus = issuerDividendPayload?.optString("status")
                 ?.takeIf { it.isNotBlank() } ?: if (issuerDividends.isNotEmpty()) "available" else "empty"
             val annual = root.optJSONObject("financials")?.optJSONArray("annual")

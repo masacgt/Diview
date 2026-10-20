@@ -111,6 +111,19 @@ test('failed persistence leaves source tag pending for retry', async () => {
   assert.notEqual(f.state.source, previous);
 });
 
+test('analysis uses percent payout units and quote date, not financial update time', async () => {
+  const f = fixture();
+  const current = f.documents.get(`${f.root}/securities/7203.T/current.json`);
+  current.price.date = '2020-03-31';
+  current.statistics.payoutRatio = 1.5;
+  current.updated_at = new Date().toISOString();
+  await f.run();
+  const snapshot = f.state.snapshots.at(-1);
+  assert.equal(snapshot.values.payout_ratio, 150);
+  assert.ok(snapshot.anomalies.some(a => a.code === 'PAYOUT_EXTREME_HIGH'));
+  assert.equal(snapshot.freshness.market_stale, true);
+});
+
 test('scheduled analysis does not compute FCF from guarded seed and yen cash flows', async () => {
   const f = fixture();
   f.documents.get(`${f.root}/securities/7203.T/financials/2026-03-31.json`).annual = {
