@@ -107,3 +107,7 @@ The production monthly-price API returned all eight December closes for 7203 and
 ## J-Quants universe snapshot evidence
 
 The scheduled v2-daily-sync and the full-universe study save a 30-day JSON artifact with each completed universe fetch. It records the Date values returned by all /equities/master pages, the normalized sorted code list, its count, and a SHA-256 of the newline-joined code list. The artifact does not request an out-of-plan historical date; it records the source date actually returned by J-Quants. Historical runs #158 and #159 did not preserve this response, so their 4,444-versus-4,442 difference can only be reconciled against separately queried snapshots, not attributed to an exact response date.
+
+### Rights-date coverage audit
+
+The manual workflow rights-date-coverage-audit.yml is a separate read-only R2 audit. It checks every active code in universe/current.json, reads the stored dividend-history status and historical event partitions, and applies the same five-year/two-distinct-years recurrence rule as the production estimator. Because dated event objects do not carry a symbol field, the audit resolves their symbol from the object key. Its 30-day artifact classifies each code as estimated, missing-current, failed or unavailable history, empty history, no positive events, no repeated month, or recurring history without an estimate. The audit only lists and reads R2 objects; it does not publish the rights-date document. The mocked end-to-end test verifies object-key symbol recovery and zero R2 writes.
