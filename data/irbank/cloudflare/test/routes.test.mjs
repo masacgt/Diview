@@ -350,6 +350,98 @@ test('dividend-months returns sorted recent observed months from R2 for each req
   ]);
 });
 
+test('yfinance v2 routes preserve exact five-digit class-share security codes', async () => {
+  const code = '92025';
+  const symbol = `${code}.T`;
+  const base = `market/yfinance/v2/securities/${symbol}`;
+  const generation = '2026-10-19';
+  const dividendEvents = [
+    { date: '2026-03-30', amount: 52.73 },
+    { date: '2026-09-29', amount: 87.5 },
+  ];
+  const splitEvent = { date: '2025-12-01', ratio: 1.5 };
+  const paddedCodeBase = 'market/yfinance/v2/securities/7203.T';
+  const catalog = {
+    generation,
+    market_data_date: generation,
+    items: [
+      {
+        code, name: 'ANA HOLDINGS INC NPV PRF STOCK', price: 4720,
+        quote_date: generation, annual_dividend_per_share: 140.23,
+        yield_rate: 2.971, dividend_status: 'has_dividend',
+      },
+      { code: '7203', name: 'トヨタ自動車', price: 3000, quote_date: generation },
+    ],
+  };
+  const current = {
+    code, symbol, updated_at: `${generation}T12:00:00Z`, source: 'Yahoo Finance via yfinance',
+    price: { close: 4720, date: generation, currency: 'JPY' },
+    dividend: {
+      dividend_status: 'has_dividend',
+      yield_basis: 'next_fiscal_year_forecast',
+      next_fiscal_year_forecast_per_share: 140.23,
+      trailing_12_month_per_share: 140.23,
+      event_amount_basis: 'yfinance_split_adjusted_assumption',
+    },
+    field_status: { dividend_history: 'available', split_history: 'available' },
+    action_history: { status: 'success', source: 'yfinance_history', yfinance_version: '1.7.0' },
+  };
+  const documents = new Map([
+    ['market/yfinance/v2/catalog/current.json', catalog],
+    [`market/yfinance/v2/catalog/generations/${generation}.json`, catalog],
+    [`${base}/profile.json`, { code, symbol, display_name: 'ANA社債型種類株式' }],
+    [`${base}/current.json`, current],
+    [`${base}/sync.json`, { status: 'ok' }],
+    [`${base}/dividends/2026.json`, { records: dividendEvents }],
+    [`${base}/splits/2025.json`, { records: [splitEvent] }],
+    [`${base}/prices/monthly/2025.json`, {
+      points: [{ month: '2025-12', date: '2025-12-30', close: 5000 }],
+    }],
+    [`${paddedCodeBase}/profile.json`, { code: '7203', symbol: '7203.T', display_name: 'トヨタ自動車' }],
+    [`${paddedCodeBase}/current.json`, {
+      code: '7203', symbol: '7203.T', price: { close: 3000, currency: 'JPY' },
+    }],
+  ]);
+  const env = dividendEnvironment(documents);
+
+  const securityResponse = await worker.fetch(new Request(`https://example.com/api/v1/securities/${code}`), env);
+  assert.equal(securityResponse.status, 200);
+  assert.equal((await securityResponse.json()).code, code);
+
+  const financialResponse = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
+  assert.equal(financialResponse.status, 200);
+  assert.equal((await financialResponse.json()).security.code, code);
+
+  const dividendsResponse = await worker.fetch(new Request(
+    `https://example.com/api/v1/dividend-months?symbols=${symbol}&event_year=2026`,
+  ), env);
+  assert.deepEqual((await dividendsResponse.json()).items[0].events.map(({ date, amount }) => ({ date, amount })), dividendEvents);
+
+  const splitResponse = await worker.fetch(new Request(
+    `https://example.com/api/v1/share-split-history?code=${code}&from=2025-01-01&to=2025-12-31`,
+  ), env);
+  assert.deepEqual((await splitResponse.json()).events, [splitEvent]);
+
+  const monthlyPriceResponse = await worker.fetch(new Request(
+    `https://example.com/api/v1/monthly-price-history?codes=${code}&months=2025-12`,
+  ), env);
+  assert.deepEqual((await monthlyPriceResponse.json()).items[0].prices, [
+    { month: '2025-12', date: '2025-12-30', close: 5000 },
+  ]);
+
+  const liveQuoteResponse = await worker.fetch(new Request(
+    `https://example.com/api/v1/live-quotes?codes=${code}`,
+  ), env);
+  const liveQuote = (await liveQuoteResponse.json()).items[0];
+  assert.equal(liveQuote.code, code);
+  assert.equal(liveQuote.price, 4720);
+  assert.equal(liveQuote.annual_dividend_per_share, 140.23);
+
+  const paddedCodeResponse = await worker.fetch(new Request('https://example.com/api/v1/securities/72030'), env);
+  assert.equal(paddedCodeResponse.status, 200);
+  assert.equal((await paddedCodeResponse.json()).code, '7203');
+});
+
 test('dividend-months returns the history-based next ex-date before the legacy statistics fallback', async () => {
   const today = japanToday();
   const estimatedDate = dateOffset(today, 120);
