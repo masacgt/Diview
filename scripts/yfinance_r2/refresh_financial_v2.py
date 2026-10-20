@@ -140,6 +140,9 @@ def refresh_with_client(code: str, client: Any, bucket: str) -> dict[str, Any]:
             current_fields[f"financial_{group}"] = financial_status.get(group, "empty")
         sync.put_json_if_changed(client, bucket, current_key, {
             **current,
+            "income_advice_metrics": sync.income_advice_metrics(
+                current, statements, current.get("income_advice_metrics"),
+            ),
             "field_status": current_fields,
             "updated_at": sync.iso_now(),
         })
@@ -269,12 +272,22 @@ def main() -> int:
     parser.add_argument("--report", default="financial-refresh-report.json", help="JSON report output path for --all")
     parser.add_argument("--shard-index", type=int, default=0, help="Zero-based shard index for --all")
     parser.add_argument("--shard-count", type=int, default=1, help="Number of disjoint shards for --all")
+    parser.add_argument("--defer-advice", action="store_true",
+                        help="A coordinating job must rebuild income advice after all shards finish")
     args = parser.parse_args()
-    if args.all:
-        return refresh_all(args.report, shard_index=args.shard_index, shard_count=args.shard_count)
-    if args.shard_index != 0 or args.shard_count != 1:
+    if not args.all and (args.shard_index != 0 or args.shard_count != 1):
         parser.error("--shard-index and --shard-count can only be used with --all")
-    return refresh(args.code)["exit_code"]
+    if args.shard_count > 1 and not args.defer_advice:
+        parser.error("Sharded refresh requires --defer-advice and one final income-advice publication")
+    try:
+        if args.all:
+            return refresh_all(args.report, shard_index=args.shard_index, shard_count=args.shard_count)
+        return refresh(args.code)["exit_code"]
+    finally:
+        if not args.defer_advice:
+            # Also repair derived data after a handled partial financial write.
+            import generate_income_advice
+            generate_income_advice.publish(collector.get_client(), collector.required_env("R2_BUCKET"))
 
 
 if __name__ == "__main__":

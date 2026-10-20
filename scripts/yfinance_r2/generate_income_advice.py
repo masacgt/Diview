@@ -22,17 +22,19 @@ def latest_annual_statement(client: Any, bucket: str, symbol: str) -> dict[str, 
         for item in page.get("Contents", [])
         if str(item.get("Key", "")).endswith(".json")
     ]
-    dated = sorted(
-        (key for key in keys if key.rsplit("/", 1)[-1][:10].count("-") == 2),
-        reverse=True,
-    )
-    year_only = sorted((key for key in keys if key not in dated), reverse=True)
-    for key in (*dated, *year_only):
+    latest = None
+    for key in sorted(keys):
         document = sync.read_json(client, bucket, key)
         annual = document.get("annual") if isinstance(document, dict) else None
-        if isinstance(annual, dict) and annual.get("period_end"):
-            return annual
-    return None
+        if not isinstance(annual, dict):
+            continue
+        try:
+            period = date.fromisoformat(str(annual.get("period_end") or ""))
+        except ValueError:
+            continue
+        if latest is None or period > date.fromisoformat(latest["period_end"]):
+            latest = annual
+    return latest
 
 
 def build_candidate(client: Any, bucket: str, row: dict[str, Any], years: range,
@@ -134,22 +136,13 @@ def build_catalog(client: Any, bucket: str, catalog: dict[str, Any],
     return result, counts
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--publish", action="store_true", help="Write and read back the derived catalog in R2")
-    parser.add_argument("--workers", type=int, default=8, help="Maximum concurrent R2 candidate reads (default: 8)")
-    args = parser.parse_args()
-    if not args.publish:
-        parser.error("--publish is required because this workflow is intended to publish the initial R2 catalog")
-
-    bucket = collector.required_env("R2_BUCKET")
-    client = collector.get_client()
+def publish(client: Any, bucket: str, workers: int = 8) -> int:
     catalog_key = sync.object_key("catalog", "current.json")
     catalog = sync.read_json(client, bucket, catalog_key)
     if not catalog or not isinstance(catalog.get("items"), list):
         raise RuntimeError("The published V2 catalog is missing or invalid")
 
-    result, counts = build_catalog(client, bucket, catalog, workers=args.workers)
+    result, counts = build_catalog(client, bucket, catalog, workers=workers)
     print(json.dumps({**counts, "generation": result["generation"]}, ensure_ascii=False, sort_keys=True), flush=True)
     if counts["read_failures"]:
         raise RuntimeError(f"Aborting without publishing because {counts['read_failures']} candidate records failed to read")
@@ -160,6 +153,16 @@ def main() -> int:
         raise RuntimeError("R2 read-back verification failed for the income-advice catalog")
     print(json.dumps({**counts, "generation": result["generation"], "r2_key": key}, ensure_ascii=False, sort_keys=True))
     return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--publish", action="store_true", help="Write and read back the derived catalog in R2")
+    parser.add_argument("--workers", type=int, default=8)
+    args = parser.parse_args()
+    if not args.publish:
+        parser.error("--publish is required")
+    return publish(collector.get_client(), collector.required_env("R2_BUCKET"), args.workers)
 
 
 if __name__ == "__main__":

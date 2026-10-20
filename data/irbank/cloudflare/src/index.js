@@ -255,7 +255,9 @@ async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
         change: price.change ?? null,
         change_percent: price.change_percent ?? null,
         source: current.source || 'Yahoo Finance via yfinance',
-        generated_at: current.updated_at ?? null,
+        // Updating financials/current metadata does not refresh the quote.
+        generated_at: /^\d{4}-\d{2}-\d{2}$/.test(price.date || '') ? `${price.date}T06:00:00.000Z` : null,
+        status: current.field_status?.price ?? null,
       }};
     }
   }
@@ -494,6 +496,10 @@ async function readV2FinancialPayload(env, code) {
       else seedValues[key] = value;
     }
     const mergedRow = { ...row, ...seedValues, ...yfinanceValues };
+    // Preserve legacy source fallback, but never undo a finalized calculation.
+    for (const field of ['equity_ratio_computed', 'calculated_doe', 'net_de_ratio']) {
+      if (Object.hasOwn(row, field)) mergedRow[field] = row[field];
+    }
     for (const field of ['sales', 'operating_profit', 'operating_cf', 'investing_cf']) {
       if (Array.isArray(row.field_status_reason?.[field])
         && row.field_status_reason[field].includes('mixed_source_units_not_comparable')) {
@@ -539,14 +545,16 @@ async function readV2FinancialPayload(env, code) {
   const dividends = Array.isArray(calendarYearMetrics?.annual_records)
     ? calendarYearMetrics.annual_records
     : dividendHistory.records;
-  const issuerDividendRecordsByYear = new Map();
+  const issuerDividendRecordsByPeriod = new Map();
   for (const record of issuerDividendDocuments.flatMap(document => Array.isArray(document.records) ? document.records : [])) {
     const fiscalYearMatch = String(record?.fiscal_year || '').match(/^(\d{4})(?:\/\d{2})?$/);
     if (!fiscalYearMatch) continue;
-    issuerDividendRecordsByYear.set(Number(fiscalYearMatch[1]), record);
+    const period = String(record.period_end || record.period || record.fiscal_year).replaceAll('/', '-');
+    if (!/^\d{4}(?:-(?:0[1-9]|1[0-2])(?:-\d{2})?)?$/.test(period)) continue;
+    issuerDividendRecordsByPeriod.set(period, { ...record, fiscal_year: Number(fiscalYearMatch[1]), fiscal_period: period });
   }
-  const issuerDividendRecords = [...issuerDividendRecordsByYear.entries()]
-    .sort(([a], [b]) => a - b)
+  const issuerDividendRecords = [...issuerDividendRecordsByPeriod.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
     .map(([, record]) => record);
   const dividendHistoryStatus = current?.field_status?.dividend_history;
   const payoutRatio = finiteNumber(current?.statistics?.payoutRatio);
@@ -1010,7 +1018,7 @@ async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
   const values = {
     per: finiteNumber(summary?.trailingPE),
     pbr: finiteNumber(summary?.priceToBook),
-    payout_ratio: finiteNumber(dividendData?.payout_ratio),
+    payout_ratio: finiteNumber(dividendData?.payout_ratio) == null ? null : dividendData.payout_ratio * 100,
     equity_ratio: finiteNumber(financialData?.equity_ratio_computed ?? financialData?.equity_ratio),
     operating_margin: operatingMargin,
     fcf_margin: finiteNumber(financialData?.fcf_margin) ?? (fcf != null && sales > 0 ? fcf / sales * 100 : null),
@@ -1063,7 +1071,8 @@ async function buildAnalysisSnapshot(env, security, targetYield = null, preloade
     freshness: {
       market_generated_at: input.marketData?.price?.generated_at ?? null,
       market_age_days: daysOld(input.marketData?.price?.generated_at),
-      market_stale: (daysOld(input.marketData?.price?.generated_at) ?? 999) > Number(config.market_stale_days || 3),
+      market_stale: ['stale', 'failed', 'empty'].includes(input.marketData?.price?.status)
+        || (daysOld(input.marketData?.price?.generated_at) ?? 999) > Number(config.market_stale_days || 3),
       financial_fiscal_year: input.financial?.fiscal_year ?? null,
       dividend_history_year: input.dividendYear,
       dividend_history_basis: input.dividendHistoryBasis,
@@ -1301,6 +1310,7 @@ async function runScheduledAnalysis(env) {
       env.MARKET_DATA?.head(`${YFINANCE_V2_ROOT}/financial_revision.json`),
     ]);
     const sourceTag = JSON.stringify({
+      analysis_contract: 2,
       catalog_etag: catalogObject?.httpEtag || catalogObject?.etag || null,
       financial_revision_etag: financialRevisionObject?.httpEtag || financialRevisionObject?.etag || null,
       stock_version: stockDefs.version || 1,

@@ -106,12 +106,15 @@ def legacy_dividends(client: Any, bucket: str, code: str) -> tuple[list[dict[str
             bundle_key, attribution)
 
 
-def records_by_year(records: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
-    selected: dict[int, dict[str, Any]] = {}
+def records_by_period(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    selected: dict[str, dict[str, Any]] = {}
     for row in records:
         year = fiscal_year(row.get("fiscal_year"))
         if year is not None:
-            selected[year] = json_safe(row)
+            period = str(row.get("period_end") or row.get("period") or row.get("fiscal_year")).replace("/", "-")
+            if not re.fullmatch(r"\d{4}(?:-(?:0[1-9]|1[0-2])(?:-\d{2})?)?", period):
+                raise ValueError(f"Invalid issuer fiscal period: {period}")
+            selected[period] = json_safe(row)
     return selected
 
 
@@ -122,23 +125,25 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
         return {"code": str(security.get("code") or ""), "status": "unsupported_code"}
 
     source_rows, source_key, attribution = legacy_dividends(client, bucket, code)
-    rows = records_by_year(source_rows)
+    rows = records_by_period(source_rows)
     if not rows:
         return {"code": code, "symbol": symbol, "status": "no_legacy_records", "source_key": source_key}
 
     inserted = 0
     unchanged = 0
-    for year, source_row in sorted(rows.items()):
+    for period, source_row in sorted(rows.items()):
+        year = int(period[:4])
         key = f"{V2_ROOT}/securities/{symbol}/issuer_dividends/{year}.json"
         existing = read_json(client, bucket, key) or {}
-        existing_rows = records_by_year(
+        existing_rows = records_by_period(
             [row for row in existing.get("records", []) if isinstance(row, dict)]
             if isinstance(existing.get("records"), list) else []
         )
-        if year in existing_rows:
+        if existing_rows.get(period) == source_row:
             unchanged += 1
             continue
 
+        existing_rows[period] = source_row
         updated = {
             **existing,
             "schema_version": 1,
@@ -147,7 +152,7 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
             "history_basis": "issuer_reported_fiscal_year",
             "amount_basis": "irbank_adjusted_fiscal_dps",
             "migration_status": "legacy_migrated",
-            "records": [*existing_rows.values(), source_row],
+            "records": [existing_rows[key] for key in sorted(existing_rows)],
             "source": "IRBANK Connect",
             "source_key": source_key,
             "attribution": attribution,
@@ -162,11 +167,11 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
                 CacheControl="public, max-age=300",
             )
             saved = read_json(client, bucket, key)
-            saved_rows = records_by_year(
+            saved_rows = records_by_period(
                 [row for row in saved.get("records", []) if isinstance(row, dict)]
                 if saved and isinstance(saved.get("records"), list) else []
             )
-            if saved is None or saved_rows.get(year) != source_row:
+            if saved is None or saved_rows.get(period) != source_row:
                 raise RuntimeError(f"v2 issuer-dividend read-back mismatch: {key}")
         inserted += 1
 
