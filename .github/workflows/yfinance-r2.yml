@@ -120,6 +120,12 @@ jobs:
 
   legacy-financial-v2-migration:
     if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'migrate-financials'
+    name: legacy-financial-v2-migration (shard ${{ matrix.shard }}/4)
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0, 1, 2, 3]
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -130,13 +136,22 @@ jobs:
       - name: Install the R2 client
         run: python -m pip install "boto3>=1.35,<2"
       - name: Seed app-used legacy financial values into v2 and verify each write
-        run: set -o pipefail; python scripts/yfinance_r2/migrate_legacy_financials.py --workers 12 --report legacy-financial-migration-report.json 2>&1 | tee legacy-financial-migration.log
+        run: set -o pipefail; python scripts/yfinance_r2/migrate_legacy_financials.py --workers 12 --shard-index "${MIGRATION_SHARD}" --shard-count 4 --report "legacy-financial-migration-report-${MIGRATION_SHARD}.json" 2>&1 | tee "legacy-financial-migration-${MIGRATION_SHARD}.log"
         shell: bash
         env:
+          MIGRATION_SHARD: ${{ matrix.shard }}
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: diview-market-data
+      - name: Save shard report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy-financial-v2-migration-${{ github.run_id }}-shard-${{ matrix.shard }}
+          path: legacy-financial-migration-report-${{ matrix.shard }}.json
+          if-no-files-found: ignore
+          retention-days: 30
 
   v2-income-advice-initial-generation:
     if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'generate-income-advice'
