@@ -67,7 +67,7 @@ def build_catalog(client: Any, bucket: str, catalog: dict[str, Any],
                   workers: int = 8) -> tuple[dict[str, Any], dict[str, Any]]:
     generation = str(catalog.get("generation") or "")
     try:
-        as_of = date.fromisoformat(generation)
+        as_of = date.fromisoformat(str(catalog.get("market_data_date") or generation[:10]))
     except ValueError as exc:
         raise RuntimeError(f"Invalid V2 catalog generation: {generation!r}") from exc
 
@@ -106,7 +106,7 @@ def build_catalog(client: Any, bucket: str, catalog: dict[str, Any],
             try:
                 candidate, reason = future.result()
                 if candidate is not None:
-                    items.append(candidate)
+                    items.append({**candidate, "source_catalog_generation": generation})
                 elif reason:
                     counts["excluded"][reason] = counts["excluded"].get(reason, 0) + 1
             except Exception as exc:
