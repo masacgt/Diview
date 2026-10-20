@@ -285,9 +285,42 @@ test('financial API exposes retained seed values separately from newer yfinance 
   const data = await response.json();
   assert.equal(data.financials.annual[0].sales, 120);
   assert.equal(data.financials.annual[0].equity_ratio_computed, 24);
+  assert.deepEqual(data.financials.annual[0].source_values.calculated.values, {});
   assert.equal(data.financials.seed_annual[0].values.sales, 100);
   assert.equal(Object.hasOwn(data.financials.seed_annual[0].values, 'equity_ratio_computed'), false);
   assert.equal(data.financials.seed_annual[0].source, 'IRBANK');
+});
+
+test('financial API retains equity ratios calculated from one source', async () => {
+  const code = '9984';
+  const base = `market/yfinance/v2/securities/${code}.T`;
+  const annual = {
+    fiscal_year: '2025/03',
+    period_end: '2025-03-31',
+    equity_ratio_computed: 20,
+    field_status: { equity_ratio_computed: 'available' },
+    source_values: {
+      calculated: {
+        values: {
+          equity_ratio_computed: {
+            value: 20,
+            formula: 'equity / total_assets * 100',
+            input_sources: { equity: 'yfinance', total_assets: 'yfinance' },
+          },
+        },
+      },
+    },
+  };
+  const env = dividendEnvironment(new Map([
+    [`${base}/profile.json`, { display_name: 'ソフトバンクグループ' }],
+    [`${base}/current.json`, { field_status: { dividend_history: 'empty' } }],
+    [`${base}/financials/2025-03-31.json`, { year: '2025', annual }],
+  ]));
+
+  const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.financials.annual[0].source_values.calculated.values.equity_ratio_computed.value, 20);
 });
 
 test('financial API keeps observed event history separate from legacy fiscal-year DPS', async () => {
