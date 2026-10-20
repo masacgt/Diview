@@ -1,4 +1,5 @@
 from datetime import date, datetime
+import io
 import json
 import tempfile
 from pathlib import Path
@@ -1018,6 +1019,30 @@ class SyncPolicyTests(TestCase):
             ),
             set(sync.FINANCIAL_GROUPS),
         )
+
+
+class AttributeErrorTracebackTests(TestCase):
+    def setUp(self):
+        with sync._ATTRIBUTE_ERROR_TRACEBACK_LOCK:
+            self.previous_keys = set(sync._ATTRIBUTE_ERROR_TRACEBACK_KEYS)
+            sync._ATTRIBUTE_ERROR_TRACEBACK_KEYS.clear()
+
+    def tearDown(self):
+        with sync._ATTRIBUTE_ERROR_TRACEBACK_LOCK:
+            sync._ATTRIBUTE_ERROR_TRACEBACK_KEYS.clear()
+            sync._ATTRIBUTE_ERROR_TRACEBACK_KEYS.update(self.previous_keys)
+
+    def test_same_origin_string_get_error_is_logged_only_once(self):
+        output = io.StringIO()
+        with patch("sys.stderr", output):
+            try:
+                "text".get("key")
+            except AttributeError as exc:
+                sync.log_attribute_error_traceback(exc)
+                sync.log_attribute_error_traceback(exc)
+
+        self.assertEqual(output.getvalue().count("DIAGNOSTIC AttributeError traceback"), 1)
+        self.assertIn("Traceback (most recent call last)", output.getvalue())
 
 
 if __name__ == "__main__":

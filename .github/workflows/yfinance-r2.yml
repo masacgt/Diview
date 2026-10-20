@@ -113,10 +113,20 @@ jobs:
           YFINANCE_LIBRARY_RETRIES: "1"
           YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND: "8"
           YFINANCE_V2_WORKERS: "24"
+          YFINANCE_UNIVERSE_SNAPSHOT_PATH: jquants-universe-snapshot.json
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: diview-market-data
+
+      - name: Save the exact J-Quants universe snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jquants-universe-${{ github.run_id }}
+          path: jquants-universe-snapshot.json
+          if-no-files-found: ignore
+          retention-days: 30
 
   legacy-financial-v2-migration:
     if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'migrate-financials'
@@ -368,6 +378,7 @@ jobs:
           YFINANCE_LIBRARY_RETRIES: "1"
           YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND: "8"
           YFINANCE_V2_WORKERS: "24"
+          YFINANCE_UNIVERSE_SNAPSHOT_PATH: jquants-universe-snapshot.json
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -377,7 +388,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: yfinance-full-universe-study-${{ github.run_id }}
-          path: sync-output.txt
+          path: |
+            sync-output.txt
+            jquants-universe-snapshot.json
           if-no-files-found: ignore
           retention-days: 30
 
