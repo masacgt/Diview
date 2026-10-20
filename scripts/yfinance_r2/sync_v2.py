@@ -1564,56 +1564,6 @@ def financial_source_values(record: Any) -> tuple[dict[str, Any], dict[str, Any]
     fields = {key: value for key, value in record.items() if key not in FINANCIAL_RECORD_METADATA}
     for field, value in fields.items():
         if field in seed or field in yfinance:
-def equity_ratio_result(seed_values: dict[str, Any], yfinance_values: dict[str, Any]) -> dict[str, Any]:
-    """Calculate equity ratio only from inputs with a shared source and unit basis."""
-    equity_field = next((
-        field for field in ("stockholders_equity", "total_equity_gross_minority_interest")
-        if finite_number(yfinance_values.get(field)) is not None
-    ), None)
-    equity_source = "yfinance" if equity_field else None
-    if equity_field is None:
-        equity_field = next((
-            field for field in ("stockholders_equity", "total_equity_gross_minority_interest")
-            if finite_number(seed_values.get(field)) is not None
-        ), None)
-        equity_source = "seed" if equity_field else None
-
-    if finite_number(yfinance_values.get("total_assets")) is not None:
-        assets_source = "yfinance"
-        assets = finite_number(yfinance_values.get("total_assets"))
-    else:
-        assets_source = "seed" if finite_number(seed_values.get("total_assets")) is not None else None
-        assets = finite_number(seed_values.get("total_assets"))
-
-    equity_values = yfinance_values if equity_source == "yfinance" else seed_values
-    equity = finite_number(equity_values.get(equity_field)) if equity_field else None
-    if equity is not None and assets is not None and assets > 0 and equity_source == assets_source:
-        return {
-            "value": equity / assets * 100,
-            "source": "calculated",
-            "input_sources": {"equity": equity_source, "total_assets": assets_source},
-            "reason": None,
-        }
-
-    # IRBANK seed balance-sheet amounts are stored in million JPY, while
-    # yfinance balance-sheet amounts are JPY. Keep the seed's same-source
-    # ratio when one input has been refreshed from a different provider.
-    seed_ratio = finite_number(seed_values.get("equity_ratio_computed"))
-    if seed_ratio is not None:
-        return {
-            "value": seed_ratio,
-            "source": "seed",
-            "input_sources": {"equity": "seed", "total_assets": "seed"},
-            "reason": "mixed_source_inputs_not_recalculated",
-        }
-    return {
-        "value": None,
-        "source": None,
-        "input_sources": {"equity": equity_source, "total_assets": assets_source},
-        "reason": "mixed_source_inputs_not_comparable" if equity_source and assets_source else "required_input_missing",
-    }
-
-
             continue
         if field in FINANCIAL_DERIVED_FIELDS:
             continue
@@ -1677,6 +1627,8 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             else:
                 field_retrieval_status[field] = "empty"
 
+    field_retrieval_status.update({field: "unsupported" for field in unsupported_valuation_fields})
+
     keys = sorted(set(fresh_income) | set(fresh_balance) | set(fresh_cash) | set(valuation)
                   | set(legacy_income) | set(legacy_balance) | set(legacy_cash) | set(legacy_valuation)
                   | set(prior_v2) | set(prior_v2_valuation))[-10:]
@@ -1690,8 +1642,6 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
         seed_values = {**seed_values}
         yfinance_values = {**prior_yfinance_values, **legacy_yfinance_values}
         fresh_values = {**fresh_income.get(period_end, {}), **fresh_balance.get(period_end, {}), **fresh_cash.get(period_end, {})}
-    field_retrieval_status.update({field: "unsupported" for field in unsupported_valuation_fields})
-
         yfinance_values.update(fresh_values)
         values = {**seed_values, **yfinance_values}
         net_de_metrics = calculate_net_de_metrics(fresh_balance.get(period_end, {}))
@@ -1769,7 +1719,19 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
         )
         if equity_ratio["reason"]:
             annual_field_status_reason["equity_ratio_computed"] = [equity_ratio["reason"]]
+        # Flat-row consumers calculate margins without consulting provenance.
+        # Preserve raw seed amounts, but never mix their units with Yahoo amounts.
+        margin_fields = ("sales", "operating_profit", "operating_cf", "investing_cf")
+        if any(finite_number(yfinance_values.get(field)) is not None for field in margin_fields):
+            for field in margin_fields:
+                if field in seed_values and finite_number(yfinance_values.get(field)) is None:
+                    values[field] = None
+                    annual_field_status[field] = "unsupported"
+                    annual_field_status_reason[field] = ["mixed_source_units_not_comparable"]
         prior_annual = prior_record.get("annual") if isinstance(prior_record.get("annual"), dict) else {}
+        prior_sources = prior_annual.get("source_values")
+        prior_seed = prior_sources.get("seed") if isinstance(prior_sources, dict) else None
+        prior_seed = prior_seed if isinstance(prior_seed, dict) else {}
         seed_source = (
             (prior_annual.get("source_values") or {}).get("seed", {}).get("source")
             if isinstance(prior_annual.get("source_values"), dict) else None
@@ -1782,21 +1744,7 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
                 "field_status": {field: "available" if field in fresh_values or field in net_de_metrics else "stale" for field in yfinance_values},
             },
             "calculated": {
-        if equity_ratio["reason"]:
-            annual_field_status_reason["equity_ratio_computed"] = [equity_ratio["reason"]]
-        # Flat-row consumers calculate margins without consulting provenance.
-        # Preserve raw seed amounts, but never mix their units with Yahoo amounts.
-        margin_fields = ("sales", "operating_profit", "operating_cf", "investing_cf")
-        if any(finite_number(yfinance_values.get(field)) is not None for field in margin_fields):
-            for field in margin_fields:
-                if field in seed_values and finite_number(yfinance_values.get(field)) is None:
-                    values[field] = None
-                    annual_field_status[field] = "unsupported"
-                    annual_field_status_reason[field] = ["mixed_source_units_not_comparable"]
                 "values": {
-        prior_sources = prior_annual.get("source_values")
-        prior_seed = prior_sources.get("seed") if isinstance(prior_sources, dict) else None
-        prior_seed = prior_seed if isinstance(prior_seed, dict) else {}
                     "equity_ratio_computed": {
                         "value": values["equity_ratio_computed"],
                         "formula": "equity / total_assets * 100",
@@ -3097,6 +3045,7 @@ def publish_catalog(client: Any, bucket: str, universe: list[dict[str, str]], se
                     previous_catalog: dict[str, Any] | None,
                     processed_items: dict[str, dict[str, Any]] | None = None,
                     failures: dict[str, str] | None = None) -> dict[str, Any]:
+    generation = f"{session_date.isoformat()}-{uuid4().hex}"
     old_items = {str(row.get("code")): row for row in (previous_catalog or {}).get("items", []) if isinstance(row, dict)}
     processed_items = processed_items or {}
     failures = failures or {}
@@ -3140,6 +3089,10 @@ def publish_catalog(client: Any, bucket: str, universe: list[dict[str, str]], se
         if item is None:
             continue
         item = {**item}
+        if isinstance(item.get("income_advice"), dict):
+            item["income_advice"] = {
+                **item["income_advice"], "source_catalog_generation": generation,
+            }
         if code in failures:
             item["status"] = "failed"
             item["failure_reason"] = failures[code][:500]
@@ -3148,7 +3101,6 @@ def publish_catalog(client: Any, bucket: str, universe: list[dict[str, str]], se
     if len(items) != len({item["code"] for item in items}):
         raise RuntimeError("v2 search catalog contains duplicate security codes")
     return {
-    generation = f"{session_date.isoformat()}-{uuid4().hex}"
         "schema_version": 1,
         "generation": generation,
         "generated_at": iso_now(),
@@ -3192,10 +3144,6 @@ def run(
     target_session: date | None = None,
 ) -> int:
     started_at = time.perf_counter()
-        if isinstance(item.get("income_advice"), dict):
-            item["income_advice"] = {
-                **item["income_advice"], "source_catalog_generation": generation,
-            }
     with _YF_CALL_LOCK:
         _YF_CALLS.clear()
     if not publish and not dry_run:
@@ -3410,6 +3358,7 @@ def run(
         client, bucket, fetched, session_date, previous_catalog,
         processed_items=processed_items, failures=failures,
     )
+    generation = catalog["generation"]
     income_advice_catalog = {
         "schema_version": 1,
         "generation": generation,
@@ -3461,7 +3410,6 @@ def run(
         "http_max_requests_per_second": rate_limiter.requests_per_second,
         "http_request_count": rate_limiter.request_count,
         "http_429_count": rate_limiter.http_429_count,
-    generation = catalog["generation"]
         "phase_seconds": phase_seconds,
         "security_collection_activity": collection_activity,
         "r2_metrics_before_publication_record": r2_metrics.snapshot(),
