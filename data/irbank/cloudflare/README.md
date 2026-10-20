@@ -60,10 +60,20 @@ curl.exe -fL -r 0-1023 "https://diview-irbank.omasa.workers.dev/api/v1/jquants/d
 
 ```powershell
 node ..\scripts\build-d1-import.cjs
-powershell -ExecutionPolicy Bypass -File .\import-d1.ps1
+powershell -ExecutionPolicy Bypass -File .\import-d1.ps1 -ImportDir '<生成処理が表示した新規ディレクトリ>'
 ```
 
-生成したSQLを分割して実行し、再実行時は `import-state.json` の成功記録から続けます。
+旧 `import-d1.ps1` 単独実行は使用しません。生成処理が表示した新規ディレクトリを
+`powershell -ExecutionPolicy Bypass -File .\import-d1.ps1 -ImportDir <生成ディレクトリ>` に渡します。
+先にレビュー済みのマイグレーション（0005を含む）を適用してください。
+全SQLのマニフェストとSHA-256を検証してから投入し、再開状態はそのディレクトリ内の
+`import-state-v2.json` にファイルハッシュ付きで保存します。旧SQL・旧完了状態は再利用しません。
+
+期間キー破損の修復には、先に `wrangler d1 export` でバックアップを取得します。
+`scripts/plan-financial-repair.py --snapshot <SQLバックアップ> --source <元CSV> --output <新規出力先>`
+は本番へ接続せず、元CSVとの一致、復元、再実行の安全性をバックアップ上で検証します。
+生成後に `apply-financial-repair.ps1 -PlanDir <出力先>` を実行し、改めて本番をエクスポートして結果を照合します。
+この修復は確認できた破損キーのグループだけを復元し、元CSV全体の無条件再投入はしません。
 
 ## AndroidとWorker API
 

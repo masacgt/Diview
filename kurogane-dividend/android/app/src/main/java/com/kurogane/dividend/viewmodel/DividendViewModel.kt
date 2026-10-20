@@ -345,8 +345,6 @@ class DividendViewModel @JvmOverloads constructor(
     val stockAnalysisData = _stockAnalysisData.asStateFlow()
     private val _cloudflareSecurityData = MutableStateFlow<Map<String, CloudflareSecurity>>(emptyMap())
     val cloudflareSecurityData = _cloudflareSecurityData.asStateFlow()
-    private val stockAnalysisMutex = Mutex()
-    private val stockAnalysisLoading = mutableSetOf<String>()
     private val _dividendEventRevision = MutableStateFlow(0)
     val dividendEventRevision = _dividendEventRevision.asStateFlow()
     private val dividendEventCacheLock = Any()
@@ -2137,43 +2135,49 @@ class DividendViewModel @JvmOverloads constructor(
     suspend fun fetchStockAnalysis(code: String, force: Boolean = false): CloudflareStockAnalysis? {
         val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
         if (!normalized.matches(Regex("[A-Z0-9]{4}"))) return null
-        _stockAnalysisData.value[normalized]?.let { if (!force) return it }
-        val now = System.currentTimeMillis()
-        val attemptKey = "stock_analysis_fetch_attempt_at_$normalized"
-        val attemptDateKey = "stock_analysis_fetch_attempt_jst_$normalized"
-        if (!PriceRefreshPolicy.shouldFetch(
-                now,
-                marketPreferences.getLong(attemptKey, 0L),
-                marketPreferences.getString(attemptDateKey, null)
-            )) {
-            val cached = runCatching {
-                marketPreferences.getString("stock_analysis_$normalized", null)?.let { raw ->
-                    val json = JSONObject(raw)
-                    val values = json.keys().asSequence().associateWith { key ->
-                        if (json.isNull(key)) null else json.optDouble(key).takeIf(Double::isFinite)
+        return financialFetches.run("analysis:$normalized") {
+            val generation = dataGeneration.get()
+            val now = System.currentTimeMillis()
+            val attemptKey = "stock_analysis_fetch_attempt_at_$normalized"
+            val attemptDateKey = "stock_analysis_fetch_attempt_jst_$normalized"
+            val versionKey = "stock_analysis_contract_version_$normalized"
+            if (!force && marketPreferences.getInt(versionKey, 0) >= 2 && !PriceRefreshPolicy.shouldFetch(
+                    now,
+                    marketPreferences.getLong(attemptKey, 0L),
+                    marketPreferences.getString(attemptDateKey, null)
+                )) {
+                val cached = runCatching {
+                    marketPreferences.getString("stock_analysis_$normalized", null)?.let { raw ->
+                        val json = JSONObject(raw)
+                        val values = json.keys().asSequence().associateWith { key ->
+                            if (json.isNull(key)) null else json.optDouble(key).takeIf(Double::isFinite)
+                        }
+                        CloudflareStockAnalysis(values)
                     }
-                    CloudflareStockAnalysis(values)
-                }
-            }.getOrNull()
-            if (cached != null) _stockAnalysisData.update { it + (normalized to cached) }
-            return cached ?: _stockAnalysisData.value[normalized]
-        }
-        marketPreferences.edit().putLong(attemptKey, now)
-            .putString(attemptDateKey, PriceRefreshPolicy.japanDate(now)).apply()
-        val allowed = stockAnalysisMutex.withLock { stockAnalysisLoading.add(normalized) }
-        if (!allowed) return _stockAnalysisData.value[normalized]
-        return try {
-            val result = stockAnalysisSlots.withPermit { marketRepository.getStockAnalysis(normalized) }
-            if (result != null) {
-                _stockAnalysisData.update { it + (normalized to result) }
-                val json = JSONObject().apply {
-                    result.values.forEach { (key, value) -> put(key, value ?: JSONObject.NULL) }
-                }
-                marketPreferences.edit().putString("stock_analysis_$normalized", json.toString()).apply()
+                }.getOrNull()
+                if (cached != null) _stockAnalysisData.update { it + (normalized to cached) }
+                return@run cached ?: _stockAnalysisData.value[normalized]
             }
-            result
-        } finally {
-            stockAnalysisMutex.withLock { stockAnalysisLoading.remove(normalized) }
+            marketPreferences.edit().putLong(attemptKey, now)
+                .putString(attemptDateKey, PriceRefreshPolicy.japanDate(now)).apply()
+            var succeeded = false
+            try {
+                val result = stockAnalysisSlots.withPermit { marketRepository.getStockAnalysis(normalized) }
+                if (result != null && generation == dataGeneration.get()) {
+                    _stockAnalysisData.update { it + (normalized to result) }
+                    val json = JSONObject().apply {
+                        result.values.forEach { (key, value) -> put(key, value ?: JSONObject.NULL) }
+                    }
+                    marketPreferences.edit().putString("stock_analysis_$normalized", json.toString())
+                        .putInt(versionKey, 2).apply()
+                    succeeded = true
+                }
+                if (generation == dataGeneration.get()) result ?: _stockAnalysisData.value[normalized] else null
+            } finally {
+                if (!succeeded && generation == dataGeneration.get()) {
+                    marketPreferences.edit().remove(attemptKey).remove(attemptDateKey).apply()
+                }
+            }
         }
     }
 
@@ -2245,11 +2249,11 @@ class DividendViewModel @JvmOverloads constructor(
         val requestedMonths = months.distinct().filter { it.matches(Regex("\\d{4}-(0[1-9]|1[0-2])")) }
         if (normalizedCodes.isEmpty() || requestedMonths.isEmpty()) return@withLock emptyList()
 
-        val cachedByCode = normalizedCodes.associateWith { readCachedMonthlyPrices(it) }
         val now = System.currentTimeMillis()
         val missingByCode = normalizedCodes.associateWith { code ->
             requestedMonths.filter { month ->
-                if (month in cachedByCode[code].orEmpty()) return@filter false
+                // Split adjustments and corrections can revise an existing month.
+                // Revalidate cached history under the same daily fetch policy.
                 val key = "monthly_price_fetch_attempt_at_${code}_$month"
                 val dateKey = "monthly_price_fetch_attempt_jst_${code}_$month"
                 PriceRefreshPolicy.shouldFetch(
@@ -2400,7 +2404,14 @@ class DividendViewModel @JvmOverloads constructor(
                 val cachedDividendsPerShare = readCachedDividendsPerShare().toMutableMap()
                 val cachedNoDividendCodes = readCachedNoDividendCodes().toMutableSet()
                 val cachedDividendStatusCodes = readCachedDividendStatusCodes().toMutableSet()
-                fetchedQuotes.forEach { (code, quote) ->
+                fetchedQuotes.forEach { (code, catalogQuote) ->
+                    // The per-security current record may be newer than the catalog.
+                    val currentQuote = heldQuotes[code]
+                    val quote = if (currentQuote == null) catalogQuote else catalogQuote.copy(
+                        annualDividendPerShare = currentQuote.annualDividendPerShare,
+                        isNoDividendConfirmed = currentQuote.isNoDividendConfirmed,
+                        hasDividendStatus = currentQuote.hasDividendStatus
+                    )
                     if (quote.annualDividendPerShare != null) cachedDividendsPerShare[code] = quote.annualDividendPerShare
                     else if (quote.isNoDividendConfirmed) cachedDividendsPerShare[code] = 0.0
                     if (quote.hasDividendStatus) {
@@ -2955,7 +2966,7 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     private companion object {
-        const val FINANCIAL_PAYLOAD_VERSION = 2
+        const val FINANCIAL_PAYLOAD_VERSION = 3
         val WATCHLIST_SORT_CRITERIA = setOf("ach", "yield", "price", "code")
         val WATCHLIST_SORT_DIRECTIONS = setOf("asc", "desc")
         val SAMPLE_HOLDING_IDS = setOf("h-7203", "h-2914", "h-8306", "h-8316", "h-8058", "h-9432", "h-9433", "h-8766", "h-8031", "h-4502", "h-apple", "h-emaxis")

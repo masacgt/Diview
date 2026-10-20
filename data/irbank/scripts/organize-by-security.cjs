@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { fiscalPeriod, matchingDividend } = require('./fiscal-period.cjs');
 
 const root = path.resolve(__dirname, '..');
 const output = path.join(root, 'organized', 'by_security');
@@ -73,7 +74,7 @@ for (const file of fs.readdirSync(valuationDir).filter((name) => name.endsWith('
     const fiscalYear = String(row.fiscal_year ?? '').slice(0, 4);
     if (!/^\d{4}$/.test(fiscalYear)) continue;
     companies.get(security.security_code).dividends.push({
-      fiscal_year: Number(fiscalYear), period: row.fiscal_year, event_type: 'annual_reported',
+      fiscal_year: Number(fiscalYear), period: fiscalPeriod(row), event_type: 'annual_reported',
       annual_dps: null, annual_dps_adjusted: row.dps_adjusted,
       record_date: null, final_rights_date: null,
       date_status: 'unavailable_in_current_snapshot', source: 'IRBANK valuation history',
@@ -90,9 +91,9 @@ if (fs.existsSync(dividendSamplePath)) {
     sourceMeta.attribution.dividends = sample.attribution;
     for (const row of sample.records ?? []) {
       const year = Number(row.fiscal_year);
-      const existing = company.dividends.find((item) => item.fiscal_year === year && item.event_type === 'annual_reported');
+      const existing = matchingDividend(company.dividends, row);
       const enriched = {
-        fiscal_year: year, period: existing?.period ?? String(year), event_type: 'annual_reported',
+        fiscal_year: year, period: row.period_end || row.period || existing?.period || fiscalPeriod(row), event_type: 'annual_reported',
         annual_dps: row.annual_dps ?? null,
         annual_dps_adjusted: row.annual_dps_adjusted ?? existing?.annual_dps_adjusted ?? null,
         record_date: null, final_rights_date: null, date_status: 'unavailable_in_current_snapshot',
@@ -117,10 +118,10 @@ if (fs.existsSync(dividendsDir)) {
     for (const row of payload.records ?? []) {
       const year = Number(row.fiscal_year);
       if (!Number.isFinite(year)) continue;
-      const existing = company.dividends.find((item) => item.fiscal_year === year && item.event_type === 'annual_reported');
+      const existing = matchingDividend(company.dividends, row);
       const enriched = {
         fiscal_year: year,
-        period: existing?.period ?? String(year),
+        period: row.period_end || row.period || existing?.period || fiscalPeriod(row),
         event_type: 'annual_reported',
         annual_dps: row.annual_dps ?? existing?.annual_dps ?? null,
         annual_dps_adjusted: row.annual_dps_adjusted ?? existing?.annual_dps_adjusted ?? null,

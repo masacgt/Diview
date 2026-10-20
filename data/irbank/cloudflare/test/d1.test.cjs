@@ -140,10 +140,27 @@ test('malformed numeric/period values, bad CSV, headers and input errors reject 
   const options=fixtures(t);
   fs.writeFileSync(path.join(options.inputDir,'financial_periods.csv'),headers.financial_periods+'\n"unterminated');
   await assert.rejects(main(options),/Unterminated/);
+  fs.rmSync(options.outputDir, { recursive: true, force: true });
   fs.writeFileSync(path.join(options.inputDir,'financial_periods.csv'),'wrong header');
   await assert.rejects(main(options),/Unexpected header/);
+  fs.rmSync(options.outputDir, { recursive: true, force: true });
   fs.unlinkSync(path.join(options.inputDir,'financial_periods.csv'));
   await assert.rejects(main(options),/ENOENT/);
+});
+
+test('validated import refuses directory reuse and preserves both issuer periods', async t => {
+  const options = fixtures(t);
+  const rows = ['2026/03', '2026/12'].map(period =>
+    csv(['13010','2026','annual_reported','10','','','','unknown',JSON.stringify({period})]));
+  fs.appendFileSync(path.join(options.inputDir, 'dividend_events.csv'), rows.join('\n'));
+  await main(options);
+  await assert.rejects(main(options), /empty import directory/);
+  const manifest = JSON.parse(fs.readFileSync(path.join(options.outputDir, 'manifest.json'), 'utf8'));
+  assert.equal(manifest.format_version, 2);
+  const db = database(); t.after(() => db.close());
+  for (const file of manifest.files) db.exec(fs.readFileSync(path.join(options.outputDir, file.name), 'utf8'));
+  assert.deepEqual(db.prepare('SELECT fiscal_period FROM issuer_dividend_periods ORDER BY fiscal_period').all()
+    .map(r => r.fiscal_period), ['2026-03', '2026-12']);
 });
 
 test('large nonsecurity CSV streams under a 32 MB heap and chunks at 250 rows', t => {

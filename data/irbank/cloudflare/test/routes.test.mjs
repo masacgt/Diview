@@ -323,6 +323,29 @@ test('financial API retains equity ratios calculated from one source', async () 
   assert.equal(data.financials.annual[0].source_values.calculated.values.equity_ratio_computed.value, 20);
 });
 
+test('financial API does not replace the calculated ratio with a retained seed ratio', async () => {
+  const annual = { period_end: '2026-03-31', equity_ratio_computed: 60,
+    field_status: { equity_ratio_computed: 'available' },
+    source_values: {
+      seed: { values: { equity_ratio_computed: 24 } },
+      yfinance: { values: { stockholders_equity: 60, total_assets: 100 } },
+      calculated: { values: { equity_ratio_computed: { value: 60 } } },
+    } };
+  const env = dividendEnvironment(new Map([['market/yfinance/v2/securities/4502.T/financials/2026.json', { annual }]]));
+  const response = await worker.fetch(new Request('https://example.com/api/v1/financial-data/4502'), env);
+  const body = await response.json();
+  assert.equal(body.financials.annual[0].equity_ratio_computed, 60);
+  assert.equal(body.financials.seed_annual[0].values.equity_ratio_computed, 24);
+});
+
+test('issuer dividend API retains two fiscal periods in one calendar year', async () => {
+  const records = ['2026/03', '2026/12'].map((period, index) => ({ fiscal_year: 2026, period, annual_dps: 10 + index }));
+  const env = dividendEnvironment(new Map([['market/yfinance/v2/securities/4502.T/issuer_dividends/2026.json', { records }]]));
+  const response = await worker.fetch(new Request('https://example.com/api/v1/financial-data/4502'), env);
+  const body = await response.json();
+  assert.deepEqual(body.issuer_dividends.records.map(r => r.fiscal_period), ['2026-03', '2026-12']);
+});
+
 test('financial API preserves mixed-unit null guards and raw provenance without changing other merges', async () => {
   const base = 'market/yfinance/v2/securities/7203.T';
   const fields = ['sales', 'operating_profit', 'operating_cf', 'investing_cf'];
