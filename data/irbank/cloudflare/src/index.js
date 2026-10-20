@@ -224,7 +224,7 @@ async function loadMarketIndex(env) {
 
 async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
   if (!env.MARKET_DATA) return null;
-  const normalizedCode = irbankR2Code(String(displayCode || '').toUpperCase());
+  const normalizedCode = yfinanceV2Code(displayCode);
   if (normalizedCode) {
     const symbol = `${normalizedCode}.T`;
     const [currentObject, profileObject] = await Promise.all([
@@ -325,7 +325,7 @@ function calculateDailyValuation(current) {
 const OFFICIAL_NEXT_FY_DPS = { '8214': { stale: 120, official: 90 }, '8058': { stale: 126, official: 125 } };
 
 function yfinanceV2Symbol(code) {
-  const normalized = irbankR2Code(String(code || '').toUpperCase().replace(/\.T$/, ''));
+  const normalized = yfinanceV2Code(code);
   return normalized ? `${normalized}.T` : null;
 }
 
@@ -535,7 +535,7 @@ async function readV2FinancialPayload(env, code) {
   const payoutRatio = finiteNumber(current?.statistics?.payoutRatio);
   return {
     security: {
-      code: irbankR2Code(String(code || '').toUpperCase()),
+      code: yfinanceV2Code(code),
       canonical_code: String(code || '').length === 4 ? `${code}0` : String(code || ''),
       name: profile?.display_name || profile?.short_name || profile?.long_name || profile?.english_name || String(code || ''),
       metrics: [],
@@ -1447,6 +1447,15 @@ function irbankR2Code(value) {
   return null;
 }
 
+function yfinanceV2Code(value) {
+  const code = String(value || '').trim().toUpperCase().replace(/\.T$/, '');
+  if (/^[A-Z0-9]{4}$/.test(code)) return code;
+  // J-Quants pads ordinary four-character TSE codes with a trailing zero;
+  // listed class shares use their distinct five-character code as the Yahoo symbol.
+  if (/^[A-Z0-9]{5}$/.test(code)) return code.endsWith('0') ? code.slice(0, 4) : code;
+  return null;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -1840,7 +1849,7 @@ export default {
 
     if (url.pathname === '/api/v1/share-split-history') {
       if (!env.MARKET_DATA) return json({ error: 'market_data_unavailable' }, 503);
-      const code = irbankR2Code(String(url.searchParams.get('code') || '').trim());
+      const code = yfinanceV2Code(url.searchParams.get('code'));
       const from = String(url.searchParams.get('from') || '');
       const to = String(url.searchParams.get('to') || '');
       const isValidDate = value => {
@@ -1890,7 +1899,7 @@ export default {
       if (!env.MARKET_DATA) return json({ error: 'market_data_unavailable' }, 503);
       const codes = [...new Set(String(url.searchParams.get('codes') || '')
         .split(',')
-        .map(value => irbankR2Code(value.trim()))
+        .map(value => yfinanceV2Code(value))
         .filter(Boolean))];
       const months = [...new Set(String(url.searchParams.get('months') || '')
         .split(',')
@@ -1933,7 +1942,7 @@ export default {
       const requestedDate = String(url.searchParams.get('market_data_date') || '');
       const cursor = String(url.searchParams.get('cursor') || '');
       const codesParam = url.searchParams.get('codes');
-      const requestedCodes = codesParam == null ? null : [...new Set(codesParam.split(',').map(value => irbankR2Code(value.trim().toUpperCase())))];
+      const requestedCodes = codesParam == null ? null : [...new Set(codesParam.split(',').map(value => yfinanceV2Code(value)))];
       if ((requestedRunId && !/^\d{4}-\d{2}-\d{2}$/.test(requestedRunId))
         || (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate))
         || (cursor && !/^\d{1,8}$/.test(cursor))
@@ -2064,10 +2073,11 @@ export default {
       return json({ items, generation: v2Catalog.generation || null });
     }
 
-    const securityMatch = url.pathname.match(/^\/api\/v1\/securities\/([A-Z0-9]{4})$/);
+    const securityMatch = url.pathname.match(/^\/api\/v1\/securities\/([A-Z0-9]{4,5})$/);
     if (securityMatch) {
       if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
-      const code = securityMatch[1];
+      const code = yfinanceV2Code(securityMatch[1]);
+      if (!code) return json({ error: 'invalid_security_code' }, 400);
       const catalog = await readV2Catalog(env);
       if (!catalog) return json({ error: 'security_catalog_unavailable' }, 503);
       const item = (catalog.items || []).find(row => String(row.code || '').toUpperCase() === code);
@@ -2181,10 +2191,11 @@ export default {
       return irbankR2Object(env, 'market/irbank/v1/catalog.json');
     }
 
-    const financialMatch = url.pathname.match(/^\/api\/v1\/financial-data\/([A-Z0-9]{4})$/);
+    const financialMatch = url.pathname.match(/^\/api\/v1\/financial-data\/([A-Z0-9]{4,5})$/);
     if (financialMatch) {
       if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
-      const code = financialMatch[1];
+      const code = yfinanceV2Code(financialMatch[1]);
+      if (!code) return json({ error: 'invalid_security_code' }, 400);
       const v2Payload = await readV2FinancialPayload(env, code);
       if (v2Payload) return json(v2Payload);
       return json({ error: 'not_found' }, 404);
@@ -2279,7 +2290,7 @@ export default {
       let security = await env.DB.prepare(
         'SELECT security_code, security_code_display, name, metrics_json FROM securities WHERE security_code = ? OR security_code_display = ? LIMIT 1'
       ).bind(code, requested).first();
-      const displayCode = irbankR2Code(requested);
+      const displayCode = yfinanceV2Code(requested);
       const currentProfile = displayCode
         ? await readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${yfinanceV2Symbol(displayCode)}/profile.json`)
         : null;
@@ -2289,7 +2300,7 @@ export default {
       if (!security) {
         if (!currentProfile) return json({ error: 'not_found' }, 404);
         security = {
-          security_code: `${displayCode}0`,
+          security_code: displayCode.length === 4 ? `${displayCode}0` : displayCode,
           security_code_display: displayCode,
           name: currentProfile.display_name || currentProfile.short_name || currentProfile.long_name || displayCode,
           metrics_json: '[]',
@@ -2302,7 +2313,7 @@ export default {
     const match = url.pathname.match(/^\/api\/v1\/securities\/([^/]+)$/);
     if (match) {
       const requested = decodeURIComponent(match[1]);
-      const code = irbankR2Code(requested);
+      const code = yfinanceV2Code(requested);
       if (!code) return json({ error: 'invalid_security_code' }, 400);
       const symbol = yfinanceV2Symbol(code);
       const publishedCatalog = await readV2Catalog(env);
