@@ -300,6 +300,17 @@ async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
 
 const YFINANCE_V2_ROOT = 'market/yfinance/v2';
 
+// SBI Shinsei's FY2026 securities report documents historical share actions
+// that are not all represented in its stored yfinance split history.
+const UNVERIFIED_DIVIDEND_SHARE_BASIS_CODES = new Set(['8303']);
+
+function dividendShareBasisStatus(code) {
+  const normalized = String(code || '').trim().toUpperCase().replace(/\.T$/, '');
+  return UNVERIFIED_DIVIDEND_SHARE_BASIS_CODES.has(normalized)
+    ? 'unverified_incomplete_corporate_action_history'
+    : null;
+}
+
 function calculateDailyValuation(current) {
   const price = finiteNumber(current?.price?.close);
   const statistics = current?.statistics || {};
@@ -531,6 +542,7 @@ async function readV2FinancialPayload(env, code) {
   const issuerDividendRecords = [...issuerDividendRecordsByYear.entries()]
     .sort(([a], [b]) => a - b)
     .map(([, record]) => record);
+  const shareBasisStatus = dividendShareBasisStatus(code);
   const dividendHistoryStatus = current?.field_status?.dividend_history;
   const payoutRatio = finiteNumber(current?.statistics?.payoutRatio);
   return {
@@ -551,6 +563,7 @@ async function readV2FinancialPayload(env, code) {
       metrics_as_of_year: finiteNumber(calendarYearMetrics?.latest_completed_year),
       source: 'Yahoo Finance via yfinance',
       current: current?.dividend || null,
+      ...(shareBasisStatus ? { share_basis_status: shareBasisStatus } : {}),
       payout_ratio: payoutRatio,
       field_status: {
         ...(current?.field_status || {}),
@@ -567,6 +580,7 @@ async function readV2FinancialPayload(env, code) {
       source: issuerDividendDocuments[0]?.source || 'IRBANK Connect',
       attribution: issuerDividendDocuments.find(document => document.attribution)?.attribution || null,
       status: issuerDividendRecords.length ? 'available' : 'empty',
+      ...(shareBasisStatus ? { share_basis_status: shareBasisStatus } : {}),
     },
     valuation: { history: valuation, seed_history: seedValuation, field_status: valuationStatus },
     market: current ? { price: current.price || null, summary: current.statistics || {} } : null,
