@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 import re
@@ -31,8 +32,9 @@ def display_code(value: object) -> str:
     return code[:4] if code.endswith("0") else code
 
 
-def fetch_securities(api_key: str) -> list[dict[str, str]]:
+def fetch_securities(api_key: str, *, snapshot_path: Path | None = None) -> list[dict[str, str]]:
     securities: dict[str, tuple[str, str]] = {}
+    response_dates: set[str] = set()
     cursor: str | None = None
     seen_cursors: set[str] = set()
     while True:
@@ -55,6 +57,11 @@ def fetch_securities(api_key: str) -> list[dict[str, str]]:
         for row in payload["data"]:
             if not isinstance(row, dict) or "Code" not in row:
                 raise RuntimeError("J-Quants master response contains an invalid issue row")
+            response_date = str(row.get("Date") or "").strip()
+            if response_date:
+                if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", response_date):
+                    raise RuntimeError(f"Unexpected J-Quants master response date: {response_date!r}")
+                response_dates.add(response_date)
             code = display_code(row["Code"])
             if code in securities:
                 raise RuntimeError(f"Duplicate issue code in J-Quants master: {code}")
@@ -69,12 +76,27 @@ def fetch_securities(api_key: str) -> list[dict[str, str]]:
         seen_cursors.add(cursor)
     if len(securities) < 1000:
         raise RuntimeError(f"J-Quants master returned only {len(securities)} issues; refusing partial universe")
-    return [{
+    rows = [{
         "security_code_display": code,
         "sector_name": securities[code][0],
         "jquants_product_category": securities[code][1],
         "security_type": SECURITY_TYPES.get(securities[code][1], "listed_security"),
     } for code in sorted(securities)]
+    if snapshot_path is not None:
+        codes = [row["security_code_display"] for row in rows]
+        report = {
+            "schema_version": 1,
+            "source": "J-Quants API v2 /equities/master",
+            "response_dates": sorted(response_dates),
+            "security_count": len(codes),
+            "security_code_sha256": hashlib.sha256("\n".join(codes).encode("utf-8")).hexdigest(),
+            "security_codes": codes,
+        }
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = snapshot_path.with_suffix(snapshot_path.suffix + ".tmp")
+        temporary.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(snapshot_path)
+    return rows
 
 
 def fetch_codes(api_key: str) -> list[str]:

@@ -1,6 +1,6 @@
 # R2市場データ構造とアプリ取得仕様
 
-更新日: 2026-10-18
+更新日: 2026-10-20
 
 状態: 合意済み仕様。yfinance v2の初回R2公開は2026-10-16に実施済み。実装と本番APIの確認範囲は「実装状況」を参照。
 
@@ -234,7 +234,7 @@ Actions run #72（2026-10-17、[実行記録](https://github.com/masacgt/Diview/
 
 run #159はJ-Quantsコード4,442件を走査し、4,335件成功・107件失敗、HTTP 429は0件で、世代 `2026-10-19` の4,356件カタログを公開した。v2同期ジョブ実時間は666秒（11分06秒）、市場カレンダージョブは25秒で、合計ランナー実時間は11分31秒。同期スクリプトは624.886秒、銘柄収集の表示時間は517.3秒、yfinance高水準呼び出しは622回（`history_daily_5d_with_actions=237`、`ticker_get_info=55`、`history_year_end_prices_initial_8y=43`、`history_daily_1y_with_actions=41`、`history_actions_max=19`、年次財務4系統各55回など）だった。R2 active wall timeは510.220秒（R2-only 420.313秒、yfinance active 89.907秒、重複89.907秒）。R2操作は `get_object` 12,114回、`get_body` 10,398回、`list_objects_v2` 1,945回、`put_object` 5,192回、`delete_object` 7回。ログ上の107失敗は、明示的な `AttributeError: 'str' object has no attribute 'get'` が55件、同一営業日のHTTP 404再試行抑止が52件で構成され、HTTP 429は0件だった。部分失敗によりActions同期ジョブの結論はfailureだが、公開処理は完了した。run #158の同一セッション銘柄数は4,444件だったため、run #159との差2コードは個別照合が必要である。
 
-失敗ログの照合では、手動run #158と通常schedule run #159の両方で、まったく同じ55コードが `AttributeError: 'str' object has no attribute 'get'` で失敗していた。run #158には別途52件のHTTP 404と4件の旧データ削除前の読戻し不一致もあった。ログにスタックトレースはない。固定しているyfinance 1.7.0の `Quote._fetch_info`（`quote.py:695`）と `Quote._fetch_complementary`（`quote.py:877-880`）には、辞書型を前提とする `.get()` があるため候補箇所ではあるが、実際の発生元とは確認できていない。R2データと同期側変換も含めて原因を確定するまでは、代表コードを単独再現して発生段階を記録する。
+失敗ログの照合では、手動run #158と通常schedule run #159、#161、#166で同じ55コードが `AttributeError: 'str' object has no attribute 'get'` で失敗していた。run #158には別途52件のHTTP 404と4件の旧データ削除前の読戻し不一致もあった。yfinance 1.7.0の `Quote._fetch_info` と `Quote._fetch_complementary` に候補の `.get()` 解析箇所があるが、実際の発生元とは未確認。これを特定するため、`sync_v2.py` にこのエラーだけを対象とした、異なる発生箇所ごと最大8件のtraceback記録を追加し、同一originの重複記録を防ぐ回帰テストも加えた。再試行・解析・保存値は変更しない。Python構文確認と `git diff --check` は成功したが、Actionsテストとmain上の通常同期は未実施。次回以降の通常scheduleログで発生元を確定するまで、原因および恒久修正は未完了として扱う。
 
 この実行は先行する手動run #158と同じセッション日 `2026-10-19` を再処理した。したがって、622回の呼び出しと11分31秒のactive job時間を新規セッションの月間負荷へ単純換算しない。GitHub Actions timing APIはrun #159のworkflow wall `run_duration_ms=697000` と `billable.UBUNTU.total_ms=0` を返した。run #158は同期job 4,395秒とcalendar job 22秒の合計4,417秒（73分37秒）、workflow wall 4,508秒（75分08秒）、`billable.UBUNTU.total_ms=0` だった。公開リポジトリの課金値0は処理時間0を意味しないため、予算比較にはactive job時間を使う。#158の23営業日単純換算は1,693.2分だが、手動の単一runなので月2,000分達成の根拠にはしない。複数の異なる通常セッションを測るまで判定を保留し、360分のtimeoutを維持する。
 
@@ -246,9 +246,9 @@ run #159はJ-Quantsコード4,442件を走査し、4,335件成功・107件失敗
 
 run #161後の本番Worker読み戻しでは、2060.Tの価格日は2026-10-19、終値は1,462円だった。`current.json`由来の `data_retrieval.ex_dividend_calendar` は2027-03-30 / available / Yahoo Finance via yfinance Ticker.calendarで、`fetched_at` は2026-10-17T14:31:41+09:00。run #161のyfinance呼び出し内に `ticker_calendar` はなく、この同期での再取得ではない。一般の `last_attempt_at` は2026-10-20T06:50:51+09:00。`/api/v1/dividend-months?symbols=2060.T` は2026-10-20時点で同じ将来日を `estimated_from_dividend_history`、source `Yahoo Finance historical dividend event dates` として選択した。2026-10-17に観測した `Ticker.get_info` フォールバックとは別であり、画面に同じ日付が出ることは `Ticker.calendar` の最新取得を示さない。
 
-同じ本番APIの `event_year=2026` 読み戻しでは、2060.Tの2026-03-30・¥24.5が10件、2026-09-29・¥26が10件返った。このAPI指定時は `readV2DividendEvents` が2026年partitionだけを読み、別年partitionを連結しないため、重複は2026年partitionの返却レコード内に既にある。現在データの `trailing_12_month_per_share=505` はこの重複行の合計と一致する。追跡済みの2026-10-09時点の `data/market/yfinance/ex_dividend_history_20261009.csv` には両日とも1行ずつ同額で記録されていた。同期コードは日次候補に変化がないと保存済みイベントを再利用し、`action_partitions_need_persist()` がpartitionの再書込みを止めるため、通常の無変更同期では自己修復しない。重複を最初にR2へ書いた実行は特定できていない。yfinanceの履歴から該当partitionを再構築し、R2およびAPI読み戻しで確認する必要がある。
+修復前の本番API `event_year=2026` 読み戻しでは、2060.Tの2026-03-30・¥24.5と2026-09-29・¥26が各10件返り、`trailing_12_month_per_share=505` だった。APIは2026年partitionだけを読んでいたため、重複は同partition内に存在した。2026-10-09時点のCSVでは各日1行ずつ同額で、最初に重複を書き込んだ実行は特定できていない。修復後の本番値は後段に記録する。
 
-再発した重複を通常同期で修復するため、ローカルcollectorは読み込んだ配当・分割履歴に同じイベント日が複数ある場合、全hot/archive partitionを読み直し、その銘柄だけ `Ticker.history(period="max", repair=True)` で再取得する。成功時は取得範囲の保存行を置換し、日付キーでpartitionを再構築して保存する。失敗時は前回データを保持し、取得失敗状態を記録する。固定データによるcollector test 65件とPython構文確認は通過したが、この修正はまだ本番実行されていない。R2の対象partitionとWorker APIの読み戻しが正常化するまで完了扱いにしない。
+重複イベント日を通常同期で修復する処理はPR #22としてmain (`1d7ce0a`) に反映した。同期は重複を検出した銘柄だけ `Ticker.history(period="max", repair=True)` で再取得し、成功時に取得範囲を置換してpartitionを再構築する。失敗時は前回値を保持して項目失敗を記録する。手動run #166後の本番R2/API読み戻しで2060.Tの二重イベントが各1件に直り、TTM合計は¥505から¥50.5へ修正された。8303.Tも3月¥42・9月¥10が各1件となり、TTM合計は¥468から¥52へ修正された。
 
 read-only分割・配当監査run #162（[Actions](https://github.com/masacgt/Diview/actions/runs/39331846984)、[artifact](https://github.com/masacgt/Diview/actions/runs/39331846984/artifacts/12227883474)）は2026-10-20時点のactive universe 4,435コード中、直近8年に分割のある1,068銘柄・1,270イベントを監査した。7,345件のissuer fiscal-year比較のうち6,206件は許容差¥0.05以内で一致、1,139件は不一致、160銘柄はIRBANK issuer DPSがなく比較不能、技術的失敗は0件。監査コードはR2のget_objectのみを呼び、R2を書き換えない。不一致は確認候補であり、配当値の誤りを単独で証明しない。
 
@@ -261,3 +261,27 @@ read-only分割・配当監査run #162（[Actions](https://github.com/masacgt/Di
 この比較は、アプリの暦年合計と発行体の事業年度配当を同じ定義にするものではない。イベント日を発行体の次の年度末に割り当てた候補比較であり、差が出てもyfinance値と発行体値のどちらが誤りかは確定しない。発行体スナップショットにも極端な値が含まれる例（8303の年度配当40,000,000円、分割比率14,000,000）があるため、533銘柄は元資料、年度帰属、イベント欠落、分割調整基準を個別確認する。監査成果物はActions run #58のartifactに保存されている。
 
 2026-10-17に監査成果物を全コード単位で集計した。533銘柄のうち54銘柄は比較対象の全年度で差があり、479銘柄は一致年度と不一致年度が混在する。配当履歴の取得状態は522件が `available`、11件が `empty`。41銘柄では少なくとも1年度に発行体DPSが正なのにyfinanceイベント合計が0となり、10銘柄には1,000円以上の発行体DPS値、2銘柄には1,000円以上のyfinanceイベント合計が含まれる。差異行はyfinance側が低い929件、高い210件で、2026年度の差異94件は監査日が年度途中である点を含めて解釈する。これらの分類は候補の優先順位付けに限り、一次資料との一件ずつの照合やyfinance値の修正には使わない。したがって全市場の金額正確性は未確認として扱う。
+
+### 2026-10-20 重複配当修復後の本番読み戻し
+
+手動Actions run #166では、mainにマージ済みのcommit `1d7ce0a` を実行した。本番R2の読み戻しでは、2060.Tの2026-03-30・¥24.5と2026-09-29・¥26が各1件となり、`trailing_12_month_per_share` は従来の重複合計505円から50.5円に修正された。重複イベント日を検出すると `Ticker.history(period="max", repair=True)` で対象履歴を再構築し、取得に失敗した場合は前回partitionを保持する。
+
+本番APIでは、7203と2060の2018〜2025年の12月価格8期分すべてについて、XTKS最終営業日の日付を確認した。日付は2018-12-28、2019-12-30、2020-12-30、2021-12-30、2022-12-30、2023-12-29、2024-12-30、2025-12-30で、終値は保存済みのyfinance月足 `Close` のまま。
+
+2060.Tの `current.json` 由来カレンダー情報は2027-03-30 / `available` / `Yahoo Finance via yfinance Ticker.calendar`、取得日時は `2026-10-17T14:31:41+09:00` のままだった。run #166の高水準yfinance呼び出し内に `ticker_calendar` はなく、保存カレンダーを新規取得していない。`/api/v1/dividend-months` は同じ日付を過去の配当履歴から `estimated_from_dividend_history` として選択する。この表示は新しい `Ticker.calendar` 取得とも `Ticker.get_info` フォールバックとも異なる。run #166は手動起動であり、通常営業日あたりの予算計測には含めない。
+
+同じ時点の本番 `/api/v1/income-advice-candidates` は、R2のV2データ由来の世代 `2026-10-19`・2,993候補を返した。JDK 17を指定して確認したエミュレータの受取月別シミュレーションでは、空白月4・5・10・11月に対し、上位候補4465・9678・4992が配当予想額と補完月付きで表示された。Worker/R2公開とアプリ側のランキング表示を読み戻し確認した。
+
+8303のissuer-dividendとyfinance履歴は株数基準が一致していない。SBI新生銀行の[2026年3月期有価証券報告書](https://corp.sbishinseibank.co.jp/ja/news/news/auto_20260619120300_S100YDBB/pdfFile.pdf)は、2022〜2025年度の1株配当額を2025-07-27の1対1,400万株分割前の実額と説明し、2023-10-02の1対2,000万株併合、2024-03-15の1対6株分割、2025-07-27の1対1,400万株分割を記載している。本番R2のissuer行は12 / 12 / 40,000,000 / 40,000,000、yfinance暦年行は2022・2023年が240,000,000、2024・2025年が0。yfinance分割履歴には2017年の1対10併合と2023年の1対2,000万併合だけがあり、2024・2025年の分割はない。このため、両配当系列を現行株数基準に調整済みとは扱えず、元値を保ったまま基準未確認として扱う。run #166開始前の2026年イベントは各9件重複しTTM ¥468だったが、再構築後は各1件、TTM ¥52をAPIで確認した。別の分割履歴欠落のためFY DPSの株数基準未確認は継続課題。
+
+run #166（[Actions](https://github.com/masacgt/Diview/actions/runs/39342594082)）は手動 `workflow_dispatch` で4,442コードを走査し、成功4,334・失敗108・カタログ4,356件でgeneration `2026-10-19` を公開した。yfinance高水準呼び出し3,715回、HTTP 429は0件。同期job 1時間10分40秒、calendar job 28秒で、active runner timeは合計1時間11分08秒だった。security collectionは4,102.967秒、カタログ生成82.593秒、公開7.996秒。R2 active wall 4,102.957秒（R2-only 2,796.904秒、yfinance重複1,306.053秒）で、操作数はget_object 84,800、get_body 79,835、list_objects_v2 14,254、put_object 67,159、delete_object 7。エラー内訳はAttributeError 55、同一セッション404再試行抑止52、1319.Tの配当イベント欠落安全停止1。`AttributeError` の55コードは#158・#159・#161とも全て一致（`A`終端51コード、その他2972・4616・6085・7085）するが、ログにtracebackがなく発生段階は未確定である。先行run #159と同じセッション日の手動再処理のため、月2,000分の通常計測には含めない。通常schedule複数回の実測が揃うまでActions timeout 360分を変更しない。
+
+### J-Quantsユニバース取得の証跡
+
+2026-10-20にJ-Quants v2 /equities/master の取得日別スナップショットを比較した。Date=2026-07-27 は正規化後4,444コード、Date=2026-07-28 は4,442コードで、後者から191Aと3271が外れ、追加コードはなかった。これは手動run #158の4,444件と通常run #159の4,442件の差と一致する。ただし、これらの過去runは応答Dateと完全なコード一覧を保存していないため、個々のrunがその日付の応答を使ったことまでは確定できず、現時点の説明は推定である。
+
+通常同期と全銘柄studyは、J-Quants応答のDate群、正規化コード総数、ソート済み全コード、コード列のSHA-256を含むJSON artifactをActionsに30日保存する。以後はrun artifactとrunログの取得件数を照合し、同じ日付のスナップショットでも件数差やコード差が出た場合に一覧を直接比較する。既存のJ-Quants日付カバレッジ外を要求して取得を強制する仕様ではない。
+
+### 権利日推定の全市場カバレッジ監査
+
+手動 workflow rights-date-coverage-audit.yml はR2を読み取り専用で調査する。universe/current.json の有効銘柄すべてについて current.json の配当履歴取得状態と、推定ロジックと同じ5年範囲の正の配当イベントを分類し、推定の有無、同月の異なる2年度以上の履歴がない状態、空履歴、正のイベントなし、取得失敗・未取得、current.json欠落を銘柄単位でartifactに保存する。推定条件を満たすのに推定レコードがない場合は、別分類で残す。workflowはR2の一覧・読み出しだけを行い、派生権利日データは変更しない。ローカルではモックR2を使った全経路確認でイベント年partitionの銘柄コード復元とR2書込ゼロを確認し、collector suite 77/77件が成功した。全市場の分類結果はActions実行後に記録する。
