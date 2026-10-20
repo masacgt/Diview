@@ -359,6 +359,8 @@ fun StockDetailScreen(
         } finally { shareSplitHistoryLoading = false }
     }
     val isCalendarYearDividendHistory = financial?.dividendHistoryBasis == "calendar_year_observed_distributions"
+    val dividendShareBasisUnverified = financial?.dividendShareBasisStatus == "unverified_incomplete_corporate_action_history"
+        || financial?.issuerDividendShareBasisStatus == "unverified_incomplete_corporate_action_history"
     val baseProfile = financial?.profile ?: com.kurogane.dividend.model.StockFinancialProfile()
     var financialError by remember(currentHolding.code) { mutableStateOf(false) }
     var financialLoading by remember(currentHolding.code) { mutableStateOf(false) }
@@ -916,6 +918,14 @@ fun StockDetailScreen(
                             Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.15f)) {
                                 Text(if (profile.consecutiveYears > 0) stringResource(R.string.stock_detail_label_3) else stringResource(R.string.stock_detail_label_4), modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
+                        }
+
+                        if (dividendShareBasisUnverified) {
+                            Text(
+                                "株式分割・併合履歴が不完全なため、過去の1株配当額の基準は未確認です。",
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.dense
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
