@@ -2631,6 +2631,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
 
     if update_monthly_now or legacy_monthly_migration_pending:
         save_monthly_prices(client, bucket, symbol, monthly, as_of=as_of)
+    valuation_by_period = {str(row.get("period_end", ""))[:10]: row for row in valuation}
     for row in statements:
         period_end = str(row.get("period_end", ""))[:10]
         year = period_end[:4]
@@ -2641,7 +2642,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             put_json_if_changed(client, bucket, key, {
                 "schema_version": 1, "symbol": symbol, "year": year,
                 "annual": row,
-                "valuation": valuation.get(period_end),
+                "valuation": valuation_by_period.get(period_end),
                 "retrieval_status": financial_status,
                 "updated_at": iso_now(), "source": "Yahoo Finance via yfinance",
             })
