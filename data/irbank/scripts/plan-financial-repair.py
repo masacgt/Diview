@@ -95,8 +95,9 @@ def main():
     for index in range(0, len(groups), 500):
         name = f"repair_{index // 500:05d}.sql"
         body = "\n".join(groups[index:index + 500]) + "\n"
-        (output / name).write_text(body, encoding="utf-8")
-        files.append({"name": name, "sha256": hashlib.sha256(body.encode()).hexdigest()})
+        encoded = body.encode("utf-8")
+        (output / name).write_bytes(encoded)
+        files.append({"name": name, "sha256": hashlib.sha256(encoded).hexdigest()})
     report.update({"snapshot_sha256": hashlib.sha256(Path(args.snapshot).read_bytes()).hexdigest(),
                    "source_sha256": hashlib.sha256(Path(args.source).read_bytes()).hexdigest(), "files": files})
     (output / "manifest.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
