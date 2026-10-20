@@ -98,5 +98,5 @@
 
 ## 2026-10-20 follow-up rollout
 
-- [ ] Complete production rollout of follow-up consistency fixes. Local evidence: Python 91, Worker/D1 50, repair planner 1, Android JVM 154 passed and JDK 17 debug build succeeded. Production backup and guarded offline repair are prepared; live repair/deployment/read-back remain to verify.
+- [x] Complete production rollout of follow-up consistency fixes. Evidence: integrated Python 95, Worker/D1 53, repair planner 1, Android JVM 155 and JDK 17 build passed; live D1 has 49,592 annual rows with zero period mismatches; Worker deployment and R2 run #192 read-back succeeded, and both devices passed startup checks. See `review2-rollout-20261020.md` for scope and remaining UI checks.
 - [ ] Verify revised financial/cache behavior visually on device, including same-year multiple fiscal periods and split-adjusted history.

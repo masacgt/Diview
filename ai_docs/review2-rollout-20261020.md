@@ -17,13 +17,27 @@ The 15 pre-existing modified files and untracked attachment directory are retain
 
 ## Local validation
 
-- Python collector/refresh suite: 91 passed.
-- Worker/D1 suite: 50 passed.
+- Python collector/refresh suite: 91 passed in the original working tree, 90 in its published subset, and 95 after integration with latest main.
+- Worker/D1 suite: 50 passed initially; 53 passed after retaining main's class-share and share-basis protections.
 - Guarded repair planner regression: 1 passed.
-- JDK 17 Android: 154 JVM tests passed; debug APK build succeeded.
+- JDK 17 Android: 154 JVM tests passed initially; integrated production source passed 155 JVM tests and a fresh debug APK build.
 - Actual production export plus additive migrations compiled 59 Worker SQL statements offline, preserving existing operational row counts.
 - Actual backup contains 17,522 corrupt annual rows. All surviving payloads matched the source CSV. Guarded offline repair yields 49,592 annual rows, zero period mismatches, and passes replay verification. This is the verified affected-group subset, not an unconditional reload of all 61,204 source CSV rows.
 
 ## Rollout status
 
-Production backup is stored only under ignored `.build/`. Production deployment, repair execution, and API read-back are pending in this snapshot of the note.
+Production backup and the post-repair export are stored only under ignored `.build/`.
+
+- Applied additive migrations 0003–0005 to production. Existing canonical issuer-dividend table contains zero records because the legacy D1 dividend table was empty; the current issuer history is served from R2.
+- Applied all 36 guarded repair chunks. The live export exactly matches the offline expected `financial_periods` table: 49,592 annual rows and zero JSON/key period mismatches. Valid rows were not overwritten. The other 11,612 source CSV rows were outside the identified corrupt groups and were not blindly imported.
+- The first repair attempt stopped before writes on a checksum mismatch caused by Windows newline translation. SQL now writes explicit UTF-8 bytes and the regression checks the actual file hashes.
+- Integrated onto `origin/main` in an isolated worktree, preserving newer class-share, 8303 share-basis, typography, and collection changes. Resolved the annual valuation list/dictionary integration boundary; all final suites passed.
+- Production Worker version `e95ca56b-88d1-4b98-ab4d-daa74120fc8a` serves 100% traffic, deployed from `a021f937`. Existing triggers were retained.
+- Production 4502 API returns 2026-03-31 DOE 4.1981758789120205, net D/E 0.5769995346890836, and equity ratio 47.89632289733827; both requested metrics are available. Analysis returns payout ratio 280.18 percentage points and quote-date freshness. 8303 retains the unverified share-basis status; 94345 exact-code financial API returns HTTP 200.
+- Installed the integrated debug APK on SCG01 `RFCNC0E4H8J` and `emulator-5554`. Both retained a running process and resumed MainActivity after launch; no new matching crash-buffer entries were found. This is startup validation, not visual acceptance of every cache or chart scenario.
+- R2 targeted run [#187](https://github.com/masacgt/Diview/actions/runs/39417160977) verified all 10 financial periods for 4502. Its old-budget derived regeneration was stopped only after explicit user approval; the existing published catalog remained intact.
+- Main run [#192](https://github.com/masacgt/Diview/actions/runs/39418812892) succeeded at 2026-10-20 21:14 JST: 4,356 eligible securities, 3,242 candidates, zero read failures, and successful R2 read-back. The workflow budget is 90 minutes with 32 R2 readers; Yahoo request limits are unchanged.
+- Direct R2 download and the Worker response match for the entire published catalog. For 4502, equity ratio changed from the stale 47,896,322.89733827 to 47.89632289733827 percent, and operating margin from 0.13798016743162025 to 10.30803068100104 percent. Both are now available and agree with the financial API's 2026-03-31 period.
+- The catalog intentionally excludes 10 securities without annual DPS, 726 without dividend history, and 378 without recurring dividend months. These are data/eligibility gaps, not failed R2 reads. 4502's payout statistic remains marked stale and PER remains empty; this rollout does not invent unavailable source inputs.
+- Both device installations used APK SHA-256 `f14281ae965a8694570aba423f51e25ffd3cbb91dbc7bf1d3b30bb380cd34a6b`. Exhaustive UI acceptance and the next scheduled full-market sync/analysis run remain unverified.
+- Twelve unrelated initially dirty files were byte-for-byte unchanged. Three shared files retained their pre-existing changes through selective staging. The original checkout remains on its original branch; production integration was done in the isolated worktree. Wrangler authentication removed a local tracked cache file; that cache change was not committed.
