@@ -3,6 +3,8 @@ package com.kurogane.dividend.data
 import com.kurogane.dividend.model.StockFinancialProfile
 import org.json.JSONObject
 import java.util.Locale
+import java.time.LocalDate
+import java.time.YearMonth
 import kotlin.math.pow
 
 data class CalendarYearDividend(val year: Int, val dps: Double)
@@ -80,18 +82,30 @@ data class FinancialData(
             val issuerDividendHistoryStatus = issuerDividendPayload?.optString("status")
                 ?.takeIf { it.isNotBlank() } ?: if (issuerDividends.isNotEmpty()) "available" else "empty"
             val annual = root.optJSONObject("financials")?.optJSONArray("annual")
-            val financial = (0 until (annual?.length() ?: 0)).mapNotNull { annual?.optJSONObject(it) }
-                .filter { it.optString("fiscal_year").matches(Regex("\\d{4}/\\d{2}")) }
-                .maxByOrNull { it.getString("fiscal_year") }
-            val period = financial?.optString("fiscal_year").orEmpty()
+            val annualRows = (0 until (annual?.length() ?: 0)).mapNotNull { annual?.optJSONObject(it) }
+            val financial = annualRows.filter { it.periodOrder() != null }
+                .maxWithOrNull(compareBy<JSONObject> { it.periodOrder()!! }
+                    .thenBy { it.periodEnd() != null })
+            val period = financial?.periodMonth().orEmpty()
             val forecastFiscalYear = period.take(4).toIntOrNull()?.plus(1)
                 ?.takeIf { it in 1900..2100 }
             val doeStatus = financial?.optJSONObject("field_status")?.optString("calculated_doe").orEmpty()
             val calculatedDoe = financial?.number("calculated_doe")
             val netDeRatio = financial?.number("net_de_ratio")
             val valuationRows = root.optJSONObject("valuation")?.optJSONArray("history")
-            val valuation = (0 until (valuationRows?.length() ?: 0)).mapNotNull { valuationRows?.optJSONObject(it) }
-                .filter { it.optString("fiscal_year") == period }.firstOrNull()
+            val valuations = (0 until (valuationRows?.length() ?: 0)).mapNotNull { valuationRows?.optJSONObject(it) }
+            val end = financial?.periodEnd()
+            val monthRows = (annualRows + valuations).filter { it.periodMonth() == period }
+            val unambiguousMonth = monthRows.mapNotNull { it.periodEnd() }.distinct().size <= 1
+            val valuation = if (financial == null) null else {
+                valuations.firstOrNull { end != null && it.periodEnd() == end }
+                    ?: valuations.filter {
+                        period.isNotBlank() && it.periodMonth() == period && unambiguousMonth &&
+                            (financial.hasNoPeriodEnd() || it.hasNoPeriodEnd()) &&
+                            (it.hasNoPeriodEnd() || it.periodEnd() != null) &&
+                            (financial.hasNoPeriodEnd() || end != null)
+                    }.singleOrNull()
+            }
             val dividend = rows.lastOrNull { it.optInt("calendar_year").toString() == period.take(4) }
             fun percent(numerator: Double?, denominator: Double?): Double? =
                 if (numerator != null && denominator != null && denominator > 0) numerator / denominator * 100 else null
@@ -119,8 +133,8 @@ data class FinancialData(
             recent.reverse()
             val growth = if (recent.size >= 2 && recent.first().dps > 0)
                 ((recent.last().dps / recent.first().dps).pow(1.0 / (recent.size - 1)) - 1) * 100 else null
-            val ranges = (0 until (valuationRows?.length() ?: 0)).mapNotNull { valuationRows?.optJSONObject(it) }
-                .filter { it.optString("fiscal_year").take(4).toIntOrNull()?.let { year ->
+            val ranges = valuations
+                .filter { it.periodMonth().take(4).toIntOrNull()?.let { year ->
                     period.take(4).toIntOrNull()?.let { year in (it - 4)..it } } == true }
                 .mapNotNull { it.number("dividend_yield_adjusted") }
             val profile = StockFinancialProfile(
@@ -165,6 +179,25 @@ data class FinancialData(
 
 internal fun JSONObject.number(key: String): Double? =
     if (!has(key) || isNull(key)) null else optDouble(key).takeIf(Double::isFinite)
+
+private fun JSONObject.hasNoPeriodEnd(): Boolean =
+    !has("period_end") || isNull("period_end") || optString("period_end").isBlank()
+
+private fun JSONObject.periodEnd(): LocalDate? =
+    if (hasNoPeriodEnd()) null else runCatching { LocalDate.parse(getString("period_end")) }.getOrNull()
+
+private fun JSONObject.periodMonth(): String =
+    periodEnd()?.toString()?.take(7)?.replace('-', '/')
+        ?: optString("fiscal_year").takeIf {
+            it.matches(Regex("\\d{4}/\\d{2}")) &&
+                runCatching { YearMonth.parse(it.replace('/', '-')) }.isSuccess
+        }.orEmpty()
+
+private fun JSONObject.periodOrder(): LocalDate? =
+    periodEnd() ?: if (hasNoPeriodEnd()) {
+        // An undated legacy month must not outrank a known day within that month.
+        runCatching { YearMonth.parse(periodMonth().replace('/', '-')).atDay(1) }.getOrNull()
+    } else null
 
 fun Double.financialText(digits: Int = 1, suffix: String = ""): String =
     if (isFinite()) String.format(Locale.JAPAN, "%.${digits}f", this) + suffix else "未取得"

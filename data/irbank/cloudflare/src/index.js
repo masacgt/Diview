@@ -406,6 +406,8 @@ async function readV2DividendHistoryBounds(env, symbol) {
   }
 }
 
+const CATALOG_GENERATION_PATTERN = /^\d{4}-\d{2}-\d{2}(?:-[0-9a-f]{32})?$/;
+
 async function readV2Catalog(env, generation = '') {
   const key = generation
     ? `${YFINANCE_V2_ROOT}/catalog/generations/${generation}.json`
@@ -466,6 +468,10 @@ function yfinanceCalendarYearDividends(events) {
   };
 }
 
+function financialPeriodKey(row) {
+  return String(row?.period_end || row?.fiscal_year || row?.year || '').replaceAll('/', '-');
+}
+
 async function readV2FinancialPayload(env, code) {
   const symbol = yfinanceV2Symbol(code);
   if (!symbol || !env.MARKET_DATA) return null;
@@ -479,7 +485,11 @@ async function readV2FinancialPayload(env, code) {
   ]);
   if (!profile && !current && financialDocuments.length === 0 && dividendDocuments.length === 0
     && issuerDividendDocuments.length === 0) return null;
-  financialDocuments.sort((a, b) => String(a.year || '').localeCompare(String(b.year || '')));
+  const documentPeriodKey = document => financialPeriodKey(
+    document.annual?.period_end ? document.annual
+      : document.valuation?.period_end ? document.valuation : document,
+  );
+  financialDocuments.sort((a, b) => documentPeriodKey(a).localeCompare(documentPeriodKey(b)));
   const sourceRows = (section) => financialDocuments.map(document => {
     const row = document[section];
     if (!row || typeof row !== 'object') return null;
@@ -505,8 +515,15 @@ async function readV2FinancialPayload(env, code) {
       if (row.field_status?.[key] === 'available' && !row.migration_source) yfinanceValues[key] = value;
       else seedValues[key] = value;
     }
+    const mergedRow = { ...row, ...seedValues, ...yfinanceValues };
+    for (const field of ['sales', 'operating_profit', 'operating_cf', 'investing_cf']) {
+      if (Array.isArray(row.field_status_reason?.[field])
+        && row.field_status_reason[field].includes('mixed_source_units_not_comparable')) {
+        mergedRow[field] = null;
+      }
+    }
     return {
-      row: { ...row, ...(sourceValues ? { source_values: sourceValues } : {}), ...seedValues, ...yfinanceValues },
+      row: { ...mergedRow, ...(sourceValues ? { source_values: sourceValues } : {}) },
       seed: Object.keys(seedValues).length ? {
         fiscal_year: row.fiscal_year,
         period_end: row.period_end,
@@ -516,8 +533,8 @@ async function readV2FinancialPayload(env, code) {
       } : null,
     };
   }).filter(Boolean);
-  const annualSources = sourceRows('annual').sort((a, b) => String(a.row.fiscal_year || '').localeCompare(String(b.row.fiscal_year || '')));
-  const valuationSources = sourceRows('valuation').sort((a, b) => String(a.row.fiscal_year || '').localeCompare(String(b.row.fiscal_year || '')));
+  const annualSources = sourceRows('annual').sort((a, b) => financialPeriodKey(a.row).localeCompare(financialPeriodKey(b.row)));
+  const valuationSources = sourceRows('valuation').sort((a, b) => financialPeriodKey(a.row).localeCompare(financialPeriodKey(b.row)));
   const annual = annualSources.map(item => item.row);
   const seedAnnual = annualSources.map(item => item.seed).filter(Boolean);
   const valuation = valuationSources.map(item => item.row);
@@ -1304,8 +1321,16 @@ async function runScheduledAnalysis(env) {
       targetsBySecurity.set(row.security_code, targets);
     }
     const latestState = await env.DB.prepare(`SELECT value_json FROM backend_state WHERE state_key = 'analysis_source'`).first();
-    const marketObject = await env.MARKET_DATA?.head('market/yfinance/latest_market_data.json');
-    const sourceTag = JSON.stringify({ etag: marketObject?.httpEtag || null, stock_version: stockDefs.version || 1, watch_version: watchDefs.version || 1 });
+    const [catalogObject, financialRevisionObject] = await Promise.all([
+      env.MARKET_DATA?.head(`${YFINANCE_V2_ROOT}/catalog/current.json`),
+      env.MARKET_DATA?.head(`${YFINANCE_V2_ROOT}/financial_revision.json`),
+    ]);
+    const sourceTag = JSON.stringify({
+      catalog_etag: catalogObject?.httpEtag || catalogObject?.etag || null,
+      financial_revision_etag: financialRevisionObject?.httpEtag || financialRevisionObject?.etag || null,
+      stock_version: stockDefs.version || 1,
+      watch_version: watchDefs.version || 1,
+    });
     const sourceChanged = latestState?.value_json !== sourceTag;
     const securities = sourceChanged
       ? (await env.DB.prepare('SELECT security_code, security_code_display, name, metrics_json FROM securities ORDER BY security_code').all()).results || []
@@ -1968,7 +1993,7 @@ export default {
       const cursor = String(url.searchParams.get('cursor') || '');
       const codesParam = url.searchParams.get('codes');
       const requestedCodes = codesParam == null ? null : [...new Set(codesParam.split(',').map(value => yfinanceV2Code(value)))];
-      if ((requestedRunId && !/^\d{4}-\d{2}-\d{2}$/.test(requestedRunId))
+      if ((requestedRunId && !CATALOG_GENERATION_PATTERN.test(requestedRunId))
         || (requestedDate && !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate))
         || (cursor && !/^\d{1,8}$/.test(cursor))
         || (codesParam != null && (!requestedCodes.length || requestedCodes.length > 50 || requestedCodes.some(code => !code)))) {
@@ -1980,7 +2005,8 @@ export default {
         if (!catalog) return json({ error: 'catalog_unavailable' }, 503);
         const generation = String(catalog.generation || catalog.market_data_date || '');
         const marketDataDate = String(catalog.market_data_date || '');
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(generation) || !marketDataDate) return json({ error: 'catalog_invalid' }, 503);
+        if (!CATALOG_GENERATION_PATTERN.test(generation) || !marketDataDate) return json({ error: 'catalog_invalid' }, 503);
+        if (requestedRunId && requestedRunId !== generation) return json({ error: 'catalog_generation_mismatch' }, 409);
         if (requestedDate && requestedDate !== marketDataDate) return json({ error: 'catalog_generation_mismatch' }, 409);
         const catalogItems = catalog.items || [];
         const offset = Math.min(catalogItems.length, Number.parseInt(cursor || '0', 10));

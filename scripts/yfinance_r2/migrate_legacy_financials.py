@@ -11,6 +11,7 @@ import re
 import sys
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any
@@ -152,7 +153,8 @@ def merge_row(
         if field not in seed_values:
             seed_values[field] = value
             added += 1
-        if row.get(field) is None:
+        blocked_reason = (row.get("field_status_reason") or {}).get(field, [])
+        if row.get(field) is None and "mixed_source_units_not_comparable" not in blocked_reason:
             row[field] = value
         statuses.setdefault(field, "legacy_migrated")
     if seed_values:
@@ -323,6 +325,17 @@ def main() -> int:
             if completed % 100 == 0 or completed == len(securities):
                 with _PROGRESS_LOCK:
                     print(f"Processed {completed}/{len(securities)} securities", flush=True)
+
+    if not args.dry_run:
+        # Successful and partially failed migrations may both change annual
+        # documents without publishing a new market catalog.
+        client.put_object(
+            Bucket=bucket, Key=f"{V2_ROOT}/financial_revision.json",
+            Body=json_bytes({
+                "schema_version": 1, "revision": uuid.uuid4().hex, "updated_at": iso_now(),
+            }),
+            ContentType="application/json",
+        )
 
     counts: dict[str, int] = {}
     for result in results:

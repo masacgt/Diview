@@ -12,6 +12,12 @@ try {
         throw "Could not initialize the local D1 schema."
     }
 
+    # Apply operational tables as well as the imported market-data schema.
+    npx wrangler d1 migrations apply diview-irbank-dev-local --local --config $config
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not apply local D1 migrations."
+    }
+
     npx wrangler dev --config $config
     if ($LASTEXITCODE -ne 0) {
         throw "The local Worker stopped with an error."

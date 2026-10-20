@@ -323,6 +323,45 @@ test('financial API retains equity ratios calculated from one source', async () 
   assert.equal(data.financials.annual[0].source_values.calculated.values.equity_ratio_computed.value, 20);
 });
 
+test('financial API preserves mixed-unit null guards and raw provenance without changing other merges', async () => {
+  const base = 'market/yfinance/v2/securities/7203.T';
+  const fields = ['sales', 'operating_profit', 'operating_cf', 'investing_cf'];
+  const annual = {
+    fiscal_year: '2026/03', period_end: '2026-03-31',
+    ...Object.fromEntries(fields.map(field => [field, null])),
+    field_status: Object.fromEntries(fields.map(field => [field, 'unsupported'])),
+    field_status_reason: Object.fromEntries(fields.map(field => [field, ['mixed_source_units_not_comparable']])),
+    source_values: {
+      seed: { source: 'IRBANK', values: { sales: 100, operating_profit: 20, operating_cf: 30, investing_cf: -10, total_assets: 500 } },
+      yfinance: { values: { total_assets: 500000000 } },
+    },
+  };
+  const documents = new Map([[`${base}/financials/2026-03-31.json`, { annual }]]);
+  const fetchData = async () => {
+    const response = await worker.fetch(new Request('https://example.com/api/v1/financial-data/7203'),
+      dividendEnvironment(documents));
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  const data = await fetchData();
+  const row = data.financials.annual[0];
+  for (const field of fields) assert.equal(row[field], null, field);
+  for (const [field, value] of Object.entries(annual.source_values.seed.values)) {
+    assert.equal(data.financials.seed_annual[0].values[field], value);
+  }
+  assert.deepEqual(row.source_values, annual.source_values);
+  assert.equal(row.total_assets, 500000000);
+  // With one fresh cash-flow input, the seed-only other side must stay null.
+  annual.operating_cf = 30000000;
+  annual.source_values.yfinance.values.operating_cf = 30000000;
+  delete annual.field_status_reason.operating_cf;
+  annual.field_status_reason.sales = ['different_reason'];
+  const mixed = (await fetchData()).financials.annual[0];
+  assert.equal(mixed.operating_cf, 30000000);
+  assert.equal(mixed.investing_cf, null);
+  assert.equal(mixed.sales, 100);
+});
+
 test('financial API keeps observed event history separate from legacy fiscal-year DPS', async () => {
   const code = '1306';
   const currentYear = Number(new Intl.DateTimeFormat('en', { timeZone: 'Asia/Tokyo', year: 'numeric' }).format(new Date()));
@@ -712,6 +751,72 @@ test('legacy trailing-distribution catalog rows are not exposed as annual DPS or
   const quoteItem = (await quotesResponse.json()).items[0];
   assert.equal(quoteItem.annual_dividend_per_share, null);
   assert.equal(quoteItem.yield_rate, null);
+});
+
+test('live-quotes keeps UUID generations pinned across same-day catalog publication', async () => {
+  const date = '2026-10-20';
+  const generation = `${date}-${'a'.repeat(32)}`;
+  const catalog = { generation, market_data_date: date, items: [
+    { code: '7203', price: 100 }, { code: '8306', price: 200 },
+  ] };
+  const documents = new Map([
+    ['market/yfinance/v2/catalog/current.json', catalog],
+    [`market/yfinance/v2/catalog/generations/${generation}.json`, catalog],
+  ]);
+  const env = dividendEnvironment(documents);
+  const first = await worker.fetch(new Request('https://example.com/api/v1/live-quotes?limit=1'), env);
+  assert.equal(first.status, 200);
+  const page = await first.json();
+  assert.equal(page.run_id, generation);
+  documents.set('market/yfinance/v2/catalog/current.json', {
+    generation: `${date}-${'b'.repeat(32)}`, market_data_date: date, items: [],
+  });
+  const next = await worker.fetch(new Request(
+    `https://example.com/api/v1/live-quotes?run_id=${page.run_id}&cursor=${page.next_cursor}&market_data_date=${date}`,
+  ), env);
+  assert.equal(next.status, 200);
+  assert.equal((await next.json()).items[0].price, 200);
+  for (const invalid of [`${date}-abc`, `${date}-${'g'.repeat(32)}`, `${generation}/bad`]) {
+    assert.equal((await worker.fetch(new Request(
+      `https://example.com/api/v1/live-quotes?run_id=${invalid}`,
+    ), env)).status, 400);
+  }
+  documents.set(`market/yfinance/v2/catalog/generations/${generation}.json`, {
+    ...catalog, generation: `${date}-${'c'.repeat(32)}`,
+  });
+  assert.equal((await worker.fetch(new Request(
+    `https://example.com/api/v1/live-quotes?run_id=${generation}`,
+  ), env)).status, 409);
+});
+
+test('financial aggregation orders full periods and retains fiscal-year-only legacy rows', async () => {
+  const base = 'market/yfinance/v2/securities/1605.T/financials';
+  const documents = new Map();
+  // Reverse same-year insertion order, as R2 listing order is not a period contract.
+  for (const period of ['2019-12-31', '2019-03-31']) {
+    documents.set(`${base}/${period}.json`, {
+      year: '2019',
+      annual: { fiscal_year: '2019', period_end: period, sales: period.endsWith('12-31') ? 200 : 100 },
+      valuation: { fiscal_year: '2019', period_end: period, per: 10 },
+      retrieval_status: { valuation: period.endsWith('12-31') ? 'available' : 'empty' },
+    });
+  }
+  documents.set(`${base}/2018.json`, {
+    year: '2018', annual: { fiscal_year: '2018/03', sales: 50 },
+    valuation: { fiscal_year: '2018/03', per: 5 },
+  });
+  const response = await worker.fetch(
+    new Request('https://example.com/api/v1/financial-data/1605'), dividendEnvironment(documents),
+  );
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  for (const rows of [data.financials.annual, data.financials.seed_annual,
+    data.valuation.history, data.valuation.seed_history]) {
+    assert.deepEqual(rows.map(row => row.period_end || row.fiscal_year),
+      ['2018/03', '2019-03-31', '2019-12-31']);
+  }
+  assert.equal(data.financials.annual.at(-1).sales, 200);
+  assert.equal(data.valuation.field_status, 'available');
 });
 
 test('requested live quotes use annual fiscal DPS and keep trailing distributions separate', async () => {

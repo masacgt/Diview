@@ -1,10 +1,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const readline = require('node:readline');
 
 const root = path.resolve(__dirname, '..');
 const d1 = path.join(root, 'organized', 'd1');
 const out = path.join(root, 'cloudflare', 'import');
-fs.mkdirSync(out, { recursive: true });
 
 const configs = [
   {
@@ -41,101 +41,80 @@ function parseCsvLine(line) {
     else if (ch === ',') { out.push(cur); cur = ''; }
     else cur += ch;
   }
+  if (quoted) throw new Error('Unterminated CSV quote');
   out.push(cur);
   return out;
 }
 
 const sql = (value) => value === '' || value == null ? 'NULL' : `'${String(value).replaceAll("'", "''")}'`;
 
-async function main() {
-for (const config of configs) {
-  const input = path.join(d1, config.file);
-  const lines = fs.readFileSync(input, 'utf8').split(/\r?\n/).filter(Boolean);
-  const header = parseCsvLine(lines.shift());
-  if (header.join('|') !== config.columns.join('|')) throw new Error(`Unexpected header in ${config.file}`);
-
-  let sourceRows = lines.map(parseCsvLine);
-  if (config.table === 'financial_periods') {
-    sourceRows = sourceRows.filter(row => row[1] === 'annual');
+// Types are table-specific: annual periods are YYYY/MM TEXT, dividend years INTEGER.
+function sqlValue(config, column, value) {
+  if (value === '' || value == null) return 'NULL';
+  if (column === 'fiscal_year') {
+    const pattern = config.table === 'financial_periods' ? /^\d{4}\/(0[1-9]|1[0-2])$/ : /^\d{4}$/;
+    if (!pattern.test(value)) throw new Error(`Invalid ${config.table}.${column}: ${value}`);
+    return config.table === 'financial_periods' ? sql(value) : value;
   }
+  if (column === 'is_consolidated') {
+    if (value === 'true' || value === '1') return '1';
+    if (value === 'false' || value === '0') return '0';
+    throw new Error(`Invalid ${column}: ${value}`);
+  }
+  if (column === 'annual_dps' || column === 'annual_dps_adjusted') {
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value) || !Number.isFinite(Number(value))) {
+      throw new Error(`Invalid ${column}: ${value}`);
+    }
+    return value;
+  }
+  return sql(value);
+}
 
-  // The dividend and financial CSVs can exceed the default 4 GB V8 heap.
-  // Stream large inputs in bounded chunks while preserving the existing SQL format.
-  if (config.table !== 'securities') {
-    const inputStream = fs.createReadStream(input, { encoding: 'utf8' });
-    let carry = '';
+async function main({ inputDir = d1, outputDir = out, log = console.log } = {}) {
+  fs.mkdirSync(outputDir, { recursive: true });
+  for (const config of configs) {
+    const input = fs.createReadStream(path.join(inputDir, config.file), { encoding: 'utf8' });
+    const lines = readline.createInterface({ input, crlfDelay: Infinity });
     let firstLine = true;
     let part = 0;
-    let chunk = [];
     let count = 0;
+    let chunk = [];
     const flush = () => {
       if (!chunk.length) return;
-      const statements = chunk.map((row) => {
-        const values = row.map((v, idx) => {
-          const col = config.columns[idx];
-          if (['fiscal_year','is_consolidated','annual_dps','annual_dps_adjusted'].includes(col) && v !== '') return v;
-          return sql(v);
-        }).join(',');
-        return `INSERT OR REPLACE INTO ${config.table} (${config.columns.join(',')}) VALUES (${values});`;
-      });
-      const filePrefix = config.table === 'financial_periods' ? 'financial_periods_annual' : 'dividend_events';
-      const name = `${filePrefix}_${String(part++).padStart(5, '0')}.sql`;
-      fs.writeFileSync(path.join(out, name), `${statements.join('\n')}\n`);
+      const prefix = config.table === 'financial_periods' ? 'financial_periods_annual' : config.table;
+      const name = `${prefix}_${String(part++).padStart(5, '0')}.sql`;
+      fs.writeFileSync(path.join(outputDir, name), `${chunk.join('\n')}\n`);
       chunk = [];
     };
-    const consumeLine = (line) => {
-      if (firstLine) {
-        firstLine = false;
-        if (line.replace(/^\uFEFF/, '').split(',').join('|') !== config.columns.join('|')) throw new Error(`Unexpected header in ${config.file}`);
-        return;
+    try {
+      for await (const line of lines) {
+        if (firstLine) {
+          firstLine = false;
+          const header = parseCsvLine(line.replace(/^\uFEFF/, ''));
+          if (header.join('|') !== config.columns.join('|')) throw new Error(`Unexpected header in ${config.file}`);
+          continue;
+        }
+        if (!line) continue;
+        const row = parseCsvLine(line);
+        if (row.length !== config.columns.length) throw new Error(`Unexpected column count in ${config.file}`);
+        if (config.table === 'financial_periods' && row[1] !== 'annual') continue;
+        const values = row.map((value, index) => sqlValue(config, config.columns[index], value));
+        chunk.push(`INSERT OR REPLACE INTO ${config.table} (${config.columns.join(',')}) VALUES (${values.join(',')});`);
+        count++;
+        if (chunk.length >= config.chunkRows) flush();
       }
-      if (!line) return;
-      const row = parseCsvLine(line);
-      if (config.table === 'financial_periods' && row[1] !== 'annual') return;
-      chunk.push(row);
-      count++;
-      if (chunk.length >= config.chunkRows) flush();
-    };
-    await new Promise((resolve, reject) => {
-      inputStream.on('data', (data) => {
-        carry += data;
-        const lines = carry.split(/\r?\n/);
-        carry = lines.pop();
-        for (const line of lines) consumeLine(line);
-      });
-      inputStream.on('end', () => {
-        if (carry) consumeLine(carry);
-        flush();
-        resolve();
-      });
-      inputStream.on('error', reject);
-    });
-    console.log(`${config.table}: ${count} rows -> ${part} files`);
-    continue;
+      if (firstLine) throw new Error(`Missing header in ${config.file}`);
+      flush();
+    } finally {
+      lines.close();
+      input.destroy();
+    }
+    log(`${config.table}: ${count} rows -> ${part} files`);
   }
-
-  let part = 0;
-  for (let i = 0; i < sourceRows.length; i += config.chunkRows) {
-    const rows = sourceRows.slice(i, i + config.chunkRows);
-    const statements = rows.map((row) => {
-      const values = row.map((v, idx) => {
-        const col = config.columns[idx];
-        if (['fiscal_year','is_consolidated','annual_dps','annual_dps_adjusted'].includes(col) && v !== '') return v;
-        return sql(v);
-      }).join(',');
-      return `INSERT OR REPLACE INTO ${config.table} (${config.columns.join(',')}) VALUES (${values});`;
-    });
-    const body = `${statements.join('\n')}\n`;
-    const filePrefix = config.table === 'financial_periods' ? 'financial_periods_annual' : config.table;
-    const name = `${filePrefix}_${String(part).padStart(5, '0')}.sql`;
-    fs.writeFileSync(path.join(out, name), body);
-    part++;
-  }
-  console.log(`${config.table}: ${sourceRows.length} rows -> ${part} files`);
-}
 }
 
-main().catch((error) => {
+module.exports = { main };
+if (require.main === module) main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
