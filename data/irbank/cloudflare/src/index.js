@@ -487,6 +487,17 @@ async function readV2FinancialPayload(env, code) {
     const seedValues = { ...(explicit?.seed?.values && typeof explicit.seed.values === 'object' ? explicit.seed.values : {}) };
     const yfinanceValues = { ...(explicit?.yfinance?.values && typeof explicit.yfinance.values === 'object' ? explicit.yfinance.values : {}) };
     const calculatedValues = explicit?.calculated?.values && typeof explicit.calculated.values === 'object' ? explicit.calculated.values : {};
+    const compatibleCalculatedValues = Object.fromEntries(Object.entries(calculatedValues).filter(([field, calculation]) => {
+      if (field !== 'equity_ratio_computed') return true;
+      const sources = calculation?.input_sources;
+      return Boolean(sources?.equity && sources?.total_assets && sources.equity === sources.total_assets);
+    }));
+    const sourceValues = explicit ? {
+      ...explicit,
+      ...(explicit.calculated && typeof explicit.calculated === 'object' ? {
+        calculated: { ...explicit.calculated, values: compatibleCalculatedValues },
+      } : {}),
+    } : null;
     for (const [key, value] of Object.entries(row)) {
       if (['fiscal_year', 'period_end', 'field_status', 'migration_source', 'source_values'].includes(key)
         || Object.hasOwn(seedValues, key) || Object.hasOwn(yfinanceValues, key)
@@ -495,7 +506,7 @@ async function readV2FinancialPayload(env, code) {
       else seedValues[key] = value;
     }
     return {
-      row: { ...row, ...seedValues, ...yfinanceValues },
+      row: { ...row, ...(sourceValues ? { source_values: sourceValues } : {}), ...seedValues, ...yfinanceValues },
       seed: Object.keys(seedValues).length ? {
         fiscal_year: row.fiscal_year,
         period_end: row.period_end,
