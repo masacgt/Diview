@@ -209,6 +209,34 @@ test('financial API aggregates only published v2 yfinance calendar-year events',
   ]);
 });
 
+test('financial API marks 8303 share basis unverified without changing stored dividend amounts', async () => {
+  const base = 'market/yfinance/v2/securities/8303.T';
+  const env = dividendEnvironment(new Map([
+    [`${base}/profile.json`, { display_name: 'ＳＢＩ新生銀行' }],
+    [`${base}/current.json`, { field_status: { dividend_history: 'available' } }],
+    [`${base}/dividends/2025.json`, { records: [{ date: '2025-03-31', amount: 40000000 }] }],
+    [`${base}/issuer_dividends/2025.json`, {
+      source: 'IRBANK Connect',
+      records: [{ fiscal_year: 2025, annual_dps: 40000000, annual_dps_adjusted: 40000000 }],
+    }],
+  ]));
+
+  const response = await worker.fetch(new Request('https://example.com/api/v1/financial-data/8303'), env);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.dividends.share_basis_status, 'unverified_incomplete_corporate_action_history');
+  assert.equal(data.issuer_dividends.share_basis_status, 'unverified_incomplete_corporate_action_history');
+  assert.equal(data.issuer_dividends.records[0].annual_dps, 40000000);
+  assert.equal(data.issuer_dividends.records[0].annual_dps_adjusted, 40000000);
+
+  const ordinaryBase = 'market/yfinance/v2/securities/7203.T';
+  const ordinary = dividendEnvironment(new Map([[`${ordinaryBase}/profile.json`, { display_name: 'トヨタ自動車' }]]));
+  const ordinaryResponse = await worker.fetch(new Request('https://example.com/api/v1/financial-data/7203'), ordinary);
+  const ordinaryData = await ordinaryResponse.json();
+  assert.equal(Object.hasOwn(ordinaryData.dividends, 'share_basis_status'), false);
+  assert.equal(Object.hasOwn(ordinaryData.issuer_dividends, 'share_basis_status'), false);
+});
+
 test('financial API returns calculated DOE and net D/E from the stored annual row', async () => {
   const code = '7203';
   const base = `market/yfinance/v2/securities/${code}.T`;
