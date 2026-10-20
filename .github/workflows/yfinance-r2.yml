@@ -162,7 +162,7 @@ jobs:
       - name: Install V2 and R2 dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
       - name: Build the initial candidate catalog from stored V2 records and verify R2 read-back
-        run: set -o pipefail; python scripts/yfinance_r2/generate_income_advice.py --publish --workers 8 2>&1 | tee income-advice-initial-generation.log
+        run: set -o pipefail; python scripts/yfinance_r2/generate_income_advice.py --publish --workers 32 2>&1 | tee income-advice-initial-generation.log
         shell: bash
         env:
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
@@ -212,7 +212,7 @@ jobs:
   yfinance-targeted-financial-refresh:
     if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'refresh-financials'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -223,7 +223,7 @@ jobs:
       - name: Install yfinance and R2 dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
       - name: Refresh one security's annual V2 financial records
-        run: set -o pipefail; python scripts/yfinance_r2/refresh_financial_v2.py --code "${TARGET_CODE}" 2>&1 | tee targeted-financial-refresh.log
+        run: set -o pipefail; python scripts/yfinance_r2/refresh_financial_v2.py --code "${TARGET_CODE}" --advice-workers 32 2>&1 | tee targeted-financial-refresh.log
         shell: bash
         env:
           TARGET_CODE: ${{ inputs.target_code }}
@@ -287,7 +287,7 @@ jobs:
     needs: yfinance-full-universe-financial-refresh
     if: always() && github.event_name == 'workflow_dispatch' && inputs.run_mode == 'refresh-all-financials' && needs.yfinance-full-universe-financial-refresh.result != 'cancelled'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -295,7 +295,7 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -r scripts/yfinance_r2/requirements.txt
       - name: Rebuild derived advice once after all financial shards, including partial failures
-        run: python scripts/yfinance_r2/generate_income_advice.py --publish --workers 8
+        run: python scripts/yfinance_r2/generate_income_advice.py --publish --workers 32
         env:
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

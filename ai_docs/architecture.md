@@ -42,7 +42,7 @@
 
 - V2 catalog generations use `YYYY-MM-DD-<uuidhex>`; `market_data_date` and schedule session dates retain ISO date semantics. Worker accepts legacy date-only IDs and new IDs. Per-generation files are immutable; publication metadata and income-advice references share the ID.
 - Financial refresh publishes `market/yfinance/v2/financial_revision.json`. Scheduled analysis compares that marker and the V2 catalog ETags instead of the retired market snapshot. Consumers select financial/valuation periods by complete `period_end`, with guarded fallback for undated legacy rows.
-- D1 migrations `0003_operational_schema.sql` and `0004_definition_defaults.sql` reconstruct operational tables and insert missing defaults without replacing operator definitions. These additions have not been applied to production. Validation and rollout boundaries: `review-fixes-20261020.md`.
+- D1 migrations `0003_operational_schema.sql` and `0004_definition_defaults.sql` reconstruct operational tables and insert missing defaults without replacing operator definitions. These additions and migration 0005 were applied to production on 2026-10-20; see `review2-rollout-20261020.md`. Validation and rollout boundaries: `review-fixes-20261020.md`.
 
 ## 2026-10-20 follow-up data contracts
 
