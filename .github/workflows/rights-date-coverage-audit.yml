@@ -1,0 +1,40 @@
+name: Audit history-based ex-dividend estimate coverage
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yfinance-rights-date-coverage-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/yfinance_r2/requirements-rights.txt
+      - name: Install read-only audit dependencies
+        run: python -m pip install -r scripts/yfinance_r2/requirements-rights.txt
+      - name: Read R2 and classify active-universe estimate coverage
+        run: python scripts/yfinance_r2/calculate_rights_dates.py --coverage-only --coverage-report rights-date-coverage.json
+        env:
+          CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: diview-market-data
+      - name: Save per-security coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rights-date-coverage-${{ github.run_id }}
+          path: rights-date-coverage.json
+          if-no-files-found: ignore
+          retention-days: 30

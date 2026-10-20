@@ -242,7 +242,23 @@ def make_client() -> Any:
                         region_name="auto")
 
 
-def rows_from_r2(client: Any, bucket: str) -> tuple[list[dict[str, Any]], int]:
+def rows_from_r2(
+    client: Any,
+    bucket: str,
+    *,
+    include_coverage: bool = False,
+) -> tuple[list[dict[str, Any]], int, dict[str, Any] | None]:
+    active_securities: list[dict[str, Any]] = []
+    if include_coverage:
+        response = client.get_object(Bucket=bucket, Key=f"{PREFIX}/universe/current.json")
+        universe = json.loads(response["Body"].read())
+        active_securities = [
+            row for row in universe.get("securities", [])
+            if isinstance(row, dict) and row.get("status") == "active"
+        ]
+        if not active_securities:
+            raise RuntimeError("R2 active J-Quants universe is empty; refusing coverage audit")
+
     paginator = client.get_paginator("list_objects_v2")
     keys: list[str] = []
     current_year = datetime.now(UTC).year
@@ -254,34 +270,157 @@ def rows_from_r2(client: Any, bucket: str) -> tuple[list[dict[str, Any]], int]:
             if key.endswith("/current.json") or (match and int(match.group(1)) in recent_years):
                 keys.append(key)
 
-    def load(key: str) -> list[dict[str, Any]]:
+    def load(key: str) -> tuple[list[dict[str, Any]], tuple[str, str] | None]:
         response = client.get_object(Bucket=bucket, Key=key)
         document = json.loads(response["Body"].read())
         symbol = str(document.get("symbol") or "").upper()
+        if not symbol:
+            match = re.search(r"/securities/([^/]+)/dividends/\d{4}\.json$", key)
+            if match:
+                symbol = match.group(1).upper()
         if key.endswith("/current.json"):
-            calendar_ex_date = str((document.get("calendar") or {}).get("ex_dividend_date") or "")
+            field_status = document.get("field_status")
+            if not isinstance(field_status, dict):
+                field_status = {}
+            history_status = str(field_status.get("dividend_history") or "not_fetched")
+            status_row = (symbol, history_status) if symbol else None
+            calendar = document.get("calendar")
+            if not isinstance(calendar, dict):
+                calendar = {}
+            calendar_ex_date = str(calendar.get("ex_dividend_date") or "")
             if calendar_ex_date and symbol:
                 try:
                     parsed_calendar_date = date.fromisoformat(calendar_ex_date[:10])
                     if parsed_calendar_date > datetime.now(UTC).date():
-                        return [{"symbol": symbol, "date": parsed_calendar_date.isoformat(), "upcoming": True}]
+                        return [{"symbol": symbol, "date": parsed_calendar_date.isoformat(), "upcoming": True}], status_row
                 except ValueError:
                     pass
-            raw_ex_date = (document.get("statistics") or {}).get("exDividendDate")
+            statistics = document.get("statistics")
+            if not isinstance(statistics, dict):
+                statistics = {}
+            raw_ex_date = statistics.get("exDividendDate")
             if raw_ex_date is None or not symbol:
-                return []
+                return [], status_row
             ex_date = datetime.fromtimestamp(float(raw_ex_date), UTC).date()
             if ex_date > datetime.now(UTC).date():
-                return [{"symbol": symbol, "date": ex_date.isoformat(), "upcoming": True}]
-            return []
-        return [{"symbol": symbol, **row} for row in document.get("records", []) if isinstance(row, dict)]
+                return [{"symbol": symbol, "date": ex_date.isoformat(), "upcoming": True}], status_row
+            return [], status_row
+        rows = [
+            {"symbol": symbol, **row}
+            for row in document.get("records", [])
+            if isinstance(row, dict)
+        ]
+        return rows, None
 
     rows: list[dict[str, Any]] = []
+    history_status_by_symbol: dict[str, str] = {}
     workers = max(1, min(int(os.environ.get("RIGHTS_DATE_WORKERS", "16")), 32))
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        for batch in pool.map(load, keys):
+        for batch, status_row in pool.map(load, keys):
             rows.extend(batch)
-    return rows, len({str(row.get("symbol") or "").upper() for row in rows if row.get("symbol")})
+            if status_row:
+                history_status_by_symbol[status_row[0]] = status_row[1]
+    coverage_inputs = None
+    if include_coverage:
+        coverage_inputs = {
+            "active_securities": active_securities,
+            "history_status_by_symbol": history_status_by_symbol,
+        }
+    return rows, len({str(row.get("symbol") or "").upper() for row in rows if row.get("symbol")}), coverage_inputs
+
+
+def build_coverage_report(
+    active_securities: list[dict[str, Any]],
+    history_status_by_symbol: dict[str, str],
+    rows: list[dict[str, Any]],
+    generated_records: list[dict[str, Any]],
+    as_of: date,
+) -> dict[str, Any]:
+    earliest_year = as_of.year - ESTIMATE_LOOKBACK_YEARS
+    events_by_symbol: dict[str, list[date]] = defaultdict(list)
+    event_rows_by_symbol: dict[str, int] = defaultdict(int)
+    positive_rows_by_symbol: dict[str, int] = defaultdict(int)
+    for row in rows:
+        symbol = str(row.get("symbol") or row.get("yfinance_symbol") or "").strip().upper()
+        if not symbol or row.get("upcoming") is True or row.get("inferred_from_history") is True:
+            continue
+        try:
+            event_date = date.fromisoformat(str(row.get("date") or row.get("ex_dividend_date") or "")[:10])
+            amount = float(row.get("amount", row.get("dividend_per_share")))
+        except (TypeError, ValueError):
+            continue
+        if event_date > as_of or event_date.year < earliest_year:
+            continue
+        event_rows_by_symbol[symbol] += 1
+        if amount > 0:
+            positive_rows_by_symbol[symbol] += 1
+            events_by_symbol[symbol].append(event_date)
+
+    estimated_symbols = {
+        str(row.get("symbol") or row.get("yfinance_symbol") or "").strip().upper()
+        for row in generated_records
+        if row.get("estimated_from_history") is True
+    }
+    classifications: dict[str, int] = defaultdict(int)
+    history_status_counts: dict[str, int] = defaultdict(int)
+    symbols: list[dict[str, Any]] = []
+    for security in active_securities:
+        code = str(security.get("code") or "")
+        symbol = str(security.get("symbol") or "").strip().upper()
+        if not symbol and code:
+            symbol = code + ".T"
+        status = history_status_by_symbol.get(symbol)
+        if status is not None:
+            history_status_counts[status] += 1
+        event_dates = events_by_symbol.get(symbol, [])
+        years_by_month: dict[int, set[int]] = defaultdict(set)
+        for event_date in event_dates:
+            years_by_month[event_date.month].add(event_date.year)
+        recurring_months = sorted(
+            month for month, years in years_by_month.items()
+            if len(years) >= MIN_RECURRING_YEARS
+        )
+        if status is None:
+            classification = "missing_current_document"
+        elif symbol in estimated_symbols:
+            classification = "history_estimated"
+        elif status not in {"available", "empty"}:
+            classification = f"history_status_{status}"
+        elif status == "empty" and event_rows_by_symbol.get(symbol, 0) == 0:
+            classification = "empty_history"
+        elif status == "empty":
+            classification = "empty_status_with_event_rows"
+        elif positive_rows_by_symbol.get(symbol, 0) == 0:
+            classification = "available_without_positive_events"
+        elif not recurring_months:
+            classification = "no_month_repeated_in_two_distinct_years"
+        else:
+            classification = "recurring_history_without_estimate"
+        classifications[classification] += 1
+        symbols.append({
+            "code": code,
+            "symbol": symbol,
+            "dividend_history_status": status or "missing_current_document",
+            "event_rows_in_lookback": event_rows_by_symbol.get(symbol, 0),
+            "positive_event_rows_in_lookback": positive_rows_by_symbol.get(symbol, 0),
+            "positive_event_years_in_lookback": len({event.year for event in event_dates}),
+            "recurring_months": recurring_months,
+            "history_estimate_present": symbol in estimated_symbols,
+            "classification": classification,
+        })
+    symbols.sort(key=lambda row: row["code"])
+    return {
+        "schema_version": 1,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "as_of": as_of.isoformat(),
+        "lookback_start_year": earliest_year,
+        "minimum_distinct_years_per_month": MIN_RECURRING_YEARS,
+        "active_universe_count": len(active_securities),
+        "current_documents_with_history_status": sum(history_status_counts.values()),
+        "history_status_counts": dict(sorted(history_status_counts.items())),
+        "classification_counts": dict(sorted(classifications.items())),
+        "symbols": symbols,
+    }
 
 
 def main() -> int:
@@ -289,22 +428,52 @@ def main() -> int:
     parser.add_argument("--input-csv", type=Path, help="Local Yahoo dividend event CSV to calculate")
     parser.add_argument("--output-csv", type=Path, help="Write a calculated local CSV")
     parser.add_argument("--output-json", type=Path, help="Write a calculated local JSON bundle")
+    parser.add_argument("--coverage-only", action="store_true", help="Read R2 and classify active securities without a history-based estimate; never publish")
+    parser.add_argument("--coverage-report", type=Path, help="Write a per-security history-estimate coverage report")
     parser.add_argument("--upload", action="store_true", help=f"Publish the complete result to R2 key {OUTPUT_KEY}")
     parser.add_argument("--bucket", default=os.environ.get("R2_BUCKET", "diview-market-data"))
     args = parser.parse_args()
+    if args.coverage_only and (args.upload or args.input_csv):
+        parser.error("--coverage-only cannot be combined with --upload or --input-csv")
+    if args.coverage_only and not args.coverage_report:
+        parser.error("--coverage-only requires --coverage-report")
 
     calendars = {"XTKS": xcals.get_calendar("XTKS"), "XNYS": xcals.get_calendar("XNYS")}
     generated_at = datetime.now(UTC).isoformat()
     client = make_client() if args.upload or not args.input_csv else None
     source_symbols = 0
+    coverage_inputs = None
     if args.input_csv:
         input_rows = read_csv(args.input_csv)
         source_symbols = len({str(row.get("security_code", "")).upper() for row in input_rows})
     else:
-        input_rows, source_symbols = rows_from_r2(client, args.bucket)
-    records, skipped_events = build_records(input_rows, calendars, datetime.now(UTC).date())
-    if not records:
+        input_rows, source_symbols, coverage_inputs = rows_from_r2(
+            client, args.bucket, include_coverage=args.coverage_only
+        )
+    as_of = datetime.now(UTC).date()
+    records, skipped_events = build_records(input_rows, calendars, as_of)
+    if not records and not args.coverage_only:
         raise RuntimeError("No valid dividend events were available; refusing to publish an empty result")
+    if args.coverage_only:
+        if coverage_inputs is None:
+            raise RuntimeError("R2 universe/status data required for coverage audit is missing")
+        report = build_coverage_report(
+            coverage_inputs["active_securities"],
+            coverage_inputs["history_status_by_symbol"],
+            input_rows,
+            records,
+            as_of,
+        )
+        args.coverage_report.parent.mkdir(parents=True, exist_ok=True)
+        args.coverage_report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps({
+            "mode": "coverage_only",
+            "active_universe_count": report["active_universe_count"],
+            "classification_counts": report["classification_counts"],
+            "history_status_counts": report["history_status_counts"],
+            "r2_writes": 0,
+        }, ensure_ascii=False, indent=2))
+        return 0
 
     document = {
         "schema_version": 1,
