@@ -1,6 +1,6 @@
 # yfinance v2 market data
 
-The `yfinance-r2.yml` workflow is the scheduled collector. It starts at 21:17 Japan time on weekdays, checks the XTKS exchange calendar, obtains the current listed-security universe from J-Quants v2, and writes app-required yfinance data to `market/yfinance/v2/` in the private `diview-market-data` R2 bucket. It uses the standard GitHub-hosted Ubuntu runner; standard runners are free for public repositories.
+The `yfinance-r2.yml` workflow is the scheduled collector. Its weekday cron is configured for 21:17 JST; GitHub may start a scheduled run later. The workflow checks the XTKS exchange calendar, obtains the current listed-security universe from J-Quants v2, and writes app-required yfinance data to `market/yfinance/v2/` in the private `diview-market-data` R2 bucket. It uses the standard GitHub-hosted Ubuntu runner; standard runners are free for public repositories.
 
 The J-Quants master includes equities, ETFs, and REITs. Its product category is retained in the v2 universe, while the app continues to resolve industry names through its bundled industry master. Each J-Quants code is converted to a Yahoo Finance `.T` symbol. A security enters the search catalog only after its yfinance profile and completed daily close are available.
 
