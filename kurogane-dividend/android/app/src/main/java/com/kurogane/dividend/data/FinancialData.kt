@@ -31,7 +31,9 @@ data class FinancialData(
     val forecastAnnualDividend: Double? = null,
     val forecastEps: Double? = null,
     val forecastFiscalYear: Int? = null,
-    val forecastPayoutRatio: Double? = null
+    val forecastPayoutRatio: Double? = null,
+    val dividendShareBasisStatus: String = "unknown",
+    val issuerDividendShareBasisStatus: String = "unknown"
 ) {
     companion object {
         fun parse(root: JSONObject, expectedCode: String): FinancialData {
@@ -41,6 +43,8 @@ data class FinancialData(
                 ?.takeIf { it == "calendar_year_observed_distributions" } ?: "unknown"
             val calendarYearEvents = historyBasis == "calendar_year_observed_distributions"
             val dividendPayload = root.optJSONObject("dividends")
+            val dividendShareBasisStatus = dividendPayload?.optString("share_basis_status")
+                ?.takeIf { it.isNotBlank() } ?: "unknown"
             val forecastAnnualDividend = dividendPayload?.optJSONObject("current")
                 ?.number("next_fiscal_year_forecast_per_share")
                 ?.takeIf { it >= 0 }
@@ -59,6 +63,8 @@ data class FinancialData(
                 ?.let { CalendarYearDividend(row.getInt("calendar_year"), it) } }
                 .associateBy { it.year }.values.sortedBy { it.year }
             val issuerDividendPayload = root.optJSONObject("issuer_dividends")
+            val issuerDividendShareBasisStatus = issuerDividendPayload?.optString("share_basis_status")
+                ?.takeIf { it.isNotBlank() } ?: "unknown"
             val issuerDividendRecords = issuerDividendPayload?.optJSONArray("records")
             val issuerDividends = (0 until (issuerDividendRecords?.length() ?: 0))
                 .mapNotNull { issuerDividendRecords?.optJSONObject(it) }
@@ -151,7 +157,8 @@ data class FinancialData(
                 "dividend_growth_years" to (dividendPayload?.number("consecutive_dividend_increase_years")
                     ?: dividend?.number("consecutive_dividend_increase_years"))
             ), historyBasis, issuerDividends, issuerDividendHistoryStatus,
-                forecastAnnualDividend, forecastEps, forecastFiscalYear, forecastPayoutRatio)
+                forecastAnnualDividend, forecastEps, forecastFiscalYear, forecastPayoutRatio,
+                dividendShareBasisStatus, issuerDividendShareBasisStatus)
         }
     }
 }
