@@ -2920,7 +2920,7 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     private companion object {
-        const val FINANCIAL_PAYLOAD_VERSION = 2
+        const val FINANCIAL_PAYLOAD_VERSION = 3
         val WATCHLIST_SORT_CRITERIA = setOf("ach", "yield", "price", "code")
         val WATCHLIST_SORT_DIRECTIONS = setOf("asc", "desc")
         val SAMPLE_HOLDING_IDS = setOf("h-7203", "h-2914", "h-8306", "h-8316", "h-8058", "h-9432", "h-9433", "h-8766", "h-8031", "h-4502", "h-apple", "h-emaxis")
