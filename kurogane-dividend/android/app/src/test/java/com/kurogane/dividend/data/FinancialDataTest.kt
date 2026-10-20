@@ -6,6 +6,69 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FinancialDataTest {
+    private fun periods(annual: String, valuation: String) = FinancialData.parse(
+        JSONObject("""{"security":{"code":"7203"},"financials":{"annual":$annual},"valuation":{"history":$valuation}}"""),
+        "7203"
+    )
+
+    @Test fun latestFullDateWinsAndValuationMatchesDayRegardlessOfArrayOrder() {
+        for (reverse in listOf(false, true)) {
+            val rows = listOf(
+                """{"period_end":"2025-03-20","fiscal_year":"2025/03","net_de_ratio":1}""",
+                """{"period_end":"2025-03-31","fiscal_year":"2025/03","net_de_ratio":2}"""
+            ).let { if (reverse) it.reversed() else it }
+            val data = periods(rows.joinToString(",", "[", "]"), """[
+                {"period_end":"2025-03-20","fiscal_year":"2025/03","eps_adjusted":10},
+                {"period_end":"2025-03-31","fiscal_year":"2025/03","eps_adjusted":20}
+            ]""")
+            assertEquals("2025/03", data.period)
+            assertEquals("2.00倍", data.profile.netDeRatio)
+            assertEquals(20.0, data.profile.eps, 0.0)
+        }
+    }
+
+    @Test fun dateIsAuthoritativeEvenWithoutOrWithConflictingFiscalLabel() {
+        val data = periods("""[
+            {"period_end":"2025-03-31","fiscal_year":"2099/12","net_de_ratio":1},
+            {"period_end":"2025-04-01","net_de_ratio":2}
+        ]""", """[{"period_end":"2025-04-01","eps_adjusted":30}]""")
+        assertEquals("2025/04", data.period)
+        assertEquals("2.00倍", data.profile.netDeRatio)
+        assertEquals(30.0, data.profile.eps, 0.0)
+    }
+
+    @Test fun differentDayCannotMatchByMonth() {
+        val data = periods("""[{"period_end":"2025-03-31","fiscal_year":"2025/03"}]""",
+            """[{"period_end":"2025-03-20","fiscal_year":"2025/03","eps_adjusted":10}]""")
+        assertTrue(data.profile.eps.isNaN())
+    }
+
+    @Test fun legacyFallbackRequiresOneUnambiguousPeriodAndOneCandidate() {
+        val dated = """[{"period_end":"2025-03-31","fiscal_year":"2025/03"}]"""
+        val legacy = """[{"fiscal_year":"2025/03","eps_adjusted":10}]"""
+        assertEquals(10.0, periods(dated, legacy).profile.eps, 0.0)
+        assertEquals(10.0, periods("""[{"fiscal_year":"2025/03"}]""",
+            """[{"period_end":"2025-03-31","eps_adjusted":10}]""").profile.eps, 0.0)
+        assertTrue(periods("""[
+            {"period_end":"2025-03-20"},{"period_end":"2025-03-31"}
+        ]""", legacy).profile.eps.isNaN())
+        assertTrue(periods(dated, """[
+            {"fiscal_year":"2025/03","eps_adjusted":10},
+            {"fiscal_year":"2025/03","eps_adjusted":20}
+        ]""").profile.eps.isNaN())
+    }
+
+    @Test fun invalidExplicitDateDoesNotBecomeLegacyAndLegacyMonthCanStillBeLatest() {
+        val data = periods("""[
+            {"period_end":"2026-02-30","fiscal_year":"2026/02","net_de_ratio":9},
+            {"period_end":"2025-03-31","net_de_ratio":1},
+            {"fiscal_year":"2025/04","net_de_ratio":2}
+        ]""", """[{"period_end":"invalid","fiscal_year":"2025/04","eps_adjusted":10}]""")
+        assertEquals("2025/04", data.period)
+        assertEquals("2.00倍", data.profile.netDeRatio)
+        assertTrue(data.profile.eps.isNaN())
+    }
+
     private fun document() = JSONObject("""{
       "security":{"code":"7203"},
       "financials":{"annual":[{"fiscal_year":"2025/03","sales":1000,"operating_profit":100,"operating_cf":200,"investing_cf":-50,"equity_ratio_computed":40}]},

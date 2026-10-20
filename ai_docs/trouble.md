@@ -2,6 +2,8 @@
 
 - Google Drive restore previously searched the Drive root through the Drive API using the `drive.file` scope and exact Diview backup filenames. Pre-existing `.dvm` files were not necessarily visible to that API query. Use Android's document picker for restore so the user explicitly grants access to the selected Drive document, while keeping `drive.file` for Diview's own exports.
 
+- Cross-component review (2026-10-20): normal sync reused `valuation` for daily multiples and then iterated dict keys as annual rows; D1 import emitted unquoted `YYYY/MM`, so SQLite division could collapse different fiscal years and `REPLACE` historical rows. Source fixes separate the valuation variables and apply table-specific SQL types; offline persistence and SQLite collision tests cover the regressions. Existing production D1 loss requires comparison with trusted original data, not just changing the import generator. See `review-fixes-20261020.md`.
+
 - A scheduled Actions run can start after the JST date changes. On 2026-10-17 the `market-calendar` job evaluated Saturday and skipped the sync even though the run had been scheduled after Friday's close. The gate now compares the latest completed XTKS session with the R2 active session on closed days, catches up only an unpublished session, and passes its date to the collector. The scheduled catch-up path remains unverified until a delayed or closed-day run exercises it.
 
 - The yfinance R2 workflow had duplicate declarations for `yfinance-capacity-study` and `yfinance-full-universe-study`; push run #123 failed before creating jobs. Keep one definition for each job. After removing the duplicate blocks in commit `06c6faae`, push run #124 started normally and passed all 55 collector tests.

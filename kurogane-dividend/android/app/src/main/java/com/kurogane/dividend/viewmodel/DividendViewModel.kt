@@ -83,6 +83,21 @@ import com.kurogane.dividend.notifications.DiviewNotifications
 
 private const val ANNUAL_DPS_CONTRACT_VERSION = 2
 
+/** Own the entire cache/attempt/request lifecycle, including cancellation cleanup. */
+internal class FinancialFetchGate {
+    private val locks = mutableMapOf<String, Mutex>()
+
+    suspend fun <T> run(code: String, fetch: suspend () -> T): T {
+        val lock = synchronized(locks) { locks.getOrPut(code) { Mutex() } }
+        // Waiters cannot enter request/attempt cleanup until they own the lock.
+        // Re-evaluate generation, cache and throttle after the prior owner finishes.
+        return lock.withLock { fetch() }
+    }
+}
+
+internal fun useFinancialDailyCache(force: Boolean, requiresContractRefresh: Boolean, sameDay: Boolean) =
+    !force && !requiresContractRefresh && sameDay
+
 data class AssetManagementListItem(
     val id: String,
     val code: String,
@@ -338,8 +353,8 @@ class DividendViewModel @JvmOverloads constructor(
     private val dividendEventCache = mutableMapOf<String, List<CloudflareDividendEvent>>()
     private val upcomingDividendEventCache = mutableMapOf<String, CloudflareUpcomingDividendEvent?>()
     private val watchlistProjectionCache = WatchlistProjectionCache()
-    private val financialMutex = Mutex()
-    private val financialLoading = mutableSetOf<String>()
+    private val financialFetches = FinancialFetchGate()
+    private val financialGenerationLock = Any()
     private val financialSlots = Semaphore(4)
     private val cloudflareSecurityMutex = Mutex()
     private val cloudflareSecuritySlots = Semaphore(4)
@@ -469,6 +484,13 @@ class DividendViewModel @JvmOverloads constructor(
         val generation = dataGeneration.get()
         val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
         if (!normalized.matches(Regex("[A-Z0-9]{4}"))) return null
+        return financialFetches.run(normalized) {
+            fetchOwnedFinancialData(normalized, force, generation)
+        }
+    }
+
+    private suspend fun fetchOwnedFinancialData(normalized: String, force: Boolean, generation: Long): FinancialData? {
+        if (generation != dataGeneration.get()) return null
         val today = PriceRefreshPolicy.japanDate(System.currentTimeMillis())
         val contractVersionKey = "financial_contract_version_$normalized"
         val contractAttemptVersionKey = "financial_contract_attempt_version_$normalized"
@@ -479,7 +501,8 @@ class DividendViewModel @JvmOverloads constructor(
         val contractRefreshAttemptedToday = requiresContractRefresh
             && marketPreferences.getInt(contractAttemptVersionKey, 0) >= FINANCIAL_PAYLOAD_VERSION
             && marketPreferences.getString(attemptDateKey, null) == today
-        if (!requiresContractRefresh && marketPreferences.getString("financial_date_$normalized", null) == today) {
+        if (useFinancialDailyCache(force, requiresContractRefresh,
+                marketPreferences.getString("financial_date_$normalized", null) == today)) {
             _financialData.value[normalized]?.let { return it }
             val cached = withContext(Dispatchers.IO) {
                 runCatching {
@@ -493,8 +516,7 @@ class DividendViewModel @JvmOverloads constructor(
             }
         }
         val now = System.currentTimeMillis()
-        // An explicit retry may bypass a failed attempt. Today's successfully
-        // parsed document is still returned by the cache check above.
+        // Explicit retry bypasses both successful daily cache and attempt throttling.
         if (!force && !PriceRefreshPolicy.shouldFetch(
                 now,
                 marketPreferences.getLong(attemptKey, 0L),
@@ -507,6 +529,7 @@ class DividendViewModel @JvmOverloads constructor(
                         ?.let { FinancialData.parse(JSONObject(it), normalized) }
                 }.getOrNull()
             }
+            if (generation != dataGeneration.get()) return null
             if (cached != null) _financialData.update { it + (normalized to cached) }
             if (cached == null) {
                 com.kurogane.dividend.data.CachedFetchFailure.decode(marketPreferences.getString(failureKey, null))
@@ -514,13 +537,14 @@ class DividendViewModel @JvmOverloads constructor(
             }
             return cached
         }
-        marketPreferences.edit()
-            .putLong(attemptKey, now)
-            .putString(attemptDateKey, PriceRefreshPolicy.japanDate(now))
-            .putInt(contractAttemptVersionKey, FINANCIAL_PAYLOAD_VERSION)
-            .apply()
-        val allowed = financialMutex.withLock { financialLoading.add(normalized) }
-        if (!allowed) return _financialData.value[normalized]
+        synchronized(financialGenerationLock) {
+            if (generation != dataGeneration.get()) return null
+            marketPreferences.edit()
+                .putLong(attemptKey, now)
+                .putString(attemptDateKey, PriceRefreshPolicy.japanDate(now))
+                .putInt(contractAttemptVersionKey, FINANCIAL_PAYLOAD_VERSION)
+                .apply()
+        }
         try {
             val document = financialSlots.withPermit { marketRepository.financialDocument(normalized) }
             if (document == null) {
@@ -543,6 +567,17 @@ class DividendViewModel @JvmOverloads constructor(
             saveRequests.trySend(Unit)
             return parsed
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            synchronized(financialGenerationLock) {
+                // The per-code gate is still owned here. Reset and this check/removal
+                // share a lock, so an old generation cannot remove a new attempt.
+                if (generation == dataGeneration.get() && marketPreferences.getLong(attemptKey, 0L) == now) {
+                    marketPreferences.edit {
+                        remove(attemptKey)
+                        remove(attemptDateKey)
+                        remove(contractAttemptVersionKey)
+                    }
+                }
+            }
             throw cancelled
         } catch (failure: Exception) {
             if (generation == dataGeneration.get()) {
@@ -552,7 +587,7 @@ class DividendViewModel @JvmOverloads constructor(
                 android.util.Log.w("CloudflareMarket", "Financial fetch failed (${failure.javaClass.simpleName})")
             }
             throw failure
-        } finally { financialMutex.withLock { financialLoading.remove(normalized) } }
+        }
     }
 
     suspend fun fetchPortfolioFinancialData(force: Boolean = false) = coroutineScope {
@@ -2787,7 +2822,7 @@ class DividendViewModel @JvmOverloads constructor(
 
     suspend fun resetLocalData() {
         restoration.await()
-        dataGeneration.incrementAndGet()
+        synchronized(financialGenerationLock) { dataGeneration.incrementAndGet() }
         notificationMutex.withLock {
         saveMutex.withLock {
             withContext(Dispatchers.IO) {
