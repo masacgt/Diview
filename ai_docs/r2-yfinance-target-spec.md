@@ -175,6 +175,12 @@ R2バケットは非公開のままにし、AndroidアプリはWorker APIを通�
 | `/api/v1/financial-data/{code}` | v2の `financials/`、暦年yfinance配当履歴、`issuer_dividends/` の決算期IRBANK記録、評価入力値。未取得項目は状態付きで返す。旧領域への実行時フォールバックはしない |
 | `/api/v1/analysis/{code}` | 銘柄の財務・配当・価格入力はv2のみを使い、分析定義と分析履歴は現行D1/KVを使う。財務期間・指標JSONへフォールバックしない |
 
+J-Quantsが返す5桁の種類株式コードは、通常株式の4桁コードへ短縮せず、yfinance v2のキーを `{code}.T`（例: `92025.T`）として保持する。Workerの旧IRBANKコード変換 `irbankR2Code` は4桁または末尾0付きの通常株式コード専用であり、v2参照に流用しない。Workerのv2 APIは専用の `yfinanceV2Code` で4桁と5桁を正規化し、銘柄詳細、財務、配当・分割履歴、12月価格、指定銘柄価格に同じコードを使う。J-Quantsの通常株式コード末尾0は従来どおり4桁へ戻す。普通株の配当履歴を種類株式の代わりに保存・表示しない。
+
+2026-10-20の調査で、`yfinance==1.7.0` の `history(period="max", actions=True, auto_adjust=False, repair=True)` は次の5桁コードの配当イベントを返した。25935.T: 2024-10 ¥28、2025-04 ¥28・2025-10 ¥30、2026-04 ¥30。50765.T: 2024-09 ¥21.72、2025-03以降2026-09まで各半期¥65。75505.T: 2026-03 ¥99.72・2026-09 ¥100.27。92015.T: 同日までイベント行なし。92025.T: 2026-03 ¥52.73・2026-09 ¥87.50。94345.T: 2024-03 ¥41.53、2024-09以降2026-09まで各半期¥50。94346.T: 2025-03 ¥126.24、2025-09以降2026-09まで各半期¥128。7銘柄すべてでyfinanceの分割行はなかった。これらはyfinanceの応答値であり、会社公表値との全件照合済みを意味しない。種類株式のコードと配当条件は発行体の[伊藤園](https://www.itoen.co.jp/ir/stock/info/)、[インフロニア](https://www.infroneer.com/jp/ir/dividend.html)、[ゼンショー](https://www.zensho.co.jp/jp/ir/stock/class-shares.html)、[JAL](https://www.jal.com/ja-jp/investor/issue/bond-type-class-shares/)、[ANA](https://www.ana.co.jp/group/investors/stock/bond-type-class-shares/)、[ソフトバンク](https://www.softbank.jp/corp/ir/stock/class-shares/)の資料で確認する。
+
+本番Workerの2026-10-20確認では、検索カタログ世代 `2026-10-19` に7コードすべてが存在した。一方、`/api/v1/dividend-months` の2025・2026年イベント配列は7コードとも空で、`/api/v1/securities/25935` はHTTP 400だった。Worker実装が5桁コードをv2 R2キーへ変換できなかったことを確認したため、Workerの専用変換と回帰確認を実装した。`node --test test/routes.test.mjs` は24/24成功。R2パーティションの内容が未公開APIからは判別できないため、修正の本番反映とイベント行の読み戻しが終わるまで種類株式履歴を完了扱いにしない。
+
 ## 現行コードの確認先
 
 - Android API呼び出しとキャッシュ: `kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/data/CloudflareMarketRepository.kt`、`.../viewmodel/DividendViewModel.kt`
