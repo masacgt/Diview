@@ -301,6 +301,8 @@ run #174後の本番Worker読み戻しでは、2060.Tは `last_attempt_at=2026-1
 
 ログのtracebackは `sync_v2.py:2622` のvaluationシリアライズを指していた。`collect_financials()` はISO期間末日をキーにした辞書を返すが、`collect_symbol()` がそのキー文字列を行オブジェクトとして反復し `.get()` を呼んでいた。実装を `valuation.get(period_end)` に修正した。この不具合はrun #177の58件の失敗に対応する。run #177は修正前のコードでセッション `2026-10-20` を公開した。同期コードはセッション日が前回試行日と異なると試行数を0から開始するため、失敗銘柄は同日1回目として保存され、次の通常実行で4回上限内の再試行が可能。修正後の通常schedule確認は未完了。同日フォローアップは修正確認には使えるが、#177が同じセッションを処理済みのため、月間負荷の独立標本には数えない。
 
+修正前の本番比較基準として、Worker `/api/v1/securities/2972` は `processing_status=failed`、失敗理由 `AttributeError: 'str' object has no attribute 'get'`、最終試行 `2026-10-20T16:34:02.951968+09:00` を返す。`/api/v1/financial-data/2972` は2022-08-31から2025-08-31まで4期の財務行を返し、最新期はyfinance由来の株主資本・NetDebt・DOE・net D/Eを持つ。APIの `valuation.history` は空配列だった。次回の修正後通常同期では同じAPIを再読込し、処理状態・失敗理由・valuation履歴の変化を比較する。
+
 本番Workerの2060.T読み戻しでは終値¥1,448、価格日 `2026-10-20`、銘柄処理状態 `ok`、最終試行 `2026-10-20T16:27:15.422687+09:00`。`current.json` の `data_retrieval.ex_dividend_calendar` は `2027-03-30` / `available` / source `Yahoo Finance via yfinance Ticker.calendar`、取得日時 `2026-10-17T14:31:41.140315+09:00` のまま。run #177に `ticker_calendar` 呼び出しはなかった。`/api/v1/dividend-months?symbols=2060.T` は同日を `estimated_from_dividend_history`、source `Yahoo Finance historical dividend event dates` として返す。これは保存済みTicker.calendar値および過去のTicker.get_infoフォールバックと別の表示データ経路であり、今回の実行でcalendarが新規取得された証拠ではない。
 
 ### 権利日推定の全市場カバレッジ監査
