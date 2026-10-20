@@ -2619,7 +2619,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             put_json_if_changed(client, bucket, key, {
                 "schema_version": 1, "symbol": symbol, "year": year,
                 "annual": row,
-                "valuation": next((item for item in valuation if item.get("period_end") == period_end), None),
+                "valuation": valuation.get(period_end),
                 "retrieval_status": financial_status,
                 "updated_at": iso_now(), "source": "Yahoo Finance via yfinance",
             })
