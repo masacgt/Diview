@@ -1,9 +1,12 @@
 import importlib.util
 from pathlib import Path
 import csv
+import hashlib
+import json
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("repair", Path(__file__).with_name("plan-financial-repair.py"))
 repair = importlib.util.module_from_spec(spec)
@@ -31,6 +34,14 @@ INSERT INTO financial_periods VALUES ('45020','annual','2025/03','IFRS',1,'{"fis
             groups, report = repair.plan(snapshot, source)
             self.assertEqual(report["corrupt_rows"], 1)
             self.assertEqual(report["annual_rows_after"], 2)
+            output = root / "plan"
+            with patch("sys.argv", ["repair", "--snapshot", str(snapshot), "--source", str(source), "--output", str(output)]):
+                repair.main()
+            manifest = json.loads((output / "manifest.json").read_text())
+            for entry in manifest["files"]:
+                body = (output / entry["name"]).read_bytes()
+                self.assertEqual(hashlib.sha256(body).hexdigest(), entry["sha256"])
+                self.assertNotIn(b"\r\n", body)
             db = sqlite3.connect(":memory:")
             db.executescript(snapshot.read_text())
             db.executescript("\n".join(groups))
