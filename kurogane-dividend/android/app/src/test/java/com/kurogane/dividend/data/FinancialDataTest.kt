@@ -6,6 +6,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FinancialDataTest {
+    @Test fun issuerDividendPeriodsInTheSameYearAreNotCollapsed() {
+        val data = FinancialData.parse(JSONObject("""{
+            "security":{"code":"4502"},
+            "issuer_dividends":{"records":[
+                {"fiscal_year":2026,"period":"2026/03","annual_dps":10},
+                {"fiscal_year":2026,"period":"2026/12","annual_dps":20}
+            ]}
+        }"""), "4502")
+        assertEquals(listOf("2026-03", "2026-12"), data.issuerDividends.map { it.fiscalPeriod })
+        assertEquals(listOf(10.0, 20.0), data.issuerDividends.map { it.displayDps })
+    }
     private fun periods(annual: String, valuation: String) = FinancialData.parse(
         JSONObject("""{"security":{"code":"7203"},"financials":{"annual":$annual},"valuation":{"history":$valuation}}"""),
         "7203"

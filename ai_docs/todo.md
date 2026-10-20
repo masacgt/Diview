@@ -95,3 +95,8 @@
 - [x] Verify the Stock Detail `決算期別DPS（参考）` card for migrated issuer-dividend data, including 8303 FY2019 at ¥10, and confirm the existing calendar-year chart remains separate. Evidence: on the emulator, opening 8303 from search displayed FY2019 ¥10 in the issuer fiscal-year card while the separate calendar-year chart showed 2019 ¥0; no holding or watchlist entry was added.
 - [ ] Audit 8303 issuer-dividend per-share values across its documented consolidation and split history before deciding whether the card needs a share-basis explanation. Evidence: the 8303 detail card displays ¥40,000,000 for FY2024 and FY2025; SBI Shinsei's 2025 corporate-action notice documents a 1-for-20,000,000 consolidation, a 6-for-1 split, and a 14,000,000-for-1 split, so the values require period-specific basis reconciliation.
 - [ ] Find exact class-specific historical dividend records for the seven five-character security codes before migrating any history. Evidence: JPX class-share listings and issuer terms confirm these are preferred or bond-type classes with distinct dividend terms; exact-code legacy R2 histories were not available in the reviewed inventory, and parent common-share values are not a safe substitute.
+
+## 2026-10-20 follow-up rollout
+
+- [ ] Complete production rollout of follow-up consistency fixes. Local evidence: Python 91, Worker/D1 50, repair planner 1, Android JVM 154 passed and JDK 17 debug build succeeded. Production backup and guarded offline repair are prepared; live repair/deployment/read-back remain to verify.
+- [ ] Verify revised financial/cache behavior visually on device, including same-year multiple fiscal periods and split-adjusted history.

@@ -287,12 +287,12 @@ fun StockDetailScreen(
     }
     val normalizedDividendCode = currentHolding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T")
     val savedDividendOverrides = dividendHistoryOverrides[normalizedDividendCode].orEmpty().associateBy { it.year }
-    val issuerFiscalDividendsByYear = financial?.issuerDividends.orEmpty().mapNotNull { dividend ->
-        dividend.displayDps?.let { dividend.fiscalYear to it }
+    val issuerFiscalDividendsByYear = financial?.issuerDividends.orEmpty().groupBy { it.fiscalYear }.mapNotNull { (year, periods) ->
+        // A yearly chart cannot choose or sum multiple issuer periods safely.
+        periods.singleOrNull()?.displayDps?.let { year to it }
     }.toMap()
-    val sourceDividendsByYear = issuerFiscalDividendsByYear.ifEmpty {
-        financial?.dividends.orEmpty().associate { it.year to it.dps }
-    }
+    val sourceDividendsByYear = if (financial?.issuerDividends.orEmpty().isNotEmpty()) issuerFiscalDividendsByYear
+        else financial?.dividends.orEmpty().associate { it.year to it.dps }
     var yearEndPrices by remember(currentHolding.code) { mutableStateOf<Map<Int, Double>>(emptyMap()) }
     LaunchedEffect(currentHolding.code, dividendHistoryYears) {
         yearEndPrices = com.kurogane.dividend.data.runCatchingCancellable {
@@ -564,6 +564,12 @@ fun StockDetailScreen(
                         color = ErrorRed, actionLabel = resources.getString(R.string.retry), onAction = { financialRetry++ })
                     financial == null -> StatusMessage(resources.getString(R.string.financial_empty),
                         actionLabel = resources.getString(R.string.retry), onAction = { financialRetry++ })
+                    financial?.profile?.let { it.calculatedDoe == "未取得" || it.netDeRatio == "未取得" } == true ->
+                        StatusMessage("一部の財務指標が未取得です。",
+                            actionLabel = resources.getString(R.string.retry), onAction = { financialRetry++ })
+                }
+                if (financial?.issuerDividends.orEmpty().groupBy { it.fiscalYear }.any { it.value.size > 1 }) {
+                    StatusMessage("同一年に複数の決算期がある配当実績は、年単位のグラフでは未取得として表示します。")
                 }
             }
             // 1. Hero Stock Header Card

@@ -253,7 +253,7 @@ jobs:
       - name: Install V2 collection dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
       - name: Refresh annual financials for every active security and verify R2 read-back
-        run: set -o pipefail; python scripts/yfinance_r2/refresh_financial_v2.py --all --shard-index ${{ matrix.shard }} --shard-count 8 --report refresh-all-financials-report-${{ matrix.shard }}.json 2>&1 | tee refresh-all-financials-${{ matrix.shard }}.log
+        run: set -o pipefail; python scripts/yfinance_r2/refresh_financial_v2.py --all --defer-advice --shard-index ${{ matrix.shard }} --shard-count 8 --report refresh-all-financials-report-${{ matrix.shard }}.json 2>&1 | tee refresh-all-financials-${{ matrix.shard }}.log
         shell: bash
         env:
           YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
@@ -272,6 +272,25 @@ jobs:
             refresh-all-financials-report-${{ matrix.shard }}.json
           if-no-files-found: ignore
           retention-days: 30
+
+  financial-refresh-advice:
+    needs: yfinance-full-universe-financial-refresh
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.run_mode == 'refresh-all-financials' && needs.yfinance-full-universe-financial-refresh.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r scripts/yfinance_r2/requirements.txt
+      - name: Rebuild derived advice once after all financial shards, including partial failures
+        run: python scripts/yfinance_r2/generate_income_advice.py --publish --workers 8
+        env:
+          CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: diview-market-data
 
   yfinance-sample-benchmark:
     if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'benchmark'

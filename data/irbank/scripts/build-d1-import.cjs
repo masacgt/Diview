@@ -1,10 +1,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const readline = require('node:readline');
+const crypto = require('node:crypto');
+const { fiscalPeriod } = require('./fiscal-period.cjs');
 
 const root = path.resolve(__dirname, '..');
 const d1 = path.join(root, 'organized', 'd1');
-const out = path.join(root, 'cloudflare', 'import');
+const out = path.join(root, 'cloudflare', 'import', `validated-${Date.now()}`);
 
 const configs = [
   {
@@ -72,6 +74,8 @@ function sqlValue(config, column, value) {
 
 async function main({ inputDir = d1, outputDir = out, log = console.log } = {}) {
   fs.mkdirSync(outputDir, { recursive: true });
+  if (fs.readdirSync(outputDir).length) throw new Error('Use a new empty import directory; old SQL must not be reused');
+  const manifest = { format_version: 2, files: [] };
   for (const config of configs) {
     const input = fs.createReadStream(path.join(inputDir, config.file), { encoding: 'utf8' });
     const lines = readline.createInterface({ input, crlfDelay: Infinity });
@@ -83,7 +87,10 @@ async function main({ inputDir = d1, outputDir = out, log = console.log } = {}) 
       if (!chunk.length) return;
       const prefix = config.table === 'financial_periods' ? 'financial_periods_annual' : config.table;
       const name = `${prefix}_${String(part++).padStart(5, '0')}.sql`;
-      fs.writeFileSync(path.join(outputDir, name), `${chunk.join('\n')}\n`);
+      const body = `${chunk.join('\n')}\n`;
+      fs.writeFileSync(path.join(outputDir, name), body);
+      manifest.files.push({ name, table: config.table, rows: chunk.length,
+        sha256: crypto.createHash('sha256').update(body).digest('hex') });
       chunk = [];
     };
     try {
@@ -99,7 +106,15 @@ async function main({ inputDir = d1, outputDir = out, log = console.log } = {}) 
         if (row.length !== config.columns.length) throw new Error(`Unexpected column count in ${config.file}`);
         if (config.table === 'financial_periods' && row[1] !== 'annual') continue;
         const values = row.map((value, index) => sqlValue(config, config.columns[index], value));
-        chunk.push(`INSERT OR REPLACE INTO ${config.table} (${config.columns.join(',')}) VALUES (${values.join(',')});`);
+        let statement = `INSERT OR REPLACE INTO ${config.table} (${config.columns.join(',')}) VALUES (${values.join(',')});`;
+        if (config.table === 'dividend_events') {
+          const record = JSON.parse(row.at(-1));
+          const period = fiscalPeriod({ fiscal_year: row[1], ...record });
+          // The old table remains a yearly compatibility projection. The new
+          // table is lossless for short years and fiscal-end changes.
+          statement += ` INSERT OR REPLACE INTO issuer_dividend_periods (security_code,fiscal_period,event_type,data_json) VALUES (${values[0]},${sql(period)},${values[2]},${values.at(-1)});`;
+        }
+        chunk.push(statement);
         count++;
         if (chunk.length >= config.chunkRows) flush();
       }
@@ -111,6 +126,9 @@ async function main({ inputDir = d1, outputDir = out, log = console.log } = {}) 
     }
     log(`${config.table}: ${count} rows -> ${part} files`);
   }
+  // A partial generation has no manifest and cannot be imported.
+  fs.writeFileSync(path.join(outputDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  log(`Validated import directory: ${outputDir}`);
 }
 
 module.exports = { main };
