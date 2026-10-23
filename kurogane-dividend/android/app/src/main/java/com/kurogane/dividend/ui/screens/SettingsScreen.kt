@@ -454,7 +454,7 @@ private fun NotificationStatusBadge(text: String, allowed: Boolean) {
 
 @Composable
 private fun Label(text: String, size: Int, color: Color, bold: Boolean = false, modifier: Modifier = Modifier) {
-    Text(text, modifier = modifier, color = color, fontSize = (size + 3).sp, lineHeight = (size + 6).sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
+    Text(text, modifier = modifier, color = color, fontSize = AppTextSize.caption, lineHeight = AppTextLineHeight.caption, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
 }
 
 @Composable
