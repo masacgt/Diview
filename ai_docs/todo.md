@@ -9,6 +9,8 @@
 
 ## Completed
 
+- [x] Unify heading, metric, and supporting-label sizes while retaining 14sp body text and 9sp chart labels. Evidence: shared Compose typography tokens and settings/distribution labels use 18sp, 24sp, and 12sp roles; the JDK 17 debug build succeeds, and SCG01 at 1.3 font scale was visually checked across all four main tabs and Settings from top to bottom.
+
 - [x] Prioritize income-gap months not yet represented when selecting the three advice candidates. Evidence: `rankIncomeAdviceCandidates` greedily chooses the candidate covering the most still-uncovered empty months, then applies score and tie-breakers; the JDK 17 debug APK builds and is installed on emulator and SCG01.
 
 - [x] Remove the calendar chart legend and reduce its unused top spacing while preserving monthly amounts and empty-month markers. Evidence: the legend row is removed and the plot/amount labels use a reduced top margin; the JDK 17 debug APK builds and is installed on emulator and SCG01.

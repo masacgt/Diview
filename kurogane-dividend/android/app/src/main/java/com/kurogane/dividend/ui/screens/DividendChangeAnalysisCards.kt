@@ -593,17 +593,17 @@ private fun DistributionCell(label: String, count: Int, total: Int, color: Color
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Box(Modifier.size(5.dp).background(color, CircleShape))
-                Text(label, fontSize = if (compact) 10.sp else 11.sp,
+                Text(label, fontSize = AppTextSize.caption,
                     lineHeight = if (compact) 15.sp else TextUnit.Unspecified, color = OnSurfaceVariant)
             }
             Text(percent(if (total > 0) count.toDouble() / total * 100 else null),
-                fontSize = if (compact) 9.sp else 10.sp,
-                lineHeight = if (compact) 13.sp else TextUnit.Unspecified,
+                fontSize = AppTextSize.caption,
+                lineHeight = if (compact) 15.sp else TextUnit.Unspecified,
                 color = color)
         }
         Text(stringResource(R.string.dividend_change_analysis_cards_text_8 , count),
-            fontSize = if (compact) 14.sp else 17.sp,
-            lineHeight = if (compact) 19.sp else TextUnit.Unspecified,
+            fontSize = AppTextSize.metric,
+            lineHeight = if (compact) 32.sp else TextUnit.Unspecified,
             fontWeight = FontWeight.Bold, color = OnSurface,
             modifier = if (compact) Modifier.fillMaxWidth() else Modifier,
             textAlign = if (compact) TextAlign.Center else TextAlign.Start)
