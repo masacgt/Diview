@@ -39,6 +39,7 @@ import com.kurogane.dividend.data.runCatchingCancellable
 import com.kurogane.dividend.model.HoldingAllocation
 import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.PortfolioMath
+import com.kurogane.dividend.model.formatStockPriceDisplay
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -108,16 +109,16 @@ fun AddHoldingSheet(
 
     // Accounts Matrix States
     var nisaShares by remember { mutableStateOf("0") }
-    var nisaPrice by remember { mutableStateOf(selectedStock.price.toString()) }
+    var nisaPrice by remember { mutableStateOf(formatStockPriceDisplay(selectedStock.price, selectedStock.code)) }
 
     var tsumitateShares by remember { mutableStateOf("0") }
-    var tsumitatePrice by remember { mutableStateOf(selectedStock.price.toString()) }
+    var tsumitatePrice by remember { mutableStateOf(formatStockPriceDisplay(selectedStock.price, selectedStock.code)) }
 
     var tokuteiShares by remember { mutableStateOf("0") }
-    var tokuteiPrice by remember { mutableStateOf(selectedStock.price.toString()) }
+    var tokuteiPrice by remember { mutableStateOf(formatStockPriceDisplay(selectedStock.price, selectedStock.code)) }
 
     var generalShares by remember { mutableStateOf("0") }
-    var generalPrice by remember { mutableStateOf(selectedStock.price.toString()) }
+    var generalPrice by remember { mutableStateOf(formatStockPriceDisplay(selectedStock.price, selectedStock.code)) }
     var downwardDragPx by remember { mutableFloatStateOf(0f) }
     var isSwipeGesture by remember { mutableStateOf(false) }
     val dismissDragThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) {
@@ -201,12 +202,13 @@ fun AddHoldingSheet(
     fun updateSelectedStock(stock: PresetStock) {
         selectedStock = stock
         stockCodeInput = stock.code
-        val acquisitionPrice = existingHoldings.firstOrNull { it.code.equals(stock.code, ignoreCase = true) }?.acqPrice
-            ?: stock.price
-        nisaPrice = acquisitionPrice.toString()
-        tsumitatePrice = acquisitionPrice.toString()
-        tokuteiPrice = acquisitionPrice.toString()
-        generalPrice = acquisitionPrice.toString()
+        val existingAcquisitionPrice = existingHoldings.firstOrNull { it.code.equals(stock.code, ignoreCase = true) }?.acqPrice
+        val inputPrice = existingAcquisitionPrice?.toString()
+            ?: formatStockPriceDisplay(stock.price, stock.code)
+        nisaPrice = inputPrice
+        tsumitatePrice = inputPrice
+        tokuteiPrice = inputPrice
+        generalPrice = inputPrice
     }
 
     // Presets or custom stock changes
@@ -566,10 +568,11 @@ fun AddHoldingSheet(
                             .background(PrimaryEmeraldContainer.copy(alpha = 0.15f))
                             .heightIn(min = 48.dp)
                             .clickable {
-                                nisaPrice = selectedStock.price.toString()
-                                tsumitatePrice = selectedStock.price.toString()
-                                tokuteiPrice = selectedStock.price.toString()
-                                generalPrice = selectedStock.price.toString()
+                                val currentPrice = formatStockPriceDisplay(selectedStock.price, selectedStock.code)
+                                nisaPrice = currentPrice
+                                tsumitatePrice = currentPrice
+                                tokuteiPrice = currentPrice
+                                generalPrice = currentPrice
                             }
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
