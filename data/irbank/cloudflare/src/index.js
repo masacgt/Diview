@@ -301,6 +301,7 @@ async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
 }
 
 const YFINANCE_V2_ROOT = 'market/yfinance/v2';
+const IRBANK_V2_DIVIDENDS_KEY = `${YFINANCE_V2_ROOT}/issuer_dividends/current.json`;
 
 // SBI Shinsei's FY2026 securities report documents historical share actions
 // that are not all represented in its stored yfinance split history.
@@ -331,34 +332,62 @@ function calculateDailyValuation(current) {
   };
 }
 
-// Company forecasts checked against issuer disclosures on 2026-10-17.
-// AOKI: https://ir.aoki-hd.co.jp/ja/news/news/auto_20260508520915/pdfFile.pdf
-// Mitsubishi: https://www.mitsubishicorp.com/jp/ja/ir/shareholder/allot/
-// Refresh these when the issuers publish their next fiscal-year forecasts.
-const OFFICIAL_NEXT_FY_DPS = { '8214': { stale: 120, official: 90 }, '8058': { stale: 126, official: 125 } };
-
 function yfinanceV2Symbol(code) {
   const normalized = yfinanceV2Code(code);
   return normalized ? `${normalized}.T` : null;
 }
 
-function selectedAnnualDividendPerShare(code, dividend, updatedAt = '') {
-  if (dividend?.dividend_status === 'no_dividend'
-    || dividend?.yield_basis === 'yfinance_reported_no_dividend') return 0;
-  if (dividend?.yield_basis === 'next_fiscal_year_forecast') {
-    const updatedDate = String(updatedAt || '').slice(0, 10);
-    const officialOverride = OFFICIAL_NEXT_FY_DPS[code];
-    const reported = finiteNumber(dividend.next_fiscal_year_forecast_per_share);
-    if (officialOverride && (!updatedDate || updatedDate <= '2027-03-31')
-      && (reported === null || Math.abs(reported - officialOverride.stale) < 0.001)) {
-      return officialOverride.official;
-    }
-    return reported;
+function selectedIrbankDividend(item) {
+  const forecast = item?.forecast;
+  const forecastDps = finiteNumber(forecast?.annual_dps_current_share_basis);
+  const forecastPeriodEnd = String(forecast?.period_end || '');
+  if (forecast?.status === 'available' && forecastDps !== null && forecastDps >= 0
+    && /^\d{4}-\d{2}-\d{2}$/.test(forecastPeriodEnd) && forecastPeriodEnd > tokyoDate(Date.now() / 1000)) {
+    return {
+      annual_dps: forecastDps,
+      dividend_period: 'next_fiscal_year_forecast',
+      yield_basis: 'next_fiscal_year_forecast',
+      dividend_amount_basis: forecast.amount_basis || 'irbank_forecast_current_share_basis',
+      dividend_status: forecastDps > 0 ? 'has_dividend' : 'no_dividend',
+      fiscal_year: finiteNumber(forecast.fiscal_year),
+      forecast,
+    };
   }
-  if (dividend?.yield_basis === 'current_fiscal_year') {
-    return finiteNumber(dividend.current_fiscal_year_per_share);
+
+  const actual = item?.actual;
+  const actualAdjusted = finiteNumber(actual?.annual_dps_adjusted);
+  const actualReported = finiteNumber(actual?.annual_dps);
+  const actualDps = actualAdjusted ?? actualReported;
+  if (item?.actual_status === 'available' && actualDps !== null && actualDps >= 0) {
+    return {
+      annual_dps: actualDps,
+      dividend_period: 'issuer_reported_fiscal_year',
+      yield_basis: 'issuer_reported_fiscal_year',
+      dividend_amount_basis: actualAdjusted !== null ? 'irbank_adjusted_fiscal_dps' : 'irbank_reported_fiscal_dps',
+      dividend_status: actualDps > 0 ? 'has_dividend' : 'no_dividend',
+      fiscal_year: finiteNumber(actual.fiscal_year),
+      forecast: null,
+    };
   }
-  return null;
+  return {
+    annual_dps: null,
+    dividend_period: 'unknown',
+    yield_basis: null,
+    dividend_amount_basis: null,
+    dividend_status: 'unknown',
+    fiscal_year: null,
+    forecast: null,
+  };
+}
+
+async function readIrbankDividendIndex(env) {
+  const document = await readV2Json(env, IRBANK_V2_DIVIDENDS_KEY);
+  return document && document.items && typeof document.items === 'object' ? document : null;
+}
+
+function irbankDividendForCode(index, code) {
+  const normalized = yfinanceV2Code(code);
+  return normalized ? selectedIrbankDividend(index?.items?.[normalized]) : selectedIrbankDividend(null);
 }
 
 function yieldFromDividend(price, annualDps) {
@@ -478,15 +507,18 @@ async function readV2FinancialPayload(env, code) {
   const symbol = yfinanceV2Symbol(code);
   if (!symbol || !env.MARKET_DATA) return null;
   const base = `${YFINANCE_V2_ROOT}/securities/${symbol}`;
-  const [profile, current, financialDocuments, dividendDocuments, issuerDividendDocuments] = await Promise.all([
+  const [profile, current, financialDocuments, dividendDocuments, irbankDividendIndex, irbankOverview] = await Promise.all([
     readV2Json(env, `${base}/profile.json`),
     readV2Json(env, `${base}/current.json`),
     listV2Documents(env, `${base}/financials/`),
     listV2Documents(env, `${base}/dividends/`),
-    listV2Documents(env, `${base}/issuer_dividends/`),
+    readIrbankDividendIndex(env),
+    irbankR2Code(code)
+      ? readV2Json(env, `market/irbank/v1/securities/${irbankR2Code(code)}/overview.json`)
+      : Promise.resolve(null),
   ]);
   if (!profile && !current && financialDocuments.length === 0 && dividendDocuments.length === 0
-    && issuerDividendDocuments.length === 0) return null;
+    && !irbankOverview && !irbankDividendIndex?.items?.[yfinanceV2Code(code)]) return null;
   const documentPeriodKey = document => financialPeriodKey(
     document.annual?.period_end ? document.annual
       : document.valuation?.period_end ? document.valuation : document,
@@ -568,12 +600,38 @@ async function readV2FinancialPayload(env, code) {
     ? calendarYearMetrics.annual_records
     : dividendHistory.records;
   const issuerDividendRecordsByPeriod = new Map();
-  for (const record of issuerDividendDocuments.flatMap(document => Array.isArray(document.records) ? document.records : [])) {
+  const irbankIssuerDividendRecords = Array.isArray(irbankOverview?.dividends?.records)
+    ? irbankOverview.dividends.records
+    : [];
+  for (const record of irbankIssuerDividendRecords) {
     const fiscalYearMatch = String(record?.fiscal_year || '').match(/^(\d{4})(?:\/\d{2})?$/);
     if (!fiscalYearMatch) continue;
-    const period = String(record.period_end || record.period || record.fiscal_year).replaceAll('/', '-');
+    const reportedDps = finiteNumber(record.annual_dps);
+    const adjustedDps = finiteNumber(record.annual_dps_adjusted);
+    if (reportedDps === null && adjustedDps === null) continue;
+    const period = String(record.period_end || record.fiscal_period || record.period || fiscalYearMatch[1]).replaceAll('/', '-');
     if (!/^\d{4}(?:-(?:0[1-9]|1[0-2])(?:-\d{2})?)?$/.test(period)) continue;
-    issuerDividendRecordsByPeriod.set(period, { ...record, fiscal_year: Number(fiscalYearMatch[1]), fiscal_period: period });
+    issuerDividendRecordsByPeriod.set(period, {
+      ...record,
+      fiscal_year: Number(fiscalYearMatch[1]),
+      fiscal_period: period,
+      source: 'IRBANK',
+    });
+  }
+  const irbankDividendItem = irbankDividendIndex?.items?.[yfinanceV2Code(code)] || null;
+  const latestIssuerActual = irbankDividendItem?.actual;
+  if (irbankDividendItem?.actual_status === 'available' && latestIssuerActual && finiteNumber(latestIssuerActual.fiscal_year) !== null) {
+    const fiscalYear = Number(latestIssuerActual.fiscal_year);
+    const period = String(latestIssuerActual.period_end || latestIssuerActual.fiscal_period || fiscalYear).replaceAll('/', '-');
+    for (const [existingPeriod, record] of issuerDividendRecordsByPeriod.entries()) {
+      if (Number(record.fiscal_year) === fiscalYear) issuerDividendRecordsByPeriod.delete(existingPeriod);
+    }
+    issuerDividendRecordsByPeriod.set(period, {
+      ...latestIssuerActual,
+      fiscal_year: fiscalYear,
+      fiscal_period: period,
+      source: 'IRBANK',
+    });
   }
   const issuerDividendRecords = [...issuerDividendRecordsByPeriod.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -611,11 +669,15 @@ async function readV2FinancialPayload(env, code) {
     },
     issuer_dividends: {
       records: issuerDividendRecords,
+      latest_actual: latestIssuerActual || issuerDividendRecords.at(-1) || null,
+      forecast: irbankDividendItem?.forecast || null,
       history_basis: 'issuer_reported_fiscal_year',
       amount_basis: 'irbank_adjusted_fiscal_dps',
-      source: issuerDividendDocuments[0]?.source || 'IRBANK Connect',
-      attribution: issuerDividendDocuments.find(document => document.attribution)?.attribution || null,
-      status: issuerDividendRecords.length ? 'available' : 'empty',
+      source: irbankDividendIndex?.source || 'IRBANK Connect',
+      attribution: irbankDividendIndex?.attribution
+        || irbankOverview?.sources?.dividends || null,
+      status: issuerDividendRecords.length || irbankDividendItem?.actual_status === 'available' ? 'available' : 'empty',
+      forecast_status: irbankDividendItem?.forecast_status || 'not_fetched',
       ...(shareBasisStatus ? { share_basis_status: shareBasisStatus } : {}),
     },
     valuation: { history: valuation, seed_history: seedValuation, field_status: valuationStatus },
@@ -1834,6 +1896,7 @@ export default {
       const catalog = JSON.parse(await catalogObject.text());
       const completionObject = await env.MARKET_DATA.get('market/yfinance/live_quotes_completion.json');
       const completion = completionObject ? await completionObject.json() : {};
+      const irbankDividendIndex = await readIrbankDividendIndex(env);
       const publishedRunId = String(completion.last_completed_run_id || '');
       const stableMarketDate = publishedRunId
         ? String(completion.last_completed_date || '')
@@ -1875,12 +1938,7 @@ export default {
           : null;
         const currentPrice = finiteNumber(liveQuote?.close) || catalogPrice;
         if (!(currentPrice > 0)) return null;
-        const statistics = document.statistics_current || {};
-        const reportedDps = finiteNumber(statistics.dividendRate);
-        const catalogDps = finiteNumber(row.annual_dividend_per_share);
-        const dps = reportedDps !== null && reportedDps >= 0
-          ? reportedDps
-          : catalogDps !== null && catalogDps >= 0 ? catalogDps : null;
+        const dps = irbankDividendForCode(irbankDividendIndex, code).annual_dps;
         const yieldRate = dps !== null && dps >= 0
           ? (dps / currentPrice) * 100
           : null;
@@ -2018,30 +2076,34 @@ export default {
         if (!CATALOG_GENERATION_PATTERN.test(generation) || !marketDataDate) return json({ error: 'catalog_invalid' }, 503);
         if (requestedRunId && requestedRunId !== generation) return json({ error: 'catalog_generation_mismatch' }, 409);
         if (requestedDate && requestedDate !== marketDataDate) return json({ error: 'catalog_generation_mismatch' }, 409);
+        const irbankDividendIndex = await readIrbankDividendIndex(env);
         const catalogItems = catalog.items || [];
         const offset = Math.min(catalogItems.length, Number.parseInt(cursor || '0', 10));
         const requestedItems = requestedCodes
           ? requestedCodes.map(code => catalogItems.find(row => String(row.code || '').toUpperCase() === code)).filter(Boolean)
           : catalogItems.slice(offset, offset + limit);
         const items = await Promise.all(requestedItems.map(async row => {
+          const code = String(row.code || '').toUpperCase();
+          const irbankDividend = irbankDividendForCode(irbankDividendIndex, code);
           const item = {
             code: row.code,
             price: row.price,
             quote_date: row.quote_date,
-            annual_dividend_per_share: row.annual_dividend_per_share,
+            annual_dividend_per_share: irbankDividend.annual_dps,
             trailing_12_month_distribution_per_share: row.trailing_12_month_distribution_per_share,
-            dividend_period: row.dividend_period,
-            dividend_amount_basis: row.dividend_amount_basis,
-            yield_rate: row.yield_rate,
-            yield_basis: row.yield_basis,
-            dividend_status: row.dividend_status,
+            dividend_period: irbankDividend.dividend_period,
+            dividend_amount_basis: irbankDividend.dividend_amount_basis,
+            yield_rate: yieldFromDividend(row.price, irbankDividend.annual_dps),
+            yield_basis: irbankDividend.yield_basis,
+            dividend_status: irbankDividend.dividend_status,
+            dividend_fiscal_year: irbankDividend.fiscal_year,
+            dividend_source: 'IRBANK',
           };
           if (!requestedCodes) return item;
 
           // The full catalog may lag the per-security current document. For a
           // portfolio refresh, read the fiscal forecast directly so a trailing
           // 12-month distribution total cannot be mistaken for annual DPS.
-          const code = String(row.code || '').toUpperCase();
           const symbol = yfinanceV2Symbol(code);
           const current = symbol
             ? await readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`)
@@ -2050,26 +2112,18 @@ export default {
           if (!dividend) {
             return {
               ...item,
-              annual_dividend_per_share: null,
-              dividend_period: 'unknown',
-              yield_rate: null,
-              yield_basis: null,
-              dividend_status: 'unknown',
+              price: finiteNumber(current?.price?.close) ?? item.price,
+              quote_date: current?.price?.date ?? item.quote_date,
+              yield_rate: yieldFromDividend(current?.price?.close ?? item.price, irbankDividend.annual_dps),
             };
           }
-          const annualDps = selectedAnnualDividendPerShare(code, dividend, current.updated_at);
           const close = finiteNumber(current.price?.close) ?? finiteNumber(row.price);
           return {
             ...item,
             price: close ?? item.price,
             quote_date: current.price?.date ?? item.quote_date,
-            annual_dividend_per_share: annualDps,
             trailing_12_month_distribution_per_share: finiteNumber(dividend.trailing_12_month_per_share),
-            dividend_period: dividend.yield_basis || 'unknown',
-            dividend_amount_basis: dividend.event_amount_basis || item.dividend_amount_basis,
-            yield_rate: yieldFromDividend(close, annualDps),
-            yield_basis: dividend.yield_basis || null,
-            dividend_status: dividend.dividend_status || 'unknown',
+            yield_rate: yieldFromDividend(close, irbankDividend.annual_dps),
           };
         }));
         const nextOffset = offset + items.length;
@@ -2101,9 +2155,22 @@ export default {
     if (url.pathname === '/api/v1/search-catalog') {
       const v2Catalog = await readV2Catalog(env);
       if (!v2Catalog) return json({ error: 'search_catalog_unavailable' }, 503);
+      const irbankDividendIndex = await readIrbankDividendIndex(env);
       const response = json({
         ...v2Catalog,
-        items: v2Catalog.items.map(({ income_advice, ...row }) => row),
+        items: v2Catalog.items.map(({ income_advice, ...row }) => {
+          const dividend = irbankDividendForCode(irbankDividendIndex, row.code);
+          return {
+            ...row,
+            annual_dividend_per_share: dividend.annual_dps,
+            dividend_period: dividend.dividend_period,
+            dividend_amount_basis: dividend.dividend_amount_basis,
+            yield_rate: yieldFromDividend(row.price, dividend.annual_dps),
+            yield_basis: dividend.yield_basis,
+            dividend_status: dividend.dividend_status,
+            dividend_source: 'IRBANK',
+          };
+        }),
       });
       response.headers.set('cache-control', 'public, max-age=300');
       return response;
@@ -2114,6 +2181,7 @@ export default {
       if (!query) return json({ items: [] });
       const v2Catalog = await readV2Catalog(env);
       if (!v2Catalog) return json({ error: 'security_catalog_unavailable' }, 503);
+      const irbankDividendIndex = await readIrbankDividendIndex(env);
       const normalizeSearchText = value => String(value || '').normalize('NFKC').toLowerCase();
       const needle = normalizeSearchText(query);
       const items = (v2Catalog.items || [])
@@ -2126,11 +2194,23 @@ export default {
           return rank(aCode) - rank(bCode) || String(a.name || '').localeCompare(String(b.name || ''), 'ja');
         })
         .slice(0, 30)
-        .map(({ code, name, price, annual_dividend_per_share, trailing_12_month_distribution_per_share,
-          dividend_period, dividend_amount_basis, yield_rate, yield_basis, security_type, dividend_status }) => ({
-          code, name, price, annual_dividend_per_share, trailing_12_month_distribution_per_share,
-          dividend_period, dividend_amount_basis, yield_rate, yield_basis, security_type, dividend_status,
-        }));
+        .map(row => {
+          const dividend = irbankDividendForCode(irbankDividendIndex, row.code);
+          return {
+            code: row.code,
+            name: row.name,
+            price: row.price,
+            annual_dividend_per_share: dividend.annual_dps,
+            trailing_12_month_distribution_per_share: row.trailing_12_month_distribution_per_share,
+            dividend_period: dividend.dividend_period,
+            dividend_amount_basis: dividend.dividend_amount_basis,
+            yield_rate: yieldFromDividend(row.price, dividend.annual_dps),
+            yield_basis: dividend.yield_basis,
+            security_type: row.security_type,
+            dividend_status: dividend.dividend_status,
+            dividend_source: 'IRBANK',
+          };
+        });
       return json({ items, generation: v2Catalog.generation || null });
     }
 
@@ -2146,11 +2226,12 @@ export default {
       const symbol = yfinanceV2Symbol(code);
       if (!symbol) return json({ error: 'invalid_security_code' }, 400);
       const base = `${YFINANCE_V2_ROOT}/securities/${symbol}`;
-      const [profile, current, sync, dividendHistoryBounds] = await Promise.all([
+      const [profile, current, sync, dividendHistoryBounds, irbankDividendIndex] = await Promise.all([
         readV2Json(env, `${base}/profile.json`),
         readV2Json(env, `${base}/current.json`),
         readV2Json(env, `${base}/sync.json`),
         readV2DividendHistoryBounds(env, symbol),
+        readIrbankDividendIndex(env),
       ]);
       if (!profile || !current) return json({ error: 'security_data_unavailable' }, 503);
       const dividend = current.dividend || {};
@@ -2159,7 +2240,8 @@ export default {
       const dividendHistoryStatus = current.field_status?.dividend_history
         || syncFieldStatus.dividend_history
         || null;
-      const selectedDps = selectedAnnualDividendPerShare(code, dividend, current.updated_at);
+      const selectedDividend = irbankDividendForCode(irbankDividendIndex, code);
+      const selectedDps = selectedDividend.annual_dps;
       const valuation = calculateDailyValuation(current);
       const infoFailure = sync?.info_refresh_failure || {};
       const companyInfoHasData = Boolean(
@@ -2180,12 +2262,20 @@ export default {
           annual_dps: selectedDps,
           annual_dps_adjusted: selectedDps,
           trailing_12_month_per_share: finiteNumber(dividend.trailing_12_month_per_share),
-          yield_basis: dividend.yield_basis || null,
-          field_status: current.field_status || {},
+          fiscal_year: selectedDividend.fiscal_year,
+          yield_basis: selectedDividend.yield_basis,
+          dividend_period: selectedDividend.dividend_period,
+          amount_basis: selectedDividend.dividend_amount_basis,
+          source: 'IRBANK API',
+          field_status: {
+            ...(current.field_status || {}),
+            annual_dps: selectedDps !== null ? 'available' : 'empty',
+            forecast_dividend: selectedDividend.yield_basis === 'next_fiscal_year_forecast' ? 'available' : 'empty',
+          },
         },
         market_price: current.price || null,
-        market_yield_rate: yieldFromDividend(current.price?.close, selectedDps) ?? finiteNumber(dividend.yield_rate),
-        dividend_status: dividend.dividend_status || 'unknown',
+        market_yield_rate: yieldFromDividend(current.price?.close, selectedDps),
+        dividend_status: selectedDividend.dividend_status,
         valuation: {
           per: valuation.per,
           pbr: valuation.pbr,
@@ -2381,28 +2471,33 @@ export default {
       if (!publishedCatalog || !(publishedCatalog.items || []).some(row => String(row.code || '').toUpperCase() === code)) {
         return json({ error: 'not_found' }, 404);
       }
-      const [v2Profile, v2Current] = await Promise.all([
+      const [v2Profile, v2Current, irbankDividendIndex] = await Promise.all([
         readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/profile.json`),
         readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`),
+        readIrbankDividendIndex(env),
       ]);
       if (!v2Profile || !v2Current) return json({ error: 'not_found' }, 404);
       const includeMarket = url.searchParams.get('include_market') !== 'false';
       const stats = v2Current.statistics || {};
       const valuation = calculateDailyValuation(v2Current);
+      const selectedDividend = irbankDividendForCode(irbankDividendIndex, code);
       return json({
         code,
         canonical_code: `${code}0`,
         name: v2Profile.display_name || v2Profile.short_name || v2Profile.long_name || v2Profile.english_name || code,
         metrics: [],
         dividend: v2Current.dividend ? {
-          fiscal_year: null,
-          annual_dps: selectedAnnualDividendPerShare(code, v2Current.dividend, v2Current.updated_at),
-          annual_dps_adjusted: selectedAnnualDividendPerShare(code, v2Current.dividend, v2Current.updated_at),
+          fiscal_year: selectedDividend.fiscal_year,
+          annual_dps: selectedDividend.annual_dps,
+          annual_dps_adjusted: selectedDividend.annual_dps,
+          yield_basis: selectedDividend.yield_basis,
+          dividend_period: selectedDividend.dividend_period,
+          amount_basis: selectedDividend.dividend_amount_basis,
+          source: 'IRBANK API',
           payout_ratio: stats.payoutRatio ?? null,
-          source: 'Yahoo Finance via yfinance',
         } : null,
-        market_yield_rate: v2Current.dividend?.yield_rate ?? null,
-        dividend_status: v2Current.dividend?.dividend_status || 'unknown',
+        market_yield_rate: yieldFromDividend(v2Current.price?.close, selectedDividend.annual_dps),
+        dividend_status: selectedDividend.dividend_status,
         financial: null,
         market_price: includeMarket ? v2Current.price || null : null,
         valuation: includeMarket ? {

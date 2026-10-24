@@ -2,6 +2,8 @@
 
 ## In Progress
 
+- [x] Source current annual DPS and yield from IRBANK v2 data. Evidence: deployed Worker and Android prefer the IRBANK actual/forecast index and fiscal-year history; 8766 now returns FY2026 adjusted actual ¥14.5333 and FY2027 forecast ¥16.34, with 3.002% yield at ¥544.3, and three production financial-data reads succeeded. Worker/Python/Android tests and JDK 17 build pass; SCG01 and emulator show ¥16.3 and 3.00% after old device-cache migration.
+- [ ] Refresh the remaining IRBANK dividend index entries from the API in quota-aware batches. Evidence: 3,963 entries (3,393 with actual rows) were seeded from the existing IRBANK R2 snapshot generated 2026-10-14; only 8766 was refreshed from the API in this run because the remaining daily quota could not cover a full-catalog refresh.
 - [ ] Prefer a known listed-security code match over the fund-name heuristic during CSV import. Evidence: `BrokerCsvImporter.kt` now resolves the local security master before classifying a row; JDK 17 `assembleDebug` succeeds. CSV behavior and regression cases remain unverified.
 - [ ] Verify the attached SBI CSV imports code 8953 as `日本都市ファンド投資法人`, and confirm mutual-fund rows without a listed-security code still use fund-name matching.
 - [ ] Unify Android financial-number typography as sans-serif with tabular figures, keeping monospace for identifiers and technical literals. Evidence: shared numeric styles and explicit financial-value overrides are updated; JDK 17 debug build succeeds, and the APK installs and launches on SCG01 and the emulator. Visual comparison on Watchlist and Total Assets remains pending.

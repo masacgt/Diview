@@ -242,10 +242,10 @@ class CloudflareMarketRepository(
                 val live = liveQuotes[code]
                 val catalog = catalogQuotes[code]
                 val price = live?.price ?: catalog?.price
-                val annualDividend = live?.annualDividendPerShare ?: catalog?.annualDividendPerShare
-                val yieldRate = live?.yieldRate ?: catalog?.yieldRate
-                val isNoDividendConfirmed = live?.isNoDividendConfirmed == true || catalog?.isNoDividendConfirmed == true
-                val hasDividendStatus = live?.hasDividendStatus == true || catalog?.hasDividendStatus == true
+                val annualDividend = live?.annualDividendPerShare
+                val yieldRate = live?.yieldRate
+                val isNoDividendConfirmed = live?.isNoDividendConfirmed == true
+                val hasDividendStatus = live?.hasDividendStatus == true
                 if (price != null || yieldRate != null || annualDividend != null) {
                     put(code, CloudflareSearchQuote(price, yieldRate, annualDividend, isNoDividendConfirmed, hasDividendStatus))
                 }
@@ -324,10 +324,9 @@ class CloudflareMarketRepository(
         val root = try { getJson("/api/v1/securities/$safeCode") }
             catch (error: MarketHttpException) { if (error.status == 404) return@withContext null else throw error }
         val dividend = root.optJSONObject("dividend")
-        // Legacy /securities responses contain IRBANK fiscal-year DPS. Only read
-        // current dividend values from the v2 yfinance payload; calendar-year
-        // history is handled separately by FinancialData and is not current DPS.
-        val yfinanceDividend = dividend?.takeIf {
+        // Current annual DPS and yield are provided from the IRBANK v2 dividend index.
+        // Calendar-year observed distributions remain a separate history series.
+        val irbankDividend = dividend?.takeIf {
             it.has("yield_basis") || it.has("trailing_12_month_per_share") || it.optJSONObject("field_status") != null
         }
         val catalogQuote = runCatching { searchCatalogQuotes()[normalized] }.getOrNull()
@@ -348,13 +347,13 @@ class CloudflareMarketRepository(
             },
             name = root.optString("name").takeIf(String::isNotBlank) ?: return@withContext null,
             annualDividendPerShare = (if (root.hasUnknownDividendStatus() && !root.hasConfirmedNoDividend()) null else
-                (yfinanceDividend?.numberOrNull("annual_dps_adjusted")
-                    ?: yfinanceDividend?.numberOrNull("annual_dps"))?.takeIf(PortfolioMath::validMoney))
+                (irbankDividend?.numberOrNull("annual_dps_adjusted")
+                    ?: irbankDividend?.numberOrNull("annual_dps"))?.takeIf(PortfolioMath::validMoney))
                 ?: catalogQuote?.takeIf { it.hasDividendStatus }?.annualDividendPerShare,
             marketPrice = (if (catalogPriceIsNewer) catalogQuote?.price else detailPrice)
                 ?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }
                 ?: catalogQuote?.price,
-            marketYieldRate = (if (yfinanceDividend != null) root.numberOrNull("market_yield_rate") else null)
+            marketYieldRate = (if (irbankDividend != null) root.numberOrNull("market_yield_rate") else null)
                 ?.takeIf { it in 0.0..100.0 }
                 ?: catalogQuote?.yieldRate,
             isNoDividendConfirmed = root.hasConfirmedNoDividend() || catalogQuote?.isNoDividendConfirmed == true,

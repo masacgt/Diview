@@ -139,11 +139,9 @@ fun StockDetailScreen(
             resolvedSecurity = cachedSecurity
             lookupFinished = true
             lookupError = null
-            if (cachedSecurity.dataRetrieval?.companyInfo == null) {
-                com.kurogane.dividend.data.runCatchingCancellable {
-                    viewModel.resolveCloudflareSecurity(stockCode)
-                }.getOrNull()?.let { resolvedSecurity = it }
-            }
+            com.kurogane.dividend.data.runCatchingCancellable {
+                viewModel.resolveCloudflareSecurity(stockCode)
+            }.getOrNull()?.let { resolvedSecurity = it }
             return@LaunchedEffect
         }
         val isTracked = holdings.any { it.code.equals(stockCode, true) } || watchlist.any { it.code.equals(stockCode, true) }
