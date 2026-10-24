@@ -143,6 +143,7 @@ class DividendViewModel @JvmOverloads constructor(
 
     private val displayPreferences = application.getSharedPreferences("display_preferences", Context.MODE_PRIVATE)
     private val marketPreferences = application.getSharedPreferences("cloudflare_market_cache", Context.MODE_PRIVATE)
+    private val marketQuoteCacheLock = Any()
     private val incomeAdviceMutex = Mutex()
     private val _incomeAdviceCatalog = MutableStateFlow(loadCachedIncomeAdviceCatalog())
     val incomeAdviceCatalog: StateFlow<CloudflareIncomeAdviceCatalog?> = _incomeAdviceCatalog.asStateFlow()
@@ -1066,13 +1067,61 @@ class DividendViewModel @JvmOverloads constructor(
 
     suspend fun awaitRestoration() { restoration.await() }
 
-    private fun updatePortfolio(next: List<Holding>) {
+    private fun updatePortfolio(next: List<Holding>, forceNewHoldingData: Boolean = false) {
         if (next == _holdings.value) return
+        val previouslyHeldCodes = _holdings.value.asSequence()
+            .filter { it.shares > 0 }
+            .map { normalizedSecurityCode(it.code) }
+            .toSet()
+        val newlyHeld = next.filter { it.shares > 0 && normalizedSecurityCode(it.code) !in previouslyHeldCodes }
+            .distinctBy { normalizedSecurityCode(it.code) }
         hasRestoredLocalHoldings = true
         val prices = readCachedPrices()
         val dividends = readCachedDividendsPerShare()
         _holdings.value = next.map { runtimeHolding(it, prices, dividends) }
         saveRequests.trySend(Unit)
+        if (newlyHeld.isNotEmpty()) scheduleAddedHoldingDataFetch(newlyHeld, forceRefresh = forceNewHoldingData)
+    }
+
+    private fun scheduleAddedHoldingDataFetch(holdings: Collection<Holding>, forceRefresh: Boolean) {
+        val targets = holdings.filter { it.shares > 0 }.distinctBy { normalizedSecurityCode(it.code) }
+        if (targets.isEmpty()) return
+        viewModelScope.launch {
+            // Include the new holding in the normal quote refresh before per-security data is fetched.
+            runCatchingCancellable { refreshMarketPricesIfDue() }
+            val dividendSymbols = targets.mapNotNull { yahooSymbol(it.category, it.code) }
+            if (dividendSymbols.isNotEmpty()) {
+                runCatchingCancellable { refreshDividendMonths(dividendSymbols) }
+            }
+            for (batch in targets.chunked(8)) {
+                coroutineScope {
+                    batch.map { holding ->
+                        async {
+                            val code = normalizedSecurityCode(holding.code)
+                            coroutineScope {
+                                listOf(
+                                    async {
+                                        runCatchingCancellable {
+                                            fetchCloudflareSecurityIfDue(code)?.let(::cacheSecurityQuoteValues)
+                                        }
+                                    },
+                                    async {
+                                        if (holding.category == Category.JAPAN) {
+                                            runCatchingCancellable { fetchFinancialData(code, force = forceRefresh) }
+                                        }
+                                    },
+                                    async {
+                                        if (holding.category == Category.JAPAN) {
+                                            runCatchingCancellable { fetchStockAnalysis(code, force = forceRefresh) }
+                                        }
+                                    }
+                                ).awaitAll()
+                            }
+                        }
+                    }.awaitAll()
+                }
+            }
+        }
     }
 
     private suspend fun persistCurrentHoldings() = saveMutex.withLock {
@@ -1906,7 +1955,7 @@ class DividendViewModel @JvmOverloads constructor(
     ): Boolean {
         restoration.await()
         if (shares <= 0 || !PortfolioMath.validMoney(averageAcquisitionPrice)) return false
-        val security = runCatchingCancellable { marketRepository.getSecurity(code) }.getOrNull() ?: return false
+        val security = runCatchingCancellable { resolveCloudflareSecurity(code) }.getOrNull() ?: return false
         val added = addOrUpdateHolding(code, shares, averageAcquisitionPrice, accountType, security)
         if (added) persistCurrentHoldings()
         return added
@@ -1943,11 +1992,7 @@ class DividendViewModel @JvmOverloads constructor(
         } ?: return false
         hasRestoredLocalHoldings = true
         refreshAllocationMonths(registered)
-        viewModelScope.launch {
-            refreshMarketPricesIfDue()
-            runCatchingCancellable { fetchFinancialData(registered.code, force = true) }
-            runCatchingCancellable { fetchStockAnalysis(registered.code, force = true) }
-        }
+        scheduleAddedHoldingDataFetch(listOf(registered), forceRefresh = true)
         return true
     }
 
@@ -2074,6 +2119,53 @@ class DividendViewModel @JvmOverloads constructor(
             .putInt("cloudflare_security_dividend_contract_version_$normalized", IRBANK_DIVIDEND_CACHE_VERSION)
             .apply()
         _cloudflareSecurityData.update { it + (normalized to security) }
+        cacheSecurityQuoteValues(security)
+    }
+
+    private fun cacheSecurityQuoteValues(security: CloudflareSecurity) {
+        val code = normalizedSecurityCode(security.code)
+        val changed = synchronized(marketQuoteCacheLock) {
+            val cachedPrices = readCachedPrices()
+            val cachedDividends = readCachedDividendsPerShare()
+            val cachedNoDividendCodes = readCachedNoDividendCodes()
+            val cachedDividendStatusCodes = readCachedDividendStatusCodes()
+            val cachedYieldRates = readCachedYieldRates()
+            val prices = cachedPrices.toMutableMap()
+            val dividends = cachedDividends.toMutableMap()
+            val noDividendCodes = cachedNoDividendCodes.toMutableSet()
+            val dividendStatusCodes = cachedDividendStatusCodes.toMutableSet()
+            val yieldRates = cachedYieldRates.toMutableMap()
+
+            security.marketPrice?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }?.let { prices[code] = it }
+            val annualDividend = security.annualDividendPerShare?.takeIf { PortfolioMath.validMoney(it) && it >= 0.0 }
+            when {
+                annualDividend != null -> dividends[code] = annualDividend
+                security.isNoDividendConfirmed -> dividends[code] = 0.0
+            }
+            if (security.hasDividendStatus) {
+                dividendStatusCodes += code
+                if (security.isNoDividendConfirmed) noDividendCodes += code else noDividendCodes -= code
+            }
+            val yieldRate = security.marketYieldRate?.takeIf { it.isFinite() && it in 0.0..100.0 }
+            if (yieldRate != null) yieldRates[code] = yieldRate
+            else if (security.hasDividendStatus) yieldRates.remove(code)
+
+            val didChange = prices != cachedPrices || dividends != cachedDividends ||
+                noDividendCodes != cachedNoDividendCodes || dividendStatusCodes != cachedDividendStatusCodes ||
+                yieldRates != cachedYieldRates
+            if (didChange) {
+                marketPreferences.edit()
+                    .putString("prices", JSONObject().apply { prices.forEach { (key, value) -> put(key, value) } }.toString())
+                    .putString("dividend_per_share", JSONObject().apply { dividends.forEach { (key, value) -> put(key, value) } }.toString())
+                    .putString("confirmed_no_dividend_codes", JSONArray().apply { noDividendCodes.sorted().forEach { put(it) } }.toString())
+                    .putString("known_dividend_status_codes", JSONArray().apply { dividendStatusCodes.sorted().forEach { put(it) } }.toString())
+                    .putString("market_yield_rates", JSONObject().apply { yieldRates.forEach { (key, value) -> put(key, value) } }.toString())
+                    .apply()
+                applyPrices(prices, dividends, noDividendCodes, dividendStatusCodes, yieldRates)
+            }
+            didChange
+        }
+        if (changed) saveRequests.trySend(Unit)
     }
 
     private suspend fun fetchCloudflareSecurityIfDue(code: String): CloudflareSecurity? {
@@ -2792,13 +2884,13 @@ class DividendViewModel @JvmOverloads constructor(
     private fun addAllocations(code: String, allocations: List<HoldingAllocation>, security: CloudflareSecurity?): Boolean {
         val before = _holdings.value
         val merged = allocatedHolding(code, allocations, security, before) ?: return false
-        updatePortfolio(if (before.any { it.id == merged.id }) before.map { if (it.id == merged.id) merged else it } else before + merged)
+        val alreadyHeld = before.any { it.code.equals(merged.code, true) && it.shares > 0 }
+        updatePortfolio(
+            if (before.any { it.id == merged.id }) before.map { if (it.id == merged.id) merged else it } else before + merged,
+            forceNewHoldingData = true
+        )
         refreshAllocationMonths(merged)
-        viewModelScope.launch {
-            refreshMarketPricesIfDue()
-            runCatchingCancellable { fetchFinancialData(merged.code, force = true) }
-            runCatchingCancellable { fetchStockAnalysis(merged.code, force = true) }
-        }
+        if (alreadyHeld) scheduleAddedHoldingDataFetch(listOf(merged), forceRefresh = true)
         return true
     }
 
