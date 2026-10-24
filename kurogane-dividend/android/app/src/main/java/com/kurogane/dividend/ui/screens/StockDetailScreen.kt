@@ -952,7 +952,7 @@ fun StockDetailScreen(
                                     val dps = point.annualDividend ?: 0.0
                                     val dpsText = point.annualDividend
                                         ?.let { com.kurogane.dividend.model.formatFinancialAmountDisplay(it) }
-                                        ?: "未取得"
+                                        ?: "0"
                                     val fiscalPeriodLabel = "${point.year}期"
                                     Triple(
                                         fiscalPeriodLabel,
@@ -2326,7 +2326,7 @@ fun StockDetailScreen(
             }
 
             // 5. 配当月・通知設定
-            item {
+            if (!currentHolding.isNoDividendConfirmed) item {
                 val dividendEvents = remember(currentHolding.code, dividendEventRevision) {
                     viewModel.dividendEventsFor(currentHolding.code)
                 }
