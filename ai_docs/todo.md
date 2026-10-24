@@ -10,6 +10,7 @@
 - [ ] Verify the attached SBI CSV imports code 8953 as `日本都市ファンド投資法人`, and confirm mutual-fund rows without a listed-security code still use fund-name matching.
 - [ ] Unify Android financial-number typography as sans-serif with tabular figures, keeping monospace for identifiers and technical literals. Evidence: shared numeric styles and explicit financial-value overrides are updated; JDK 17 debug build succeeds, and the APK installs and launches on SCG01 and the emulator. Visual comparison on Watchlist and Total Assets remains pending.
 - [ ] Visually compare Watchlist and Total Assets numerals, then inspect the affected financial values and input fields on device.
+- [ ] Validate sharded legacy financial migration, including partition coverage, mixed-source ratio cleanup, report checkpoints, and R2 read-back. Evidence: the migration script and workflow now support four deterministic shards and resumable progress reports; this migration path was not run in the current integration.
 
 ## Completed
 
