@@ -2,6 +2,8 @@
 
 ## Runtime and storage
 
+- New support feedback is saved with a transactional D1 email outbox (`support_feedback_email`, migration 0006). The Worker notifies the configured verified admin via Cloudflare Email Service; existing hourly cron retries up to 20 pending messages with a 10-minute lease. Delivery is at-least-once; old receipts are not backfilled and deletion removes outbox records. See `data/irbank/cloudflare/docs/feedback-email.md`.
+
 - The current app source is `kurogane-dividend/`; Android builds come from `kurogane-dividend/android/`.
 - Android Compose typography uses the platform sans-serif family for interface text and financial figures; shared numeric styles enable tabular figures (`tnum`). Monospace is reserved for identifiers and technical literals. No custom font files are bundled.
 - Android portfolio CSV import supports six broker labels and keeps CSV export unencrypted at a user-selected device destination. Encrypted Drive backup uses the reference APK's AES-256-GCM DVM format for holdings plus a Diview DVM sidecar for shareholder-benefit, stock-climate, and dividend-history overrides; OAuth/Drive setup is external. See `ai_docs/portfolio-import-backup-spec.md` for file formats, restore behavior, and limits.

@@ -1090,3 +1090,18 @@ test('invalid input, rate limiting and anonymous administration are rejected', a
   assert.ok(limited.headers.get('retry-after'));
   assert.equal((await worker.fetch(new Request('https://example.com/api/v1/admin/feedback'), environment())).status, 401);
 });
+
+test('notification storage failure never turns a saved feedback receipt into failure', async () => {
+  const env = environment();
+  env.FEEDBACK_EMAIL_FROM = 'noreply@example.org';
+  env.FEEDBACK_EMAIL_TO = 'admin@example.com';
+  env.FEEDBACK_EMAIL = { send: async () => { throw Error('mail unavailable'); } };
+  const prepare = env.DB.prepare;
+  env.DB.prepare = sql => {
+    if (sql.includes('support_feedback_email')) throw Error('outbox unavailable');
+    return prepare(sql);
+  };
+  const response = await worker.fetch(request(payload()), env);
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).accepted, true);
+});

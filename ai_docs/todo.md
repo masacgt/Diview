@@ -18,6 +18,8 @@
 
 ## Completed
 
+- [x] Add administrator email notifications for new support feedback. Evidence: migration 0006 records a transactional outbox; 48 isolated Worker tests pass, flipsave.org Email Routing is ready, and production test receipt `7fe56e6a-51ca-419c-9c2f-c6329b692fcb` has one successful send and a matching Gmail INBOX message. No Android changes are needed.
+
 - [x] Unify heading, metric, and supporting-label sizes while retaining 14sp body text and 9sp chart labels. Evidence: shared Compose typography tokens and settings/distribution labels use 18sp, 24sp, and 12sp roles; the JDK 17 debug build succeeds, and SCG01 at 1.3 font scale was visually checked across all four main tabs and Settings from top to bottom.
 
 - [x] Prioritize income-gap months not yet represented when selecting the three advice candidates. Evidence: `rankIncomeAdviceCandidates` greedily chooses the candidate covering the most still-uncovered empty months, then applies score and tie-breakers; the JDK 17 debug APK builds and is installed on emulator and SCG01.
