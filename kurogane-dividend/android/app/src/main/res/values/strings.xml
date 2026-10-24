@@ -77,12 +77,12 @@
     <string name="annual_dividend_text_6">"月別の受取見込み額"</string>
     <string name="annual_dividend_info_content_description">配当グラフの説明</string>
     <string name="annual_dividend_info_title">グラフの見方</string>
-    <string name="annual_dividend_info_description">棒グラフは配当履歴と現在の保有株数から税引き後の金額を月別に集計した見込みです。日本株の受取月は権利確定日から3か月後を目安にしています。支払開始月は取得できた予定日を優先し、予定日がない場合は権利確定日から3か月後として推定します。米国株・投信は取得した配当履歴の日付で集計します。実際の支払日や入金額は会社や証券会社によって異なる場合があります。</string>
+    <string name="annual_dividend_info_description">棒グラフは配当履歴と現在の保有株数から税引き後の金額を月別に集計した見込みです。日本株の権利落ち月は権利落ち日、受取月は配当金支払開始予定日を優先し、未取得の場合は権利確定日の約3か月後として推定します。米国株・投信は取得した配当履歴の日付で集計します。実際の支払日や入金額は会社や証券会社によって異なる場合があります。</string>
     <string name="annual_dividend_estimated_badge">"推定"</string>
+    <string name="annual_dividend_month_mode_ex_dividend">"権利落ち月"</string>
     <string name="annual_dividend_month_mode_receipt">"受取月"</string>
-    <string name="annual_dividend_month_mode_payment_start">"支払開始月"</string>
-    <string name="annual_dividend_month_mode_helper_receipt">"権利確定日から約3か月後を、受取月の目安として表示します。"</string>
-    <string name="annual_dividend_month_mode_helper_payment_start">"支払開始予定日を優先し、予定日がない銘柄は権利確定日から約3か月後を表示します。"</string>
+    <string name="annual_dividend_month_mode_helper_ex_dividend">"権利落ち日を基準に月別集計します。"</string>
+    <string name="annual_dividend_month_mode_helper_receipt">"支払開始予定日を優先し、未取得の場合は権利確定日の約3か月後を受取月の目安として表示します。"</string>
     <string name="annual_dividend_1_s">"%1$s"</string>
     <string name="japanese_stocks">"日本株"</string>
     <string name="us_stocks">"米国株"</string>
