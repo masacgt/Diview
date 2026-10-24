@@ -857,10 +857,10 @@ private fun DividendChangeCard(row: DividendChangeSecurity, privacy: Boolean, on
             val muted = OnSurfaceVariant
             Text(buildAnnotatedString {
                 withStyle(SpanStyle(color = muted, fontSize = AppTextSize.compact)) { append(resources.getString(R.string.dividend_change_analysis_cards_label_22)) }
-                withStyle(SpanStyle(color = color, fontSize = AppTextSize.emphasizedSection, fontWeight = FontWeight.Bold)) {
+                withStyle(SpanStyle(color = color, fontSize = AppTextSize.metric, fontWeight = FontWeight.Bold)) {
                     append(money(annualImpact, privacy, signed = true))
                 }
-            }, lineHeight = 21.sp)
+            }, lineHeight = 28.sp)
         }
         AdaptiveRow(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(SurfaceContainerLowest)
             .padding(horizontal = 8.dp, vertical = 3.dp),
@@ -937,7 +937,7 @@ private fun MonitorEmptyCard(message: String) {
 private fun MonitorHeading(title: String, icon: ImageVector) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
-        Text(title, color = OnSurface, fontSize = AppTextSize.emphasizedBody, fontWeight = FontWeight.Bold)
+        Text(title, color = OnSurface, fontSize = AppTextSize.heading, fontWeight = FontWeight.Bold)
     }
 }
 

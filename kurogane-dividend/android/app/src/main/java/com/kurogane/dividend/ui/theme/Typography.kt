@@ -9,25 +9,28 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 
-/** Shared font-size values. Keep these values aligned with the existing screen design. */
+/** Shared font-size values for the app's semantic text roles. */
 object AppTextSize {
-    // Supporting labels share one readable size across screens.
-    val micro: TextUnit = 12.sp
-    val tiny: TextUnit = 12.sp
     val chartLabel: TextUnit = 9.sp
-    val compact: TextUnit = 12.sp
-    val dense: TextUnit = 12.sp
-    val caption: TextUnit = 12.sp
-    val compactBody: TextUnit = 12.sp
+    val supporting: TextUnit = 12.sp
     val body: TextUnit = 14.sp
-    val emphasizedBody: TextUnit = 15.sp
-    val section: TextUnit = 16.sp
-    val emphasizedSection: TextUnit = 18.sp
-    val headline: TextUnit = 18.sp
-    val screenTitle: TextUnit = 18.sp
+    val heading: TextUnit = 18.sp
     val metric: TextUnit = 24.sp
-    val largeMetric: TextUnit = 24.sp
-    val hero: TextUnit = 24.sp
+
+    // Compatibility aliases share the semantic role values above.
+    val micro: TextUnit = supporting
+    val tiny: TextUnit = supporting
+    val compact: TextUnit = supporting
+    val dense: TextUnit = supporting
+    val caption: TextUnit = supporting
+    val compactBody: TextUnit = supporting
+    val emphasizedBody: TextUnit = body
+    val section: TextUnit = heading
+    val emphasizedSection: TextUnit = heading
+    val headline: TextUnit = heading
+    val screenTitle: TextUnit = heading
+    val largeMetric: TextUnit = metric
+    val hero: TextUnit = metric
 }
 
 /** Existing explicit line heights, named without changing their rendered values. */
@@ -124,19 +127,19 @@ private fun Typography.withAppRoleWeights(): Typography = copy(
 )
 
 val AppTypography = materialTypography.withAppRoleWeights().copy(
-    displayLarge = materialTypography.displayLarge.copy(fontSize = AppTextSize.hero, fontWeight = AppTextWeight.strongHeading).withAppTextRhythm(32.sp),
-    displayMedium = materialTypography.displayMedium.copy(fontSize = AppTextSize.largeMetric, fontWeight = AppTextWeight.strongHeading).withAppTextRhythm(32.sp),
+    displayLarge = materialTypography.displayLarge.copy(fontSize = AppTextSize.metric, fontWeight = AppTextWeight.strongHeading).withAppTextRhythm(32.sp),
+    displayMedium = materialTypography.displayMedium.copy(fontSize = AppTextSize.metric, fontWeight = AppTextWeight.strongHeading).withAppTextRhythm(32.sp),
     displaySmall = materialTypography.displaySmall.copy(fontSize = AppTextSize.metric, fontWeight = AppTextWeight.strongHeading).withAppTextRhythm(32.sp),
     headlineLarge = materialTypography.headlineLarge.copy(fontSize = AppTextSize.metric, fontWeight = AppTextWeight.strongHeading).withAppTextRhythm(32.sp),
-    headlineMedium = materialTypography.headlineMedium.copy(fontSize = AppTextSize.screenTitle, fontWeight = AppTextWeight.strongHeading).withAppTextRhythm(24.sp),
-    headlineSmall = materialTypography.headlineSmall.copy(fontSize = AppTextSize.headline, fontWeight = AppTextWeight.heading).withAppTextRhythm(24.sp),
-    titleLarge = materialTypography.titleLarge.copy(fontSize = AppTextSize.screenTitle, fontWeight = AppTextWeight.strongHeading).withAppTextRhythm(24.sp),
-    titleMedium = materialTypography.titleMedium.copy(fontSize = AppTextSize.headline, fontWeight = AppTextWeight.heading).withAppTextRhythm(24.sp),
-    titleSmall = materialTypography.titleSmall.copy(fontSize = AppTextSize.section, fontWeight = AppTextWeight.heading).withAppTextRhythm(22.sp),
+    headlineMedium = materialTypography.headlineMedium.copy(fontSize = AppTextSize.heading, fontWeight = AppTextWeight.strongHeading).withAppTextRhythm(24.sp),
+    headlineSmall = materialTypography.headlineSmall.copy(fontSize = AppTextSize.heading, fontWeight = AppTextWeight.heading).withAppTextRhythm(24.sp),
+    titleLarge = materialTypography.titleLarge.copy(fontSize = AppTextSize.heading, fontWeight = AppTextWeight.strongHeading).withAppTextRhythm(24.sp),
+    titleMedium = materialTypography.titleMedium.copy(fontSize = AppTextSize.heading, fontWeight = AppTextWeight.heading).withAppTextRhythm(24.sp),
+    titleSmall = materialTypography.titleSmall.copy(fontSize = AppTextSize.heading, fontWeight = AppTextWeight.heading).withAppTextRhythm(22.sp),
     bodyLarge = materialTypography.bodyLarge.copy(fontSize = AppTextSize.body, fontWeight = AppTextWeight.body).withAppTextRhythm(AppTextLineHeight.body),
-    bodyMedium = materialTypography.bodyMedium.copy(fontSize = AppTextSize.caption, fontWeight = AppTextWeight.body).withAppTextRhythm(AppTextLineHeight.caption),
-    bodySmall = materialTypography.bodySmall.copy(fontSize = AppTextSize.dense, fontWeight = AppTextWeight.supporting).withAppTextRhythm(AppTextLineHeight.denseRelaxed),
+    bodyMedium = materialTypography.bodyMedium.copy(fontSize = AppTextSize.supporting, fontWeight = AppTextWeight.body).withAppTextRhythm(AppTextLineHeight.caption),
+    bodySmall = materialTypography.bodySmall.copy(fontSize = AppTextSize.supporting, fontWeight = AppTextWeight.supporting).withAppTextRhythm(AppTextLineHeight.denseRelaxed),
     labelLarge = materialTypography.labelLarge.copy(fontSize = AppTextSize.body, fontWeight = AppTextWeight.supporting).withAppTextRhythm(AppTextLineHeight.body),
-    labelMedium = materialTypography.labelMedium.copy(fontSize = AppTextSize.caption, fontWeight = AppTextWeight.supporting).withAppTextRhythm(AppTextLineHeight.caption),
-    labelSmall = materialTypography.labelSmall.copy(fontSize = AppTextSize.dense, fontWeight = AppTextWeight.supporting).withAppTextRhythm(AppTextLineHeight.denseRelaxed)
+    labelMedium = materialTypography.labelMedium.copy(fontSize = AppTextSize.supporting, fontWeight = AppTextWeight.supporting).withAppTextRhythm(AppTextLineHeight.caption),
+    labelSmall = materialTypography.labelSmall.copy(fontSize = AppTextSize.supporting, fontWeight = AppTextWeight.supporting).withAppTextRhythm(AppTextLineHeight.denseRelaxed)
 )

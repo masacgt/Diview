@@ -366,7 +366,7 @@ fun AnnualDividendScreen(
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
                                         text = if (isPrivacyActive) "•••" else String.format(Locale.JAPAN, "%.2f", yieldOnCost),
-                                        fontSize = AppTextSize.headline,
+                                        fontSize = AppTextSize.metric,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = PrimaryEmerald,
                                         fontFamily = AppNumericFontFamily,
@@ -403,7 +403,7 @@ fun AnnualDividendScreen(
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
                                         text = if (isPrivacyActive) "•••" else String.format(Locale.JAPAN, "%.2f", yieldOnValuation),
-                                        fontSize = AppTextSize.headline,
+                                        fontSize = AppTextSize.metric,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = PrimaryEmerald,
                                         fontFamily = AppNumericFontFamily,
@@ -1691,7 +1691,7 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                     fontWeight = FontWeight.ExtraBold,
                                     color = OnSurface,
                                     fontFamily = AppNumericFontFamily,
-                                    fontSize = AppTextSize.screenTitle,
+                                    fontSize = AppTextSize.metric,
                                     shadow = Shadow(
                                         color = Color.White.copy(alpha = 0.9f),
                                         blurRadius = 7f
@@ -2716,7 +2716,7 @@ private fun CompoundingSimulationSection(
                                     Text(signedPercent(increaseRate), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
                                 }
                             }
-                            Text(signedMoney(increaseAmount), color = if ((increaseAmount ?: 0.0) >= 0.0) StatusSuccess else ErrorRed, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
+                            Text(signedMoney(increaseAmount), color = if ((increaseAmount ?: 0.0) >= 0.0) StatusSuccess else ErrorRed, fontSize = AppTextSize.metric, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
                             Text(stringResource(R.string.annual_dividend_text_36, firstPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, it.toString()) } ?: resources.getString(R.string.annual_dividend_label_20), latestPoint?.year?.let { resources.getString(R.string.stock_detail_label_5, it.toString()) } ?: resources.getString(R.string.annual_dividend_label_21)), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
                     }
@@ -2727,7 +2727,7 @@ private fun CompoundingSimulationSection(
                                 Spacer(Modifier.width(4.dp))
                                 Text(stringResource(R.string.annual_dividend_text_37), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                             }
-                            Text(cagr?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: resources.getString(R.string.not_available), color = PrimaryEmerald, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
+                            Text(cagr?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: resources.getString(R.string.not_available), color = PrimaryEmerald, fontSize = AppTextSize.metric, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily)
                             Text(stringResource(R.string.annual_dividend_text_39, signedMoney(averageAnnualIncrease)), color = OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -2921,7 +2921,7 @@ private fun AssetTrackingSection(
                     Text(
                         text = if (isPrivacyActive) "¥••••••••" else "¥${currencyFormat.format(realAssets.toLong())}",
                         color = OnSurface,
-                        fontSize = AppTextSize.section,
+                        fontSize = AppTextSize.metric,
                         fontWeight = FontWeight.Bold,
                         fontFamily = AppNumericFontFamily
                     )
@@ -2968,7 +2968,7 @@ private fun AssetTrackingSection(
                     Text(
                         text = if (isPrivacyActive) "+¥••••••" else "+¥${historicalMoney(gains[4])}",
                         color = PrimaryEmerald,
-                        fontSize = AppTextSize.section,
+                        fontSize = AppTextSize.metric,
                         fontWeight = FontWeight.Bold,
                         fontFamily = AppNumericFontFamily
                     )

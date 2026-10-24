@@ -411,7 +411,7 @@ fun TermsPrivacyScreen(
                                     Column(modifier = Modifier.padding(10.dp)) {
                                         Text(stringResource(R.string.terms_privacy_text_21), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                         Spacer(modifier = Modifier.height(2.dp))
-                                        Text(stringResource(R.string.terms_privacy_text_22), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = FontFamily.Monospace)
+                                        Text(stringResource(R.string.terms_privacy_text_22), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.supporting, fontFamily = FontFamily.Monospace)
                                         Text(stringResource(R.string.terms_privacy_text_23), color = SoftGray, fontSize = AppTextSize.dense)
                                     }
                                 }
@@ -424,7 +424,7 @@ fun TermsPrivacyScreen(
                                     Column(modifier = Modifier.padding(10.dp)) {
                                         Text(stringResource(R.string.terms_privacy_text_24), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                         Spacer(modifier = Modifier.height(2.dp))
-                                        Text(stringResource(R.string.terms_privacy_aes_256), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.section, fontFamily = FontFamily.Monospace)
+                                        Text(stringResource(R.string.terms_privacy_aes_256), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body, fontFamily = FontFamily.Monospace)
                                         Text(stringResource(R.string.terms_privacy_text_25), color = SoftGray, fontSize = AppTextSize.dense)
                                     }
                                 }
