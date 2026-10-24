@@ -384,6 +384,21 @@ function selectedIrbankDividend(item) {
       yield_attribution: yieldAttribution,
     };
   }
+  if (item?.actual_status === 'empty' && !actual) {
+    return {
+      annual_dps: 0,
+      dividend_period: 'issuer_reported_no_dividend',
+      yield_basis: 'issuer_reported_no_dividend',
+      dividend_amount_basis: 'irbank_empty_dividend_records',
+      dividend_status: 'no_dividend',
+      fiscal_year: null,
+      forecast: null,
+      yield_rate: 0,
+      yield_as_of: yieldAsOf,
+      yield_source: 'IRBANK dividends API (empty records)',
+      yield_attribution: yieldAttribution,
+    };
+  }
   return {
     annual_dps: null,
     dividend_period: 'unknown',
