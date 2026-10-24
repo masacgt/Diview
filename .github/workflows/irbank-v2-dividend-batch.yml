@@ -19,9 +19,17 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/irbank_r2/refresh_v2_dividend_batch.py
+            scripts/irbank_r2/refresh_v2_dividends.py
+            scripts/irbank_r2/requirements.txt
+          sparse-checkout-cone-mode: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/irbank_r2/requirements.txt
       - name: Install R2 client
         run: python -m pip install -r scripts/irbank_r2/requirements.txt
       - name: Refresh actual and forecast dividends within the daily quota
