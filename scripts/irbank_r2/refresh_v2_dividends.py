@@ -28,7 +28,9 @@ DEFAULT_OUTPUT = Path(tempfile.gettempdir()) / "diview-irbank-v2-dividends-curre
 EDINET_CODE_RE = re.compile(r"^[EG]\d{5}$")
 SECURITY_CODE_RE = re.compile(r"^[A-Z0-9]{4}$")
 FORECAST_TITLE_RE = re.compile(r"配当|決算|業績|dividend|earnings|results|forecast", re.IGNORECASE)
-API_REQUEST_INTERVAL_SECONDS = 1.05
+# IRBANK currently allows 60 requests/minute per account. Keep a small margin
+# for requests made outside this process while reducing idle time between calls.
+API_REQUEST_INTERVAL_SECONDS = 1.02
 _api_rate_lock = threading.Lock()
 _api_next_request_at = 0.0
 
