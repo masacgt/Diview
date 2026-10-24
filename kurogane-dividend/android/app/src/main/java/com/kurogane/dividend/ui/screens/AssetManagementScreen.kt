@@ -96,7 +96,7 @@ private fun OdometerAmount(
         fontSize = AppTextSize.hero,
         fontWeight = FontWeight.ExtraBold,
         color = OnSurface,
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = AppNumericFontFamily,
         fontFeatureSettings = "\"tnum\" 1, \"kern\" 1, \"palt\" 1",
         letterSpacing = (-0.5).sp
     )

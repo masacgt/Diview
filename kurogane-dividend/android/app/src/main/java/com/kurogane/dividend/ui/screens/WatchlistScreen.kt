@@ -1101,6 +1101,12 @@ fun WatchlistScreen(
                     else -> resources.getString(R.string.watchlist_label_23)
                 }
                 
+                val currentYieldLabel = stringResource(R.string.stock_detail_text_4)
+                val currentYieldDisplay = com.kurogane.dividend.model.formatDividendYieldDisplay(
+                    stock.currentYield,
+                    stock.isNoDividendConfirmed
+                )
+                val useCompactYieldValue = LocalDensity.current.fontScale >= 1.8f
                 val dynamicBadge = badgeTextFor(stock)
 
                 val badgeColor = if (isReached) {
@@ -1369,17 +1375,16 @@ fun WatchlistScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        Text(stringResource(R.string.stock_detail_text_4), color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
+                                        Text(currentYieldLabel, color = OnSurfaceVariant, fontSize = AppTextSize.dense, maxLines = 1)
                                         Spacer(modifier = Modifier.width(5.dp))
                                         Text(
-                                            com.kurogane.dividend.model.formatDividendYieldDisplay(
-                                                stock.currentYield,
-                                                stock.isNoDividendConfirmed
-                                            ),
+                                            currentYieldDisplay,
                                             fontWeight = FontWeight.Bold,
                                             color = if (stock.isReady) PrimaryEmerald else OnSurface,
-                                            fontSize = AppTextSize.body,
-                                            fontFamily = FontFamily.Monospace
+                                            fontSize = if (useCompactYieldValue) AppTextSize.dense else AppTextSize.body,
+                                            fontFamily = AppNumericFontFamily,
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                         Icon(
                                             Icons.AutoMirrored.Filled.ArrowForward,
@@ -1409,7 +1414,7 @@ fun WatchlistScreen(
                                             color = PrimaryEmerald,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = AppTextSize.section,
-                                            fontFamily = FontFamily.Monospace,
+                                            fontFamily = AppNumericFontFamily,
                                             modifier = Modifier.padding(horizontal = 4.dp)
                                         )
                                         TargetYieldAdjustButton(

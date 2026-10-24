@@ -114,9 +114,11 @@ object BrokerCsvImporter {
             val currencyText = firstValue(cells, currentColumns.currencies).orEmpty()
             if (isUnsupportedInstrument(type, name, unsupportedSection)) return@forEach
             val account = firstValue(cells, currentColumns.accounts)?.let(::canonicalAccount) ?: sectionAccount
+            val masterName = securityNames[code] ?: securityNames[code.trimStart('0')]
             val isFundType = listOf("投資信託", "投信", "ファンド", "fund").any(type::contains)
             val isShareType = listOf("株式", "etf", "stock").any(type::contains)
-            val isFund = isFundType || (!isShareType && code.isBlank()) || name.contains("投資信託") || name.contains("ファンド")
+            val isFund = masterName == null &&
+                (isFundType || (!isShareType && code.isBlank()) || name.contains("投資信託") || name.contains("ファンド"))
             val isUsd = currencyText.contains("usd", ignoreCase = true) || currencyText.contains("$") ||
                 market.contains("NASDAQ", ignoreCase = true) || market.contains("NYSE", ignoreCase = true) ||
                 market.contains("AMEX", ignoreCase = true) || market.contains("米国") || type.contains("米国株") ||
@@ -134,7 +136,6 @@ object BrokerCsvImporter {
                 if (found == null) unmatched += UnmatchedFund(name, shares, cost)
                 else result += CsvHoldingRow("FUND:${FundNameMatcher.normalize(found.second)}", found.second, shares, cost, price, account, true, matchedName = found.second)
             } else {
-                val masterName = securityNames[code] ?: securityNames[code.trimStart('0')]
                 result += CsvHoldingRow(code, masterName ?: name, shares, cost, price, account, false, matchedName = masterName, currency = currency)
             }
         }
