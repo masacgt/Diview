@@ -39,6 +39,30 @@ class ApiFailure(RuntimeError):
         self.status = status
 
 
+class RequestBudgetExceeded(RuntimeError):
+    """Raised before an IRBANK request would exceed the configured daily cap."""
+
+
+class RequestBudget:
+    def __init__(self, limit: int, *, used: int = 0):
+        self.limit = max(0, limit)
+        self.used = max(0, used)
+        self._lock = threading.Lock()
+
+    @property
+    def remaining(self) -> int:
+        with self._lock:
+            return max(0, self.limit - self.used)
+
+    def consume(self, url: str) -> None:
+        with self._lock:
+            if self.used >= self.limit:
+                raise RequestBudgetExceeded(
+                    f"IRBANK daily request limit reached before {url.split('?')[0]}"
+                )
+            self.used += 1
+
+
 def iso_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -55,11 +79,14 @@ def wait_for_api_slot(token: str | None) -> None:
         time.sleep(wait_seconds)
 
 
-def request_json(url: str, token: str | None = None, *, attempts: int = 5) -> dict[str, Any]:
+def request_json(url: str, token: str | None = None, *, attempts: int = 5,
+                 budget: RequestBudget | None = None) -> dict[str, Any]:
     headers = {"Accept": "application/json", "User-Agent": "Diview/IRBANK-v2-dividends"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     for attempt in range(attempts):
+        if token and budget:
+            budget.consume(url)
         if not url.endswith("/usage"):
             wait_for_api_slot(token)
         request = Request(url, headers=headers)
@@ -202,11 +229,12 @@ def parse_forecast(document: dict[str, Any], latest_actual_row: dict[str, Any] |
 
 
 def fetch_latest_forecast(code: str, actual: dict[str, Any] | None, token: str,
-                          *, as_of: date | None = None) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+                          *, as_of: date | None = None,
+                          budget: RequestBudget | None = None) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     as_of = as_of or date.today()
     from_date = (as_of - timedelta(days=1095)).isoformat()
     url = f"{API_BASE}/securities/{code}/disclosures?{urlencode({'from': from_date, 'limit': 100})}"
-    listing = request_json(url, token)
+    listing = request_json(url, token, budget=budget)
     disclosures = listing.get("disclosures")
     if not isinstance(disclosures, list):
         raise ValueError("IRBANK disclosure list does not contain disclosures[]")
@@ -217,7 +245,14 @@ def fetch_latest_forecast(code: str, actual: dict[str, Any] | None, token: str,
         doc_id = str(row.get("doc_id") or "")
         if not doc_id:
             continue
-        document = request_json(f"{API_BASE}/disclosures/{doc_id}?include=meta,xbrl_facts", token)
+        try:
+            document = request_json(
+                f"{API_BASE}/disclosures/{doc_id}?include=meta,xbrl_facts", token, budget=budget
+            )
+        except ApiFailure as error:
+            if error.status == 404:
+                continue
+            raise
         forecast = parse_forecast(document, actual)
         if forecast:
             return forecast, document.get("attribution")
@@ -248,10 +283,11 @@ def parse_codes(raw: str | None, codes_file: Path | None, catalog: list[dict[str
     return [row for row in catalog if str(row["code"]).upper() in selected]
 
 
-def fetch_dividend_record(security: dict[str, Any], token: str, from_fiscal_year: int) -> tuple[str, dict[str, Any]]:
+def fetch_dividend_record(security: dict[str, Any], token: str, from_fiscal_year: int,
+                          *, budget: RequestBudget | None = None) -> tuple[str, dict[str, Any]]:
     code = str(security["code"]).upper()
     query = urlencode({"edinet_code": security["edinet_code"], "from_fiscal_year": from_fiscal_year})
-    document = request_json(f"{API_BASE}/dividends?{query}", token)
+    document = request_json(f"{API_BASE}/dividends?{query}", token, budget=budget)
     actual = latest_actual(document.get("records"))
     result = {
         "code": code,
