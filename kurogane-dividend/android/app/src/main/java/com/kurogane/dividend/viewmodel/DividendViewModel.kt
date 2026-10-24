@@ -799,7 +799,8 @@ class DividendViewModel @JvmOverloads constructor(
                 val amount = row.optDouble("amount", Double.NaN).takeIf { it.isFinite() && it > 0.0 } ?: return@mapNotNull null
                 val finalRightsDate = runCatching { LocalDate.parse(row.optString("final_rights_date")) }.getOrNull()
                 val recordDate = runCatching { LocalDate.parse(row.optString("record_date")) }.getOrNull()
-                CloudflareDividendEvent(date, amount, finalRightsDate, recordDate)
+                val paymentStartDate = runCatching { LocalDate.parse(row.optString("payment_start_date")) }.getOrNull()
+                CloudflareDividendEvent(date, amount, finalRightsDate, recordDate, paymentStartDate)
             }.sortedBy { it.date }
         }.getOrDefault(emptyList())
 
@@ -819,8 +820,9 @@ class DividendViewModel @JvmOverloads constructor(
             val exDividendDate = LocalDate.parse(row.optString("ex_dividend_date"))
             val finalRightsDate = runCatching { LocalDate.parse(row.optString("final_rights_date")) }.getOrNull()
             val recordDate = runCatching { LocalDate.parse(row.optString("record_date")) }.getOrNull()
+            val paymentStartDate = runCatching { LocalDate.parse(row.optString("payment_start_date")) }.getOrNull()
             CloudflareUpcomingDividendEvent(
-                exDividendDate, finalRightsDate, recordDate,
+                exDividendDate, finalRightsDate, recordDate, paymentStartDate,
                 estimatedFromHistory = row.optBoolean("estimated_from_history", false)
             )
         }.getOrNull()
@@ -841,6 +843,7 @@ class DividendViewModel @JvmOverloads constructor(
                 .put("ex_dividend_date", event.exDividendDate.toString())
                 .put("final_rights_date", event.finalRightsDate?.toString().orEmpty())
                 .put("record_date", event.recordDate?.toString().orEmpty())
+                .put("payment_start_date", event.paymentStartDate?.toString().orEmpty())
                 .put("estimated_from_history", event.estimatedFromHistory).toString()).apply()
         }
         synchronized(dividendEventCacheLock) {
@@ -855,7 +858,8 @@ class DividendViewModel @JvmOverloads constructor(
                 .put("date", event.date.toString())
                 .put("amount", event.amountPerShare)
                 .put("final_rights_date", event.finalRightsDate?.toString())
-                .put("record_date", event.recordDate?.toString()))
+                .put("record_date", event.recordDate?.toString())
+                .put("payment_start_date", event.paymentStartDate?.toString()))
         }
         marketPreferences.edit().putString("dividend_events_$symbol", rows.toString()).apply()
         synchronized(dividendEventCacheLock) {

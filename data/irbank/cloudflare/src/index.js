@@ -1831,6 +1831,7 @@ export default {
           .map(event => [`${String(event.symbol || '').toUpperCase()}|${String(event.ex_dividend_date || '')}`, {
             finalRightsDate: event.final_rights_date || null,
             recordDate: event.record_date || null,
+            paymentStartDate: event.payment_start_date || null,
           }]));
         const estimatedEventsBySymbol = new Map();
         for (const event of rightsRecords) {
@@ -1870,12 +1871,17 @@ export default {
           const upcomingRightsDates = upcomingExDate && upcomingExDate > asOf
             ? rightsDatesByEvent.get(`${symbol}|${upcomingExDate}`) || null
             : null;
+          const calendarPaymentStartDate = String(
+            calendarExDate === upcomingExDate ? current?.calendar?.payment_start_date || '' : '');
           const usesHistoryEstimate = Boolean(estimatedHistoryDate && upcomingExDate === estimatedHistoryDate);
           const usesCalendarDate = Boolean(!usesHistoryEstimate && calendarUpcoming && upcomingExDate === calendarUpcoming);
           const upcomingEvent = upcomingExDate && upcomingExDate > asOf ? {
             ex_dividend_date: upcomingExDate,
             final_rights_date: upcomingRightsDates?.finalRightsDate || null,
             record_date: upcomingRightsDates?.recordDate || null,
+            ...(/^\d{4}-\d{2}-\d{2}$/.test(calendarPaymentStartDate)
+              ? { payment_start_date: calendarPaymentStartDate }
+              : {}),
             estimated_from_history: usesHistoryEstimate,
             ex_dividend_date_status: usesHistoryEstimate
               ? 'estimated_from_dividend_history'
@@ -1897,11 +1903,15 @@ export default {
                 (matchesRequestedYear ? date <= asOf : date >= cutoff && date <= asOf) && amount > 0;
             }).map(event => {
               const eventDate = String(event.date);
-              const rightsDates = rightsDatesByEvent.get(`${symbol}|${eventDate}`) || {};
+              const rightsDates = rightsDatesByEvent.get(symbol + '|' + eventDate) || {};
+              const paymentStartDate = String(event.payment_start_date || rightsDates.paymentStartDate || '');
               return { date: eventDate, amount: finiteNumber(event.amount),
                 amount_basis: current?.dividend?.event_amount_basis || 'yfinance_split_adjusted_assumption',
                 row_repaired_by_yfinance: event.row_repaired_by_yfinance === true,
-                final_rights_date: rightsDates.finalRightsDate || null, record_date: rightsDates.recordDate || null };
+                final_rights_date: rightsDates.finalRightsDate || null, record_date: rightsDates.recordDate || null,
+                ...(/^\d{4}-\d{2}-\d{2}$/.test(paymentStartDate)
+                  ? { payment_start_date: paymentStartDate }
+                  : {}) };
             }).sort((a, b) => a.date.localeCompare(b.date));
             return {
               symbol,

@@ -626,15 +626,18 @@ def date_value(value: Any) -> date | None:
         return None
 
 
-def calendar_ex_dividend_date(calendar: Any) -> date | None:
-    """Read Yahoo's next Ex-Dividend Date from yfinance's calendar payload."""
+def calendar_field_date(calendar: Any, keys: tuple[str, ...]) -> date | None:
+    """Read a named date from dictionary or DataFrame yfinance calendar payloads."""
     value: Any = None
     if isinstance(calendar, dict):
-        value = calendar.get("Ex-Dividend Date", calendar.get("exDividendDate"))
+        for key in keys:
+            if key in calendar:
+                value = calendar[key]
+                break
     elif hasattr(calendar, "index") and hasattr(calendar, "columns"):
         # Older yfinance releases returned a one-column DataFrame with event
         # names on the index; newer releases return a dictionary.
-        for key in ("Ex-Dividend Date", "exDividendDate"):
+        for key in keys:
             try:
                 if key in calendar.index:
                     value = calendar.loc[key]
@@ -649,6 +652,16 @@ def calendar_ex_dividend_date(calendar: Any) -> date | None:
             except (KeyError, IndexError, TypeError):
                 continue
     return date_value(value)
+
+
+def calendar_ex_dividend_date(calendar: Any) -> date | None:
+    """Read Yahoo's next Ex-Dividend Date from yfinance's calendar payload."""
+    return calendar_field_date(calendar, ("Ex-Dividend Date", "exDividendDate"))
+
+
+def calendar_payment_start_date(calendar: Any) -> date | None:
+    """Read Yahoo's announced next dividend payment date when provided."""
+    return calendar_field_date(calendar, ("Dividend Date", "dividendDate"))
 
 
 def years_before(day: date, years: int) -> date:
@@ -2063,7 +2076,12 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         or (as_of - previous_calendar_attempt).days >= 30
     )
     calendar_ex_date = date_value(previous_calendar.get("ex_dividend_date"))
+    calendar_payment_date = date_value(previous_calendar.get("payment_start_date"))
     calendar_status = str(previous_calendar.get("status") or "not_fetched")
+    calendar_payment_status = str(
+        previous_calendar.get("payment_start_date_status")
+        or ("available" if calendar_payment_date else "not_fetched")
+    )
     calendar_last_attempt_status = str(previous_calendar.get("last_attempt_status") or calendar_status)
     calendar_fetched_at = previous_calendar.get("fetched_at")
     calendar_last_attempt_at = previous_calendar.get("last_attempt_at") or calendar_fetched_at
@@ -2073,15 +2091,20 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             count_yfinance_call("ticker_calendar")
             calendar_payload = ticker.calendar
             calendar_ex_date = calendar_ex_dividend_date(calendar_payload)
+            calendar_payment_date = calendar_payment_start_date(calendar_payload)
             calendar_status = "available" if calendar_ex_date else "empty"
+            calendar_payment_status = "available" if calendar_payment_date else "empty"
             calendar_last_attempt_status = calendar_status
             calendar_fetched_at = calendar_last_attempt_at
         except Exception as exc:
             calendar_last_attempt_status = "failed"
             calendar_status = "stale" if calendar_ex_date else "failed"
+            calendar_payment_status = "stale" if calendar_payment_date else "failed"
             print(f"Dividend calendar unavailable for {symbol}: {type(exc).__name__}: {exc}"[:500], file=sys.stderr)
     calendar = {
         "ex_dividend_date": calendar_ex_date.isoformat() if calendar_ex_date else None,
+        "payment_start_date": calendar_payment_date.isoformat() if calendar_payment_date else None,
+        "payment_start_date_status": calendar_payment_status,
         "status": calendar_status,
         "last_attempt_status": calendar_last_attempt_status,
         "last_attempt_at": calendar_last_attempt_at,
@@ -2522,6 +2545,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             "calendar_year_dividend_metrics": calendar_year_metrics["status"],
             "split_history": action_status["splits"],
             "upcoming_ex_dividend_date": calendar["status"],
+            "upcoming_dividend_payment_start_date": calendar_payment_status,
             "monthly_prices": monthly_status,
             "forecast_dividend": "available" if has_forecast_dps else "empty",
             "trailing_12_month_per_share": "stale" if dividend_history_failed else "available" if trailing_dividends > 0 else "empty",
