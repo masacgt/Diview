@@ -71,6 +71,8 @@ The Worker exposes `/api/v1/irbank/catalog`, `/api/v1/irbank/manifest`, `/api/v1
 
 `refresh_v2_dividend_yields.py` pages through `GET /v1/screening?filters=dividendYield:gte:0`, validates the complete result and its attribution, and merges each IRBANK percentage and `as_of` date into the same index without replacing DPS or forecast records. A full refresh is about 38 requests at the current listing size. Dry runs require `--input <local-index.json>`; `--publish` reads the existing R2 object and verifies the uploaded object by SHA-256.
 
+`refresh_v2_dividend_batch.py` is the resumable daily backfill and refresh path for current actual DPS and company forecasts. The scheduled workflow runs once daily, reads `/v1/usage`, and caps all authenticated IRBANK requests—including retries and the usage lookup—at 200. It walks the full IRBANK catalog in a persisted round-robin order, fills missing actual/forecast entries, and refreshes completed entries after 60 days. Existing yield fields and unrelated index fields are retained. Forecast extraction can require one disclosure-list request and up to eight disclosure-document requests; the R2 `batch_sync` summary reports remaining entries and a minimum-days estimate against the two-month target, so completion depends on how many documents each company requires. Each completed run publishes the merged index and verifies its SHA-256 read-back. The workflow requires the `IRBANK_API_KEY`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` GitHub Actions secrets.
+
 ```powershell
 $env:IRBANK_API_KEY = '<IRBANK Connect API key>'
 $env:CLOUDFLARE_ACCOUNT_ID = '<Cloudflare account ID>'
@@ -78,6 +80,7 @@ $env:R2_ACCESS_KEY_ID = '<R2 access key>'
 $env:R2_SECRET_ACCESS_KEY = '<R2 secret key>'
 python scripts/irbank_r2/refresh_v2_dividends.py --forecast-codes 8766 --publish
 python scripts/irbank_r2/refresh_v2_dividend_yields.py --publish
+python scripts/irbank_r2/refresh_v2_dividend_batch.py --publish --max-api-requests 200 --refresh-days 60
 ```
 
 Omit `--forecast-codes` to refresh actuals only. Use `--codes 8766 --forecast-codes 8766` for a targeted update; it preserves other securities and existing forecasts in the R2 index. The default full-catalog refresh consumes about one IRBANK request per security, plus selected disclosure-list/document requests, and stops before exceeding the remaining daily quota. Requests are paced below IRBANK's current 60-per-minute limit, so a full-catalog refresh takes about 70 minutes.
