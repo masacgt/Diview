@@ -178,7 +178,13 @@ fun SettingsScreen(
                     }
                     AdaptiveRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp), stackAtFontScale = 2.2f) {
                         listOf("system" to stringResource(R.string.settings_label_44), "light" to stringResource(R.string.settings_label_43), "dark" to stringResource(R.string.settings_label_42)).forEach { (mode, name) ->
-                            Segment(name, themeMode == mode, Modifier.weight(1f)) { viewModel.setThemeMode(mode) }
+                            val modeIcon = when (mode) {
+                                "system" -> Icons.Default.SettingsBrightness
+                                "light" -> Icons.Default.LightMode
+                                "dark" -> Icons.Default.DarkMode
+                                else -> null
+                            }
+                            Segment(name, themeMode == mode, Modifier.weight(1f), leadingIcon = modeIcon) { viewModel.setThemeMode(mode) }
                         }
                     }
                     HorizontalDivider(color = SettingsBorder, thickness = .6.dp)
@@ -389,7 +395,10 @@ fun SettingsScreen(
 
         item {
             Column(Modifier.fillMaxWidth().padding(top = 3.dp, bottom = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Label(stringResource(R.string.settings_label_41), 7, SettingsMint)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = SettingsMint, modifier = Modifier.size(12.dp))
+                    Label(stringResource(R.string.settings_label_41), 7, SettingsMint)
+                }
                 Spacer(Modifier.height(3.dp)); Label(stringResource(R.string.settings_2025_diview), 6, SettingsMuted)
             }
         }
@@ -458,7 +467,13 @@ private fun Label(text: String, size: Int, color: Color, bold: Boolean = false, 
 }
 
 @Composable
-private fun Segment(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun Segment(
+    text: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    leadingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    onClick: () -> Unit
+) {
     val shape = RoundedCornerShape(8.dp)
     Row(
         modifier.heightIn(min = 48.dp)
@@ -477,6 +492,15 @@ private fun Segment(text: String, selected: Boolean, modifier: Modifier = Modifi
             modifier = Modifier.size(15.dp)
         )
         Spacer(Modifier.width(4.dp))
+        if (leadingIcon != null) {
+            Icon(
+                leadingIcon,
+                contentDescription = null,
+                tint = if (selected) SettingsMint else SettingsMuted,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(Modifier.width(3.dp))
+        }
         Text(text, color = if (selected) SettingsMint else OnSurface, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, lineHeight = 14.sp)
     }
 }

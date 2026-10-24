@@ -2578,7 +2578,10 @@ fun WatchlistScreen(
                             .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
                             .padding(10.dp)
                     ) {
-                        Text(stringResource(R.string.watchlist_text_54), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(13.dp))
+                            Text(stringResource(R.string.watchlist_text_54), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                        }
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(stringResource(R.string.watchlist_empty_month_count, projection.emptyMonths.size), color = ErrorRed, fontSize = AppTextSize.caption, fontWeight = FontWeight.Bold)
                     }

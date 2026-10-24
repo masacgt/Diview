@@ -248,7 +248,7 @@
     <string name="dividend_change_analysis_cards_payout_info_title">"指標の見方"</string>
     <string name="dividend_change_analysis_cards_payout_info_content_description">"配当性向健全度レーダーの説明"</string>
     <string name="dividend_change_analysis_cards_text_12">"配当性向の取得済み %1$s / %2$s 銘柄"</string>
-    <string name="dividend_change_analysis_cards_1_s_2_s">"⚠ %1$s（%2$s）"</string>
+    <string name="dividend_change_analysis_cards_1_s_2_s">"%1$s（%2$s）"</string>
     <string name="dividend_change_analysis_cards_text_13">"配当性向 %1$s・%2$s"</string>
     <string name="dividend_change_analysis_cards_text_14">"%1$s。詳細画面で財務指標を確認できます。"</string>
     <string name="dividend_change_analysis_cards_text_15">"非減配%1$s"</string>
@@ -397,7 +397,7 @@
     <string name="settings_label_39">"アプリをレビューで応援"</string>
     <string name="settings_label_40">"バージョン"</string>
     <string name="settings_v_1_s_build_2_s">"v%1$s (Build %2$s)"</string>
-    <string name="settings_label_41">"♙  金融データは端末内暗号化保存されています"</string>
+    <string name="settings_label_41">"金融データは端末内暗号化保存されています"</string>
     <string name="settings_2025_diview">"© 2025 Diview"</string>
     <string name="settings_text_16">"データを初期化"</string>
     <string name="settings_text_17">"端末内の保有・設定データを初期化しますか？"</string>
@@ -627,18 +627,18 @@
     <string name="watchlist_text_51">"¥42,800/年"</string>
     <string name="watchlist_text_52">"月平均手取り"</string>
     <string name="watchlist_text_53">"¥3,567/月"</string>
-    <string name="watchlist_text_54">"⚠️ インカム空白"</string>
+    <string name="watchlist_text_54">"インカム空白"</string>
     <string name="watchlist_text_55">"4 ヶ月 (無収入)"</string>
     <string name="watchlist_text_56">"四半期キャッシュフロー対比"</string>
     <string name="watchlist_text_57" formatted="false">"Q2・Q4偏重 85.0%"</string>
     <string name="watchlist_text_58">"Q1 (1-3月)"</string>
     <string name="watchlist_text_59">"¥3,200"</string>
     <string name="watchlist_text_60" formatted="false">"7.5%"</string>
-    <string name="watchlist_text_61">"Q2 (4-6月) 🟢"</string>
+    <string name="watchlist_text_61">"Q2 (4-6月)"</string>
     <string name="watchlist_text_62">"¥18,200"</string>
     <string name="watchlist_text_63" formatted="false">"42.5%"</string>
     <string name="watchlist_text_64">"Q3 (7-9月)"</string>
-    <string name="watchlist_text_65">"Q4 (10-12月) 🟢"</string>
+    <string name="watchlist_text_65">"Q4 (10-12月)"</string>
     <string name="watchlist_text_66">"受取配当カレンダー"</string>
     <string name="watchlist_calendar_info_content_description">受取配当カレンダーの説明</string>
     <string name="watchlist_heatmap_info_content_description">配当密度ヒートマップの説明</string>
@@ -647,7 +647,7 @@
     <string name="watchlist_text_68">"米株"</string>
     <string name="watchlist_text_69">"空白"</string>
     <string name="watchlist_text_70">"日本株(3/9月期)は 6月・12月 入金"</string>
-    <string name="watchlist_text_71">"⚠️ 空白月: 1, 4, 7, 10月"</string>
+    <string name="watchlist_text_71">"空白月: 1, 4, 7, 10月"</string>
     <string name="watchlist_text_72">"インカム空白月の候補"</string>
     <string name="watchlist_text_80">"銘柄別 受取月寄与度"</string>
     <string name="watchlist_text_81">"監視4銘柄"</string>
@@ -666,8 +666,8 @@
     <string name="main_activity_a11y_3">"設定"</string>
     <string name="main_activity_text_4">"確認"</string>
     <string name="main_activity_text_5">"お知らせ・通知"</string>
-    <string name="main_activity_text_6">"🔔 利回りシグナル検知"</string>
-    <string name="main_activity_text_7">"🎉 ロードマップ進捗アップデート"</string>
+    <string name="main_activity_text_6">"利回りシグナル検知"</string>
+    <string name="main_activity_text_7">"ロードマップ進捗アップデート"</string>
     <string name="main_activity_text_8">"現在の想定配当は月換算で ¥%1$s です。ロードマップで目標との差額を確認できます。"</string>
 
 
@@ -725,9 +725,9 @@
     <string name="settings_message_4">"CSVを保存できませんでした"</string>
     <string name="settings_message_5">"JSONを保存しました"</string>
     <string name="settings_message_6">"JSONを保存できませんでした"</string>
-    <string name="settings_label_42">"☾  ダーク"</string>
-    <string name="settings_label_43">"☼  ライト"</string>
-    <string name="settings_label_44">"▣  システム"</string>
+    <string name="settings_label_42">"ダーク"</string>
+    <string name="settings_label_43">"ライト"</string>
+    <string name="settings_label_44">"システム"</string>
     <string name="settings_label_45">"ピクセル発光を最小化し黒色消費電力を抑制"</string>
     <string name="settings_label_46">"節電"</string>
     <string name="settings_label_47">"現在値ベース"</string>
@@ -895,7 +895,7 @@
     <string name="asset_management_label_11">"%1$s円"</string>
     <string name="asset_management_label_12">"あと ¥ •••••• で月%1$s達成"</string>
     <string name="asset_management_label_13">"あと ¥%1$s で目標クリア"</string>
-    <string name="asset_management_label_14">"目標達成済！不労所得生活達成✨"</string>
+    <string name="asset_management_label_14">"目標達成済！不労所得生活達成"</string>
     <string name="asset_management_label_15">"%1$s月の配当入金ポートフォリオ"</string>
     <string name="asset_management_label_16">"保有銘柄一覧"</string>
     <string name="asset_management_label_17">"%1$s月に入金が予定されている銘柄はありません。"</string>

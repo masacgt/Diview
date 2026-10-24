@@ -710,7 +710,10 @@ private fun PayoutHealthCard(analysis: DividendChangeAnalysis) {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ErrorRed.copy(alpha = 0.08f))
                 .border(0.5.dp, BorderBlue, RoundedCornerShape(10.dp)).padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(stringResource(R.string.dividend_change_analysis_cards_1_s_2_s , row.name, row.code), color = ErrorRed, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Warning, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(14.dp))
+                    Text(stringResource(R.string.dividend_change_analysis_cards_1_s_2_s, row.name, row.code), color = ErrorRed, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
+                }
                 Text(stringResource(R.string.dividend_change_analysis_cards_text_13 , percent(row.payoutRatio), if (row.payoutRatio!! < 0) resources.getString(R.string.dividend_change_analysis_cards_label_19) else resources.getString(R.string.dividend_change_analysis_cards_label_20)),
                     color = ErrorRed, fontSize = AppTextSize.dense)
                 Text(stringResource(R.string.dividend_change_analysis_cards_text_14 , row.profile?.fcfStatus?.takeUnless { it == "未取得" } ?: resources.getString(R.string.dividend_change_analysis_cards_label_21)),

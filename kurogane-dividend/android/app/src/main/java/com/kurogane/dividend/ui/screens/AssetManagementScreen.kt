@@ -659,19 +659,32 @@ fun AssetManagementScreen(
                                 color = SoftGray
                             )
                             val shortage = currentAnnualTarget.toDouble() - totalAnnualDivVal
-                            Text(
-                                text = if (shortage > 0) {
-                                    if (isPrivacyActive) {
-                                        val formattedTarget = if (currentMonthlyTarget >= 10000) resources.getString(R.string.asset_management_label_10, (currentMonthlyTarget / 10000).toString()) else resources.getString(R.string.asset_management_label_11, (javaCurrencyFormat.format(currentMonthlyTarget)).toString())
-                                        resources.getString(R.string.asset_management_label_12, (formattedTarget).toString())
-                                    } else {
-                                        resources.getString(R.string.asset_management_label_13, (javaCurrencyFormat.format(shortage.toLong())).toString())
-                                    }
-                                } else resources.getString(R.string.asset_management_label_14),
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Bold,
-                                color = if (shortage > 0) ErrorRed else StatusSuccess
-                            )
+                            val targetStatusText = if (shortage > 0) {
+                                if (isPrivacyActive) {
+                                    val formattedTarget = if (currentMonthlyTarget >= 10000) resources.getString(R.string.asset_management_label_10, (currentMonthlyTarget / 10000).toString()) else resources.getString(R.string.asset_management_label_11, (javaCurrencyFormat.format(currentMonthlyTarget)).toString())
+                                    resources.getString(R.string.asset_management_label_12, (formattedTarget).toString())
+                                } else {
+                                    resources.getString(R.string.asset_management_label_13, (javaCurrencyFormat.format(shortage.toLong())).toString())
+                                }
+                            } else resources.getString(R.string.asset_management_label_14)
+                            if (shortage > 0) {
+                                Text(
+                                    text = targetStatusText,
+                                    fontSize = AppTextSize.dense,
+                                    fontWeight = FontWeight.Bold,
+                                    color = ErrorRed
+                                )
+                            } else {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = targetStatusText,
+                                        fontSize = AppTextSize.dense,
+                                        fontWeight = FontWeight.Bold,
+                                        color = StatusSuccess
+                                    )
+                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = StatusSuccess, modifier = Modifier.size(13.dp))
+                                }
+                            }
                         }
                     }
                 }
