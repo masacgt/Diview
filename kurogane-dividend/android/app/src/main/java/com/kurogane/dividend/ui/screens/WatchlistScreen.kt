@@ -1121,12 +1121,6 @@ fun WatchlistScreen(
                     else -> resources.getString(R.string.watchlist_label_23)
                 }
                 
-                val currentYieldLabel = stringResource(R.string.stock_detail_text_4)
-                val currentYieldDisplay = com.kurogane.dividend.model.formatDividendYieldDisplay(
-                    stock.currentYield,
-                    stock.isNoDividendConfirmed
-                )
-                val useCompactYieldValue = LocalDensity.current.fontScale >= 1.8f
                 val dynamicBadge = badgeTextFor(stock)
 
                 val badgeColor = if (isReached) {
