@@ -1121,6 +1121,22 @@ class DividendViewModel @JvmOverloads constructor(
                     }.awaitAll()
                 }
             }
+            val currentCalendarYear = LocalDate.now(ZoneId.of("Asia/Tokyo")).year
+            val monthlyPriceGroups = targets.groupBy { holding ->
+                val financial = financialDataSnapshot(holding.code)
+                val chartForecastYear = financial?.takeIf {
+                    it.forecastAnnualDividend != null &&
+                        it.forecastFiscalYear?.let { year -> year >= currentCalendarYear } == true
+                }?.forecastFiscalYear ?: currentCalendarYear
+                (chartForecastYear - 7 until chartForecastYear).map { "$it-12" }
+            }
+            monthlyPriceGroups.forEach { (months, groupedHoldings) ->
+                runCatchingCancellable {
+                    loadMonthlyPriceHistory(groupedHoldings.map { normalizedSecurityCode(it.code) }, months)
+                }.onFailure { error ->
+                    android.util.Log.w("CloudflareMarket", "追加銘柄の年末株価履歴の取得に失敗しました", error)
+                }
+            }
         }
     }
 
