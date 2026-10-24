@@ -14,6 +14,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import boto3
@@ -167,6 +168,55 @@ def merge_row(
     return row, added
 
 
+def repair_mixed_source_equity_ratio(annual: Any) -> bool:
+    if not isinstance(annual, dict):
+        return False
+    source_values = annual.get("source_values")
+    if not isinstance(source_values, dict):
+        return False
+    calculated = source_values.get("calculated")
+    calculated_values = calculated.get("values") if isinstance(calculated, dict) else None
+    ratio_entry = calculated_values.get("equity_ratio_computed") if isinstance(calculated_values, dict) else None
+    if not isinstance(ratio_entry, dict):
+        return False
+    input_sources = ratio_entry.get("input_sources")
+    equity_source = input_sources.get("equity") if isinstance(input_sources, dict) else None
+    assets_source = input_sources.get("total_assets") if isinstance(input_sources, dict) else None
+    if (
+        isinstance(equity_source, str)
+        and equity_source.strip()
+        and equity_source.strip().lower() not in {"unknown", "mixed", "unavailable"}
+        and equity_source == assets_source
+    ):
+        return False
+
+    calculated_values.pop("equity_ratio_computed", None)
+    seed_record = source_values.get("seed")
+    seed_values = seed_record.get("values") if isinstance(seed_record, dict) else None
+    seed_ratio = seed_values.get("equity_ratio_computed") if isinstance(seed_values, dict) else None
+    valid_seed_ratio = (
+        isinstance(seed_ratio, (int, float))
+        and not isinstance(seed_ratio, bool)
+        and math.isfinite(float(seed_ratio))
+    )
+    statuses = dict(annual.get("field_status") or {})
+    reasons = dict(annual.get("field_status_reason") or {})
+    if valid_seed_ratio:
+        annual["equity_ratio_computed"] = seed_ratio
+        statuses["equity_ratio_computed"] = "legacy_migrated"
+        reasons.pop("equity_ratio_computed", None)
+    else:
+        annual.pop("equity_ratio_computed", None)
+        statuses["equity_ratio_computed"] = "empty"
+        reasons["equity_ratio_computed"] = ["mixed_source_inputs_not_comparable"]
+    annual["field_status"] = statuses
+    if reasons:
+        annual["field_status_reason"] = reasons
+    else:
+        annual.pop("field_status_reason", None)
+    return True
+
+
 def json_bytes(value: dict[str, Any]) -> bytes:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
 
@@ -194,6 +244,28 @@ def list_financial_keys(client: Any, bucket: str, symbol: str) -> dict[str, str]
     return keys
 
 
+def select_shard(
+    securities: list[dict[str, Any]],
+    *,
+    limit: int = 0,
+    shard_index: int = 0,
+    shard_count: int = 1,
+) -> list[dict[str, Any]]:
+    if shard_count < 1 or shard_index < 0 or shard_index >= shard_count:
+        raise ValueError("shard_index must be between 0 and shard_count - 1")
+    ordered = sorted(securities, key=lambda row: str(row.get("code") or "").upper())
+    if limit > 0:
+        ordered = ordered[:limit]
+    return ordered[shard_index::shard_count]
+
+
+def write_report(path: Path, report: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.tmp")
+    temporary.write_text(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
 def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
     code = str(security.get("code") or "").strip().upper()
     symbol = str(security.get("symbol") or "").strip().upper()
@@ -217,6 +289,7 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
     keys = list_financial_keys(client, bucket, symbol)
     changed_documents = 0
     migrated_fields = 0
+    repaired_derived_fields = 0
     for fiscal_year in period_years:
         period_end = (annual_by_period.get(fiscal_year) or valuation_by_period[fiscal_year])[0]
         year = period_end[:4]
@@ -241,8 +314,10 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
                 updated.get("valuation"), fiscal_year, valuation_end, valuation_values, source_key=source_key,
             )
             added += count
-        if added == 0:
+        repaired_ratio = repair_mixed_source_equity_ratio(updated.get("annual"))
+        if added == 0 and not repaired_ratio:
             continue
+        repaired_derived_fields += int(repaired_ratio)
         retrieval_status = dict(updated.get("retrieval_status") or {})
         retrieval_status["legacy_migration"] = "seeded"
         updated["retrieval_status"] = retrieval_status
@@ -270,6 +345,13 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
             for field, value in expected_row.items():
                 if field in (*ANNUAL_FIELDS, *VALUATION_FIELDS) and actual_row.get(field) != value:
                     raise RuntimeError(f"v2 read-back mismatch for {section}.{field}: {key}")
+            for field in ("field_status", "field_status_reason"):
+                if actual_row.get(field) != expected_row.get(field):
+                    raise RuntimeError(f"v2 read-back mismatch for {section}.{field}: {key}")
+            expected_calculated = ((expected_row.get("source_values") or {}).get("calculated"))
+            actual_calculated = ((actual_row.get("source_values") or {}).get("calculated"))
+            if actual_calculated != expected_calculated:
+                raise RuntimeError(f"v2 read-back mismatch for {section}.source_values.calculated: {key}")
             expected_seed = ((updated.get(section) or {}).get("source_values") or {}).get("seed", {}).get("values", {})
             actual_seed = ((actual_row.get("source_values") or {}).get("seed") or {}).get("values", {})
             for field, value in expected_seed.items():
@@ -283,6 +365,7 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
         "status": "dry_run" if dry_run else "migrated" if changed_documents else "already_seeded",
         "document_count": changed_documents,
         "field_count": migrated_fields,
+        "repaired_derived_field_count": repaired_derived_fields,
     }
 
 
@@ -290,24 +373,60 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--limit", type=int, default=0, help="Process only the first N active securities")
+    parser.add_argument("--shard-index", type=int, default=0, help="Zero-based index of this disjoint migration shard")
+    parser.add_argument("--shard-count", type=int, default=1, help="Number of disjoint migration shards")
     parser.add_argument("--dry-run", action="store_true", help="Report changes without writing R2")
     parser.add_argument("--report", default="legacy-financial-migration-report.json")
     args = parser.parse_args()
     if args.workers < 1 or args.workers > 32:
         parser.error("--workers must be between 1 and 32")
+    if args.shard_count < 1 or args.shard_index < 0 or args.shard_index >= args.shard_count:
+        parser.error("--shard-index must be between 0 and shard-count - 1, and shard-count must be at least 1")
+    if args.limit < 0:
+        parser.error("--limit cannot be negative")
 
     started_at = iso_now()
     bucket = required_env("R2_BUCKET")
     client = make_client(args.workers)
     universe = read_json(client, bucket, f"{V2_ROOT}/universe/current.json")
-    securities = [row for row in (universe or {}).get("securities", [])
-                  if isinstance(row, dict) and row.get("status") == "active"]
-    if not securities:
+    active_securities = [row for row in (universe or {}).get("securities", [])
+                         if isinstance(row, dict) and row.get("status") == "active"]
+    if not active_securities:
         raise RuntimeError("No active securities found in the published v2 universe")
-    if args.limit > 0:
-        securities = securities[:args.limit]
+    try:
+        securities = select_shard(
+            active_securities,
+            limit=args.limit,
+            shard_index=args.shard_index,
+            shard_count=args.shard_count,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+    if not securities:
+        raise RuntimeError("Selected migration shard contains no active securities")
 
-    print(f"Financial seed: securities={len(securities)}, workers={args.workers}, dry_run={args.dry_run}", flush=True)
+    report_path = Path(args.report)
+    print(
+        f"Financial seed: active={len(active_securities)}, selected={len(securities)}, "
+        f"shard={args.shard_index}/{args.shard_count}, workers={args.workers}, dry_run={args.dry_run}",
+        flush=True,
+    )
+    write_report(report_path, {
+        "schema_version": 1,
+        "started_at": started_at,
+        "completed_at": None,
+        "source_prefix": LEGACY_ROOT,
+        "target_prefix": f"{V2_ROOT}/securities/{{symbol}}/financials/",
+        "status": "in_progress",
+        "universe_security_count": len(active_securities),
+        "security_count": len(securities),
+        "processed_security_count": 0,
+        "shard_index": args.shard_index,
+        "shard_count": args.shard_count,
+        "counts": {},
+        "migrated_field_count": 0,
+        "securities": [],
+    })
     results: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {pool.submit(migrate_one, client, bucket, row, dry_run=args.dry_run): row for row in securities}
@@ -325,6 +444,28 @@ def main() -> int:
             if completed % 100 == 0 or completed == len(securities):
                 with _PROGRESS_LOCK:
                     print(f"Processed {completed}/{len(securities)} securities", flush=True)
+                counts: dict[str, int] = {}
+                for result in results:
+                    state = str(result.get("status") or "unknown")
+                    counts[state] = counts.get(state, 0) + 1
+                checkpoint = {
+                    "schema_version": 1,
+                    "started_at": started_at,
+                    "completed_at": None,
+                    "source_prefix": LEGACY_ROOT,
+                    "target_prefix": f"{V2_ROOT}/securities/{{symbol}}/financials/",
+                    "status": "in_progress",
+                    "universe_security_count": len(active_securities),
+                    "security_count": len(securities),
+                    "processed_security_count": len(results),
+                    "shard_index": args.shard_index,
+                    "shard_count": args.shard_count,
+                    "counts": counts,
+                    "migrated_field_count": sum(int(row.get("field_count", 0)) for row in results),
+                    "repaired_derived_field_count": sum(int(row.get("repaired_derived_field_count", 0)) for row in results),
+                    "securities": sorted(results, key=lambda row: str(row.get("code") or "")),
+                }
+                write_report(report_path, checkpoint)
 
     if not args.dry_run:
         # Successful and partially failed migrations may both change annual
@@ -348,14 +489,17 @@ def main() -> int:
         "source_prefix": LEGACY_ROOT,
         "target_prefix": f"{V2_ROOT}/securities/{{symbol}}/financials/",
         "status": "failed" if counts.get("failed") else "dry_run" if args.dry_run else "complete",
+        "universe_security_count": len(active_securities),
         "security_count": len(securities),
+        "processed_security_count": len(results),
+        "shard_index": args.shard_index,
+        "shard_count": args.shard_count,
         "counts": counts,
         "migrated_field_count": sum(int(row.get("field_count", 0)) for row in results),
+        "repaired_derived_field_count": sum(int(row.get("repaired_derived_field_count", 0)) for row in results),
         "securities": sorted(results, key=lambda row: str(row.get("code") or "")),
     }
-    with open(args.report, "w", encoding="utf-8") as output:
-        json.dump(report, output, ensure_ascii=False, indent=2, allow_nan=False)
-        output.write("\n")
+    write_report(report_path, report)
     print(json.dumps({key: value for key, value in report.items() if key != "securities"}, ensure_ascii=False), flush=True)
     return 1 if counts.get("failed") else 0
 
