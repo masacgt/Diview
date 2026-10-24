@@ -81,7 +81,7 @@ import com.kurogane.dividend.notifications.NotificationStore
 import com.kurogane.dividend.notifications.NotificationScheduler
 import com.kurogane.dividend.notifications.DiviewNotifications
 
-private const val ANNUAL_DPS_CONTRACT_VERSION = 2
+private const val ANNUAL_DPS_CONTRACT_VERSION = 3
 private const val IRBANK_YIELD_CONTRACT_VERSION = 1
 
 /** Own the entire cache/attempt/request lifecycle, including cancellation cleanup. */
@@ -3149,7 +3149,7 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     private companion object {
-        const val IRBANK_DIVIDEND_CACHE_VERSION = 2
+        const val IRBANK_DIVIDEND_CACHE_VERSION = 3
         const val FINANCIAL_PAYLOAD_VERSION = 3
         val WATCHLIST_SORT_CRITERIA = setOf("ach", "yield", "price", "code")
         val WATCHLIST_SORT_DIRECTIONS = setOf("asc", "desc")
