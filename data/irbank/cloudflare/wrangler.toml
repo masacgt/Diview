@@ -2,6 +2,14 @@ name = "diview-irbank"
 compatibility_date = "2026-10-03"
 main = "src/index.js"
 
+[vars]
+FEEDBACK_EMAIL_FROM = "noreply@flipsave.org"
+FEEDBACK_EMAIL_TO = "gekidan.natuki800@gmail.com"
+
+[[send_email]]
+name = "FEEDBACK_EMAIL"
+destination_address = "gekidan.natuki800@gmail.com"
+
 [observability]
 enabled = true
 head_sampling_rate = 1

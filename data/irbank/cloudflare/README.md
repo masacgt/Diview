@@ -4,6 +4,8 @@
 
 ## Android財務・問い合わせAPI
 
+新規問い合わせの管理者メール通知と再試行については [問い合わせメール通知](docs/feedback-email.md) を参照してください。Worker公開前に追加の `0006_feedback_email.sql` を適用します。
+
 `GET /api/v1/financial-data/7203` は、v2のプロフィール・現在値・年次財務・配当履歴を返します。`dividends.records` はyfinanceの日足履歴から取得した修復済み配当イベントを暦年単位で集計し、完了した年だけを `calendar_year` と `calendar_year_distribution_per_share` で返します。金額基準は `dividends.amount_basis=yfinance_split_adjusted_assumption` で、IRBANKの決算期DPSとは別の履歴です。一方、現在の年間DPSは `market/yfinance/v2/issuer_dividends/current.json` のIRBANKデータから選び、予想がなければ最新の分割調整済み実績を返します。予想利回りはIRBANKスクリーニングの `dividendYield` と基準日を優先し、IRBANK値がない場合だけ選択した終値とIRBANKのDPSから計算します。`issuer_dividends.records` はIRBANK v1の銘柄別年間実績を返し、最新年度は配当インデックスの更新値で上書きします。会社予想、最新実績、出典も分けて返します。IRBANKの配当額が未取得の場合はyfinanceの配当額に戻さず、状態を `unknown` として返します。暦年の実配当イベント履歴は引き続きyfinance由来です。v2配当履歴が空でも404にせず項目状態を併記します。銘柄情報の8期編集値は端末内に暗号化保存し、R2の共有データを変更しません。
 
 IRBANKの配当取得が成功し `actual_status=empty`（配当実績レコード0件）の場合、銘柄検索・ライブ価格・銘柄情報APIは年間DPS 0円、利回り0%、`dividend_status=no_dividend` を返します。予想データが有効な場合は会社予想を優先し、未取得・失敗状態は無配に変換しません。
