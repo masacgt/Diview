@@ -1,4 +1,5 @@
 import { readFeedback, saveFeedback } from './feedback.mjs';
+import { safelyDeliverFeedbackEmail, retryFeedbackEmails } from './feedback-email.mjs';
 
 const ANALYSIS_CONCURRENCY = 8;
 
@@ -1615,7 +1616,7 @@ function yfinanceV2Code(value) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     const config = await backendConfig(env);
@@ -1629,6 +1630,9 @@ export default {
       try {
         await env.DB.prepare("DELETE FROM support_feedback WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-90 days')").run();
         if (!await saveFeedback(env.DB, input)) return json({ error: 'request_id_conflict' }, 409);
+        const notification = safelyDeliverFeedbackEmail(env, input.requestId);
+        if (ctx?.waitUntil) ctx.waitUntil(notification);
+        else await notification;
         return json({ accepted: true, receiptId: input.requestId }, 201);
       } catch {
         return json({ error: 'feedback_storage_unavailable' }, 503);
@@ -2585,6 +2589,7 @@ export default {
   },
 
   async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(retryFeedbackEmails(env));
     ctx.waitUntil(env.DB.prepare("DELETE FROM support_feedback WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-90 days')").run());
     ctx.waitUntil(runScheduledAnalysis(env));
   },
