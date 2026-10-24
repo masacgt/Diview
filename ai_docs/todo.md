@@ -20,6 +20,8 @@
 
 ## Completed
 
+- [x] Integrate feedback email notifications (`708d165c`) and the month-filter header fix (`ffd185ff`). Evidence: isolated integration preserves both completion records, all 59 Worker/D1 tests pass, JDK 17 `assembleDebug` succeeds, and the fresh APK installs/launches on SCG01 and emulator with live resumed activities and no process fatal errors. Targeted visual/interaction checks were not repeated during integration; original branch evidence remains above/below.
+
 - [x] Prevent the selected-month Asset Management heading from squeezing the sort button into a tall sliver. Evidence: `AssetManagementScreen.kt` wraps header actions with FlowRow; JDK 17 debug build/install passed on SCG01 (font scale 1.7) and emulator (1.0), June-chart selection followed by Asset Management renders correctly, both clear to the full list, and SCG01 opens the sort sheet.
 
 - [x] Add administrator email notifications for new support feedback. Evidence: migration 0006 records a transactional outbox; 48 isolated Worker tests pass, flipsave.org Email Routing is ready, and production test receipt `7fe56e6a-51ca-419c-9c2f-c6329b692fcb` has one successful send and a matching Gmail INBOX message. No Android changes are needed.
