@@ -670,6 +670,16 @@ class R2MetricsTests(TestCase):
 
 
 class EventPartitionPersistenceTests(TestCase):
+    def test_duplicate_event_dates_are_detected_for_yfinance_rebuild(self):
+        self.assertTrue(sync.has_duplicate_event_dates([
+            {"date": "2026-03-30", "amount": 24.5},
+            {"date": "2026-03-30", "amount": 24.5},
+        ]))
+        self.assertFalse(sync.has_duplicate_event_dates([
+            {"date": "2026-03-30", "amount": 24.5},
+            {"date": "2026-09-29", "amount": 26.0},
+        ]))
+
     def test_unchanged_daily_chart_does_not_rewrite_event_partitions(self):
         self.assertFalse(sync.action_partitions_need_persist(None, None, [], []))
 
@@ -1012,10 +1022,6 @@ class SyncPolicyTests(TestCase):
         )
 
 
-if __name__ == "__main__":
-    import unittest
-
-    unittest.main()
 
 class OfflineFinancialSyncTests(TestCase):
     class Store:
@@ -1283,3 +1289,8 @@ class OfflineFinancialSyncTests(TestCase):
             key = sync.object_key("catalog", "generations", generation + ".json")
             self.assertEqual(store.writes.count(key), 1)
             self.assertEqual(store.documents[key]["generation"], generation)
+
+if __name__ == "__main__":
+    import unittest
+
+    unittest.main()

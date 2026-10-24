@@ -1106,6 +1106,19 @@ def replace_dated_history(
     return collector.merge_dated(retained, fresh, key)
 
 
+def has_duplicate_event_dates(rows: list[dict[str, Any]], key: str = "date") -> bool:
+    """Detect repeated event dates that require rebuilding the partition from Yahoo."""
+    seen: set[str] = set()
+    for row in rows:
+        event_date = str(row.get(key) or "")[:10]
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", event_date):
+            continue
+        if event_date in seen:
+            return True
+        seen.add(event_date)
+    return False
+
+
 def monthly_history_rows(ticker: Any, *, initial: bool, as_of: date) -> list[dict[str, Any]]:
     first_year, latest_year = year_end_price_years(as_of)
     if initial:
@@ -2092,6 +2105,27 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         prior_splits = load_recent_year_records(client, bucket, symbol, "splits", as_of)
     prior_dividends.extend(legacy_dividends)
     prior_splits.extend(legacy_splits)
+    stored_duplicate_events = (
+        has_duplicate_event_dates(prior_dividends)
+        or has_duplicate_event_dates(prior_splits)
+    )
+    if stored_duplicate_events and not full_action_history_required:
+        # Load every hot/archive partition before a full Yahoo rebuild so rows
+        # outside the recent three-year window are retained or repaired too.
+        full_action_history_required = True
+        prior_dividends = load_all_year_records(client, bucket, symbol, "dividends", include_archive=True)
+        prior_splits = load_all_year_records(client, bucket, symbol, "splits", include_archive=True)
+        prior_dividends.extend(legacy_dividends)
+        prior_splits.extend(legacy_splits)
+        stored_duplicate_events = (
+            has_duplicate_event_dates(prior_dividends)
+            or has_duplicate_event_dates(prior_splits)
+        )
+    if stored_duplicate_events:
+        # Corrupt stored partitions must bypass same-session reuse and refresh
+        # the complete Yahoo history before their derived totals are published.
+        skip_action_retry = False
+        forced_repair_expected = True
     action_status: dict[str, str] = {}
     action_retrieval: dict[str, Any] = {
         "source": "yfinance_history_chart",
@@ -2105,7 +2139,12 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "dividend_amount_basis": "yfinance_split_adjusted_assumption",
         "split_ratio_reapplied_to_dividends": False,
     }
-    full_history_attempted = refresh_full_history or prior_sync.get("long_history_retry_pending") is True or prior_repair_period == "max"
+    full_history_attempted = (
+        refresh_full_history
+        or prior_sync.get("long_history_retry_pending") is True
+        or prior_repair_period == "max"
+        or stored_duplicate_events
+    )
     full_history_refreshed = False
     new_split_detected = False
     forced_repair = False
@@ -2113,6 +2152,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     actions_changed = False
     fresh_dividends: list[dict[str, Any]] | None = None
     fresh_splits: list[dict[str, Any]] | None = None
+    if stored_duplicate_events:
+        action_retrieval["repair_reason"] = "duplicate_stored_event_dates"
     if skip_action_retry:
         dividends = prior_dividends
         splits = prior_splits
@@ -2122,8 +2163,18 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         action_retrieval["retry_status"] = "reused_successful_same_session"
     else:
         try:
-            forced_repair = refresh_full_history or prior_sync.get("long_history_retry_pending") is True or bool(prior_repair_period)
-            repair_period = "max" if (refresh_full_history or prior_sync.get("long_history_retry_pending") is True or prior_repair_period == "max") else "1y"
+            forced_repair = (
+                refresh_full_history
+                or prior_sync.get("long_history_retry_pending") is True
+                or bool(prior_repair_period)
+                or stored_duplicate_events
+            )
+            repair_period = "max" if (
+                refresh_full_history
+                or prior_sync.get("long_history_retry_pending") is True
+                or prior_repair_period == "max"
+                or stored_duplicate_events
+            ) else "1y"
             prior_full_coverage_end = str(prior_action_history.get("full_history_coverage_end") or "")
             if forced_repair:
                 fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
