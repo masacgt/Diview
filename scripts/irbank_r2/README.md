@@ -64,3 +64,17 @@ python scripts/r2_unified/publish_securities.py
 The output is `market/securities/v1/{code}.json`. It records each provider's source key and update/attribution metadata, and exposes dividend rows grouped under `dividend_history_by_source`; both sources are retained when available, without merging fiscal-year issuer DPS and dated observed distributions. Invalid Yahoo events and exact duplicate date/amount pairs are filtered. After all current bundles publish successfully, stale four-character objects under this managed output prefix are removed; an empty security universe aborts before publishing or pruning. For IRBANK securities without dividend rows, the publisher uses a Yahoo compact dividend object or migrates events from the existing yfinance security history. This script is a legacy compatibility publisher, not part of the scheduled yfinance v2 collection. The current scheduled job uses the J-Quants universe and writes `market/yfinance/v2/`; it does not refresh this combined prefix. The Worker may retain item-level compatibility reads while financial fields migrate, but v2 search, quote, dividend-event, and monthly-price routes use the v2 namespace.
 
 The Worker exposes `/api/v1/irbank/catalog`, `/api/v1/irbank/manifest`, `/api/v1/irbank/securities/{code}`, and the optional `/prices` and `/weekly-margin` families. Four-character numeric and alphabetic codes are accepted; five-character codes with a trailing `0` are normalized.
+
+## v2 current dividend index
+
+`refresh_v2_dividends.py` fetches the latest annual actual DPS from `GET /v1/dividends` and can parse current-year `DividendPerShare` forecast facts from IRBANK disclosure documents. The output is `market/yfinance/v2/issuer_dividends/current.json`; the Worker uses this index for current annual DPS and yield. A forecast that cannot be normalized to a single current-share basis stays unavailable. The script checks `/v1/usage` before calling the API, writes to a temporary local JSON file by default, and verifies a read-back when `--publish` is used. A partial publication merges into an existing index and is rejected if no full index exists yet.
+
+```powershell
+$env:IRBANK_API_KEY = '<IRBANK Connect API key>'
+$env:CLOUDFLARE_ACCOUNT_ID = '<Cloudflare account ID>'
+$env:R2_ACCESS_KEY_ID = '<R2 access key>'
+$env:R2_SECRET_ACCESS_KEY = '<R2 secret key>'
+python scripts/irbank_r2/refresh_v2_dividends.py --forecast-codes 8766 --publish
+```
+
+Omit `--forecast-codes` to refresh actuals only. Use `--codes 8766 --forecast-codes 8766` for a targeted update; it preserves other securities and existing forecasts in the R2 index. The default full-catalog refresh consumes about one IRBANK request per security, plus selected disclosure-list/document requests, and stops before exceeding the remaining daily quota. Requests are paced below IRBANK's current 60-per-minute limit, so a full-catalog refresh takes about 70 minutes.

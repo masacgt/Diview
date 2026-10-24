@@ -215,9 +215,10 @@ test('financial API marks 8303 share basis unverified without changing stored di
     [`${base}/profile.json`, { display_name: 'ＳＢＩ新生銀行' }],
     [`${base}/current.json`, { field_status: { dividend_history: 'available' } }],
     [`${base}/dividends/2025.json`, { records: [{ date: '2025-03-31', amount: 40000000 }] }],
-    [`${base}/issuer_dividends/2025.json`, {
-      source: 'IRBANK Connect',
-      records: [{ fiscal_year: 2025, annual_dps: 40000000, annual_dps_adjusted: 40000000 }],
+    ['market/irbank/v1/securities/8303/overview.json', {
+      security: { code: '8303', name: 'ＳＢＩ新生銀行' },
+      dividends: { records: [{ fiscal_year: 2025, annual_dps: 40000000, annual_dps_adjusted: 40000000 }] },
+      sources: { dividends: { source_label: '金融庁 EDINET / TDnet' } },
     }],
   ]));
 
@@ -338,12 +339,23 @@ test('financial API does not replace the calculated ratio with a retained seed r
   assert.equal(body.financials.seed_annual[0].values.equity_ratio_computed, 24);
 });
 
-test('issuer dividend API retains two fiscal periods in one calendar year', async () => {
+test('financial API uses IRBANK canonical fiscal DPS instead of yfinance issuer rows', async () => {
   const records = ['2026/03', '2026/12'].map((period, index) => ({ fiscal_year: 2026, period, annual_dps: 10 + index }));
-  const env = dividendEnvironment(new Map([['market/yfinance/v2/securities/4502.T/issuer_dividends/2026.json', { records }]]));
+  const documents = new Map([
+    ['market/yfinance/v2/securities/4502.T/profile.json', { display_name: 'アステラス製薬' }],
+    ['market/yfinance/v2/securities/4502.T/issuer_dividends/2026.json', { records }],
+    ['market/irbank/v1/securities/4502/overview.json', {
+      security: { code: '4502', name: 'アステラス製薬' },
+      dividends: { records: [{ fiscal_year: 2026, annual_dps: 74, annual_dps_adjusted: 74 }] },
+      sources: { dividends: { source_label: '金融庁 EDINET / TDnet' } },
+    }],
+  ]);
+  const env = dividendEnvironment(documents);
   const response = await worker.fetch(new Request('https://example.com/api/v1/financial-data/4502'), env);
   const body = await response.json();
-  assert.deepEqual(body.issuer_dividends.records.map(r => r.fiscal_period), ['2026-03', '2026-12']);
+  assert.deepEqual(body.issuer_dividends.records.map(r => r.fiscal_period), ['2026']);
+  assert.equal(body.issuer_dividends.records[0].annual_dps_adjusted, 74);
+  assert.equal(body.issuer_dividends.records[0].source, 'IRBANK');
 });
 
 test('financial API preserves mixed-unit null guards and raw provenance without changing other merges', async () => {
@@ -558,7 +570,8 @@ test('yfinance v2 routes preserve exact five-digit class-share security codes', 
   const liveQuote = (await liveQuoteResponse.json()).items[0];
   assert.equal(liveQuote.code, code);
   assert.equal(liveQuote.price, 4720);
-  assert.equal(liveQuote.annual_dividend_per_share, 140.23);
+  assert.equal(liveQuote.annual_dividend_per_share, null);
+  assert.equal(liveQuote.yield_rate, null);
 
   const paddedCodeResponse = await worker.fetch(new Request('https://example.com/api/v1/securities/72030'), env);
   assert.equal(paddedCodeResponse.status, 200);
@@ -766,9 +779,9 @@ test('legacy trailing-distribution catalog rows are not exposed as annual DPS or
   assert.equal(catalogItem.yield_rate, null);
   assert.equal(catalogItem.trailing_12_month_distribution_per_share, 630);
   const noDividendItem = catalogPayload.items.find(item => item.code === '6721');
-  assert.equal(noDividendItem.annual_dividend_per_share, 0);
-  assert.equal(noDividendItem.dividend_period, 'yfinance_reported_no_dividend');
-  assert.equal(noDividendItem.yield_rate, 0);
+  assert.equal(noDividendItem.annual_dividend_per_share, null);
+  assert.equal(noDividendItem.dividend_period, 'unknown');
+  assert.equal(noDividendItem.yield_rate, null);
 
   const quotesResponse = await worker.fetch(new Request('https://example.com/api/v1/live-quotes?limit=1'), env);
   const quoteItem = (await quotesResponse.json()).items[0];
@@ -842,7 +855,90 @@ test('financial aggregation orders full periods and retains fiscal-year-only leg
   assert.equal(data.valuation.field_status, 'available');
 });
 
-test('requested live quotes use annual fiscal DPS and keep trailing distributions separate', async () => {
+test('Tokio Marine IRBANK forecast replaces the yfinance DPS in quotes and financial data', async () => {
+  const code = '8766';
+  const generation = '2026-10-23';
+  const base = 'market/yfinance/v2/securities/8766.T';
+  const actual = {
+    fiscal_year: 2026,
+    annual_dps: 218,
+    annual_dps_adjusted: 14.533333333333333,
+    period_end: '2026-03-31',
+    source_refs: [{ doc_id: 'S100YLS8', source: 'edinet' }],
+  };
+  const forecast = {
+    status: 'available',
+    fiscal_year: 2027,
+    period_end: '2027-03-31',
+    annual_dps_current_share_basis: 16.34,
+    amount_basis: 'irbank_forecast_current_share_basis',
+    source_refs: [{ doc_id: '20260825525826', source: 'tdnet' }],
+    components: [
+      { period: 'second_quarter', reported_dps: 122.5, current_share_basis_dps: 8.17 },
+      { period: 'year_end', reported_dps: 8.17, current_share_basis_dps: 8.17 },
+    ],
+    normalization: { method: 'interim_dps_divided_by_irbank_adjustment_factor', factor: 15 },
+  };
+  const catalog = {
+    generation,
+    market_data_date: generation,
+    items: [{ code, name: '東京海上ホールディングス', price: 544.3, quote_date: generation,
+      annual_dividend_per_share: 130, yield_rate: 23.8839, yield_basis: 'next_fiscal_year_forecast',
+      dividend_status: 'has_dividend' }],
+  };
+  const documents = new Map([
+    ['market/yfinance/v2/catalog/current.json', catalog],
+    [`market/yfinance/v2/catalog/generations/${generation}.json`, catalog],
+    ['market/irbank/v1/securities/8766/overview.json', {
+      security: { code, name: '東京海上ホールディングス' },
+      dividends: { records: [
+        { fiscal_year: 2025, annual_dps: 172, annual_dps_adjusted: 11.47 },
+        { fiscal_year: 2026, annual_dps: 218, annual_dps_adjusted: 14.53 },
+      ] },
+      sources: { dividends: { source_label: '金融庁 EDINET / TDnet', processed_by: 'IRBANK' } },
+    }],
+    ['market/yfinance/v2/issuer_dividends/current.json', {
+      source: 'IRBANK Connect REST API',
+      attribution: { source_label: '金融庁 EDINET / TDnet', processed_by: 'IRBANK' },
+      items: { [code]: { code, name: '東京海上ホールディングス', actual_status: 'available', actual,
+        forecast_status: 'available', forecast } },
+    }],
+    [`${base}/profile.json`, { code, symbol: '8766.T', display_name: '東京海上ホールディングス' }],
+    [`${base}/current.json`, {
+      code, symbol: '8766.T', updated_at: `${generation}T12:00:00Z`,
+      price: { close: 544.3, date: generation, currency: 'JPY' },
+      dividend: { dividend_status: 'has_dividend', yield_basis: 'next_fiscal_year_forecast',
+        next_fiscal_year_forecast_per_share: 130, trailing_12_month_per_share: 218,
+        event_amount_basis: 'yfinance_split_adjusted_assumption' },
+      statistics: { dividendRate: 130 },
+    }],
+    [`${base}/issuer_dividends/2024.json`, { records: [{
+      fiscal_year: 2024, period_end: '2024-03-31', annual_dps: 123, annual_dps_adjusted: 8.2,
+    }] }],
+  ]);
+  const env = dividendEnvironment(documents);
+
+  const quoteResponse = await worker.fetch(new Request(
+    'https://example.com/api/v1/live-quotes?codes=8766',
+  ), env);
+  const quote = (await quoteResponse.json()).items[0];
+  assert.equal(quote.annual_dividend_per_share, 16.34);
+  assert.equal(quote.dividend_source, 'IRBANK');
+  assert.equal(quote.dividend_period, 'next_fiscal_year_forecast');
+  assert.equal(quote.yield_rate, 3.002);
+
+  const financialResponse = await worker.fetch(new Request(
+    'https://example.com/api/v1/financial-data/8766',
+  ), env);
+  const financial = await financialResponse.json();
+  assert.equal(financial.issuer_dividends.latest_actual.annual_dps_adjusted, 14.533333333333333);
+  assert.deepEqual(financial.issuer_dividends.records.map(row => row.fiscal_year), [2025, 2026]);
+  assert.equal(financial.issuer_dividends.records[0].source, 'IRBANK');
+  assert.equal(financial.issuer_dividends.records.at(-1).annual_dps_adjusted, 14.533333333333333);
+  assert.equal(financial.issuer_dividends.forecast.annual_dps_current_share_basis, 16.34);
+});
+
+test('requested live quotes prefer IRBANK forecasts and keep trailing distributions separate', async () => {
   const generation = '2026-10-16';
   const codes = ['8214', '8058'];
   const catalog = {
@@ -862,6 +958,19 @@ test('requested live quotes use annual fiscal DPS and keep trailing distribution
   const documents = new Map([
     ['market/yfinance/v2/catalog/current.json', catalog],
     [`market/yfinance/v2/catalog/generations/${generation}.json`, catalog],
+    ['market/yfinance/v2/issuer_dividends/current.json', {
+      source: 'IRBANK Connect REST API',
+      items: {
+        '8214': {
+          actual_status: 'available', actual: { fiscal_year: 2026, annual_dps_adjusted: 90 },
+          forecast_status: 'available', forecast: { status: 'available', fiscal_year: 2027, period_end: '2027-03-31', annual_dps_current_share_basis: 90 },
+        },
+        '8058': {
+          actual_status: 'available', actual: { fiscal_year: 2026, annual_dps_adjusted: 125 },
+          forecast_status: 'available', forecast: { status: 'available', fiscal_year: 2027, period_end: '2027-03-31', annual_dps_current_share_basis: 125 },
+        },
+      },
+    }],
     ['market/yfinance/v2/securities/8214.T/current.json', {
       updated_at: '2026-10-16T00:00:00Z',
       price: { close: 1800, date: generation },
@@ -896,16 +1005,9 @@ test('requested live quotes use annual fiscal DPS and keep trailing distribution
   ]);
   assert.deepEqual(items.map(item => item.yield_rate), [5, 4.4643]);
 
-  documents.set('market/yfinance/v2/securities/8214.T/current.json', {
-    updated_at: '2026-10-17T00:00:00Z',
-    price: { close: 1800, date: generation },
-    dividend: {
-      dividend_status: 'has_dividend',
-      yield_basis: 'next_fiscal_year_forecast',
-      next_fiscal_year_forecast_per_share: 100,
-      trailing_12_month_per_share: 630,
-    },
-  });
+  const irbankIndex = documents.get('market/yfinance/v2/issuer_dividends/current.json');
+  irbankIndex.items['8214'].forecast.annual_dps_current_share_basis = 100;
+  documents.set('market/yfinance/v2/issuer_dividends/current.json', irbankIndex);
   const revisedResponse = await worker.fetch(new Request(
     'https://example.com/api/v1/live-quotes?codes=8214',
   ), dividendEnvironment(documents));

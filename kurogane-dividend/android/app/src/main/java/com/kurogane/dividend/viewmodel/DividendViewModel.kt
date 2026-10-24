@@ -2060,6 +2060,7 @@ class DividendViewModel @JvmOverloads constructor(
         marketPreferences.edit()
             .putString("cloudflare_security_snapshot_$normalized", json.toString())
             .putString("cloudflare_security_fetched_jst_$normalized", PriceRefreshPolicy.japanDate(System.currentTimeMillis()))
+            .putInt("cloudflare_security_dividend_contract_version_$normalized", IRBANK_DIVIDEND_CACHE_VERSION)
             .apply()
         _cloudflareSecurityData.update { it + (normalized to security) }
     }
@@ -2070,22 +2071,30 @@ class DividendViewModel @JvmOverloads constructor(
         val cacheKey = "cloudflare_security_snapshot_$normalized"
         val attemptKey = "cloudflare_security_fetch_attempt_at_$normalized"
         val attemptDateKey = "cloudflare_security_fetch_attempt_jst_$normalized"
+        val dividendContractVersionKey = "cloudflare_security_dividend_contract_version_$normalized"
         var cached: CloudflareSecurity? = null
         val shouldFetch = cloudflareSecurityMutex.withLock {
             cached = _cloudflareSecurityData.value[normalized]
                 ?: marketPreferences.getString(cacheKey, null)?.let(::parseCloudflareSecuritySnapshot)
             val now = System.currentTimeMillis()
+            val today = PriceRefreshPolicy.japanDate(now)
+            val needsIrbankDividendMigration = marketPreferences.getInt(dividendContractVersionKey, 0) < IRBANK_DIVIDEND_CACHE_VERSION
             val missingCompanyInfoMetadata = cached?.dataRetrieval?.companyInfo == null
-            if ((!missingCompanyInfoMetadata && !PriceRefreshPolicy.shouldFetch(
+            val shouldRefresh = if (needsIrbankDividendMigration) {
+                marketPreferences.getString(attemptDateKey, null) != today
+            } else {
+                missingCompanyInfoMetadata || PriceRefreshPolicy.shouldFetch(
                     now,
                     marketPreferences.getLong(attemptKey, 0L),
                     marketPreferences.getString(attemptDateKey, null)
                         ?: marketPreferences.getString("cloudflare_security_fetched_jst_$normalized", null)
-                )) || !cloudflareSecurityLoading.add(normalized)) {
+                )
+            }
+            if (!shouldRefresh || !cloudflareSecurityLoading.add(normalized)) {
                 false
             } else {
                 marketPreferences.edit().putLong(attemptKey, now)
-                    .putString(attemptDateKey, PriceRefreshPolicy.japanDate(now)).apply()
+                    .putString(attemptDateKey, today).apply()
                 true
             }
         }
@@ -2121,7 +2130,11 @@ class DividendViewModel @JvmOverloads constructor(
     suspend fun resolveCloudflareSecurity(code: String): CloudflareSecurity? {
         val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
         val cached = cachedCloudflareSecurity(normalized)
-        val security = if (cached?.dataRetrieval?.companyInfo == null) {
+        val needsIrbankDividendMigration = marketPreferences.getInt(
+            "cloudflare_security_dividend_contract_version_$normalized",
+            0
+        ) < IRBANK_DIVIDEND_CACHE_VERSION
+        val security = if (cached?.dataRetrieval?.companyInfo == null || needsIrbankDividendMigration) {
             fetchCloudflareSecurityIfDue(normalized) ?: cached
         } else {
             cached
@@ -2966,6 +2979,7 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     private companion object {
+        const val IRBANK_DIVIDEND_CACHE_VERSION = 1
         const val FINANCIAL_PAYLOAD_VERSION = 3
         val WATCHLIST_SORT_CRITERIA = setOf("ach", "yield", "price", "code")
         val WATCHLIST_SORT_DIRECTIONS = setOf("asc", "desc")
