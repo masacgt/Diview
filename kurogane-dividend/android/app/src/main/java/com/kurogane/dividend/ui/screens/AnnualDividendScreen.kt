@@ -621,8 +621,8 @@ private fun AnnualDividendTab(
 }
 
 private enum class MonthlyDividendChartBasis {
+    EX_DIVIDEND_MONTH,
     RECEIPT_MONTH,
-    PAYMENT_START_MONTH
 }
 
 @Composable
@@ -644,8 +644,8 @@ private fun MonthlyDividendEstimateCard(
         fun eventMonth(category: Category, event: com.kurogane.dividend.data.CloudflareDividendEvent): Int? {
             if (category != Category.JAPAN) return event.date.monthValue
             val monthDate = when (chartBasis) {
-                MonthlyDividendChartBasis.RECEIPT_MONTH -> event.recordDate?.plusMonths(3)
-                MonthlyDividendChartBasis.PAYMENT_START_MONTH ->
+                MonthlyDividendChartBasis.EX_DIVIDEND_MONTH -> event.date
+                MonthlyDividendChartBasis.RECEIPT_MONTH ->
                     event.paymentStartDate ?: event.recordDate?.plusMonths(3)
             }
             return monthDate?.monthValue
@@ -856,10 +856,11 @@ private fun MonthlyDividendEstimateCard(
                     ) {
                         Text(
                             text = stringResource(
-                                if (basis == MonthlyDividendChartBasis.RECEIPT_MONTH) {
-                                    R.string.annual_dividend_month_mode_receipt
-                                } else {
-                                    R.string.annual_dividend_month_mode_payment_start
+                                when (basis) {
+                                    MonthlyDividendChartBasis.EX_DIVIDEND_MONTH ->
+                                        R.string.annual_dividend_month_mode_ex_dividend
+                                    MonthlyDividendChartBasis.RECEIPT_MONTH ->
+                                        R.string.annual_dividend_month_mode_receipt
                                 }
                             ),
                             color = if (isSelected) OnPrimary else OnSurfaceVariant,
@@ -873,10 +874,11 @@ private fun MonthlyDividendEstimateCard(
             Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = stringResource(
-                    if (chartBasis == MonthlyDividendChartBasis.RECEIPT_MONTH) {
-                        R.string.annual_dividend_month_mode_helper_receipt
-                    } else {
-                        R.string.annual_dividend_month_mode_helper_payment_start
+                    when (chartBasis) {
+                        MonthlyDividendChartBasis.EX_DIVIDEND_MONTH ->
+                            R.string.annual_dividend_month_mode_helper_ex_dividend
+                        MonthlyDividendChartBasis.RECEIPT_MONTH ->
+                            R.string.annual_dividend_month_mode_helper_receipt
                     }
                 ),
                 color = OnSurfaceVariant,
