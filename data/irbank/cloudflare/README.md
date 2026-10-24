@@ -1,10 +1,10 @@
 # IRBANK → Cloudflare D1
 
-このディレクトリには、Cloudflare D1/R2を使うWorker APIがあります。D1は運用・分析データ、R2はIRBANKの保存データとyfinance由来の市場データを保持します。上場銘柄の検索・日次価格・配当・月次価格は、仕様上 `market/yfinance/v2/` を参照します。R2バケットは非公開で、アプリにはWorker APIを通じて配信します。
+このディレクトリには、Cloudflare D1/R2を使うWorker APIがあります。D1は運用・分析データ、R2はIRBANKの保存データと市場データを保持します。検索・日次価格・月次価格・暦年の配当イベントは `market/yfinance/v2/` を参照します。現在の年間DPSと利回りは同じv2名前空間のIRBANK配当インデックスを優先し、IRBANK会社予想、次に分割調整済み実績を使います。R2バケットは非公開で、アプリにはWorker APIを通じて配信します。
 
 ## Android財務・問い合わせAPI
 
-`GET /api/v1/financial-data/7203` は、v2のプロフィール・現在値・年次財務・配当イベントを返します。配当イベントはyfinanceの日足履歴から取得した修復済み金額を暦年単位で集計し、完了した年だけを `calendar_year` と `calendar_year_distribution_per_share` で返します。金額基準は `dividends.amount_basis=yfinance_split_adjusted_assumption` で、返却配当額を分割調整済みとして扱います。会社公表の決算期DPSやIRBANKの `annual_dps_adjusted` とは異なる値で、アプリ・Workerから分割比率を追加適用しません。財務・評価値は移行中に項目単位で旧概要から補う場合がありますが、配当履歴はIRBANK値へフォールバックしません。v2の初回公開前は配当履歴を空配列・`not_fetched` として返し、金額基準はnullにします。v2データのいずれかがあれば、配当履歴が空でも404にせず項目状態を併記します。Androidは未取得の配当履歴を決算期DPSで埋めず、配当利回りを `0.00%` と表示しながら取得状態を未取得として保持します。銘柄情報の8期編集値は端末内に暗号化保存し、R2の共有データを変更しません。
+`GET /api/v1/financial-data/7203` は、v2のプロフィール・現在値・年次財務・配当履歴を返します。`dividends.records` はyfinanceの日足履歴から取得した修復済み配当イベントを暦年単位で集計し、完了した年だけを `calendar_year` と `calendar_year_distribution_per_share` で返します。金額基準は `dividends.amount_basis=yfinance_split_adjusted_assumption` で、IRBANKの決算期DPSとは別の履歴です。一方、現在の年間DPSは `market/yfinance/v2/issuer_dividends/current.json` のIRBANKデータから選び、予想がなければ最新の分割調整済み実績を返します。予想利回りはIRBANKスクリーニングの `dividendYield` と基準日を優先し、IRBANK値がない場合だけ選択した終値とIRBANKのDPSから計算します。`issuer_dividends.records` はIRBANK v1の銘柄別年間実績を返し、最新年度は配当インデックスの更新値で上書きします。会社予想、最新実績、出典も分けて返します。IRBANKの配当額が未取得の場合はyfinanceの配当額に戻さず、状態を `unknown` として返します。暦年の実配当イベント履歴は引き続きyfinance由来です。v2配当履歴が空でも404にせず項目状態を併記します。銘柄情報の8期編集値は端末内に暗号化保存し、R2の共有データを変更しません。
 
 `GET /api/v1/securities/7203` は `data_retrieval` にyfinance ticker、取得元、通貨、最終取得試行日時、同期状態、失敗理由を含めます。`company_info` には会社情報・統計の最終取得日、直近の試行状態、再試行予定、失敗分類・理由を返します。個別の取得日時が保存されていない既存レコードでは、最終成功同期日を参考値として返し、`fetch_date_basis=last_successful_sync_fallback` と状態 `stale` で区別します。この場合、個別取得時刻を誤認させないよう `last_fetched_at` はnullです。新しい個別取得日時には `fetch_date_basis=company_info_fetch` を付けます。`valuation` のPER/PBRは日次終値をyfinanceの保存済みEPS/BPSで割ってWorkerでも再計算し、Yahooの報告倍率をそのまま返しません。`dividend_history` は履歴取得状態、取得元、直近取得範囲、保存済み配当イベントの最古日・最新日を返します。保存期間はR2の通常・アーカイブ年次パーティション内のイベント日から求め、取得範囲とは区別します。Androidの銘柄情報画面はこの内容を「データ取得情報」として表示します。
 
@@ -45,7 +45,7 @@ npx wrangler d1 execute diview-irbank --remote --file ..\organized\d1\seed_app_d
 
 D1には銘柄マスター、API・分析・Watchlistなどの運用データ、株式分析に使う年次財務を保持します。四半期・半期財務はアプリとWorkerの現在の処理では参照されないため、R2の `market/irbank/v1/` 配下を配信元とし、D1の原本は `market/irbank/v1/archive/d1-financial-periods-qs-20261009.json` に全32,442行を退避しています。退避オブジェクトは取得ファイルのSHA-256と行数を照合済みです。
 
-D1の財務インポートは年次だけを生成します。D1の `dividend_events` と年次 `financial_periods` は分析APIや互換処理で使われます。検索・日次価格・配当イベント・月次価格の新しいデータ経路は、yfinance v2のR2カタログと銘柄別オブジェクトです。IRBANKのカタログと銘柄概要APIは、IRBANKデータの参照用に引き続き提供します。
+D1の財務インポートは年次だけを生成します。D1の `dividend_events` と年次 `financial_periods` は分析APIや互換処理で使われます。検索・日次価格・暦年配当イベント・月次価格の新しいデータ経路は、yfinance v2のR2カタログと銘柄別オブジェクトです。年間DPS・利回りはIRBANK APIの実績と開示予想をv2のIRBANK配当インデックスへ集約して配信します。IRBANKのカタログと銘柄概要APIは、IRBANKデータの参照用に引き続き提供します。
 
 ## J-Quants調整済み日足API
 

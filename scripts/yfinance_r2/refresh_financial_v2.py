@@ -274,6 +274,8 @@ def main() -> int:
     parser.add_argument("--shard-count", type=int, default=1, help="Number of disjoint shards for --all")
     parser.add_argument("--defer-advice", action="store_true",
                         help="A coordinating job must rebuild income advice after all shards finish")
+    parser.add_argument("--advice-workers", type=int, default=8,
+                        help="Parallel R2 readers for derived catalog regeneration (not Yahoo requests)")
     args = parser.parse_args()
     if not args.all and (args.shard_index != 0 or args.shard_count != 1):
         parser.error("--shard-index and --shard-count can only be used with --all")
@@ -287,7 +289,8 @@ def main() -> int:
         if not args.defer_advice:
             # Also repair derived data after a handled partial financial write.
             import generate_income_advice
-            generate_income_advice.publish(collector.get_client(), collector.required_env("R2_BUCKET"))
+            generate_income_advice.publish(collector.get_client(), collector.required_env("R2_BUCKET"),
+                                           workers=max(1, args.advice_workers))
 
 
 if __name__ == "__main__":

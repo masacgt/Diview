@@ -12,10 +12,12 @@ import re
 import sys
 import threading
 import time
+import traceback
 from collections import Counter
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 from uuid import uuid4
@@ -48,6 +50,34 @@ OFFICIAL_NEXT_FY_DPS = {"8214": (120.0, 90.0), "8058": (126.0, 125.0)}
 _YF_CALL_LOCK = threading.Lock()
 _YF_CALLS: dict[str, int] = {}
 _R2_DOCUMENT_CACHE = threading.local()
+_ATTRIBUTE_ERROR_TRACEBACK_LOCK = threading.Lock()
+_ATTRIBUTE_ERROR_TRACEBACK_KEYS: set[tuple[str, str, str, int, str]] = set()
+_ATTRIBUTE_ERROR_TRACEBACK_LIMIT = 8
+
+
+def log_attribute_error_traceback(exc: Exception) -> None:
+    """Log a bounded traceback for the repeated string.get() failure cohort."""
+    if not isinstance(exc, AttributeError) or "'str' object has no attribute 'get'" not in str(exc):
+        return
+    frames = traceback.extract_tb(exc.__traceback__) if exc.__traceback__ else []
+    origin = frames[-1] if frames else None
+    key = (
+        type(exc).__name__,
+        str(exc),
+        origin.filename if origin else "",
+        origin.lineno if origin else 0,
+        origin.name if origin else "",
+    )
+    with _ATTRIBUTE_ERROR_TRACEBACK_LOCK:
+        if key in _ATTRIBUTE_ERROR_TRACEBACK_KEYS or len(_ATTRIBUTE_ERROR_TRACEBACK_KEYS) >= _ATTRIBUTE_ERROR_TRACEBACK_LIMIT:
+            return
+        _ATTRIBUTE_ERROR_TRACEBACK_KEYS.add(key)
+        detail = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__, limit=12))
+        print(
+            f"DIAGNOSTIC AttributeError traceback origin={key[2]}:{key[3]}:{key[4]}\n{detail}",
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 class ActivityTimeline:
@@ -2601,6 +2631,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
 
     if update_monthly_now or legacy_monthly_migration_pending:
         save_monthly_prices(client, bucket, symbol, monthly, as_of=as_of)
+    valuation_by_period = {str(row.get("period_end", ""))[:10]: row for row in valuation}
     for row in statements:
         period_end = str(row.get("period_end", ""))[:10]
         year = period_end[:4]
@@ -2611,7 +2642,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             put_json_if_changed(client, bucket, key, {
                 "schema_version": 1, "symbol": symbol, "year": year,
                 "annual": row,
-                "valuation": next((item for item in valuation if item.get("period_end") == period_end), None),
+                "valuation": valuation_by_period.get(period_end),
                 "retrieval_status": financial_status,
                 "updated_at": iso_now(), "source": "Yahoo Finance via yfinance",
             })
@@ -3126,7 +3157,11 @@ def run(
         raise RuntimeError("JQUANTS_API_KEY is required")
     phase_seconds: dict[str, float] = {}
     phase_started = time.perf_counter()
-    fetched = fetch_securities(api_key)
+    universe_snapshot_path = os.environ.get("YFINANCE_UNIVERSE_SNAPSHOT_PATH", "").strip()
+    fetched = fetch_securities(
+        api_key,
+        snapshot_path=Path(universe_snapshot_path) if universe_snapshot_path else None,
+    )
     phase_seconds["jquants_universe_fetch"] = round(time.perf_counter() - phase_started, 3)
     latest_session = latest_completed_xtks_session()
     session_date = target_session or latest_session
@@ -3282,6 +3317,7 @@ def run(
                     else:
                         results[code] = result
                 except Exception as exc:
+                    log_attribute_error_traceback(exc)
                     failures[code] = f"{type(exc).__name__}: {exc}"
                     print(f"FAILED {code}: {failures[code]}", file=sys.stderr, flush=True)
                 if completed_count % 100 == 0 or completed_count == len(futures):

@@ -113,13 +113,29 @@ jobs:
           YFINANCE_LIBRARY_RETRIES: "1"
           YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND: "8"
           YFINANCE_V2_WORKERS: "24"
+          YFINANCE_UNIVERSE_SNAPSHOT_PATH: jquants-universe-snapshot.json
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: diview-market-data
 
+      - name: Save the exact J-Quants universe snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jquants-universe-${{ github.run_id }}
+          path: jquants-universe-snapshot.json
+          if-no-files-found: ignore
+          retention-days: 30
+
   legacy-financial-v2-migration:
     if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'migrate-financials'
+    name: legacy-financial-v2-migration (shard ${{ matrix.shard }}/4)
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0, 1, 2, 3]
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -130,13 +146,22 @@ jobs:
       - name: Install the R2 client
         run: python -m pip install "boto3>=1.35,<2"
       - name: Seed app-used legacy financial values into v2 and verify each write
-        run: set -o pipefail; python scripts/yfinance_r2/migrate_legacy_financials.py --workers 12 --report legacy-financial-migration-report.json 2>&1 | tee legacy-financial-migration.log
+        run: set -o pipefail; python scripts/yfinance_r2/migrate_legacy_financials.py --workers 12 --shard-index "${MIGRATION_SHARD}" --shard-count 4 --report "legacy-financial-migration-report-${MIGRATION_SHARD}.json" 2>&1 | tee "legacy-financial-migration-${MIGRATION_SHARD}.log"
         shell: bash
         env:
+          MIGRATION_SHARD: ${{ matrix.shard }}
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: diview-market-data
+      - name: Save shard report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy-financial-v2-migration-${{ github.run_id }}-shard-${{ matrix.shard }}
+          path: legacy-financial-migration-report-${{ matrix.shard }}.json
+          if-no-files-found: ignore
+          retention-days: 30
 
   v2-income-advice-initial-generation:
     if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'generate-income-advice'
@@ -152,7 +177,7 @@ jobs:
       - name: Install V2 and R2 dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
       - name: Build the initial candidate catalog from stored V2 records and verify R2 read-back
-        run: set -o pipefail; python scripts/yfinance_r2/generate_income_advice.py --publish --workers 8 2>&1 | tee income-advice-initial-generation.log
+        run: set -o pipefail; python scripts/yfinance_r2/generate_income_advice.py --publish --workers 32 2>&1 | tee income-advice-initial-generation.log
         shell: bash
         env:
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
@@ -202,7 +227,7 @@ jobs:
   yfinance-targeted-financial-refresh:
     if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'refresh-financials'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -213,7 +238,7 @@ jobs:
       - name: Install yfinance and R2 dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
       - name: Refresh one security's annual V2 financial records
-        run: set -o pipefail; python scripts/yfinance_r2/refresh_financial_v2.py --code "${TARGET_CODE}" --defer-advice 2>&1 | tee targeted-financial-refresh.log
+        run: set -o pipefail; python scripts/yfinance_r2/refresh_financial_v2.py --code "${TARGET_CODE}" --defer-advice --advice-workers 32 2>&1 | tee targeted-financial-refresh.log
         shell: bash
         env:
           TARGET_CODE: ${{ inputs.target_code }}
@@ -285,7 +310,7 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -r scripts/yfinance_r2/requirements.txt
       - name: Rebuild derived advice once after all financial shards, including partial failures
-        run: python scripts/yfinance_r2/generate_income_advice.py --publish --workers 8
+        run: python scripts/yfinance_r2/generate_income_advice.py --publish --workers 32
         env:
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -387,6 +412,7 @@ jobs:
           YFINANCE_LIBRARY_RETRIES: "1"
           YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND: "8"
           YFINANCE_V2_WORKERS: "24"
+          YFINANCE_UNIVERSE_SNAPSHOT_PATH: jquants-universe-snapshot.json
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -396,7 +422,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: yfinance-full-universe-study-${{ github.run_id }}
-          path: sync-output.txt
+          path: |
+            sync-output.txt
+            jquants-universe-snapshot.json
           if-no-files-found: ignore
           retention-days: 30
 
