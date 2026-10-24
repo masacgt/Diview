@@ -2,6 +2,7 @@
 
 ## In Progress
 
+- [ ] Verify new-holding data hydration through manual registration, CSV/DVM import, and app restart on device. Evidence: new positive-share holdings now schedule security/quote, financial/analysis, and dividend-month fetches into app-private caches; JDK 17 debug build succeeds, but add/import/cache-restore interaction was not exercised.
 - [x] Source current annual DPS from IRBANK v2 data. Evidence: the Worker and Android use the IRBANK actual/forecast index and fiscal-year history; 8766 returns FY2026 adjusted actual ¥14.5333 and FY2027 forecast ¥16.34. The earlier 3.002% was calculated against the 2026-10-20 quote; direct screening yield is now tracked in the next completed item.
 - [x] Source forecast yield from IRBANK screening and propagate it through the Worker and Android. Evidence: the paged refresh stored 3,779 unique values (3,781 rows, including two exact duplicate rows) with attribution and as-of dates; R2 SHA-256 read-back matched. Production Worker `1e65fe3c-5a9e-4a0c-b317-2a683cb85f71` returns 8766 at 2.855062% as of 2026-10-24, and the JDK 17 debug APK shows 2.86% in search and Stock Detail after migrating the old detail cache.
 - [x] Install the updated APK on the physical Android device. Evidence: JDK 17 APK installation and launch succeeded on SCG01 (`RFCNC0E4H8J`); Stock Detail visibly shows 8766 at ¥544.3, DPS ¥16.3, and IRBANK yield 2.86%.
