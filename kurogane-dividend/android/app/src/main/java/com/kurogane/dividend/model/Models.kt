@@ -25,7 +25,9 @@ data class Holding(
     val usdJpyRate: Double? = null,
     val usWithholdingEnabled: Boolean = true,
     val financialProfile: StockFinancialProfile? = null,
-    val isNoDividendConfirmed: Boolean = false
+    val isNoDividendConfirmed: Boolean = false,
+    val irbankYieldRate: Double? = null,
+    val irbankYieldDps: Double? = null
 ) {
     val priceUnit: Double get() = if (category == Category.FUND) 10_000.0 else 1.0
     val effectiveTaxFreeShares: Int get() =
@@ -36,7 +38,9 @@ data class Holding(
     val gainLoss: Double get() = totalValuation - totalCost
     val gainLossPercent: Double get() = if (totalCost > 0) (gainLoss / totalCost) * 100 else 0.0
     val annualDividend: Double get() = shares * dps / priceUnit * currencyFactor
-    val liveYield: Double get() = PortfolioMath.yieldPercent(dps, price)
+    val liveYield: Double get() = irbankYieldRate
+        ?.takeIf { it.isFinite() && it in 0.0..100.0 && irbankYieldDps == dps }
+        ?: PortfolioMath.yieldPercent(dps, price)
     val liveYoc: Double get() = PortfolioMath.yieldPercent(dps, acqPrice)
 
     fun getEffectiveAnnualDividend(taxRateMode: String): Double = getEffectiveDividendForShares(shares.toLong(), taxRateMode)

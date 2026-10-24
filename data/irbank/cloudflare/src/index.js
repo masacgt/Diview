@@ -338,6 +338,13 @@ function yfinanceV2Symbol(code) {
 }
 
 function selectedIrbankDividend(item) {
+  const reportedYield = finiteNumber(item?.yield?.rate);
+  const yieldRate = reportedYield !== null && reportedYield >= 0 ? reportedYield : null;
+  const yieldAsOf = /^\d{4}-\d{2}-\d{2}$/.test(String(item?.yield?.as_of || ''))
+    ? String(item.yield.as_of)
+    : null;
+  const yieldSource = yieldRate !== null ? String(item?.yield?.source || 'IRBANK screening dividendYield') : null;
+  const yieldAttribution = item?.yield?.attribution || null;
   const forecast = item?.forecast;
   const forecastDps = finiteNumber(forecast?.annual_dps_current_share_basis);
   const forecastPeriodEnd = String(forecast?.period_end || '');
@@ -351,6 +358,10 @@ function selectedIrbankDividend(item) {
       dividend_status: forecastDps > 0 ? 'has_dividend' : 'no_dividend',
       fiscal_year: finiteNumber(forecast.fiscal_year),
       forecast,
+      yield_rate: yieldRate,
+      yield_as_of: yieldAsOf,
+      yield_source: yieldSource,
+      yield_attribution: yieldAttribution,
     };
   }
 
@@ -367,6 +378,10 @@ function selectedIrbankDividend(item) {
       dividend_status: actualDps > 0 ? 'has_dividend' : 'no_dividend',
       fiscal_year: finiteNumber(actual.fiscal_year),
       forecast: null,
+      yield_rate: yieldRate,
+      yield_as_of: yieldAsOf,
+      yield_source: yieldSource,
+      yield_attribution: yieldAttribution,
     };
   }
   return {
@@ -377,6 +392,10 @@ function selectedIrbankDividend(item) {
     dividend_status: 'unknown',
     fiscal_year: null,
     forecast: null,
+    yield_rate: yieldRate,
+    yield_as_of: yieldAsOf,
+    yield_source: yieldSource,
+    yield_attribution: yieldAttribution,
   };
 }
 
@@ -390,7 +409,9 @@ function irbankDividendForCode(index, code) {
   return normalized ? selectedIrbankDividend(index?.items?.[normalized]) : selectedIrbankDividend(null);
 }
 
-function yieldFromDividend(price, annualDps) {
+function yieldFromDividend(price, annualDps, irbankYield = null) {
+  const reportedYield = finiteNumber(irbankYield);
+  if (reportedYield !== null && reportedYield >= 0) return reportedYield;
   const close = finiteNumber(price);
   return close !== null && close > 0 && annualDps !== null
     ? Math.round((annualDps / close * 100) * 10000) / 10000
@@ -1938,9 +1959,10 @@ export default {
           : null;
         const currentPrice = finiteNumber(liveQuote?.close) || catalogPrice;
         if (!(currentPrice > 0)) return null;
-        const dps = irbankDividendForCode(irbankDividendIndex, code).annual_dps;
+        const dividend = irbankDividendForCode(irbankDividendIndex, code);
+        const dps = dividend.annual_dps;
         const yieldRate = dps !== null && dps >= 0
-          ? (dps / currentPrice) * 100
+          ? yieldFromDividend(currentPrice, dps, dividend.yield_rate)
           : null;
         return {
           code,
@@ -1951,6 +1973,9 @@ export default {
           acquisition_date: point.date,
           annual_dividend_per_share: dps !== null && dps >= 0 ? dps : null,
           yield_rate: yieldRate,
+          yield_source: dividend.yield_source || (yieldRate !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
+          yield_as_of: dividend.yield_as_of,
+          yield_attribution: dividend.yield_attribution,
           estimated_average_trading_value_20d: finiteNumber(row.estimated_average_trading_value_20d),
         };
       }))).filter(Boolean);
@@ -2093,7 +2118,10 @@ export default {
             trailing_12_month_distribution_per_share: row.trailing_12_month_distribution_per_share,
             dividend_period: irbankDividend.dividend_period,
             dividend_amount_basis: irbankDividend.dividend_amount_basis,
-            yield_rate: yieldFromDividend(row.price, irbankDividend.annual_dps),
+            yield_rate: yieldFromDividend(row.price, irbankDividend.annual_dps, irbankDividend.yield_rate),
+            yield_source: irbankDividend.yield_source || (irbankDividend.annual_dps !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
+            yield_as_of: irbankDividend.yield_as_of,
+            yield_attribution: irbankDividend.yield_attribution,
             yield_basis: irbankDividend.yield_basis,
             dividend_status: irbankDividend.dividend_status,
             dividend_fiscal_year: irbankDividend.fiscal_year,
@@ -2114,7 +2142,8 @@ export default {
               ...item,
               price: finiteNumber(current?.price?.close) ?? item.price,
               quote_date: current?.price?.date ?? item.quote_date,
-              yield_rate: yieldFromDividend(current?.price?.close ?? item.price, irbankDividend.annual_dps),
+              yield_rate: yieldFromDividend(current?.price?.close ?? item.price, irbankDividend.annual_dps, irbankDividend.yield_rate),
+              yield_source: irbankDividend.yield_source || (irbankDividend.annual_dps !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
             };
           }
           const close = finiteNumber(current.price?.close) ?? finiteNumber(row.price);
@@ -2123,7 +2152,8 @@ export default {
             price: close ?? item.price,
             quote_date: current.price?.date ?? item.quote_date,
             trailing_12_month_distribution_per_share: finiteNumber(dividend.trailing_12_month_per_share),
-            yield_rate: yieldFromDividend(close, irbankDividend.annual_dps),
+            yield_rate: yieldFromDividend(close, irbankDividend.annual_dps, irbankDividend.yield_rate),
+            yield_source: irbankDividend.yield_source || (irbankDividend.annual_dps !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
           };
         }));
         const nextOffset = offset + items.length;
@@ -2165,7 +2195,10 @@ export default {
             annual_dividend_per_share: dividend.annual_dps,
             dividend_period: dividend.dividend_period,
             dividend_amount_basis: dividend.dividend_amount_basis,
-            yield_rate: yieldFromDividend(row.price, dividend.annual_dps),
+            yield_rate: yieldFromDividend(row.price, dividend.annual_dps, dividend.yield_rate),
+            yield_source: dividend.yield_source || (dividend.annual_dps !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
+            yield_as_of: dividend.yield_as_of,
+            yield_attribution: dividend.yield_attribution,
             yield_basis: dividend.yield_basis,
             dividend_status: dividend.dividend_status,
             dividend_source: 'IRBANK',
@@ -2204,7 +2237,10 @@ export default {
             trailing_12_month_distribution_per_share: row.trailing_12_month_distribution_per_share,
             dividend_period: dividend.dividend_period,
             dividend_amount_basis: dividend.dividend_amount_basis,
-            yield_rate: yieldFromDividend(row.price, dividend.annual_dps),
+            yield_rate: yieldFromDividend(row.price, dividend.annual_dps, dividend.yield_rate),
+            yield_source: dividend.yield_source || (dividend.annual_dps !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
+            yield_as_of: dividend.yield_as_of,
+            yield_attribution: dividend.yield_attribution,
             yield_basis: dividend.yield_basis,
             security_type: row.security_type,
             dividend_status: dividend.dividend_status,
@@ -2274,7 +2310,11 @@ export default {
           },
         },
         market_price: current.price || null,
-        market_yield_rate: yieldFromDividend(current.price?.close, selectedDps),
+        market_yield_rate: yieldFromDividend(current.price?.close, selectedDps, selectedDividend.yield_rate),
+        market_yield_source: selectedDividend.yield_source
+          || (selectedDps !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
+        market_yield_as_of: selectedDividend.yield_as_of,
+        market_yield_attribution: selectedDividend.yield_attribution,
         dividend_status: selectedDividend.dividend_status,
         valuation: {
           per: valuation.per,
@@ -2496,7 +2536,11 @@ export default {
           source: 'IRBANK API',
           payout_ratio: stats.payoutRatio ?? null,
         } : null,
-        market_yield_rate: yieldFromDividend(v2Current.price?.close, selectedDividend.annual_dps),
+        market_yield_rate: yieldFromDividend(v2Current.price?.close, selectedDividend.annual_dps, selectedDividend.yield_rate),
+        market_yield_source: selectedDividend.yield_source
+          || (selectedDividend.annual_dps !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
+        market_yield_as_of: selectedDividend.yield_as_of,
+        market_yield_attribution: selectedDividend.yield_attribution,
         dividend_status: selectedDividend.dividend_status,
         financial: null,
         market_price: includeMarket ? v2Current.price || null : null,
