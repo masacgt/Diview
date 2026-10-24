@@ -174,13 +174,15 @@ data class CloudflareDividendEvent(
     val date: LocalDate,
     val amountPerShare: Double,
     val finalRightsDate: LocalDate? = null,
-    val recordDate: LocalDate? = null
+    val recordDate: LocalDate? = null,
+    val paymentStartDate: LocalDate? = null
 )
 
 data class CloudflareUpcomingDividendEvent(
     val exDividendDate: LocalDate,
     val finalRightsDate: LocalDate? = null,
     val recordDate: LocalDate? = null,
+    val paymentStartDate: LocalDate? = null,
     val estimatedFromHistory: Boolean = false
 )
 
@@ -630,7 +632,8 @@ class CloudflareMarketRepository(
                         ?: return@mapNotNull null
                     val finalRightsDate = runCatching { LocalDate.parse(event.optString("final_rights_date")) }.getOrNull()
                     val recordDate = runCatching { LocalDate.parse(event.optString("record_date")) }.getOrNull()
-                    CloudflareDividendEvent(date, amount, finalRightsDate, recordDate)
+                    val paymentStartDate = runCatching { LocalDate.parse(event.optString("payment_start_date")) }.getOrNull()
+                    CloudflareDividendEvent(date, amount, finalRightsDate, recordDate, paymentStartDate)
                 }.distinctBy { it.date to it.amountPerShare }.sortedBy { it.date })
             }
         }
@@ -644,8 +647,9 @@ class CloudflareMarketRepository(
                     ?: continue
                 val finalRightsDate = runCatching { LocalDate.parse(event.optString("final_rights_date")) }.getOrNull()
                 val recordDate = runCatching { LocalDate.parse(event.optString("record_date")) }.getOrNull()
+                val paymentStartDate = runCatching { LocalDate.parse(event.optString("payment_start_date")) }.getOrNull()
                 put(symbol, CloudflareUpcomingDividendEvent(
-                    exDividendDate, finalRightsDate, recordDate,
+                    exDividendDate, finalRightsDate, recordDate, paymentStartDate,
                     estimatedFromHistory = event.optBoolean("estimated_from_history", false)
                 ))
             }
