@@ -551,7 +551,7 @@ fun AssetManagementScreen(
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_4) else resources.getString(R.string.add_holding_text_22, com.kurogane.dividend.model.formatFinancialAmountDisplay(totalAnnualDivVal)),
-                                        fontSize = AppTextSize.headline,
+                                        fontSize = AppTextSize.metric,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = NeonGreen
                                     )
@@ -582,7 +582,7 @@ fun AssetManagementScreen(
                                     Row(verticalAlignment = Alignment.Bottom) {
                                         Text(
                                             text = if (isPrivacyActive) "•••" else String.format(java.util.Locale.JAPAN, "%.2f", avgYield),
-                                            fontSize = AppTextSize.headline,
+                                            fontSize = AppTextSize.metric,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = OnSurface
                                         )
@@ -1658,7 +1658,7 @@ fun HoldingQuickEditModal(
             ) {
                 Column {
                     Text(stringResource(R.string.asset_management_text_23), color = SoftGray, fontSize = AppTextSize.dense)
-                    Text(stringResource(R.string.add_holding_1_s_2_s_2 , modalCurrency, com.kurogane.dividend.model.formatStockPriceDisplay(currentPrice, holding.code)), color = OnSurface, fontSize = AppTextSize.screenTitle, fontWeight = FontWeight.ExtraBold, fontFamily = AppNumericFontFamily)
+                    Text(stringResource(R.string.add_holding_1_s_2_s_2 , modalCurrency, com.kurogane.dividend.model.formatStockPriceDisplay(currentPrice, holding.code)), color = OnSurface, fontSize = AppTextSize.metric, fontWeight = FontWeight.ExtraBold, fontFamily = AppNumericFontFamily)
                 }
                 Surface(shape = CircleShape, color = NeonGreen.copy(alpha = 0.18f)) {
                     Text(

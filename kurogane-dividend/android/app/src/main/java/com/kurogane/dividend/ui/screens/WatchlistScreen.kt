@@ -1356,7 +1356,7 @@ fun WatchlistScreen(
                                     stringResource(R.string.add_holding_1_s_2_s_2 , stock.currency, com.kurogane.dividend.model.formatStockPriceDisplay(stock.price, stock.code)),
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
-                                    fontSize = AppTextSize.section,
+                                    fontSize = AppTextSize.body,
                                     fontFamily = AppNumericFontFamily
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -1415,7 +1415,7 @@ fun WatchlistScreen(
                                             .background(SurfaceContainer)
                                             .padding(horizontal = 6.dp, vertical = 0.dp)
                                     ) {
-                                        Text(stringResource(R.string.watchlist_text_15), color = OnSurfaceVariant, fontSize = AppTextSize.section, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
+                                        Text(stringResource(R.string.watchlist_text_15), color = OnSurfaceVariant, fontSize = AppTextSize.supporting, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
                                         Spacer(modifier = Modifier.width(4.dp))
                                         TargetYieldAdjustButton(
                                             icon = Icons.Default.Remove,
@@ -1427,7 +1427,7 @@ fun WatchlistScreen(
                                             stringResource(R.string.settings_1_s , String.format(Locale.JAPAN, "%.2f", stock.targetYield)),
                                             color = PrimaryEmerald,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = AppTextSize.section,
+                                            fontSize = AppTextSize.body,
                                             fontFamily = AppNumericFontFamily,
                                             modifier = Modifier.padding(horizontal = 4.dp)
                                         )
@@ -1932,7 +1932,7 @@ fun WatchlistScreen(
                 // KPI Sub-Grid Row (3 Cards)
                 val kpiCardsInSingleRow = LocalDensity.current.fontScale < 1.4f
                 val kpiValueColor = OnSurface
-                val kpiValueFontSize = AppTextSize.section
+                val kpiValueFontSize = AppTextSize.metric
                 val kpiValueFontWeight = FontWeight.Bold
                 val kpiValueFontFamily = AppNumericFontFamily
                 AdaptiveRow(
