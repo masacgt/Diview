@@ -172,9 +172,13 @@ fun StockDetailScreen(
             else -> holding.dps
         }
         val calculatedYield = com.kurogane.dividend.model.PortfolioMath.yieldPercent(dps, price)
-        val displayYield = calculatedYield
+        val irbankYieldDps = resolvedSecurity?.annualDividendPerShare
+        val irbankYieldRate = resolvedSecurity?.marketYieldRate?.takeIf { dps == irbankYieldDps }
+        val displayYield = irbankYieldRate ?: calculatedYield
         holding.copy(price = price, dps = dps, yieldRate = displayYield,
             isNoDividendConfirmed = noDividendConfirmed,
+            irbankYieldRate = irbankYieldRate,
+            irbankYieldDps = irbankYieldDps,
             yoc = com.kurogane.dividend.model.PortfolioMath.yieldPercent(dps, holding.acqPrice),
             usdJpyRate = exchangeRate?.usdJpy, usWithholdingEnabled = usTaxDeduction)
     }
@@ -452,7 +456,7 @@ fun StockDetailScreen(
         },
         "財務面の支え：自己資本比率${profile.equityRatio.financialText(1, "%")}は資本構成、営業利益率${profile.operatingMargin.financialText(1, "%")}は本業の採算、${profile.fcfStatus}は営業活動と投資後の現金収支を見る材料です。指標が未取得の場合はその項目を評価できず、黒字や高い比率だけで配当継続が確定するわけではありません。複数期の推移と配当額を合わせて確認してください。"
     )
-    val liveYield = if (currentPrice > 0 && dps > 0.0) (dps / currentPrice) * 100.0 else currentHolding.yieldRate
+    val liveYield = currentHolding.liveYield
     val liveYoc = if (currentHolding.acqPrice > 0) (dps / currentHolding.acqPrice) * 100.0 else liveYield
 
     val totalSimShares = baseShares.toLong() + simAddedShares

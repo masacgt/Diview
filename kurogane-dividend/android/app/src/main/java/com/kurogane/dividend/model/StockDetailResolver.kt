@@ -28,7 +28,9 @@ object StockDetailResolver {
             PortfolioMath.yieldPercent(dps, price), 0.0, stock?.payoutTiming ?: "配当月未取得", "—",
             stock?.payoutMonths ?: emptyList(), "", "未保有", stock?.dailyChange ?: "—", stock?.isPositive ?: true,
             usdJpyRate = stock?.usdJpyRate,
-            isNoDividendConfirmed = noDividendConfirmed
+            isNoDividendConfirmed = noDividendConfirmed,
+            irbankYieldRate = security?.marketYieldRate,
+            irbankYieldDps = security?.annualDividendPerShare
         )
     }
 }

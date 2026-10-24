@@ -30,7 +30,8 @@ data class CloudflareSearchQuote(
     val annualDividendPerShare: Double? = null,
     val isNoDividendConfirmed: Boolean = false,
     val hasDividendStatus: Boolean = false,
-    val quoteDate: String? = null
+    val quoteDate: String? = null,
+    val yieldAsOf: String? = null
 )
 
 private data class CachedSearchCatalogQuotes(
@@ -93,7 +94,9 @@ data class CloudflareMarketQuote(
     val price: Double,
     val annualDividendPerShare: Double?,
     val isNoDividendConfirmed: Boolean = false,
-    val hasDividendStatus: Boolean = false
+    val hasDividendStatus: Boolean = false,
+    val yieldRate: Double? = null,
+    val yieldAsOf: String? = null
 )
 
 data class CloudflarePriceCatalogSnapshot(
@@ -243,11 +246,15 @@ class CloudflareMarketRepository(
                 val catalog = catalogQuotes[code]
                 val price = live?.price ?: catalog?.price
                 val annualDividend = live?.annualDividendPerShare
-                val yieldRate = live?.yieldRate
+                val yieldRate = live?.yieldRate ?: catalog?.yieldRate
+                val yieldAsOf = live?.yieldAsOf ?: catalog?.yieldAsOf
                 val isNoDividendConfirmed = live?.isNoDividendConfirmed == true
                 val hasDividendStatus = live?.hasDividendStatus == true
                 if (price != null || yieldRate != null || annualDividend != null) {
-                    put(code, CloudflareSearchQuote(price, yieldRate, annualDividend, isNoDividendConfirmed, hasDividendStatus))
+                    put(code, CloudflareSearchQuote(
+                        price, yieldRate, annualDividend, isNoDividendConfirmed, hasDividendStatus,
+                        live?.quoteDate ?: catalog?.quoteDate, yieldAsOf
+                    ))
                 }
             }
         }
@@ -308,7 +315,10 @@ class CloudflareMarketRepository(
         }
         val noDividend = row.hasConfirmedNoDividend()
         val quoteDate = row.optString("quote_date").takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
-        return CloudflareSearchQuote(price, yieldRate, annualDividend, noDividend, row.hasDividendStatus(), quoteDate)
+        val yieldAsOf = row.optString("yield_as_of").takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
+        return CloudflareSearchQuote(
+            price, yieldRate, annualDividend, noDividend, row.hasDividendStatus(), quoteDate, yieldAsOf
+        )
             .takeIf { it.price != null || it.yieldRate != null || it.annualDividendPerShare != null }
     }
 
@@ -427,11 +437,15 @@ class CloudflareMarketRepository(
                 if (isSecurityCode(code) && price != null && PortfolioMath.validMoney(price) && price > 0.0) {
                     val annualDividend = row.annualDividendPerShareOrNull()
                     val yieldRate = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 }
+                    val yieldAsOf = row.optString("yield_as_of")
+                        .takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
                     put(code, CloudflareMarketQuote(
                         price,
                         annualDividend,
                         row.hasConfirmedNoDividend(),
-                        row.hasDividendStatus()
+                        row.hasDividendStatus(),
+                        yieldRate,
+                        yieldAsOf
                     ))
                 }
             }
