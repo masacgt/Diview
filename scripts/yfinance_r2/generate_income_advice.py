@@ -142,11 +142,16 @@ def publish(client: Any, bucket: str, workers: int = 8) -> int:
     if not catalog or not isinstance(catalog.get("items"), list):
         raise RuntimeError("The published V2 catalog is missing or invalid")
 
+    revision_key = sync.object_key("financial_revision.json")
+    revision = sync.read_json(client, bucket, revision_key)
     result, counts = build_catalog(client, bucket, catalog, workers=workers)
     print(json.dumps({**counts, "generation": result["generation"]}, ensure_ascii=False, sort_keys=True), flush=True)
     if counts["read_failures"]:
         raise RuntimeError(f"Aborting without publishing because {counts['read_failures']} candidate records failed to read")
     key = sync.object_key("derived", "income_advice", "current.json")
+    if (sync.read_json(client, bucket, catalog_key) != catalog
+            or sync.read_json(client, bucket, revision_key) != revision):
+        raise RuntimeError("Source changed during advice generation; retry publication")
     sync.put_json_if_changed(client, bucket, key, result)
     saved = sync.read_json(client, bucket, key)
     if saved != result:
