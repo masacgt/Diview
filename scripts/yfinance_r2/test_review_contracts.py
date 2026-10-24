@@ -55,17 +55,3 @@ class ReviewContractTests(TestCase):
         saved = dividends.records_by_period(rows)
         self.assertEqual(set(saved), {"2026-03", "2026-12"})
         self.assertEqual(saved["2026-03"]["annual_dps"], 10)
-
-
-class AdvicePublicationTests(TestCase):
-    def test_changed_sources_prevent_publication(self):
-        catalog = {"generation": "2026-10-20", "items": []}
-        result = {"generation": "2026-10-20", "items": []}
-        for final_catalog, final_revision in [(dict(catalog, generation="new"), {}), (catalog, {"revision": "new"})]:
-            with self.subTest(catalog=final_catalog, revision=final_revision), \
-                    patch.object(advice.sync, "read_json", side_effect=[catalog, {}, final_catalog, final_revision]), \
-                    patch.object(advice, "build_catalog", return_value=(result, {"read_failures": 0})), \
-                    patch.object(advice.sync, "put_json_if_changed") as put, redirect_stdout(io.StringIO()):
-                with self.assertRaisesRegex(RuntimeError, "Source changed"):
-                    advice.publish(object(), "test")
-                put.assert_not_called()

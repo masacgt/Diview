@@ -1,6 +1,6 @@
 # R2市場データ構造とアプリ取得仕様
 
-更新日: 2026-10-18
+更新日: 2026-10-20
 
 状態: 合意済み仕様。yfinance v2の初回R2公開は2026-10-16に実施済み。実装と本番APIの確認範囲は「実装状況」を参照。
 
@@ -70,7 +70,7 @@ Androidの `/api/v1/financial-data/{code}` は現在IRBANK概要から年次財�
 
 現行Androidの `FinancialData.kt` が実際に使う年次財務入力は、売上高・営業利益から算出する営業利益率、営業CFと投資CFの合計から算出するFCF比率、自己資本と総資産から算出する自己資本比率である。年次評価値はEPS、BPS、配当利回りを使う。純利益、損益計算書のEPS、発行株式数、設備投資額はこの画面の計算に使わないため、yfinanceから取り出してR2へ保存しない。
 
-財務指標の計算では、異なる出典の金額を単位確認なしに割り合わせない。IRBANK種データの総資産は `million_jpy`、yfinance財務の金額は円単位であることを確認した。例えば2026-03-31の7203は、種データの総資産105,522,331百万円とyfinance自己資本39,918,854,000,000円を混ぜたため、自己資本比率が37,829,768.9%になっていた。4502でも同じ混在で47,896,322.9%となっていた。恒久対策は、両方の入力が同一出典に属する場合だけ再計算し、出典が異なる場合は種データ側の同一期間比率を保持すること。種の比率もない場合は未取得とし、異出典の入力から比率を作らない。実装・本番R2反映・API/画面の再確認状況は `ai_docs/todo.md` に記録する。
+財務指標の計算では、異なる出典の金額を単位確認なしに割り合わせない。IRBANK種データの総資産は `million_jpy`、yfinance財務の金額は円単位であることを確認した。例えば2026-03-31の7203は、種データの総資産105,522,331百万円とyfinance自己資本39,918,854,000,000円を混ぜたため、自己資本比率が37,829,768.9%になっていた。4502でも同じ混在で47,896,322.9%となっていた。恒久対策は、入力が同一の既知出典に属する場合だけ再計算すること。出典が異なるか不明な場合は派生比率を除外し、同期間のIRBANK種比率があれば保持する。種比率もない場合は未取得とし、異出典の入力から比率を作らない。Workerも出典情報が欠落または不一致の派生比率を公開せず、出典付きの種データを保持する。Androidは財務payloadの意味が変わった際にキャッシュ契約版を更新し、同日キャッシュで誤った旧値を使い続けない。実装・本番R2反映・API/画面の再確認状況は `ai_docs/todo.md` に記録する。
 
 移行前は、IRBANKの調整済み決算期別DPSを第一候補にし、統合銘柄データ中のyfinance配当イベントを暦年で合計した値を代替にしていた。移行後はyfinanceの返却配当額を分割調整済みとして扱い、追加の比率換算はしない。暦年のイベント合計と会社公表の決算期DPSは期間定義が異なるため、数値の一致は保証しない。
 
@@ -106,9 +106,9 @@ market/yfinance/v2/
 
 `profile.json` はコード、yfinanceシンボル、`shortName`、`longName`、表示名など、銘柄名表示に必要な情報だけを持つ。取引所、国、事業概要、時価総額、プロフィール上の発行株式数は保存しない。市場・商品区分はJ-Quantsの銘柄一覧を使い、業種情報は現在のAndroid同梱業種マスターを使う。通貨は現在価格の単位として `current.json` にのみ保存する。
 
-`current.json` は最新の市場終了価格と価格日、同じ日足データに含まれる前日終値・前日比、直近12か月の配当イベント合計による実績年間配当額、次期配当見込み、今期配当実績、配当利回り、PER、PBRなど現在表示・計算に使う値を持つ。PERは当日終値÷保存済みの正の `trailingEps`、PBRは当日終値÷保存済みの正の `bookValue` で日次計算し、Yahooが報告するPER/PBRは使用しない。計算元となる価格日と統計取得日を記録する。現行アプリで使わない統計項目は現行オブジェクトから除外し、旧値を `archive/unused_statistics/{symbol}/statistics.json` へ一度保存する。利回りは次期配当見込みを最新終値で割って算出し、見込みがない場合は今期配当実績を使う。実装ではyfinanceの `dividendRate` を次の12か月の配当見込みとして記録する。この値は会社が確定した次会計年度DPSとは区別する。代替の今期配当実績は、yfinance配当イベントのうち現在の会計年度に属し、取得日までに記録された金額の合計である。両方取得できない場合、データ状態は未取得として保持し、アプリでは `0.00%` と表示する。金額の取得基準は `event_amount_basis: yfinance_split_adjusted_assumption` に記録し、yfinanceの返却額を分割調整済みとして扱う。
+`current.json` は最新の市場終了価格と価格日、同じ日足データに含まれる前日終値・前日比、直近12か月の配当イベント合計、PER、PBRなどyfinance由来の市場・統計値を持つ。PERは当日終値÷保存済みの正の `trailingEps`、PBRは当日終値÷保存済みの正の `bookValue` で日次計算し、Yahooが報告するPER/PBRは使用しない。計算元となる価格日と統計取得日を記録する。現行アプリで使わない統計項目は現行オブジェクトから除外し、旧値を `archive/unused_statistics/{symbol}/statistics.json` へ一度保存する。yfinance由来の配当イベント合計は暦年・直近12か月の観測履歴として保持し、会社の現在DPS・予想利回りとは別の系列として扱う。
 
-銘柄情報画面の現在DPSと利回りは `current.json` の次期見込み、または取得できない場合の今期実績から求める。利回りはそのDPSを最新終値で割って計算し、DPSが未取得なら `0.00%` とする。過去の暦年イベント合計、利回りだけの値、旧APIの `annual_dps_adjusted`（決算期集計）は現在DPSへ代用しない。株価は詳細データと検索カタログの価格日を比較し、より新しい日付の終値を使う。
+銘柄情報画面の現在DPSはIRBANK配当インデックスの次期会社予想、または取得できない場合の今期実績から求める。予想利回りはIRBANKスクリーニングの `dividendYield` があればその値を優先し、未取得の場合のみ選択した終値とIRBANK DPSから計算する。IRBANK値の基準日と出典情報をR2/APIに保持する。DPSが未取得なら `0.00%` とする。過去の暦年イベント合計や旧APIの `annual_dps_adjusted`（決算期集計）は現在DPSへ代用しない。株価は詳細データと検索カタログの価格日を比較し、より新しい日付の終値を使う。
 
 `prices/monthly/{year}.json` は直近8確定年の12月価格を年ごとに最大1点格納する。初回取得では対象8年の yfinance 月間足を取得して12月分だけ残し、以後は12月の最終XTKS営業日後に当年12月価格を更新する。12月以外の月次価格、8年の対象期間より古い価格は保存しない。直近13か月に入る最新の12月価格は `securities/{symbol}/prices/monthly/{year}.json`、それ以前の対象年は `archive/prices/monthly/{symbol}/{year}.json` に置く。価格日はXTKSの12月最終営業日とし、`Close` は株式分割調整済み・配当再投資調整なしである。既存R2月次履歴は銘柄の初回v2年末価格同期時に12月価格だけへ整理し、通常領域から不要月を削除する。
 
@@ -175,6 +175,18 @@ R2バケットは非公開のままにし、AndroidアプリはWorker APIを通�
 | `/api/v1/financial-data/{code}` | v2の `financials/`、暦年yfinance配当履歴、`issuer_dividends/` の決算期IRBANK記録、評価入力値。未取得項目は状態付きで返す。旧領域への実行時フォールバックはしない |
 | `/api/v1/analysis/{code}` | 銘柄の財務・配当・価格入力はv2のみを使い、分析定義と分析履歴は現行D1/KVを使う。財務期間・指標JSONへフォールバックしない |
 
+J-Quantsが返す5桁の種類株式コードは、通常株式の4桁コードへ短縮せず、yfinance v2のキーを `{code}.T`（例: `92025.T`）として保持する。Workerの旧IRBANKコード変換 `irbankR2Code` は4桁または末尾0付きの通常株式コード専用であり、v2参照に流用しない。Workerのv2 APIは専用の `yfinanceV2Code` で4桁と5桁を正規化し、銘柄詳細、財務、配当・分割履歴、12月価格、指定銘柄価格に同じコードを使う。J-Quantsの通常株式コード末尾0は従来どおり4桁へ戻す。普通株の配当履歴を種類株式の代わりに保存・表示しない。
+
+2026-10-20の調査で、`yfinance==1.7.0` の `history(period="max", actions=True, auto_adjust=False, repair=True)` は次の5桁コードの配当イベントを返した。25935.T: 2024-10 ¥28、2025-04 ¥28・2025-10 ¥30、2026-04 ¥30。50765.T: 2024-09 ¥21.72、2025-03以降2026-09まで各半期¥65。75505.T: 2026-03 ¥99.72・2026-09 ¥100.27。92015.T: 同日までイベント行なし。92025.T: 2026-03 ¥52.73・2026-09 ¥87.50。94345.T: 2024-03 ¥41.53、2024-09以降2026-09まで各半期¥50。94346.T: 2025-03 ¥126.24、2025-09以降2026-09まで各半期¥128。7銘柄すべてでyfinanceの分割行はなかった。これらはyfinanceの応答値であり、会社公表値との全件照合済みを意味しない。種類株式のコードと配当条件は発行体の[伊藤園](https://www.itoen.co.jp/ir/stock/info/)、[インフロニア](https://www.infroneer.com/jp/ir/dividend.html)、[ゼンショー](https://www.zensho.co.jp/jp/ir/stock/class-shares.html)、[JAL](https://www.jal.com/ja-jp/investor/issue/bond-type-class-shares/)、[ANA](https://www.ana.co.jp/group/investors/stock/bond-type-class-shares/)、[ソフトバンク](https://www.softbank.jp/corp/ir/stock/class-shares/)の資料で確認する。
+
+本番Workerの2026-10-20確認では、検索カタログ世代 `2026-10-19` に7コードすべてが存在した。一方、`/api/v1/dividend-months` の2025・2026年イベント配列は7コードとも空で、`/api/v1/securities/25935` はHTTP 400だった。Worker実装が5桁コードをv2 R2キーへ変換できなかったことを確認したため、Workerの専用変換と回帰確認を実装した。`node --test test/routes.test.mjs` は24/24成功。R2パーティションの内容が未公開APIからは判別できないため、修正の本番反映とイベント行の読み戻しが終わるまで種類株式履歴を完了扱いにしない。
+
+### 8303の公表DPSと株式数基準
+
+SBI新生銀行の公表資料では、FY2024およびFY2025の普通株式配当は各¥40,000,000、FY2026は¥42である。FY2024/25の¥40,000,000は2025-07-27の1株を14,000,000株とする分割前に実際に支払われた金額であり、FY2026の¥42は分割後の基準である。比較用に同じ現在株数基準へ換算する場合、FY2024/25は¥40,000,000 ÷ 14,000,000 = 約¥2.857142857となる。FY2023の公表¥12は、2023-10-02の20,000,000株を1株とする併合と、2024-03-15の1株を6株とする分割より前の金額である。2025年のB種優先株式に対する¥100,000,000,000の特別配当（1株当たり¥16,666,666,667）は普通株式のDPSに加算しない。根拠は発行体の[2025年IPO資料](https://corp.sbishinseibank.co.jp/ja/news/news/20251113c.html)、[2026年3月期決算短信](https://corp.sbishinseibank.co.jp/ja/news/news/auto_20260416505343/pdfFile.pdf)、[2026年3月期配当決議](https://corp.sbishinseibank.co.jp/ja/news/news/auto_20260513528625/pdfFile.pdf)。
+
+2026-10-20に実行した`yfinance==1.7.0`の読取専用確認では、`Ticker.splits`は2017-09-27の0.1と2023-09-28の0.00000005だけを返し、発行体が開示する2024年の6分割と2025年の14,000,000分割を含まなかった。`Ticker.dividends`は2023-03-30の¥240,000,000、2026-03-30の¥42、2026-09-29の¥10を返し、2024/25年のイベント行を返さなかった。したがって8303では、yfinanceの配当値が自動的に現在株数基準へ正規化されるとは確認できず、`Ticker.splits`だけによる過去DPSの補正も不完全になる。移行データの公表額を改変せず、会計期ごとの公表株数基準とyfinanceの取得値を区別して扱う。FY2024/25からFY2026への見かけの差には株数基準の違いが含まれるが、現在基準へ換算した後も金額が異なるため、株数基準だけで説明できる差ではない。
+
 ## 現行コードの確認先
 
 - Android API呼び出しとキャッシュ: `kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/data/CloudflareMarketRepository.kt`、`.../viewmodel/DividendViewModel.kt`
@@ -194,6 +206,7 @@ R2バケットは非公開のままにし、AndroidアプリはWorker APIを通�
 - 2026-10-17のex-dividend確認では、2060.Tの `dividend-months` が2027-03-30、状態 `available`、取得元 `Ticker.get_info` を返し、Androidの銘柄情報画面も同日を表示した。`current.json` の `calendar.ex_dividend_date` は `not_fetched` のため、これは `Ticker.calendar` の成功確認ではない。1326.Tは履歴 `empty`・今後イベントなしで、Androidは `権利落ち日未取得` を表示した。`Ticker.calendar` が通常の全銘柄取得で保存されることは、次の営業日同期で確認する。
 - 2026-10-17のActions run #51で月次価格を28,950パーティション走査し、25,680個の12月価格日の正規化を完了した。失敗0件、yfinance通信0回で、変更したオブジェクトはR2へ書き戻した後に読み戻して照合した。本番Worker APIの確認では7203の8年分が期待するXTKS最終営業日になり、株式分割・併合を含む20銘柄の142価格点も全件正しい日付だった。1491は保存価格がなく、空データのまま返った。
 - Workerの財務・評価値APIはv2専用で、分析APIもD1財務期間・銘柄指標へフォールバックしない。`migrate_legacy_financials.py` と手動Actionsモード `migrate-financials` は、旧IRBANK概要からアプリ利用項目だけをv2へ移し、各書込みをR2から読み戻して検証する。2026-10-17のActions run #74は4,444銘柄を処理し、71銘柄の2,982項目を移行、失敗0件で完了した。519件は旧データなし、227銘柄はアプリ利用項目なし、3,620銘柄は移行済み、7コードは未対応だった。旧データへのAPIフォールバックを持たないWorker version `e3584082-fa47-4d72-a90c-4f8d9e068382` を本番へ反映した。APIの5銘柄サンプルでは年次財務10期・評価値10期が返り、1605の評価値履歴で同一暦年の2019-03-31と2019-12-31が別期間として保持されることを確認した。v2公開後の他ルート・画面確認の詳細は `ai_docs/todo.md` を参照。
+- 自己資本比率は出所が異なる金額を混ぜて計算しない。IRBANK種データの総資産は百万円単位、yfinanceの貸借対照表値は円単位のため、両出所が異なる場合は同じ期間の種データ `equity_ratio_computed` を維持し、種比率もない場合は未取得にする。このガードを含むcollector suite 64件とPython構文確認はローカルで成功した。2026-10-20のmigration run #175（[Actions](https://github.com/masacgt/Diview/actions/runs/39378087521)）は4,442銘柄を処理した。125銘柄に1,219個の不足種フィールドを補完し、失敗0件、変更R2オブジェクトの読戻し検証を完了した。2026-03-31の本番API値は4502が47.896322897%、7203が37.829768942%で、いずれも `source_values.seed.values.equity_ratio_computed` 由来、状態は `stale`。yfinanceの金額値は別出所のまま保持され、比率計算には混在していない。エミュレータの銘柄詳細にも4502は47.9%、7203は37.8%と表示され、API値と一致した。種データ由来の比率は確認できたが、`stale` 状態が示す鮮度は引き続き区別する。
 
 ### 取得時間短縮策の実施状況（調査基準日: 2026-10-20）
 
@@ -228,7 +241,7 @@ Actions run #72（2026-10-17、[実行記録](https://github.com/masacgt/Diview/
 
 run #159はJ-Quantsコード4,442件を走査し、4,335件成功・107件失敗、HTTP 429は0件で、世代 `2026-10-19` の4,356件カタログを公開した。v2同期ジョブ実時間は666秒（11分06秒）、市場カレンダージョブは25秒で、合計ランナー実時間は11分31秒。同期スクリプトは624.886秒、銘柄収集の表示時間は517.3秒、yfinance高水準呼び出しは622回（`history_daily_5d_with_actions=237`、`ticker_get_info=55`、`history_year_end_prices_initial_8y=43`、`history_daily_1y_with_actions=41`、`history_actions_max=19`、年次財務4系統各55回など）だった。R2 active wall timeは510.220秒（R2-only 420.313秒、yfinance active 89.907秒、重複89.907秒）。R2操作は `get_object` 12,114回、`get_body` 10,398回、`list_objects_v2` 1,945回、`put_object` 5,192回、`delete_object` 7回。ログ上の107失敗は、明示的な `AttributeError: 'str' object has no attribute 'get'` が55件、同一営業日のHTTP 404再試行抑止が52件で構成され、HTTP 429は0件だった。部分失敗によりActions同期ジョブの結論はfailureだが、公開処理は完了した。run #158の同一セッション銘柄数は4,444件だったため、run #159との差2コードは個別照合が必要である。
 
-失敗ログの照合では、手動run #158と通常schedule run #159の両方で、まったく同じ55コードが `AttributeError: 'str' object has no attribute 'get'` で失敗していた。run #158には別途52件のHTTP 404と4件の旧データ削除前の読戻し不一致もあった。ログにスタックトレースはない。固定しているyfinance 1.7.0の `Quote._fetch_info`（`quote.py:695`）と `Quote._fetch_complementary`（`quote.py:877-880`）には、辞書型を前提とする `.get()` があるため候補箇所ではあるが、実際の発生元とは確認できていない。R2データと同期側変換も含めて原因を確定するまでは、代表コードを単独再現して発生段階を記録する。
+失敗ログの照合では、手動run #158と通常schedule run #159、#161、#166で同じ55コードが `AttributeError: 'str' object has no attribute 'get'` で失敗していた。run #177では同じ例外が58銘柄で発生した。run #177のtracebackは `sync_v2.py:2622` のvaluationシリアライズを指し、yfinance内部ではなかった。`collect_financials()` はISO期間末日をキーにした辞書を返す一方、`collect_symbol()` がそのキー文字列をrowオブジェクトとして反復して `.get()` を呼んでいた。実装を `valuation.get(period_end)` に修正した。run #177の58件はこの処理不具合に対応する。再試行分類、yfinance応答解析、保存済み種データは変更していない。push Actions run #39395495665の決定的collectorテストは成功したが、修正後の通常schedule確認は未実施。
 
 この実行は先行する手動run #158と同じセッション日 `2026-10-19` を再処理した。したがって、622回の呼び出しと11分31秒のactive job時間を新規セッションの月間負荷へ単純換算しない。GitHub Actions timing APIはrun #159のworkflow wall `run_duration_ms=697000` と `billable.UBUNTU.total_ms=0` を返した。run #158は同期job 4,395秒とcalendar job 22秒の合計4,417秒（73分37秒）、workflow wall 4,508秒（75分08秒）、`billable.UBUNTU.total_ms=0` だった。公開リポジトリの課金値0は処理時間0を意味しないため、予算比較にはactive job時間を使う。#158の23営業日単純換算は1,693.2分だが、手動の単一runなので月2,000分達成の根拠にはしない。複数の異なる通常セッションを測るまで判定を保留し、360分のtimeoutを維持する。
 
@@ -238,24 +251,72 @@ run #159はJ-Quantsコード4,442件を走査し、4,335件成功・107件失敗
 
 手動全銘柄同期run #161（[Actions](https://github.com/masacgt/Diview/actions/runs/39328353180)、workflow_dispatch）は、対象セッション日 `2026-10-19` のJ-Quantsコード4,442件を処理し、成功4,335件・失敗107件で世代 `2026-10-19` の4,356件カタログを公開した。同期jobは5,133秒（85分33秒）、市場カレンダーjobは25秒で、合計ランナー実時間は5,158秒（85分58秒）。workflow wallは5,795秒（96分35秒）。同期スクリプト時間は5,089.015秒、銘柄収集は4,954.814秒、カタログ生成116.187秒、公開11.310秒。高水準yfinance呼び出しは454回で、年次財務4系統が各55回、ticker_get_info 51回、daily 5d+actions 83回、year-end 8y 39回、daily 1y+actions 40回、actions max 16回、actions 1y 5回。HTTP 429は0件。R2 active wall timeは4,954.798秒（R2-only 4,851.527秒、yfinance active 103.271秒が重複）で、R2呼び出しはget_object 84,531回、get_body 79,601回、list_objects_v2 14,173回、put_object 66,874回だった。107失敗はAttributeError 55件と同一営業日HTTP 404再試行抑止52件。カタログ公開後、部分失敗により同期jobはfailureで終了した。このrunは手動で、run #159と同じセッション日を再処理したため、通常営業日の月間負荷サンプルには数えない。23回すべてが85分58秒と仮定した換算は1,977.2 runner minutesだが、通常同期の予算達成を証明しない。Actions timing APIの `billable.UBUNTU.total_ms=0` は課金値であり、実行時間にはjob開始・終了時刻を用いる。
 
-手動全銘柄同期run #170（[Actions](https://github.com/masacgt/Diview/actions/runs/39353090086)、workflow_dispatch）はJ-Quantsコード4,442件を走査し、成功4,334・失敗108、世代 `2026-10-19` のカタログ4,356件を公開した。yfinance高水準呼び出しは3,692回（`history_actions_max=3,286`、日足1年+actions 40、直近5日+actions 56、初回8年12月価格39、`ticker_get_info=51`、年次財務4系統各55）。HTTP 429は0件。失敗108件は `AttributeError` 55件、同一セッションHTTP 404の再試行抑止52件、1319.Tの配当イベント欠落を伴う旧データ削除前検証1件で構成される。部分失敗のためworkflowはfailureだが、全件走査と公開は完了した。同期jobは4,591秒（76分31秒）、市場カレンダーjobは24秒、合計4,615秒（76分55秒）。workflow wallは9,733秒（2時間42分13秒）。スクリプト時間は4,550.096秒、銘柄収集4,438.675秒、カタログ生成94.321秒、公開10.399秒。R2 active wall timeは4,438.663秒（R2-only 3,311.150秒、yfinance active 1,127.513秒が重複）で、R2操作はget_object 84,491回、get_body 79,549回、list_objects_v2 14,164回、put_object 66,804回。23営業日に同じ時間を仮置きした1,769.1分は手動・同一セッションの再実行による参考値で、通常月間負荷の判定には使用しない。複数の異なる通常スケジュール実行を測るまで2,000分判定を保留し、Actions timeoutは360分のままとする。
-
-run #170後の2060.T本番読み戻しは2026年の配当イベントを2026-03-30 ¥24.5、2026-09-29 ¥26の各1行で返し、TTM合計は¥50.5だった。修復前の各10行・¥505は解消した。価格は2026-10-19終値¥1,462、履歴カバレッジは2026-10-19まで。保存済みカレンダーは2027-03-30 / `available` / `Yahoo Finance via yfinance Ticker.calendar` だが、取得時刻は2026-10-17のままでrun #170の再取得ではない。`company_info`（`Ticker.get_info()`）は別項目で最終成功セッション2026-10-16、状態 `stale`。`/api/v1/dividend-months` は同日を履歴イベント由来の `estimated_from_dividend_history` として選択する。
-
 run #161後の本番Worker読み戻しでは、2060.Tの価格日は2026-10-19、終値は1,462円だった。`current.json`由来の `data_retrieval.ex_dividend_calendar` は2027-03-30 / available / Yahoo Finance via yfinance Ticker.calendarで、`fetched_at` は2026-10-17T14:31:41+09:00。run #161のyfinance呼び出し内に `ticker_calendar` はなく、この同期での再取得ではない。一般の `last_attempt_at` は2026-10-20T06:50:51+09:00。`/api/v1/dividend-months?symbols=2060.T` は2026-10-20時点で同じ将来日を `estimated_from_dividend_history`、source `Yahoo Finance historical dividend event dates` として選択した。2026-10-17に観測した `Ticker.get_info` フォールバックとは別であり、画面に同じ日付が出ることは `Ticker.calendar` の最新取得を示さない。
 
-run #170前の本番API `event_year=2026` 読み戻しでは、2060.Tの2026-03-30・¥24.5と2026-09-29・¥26が各10件返り、`trailing_12_month_per_share=505` だった。APIは2026年partitionだけを読むため、重複は当該partition内に存在した。追跡済みの2026-10-09 `data/market/yfinance/ex_dividend_history_20261009.csv` には両日とも1行ずつ同額で記録されていた。通常の日次候補に変化がない場合は保存済みイベントを再利用するため自動では修復されず、最初にR2へ重複を書いた実行は特定できていない。手動run #170の修復後読み戻しは下記に記録する。
+修復前の本番API `event_year=2026` 読み戻しでは、2060.Tの2026-03-30・¥24.5と2026-09-29・¥26が各10件返り、`trailing_12_month_per_share=505` だった。APIは2026年partitionだけを読んでいたため、重複は同partition内に存在した。2026-10-09時点のCSVでは各日1行ずつ同額で、最初に重複を書き込んだ実行は特定できていない。修復後の本番値は後段に記録する。
 
-重複修復ではcollectorが全hot/archive partitionを読み込み、重複イベント日を検出した銘柄だけ `Ticker.history(period="max", repair=True)` で再取得する。成功時は取得範囲の保存行を置換し、日付キーでpartitionを再構築して保存する。失敗時は前回値を保ち、取得失敗状態を記録する。手動run #170で2060.Tにこの処理を適用し、本番Worker読み戻しでイベントが各1行、TTM合計が¥50.5になったことを確認した。run #170の全体結果と残課題は下記に記録する。
+重複イベント日を通常同期で修復する処理はPR #22としてmain (`1d7ce0a`) に反映した。同期は重複を検出した銘柄だけ `Ticker.history(period="max", repair=True)` で再取得し、成功時に取得範囲を置換してpartitionを再構築する。失敗時は前回値を保持して項目失敗を記録する。手動run #166後の本番R2/API読み戻しで2060.Tの二重イベントが各1件に直り、TTM合計は¥505から¥50.5へ修正された。8303.Tも3月¥42・9月¥10が各1件となり、TTM合計は¥468から¥52へ修正された。
 
 read-only分割・配当監査run #162（[Actions](https://github.com/masacgt/Diview/actions/runs/39331846984)、[artifact](https://github.com/masacgt/Diview/actions/runs/39331846984/artifacts/12227883474)）は2026-10-20時点のactive universe 4,435コード中、直近8年に分割のある1,068銘柄・1,270イベントを監査した。7,345件のissuer fiscal-year比較のうち6,206件は許容差¥0.05以内で一致、1,139件は不一致、160銘柄はIRBANK issuer DPSがなく比較不能、技術的失敗は0件。監査コードはR2のget_objectのみを呼び、R2を書き換えない。不一致は確認候補であり、配当値の誤りを単独で証明しない。
 
 ### 分割・併合対象銘柄の全市場監査
 
-読み取り専用の監査を[Actions run #58](https://github.com/masacgt/Diview/actions/runs/39000622938)で実施した。直近8年間に分割または併合があった有効銘柄1,068件、イベント1,271件を対象に、R2のyfinance配当イベントをIRBANKの発行体年度配当スナップショットと照合した。監査ジョブは成功し、技術的失敗は0件で、R2への書き込みは行っていない。
+最新の読み取り専用監査は[Actions run #176](https://github.com/masacgt/Diview/actions/runs/39383687304)（[artifact](https://github.com/masacgt/Diview/actions/runs/39383687304/artifacts/12246248712)、SHA-256 `3bc71bfa1900f474297dcbe634007c4007151aab24e55525ab5d2ba1bf80fc6f`）で実施した。2026-10-20時点の有効銘柄4,435件から、直近8年間に分割・併合があった1,068銘柄と1,270イベントを選び、R2のyfinance配当イベントをIRBANKの発行体年度DPSスナップショットと照合した。監査は2分54秒で成功し、技術的失敗は0件、R2への書き込みもない。
 
-発行体年度配当を比較できた908銘柄の7,345年度比較のうち、6,206件は1株当たり0.05円以内で一致し、1,139件は許容差を超えた。少なくとも1年度で差があった銘柄は533件だった。残る160件は発行体配当値を取得できず、比較対象から外れた。R2の現在履歴状態は954件が `available`、114件が `empty` だった。
+artifactの年度CSVには7,345行がある。このうち `status=compared` は7,336行で、6,206行が1株当たり¥0.05以内で一致し、1,130行が許容差を超えた。残る9行は8303の `yfinance_failed` 状態で、数値比較から除外する必要がある。現在の `summary.json` はこの9行を含めて6,207一致・1,138不一致と集計するため、数値比較の率や件数には年度CSVの `status` を使う。銘柄単位の状態は `compared` 907、issuer DPS unavailable 157、yfinance failed 4。
 
-この比較は、アプリの暦年合計と発行体の事業年度配当を同じ定義にするものではない。イベント日を発行体の次の年度末に割り当てた候補比較であり、差が出てもyfinance値と発行体値のどちらが誤りかは確定しない。発行体スナップショットにも極端な値が含まれる例（8303の年度配当40,000,000円、分割比率14,000,000）があるため、533銘柄は元資料、年度帰属、イベント欠落、分割調整基準を個別確認する。監査成果物はActions run #58のartifactに保存されている。
+数値比較できた不一致は531銘柄で、54銘柄は比較対象の全年度で不一致、477銘柄は一致年度と不一致年度が混在する。不一致行のうちyfinance値が低いものは926行、高いものは204行だった。発行体DPSが正でyfinance合計が0の不一致は40銘柄・106行、発行体DPSが¥1,000以上の値を含む銘柄は9、yfinanceイベント合計が¥1,000以上の値を含む銘柄は1だった。FY2026の不一致94行は年度途中の比較である。
 
-2026-10-17に監査成果物を全コード単位で集計した。533銘柄のうち54銘柄は比較対象の全年度で差があり、479銘柄は一致年度と不一致年度が混在する。配当履歴の取得状態は522件が `available`、11件が `empty`。41銘柄では少なくとも1年度に発行体DPSが正なのにyfinanceイベント合計が0となり、10銘柄には1,000円以上の発行体DPS値、2銘柄には1,000円以上のyfinanceイベント合計が含まれる。差異行はyfinance側が低い929件、高い210件で、2026年度の差異94件は監査日が年度途中である点を含めて解釈する。これらの分類は候補の優先順位付けに限り、一次資料との一件ずつの照合やyfinance値の修正には使わない。したがって全市場の金額正確性は未確認として扱う。
+この比較は、アプリの暦年合計と発行体の事業年度配当を同じ定義にするものではない。イベント日を発行体の次の年度末に割り当てた候補比較であり、差が出てもyfinance値と発行体値のどちらが誤りかは確定しない。IRBANK処理済み発行体スナップショットに極端な値がある例や、取得失敗状態の既存値が残る例もある。結果は個別の一次資料確認用の候補であり、yfinance値の修正や全市場の金額正確性を証明するものではない。過去のrun #58および#162の集計はその実行時点の履歴として保持し、最新判定にはrun #176を使う。
+
+### 2026-10-20 重複配当修復後の本番読み戻し
+
+手動Actions run #166では、mainにマージ済みのcommit `1d7ce0a` を実行した。本番R2の読み戻しでは、2060.Tの2026-03-30・¥24.5と2026-09-29・¥26が各1件となり、`trailing_12_month_per_share` は従来の重複合計505円から50.5円に修正された。重複イベント日を検出すると `Ticker.history(period="max", repair=True)` で対象履歴を再構築し、取得に失敗した場合は前回partitionを保持する。
+
+本番APIでは、7203と2060の2018〜2025年の12月価格8期分すべてについて、XTKS最終営業日の日付を確認した。日付は2018-12-28、2019-12-30、2020-12-30、2021-12-30、2022-12-30、2023-12-29、2024-12-30、2025-12-30で、終値は保存済みのyfinance月足 `Close` のまま。
+
+2060.Tの `current.json` 由来カレンダー情報は2027-03-30 / `available` / `Yahoo Finance via yfinance Ticker.calendar`、取得日時は `2026-10-17T14:31:41+09:00` のままだった。run #166の高水準yfinance呼び出し内に `ticker_calendar` はなく、保存カレンダーを新規取得していない。`/api/v1/dividend-months` は同じ日付を過去の配当履歴から `estimated_from_dividend_history` として選択する。この表示は新しい `Ticker.calendar` 取得とも `Ticker.get_info` フォールバックとも異なる。run #166は手動起動であり、通常営業日あたりの予算計測には含めない。
+
+同じ時点の本番 `/api/v1/income-advice-candidates` は、R2のV2データ由来の世代 `2026-10-19`・2,993候補を返した。JDK 17を指定して確認したエミュレータの受取月別シミュレーションでは、空白月4・5・10・11月に対し、上位候補4465・9678・4992が配当予想額と補完月付きで表示された。Worker/R2公開とアプリ側のランキング表示を読み戻し確認した。
+
+8303のissuer-dividendとyfinance履歴は株数基準が一致していない。SBI新生銀行の[2026年3月期有価証券報告書](https://corp.sbishinseibank.co.jp/ja/news/news/auto_20260619120300_S100YDBB/pdfFile.pdf)は、2022〜2025年度の1株配当額を2025-07-27の1対1,400万株分割前の実額と説明し、2023-10-02の1対2,000万株併合、2024-03-15の1対6株分割、2025-07-27の1対1,400万株分割を記載している。本番R2のissuer行は12 / 12 / 40,000,000 / 40,000,000、yfinance暦年行は2022・2023年が240,000,000、2024・2025年が0。yfinance分割履歴には2017年の1対10併合と2023年の1対2,000万併合だけがあり、2024・2025年の分割はない。このため、両配当系列を現行株数基準に調整済みとは扱えず、元値を保ったまま基準未確認として扱う。run #166開始前の2026年イベントは各9件重複しTTM ¥468だったが、再構築後は各1件、TTM ¥52をAPIで確認した。別の分割履歴欠落のためFY DPSの株数基準未確認は継続課題。
+
+run #166（[Actions](https://github.com/masacgt/Diview/actions/runs/39342594082)）は手動 `workflow_dispatch` で4,442コードを走査し、成功4,334・失敗108・カタログ4,356件でgeneration `2026-10-19` を公開した。yfinance高水準呼び出し3,715回、HTTP 429は0件。同期job 1時間10分40秒、calendar job 28秒で、active runner timeは合計1時間11分08秒だった。security collectionは4,102.967秒、カタログ生成82.593秒、公開7.996秒。R2 active wall 4,102.957秒（R2-only 2,796.904秒、yfinance重複1,306.053秒）で、操作数はget_object 84,800、get_body 79,835、list_objects_v2 14,254、put_object 67,159、delete_object 7。エラー内訳はAttributeError 55、同一セッション404再試行抑止52、1319.Tの配当イベント欠落安全停止1。`AttributeError` の55コードは#158・#159・#161とも全て一致（`A`終端51コード、その他2972・4616・6085・7085）するが、ログにtracebackがなく発生段階は未確定である。先行run #159と同じセッション日の手動再処理のため、月2,000分の通常計測には含めない。通常schedule複数回の実測が揃うまでActions timeout 360分を変更しない。
+
+### J-Quantsユニバース取得の証跡
+
+2026-10-20にJ-Quants v2 /equities/master の取得日別スナップショットを比較した。Date=2026-07-27 は正規化後4,444コード、Date=2026-07-28 は4,442コードで、後者から191Aと3271が外れ、追加コードはなかった。これは手動run #158の4,444件と通常run #159の4,442件の差と一致する。ただし、これらの過去runは応答Dateと完全なコード一覧を保存していないため、個々のrunがその日付の応答を使ったことまでは確定できず、現時点の説明は推定である。
+
+通常同期と全銘柄studyは、J-Quants応答のDate群、正規化コード総数、ソート済み全コード、コード列のSHA-256を含むJSON artifactをActionsに30日保存する。以後はrun artifactとrunログの取得件数を照合し、同じ日付のスナップショットでも件数差やコード差が出た場合に一覧を直接比較する。既存のJ-Quants日付カバレッジ外を要求して取得を強制する仕様ではない。
+
+### 2026-10-20 手動全銘柄同期run #174
+
+[Actions run #174](https://github.com/masacgt/Diview/actions/runs/39369145041) は `workflow_dispatch` で実行し、J-Quants v2 `/equities/master` の保存済みスナップショットに含まれる4,442コード（4,442 unique、応答Date `2026-07-28`、2060を含む）を処理した。snapshot artifactのコード列SHA-256は `8bcde9ed5025eaa81631886172e4a733e8be204afe4fee2aa4a2b919511b35d3`。世代 `2026-10-19` の4,356件カタログをR2へ公開し、成功4,227件・失敗215件だった。失敗は日次銘柄試行上限到達163件と、同一セッションのHTTP 404再試行抑止52件。HTTP 429は0件。
+
+同期jobの実時間は1時間19分20秒、calendar jobは18秒。スクリプト経過時間は4,716.936秒、銘柄収集4,584.581秒、カタログ生成96.850秒、公開28.458秒だった。高水準yfinance呼び出しは2,872回で、すべて `history_actions_max`。R2 active wall timeは4,584.570秒（R2-only 3,947.544秒、yfinanceとの重複637.026秒）で、操作数は `get_object` 77,173、`get_body` 73,847、`list_objects_v2` 12,256、`put_object` 61,756。GitHubのrun usage表示による合計runner timeは79分21秒。仮に同じ時間を23営業日繰り返すと1,825.05分だが、同一セッション日の手動再処理であり通常同期の独立サンプルではないため、月2,000分以内の判定には使用しない。
+
+この手動実行では `ALLOW_CLOSED_MARKET=true` が設定され、「市場セッション外でも手動要求を許可」とログに記録された。したがって全ユニバース処理と公開は確認したが、通常スケジュールのXTKSカレンダーゲート通過を示す証拠ではない。通常ゲートと全4,442コードの処理はscheduled run #159で確認済み。
+
+run #174後の本番Worker読み戻しでは、2060.Tは `last_attempt_at=2026-10-20T13:26:10.972821+09:00`、銘柄処理状態 `ok`、価格日 `2026-10-19`。一方、`current.json`由来の `data_retrieval.ex_dividend_calendar` は `2027-03-30` / `available` / `Yahoo Finance via yfinance Ticker.calendar`、取得日時 `2026-10-17T14:31:41.140315+09:00` のままで、run #174の呼び出し内に `ticker_calendar` はない。`/api/v1/dividend-months?symbols=2060.T` が返す同日付は `estimated_from_dividend_history`、source `Yahoo Finance historical dividend event dates` であり、保存済みTicker.calendarやTicker.get_info fallbackとは別の表示経路である。よって#174は新しいTicker.calendar取得を確認していない。
+
+### 2026-10-20 手動同期run #177
+
+[Actions run #177](https://github.com/masacgt/Diview/actions/runs/39385915371) は `workflow_dispatch` で実行した手動同期で、カレンダージョブの `ALLOW_CLOSED_MARKET=true` により通常の営業日ゲートを迂回した。J-Quants v2 `/equities/master` の保存artifact `12250424117` は応答日 `2026-07-28`、4,442コード・4,442 unique、2060を含み、正規化コード列SHA-256は `8bcde9ed5025eaa81631886172e4a733e8be204afe4fee2aa4a2b919511b35d3`。同期は全件を走査し、世代 `2026-10-20`、カタログ4,356件、成功4,327件・失敗115件をR2へ公開した。失敗内訳は `AttributeError` 58件、HTTP 404 52件、`RuntimeError` 5件。HTTP 429は0件。
+
+同期jobは4,025秒（67分05秒）、market-calendar jobは28秒で、合計active runner timeは4,053秒（67分33秒）。スクリプト経過時間は3,988.257秒（銘柄収集3,887.574秒、カタログ生成87.695秒、公開7.996秒）。高水準yfinance呼び出しは9,372回で、`history_daily_1y_with_actions` 4,106、`history_actions_max` 3,318、`ticker_get_info` 1,026、`history_daily_5d_with_actions` 284、初回8年12月価格269、年次損益・貸借対照表・キャッシュフロー・評価値が各92、`history_actions_1y` 1。R2 active wallは3,885.386秒（R2-only 2,046.139秒、yfinanceとの重複1,839.247秒）。R2操作は `get_object` 86,058、`get_body` 80,165、`list_objects_v2` 14,913、`put_object` 69,505、`delete_object` 210。23営業日の単純乗算は1,553.65分だが、手動runのため通常月間予算の判定には使わない。timeout 360分は複数の異なる通常スケジュール実測まで維持する。
+
+ログのtracebackは `sync_v2.py:2622` のvaluationシリアライズを指していた。`collect_financials()` はISO期間末日をキーにした辞書を返すが、`collect_symbol()` がそのキー文字列を行オブジェクトとして反復し `.get()` を呼んでいた。実装を `valuation.get(period_end)` に修正した。この不具合はrun #177の58件の失敗に対応する。run #177は修正前のコードでセッション `2026-10-20` を公開した。同期コードはセッション日が前回試行日と異なると試行数を0から開始するため、失敗銘柄は同日1回目として保存され、次の通常実行で4回上限内の再試行が可能。修正後の通常schedule確認は未完了。同日フォローアップは修正確認には使えるが、#177が同じセッションを処理済みのため、月間負荷の独立標本には数えない。
+
+修正前の本番比較基準として、Worker `/api/v1/securities/2972` は `processing_status=failed`、失敗理由 `AttributeError: 'str' object has no attribute 'get'`、最終試行 `2026-10-20T16:34:02.951968+09:00` を返す。`/api/v1/financial-data/2972` は2022-08-31から2025-08-31まで4期の財務行を返し、最新期はyfinance由来の株主資本・NetDebt・DOE・net D/Eを持つ。APIの `valuation.history` は空配列だった。次回の修正後通常同期では同じAPIを再読込し、処理状態・失敗理由・valuation履歴の変化を比較する。
+
+本番Workerの2060.T読み戻しでは終値¥1,448、価格日 `2026-10-20`、銘柄処理状態 `ok`、最終試行 `2026-10-20T16:27:15.422687+09:00`。`current.json` の `data_retrieval.ex_dividend_calendar` は `2027-03-30` / `available` / source `Yahoo Finance via yfinance Ticker.calendar`、取得日時 `2026-10-17T14:31:41.140315+09:00` のまま。run #177に `ticker_calendar` 呼び出しはなかった。`/api/v1/dividend-months?symbols=2060.T` は同日を `estimated_from_dividend_history`、source `Yahoo Finance historical dividend event dates` として返す。これは保存済みTicker.calendar値および過去のTicker.get_infoフォールバックと別の表示データ経路であり、今回の実行でcalendarが新規取得された証拠ではない。
+
+### 権利日推定の全市場カバレッジ監査
+
+手動 workflow rights-date-coverage-audit.yml はR2を読み取り専用で調査する。universe/current.json の有効銘柄すべてについて current.json の配当履歴取得状態と、推定ロジックと同じ5年範囲の正の配当イベントを分類し、推定の有無、同月の異なる2年度以上の履歴がない状態、空履歴、正のイベントなし、取得失敗・未取得、current.json欠落を銘柄単位でartifactに保存する。推定条件を満たすのに推定レコードがない場合は、別分類で残す。workflowはR2の一覧・読み出しだけを行い、派生権利日データは変更しない。ローカルではモックR2を使った全経路確認でイベント年partitionの銘柄コード復元とR2書込ゼロを確認し、collector suite 77/77件が成功した。
+
+2026-10-20の [Actions run 39377399629](https://github.com/masacgt/Diview/actions/runs/39377399629) は4,442銘柄を監査し、[JSON artifact](https://github.com/masacgt/Diview/actions/runs/39377399629/artifacts/12245131125) に全銘柄の分類を保存した。分類は `history_estimated` 3,423、`empty_history` 680、`available_without_positive_events` 74、`no_month_repeated_in_two_distinct_years` 186、`history_status_failed` 24、`missing_current_document` 52、`empty_status_with_event_rows` 3で、合計4,442件。状態の集計は `available` 3,652、`empty` 695、`failed` 43、current document未取得52だった。失敗状態でも既存履歴から推定済みの銘柄は `history_estimated` に分類されるため、`history_status_failed` は推定がない24銘柄を表す。
+
+`5138.T`、`6034.T`、`7578.T` の `field_status.dividend_history=empty` は、全期間のイベントが存在しないという意味ではない。本番 `/api/v1/securities/{code}` では3銘柄とも `last_attempt_status=success`、`period=1y`、`last_coverage_event_count=0`、`stored_history_status=available` と保存済み履歴の開始・終了日が返った。同期処理は通常直近1年を取得範囲として状態を設定し、その範囲外の古いイベントを保持する。監査で見つかった過去行は、本番 `/api/v1/dividend-months` の `event_year` 指定でそれぞれ 5138.T: 2025-03-28 ¥35、6034.T: 2022-12-29 ¥30、7578.T: 2021-03-30 ¥6 と読み戻せた。既定の同APIは現在年・前年を読み、さらに直近365日へ絞るため、3銘柄とも既定の `events` は空だった。これは直近1年の取得状態と長期保存履歴の期間差であり、R2イベント欠落ではない。状態名は取得範囲が分からないと全履歴の有無と誤読されるため、API状態の意味を期間付きで扱う。
+
+監査runは25分45秒で終了したが、手動・読み取り専用の単発監査のため、通常同期の月間runner分数には含めない。

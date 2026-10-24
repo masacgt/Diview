@@ -30,7 +30,8 @@ data class CloudflareSearchQuote(
     val annualDividendPerShare: Double? = null,
     val isNoDividendConfirmed: Boolean = false,
     val hasDividendStatus: Boolean = false,
-    val quoteDate: String? = null
+    val quoteDate: String? = null,
+    val yieldAsOf: String? = null
 )
 
 private data class CachedSearchCatalogQuotes(
@@ -93,7 +94,9 @@ data class CloudflareMarketQuote(
     val price: Double,
     val annualDividendPerShare: Double?,
     val isNoDividendConfirmed: Boolean = false,
-    val hasDividendStatus: Boolean = false
+    val hasDividendStatus: Boolean = false,
+    val yieldRate: Double? = null,
+    val yieldAsOf: String? = null
 )
 
 data class CloudflarePriceCatalogSnapshot(
@@ -242,12 +245,16 @@ class CloudflareMarketRepository(
                 val live = liveQuotes[code]
                 val catalog = catalogQuotes[code]
                 val price = live?.price ?: catalog?.price
-                val annualDividend = live?.annualDividendPerShare ?: catalog?.annualDividendPerShare
+                val annualDividend = live?.annualDividendPerShare
                 val yieldRate = live?.yieldRate ?: catalog?.yieldRate
-                val isNoDividendConfirmed = live?.isNoDividendConfirmed == true || catalog?.isNoDividendConfirmed == true
-                val hasDividendStatus = live?.hasDividendStatus == true || catalog?.hasDividendStatus == true
+                val yieldAsOf = live?.yieldAsOf ?: catalog?.yieldAsOf
+                val isNoDividendConfirmed = live?.isNoDividendConfirmed == true
+                val hasDividendStatus = live?.hasDividendStatus == true
                 if (price != null || yieldRate != null || annualDividend != null) {
-                    put(code, CloudflareSearchQuote(price, yieldRate, annualDividend, isNoDividendConfirmed, hasDividendStatus))
+                    put(code, CloudflareSearchQuote(
+                        price, yieldRate, annualDividend, isNoDividendConfirmed, hasDividendStatus,
+                        live?.quoteDate ?: catalog?.quoteDate, yieldAsOf
+                    ))
                 }
             }
         }
@@ -308,7 +315,10 @@ class CloudflareMarketRepository(
         }
         val noDividend = row.hasConfirmedNoDividend()
         val quoteDate = row.optString("quote_date").takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
-        return CloudflareSearchQuote(price, yieldRate, annualDividend, noDividend, row.hasDividendStatus(), quoteDate)
+        val yieldAsOf = row.optString("yield_as_of").takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
+        return CloudflareSearchQuote(
+            price, yieldRate, annualDividend, noDividend, row.hasDividendStatus(), quoteDate, yieldAsOf
+        )
             .takeIf { it.price != null || it.yieldRate != null || it.annualDividendPerShare != null }
     }
 
@@ -324,10 +334,9 @@ class CloudflareMarketRepository(
         val root = try { getJson("/api/v1/securities/$safeCode") }
             catch (error: MarketHttpException) { if (error.status == 404) return@withContext null else throw error }
         val dividend = root.optJSONObject("dividend")
-        // Legacy /securities responses contain IRBANK fiscal-year DPS. Only read
-        // current dividend values from the v2 yfinance payload; calendar-year
-        // history is handled separately by FinancialData and is not current DPS.
-        val yfinanceDividend = dividend?.takeIf {
+        // Current annual DPS and yield are provided from the IRBANK v2 dividend index.
+        // Calendar-year observed distributions remain a separate history series.
+        val irbankDividend = dividend?.takeIf {
             it.has("yield_basis") || it.has("trailing_12_month_per_share") || it.optJSONObject("field_status") != null
         }
         val catalogQuote = runCatching { searchCatalogQuotes()[normalized] }.getOrNull()
@@ -348,13 +357,13 @@ class CloudflareMarketRepository(
             },
             name = root.optString("name").takeIf(String::isNotBlank) ?: return@withContext null,
             annualDividendPerShare = (if (root.hasUnknownDividendStatus() && !root.hasConfirmedNoDividend()) null else
-                (yfinanceDividend?.numberOrNull("annual_dps_adjusted")
-                    ?: yfinanceDividend?.numberOrNull("annual_dps"))?.takeIf(PortfolioMath::validMoney))
+                (irbankDividend?.numberOrNull("annual_dps_adjusted")
+                    ?: irbankDividend?.numberOrNull("annual_dps"))?.takeIf(PortfolioMath::validMoney))
                 ?: catalogQuote?.takeIf { it.hasDividendStatus }?.annualDividendPerShare,
             marketPrice = (if (catalogPriceIsNewer) catalogQuote?.price else detailPrice)
                 ?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }
                 ?: catalogQuote?.price,
-            marketYieldRate = (if (yfinanceDividend != null) root.numberOrNull("market_yield_rate") else null)
+            marketYieldRate = (if (irbankDividend != null) root.numberOrNull("market_yield_rate") else null)
                 ?.takeIf { it in 0.0..100.0 }
                 ?: catalogQuote?.yieldRate,
             isNoDividendConfirmed = root.hasConfirmedNoDividend() || catalogQuote?.isNoDividendConfirmed == true,
@@ -428,11 +437,15 @@ class CloudflareMarketRepository(
                 if (isSecurityCode(code) && price != null && PortfolioMath.validMoney(price) && price > 0.0) {
                     val annualDividend = row.annualDividendPerShareOrNull()
                     val yieldRate = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 }
+                    val yieldAsOf = row.optString("yield_as_of")
+                        .takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
                     put(code, CloudflareMarketQuote(
                         price,
                         annualDividend,
                         row.hasConfirmedNoDividend(),
-                        row.hasDividendStatus()
+                        row.hasDividendStatus(),
+                        yieldRate,
+                        yieldAsOf
                     ))
                 }
             }

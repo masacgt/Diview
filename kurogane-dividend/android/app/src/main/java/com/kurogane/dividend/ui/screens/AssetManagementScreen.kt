@@ -527,15 +527,20 @@ fun AssetManagementScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // Sub-Grid 2 Columns
+                        val compactMetricCards = LocalDensity.current.fontScale >= 1.8f
                         AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                            modifier = Modifier.fillMaxWidth().then(
+                                if (compactMetricCards) Modifier else Modifier.height(IntrinsicSize.Min)
+                            ),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             // Expected Dividend Card
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
+                                    .then(
+                                        if (compactMetricCards) Modifier.fillMaxWidth()
+                                        else Modifier.weight(1f).fillMaxHeight()
+                                    )
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(SurfaceContainer)
                                     .border(0.5.dp, BorderBlue, RoundedCornerShape(14.dp))
@@ -562,8 +567,10 @@ fun AssetManagementScreen(
                             // Dividend Yield Card
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
+                                    .then(
+                                        if (compactMetricCards) Modifier.fillMaxWidth()
+                                        else Modifier.weight(1f).fillMaxHeight()
+                                    )
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(SurfaceContainer)
                                     .border(0.5.dp, BorderBlue, RoundedCornerShape(14.dp))
@@ -1063,63 +1070,114 @@ fun AssetManagementScreen(
                             HorizontalDivider(color = BorderBlue, thickness = 0.5.dp)
                             Spacer(modifier = Modifier.height(4.dp))
 
-                            // Four compact metric tiles matching the portfolio card design.
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(CardDarkLighter)
-                                    .border(0.5.dp, BorderBlue, RoundedCornerShape(10.dp))
-                                    .padding(horizontal = 4.dp, vertical = 0.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                val latestChangeColor = when {
-                                    latestDividendChange == null -> SoftGray
-                                    latestDividendChange >= 0.0 -> NeonGreenLight
-                                    else -> ErrorRed
-                                }
-                                HoldingMetricTile(
-                                    label = resources.getString(R.string.asset_management_label_31),
-                                    value = com.kurogane.dividend.model.formatDividendYieldDisplay(
-                                        if (calculationBasis == "cost") holding.liveYoc else holding.liveYield,
-                                        holding.isNoDividendConfirmed
-                                    ),
-                                    detail = if (calculationBasis == "cost") resources.getString(R.string.yield_basis_cost_detail) else "現在株価比",
-                                    modifier = Modifier.weight(1f),
-                                    valueColor = NeonGreenLight
-                                )
-                                HoldingMetricDivider()
-                                HoldingMetricTile(
-                                    label = resources.getString(R.string.asset_management_label_32),
-                                    value = if (annualDiv > 0) "¥${javaCurrencyFormat.format(annualDiv.toLong())}/年" else "¥0/年",
-                                    detail = payoutMonthSummary,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                HoldingMetricDivider()
-                                HoldingMetricTile(
-                                    label = resources.getString(R.string.asset_management_label_33),
-                                    value = latestDividendGrowth?.let {
-                                        if (it == 0.0) "0.0%" else String.format(java.util.Locale.JAPAN, "%+.1f%%", it)
-                                    } ?: "0.0%",
-                                    detail = annualDividendChange?.let {
-                                        val sign = if (it > 0) "+" else if (it < 0) "−" else ""
-                                        "年額 $sign¥${javaCurrencyFormat.format(kotlin.math.abs(it).toLong())}"
-                                    } ?: "年額 ¥0",
-                                    modifier = Modifier.weight(1f),
-                                    valueColor = latestChangeColor,
-                                    detailColor = latestChangeColor
-                                )
-                                HoldingMetricDivider()
-                                HoldingMetricTile(
-                                    label = resources.getString(R.string.csv_import_label_5),
-                                    value = "${holding.shares}株",
-                                    detail = "@${holding.currency}${com.kurogane.dividend.model.formatStockPriceDisplay(holding.price, holding.code)}",
-                                    modifier = Modifier.weight(1f),
-                                    showEditHint = true,
-                                    onClick = {
-                                        onOpenHoldingRegistration(holding.code)
+                            // Keep the four compact metrics in one row until their values collide.
+                            val latestChangeColor = when {
+                                latestDividendChange == null -> SoftGray
+                                latestDividendChange >= 0.0 -> NeonGreenLight
+                                else -> ErrorRed
+                            }
+                            val yieldValue = com.kurogane.dividend.model.formatDividendYieldDisplay(
+                                if (calculationBasis == "cost") holding.liveYoc else holding.liveYield,
+                                holding.isNoDividendConfirmed
+                            )
+                            val yieldDetail = if (calculationBasis == "cost") resources.getString(R.string.yield_basis_cost_detail) else "現在株価比"
+                            val annualDividendValue = if (annualDiv > 0) "¥${javaCurrencyFormat.format(annualDiv.toLong())}/年" else "¥0/年"
+                            val dividendGrowthValue = latestDividendGrowth?.let {
+                                if (it == 0.0) "0.0%" else String.format(java.util.Locale.JAPAN, "%+.1f%%", it)
+                            } ?: "0.0%"
+                            val dividendGrowthDetail = annualDividendChange?.let {
+                                val sign = if (it > 0) "+" else if (it < 0) "−" else ""
+                                "年額 $sign¥${javaCurrencyFormat.format(kotlin.math.abs(it).toLong())}"
+                            } ?: "年額 ¥0"
+                            val sharesValue = "${holding.shares}株"
+                            val sharesDetail = "@${holding.currency}${com.kurogane.dividend.model.formatStockPriceDisplay(holding.price, holding.code)}"
+                            val metricCardModifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(CardDarkLighter)
+                                .border(0.5.dp, BorderBlue, RoundedCornerShape(10.dp))
+                                .padding(horizontal = 4.dp, vertical = 0.dp)
+
+                            if (LocalDensity.current.fontScale >= 1.8f) {
+                                Column(
+                                    modifier = metricCardModifier.padding(vertical = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                        HoldingMetricTile(
+                                            label = resources.getString(R.string.asset_management_label_31),
+                                            value = yieldValue,
+                                            detail = yieldDetail,
+                                            modifier = Modifier.weight(1f),
+                                            valueColor = NeonGreenLight
+                                        )
+                                        HoldingMetricDivider()
+                                        HoldingMetricTile(
+                                            label = resources.getString(R.string.asset_management_label_32),
+                                            value = annualDividendValue,
+                                            detail = payoutMonthSummary,
+                                            modifier = Modifier.weight(1f)
+                                        )
                                     }
-                                )
+                                    HorizontalDivider(color = BorderBlue, thickness = 0.5.dp)
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                        HoldingMetricTile(
+                                            label = resources.getString(R.string.asset_management_label_33),
+                                            value = dividendGrowthValue,
+                                            detail = dividendGrowthDetail,
+                                            modifier = Modifier.weight(1f),
+                                            valueColor = latestChangeColor,
+                                            detailColor = latestChangeColor
+                                        )
+                                        HoldingMetricDivider()
+                                        HoldingMetricTile(
+                                            label = resources.getString(R.string.csv_import_label_5),
+                                            value = sharesValue,
+                                            detail = sharesDetail,
+                                            modifier = Modifier.weight(1f),
+                                            showEditHint = true,
+                                            onClick = { onOpenHoldingRegistration(holding.code) }
+                                        )
+                                    }
+                                }
+                            } else {
+                                Row(
+                                    modifier = metricCardModifier,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    HoldingMetricTile(
+                                        label = resources.getString(R.string.asset_management_label_31),
+                                        value = yieldValue,
+                                        detail = yieldDetail,
+                                        modifier = Modifier.weight(1f),
+                                        valueColor = NeonGreenLight
+                                    )
+                                    HoldingMetricDivider()
+                                    HoldingMetricTile(
+                                        label = resources.getString(R.string.asset_management_label_32),
+                                        value = annualDividendValue,
+                                        detail = payoutMonthSummary,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    HoldingMetricDivider()
+                                    HoldingMetricTile(
+                                        label = resources.getString(R.string.asset_management_label_33),
+                                        value = dividendGrowthValue,
+                                        detail = dividendGrowthDetail,
+                                        modifier = Modifier.weight(1f),
+                                        valueColor = latestChangeColor,
+                                        detailColor = latestChangeColor
+                                    )
+                                    HoldingMetricDivider()
+                                    HoldingMetricTile(
+                                        label = resources.getString(R.string.csv_import_label_5),
+                                        value = sharesValue,
+                                        detail = sharesDetail,
+                                        modifier = Modifier.weight(1f),
+                                        showEditHint = true,
+                                        onClick = { onOpenHoldingRegistration(holding.code) }
+                                    )
+                                }
                             }
 
                             // Month Highlight Banner if selected

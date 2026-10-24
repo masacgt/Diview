@@ -1,9 +1,11 @@
 import io
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-from fetch_jquants_universe import display_code, fetch_codes
+from fetch_jquants_universe import display_code, fetch_codes, fetch_securities
 
 
 class _Response(io.BytesIO):
@@ -22,14 +24,28 @@ class JQuantsUniverseTests(unittest.TestCase):
             display_code("1301.T")
 
     def test_all_pages_are_required(self):
-        first = {"data": [{"Code": f"{n:04d}0"} for n in range(1000, 2000)], "pagination_key": "next"}
-        second = {"data": [{"Code": "20000"}]}
+        first = {"data": [{"Date": "2026-07-27", "Code": f"{n:04d}0"} for n in range(1000, 2000)], "pagination_key": "next"}
+        second = {"data": [{"Date": "2026-07-27", "Code": "20000"}]}
         responses = [_Response(json.dumps(page).encode()) for page in (first, second)]
         with patch("fetch_jquants_universe.urlopen", side_effect=responses) as request:
             codes = fetch_codes("test-key")
         self.assertEqual(len(codes), 1001)
         self.assertEqual(codes[-1], "2000")
         self.assertIn("pagination_key=next", request.call_args_list[1].args[0].full_url)
+
+    def test_snapshot_report_preserves_response_date_and_exact_normalized_codes(self):
+        first = {"data": [{"Date": "2026-07-27", "Code": f"{n:04d}0"} for n in range(1000, 2000)], "pagination_key": "next"}
+        second = {"data": [{"Date": "2026-07-27", "Code": "20000"}]}
+        responses = [_Response(json.dumps(page).encode()) for page in (first, second)]
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "universe.json"
+            with patch("fetch_jquants_universe.urlopen", side_effect=responses):
+                rows = fetch_securities("test-key", snapshot_path=target)
+            report = json.loads(target.read_text(encoding="utf-8"))
+        self.assertEqual(report["response_dates"], ["2026-07-27"])
+        self.assertEqual(report["security_count"], 1001)
+        self.assertEqual(report["security_codes"], [row["security_code_display"] for row in rows])
+        self.assertEqual(len(report["security_code_sha256"]), 64)
 
     def test_partial_response_is_rejected(self):
         response = _Response(b'{"data":[{"Code":"13010"}]}')

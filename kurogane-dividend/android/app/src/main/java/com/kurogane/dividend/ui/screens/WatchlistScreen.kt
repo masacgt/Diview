@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import com.kurogane.dividend.model.WatchlistStock
 import com.kurogane.dividend.ui.theme.*
@@ -724,14 +725,19 @@ fun WatchlistScreen(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
+                        val compactSummaryMetricCards = LocalDensity.current.fontScale >= 1.8f
                         AdaptiveRow(
-                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                            modifier = Modifier.fillMaxWidth().then(
+                                if (compactSummaryMetricCards) Modifier else Modifier.height(IntrinsicSize.Min)
+                            ),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
+                                    .then(
+                                        if (compactSummaryMetricCards) Modifier.fillMaxWidth()
+                                        else Modifier.weight(1f).fillMaxHeight()
+                                    )
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(BackgroundDark.copy(alpha = 0.7f))
                                     .border(0.5.dp, BorderBlue, RoundedCornerShape(12.dp))
@@ -755,8 +761,10 @@ fun WatchlistScreen(
 
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
+                                    .then(
+                                        if (compactSummaryMetricCards) Modifier.fillMaxWidth()
+                                        else Modifier.weight(1f).fillMaxHeight()
+                                    )
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(BackgroundDark.copy(alpha = 0.7f))
                                     .border(0.5.dp, BorderBlue, RoundedCornerShape(12.dp))
@@ -868,13 +876,19 @@ fun WatchlistScreen(
                                 Icon(Icons.Default.Calculate, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(16.dp))
                             }
                             Spacer(modifier = Modifier.width(8.dp))
+                            val batchSimulationTitle = stringResource(R.string.watchlist_text_10)
+                            val compactBatchSimulationTitle = androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.7f
                             Text(
-                                stringResource(R.string.watchlist_text_10),
+                                text = if (compactBatchSimulationTitle) "一括シミュレーション" else batchSimulationTitle,
+                                modifier = if (compactBatchSimulationTitle) {
+                                    Modifier.semantics { contentDescription = batchSimulationTitle }
+                                } else Modifier,
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
                                     fontSize = AppTextSize.body
-                                )
+                                ),
+                                maxLines = 1
                             )
                         }
 
@@ -1091,6 +1105,12 @@ fun WatchlistScreen(
                 )
                 val currentYield = watchlistMetrics.currentYields[stock.code]
                     ?: com.kurogane.dividend.model.PortfolioMath.yieldPercent(stock.dps, stock.price)
+                val currentYieldLabel = stringResource(R.string.stock_detail_text_4)
+                val currentYieldDisplay = com.kurogane.dividend.model.formatDividendYieldDisplay(
+                    stock.currentYield,
+                    stock.isNoDividendConfirmed
+                )
+                val useCompactYieldValue = LocalDensity.current.fontScale >= 1.8f
                 val isReached = currentYield >= stock.targetYield
                 val isClose = !isReached && (currentYield >= (stock.targetYield - 0.25))
                 val yieldAchievement = (currentYield / stock.targetYield * 100.0).coerceIn(0.0, 100.0)
