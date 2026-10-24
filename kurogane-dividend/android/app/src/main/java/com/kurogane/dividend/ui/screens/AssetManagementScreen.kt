@@ -197,7 +197,7 @@ private fun OdometerAmount(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun AssetManagementScreen(
     viewModel: DividendViewModel,
@@ -693,16 +693,17 @@ fun AssetManagementScreen(
 
             // ================= HOLDINGS LIST HEADER & SORT =================
             item(key = "holdings_header", contentType = "header") {
-                AdaptiveRow(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Inventory2, contentDescription = null, tint = NeonGreenLight, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (selectedMonth != null) resources.getString(R.string.asset_management_label_15, (selectedMonth).toString()) else resources.getString(R.string.asset_management_label_16),
+                            modifier = Modifier.weight(1f, fill = false),
                             fontSize = AppTextSize.body,
                             fontWeight = FontWeight.Bold,
                             color = OnSurface
