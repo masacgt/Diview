@@ -640,44 +640,66 @@ private fun MonthlyDividendEstimateCard(
     var showDividendInfo by remember { mutableStateOf(false) }
     var selectedQuarterIndex by remember { mutableStateOf<Int?>(null) }
     val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
-    val monthlyByCategory = remember(holdings, taxRateMode, dividendEventRevision, chartBasis) {
-        fun eventMonth(category: Category, event: com.kurogane.dividend.data.CloudflareDividendEvent): Int? {
-            if (category != Category.JAPAN) return event.date.monthValue
-            val monthDate = when (chartBasis) {
-                MonthlyDividendChartBasis.EX_DIVIDEND_MONTH -> event.date
-                MonthlyDividendChartBasis.RECEIPT_MONTH ->
-                    event.paymentStartDate ?: event.recordDate?.plusMonths(3)
+    val monthlyByCategoryByBasis = remember(holdings, taxRateMode, dividendEventRevision) {
+        fun monthlyAmountsForBasis(basis: MonthlyDividendChartBasis): List<List<Double>> {
+            fun eventMonth(category: Category, event: com.kurogane.dividend.data.CloudflareDividendEvent): Int? {
+                if (category != Category.JAPAN) return event.date.monthValue
+                val monthDate = when (basis) {
+                    MonthlyDividendChartBasis.EX_DIVIDEND_MONTH -> event.date
+                    MonthlyDividendChartBasis.RECEIPT_MONTH ->
+                        event.paymentStartDate ?: event.recordDate?.plusMonths(3)
+                }
+                return monthDate?.monthValue
             }
-            return monthDate?.monthValue
-        }
-        (1..12).map { month ->
-            listOf(Category.JAPAN, Category.US, Category.FUND).map { category ->
-                holdings.filter { it.category == category }.sumOf { holding ->
-                    viewModel.dividendEventsFor(holding.code).sumOf { event ->
-                        if (eventMonth(category, event) == month) {
-                            holding.copy(dps = event.amountPerShare).getEffectiveAnnualDividend(taxRateMode)
-                        } else {
-                            0.0
+            return (1..12).map { month ->
+                listOf(Category.JAPAN, Category.US, Category.FUND).map { category ->
+                    holdings.filter { it.category == category }.sumOf { holding ->
+                        viewModel.dividendEventsFor(holding.code).sumOf { event ->
+                            if (eventMonth(category, event) == month) {
+                                holding.copy(dps = event.amountPerShare).getEffectiveAnnualDividend(taxRateMode)
+                            } else {
+                                0.0
+                            }
                         }
                     }
                 }
             }
         }
+        MonthlyDividendChartBasis.entries.associateWith(::monthlyAmountsForBasis)
     }
-    val monthlyDividends = remember(monthlyByCategory) {
-        monthlyByCategory.mapIndexed { index, categories ->
-            val month = index + 1
-            val amount = categories.sum()
-            val label = when {
-                amount >= 1_000_000 -> String.format(Locale.JAPAN, "%.0f万", amount / 10_000.0)
-                amount >= 10_000 -> String.format(Locale.JAPAN, "%.1f万", amount / 10_000.0)
-                amount > 0 -> String.format(Locale.JAPAN, "%.1f千", amount / 1_000.0)
-                else -> "0"
-            }
-            Triple(month, amount, label)
-        }
-    }
+    val targetMonthlyByCategory = monthlyByCategoryByBasis.getValue(chartBasis)
     var monthlyChartVisible by remember { mutableStateOf(false) }
+    val monthlyValueAnimationSpec: AnimationSpec<Float> = if (monthlyChartVisible && isTabSelected) {
+        tween(durationMillis = 280, easing = FastOutSlowInEasing)
+    } else {
+        snap()
+    }
+    val monthlyByCategory = mutableListOf<List<Double>>()
+    targetMonthlyByCategory.forEachIndexed { monthIndex, categories ->
+        val animatedCategories = mutableListOf<Double>()
+        categories.forEachIndexed { categoryIndex, targetAmount ->
+            val animatedAmount by animateFloatAsState(
+                targetValue = targetAmount.toFloat(),
+                animationSpec = monthlyValueAnimationSpec,
+                label = "Monthly dividend amount $monthIndex $categoryIndex"
+            )
+            animatedCategories += animatedAmount.toDouble()
+        }
+        monthlyByCategory += animatedCategories
+    }
+    val targetMonthlyAmounts = targetMonthlyByCategory.map { it.sum() }
+    val monthlyDividends = monthlyByCategory.mapIndexed { index, categories ->
+        val month = index + 1
+        val amount = categories.sum()
+        val targetAmount = targetMonthlyAmounts[index]
+        val label = when {
+            targetAmount >= 1_000_000 -> String.format(Locale.JAPAN, "%.0f万", targetAmount / 10_000.0)
+            targetAmount >= 10_000 -> String.format(Locale.JAPAN, "%.1f万", targetAmount / 10_000.0)
+            targetAmount > 0 -> String.format(Locale.JAPAN, "%.1f千", targetAmount / 1_000.0)
+            else -> "0"
+        }
+        Triple(month, amount, label)
+    }
     val monthlyBarsProgress = remember { Animatable(1f) }
     LaunchedEffect(isTabSelected) {
         if (!isTabSelected) {
@@ -695,8 +717,12 @@ private fun MonthlyDividendEstimateCard(
             monthlyBarsProgress.snapTo(1f)
         }
     }
-    val maxMonthlyAmount = remember(monthlyDividends) {
-        monthlyDividends.maxOfOrNull { it.second }?.coerceAtLeast(1.0) ?: 1.0
+    val maxMonthlyAmount = remember(monthlyByCategoryByBasis) {
+        monthlyByCategoryByBasis.values
+            .flatMap { months -> months.map { it.sum() } }
+            .maxOrNull()
+            ?.coerceAtLeast(1.0)
+            ?: 1.0
     }
     val quarterlyCashFlowAmounts = remember(monthlyDividends) {
         (0..3).map { quarterIndex ->
@@ -943,20 +969,27 @@ private fun MonthlyDividendEstimateCard(
                                     }
                                 }
                             }
-                            Text(
-                                text = label,
+                            Crossfade(
+                                targetState = label,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(monthlyAmountLabelSlotHeight)
                                     .align(Alignment.TopCenter)
                                     .offset(y = monthlyChartCanvasHeight * (monthlyBarAreaBottomFraction - animatedHeightFraction * monthlyBarAreaHeightFraction) - monthlyAmountLabelTopOffset),
-                                fontSize = AppTextSize.chartLabel,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isSelected) PrimaryEmerald else OnSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
-                                softWrap = false
-                            )
+                                animationSpec = tween(durationMillis = 140),
+                                label = "Monthly dividend amount label"
+                            ) { displayedLabel ->
+                                Text(
+                                    text = displayedLabel,
+                                    modifier = Modifier.fillMaxSize(),
+                                    fontSize = AppTextSize.chartLabel,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isSelected) PrimaryEmerald else OnSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
+                                    softWrap = false
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(monthlyAxisGap))
                         Box(
