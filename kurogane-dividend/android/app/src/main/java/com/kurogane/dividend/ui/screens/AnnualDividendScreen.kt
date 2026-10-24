@@ -752,78 +752,61 @@ private fun MonthlyDividendEstimateCard(
                     Icon(Icons.Default.DateRange, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(stringResource(R.string.annual_dividend_text_6), fontSize = AppTextSize.body, fontWeight = FontWeight.ExtraBold, color = OnSurface)
-                }
-                Box {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = SurfaceContainer,
-                        border = BorderStroke(1.dp, BorderColor)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(start = 2.dp, end = 8.dp, top = 1.dp, bottom = 1.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    Box {
+                        IconButton(
+                            onClick = { showDividendInfo = true },
+                            modifier = Modifier.size(28.dp)
                         ) {
-                            IconButton(
-                                onClick = { showDividendInfo = true },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Info,
-                                    contentDescription = stringResource(R.string.annual_dividend_info_content_description),
-                                    tint = OnSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            Text(
-                                stringResource(R.string.annual_dividend_estimated_badge),
-                                fontSize = AppTextSize.dense,
-                                fontWeight = FontWeight.Bold,
-                                color = OnSurfaceVariant
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = stringResource(R.string.annual_dividend_info_content_description),
+                                tint = OnSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
                             )
                         }
-                    }
-                    DropdownMenu(
-                        expanded = showDividendInfo,
-                        onDismissRequest = { showDividendInfo = false },
-                        modifier = Modifier.widthIn(max = 300.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        containerColor = CardDark,
-                        tonalElevation = 0.dp,
-                        shadowElevation = 12.dp
-                    ) {
-                        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = PrimaryEmerald.copy(alpha = 0.14f),
-                                    modifier = Modifier.size(30.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            Icons.Default.Info,
-                                            contentDescription = null,
-                                            tint = NeonGreen,
-                                            modifier = Modifier.size(17.dp)
-                                        )
+                        DropdownMenu(
+                            expanded = showDividendInfo,
+                            onDismissRequest = { showDividendInfo = false },
+                            modifier = Modifier.widthIn(max = 300.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            containerColor = CardDark,
+                            tonalElevation = 0.dp,
+                            shadowElevation = 12.dp
+                        ) {
+                            Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = PrimaryEmerald.copy(alpha = 0.14f),
+                                        modifier = Modifier.size(30.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                Icons.Default.Info,
+                                                contentDescription = null,
+                                                tint = NeonGreen,
+                                                modifier = Modifier.size(17.dp)
+                                            )
+                                        }
                                     }
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(
+                                        stringResource(R.string.annual_dividend_info_title),
+                                        color = OnSurface,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = AppTextSize.body
+                                    )
                                 }
-                                Spacer(Modifier.width(10.dp))
+                                Spacer(Modifier.height(12.dp))
+                                HorizontalDivider(color = BorderBlue, thickness = 0.75.dp)
+                                Spacer(Modifier.height(12.dp))
                                 Text(
-                                    stringResource(R.string.annual_dividend_info_title),
-                                    color = OnSurface,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = AppTextSize.body
+                                    stringResource(R.string.annual_dividend_info_description),
+                                    color = OnSurfaceVariant,
+                                    fontSize = AppTextSize.caption,
+                                    lineHeight = 20.sp
                                 )
                             }
-                            Spacer(Modifier.height(12.dp))
-                            HorizontalDivider(color = BorderBlue, thickness = 0.75.dp)
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                stringResource(R.string.annual_dividend_info_description),
-                                color = OnSurfaceVariant,
-                                fontSize = AppTextSize.caption,
-                                lineHeight = 20.sp
-                            )
                         }
                     }
                 }
@@ -871,20 +854,6 @@ private fun MonthlyDividendEstimateCard(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = stringResource(
-                    when (chartBasis) {
-                        MonthlyDividendChartBasis.EX_DIVIDEND_MONTH ->
-                            R.string.annual_dividend_month_mode_helper_ex_dividend
-                        MonthlyDividendChartBasis.RECEIPT_MONTH ->
-                            R.string.annual_dividend_month_mode_helper_receipt
-                    }
-                ),
-                color = OnSurfaceVariant,
-                fontSize = AppTextSize.caption,
-                lineHeight = 20.sp
-            )
             Spacer(modifier = Modifier.height(16.dp))
 
             Row(
