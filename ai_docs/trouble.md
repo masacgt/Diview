@@ -1,5 +1,7 @@
 # Trouble
 
+- Selecting a month before opening Asset Management could give the sort control almost zero width: the long month-filter heading and actions were measured sequentially in one Row (reproduced on SCG01 at font scale 1.7). The holdings header now uses FlowRow to wrap the actions, and constrains the heading text with weight so the count retains space. Month selection, filtering, and sorting logic are unchanged.
+
 - Google Drive restore previously searched the Drive root through the Drive API using the `drive.file` scope and exact Diview backup filenames. Pre-existing `.dvm` files were not necessarily visible to that API query. Use Android's document picker for restore so the user explicitly grants access to the selected Drive document, while keeping `drive.file` for Diview's own exports.
 
 - Cross-component review (2026-10-20): normal sync reused `valuation` for daily multiples and then iterated dict keys as annual rows; D1 import emitted unquoted `YYYY/MM`, so SQLite division could collapse different fiscal years and `REPLACE` historical rows. Source fixes separate the valuation variables and apply table-specific SQL types; offline persistence and SQLite collision tests cover the regressions. Existing production D1 loss requires comparison with trusted original data, not just changing the import generator. See `review-fixes-20261020.md`.
