@@ -15,6 +15,8 @@
 - [ ] Unify Android financial-number typography as sans-serif with tabular figures, keeping monospace for identifiers and technical literals. Evidence: shared numeric styles and explicit financial-value overrides are updated; JDK 17 debug build succeeds, and the APK installs and launches on SCG01 and the emulator. Visual comparison on Watchlist and Total Assets remains pending.
 - [ ] Visually compare Watchlist and Total Assets numerals, then inspect the affected financial values and input fields on device.
 - [ ] Validate sharded legacy financial migration, including partition coverage, mixed-source ratio cleanup, report checkpoints, and R2 read-back. Evidence: the migration script and workflow now support four deterministic shards and resumable progress reports; this migration path was not run in the current integration.
+- [x] Add the annual dividend chart's receipt-month/payment-start-month switch and remove the chart's unacquired-month count and annual-total label. Evidence: the Japanese chart uses a supplied event payment-start date when present and otherwise record date plus three months; JDK 17 debug build succeeded, and both modes were tapped and visually checked on emulator and SCG01.
+- [ ] Verify production per-event payment-start-date coverage. The existing yfinance calendar field is only the next announced date; the current device event history used the agreed record-date-plus-three-month fallback.
 
 ## Completed
 

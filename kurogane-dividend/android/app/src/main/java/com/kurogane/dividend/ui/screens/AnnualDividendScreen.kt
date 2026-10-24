@@ -452,7 +452,6 @@ fun AnnualDividendScreen(
                         viewModel = viewModel,
                         holdings = holdings,
                         taxRateMode = taxRateMode,
-                        totalAnnualDividend = totalAnnualDiv,
                         selectedMonth = selectedMonth,
                         isPrivacyActive = isPrivacyActive,
                         chartViewportBounds = chartViewportBounds,
@@ -621,28 +620,45 @@ private fun AnnualDividendTab(
     }
 }
 
+private enum class MonthlyDividendChartBasis {
+    RECEIPT_MONTH,
+    PAYMENT_START_MONTH
+}
+
 @Composable
 private fun MonthlyDividendEstimateCard(
     viewModel: DividendViewModel,
     holdings: List<Holding>,
     taxRateMode: String,
-    totalAnnualDividend: Double,
     selectedMonth: Int?,
     isPrivacyActive: Boolean,
     chartViewportBounds: Rect?,
     isTabSelected: Boolean
 ) {
-    val resources = androidx.compose.ui.platform.LocalContext.current.resources
+    var chartBasis by remember { mutableStateOf(MonthlyDividendChartBasis.RECEIPT_MONTH) }
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
     var showDividendInfo by remember { mutableStateOf(false) }
     var selectedQuarterIndex by remember { mutableStateOf<Int?>(null) }
     val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
-    val monthlyByCategory = remember(holdings, taxRateMode, dividendEventRevision) {
+    val monthlyByCategory = remember(holdings, taxRateMode, dividendEventRevision, chartBasis) {
+        fun eventMonth(category: Category, event: com.kurogane.dividend.data.CloudflareDividendEvent): Int? {
+            if (category != Category.JAPAN) return event.date.monthValue
+            val monthDate = when (chartBasis) {
+                MonthlyDividendChartBasis.RECEIPT_MONTH -> event.recordDate?.plusMonths(3)
+                MonthlyDividendChartBasis.PAYMENT_START_MONTH ->
+                    event.paymentStartDate ?: event.recordDate?.plusMonths(3)
+            }
+            return monthDate?.monthValue
+        }
         (1..12).map { month ->
             listOf(Category.JAPAN, Category.US, Category.FUND).map { category ->
                 holdings.filter { it.category == category }.sumOf { holding ->
-                    viewModel.dividendEventsFor(holding.code).filter { it.date.monthValue == month }.sumOf { event ->
-                        holding.copy(dps = event.amountPerShare).getEffectiveAnnualDividend(taxRateMode)
+                    viewModel.dividendEventsFor(holding.code).sumOf { event ->
+                        if (eventMonth(category, event) == month) {
+                            holding.copy(dps = event.amountPerShare).getEffectiveAnnualDividend(taxRateMode)
+                        } else {
+                            0.0
+                        }
                     }
                 }
             }
@@ -716,6 +732,10 @@ private fun MonthlyDividendEstimateCard(
     val monthlyChartHeight = monthlyChartCanvasHeight + monthlyAxisInset
     val monthlyBarStaggerStep = if (monthlyDividends.size > 1) .32f / (monthlyDividends.size - 1) else 0f
 
+    LaunchedEffect(chartBasis) {
+        selectedQuarterIndex = null
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -732,75 +752,138 @@ private fun MonthlyDividendEstimateCard(
                     Icon(Icons.Default.DateRange, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(stringResource(R.string.annual_dividend_text_6), fontSize = AppTextSize.body, fontWeight = FontWeight.ExtraBold, color = OnSurface)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Box {
-                        IconButton(
-                            onClick = { showDividendInfo = true },
-                            modifier = Modifier.size(28.dp)
+                }
+                Box {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = SurfaceContainer,
+                        border = BorderStroke(1.dp, BorderColor)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(start = 2.dp, end = 8.dp, top = 1.dp, bottom = 1.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                Icons.Default.Info,
-                                contentDescription = stringResource(R.string.annual_dividend_info_content_description),
-                                tint = OnSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showDividendInfo,
-                            onDismissRequest = { showDividendInfo = false },
-                            modifier = Modifier.widthIn(max = 300.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            containerColor = CardDark,
-                            tonalElevation = 0.dp,
-                            shadowElevation = 12.dp
-                        ) {
-                            Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = PrimaryEmerald.copy(alpha = 0.14f),
-                                        modifier = Modifier.size(30.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                Icons.Default.Info,
-                                                contentDescription = null,
-                                                tint = NeonGreen,
-                                                modifier = Modifier.size(17.dp)
-                                            )
-                                        }
-                                    }
-                                    Spacer(Modifier.width(10.dp))
-                                    Text(
-                                        stringResource(R.string.annual_dividend_info_title),
-                                        color = OnSurface,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = AppTextSize.body
-                                    )
-                                }
-                                Spacer(Modifier.height(12.dp))
-                                HorizontalDivider(color = BorderBlue, thickness = 0.75.dp)
-                                Spacer(Modifier.height(12.dp))
-                                Text(
-                                    stringResource(R.string.annual_dividend_info_description),
-                                    color = OnSurfaceVariant,
-                                    fontSize = AppTextSize.caption,
-                                    lineHeight = 20.sp
+                            IconButton(
+                                onClick = { showDividendInfo = true },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Info,
+                                    contentDescription = stringResource(R.string.annual_dividend_info_content_description),
+                                    tint = OnSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
+                            Text(
+                                stringResource(R.string.annual_dividend_estimated_badge),
+                                fontSize = AppTextSize.dense,
+                                fontWeight = FontWeight.Bold,
+                                color = OnSurfaceVariant
+                            )
+                        }
+                    }
+                    DropdownMenu(
+                        expanded = showDividendInfo,
+                        onDismissRequest = { showDividendInfo = false },
+                        modifier = Modifier.widthIn(max = 300.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = CardDark,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 12.dp
+                    ) {
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = PrimaryEmerald.copy(alpha = 0.14f),
+                                    modifier = Modifier.size(30.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Default.Info,
+                                            contentDescription = null,
+                                            tint = NeonGreen,
+                                            modifier = Modifier.size(17.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    stringResource(R.string.annual_dividend_info_title),
+                                    color = OnSurface,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = AppTextSize.body
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            HorizontalDivider(color = BorderBlue, thickness = 0.75.dp)
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                stringResource(R.string.annual_dividend_info_description),
+                                color = OnSurfaceVariant,
+                                fontSize = AppTextSize.caption,
+                                lineHeight = 20.sp
+                            )
                         }
                     }
                 }
-                Text(
-                    text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_15) else resources.getString(R.string.annual_dividend_label_16, com.kurogane.dividend.model.formatFinancialAmountDisplay(totalAnnualDividend)),
-                    fontSize = AppTextSize.caption,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = NeonGreenLight
-                )
             }
 
-            Text(stringResource(R.string.annual_dividend_text_7 , holdings.count { it.dps > 0 && it.dividendMonths.isEmpty() }), color = OnSurfaceVariant, fontSize = AppTextSize.caption)
-            Spacer(modifier = Modifier.height(18.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(CircleShape)
+                    .background(SurfaceContainer)
+                    .padding(3.dp)
+                    .selectableGroup(),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                MonthlyDividendChartBasis.entries.forEach { basis ->
+                    val isSelected = chartBasis == basis
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(CircleShape)
+                            .background(if (isSelected) PrimaryEmerald else Color.Transparent)
+                            .selectable(
+                                selected = isSelected,
+                                onClick = { chartBasis = basis },
+                                role = Role.Tab
+                            )
+                            .heightIn(min = 42.dp)
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(
+                                if (basis == MonthlyDividendChartBasis.RECEIPT_MONTH) {
+                                    R.string.annual_dividend_month_mode_receipt
+                                } else {
+                                    R.string.annual_dividend_month_mode_payment_start
+                                }
+                            ),
+                            color = if (isSelected) OnPrimary else OnSurfaceVariant,
+                            fontSize = AppTextSize.body,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = stringResource(
+                    if (chartBasis == MonthlyDividendChartBasis.RECEIPT_MONTH) {
+                        R.string.annual_dividend_month_mode_helper_receipt
+                    } else {
+                        R.string.annual_dividend_month_mode_helper_payment_start
+                    }
+                ),
+                color = OnSurfaceVariant,
+                fontSize = AppTextSize.caption,
+                lineHeight = 20.sp
+            )
+            Spacer(modifier = Modifier.height(16.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth().height(monthlyChartHeight)
