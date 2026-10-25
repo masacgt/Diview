@@ -1,8 +1,41 @@
+import hashlib
+import json
 import unittest
 from datetime import date
+from io import BytesIO
 from unittest.mock import patch
 
-from refresh_v2_dividends import fetch_latest_forecast, parse_forecast
+from refresh_v2_dividends import (
+    DEFAULT_R2_KEY,
+    DIVIDEND_SHARD_MANIFEST_KEY,
+    DIVIDEND_SHARD_ROOT,
+    activate_dividend_index_shards,
+    build_dividend_index_shards,
+    fetch_latest_forecast,
+    json_bytes,
+    parse_forecast,
+    prepare_dividend_index_shards,
+)
+from refresh_v2_dividend_batch import publish_index
+
+
+class MissingR2Key(Exception):
+    response = {"Error": {"Code": "NoSuchKey"}}
+
+
+class FakeR2Client:
+    def __init__(self, objects=None):
+        self.objects = dict(objects or {})
+
+    def put_object(self, *, Bucket, Key, Body, **_kwargs):
+        self.objects[Key] = bytes(Body)
+        return {"ETag": "test-etag"}
+
+    def get_object(self, *, Bucket, Key):
+        if Key not in self.objects:
+            raise MissingR2Key(Key)
+        value = self.objects[Key]
+        return {"Body": BytesIO(value if isinstance(value, bytes) else json_bytes(value))}
 
 
 class IrbankForecastParsingTests(unittest.TestCase):
@@ -99,6 +132,72 @@ class IrbankForecastParsingTests(unittest.TestCase):
         }
 
         self.assertIsNone(parse_forecast(document, None))
+
+
+class IrbankDividendIndexShardTests(unittest.TestCase):
+    def test_builds_balanced_prefix_shards_with_only_index_items(self):
+        document = {
+            "generated_at": "2026-10-26T00:00:00Z",
+            "source": "IRBANK Connect",
+            "attribution": {"source_label": "IRBANK"},
+            "yield_coverage": {"large_metadata": True},
+            "items": {
+                "7203": {"actual_status": "available", "actual": {"annual_dps": 100}},
+                "7211": {"actual_status": "empty", "actual": None},
+                "130A": {"actual_status": "not_fetched", "actual": None},
+            },
+        }
+
+        shards, manifest = build_dividend_index_shards(document, "b")
+
+        self.assertEqual(set(shards), {
+            f"{DIVIDEND_SHARD_ROOT}/b/13.json",
+            f"{DIVIDEND_SHARD_ROOT}/b/72.json",
+        })
+        self.assertEqual(manifest["slot"], "b")
+        self.assertEqual(manifest["prefixes"], ["13", "72"])
+        self.assertEqual(manifest["item_count"], 3)
+        self.assertNotIn(b"yield_coverage", shards[f"{DIVIDEND_SHARD_ROOT}/b/13.json"])
+
+    def test_prepares_inactive_slot_then_activates_only_after_verified_writes(self):
+        client = FakeR2Client({DIVIDEND_SHARD_MANIFEST_KEY: {
+            "schema_version": 1, "slot": "a", "prefixes": ["72"],
+        }})
+        document = {
+            "generated_at": "2026-10-26T00:00:00Z",
+            "source": "IRBANK Connect",
+            "items": {"7203": {"actual_status": "available", "actual": {"annual_dps": 100}}},
+        }
+
+        manifest = prepare_dividend_index_shards(client, "bucket", document)
+
+        self.assertEqual(manifest["slot"], "b")
+        self.assertEqual(manifest["shard_count"], 1)
+        current = json_bytes(client.objects[DIVIDEND_SHARD_MANIFEST_KEY])
+        self.assertIn(b'"slot":"a"', current)
+        self.assertEqual(activate_dividend_index_shards(client, "bucket", manifest),
+                         hashlib.sha256(json_bytes(manifest)).hexdigest())
+        active = client.objects[DIVIDEND_SHARD_MANIFEST_KEY]
+        self.assertIn(b'"slot":"b"', active)
+        self.assertEqual(client.get_object(Bucket="bucket", Key=f"{DIVIDEND_SHARD_ROOT}/b/72.json")["Body"].read(),
+                         json_bytes({"schema_version": 1, "prefix": "72", "items": document["items"]}))
+
+    def test_batch_publisher_activates_shards_before_advancing_financial_revision(self):
+        client = FakeR2Client()
+        document = {
+            "generated_at": "2026-10-26T00:00:00Z",
+            "source": "IRBANK Connect",
+            "items": {"7203": {"actual_status": "available", "actual": {"annual_dps": 100}}},
+        }
+
+        with patch("refresh_v2_dividend_batch.refresh.bump_financial_revision") as bump_revision:
+            digest, etag = publish_index(client, "bucket", DEFAULT_R2_KEY, document)
+
+        self.assertEqual(digest, hashlib.sha256(json_bytes(document)).hexdigest())
+        self.assertEqual(etag, "test-etag")
+        self.assertEqual(json.loads(client.objects[DIVIDEND_SHARD_MANIFEST_KEY])["slot"], "a")
+        self.assertEqual(json.loads(client.objects[f"{DIVIDEND_SHARD_ROOT}/a/72.json"])["items"], document["items"])
+        bump_revision.assert_called_once_with(client, "bucket")
 
 
 if __name__ == "__main__":

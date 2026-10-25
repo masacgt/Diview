@@ -304,6 +304,9 @@ async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
 
 const YFINANCE_V2_ROOT = 'market/yfinance/v2';
 const IRBANK_V2_DIVIDENDS_KEY = `${YFINANCE_V2_ROOT}/issuer_dividends/current.json`;
+const IRBANK_V2_DIVIDEND_SHARDS_ROOT = `${YFINANCE_V2_ROOT}/issuer_dividends/shards`;
+const IRBANK_V2_DIVIDEND_SHARD_MANIFEST_KEY = `${IRBANK_V2_DIVIDEND_SHARDS_ROOT}/current.json`;
+const DIVIDEND_SHARD_PREFIX_LENGTH = 2;
 
 // SBI Shinsei's FY2026 securities report documents historical share actions
 // that are not all represented in its stored yfinance split history.
@@ -421,9 +424,25 @@ function selectedIrbankDividend(item) {
   };
 }
 
-async function readIrbankDividendIndex(env) {
-  const document = await readV2Json(env, IRBANK_V2_DIVIDENDS_KEY);
-  return document && document.items && typeof document.items === 'object' ? document : null;
+async function readIrbankDividendIndex(env, code = null) {
+  if (code === null || code === undefined) {
+    const document = await readV2Json(env, IRBANK_V2_DIVIDENDS_KEY);
+    return document && document.items && typeof document.items === 'object' ? document : null;
+  }
+  const normalized = yfinanceV2Code(code);
+  if (!normalized) return null;
+  const manifest = await readV2Json(env, IRBANK_V2_DIVIDEND_SHARD_MANIFEST_KEY);
+  if (manifest?.schema_version !== 1 || manifest.prefix_length !== DIVIDEND_SHARD_PREFIX_LENGTH
+    || !['a', 'b'].includes(manifest.slot)
+    || !Array.isArray(manifest.prefixes)) return null;
+  const prefix = normalized.slice(0, DIVIDEND_SHARD_PREFIX_LENGTH);
+  if (!manifest.prefixes.includes(prefix)) {
+    return { source: manifest.source, attribution: manifest.attribution, items: {} };
+  }
+  const shard = await readV2Json(env, `${IRBANK_V2_DIVIDEND_SHARDS_ROOT}/${manifest.slot}/${prefix}.json`);
+  return shard && shard.items && typeof shard.items === 'object'
+    ? { source: manifest.source, attribution: manifest.attribution, items: shard.items }
+    : { source: manifest.source, attribution: manifest.attribution, items: {} };
 }
 
 function irbankDividendForCode(index, code) {
@@ -668,7 +687,7 @@ async function readV2FinancialPayload(env, code) {
     currentPromise,
     listV2Documents(env, `${base}/financials/`),
     dividendDocumentsPromise,
-    readIrbankDividendIndex(env),
+    readIrbankDividendIndex(env, code),
     irbankR2Code(code)
       ? readV2Json(env, `market/irbank/v1/securities/${irbankR2Code(code)}/overview.json`)
       : Promise.resolve(null),
@@ -2639,7 +2658,7 @@ export default {
         readV2Json(env, `${base}/current.json`),
         readV2Json(env, `${base}/sync.json`),
         readV2DividendHistoryBounds(env, symbol),
-        readIrbankDividendIndex(env),
+        readIrbankDividendIndex(env, code),
       ]);
       if (!profile || !current) return json({ error: 'security_data_unavailable' }, 503);
       const dividend = current.dividend || {};
@@ -2897,7 +2916,7 @@ export default {
       const [v2Profile, v2Current, irbankDividendIndex] = await Promise.all([
         readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/profile.json`),
         readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`),
-        readIrbankDividendIndex(env),
+        readIrbankDividendIndex(env, code),
       ]);
       if (!v2Profile || !v2Current) return json({ error: 'not_found' }, 404);
       const includeMarket = url.searchParams.get('include_market') !== 'false';

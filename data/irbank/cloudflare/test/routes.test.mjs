@@ -17,11 +17,40 @@ function environment(limit = 1, storageFails = false) {
   };
 }
 
-function dividendEnvironment(documents, marketAvailable = true) {
+function dividendEnvironment(documents, marketAvailable = true, reads = null) {
+  const indexKey = 'market/yfinance/v2/issuer_dividends/current.json';
+  const manifestKey = 'market/yfinance/v2/issuer_dividends/shards/current.json';
+  if (documents.has(indexKey) && !documents.has(manifestKey)) {
+    const index = documents.get(indexKey);
+    const grouped = new Map();
+    for (const [code, item] of Object.entries(index?.items || {})) {
+      const prefix = code.slice(0, 2).toUpperCase();
+      if (!grouped.has(prefix)) grouped.set(prefix, {});
+      grouped.get(prefix)[code.toUpperCase()] = item;
+    }
+    const slot = 'a';
+    documents.set(manifestKey, {
+      schema_version: 1,
+      slot,
+      prefix_length: 2,
+      prefixes: [...grouped.keys()].sort(),
+      item_count: Object.keys(index?.items || {}).length,
+      source: index.source,
+      attribution: index.attribution,
+    });
+    for (const [prefix, items] of grouped) {
+      documents.set(`market/yfinance/v2/issuer_dividends/shards/${slot}/${prefix}.json`, {
+        schema_version: 1, prefix, items,
+      });
+    }
+  }
   return {
     APP_DEFINITIONS: { get: async () => null },
     MARKET_DATA: marketAvailable ? {
-      get: async key => documents.has(key) ? { json: async () => documents.get(key) } : null,
+      get: async key => {
+        reads?.push(key);
+        return documents.has(key) ? { json: async () => documents.get(key) } : null;
+      },
       list: async ({ prefix }) => ({
         objects: [...documents.keys()].filter(key => key.startsWith(prefix)).map(key => ({ key })),
         truncated: false,
@@ -53,6 +82,44 @@ test('financial API only returns the necessary public document fields', async ()
   assert.equal(data.security.code, '7203');
   assert.equal(data.officers, undefined);
   assert.equal((await worker.fetch(new Request('https://example.com/api/v1/financial-data/7203', { method: 'POST' }), environment())).status, 405);
+});
+
+test('financial API reads only the active issuer-dividend shard for one security', async () => {
+  const base = 'market/yfinance/v2/securities/7203.T';
+  const indexKey = 'market/yfinance/v2/issuer_dividends/current.json';
+  const documents = new Map([
+    [`${base}/profile.json`, { display_name: 'トヨタ自動車', symbol: '7203.T' }],
+    [`${base}/current.json`, { dividend: { calendar_year_metrics: { annual_records: [] } } }],
+    [`market/irbank/v1/securities/7203/overview.json`, { dividends: { records: [] } }],
+    [`${base}/financials/2025-03-31.json`, {
+      annual: { fiscal_year: '2025/03', period_end: '2025-03-31', field_status: {} },
+    }],
+    ['market/yfinance/v2/issuer_dividends/shards/current.json', {
+      schema_version: 1, slot: 'b', prefix_length: 2, prefixes: ['72'], source: 'IRBANK Connect',
+      attribution: { source_label: 'IRBANK' },
+    }],
+    ['market/yfinance/v2/issuer_dividends/shards/b/72.json', {
+      schema_version: 1, prefix: '72', items: {
+        '7203': {
+          code: '7203', actual_status: 'available',
+          actual: { fiscal_year: 2025, period_end: '2025-03-31', annual_dps: 100 },
+          forecast_status: 'not_requested', forecast: null,
+        },
+      },
+    }],
+  ]);
+  const reads = [];
+  const response = await worker.fetch(
+    new Request('https://example.com/api/v1/financial-data/7203'),
+    dividendEnvironment(documents, true, reads),
+  );
+
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.issuer_dividends.latest_actual.annual_dps, 100);
+  assert.equal(data.issuer_dividends.source, 'IRBANK Connect');
+  assert.ok(reads.includes('market/yfinance/v2/issuer_dividends/shards/b/72.json'));
+  assert.ok(!reads.includes(indexKey));
 });
 
 test('security API exposes yfinance retrieval metadata and stored dividend history bounds', async () => {

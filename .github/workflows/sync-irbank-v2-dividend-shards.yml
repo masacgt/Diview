@@ -1,0 +1,38 @@
+name: Sync IRBANK v2 dividend shards
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: irbank-v2-dividend-batch
+  cancel-in-progress: false
+
+jobs:
+  sync-shards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/irbank_r2/requirements.txt
+            scripts/irbank_r2/refresh_v2_dividends.py
+            scripts/irbank_r2/sync_v2_dividend_index_shards.py
+            scripts/yfinance_r2/financial_revision.py
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/irbank_r2/requirements.txt
+      - name: Install the R2 client
+        run: python -m pip install -r scripts/irbank_r2/requirements.txt
+      - name: Publish and verify the active shard set
+        run: python scripts/irbank_r2/sync_v2_dividend_index_shards.py
+        env:
+          CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
