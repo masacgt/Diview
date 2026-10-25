@@ -169,8 +169,11 @@ run #166はrun #159と同じ対象セッションを再処理した手動実行�
 |---|---|---|---:|---|
 | [#233](https://github.com/masacgt/Diview/actions/runs/40186701833) | 手動 `sync`、`main` / `5d787342` | 4,396成功、48失敗、カタログ4,362件を公開後に失敗終了 | workflow 69分26秒、同期job 68分58秒 | `--reprocess-successful` を含む手動再処理で、最適化ブランチSHA `2bfdcf54` と異なるため効果比較には不採用。Actions使用時間には含む |
 | [#239](https://github.com/masacgt/Diview/actions/runs/40191902472) | `workflow_dispatch`, `run_mode=test`、最適化ブランチ / `001de56` | 112件中8件失敗 | workflow 約38秒、テストjob 約31秒 | 同期・ベンチマークの標本外。テスト成功まで次のベンチマークを保留 |
+| [#240](https://github.com/masacgt/Diview/actions/runs/40193506451) | push、最適化ブランチ / `bb7e6cfd` | `yfinance-sync-tests` 全112件成功。全体同期はスキップ | workflow / テストjob 約34秒 | 同期・ベンチマークの標本外。回帰テスト修正の検証 |
 
-Run #239の失敗は、同一出所の比率状態補完1件、DPS不明時の利回り再利用1件、IRBANK seedの`field_units`期待値4件、使用中統計値のアーカイブ期待値1件、`CURRENT_FIELDS`期待値1件。コード側の利回り再利用を修正し、現行の状態・単位メタデータに合うテスト期待値を更新してから再実行する。
+Run #239の失敗は、同一出所の比率状態補完1件、DPS不明時の利回り再利用1件、IRBANK seedの`field_units`期待値4件、使用中統計値のアーカイブ期待値1件、`CURRENT_FIELDS`期待値1件。コミット`bb7e6cfd`で利回りの再利用を修正し、現行の状態・単位メタデータに合うテスト期待値へ更新した。Run #240で112件すべて成功した。
+
+Run #233の48失敗はすべて異なる銘柄のYahoo HTTP 404で、同期ログ上は同一セッション内の`no_data`再試行として抑止された。生成世代は公開済みであり、コードごとの理由を確定するまでは再試行・削除方針を変更しない。
 
 ## J-Quantsユニバース差分と今後のスナップショット記録
 
