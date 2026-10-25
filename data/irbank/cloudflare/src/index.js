@@ -597,6 +597,7 @@ const IRBANK_VALUATION_FIELD_UNITS = {
   ...financialUnitContract.irbank.valuation_field_units,
 };
 const FINANCIAL_ANNUAL_MONEY_FIELDS = IRBANK_ANNUAL_MONEY_FIELDS;
+const YFINANCE_NATIVE_FINANCIAL_UNIT = financialUnitContract.api_units.yfinance_native_financial_money;
 const YFINANCE_STATISTICS_FIELD_UNITS = financialUnitContract.yfinance_statistics_field_units;
 
 function isReasonableEquityRatio(value) {
@@ -608,6 +609,22 @@ function normalizedFinancialUnit(value) {
   return typeof value === 'string' && value.trim()
     ? value.trim().toLowerCase().replaceAll('-', '_')
     : null;
+}
+
+function normalizedFinancialCurrency(value) {
+  if (typeof value !== 'string') return null;
+  const currency = value.trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(currency) && currency !== 'XXX' ? currency : null;
+}
+
+function isVerifiedYfinanceDerivedPercent(calculation, inputFields, yfinanceValues, yfinanceFieldUnits) {
+  if (calculation?.unit !== 'percent' || !isReasonableEquityRatio(calculation?.value)) return false;
+  const sources = calculation?.input_sources;
+  const units = calculation?.input_units;
+  return inputFields.every(field => sources?.[field] === 'yfinance'
+    && normalizedFinancialUnit(units?.[field]) === YFINANCE_NATIVE_FINANCIAL_UNIT
+    && normalizedFinancialUnit(yfinanceFieldUnits[field]) === YFINANCE_NATIVE_FINANCIAL_UNIT
+    && finiteNumber(yfinanceValues[field]) !== null);
 }
 
 function yfinanceStatisticsFieldUnit(current, field) {
@@ -706,6 +723,37 @@ async function readV2FinancialPayload(env, code) {
     const seedRecord = explicit?.seed && typeof explicit.seed === 'object' ? explicit.seed : {};
     const seedValues = { ...(seedRecord.values && typeof seedRecord.values === 'object' ? seedRecord.values : {}) };
     const yfinanceValues = { ...(explicit?.yfinance?.values && typeof explicit.yfinance.values === 'object' ? explicit.yfinance.values : {}) };
+    const yfinanceSourceRecord = explicit?.yfinance && typeof explicit.yfinance === 'object' ? explicit.yfinance : {};
+    const rawYfinanceUnits = yfinanceSourceRecord.field_units && typeof yfinanceSourceRecord.field_units === 'object'
+      ? yfinanceSourceRecord.field_units : {};
+    const rawYfinanceCurrencies = yfinanceSourceRecord.field_reported_currencies
+      && typeof yfinanceSourceRecord.field_reported_currencies === 'object'
+      ? yfinanceSourceRecord.field_reported_currencies : {};
+    const reportedYfinanceCurrencies = {};
+    const unverifiedYfinanceFields = new Set();
+    const yfinanceFieldUnits = {};
+    for (const [field, rawUnit] of Object.entries(rawYfinanceUnits)) {
+      if (!FINANCIAL_ANNUAL_MONEY_FIELDS.has(field)) {
+        yfinanceFieldUnits[field] = rawUnit;
+        continue;
+      }
+      const currency = normalizedFinancialCurrency(rawYfinanceCurrencies[field]);
+      const unit = normalizedFinancialUnit(rawUnit);
+      if (unit === YFINANCE_NATIVE_FINANCIAL_UNIT) {
+        yfinanceFieldUnits[field] = unit;
+        if (currency) reportedYfinanceCurrencies[field] = currency;
+      }
+    }
+    if (section === 'annual') {
+      for (const field of FINANCIAL_ANNUAL_MONEY_FIELDS) {
+        if (!Object.hasOwn(yfinanceValues, field)) continue;
+        const unit = normalizedFinancialUnit(rawYfinanceUnits[field]);
+        if (unit !== YFINANCE_NATIVE_FINANCIAL_UNIT) {
+          unverifiedYfinanceFields.add(field);
+          delete yfinanceValues[field];
+        }
+      }
+    }
     const calculatedValues = explicit?.calculated?.values && typeof explicit.calculated.values === 'object' ? explicit.calculated.values : {};
     for (const [key, value] of Object.entries(row)) {
       if (['fiscal_year', 'period_end', 'field_status', 'field_status_reason', 'field_units', 'migration_source', 'source_values'].includes(key)
@@ -714,30 +762,67 @@ async function readV2FinancialPayload(env, code) {
       if (row.field_status?.[key] === 'available' && !row.migration_source) yfinanceValues[key] = value;
       else seedValues[key] = value;
     }
+    if (section === 'annual') {
+      for (const field of FINANCIAL_ANNUAL_MONEY_FIELDS) {
+        if (!Object.hasOwn(yfinanceValues, field)) continue;
+        if (normalizedFinancialUnit(rawYfinanceUnits[field]) !== YFINANCE_NATIVE_FINANCIAL_UNIT) {
+          unverifiedYfinanceFields.add(field);
+          delete yfinanceValues[field];
+        }
+      }
+    }
+    const sanitizedYfinanceMetadata = explicit?.yfinance && typeof explicit.yfinance === 'object'
+      ? Object.fromEntries(Object.entries(explicit.yfinance).filter(([key]) => key !== 'field_currencies'))
+      : null;
+    const sanitizedYfinanceRecord = sanitizedYfinanceMetadata ? {
+      ...sanitizedYfinanceMetadata,
+      values: yfinanceValues,
+      field_units: yfinanceFieldUnits,
+      field_reported_currencies: reportedYfinanceCurrencies,
+      ...(unverifiedYfinanceFields.size ? { unverified_fields: [...unverifiedYfinanceFields].sort() } : {}),
+    } : null;
     const seedUnits = seedFieldUnits(section, seedValues, seedRecord, row);
+    const seedRatio = seedUnits.equity_ratio_computed === 'percent'
+      ? finiteNumber(seedValues.equity_ratio_computed) : null;
     const ratioCalculation = calculatedValues.equity_ratio_computed;
     const ratioSources = ratioCalculation?.input_sources;
     const ratioUnits = ratioCalculation?.input_units;
     const ratioSource = ratioSources?.equity;
     const ratioInputUnit = normalizedFinancialUnit(ratioUnits?.equity);
+    const compatibleRatioUnit = ratioInputUnit === 'jpy' || ratioInputUnit === 'million_jpy'
+      || ratioInputUnit === YFINANCE_NATIVE_FINANCIAL_UNIT
+      || Boolean(ratioInputUnit && /^[a-z]{3}$/.test(ratioInputUnit));
     const sameSourceCalculation = Boolean(
       typeof ratioSource === 'string' && ratioSource.trim()
       && ratioSource === ratioSources?.total_assets
       && ratioInputUnit
       && ratioInputUnit === normalizedFinancialUnit(ratioUnits?.total_assets)
-      && ['jpy', 'million_jpy'].includes(ratioInputUnit)
+      && compatibleRatioUnit
       && ratioCalculation?.unit === 'percent'
       && !['unknown', 'mixed', 'unavailable'].includes(String(ratioSource).toLowerCase())
       && isReasonableEquityRatio(ratioCalculation?.value),
     );
-    const compatibleCalculatedValues = Object.fromEntries(Object.entries(calculatedValues).filter(([field]) => {
-      if (field !== 'equity_ratio_computed') return true;
-      return sameSourceCalculation;
+    const compatibleCalculatedValues = Object.fromEntries(Object.entries(calculatedValues).filter(([field, calculation]) => {
+      if (field === 'equity_ratio_computed') return sameSourceCalculation;
+      if (field === 'operating_margin') {
+        return isVerifiedYfinanceDerivedPercent(
+          calculation, ['operating_profit', 'sales'], yfinanceValues, yfinanceFieldUnits,
+        );
+      }
+      if (field === 'fcf_margin') {
+        return isVerifiedYfinanceDerivedPercent(
+          calculation, ['operating_cf', 'investing_cf', 'sales'], yfinanceValues, yfinanceFieldUnits,
+        );
+      }
+      return true;
     }));
     const sourceValues = explicit ? {
       ...explicit,
       ...(explicit.seed && typeof explicit.seed === 'object' ? {
         seed: { ...explicit.seed, values: seedValues, field_units: seedUnits },
+      } : {}),
+      ...(explicit.yfinance && typeof explicit.yfinance === 'object' ? {
+        yfinance: sanitizedYfinanceRecord,
       } : {}),
       ...(explicit.calculated && typeof explicit.calculated === 'object' ? {
         calculated: { ...explicit.calculated, values: compatibleCalculatedValues },
@@ -745,12 +830,11 @@ async function readV2FinancialPayload(env, code) {
     } : null;
     const flatSeedValues = { ...seedValues };
     const effectiveFieldUnits = {};
-    const knownFlatUnits = section === 'annual'
-      ? { ...IRBANK_ANNUAL_FIELD_UNITS, ...Object.fromEntries([...FINANCIAL_ANNUAL_MONEY_FIELDS].map(field => [field, 'jpy'])) }
-      : IRBANK_VALUATION_FIELD_UNITS;
+    const knownFlatUnits = section === 'annual' ? IRBANK_ANNUAL_FIELD_UNITS : IRBANK_VALUATION_FIELD_UNITS;
     for (const field of new Set([...Object.keys(seedValues), ...Object.keys(yfinanceValues)])) {
       if (Object.hasOwn(yfinanceValues, field)) {
-        const unit = explicit?.yfinance?.field_units?.[field] || knownFlatUnits[field];
+        const unit = yfinanceFieldUnits[field]
+          || (FINANCIAL_ANNUAL_MONEY_FIELDS.has(field) ? null : knownFlatUnits[field]);
         if (unit) effectiveFieldUnits[field] = unit;
         continue;
       }
@@ -768,15 +852,29 @@ async function readV2FinancialPayload(env, code) {
       }
     }
     const mergedRow = { ...row, ...flatSeedValues, ...yfinanceValues };
+    const currencyStatuses = { ...(mergedRow.field_status || {}) };
+    const currencyReasons = { ...(mergedRow.field_status_reason || {}) };
+    for (const field of unverifiedYfinanceFields) {
+      if (Object.hasOwn(flatSeedValues, field)) {
+        mergedRow[field] = flatSeedValues[field];
+        currencyStatuses[field] = 'legacy_migrated';
+        delete currencyReasons[field];
+      } else {
+        delete mergedRow[field];
+        currencyStatuses[field] = 'unsupported';
+        currencyReasons[field] = ['financial_currency_unverified'];
+      }
+    }
+    if (unverifiedYfinanceFields.size) {
+      mergedRow.field_status = currencyStatuses;
+      if (Object.keys(currencyReasons).length) mergedRow.field_status_reason = currencyReasons;
+    }
     // A flat legacy ratio is trusted only when its source calculation is proven,
     // or when IRBANK supplied a valid ratio directly. Otherwise the API omits it.
     for (const field of ['calculated_doe', 'net_de_ratio']) {
       if (Object.hasOwn(row, field)) mergedRow[field] = row[field];
     }
     if (section === 'annual') {
-      const seedRatio = seedUnits.equity_ratio_computed === 'percent'
-        ? finiteNumber(seedValues.equity_ratio_computed)
-        : null;
       const yfinanceEquityField = finiteNumber(yfinanceValues.stockholders_equity) !== null
         ? 'stockholders_equity'
         : finiteNumber(yfinanceValues.total_equity_gross_minority_interest) !== null
@@ -784,26 +882,56 @@ async function readV2FinancialPayload(env, code) {
           : null;
       const yfinanceEquity = yfinanceEquityField ? finiteNumber(yfinanceValues[yfinanceEquityField]) : null;
       const yfinanceAssets = finiteNumber(yfinanceValues.total_assets);
-      const yfinanceEquityUnit = normalizedFinancialUnit(explicit?.yfinance?.field_units?.[yfinanceEquityField]);
-      const yfinanceAssetsUnit = normalizedFinancialUnit(explicit?.yfinance?.field_units?.total_assets);
+      const yfinanceEquityUnit = normalizedFinancialUnit(yfinanceFieldUnits[yfinanceEquityField]);
+      const yfinanceAssetsUnit = normalizedFinancialUnit(yfinanceFieldUnits.total_assets);
       const recalculatedYfinanceRatio = yfinanceEquity !== null && yfinanceAssets !== null && yfinanceAssets > 0
-        && yfinanceEquityUnit === 'jpy' && yfinanceAssetsUnit === yfinanceEquityUnit
+        && yfinanceEquityUnit === YFINANCE_NATIVE_FINANCIAL_UNIT
+        && yfinanceAssetsUnit === yfinanceEquityUnit
         ? yfinanceEquity / yfinanceAssets * 100
         : null;
       const safeRatio = sameSourceCalculation
         ? finiteNumber(ratioCalculation.value)
-        : isReasonableEquityRatio(seedRatio)
-          ? finiteNumber(seedRatio)
-          : isReasonableEquityRatio(recalculatedYfinanceRatio)
-            ? recalculatedYfinanceRatio
+        : isReasonableEquityRatio(recalculatedYfinanceRatio)
+          ? recalculatedYfinanceRatio
+          : isReasonableEquityRatio(seedRatio)
+            ? finiteNumber(seedRatio)
             : null;
       delete mergedRow.equity_ratio;
       delete mergedRow.equity_ratio_computed;
       if (safeRatio !== null) {
         mergedRow.equity_ratio_computed = safeRatio;
         effectiveFieldUnits.equity_ratio_computed = 'percent';
+        if (sameSourceCalculation || isReasonableEquityRatio(recalculatedYfinanceRatio)) {
+          const priorStatus = mergedRow.field_status?.equity_ratio_computed;
+          mergedRow.field_status = {
+            ...(mergedRow.field_status || {}),
+            equity_ratio_computed: priorStatus === 'stale' ? 'stale' : 'available',
+          };
+        }
       } else {
-        mergedRow.field_status = { ...(row.field_status || {}), equity_ratio_computed: 'empty' };
+        mergedRow.field_status = { ...(mergedRow.field_status || {}), equity_ratio_computed: 'empty' };
+      }
+    }
+    for (const field of ['operating_margin', 'fcf_margin']) {
+      const calculation = compatibleCalculatedValues[field];
+      const value = finiteNumber(calculation?.value);
+      if (value !== null && isVerifiedYfinanceDerivedPercent(
+        calculation,
+        field === 'operating_margin' ? ['operating_profit', 'sales'] : ['operating_cf', 'investing_cf', 'sales'],
+        yfinanceValues,
+        yfinanceFieldUnits,
+      )) {
+        mergedRow[field] = value;
+        effectiveFieldUnits[field] = 'percent';
+      } else {
+        const seedMargin = normalizedFinancialUnit(seedUnits[field]) === 'percent'
+          ? finiteNumber(seedValues[field]) : null;
+        if (isReasonableEquityRatio(seedMargin)) {
+          mergedRow[field] = seedMargin;
+          effectiveFieldUnits[field] = 'percent';
+        } else {
+          delete mergedRow[field];
+        }
       }
     }
     for (const field of ['sales', 'operating_profit', 'operating_cf', 'investing_cf']) {
@@ -838,6 +966,7 @@ async function readV2FinancialPayload(env, code) {
         source_key: seedRecord.source_key || row.migration_source || null,
         values: seedValues,
         field_units: seedUnits,
+        validation_status: 'available',
       } : null,
     };
   }).filter(Boolean);
@@ -939,7 +1068,7 @@ async function readV2FinancialPayload(env, code) {
   const rawPayoutUnit = yfinanceStatisticsFieldUnit(current, 'payoutRatio');
   const payoutRatio = ratioAsPercent(rawPayoutRatio, rawPayoutUnit);
   return {
-    financial_contract_version: 5,
+    financial_contract_version: 6,
     security: {
       code: yfinanceV2Code(code),
       canonical_code: String(code || '').length === 4 ? `${code}0` : String(code || ''),

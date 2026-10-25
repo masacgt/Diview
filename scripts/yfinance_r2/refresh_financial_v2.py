@@ -68,6 +68,7 @@ def refresh_with_client(code: str, client: Any, bucket: str) -> dict[str, Any]:
         symbol,
         fetch_groups=set(sync.FINANCIAL_GROUPS),
         previous_status=prior_field_status,
+        financial_currency=info.get("financialCurrency"),
     )
     wrote = 0
     for row in statements:

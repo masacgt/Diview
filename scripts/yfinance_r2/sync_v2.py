@@ -294,8 +294,8 @@ class GlobalHttpRateLimiter:
         if self.original_request is not None:
             self.session_class.request = self.original_request
 # J-Quants is the source for the supported Japanese-market universe and product
-# category. Keep only names/IDs in profile.json; price currency remains on the
-# current quote, where app calculations and display consume it.
+# category. Keep quote currency separate from Yahoo's reported statement currency;
+# the latter is provenance and does not establish the units of statement values.
 PROFILE_FIELDS: tuple[str, ...] = ()
 CURRENT_FIELDS = (
     "trailingEps", "forwardEps", "bookValue", "dividendRate", "dividendYield",
@@ -1597,6 +1597,7 @@ FINANCIAL_UNIT_CONTRACT = json.loads(
     (Path(__file__).resolve().parents[2] / "data/irbank/cloudflare/src/financial_unit_contract.json")
     .read_text(encoding="utf-8")
 )
+YFINANCE_NATIVE_FINANCIAL_UNIT = FINANCIAL_UNIT_CONTRACT["api_units"]["yfinance_native_financial_money"]
 IRBANK_ANNUAL_MONEY_FIELDS = frozenset(FINANCIAL_UNIT_CONTRACT["irbank"]["annual_money_fields"])
 IRBANK_ANNUAL_FIELD_UNITS = {
     **{field: "million_jpy" for field in IRBANK_ANNUAL_MONEY_FIELDS},
@@ -1617,6 +1618,13 @@ def source_field_units(values: dict[str, Any], source: Any, existing: Any,
             if field in values and not units.get(field):
                 units[field] = unit
     return units
+
+
+def normalize_financial_currency(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    currency = value.strip().upper()
+    return currency if re.fullmatch(r"[A-Z]{3}", currency) and currency != "XXX" else None
 
 
 def equity_ratio_result(seed_values: dict[str, Any], yfinance_values: dict[str, Any],
@@ -1655,7 +1663,11 @@ def equity_ratio_result(seed_values: dict[str, Any], yfinance_values: dict[str, 
     equity_unit = canonical_unit((yfinance_units if equity_source == "yfinance" else seed_units).get(equity_field)) if equity_field else None
     assets_unit = canonical_unit((yfinance_units if assets_source == "yfinance" else seed_units).get(assets_field)) if assets_field else None
     ratio_out_of_range = False
-    units_match = equity_unit is not None and equity_unit == assets_unit and equity_unit in {"jpy", "million_jpy"}
+    compatible_amount_unit = lambda unit: unit in {"jpy", "million_jpy", YFINANCE_NATIVE_FINANCIAL_UNIT} or bool(
+        isinstance(unit, str) and re.fullmatch(r"[a-z]{3}", unit)
+    )
+    units_match = (equity_unit is not None and equity_unit == assets_unit
+                   and compatible_amount_unit(equity_unit))
     if equity is not None and assets is not None and assets > 0 and equity_source == assets_source and units_match:
         calculated_ratio = equity / assets * 100
         if math.isfinite(calculated_ratio) and abs(calculated_ratio) <= 1000:
@@ -1668,9 +1680,9 @@ def equity_ratio_result(seed_values: dict[str, Any], yfinance_values: dict[str, 
             }
         ratio_out_of_range = True
 
-    # IRBANK seed balance-sheet amounts are stored in million JPY, while
-    # yfinance balance-sheet amounts are JPY. Keep the seed's same-source
-    # ratio when one input has been refreshed from a different provider.
+    # Keep a source-provided seed ratio when the inputs cannot be recalculated
+    # from one provider. Absolute amounts from separate providers are not
+    # compared because Yahoo's statement currency/scale is not authoritative.
     seed_ratio = finite_number(seed_values.get("equity_ratio_computed"))
     seed_ratio_unit = canonical_unit(seed_units.get("equity_ratio_computed"))
     if seed_ratio is not None and seed_ratio_unit == "percent" and abs(seed_ratio) <= 1000:
@@ -1718,11 +1730,13 @@ def financial_source_values(record: Any) -> tuple[dict[str, Any], dict[str, Any]
 
 def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: str, symbol: str,
                        *, fetch_groups: set[str] | None = None,
-                       previous_status: dict[str, Any] | None = None
+                       previous_status: dict[str, Any] | None = None,
+                       financial_currency: Any = None,
                        ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], dict[str, str]]:
     retrieval_status: dict[str, Any] = {}
     requested_groups = set(FINANCIAL_GROUPS) if fetch_groups is None else set(fetch_groups)
     previous_status = previous_status or {}
+    normalized_financial_currency = normalize_financial_currency(financial_currency)
 
     def fetch_metrics(name: str, request: Any, fields: dict[str, str]) -> dict[str, dict[str, Any]]:
         try:
@@ -1807,14 +1821,83 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             {**prior_flat_units, **prior_seed_units},
             IRBANK_ANNUAL_FIELD_UNITS,
         )
-        yfinance_field_units = {
-            field: "jpy" for field in yfinance_values if field in YFINANCE_FINANCIAL_MONEY_FIELDS
+        prior_yfinance_record = prior_sources.get("yfinance") if isinstance(prior_sources, dict) else None
+        prior_yfinance_record = prior_yfinance_record if isinstance(prior_yfinance_record, dict) else {}
+        prior_yfinance_units = prior_yfinance_record.get("field_units")
+        prior_yfinance_units = prior_yfinance_units if isinstance(prior_yfinance_units, dict) else {}
+        prior_yfinance_currencies = prior_yfinance_record.get("field_reported_currencies")
+        prior_yfinance_currencies = prior_yfinance_currencies if isinstance(prior_yfinance_currencies, dict) else {}
+        yfinance_field_units: dict[str, str] = {}
+        yfinance_field_reported_currencies: dict[str, str] = {}
+        for field, raw_unit in prior_yfinance_units.items():
+            unit = str(raw_unit or "").strip().lower()
+            if field in YFINANCE_FINANCIAL_MONEY_FIELDS and unit == YFINANCE_NATIVE_FINANCIAL_UNIT:
+                yfinance_field_units[field] = unit
+                currency = normalize_financial_currency(prior_yfinance_currencies.get(field))
+                if currency:
+                    yfinance_field_reported_currencies[field] = currency
+        refreshed_money_fields = {
+            field for field in (set(fresh_values) | set(net_de_metrics))
+            if field in YFINANCE_FINANCIAL_MONEY_FIELDS
         }
+        for field in refreshed_money_fields:
+            yfinance_field_units[field] = YFINANCE_NATIVE_FINANCIAL_UNIT
+            if normalized_financial_currency:
+                yfinance_field_reported_currencies[field] = normalized_financial_currency
+            else:
+                yfinance_field_reported_currencies.pop(field, None)
         equity_ratio = equity_ratio_result(seed_values, yfinance_values, seed_field_units, yfinance_field_units)
         if equity_ratio["value"] is not None:
             values["equity_ratio_computed"] = equity_ratio["value"]
         else:
             values.pop("equity_ratio_computed", None)
+        calculated_financial_metrics: dict[str, dict[str, Any]] = {}
+
+        def margin_percent(numerator: float | None, denominator: float | None) -> float | None:
+            if numerator is None or denominator is None or denominator <= 0:
+                return None
+            result = numerator / denominator * 100
+            return result if math.isfinite(result) and abs(result) <= 1000 else None
+
+        sales = finite_number(yfinance_values.get("sales"))
+        operating_profit = finite_number(yfinance_values.get("operating_profit"))
+        operating_margin = margin_percent(operating_profit, sales)
+        if operating_margin is not None and all(
+                yfinance_field_units.get(field) == YFINANCE_NATIVE_FINANCIAL_UNIT
+                for field in ("sales", "operating_profit")):
+            values["operating_margin"] = operating_margin
+            calculated_financial_metrics["operating_margin"] = {
+                "value": operating_margin,
+                "formula": "operating_profit / sales * 100",
+                "input_sources": {"operating_profit": "yfinance", "sales": "yfinance"},
+                "input_units": {"operating_profit": YFINANCE_NATIVE_FINANCIAL_UNIT,
+                                "sales": YFINANCE_NATIVE_FINANCIAL_UNIT},
+                "unit": "percent",
+            }
+        else:
+            values.pop("operating_margin", None)
+
+        operating_cf = finite_number(yfinance_values.get("operating_cf"))
+        investing_cf = finite_number(yfinance_values.get("investing_cf"))
+        fcf_margin = margin_percent(
+            operating_cf + investing_cf if operating_cf is not None and investing_cf is not None else None,
+            sales,
+        )
+        if fcf_margin is not None and all(
+                yfinance_field_units.get(field) == YFINANCE_NATIVE_FINANCIAL_UNIT
+                for field in ("sales", "operating_cf", "investing_cf")):
+            values["fcf_margin"] = fcf_margin
+            calculated_financial_metrics["fcf_margin"] = {
+                "value": fcf_margin,
+                "formula": "(operating_cf + investing_cf) / sales * 100",
+                "input_sources": {"operating_cf": "yfinance", "investing_cf": "yfinance", "sales": "yfinance"},
+                "input_units": {"operating_cf": YFINANCE_NATIVE_FINANCIAL_UNIT,
+                                "investing_cf": YFINANCE_NATIVE_FINANCIAL_UNIT,
+                                "sales": YFINANCE_NATIVE_FINANCIAL_UNIT},
+                "unit": "percent",
+            }
+        else:
+            values.pop("fcf_margin", None)
         fresh_doe_dividend_values = fresh_cash.get(period_end, {})
         doe_dividend_field = (
             "common_stock_dividend_paid"
@@ -1840,6 +1923,9 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
                 "doe_dividend_source_field": doe_dividend_field,
                 "doe_formula": "dividend_total_paid / period_end_stockholders_equity * 100",
             })
+            yfinance_field_units["doe_dividend_total"] = YFINANCE_NATIVE_FINANCIAL_UNIT
+            if normalized_financial_currency:
+                yfinance_field_reported_currencies["doe_dividend_total"] = normalized_financial_currency
         annual_field_status = {
             field: "available" if field in fresh_values or field in net_de_metrics
             else "stale" if field in yfinance_values
@@ -1848,6 +1934,17 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             for source, fields in (("income_statement", INCOME_FIELDS), ("balance_sheet", BALANCE_FIELDS), ("cash_flow", CASH_FLOW_FIELDS))
             for field in fields.values()
         }
+        unverified_yfinance_money_fields = {
+            field for field in yfinance_values
+            if field in YFINANCE_FINANCIAL_MONEY_FIELDS and field not in yfinance_field_units
+        }
+        for field in unverified_yfinance_money_fields:
+            if field in seed_values and seed_field_units.get(field) in {"jpy", "million_jpy"}:
+                values[field] = seed_values[field]
+                annual_field_status[field] = "legacy_migrated"
+            else:
+                values.pop(field, None)
+                annual_field_status[field] = "unsupported"
         if calculated_doe is not None:
             annual_field_status["calculated_doe"] = "available"
         elif finite_number(yfinance_values.get("calculated_doe", seed_values.get("calculated_doe"))) is not None:
@@ -1872,6 +1969,11 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
                 and "total_assets" in fresh_values
                 else "stale"
             )
+        for field, inputs in (
+                ("operating_margin", ("sales", "operating_profit")),
+                ("fcf_margin", ("sales", "operating_cf", "investing_cf"))):
+            if field in calculated_financial_metrics:
+                annual_field_status[field] = "available" if all(input_field in fresh_values for input_field in inputs) else "stale"
         annual_field_status_reason = financial_metric_missing_reasons(
             fresh_balance=fresh_balance.get(period_end, {}),
             fresh_cash=fresh_cash.get(period_end, {}),
@@ -1879,6 +1981,9 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             calculated_doe=calculated_doe,
             net_de_metrics=net_de_metrics,
         )
+        for field in unverified_yfinance_money_fields:
+            if field not in seed_values or seed_field_units.get(field) not in {"jpy", "million_jpy"}:
+                annual_field_status_reason[field] = ["financial_currency_unverified"]
         if equity_ratio["reason"]:
             annual_field_status_reason["equity_ratio_computed"] = [equity_ratio["reason"]]
         # Flat-row consumers calculate margins without consulting provenance.
@@ -1890,6 +1995,15 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
                     values[field] = None
                     annual_field_status[field] = "unsupported"
                     annual_field_status_reason[field] = ["mixed_source_units_not_comparable"]
+        ratio_calculation = {
+            "equity_ratio_computed": {
+                "value": values["equity_ratio_computed"],
+                "formula": "equity / total_assets * 100",
+                "input_sources": equity_ratio["input_sources"],
+                "input_units": equity_ratio["input_units"],
+                "unit": "percent",
+            }
+        } if "equity_ratio_computed" in values and equity_ratio["source"] == "calculated" else {}
         annual_sources = {
             "seed": {
                 **prior_seed,
@@ -1901,18 +2015,13 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
                 "source": "Yahoo Finance via yfinance",
                 "values": yfinance_values,
                 "field_units": yfinance_field_units,
+                "field_reported_currencies": yfinance_field_reported_currencies,
+                "reported_financial_currency": normalized_financial_currency,
+                "reported_financial_currency_status": "reported_unverified" if normalized_financial_currency else "not_reported",
                 "field_status": {field: "available" if field in fresh_values or field in net_de_metrics else "stale" for field in yfinance_values},
             },
             "calculated": {
-                "values": {
-                    "equity_ratio_computed": {
-                        "value": values["equity_ratio_computed"],
-                        "formula": "equity / total_assets * 100",
-                        "input_sources": equity_ratio["input_sources"],
-                        "input_units": equity_ratio["input_units"],
-                        "unit": "percent",
-                    }
-                } if "equity_ratio_computed" in values and equity_ratio["source"] == "calculated" else {},
+                "values": {**ratio_calculation, **calculated_financial_metrics},
             },
         }
         statements.append({
@@ -2210,6 +2319,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         cached["shortName"] = prior_profile.get("short_name") or prior_profile.get("display_name")
         cached["longName"] = prior_profile.get("long_name")
         cached["currency"] = (prior_current.get("price") or {}).get("currency") or "JPY"
+        if normalize_financial_currency(prior_profile.get("reported_financial_currency")):
+            cached["financialCurrency"] = prior_profile["reported_financial_currency"]
         return cached
 
     info_refresh_pending_before_attempt = prior_sync.get("info_refresh_pending") is True
@@ -2640,6 +2751,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         statements, valuation, financial_status, financial_document_keys = collect_financials(
             ticker, old, client, bucket, symbol,
             fetch_groups=financial_groups, previous_status=prior_field_status,
+            financial_currency=info.get("financialCurrency"),
         )
         financial_retry_pending = any(value == "failed" for value in financial_status.values() if isinstance(value, str))
         if isinstance(financial_status.get("fields"), dict):
@@ -2659,6 +2771,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "code": code,
         "symbol": symbol,
         **names,
+        "reported_financial_currency": normalize_financial_currency(info.get("financialCurrency")),
         **{key: collector.json_safe(info[key]) for key in PROFILE_FIELDS if info.get(key) is not None},
         "updated_at": iso_now(),
         "source": "Yahoo Finance via yfinance",
@@ -2666,6 +2779,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     previous_profile = prior_profile
     stale_profile_fields: set[str] = set()
     for field, value in (previous_profile.items() if previous_profile else []):
+        if field == "reported_financial_currency" and info_fetched:
+            continue
         if profile.get(field) is None and value is not None:
             profile[field] = value
             stale_profile_fields.add(field)
@@ -2675,7 +2790,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     else:
         profile["field_status"] = {
             field: ("stale" if field in stale_profile_fields else "available" if profile.get(field) is not None else "empty")
-            for field in (*PROFILE_FIELDS, "short_name", "long_name", "display_name", "english_name")
+            for field in (*PROFILE_FIELDS, "reported_financial_currency", "short_name", "long_name", "display_name", "english_name")
         }
     profile = preserve_profile_timestamp_if_unchanged(profile, previous_profile)
 
@@ -3125,9 +3240,27 @@ def income_advice_metrics(current: dict[str, Any], statements: list[dict[str, An
     values: dict[str, Any] = {}
     statuses: dict[str, str] = {}
 
-    payout_ratio = finite_number(statistics.get("payoutRatio"))
-    values["payout_ratio"] = payout_ratio * 100 if payout_ratio is not None else prior.get("payout_ratio")
+    statistics_units = current.get("statistics_field_units") if isinstance(current.get("statistics_field_units"), dict) else {}
+    def statistic_percent(field: str) -> float | None:
+        value = finite_number(statistics.get(field))
+        unit = str(
+            statistics_units.get(field)
+            or FINANCIAL_UNIT_CONTRACT["yfinance_statistics_field_units"].get(field)
+            or ""
+        ).strip().lower()
+        if value is None:
+            return None
+        if unit == "ratio":
+            return value * 100
+        if unit == "percent":
+            return value
+        return None
+
+    normalized_payout_ratio = statistic_percent("payoutRatio")
+    values["payout_ratio"] = normalized_payout_ratio if normalized_payout_ratio is not None else prior.get("payout_ratio")
     statuses["payout_ratio"] = str(field_status.get("statistics_payoutRatio", "empty"))
+    if finite_number(statistics.get("payoutRatio")) is not None and normalized_payout_ratio is None:
+        statuses["payout_ratio"] = "stale" if prior.get("payout_ratio") is not None else "unsupported"
     if statuses["payout_ratio"] in {"empty", "not_scheduled"} and prior.get("payout_ratio") is not None:
         values["payout_ratio"] = prior.get("payout_ratio")
         statuses["payout_ratio"] = str(prior_fields.get("payout_ratio", "stale"))
@@ -3164,9 +3297,9 @@ def income_advice_metrics(current: dict[str, Any], statements: list[dict[str, An
         values[metric] = finite_number(statistics.get(statistic))
         statuses[metric] = str(field_status.get(f"statistics_{statistic}", "empty"))
 
-    reported_operating_margin = finite_number(statistics.get("operatingMargins"))
+    reported_operating_margin = statistic_percent("operatingMargins")
     if reported_operating_margin is not None:
-        values["operating_margin"] = reported_operating_margin * 100
+        values["operating_margin"] = reported_operating_margin
         statuses["operating_margin"] = str(field_status.get("statistics_operatingMargins", "available"))
 
     dividend = current.get("dividend") if isinstance(current.get("dividend"), dict) else {}

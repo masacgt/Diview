@@ -11,7 +11,9 @@ class FinancialDataTest {
             fun JSONObject.tagUnits(definitions: Map<String, String>) {
                 val units = optJSONObject("field_units") ?: JSONObject()
                 definitions.forEach { (field, unit) ->
-                    if (has(field) && !isNull(field)) units.put(field, unit)
+                    if (has(field) && !isNull(field) && (!units.has(field) || units.isNull(field))) {
+                        units.put(field, unit)
+                    }
                 }
                 put("field_units", units)
             }
@@ -146,6 +148,29 @@ class FinancialDataTest {
         assertEquals("10.0倍", data.profile.getPer(500.0))
         assertEquals(30.0, data.dividends.last().dps, 0.0)
     }
+    @Test fun usesVerifiedPercentagesAndRejectsYahooNativeMoneyAsYen() {
+        val root = JSONObject("""{
+          "security":{"code":"7203"},
+          "financials":{"annual":[{
+            "fiscal_year":"2025/03","sales":1000,"operating_profit":100,
+            "operating_cf":200,"investing_cf":-50,"operating_margin":10,
+            "fcf_margin":15,"equity_ratio_computed":40,
+            "field_units":{
+              "sales":"yfinance_native","operating_profit":"yfinance_native",
+              "operating_cf":"yfinance_native","investing_cf":"yfinance_native",
+              "operating_margin":"percent","fcf_margin":"percent","equity_ratio_computed":"percent"
+            }
+          }]}
+        }""")
+
+        val data = parseFixture(root, "7203")
+
+        assertEquals(10.0, data.profile.operatingMargin, 0.0)
+        assertEquals(15.0, data.profile.fcfMargin!!, 0.0)
+        assertEquals("フリーCF黒字", data.profile.fcfStatus)
+        assertEquals(40.0, data.profile.equityRatio, 0.0)
+        assertNull(data.values["sales"])
+    }
     @Test fun missingDataDoesNotProduceInventedMetricsOrScores() {
         val data = parseFixture(JSONObject("""{"security":{"code":"7203"}}"""), "7203")
         assertTrue(data.profile.payoutRatio.isNaN())
@@ -174,6 +199,26 @@ class FinancialDataTest {
         val root = JSONObject("""{"security":{"code":"7203"},"dividends":{"payout_ratio":25}}""")
         val data = parseFixture(root, "7203")
         assertEquals(25.0, data.profile.payoutRatio, 0.0)
+    }
+    @Test fun payoutRatioUsesDeclaredUnitForAnnualAndTopLevelValues() {
+        val annualPercent = JSONObject("""{
+          "security":{"code":"7203"},
+          "financials":{"annual":[{"period_end":"2025-03-31"}]},
+          "dividends":{"records":[{"calendar_year":2025,"payout_ratio":25,
+            "field_units":{"payout_ratio":"percent"}}]}
+        }""")
+        val topLevelFraction = JSONObject("""{
+          "security":{"code":"7203"},
+          "dividends":{"payout_ratio":0.25,"field_units":{"payout_ratio":"ratio"}}
+        }""")
+        val unknownUnit = JSONObject("""{
+          "security":{"code":"7203"},
+          "dividends":{"payout_ratio":25,"field_units":{"payout_ratio":"unknown"}}
+        }""")
+
+        assertEquals(25.0, parseFixture(annualPercent, "7203").profile.payoutRatio, 0.0)
+        assertEquals(25.0, parseFixture(topLevelFraction, "7203").profile.payoutRatio, 0.0)
+        assertTrue(parseFixture(unknownUnit, "7203").profile.payoutRatio.isNaN())
     }
     @Test fun identifiesObservedCalendarYearDistributionsAndCalculatesTheirCagr() {
         val root = JSONObject("""{"security":{"code":"1306"},"dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"calendar_year":2024,"calendar_year_distribution_per_share":100},{"calendar_year":2025,"calendar_year_distribution_per_share":110}]}}""")
