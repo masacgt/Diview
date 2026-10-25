@@ -63,4 +63,26 @@ class StockAnalysisNarrativeGeneratorTest {
         assertEquals(45L * 45L * 45L * 45L * 45L * 45L, result.possibleCombinations)
         assertNull(result.combinationIndex)
     }
+
+    @Test
+    fun detailedDividendContinuityCommentsStayWithinTheRequestedLength() {
+        val violations = mutableListOf<String>()
+        ranges.forEach { (key, metricRanges) ->
+            metricRanges.forEachIndexed { bandIndex, (low, high) ->
+                val values = baseline.toMutableMap().apply { this[key] = (low + high) / 2.0 }
+                val text = StockAnalysisNarrativeGenerator.generateDetailed(values)
+                    .findings.single { it.key == key }.text
+                val allowed = if (key == "per" || key == "pbr") 130..170 else 100..140
+                if (text.length !in allowed) violations += "$key band $bandIndex: ${text.length} characters"
+            }
+        }
+        listOf("per" to -1.0, "pbr" to -1.0, "payout_ratio" to -10.0).forEach { (key, value) ->
+            val values = baseline.toMutableMap().apply { this[key] = value }
+            val text = StockAnalysisNarrativeGenerator.generateDetailed(values)
+                .findings.single { it.key == key }.text
+            val allowed = if (key == "per" || key == "pbr") 130..170 else 100..140
+            if (text.length !in allowed) violations += "$key non-positive: ${text.length} characters"
+        }
+        assertTrue(violations.joinToString("\n"), violations.isEmpty())
+    }
 }

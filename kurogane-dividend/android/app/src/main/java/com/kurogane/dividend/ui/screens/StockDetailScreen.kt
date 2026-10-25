@@ -2509,7 +2509,7 @@ fun StockDetailScreen(
 
 
             item {
-                StockAnalysisNarrativeCard(analysisNarrative, healthExplanationKeys)
+                StockAnalysisNarrativeCard(analysisNarrative)
             }
 
             // 5. 配当月・通知設定
@@ -3869,8 +3869,7 @@ private fun StockAnalysisPositionRow(item: StockAnalysisPositionItem) {
 
 @Composable
 private fun StockAnalysisNarrativeCard(
-    analysisNarrative: StockAnalysisNarrative,
-    healthExplanationKeys: Set<String>
+    analysisNarrative: StockAnalysisNarrative
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
@@ -3910,9 +3909,7 @@ private fun StockAnalysisNarrativeCard(
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
-                    if (finding.key !in healthExplanationKeys) {
-                        Text(finding.text, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
-                    }
+                    Text(finding.text, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
                 }
             }
             Text(
