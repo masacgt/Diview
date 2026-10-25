@@ -669,6 +669,12 @@ private fun MonthlyDividendEstimateCard(
         }
         MonthlyDividendChartBasis.entries.associateWith(::monthlyAmountsForBasis)
     }
+    // The basis switch redistributes events across months; keep the average independent of bar animation values.
+    val monthlyAverageAmount = remember(monthlyByCategoryByBasis) {
+        monthlyByCategoryByBasis
+            .getValue(MonthlyDividendChartBasis.EX_DIVIDEND_MONTH)
+            .sumOf { categories -> categories.sum() } / 12.0
+    }
     val targetMonthlyByCategory = monthlyByCategoryByBasis.getValue(chartBasis)
     var monthlyChartVisible by remember { mutableStateOf(false) }
     val monthlyValueAnimationSpec: AnimationSpec<Float> = if (monthlyChartVisible && isTabSelected) {
@@ -1047,7 +1053,7 @@ private fun MonthlyDividendEstimateCard(
                         text = selectedMonth?.let { month ->
                             val amount = monthlyDividends.firstOrNull { it.first == month }?.second ?: 0.0
                             "${month}月: ¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(amount)}"
-                        } ?: "月平均: ¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(monthlyDividends.sumOf { it.second } / 12)}",
+                        } ?: "月平均: ¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(monthlyAverageAmount)}",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         color = NeonGreenLight,
                         fontSize = AppTextSize.dense,
