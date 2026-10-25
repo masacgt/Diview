@@ -481,6 +481,21 @@ fun StockDetailScreen(
     )
     val liveYield = currentHolding.liveYield
     val liveYoc = if (currentHolding.acqPrice > 0) (dps / currentHolding.acqPrice) * 100.0 else liveYield
+    val topCardForecastDps = if (currentHolding.category == com.kurogane.dividend.model.Category.FUND) null else
+        financial?.takeIf { it.forecastFiscalYear == chartForecastYear }?.forecastAnnualDividend
+            ?: currentYearForecastDps ?: financial?.yahooForwardAnnualDividendRate
+    val topCardDps = topCardForecastDps ?: dps
+    val topCardDpsUnavailable = currentDpsUnavailable && topCardForecastDps == null
+    val topCardNoDividendConfirmed = topCardForecastDps?.let { it == 0.0 }
+        ?: currentHolding.isNoDividendConfirmed
+    val topCardYield = topCardForecastDps?.let {
+        com.kurogane.dividend.model.PortfolioMath.yieldPercent(it, currentPrice)
+    } ?: liveYield
+    val topCardYoc = topCardForecastDps?.let { forecastDps ->
+        if (currentHolding.acqPrice > 0) {
+            com.kurogane.dividend.model.PortfolioMath.yieldPercent(forecastDps, currentHolding.acqPrice)
+        } else topCardYield
+    } ?: liveYoc
 
     val totalSimShares = baseShares.toLong() + simAddedShares
     val simPurchaseAmount = simAddedShares * currentHolding.price / currentHolding.priceUnit
@@ -770,12 +785,20 @@ fun StockDetailScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
-                                    Text(if (currentHolding.category == com.kurogane.dividend.model.Category.FUND) stringResource(R.string.stock_detail_label) else stringResource(R.string.stock_detail_label_2), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     Text(
-                                        if (currentDpsUnavailable) "未取得" else stringResource(
+                                        when {
+                                            currentHolding.category == com.kurogane.dividend.model.Category.FUND -> stringResource(R.string.stock_detail_label)
+                                            topCardForecastDps != null -> stringResource(R.string.stock_detail_label_forecast_dps)
+                                            else -> stringResource(R.string.stock_detail_label_2)
+                                        },
+                                        color = OnSurfaceVariant,
+                                        fontSize = AppTextSize.dense
+                                    )
+                                    Text(
+                                        if (topCardDpsUnavailable) "未取得" else stringResource(
                                             R.string.add_holding_1_s_2_s_2,
                                             currentHolding.currency,
-                                            com.kurogane.dividend.model.formatFinancialAmountDisplay(currentHolding.dps)
+                                            com.kurogane.dividend.model.formatFinancialAmountDisplay(topCardDps)
                                         ),
                                         fontWeight = FontWeight.Bold,
                                         color = OnSurface,
@@ -792,9 +815,14 @@ fun StockDetailScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
-                                    Text(stringResource(R.string.stock_detail_text_4), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     Text(
-                                        com.kurogane.dividend.model.formatDividendYieldDisplay(liveYield, currentHolding.isNoDividendConfirmed),
+                                        if (topCardForecastDps != null) stringResource(R.string.stock_detail_label_forecast_yield)
+                                        else stringResource(R.string.stock_detail_text_4),
+                                        color = OnSurfaceVariant,
+                                        fontSize = AppTextSize.dense
+                                    )
+                                    Text(
+                                        com.kurogane.dividend.model.formatDividendYieldDisplay(topCardYield, topCardNoDividendConfirmed),
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryEmerald,
                                         fontSize = AppTextSize.caption,
@@ -810,9 +838,14 @@ fun StockDetailScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
-                                    Text(stringResource(R.string.stock_detail_text_6), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     Text(
-                                        if (currentDpsUnavailable) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(currentHolding.liveYoc, currentHolding.isNoDividendConfirmed),
+                                        if (topCardForecastDps != null) stringResource(R.string.stock_detail_label_forecast_yoc)
+                                        else stringResource(R.string.stock_detail_text_6),
+                                        color = OnSurfaceVariant,
+                                        fontSize = AppTextSize.dense
+                                    )
+                                    Text(
+                                        if (topCardDpsUnavailable) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(topCardYoc, topCardNoDividendConfirmed),
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryEmerald,
                                         fontSize = AppTextSize.caption,

@@ -2,6 +2,8 @@
 
 ## In Progress
 
+- [x] Use forecast DPS and matching forecast yields in the Stock Detail top card. Evidence: `FinancialData.kt` accepts Yahoo `dividendRate` only with `jpy_per_share` units, and `StockDetailScreen.kt` prioritizes issuer forecasts then the existing dividend-event estimate; JDK 17 `assembleDebug` succeeded, 8984 displays ¥6,571 / 6.01% / 5.33% matching the chart on `emulator-5560`, and the installed APK SHA-256 matches on the emulator and SCG01.
+
 - [x] Normalize Android payout ratios from their declared units and prevent percent values from being multiplied again. Evidence: production `/api/v1/financial-data/8984` declares `dividends.payout_ratio=100` as `percent`, while 7203 returns `27.040002` as `percent`; the JDK 17 debug APK built and installed with matching SHA-256 on `emulator-5560` and `RFCNC0E4H8J`, and the emulator now displays 8984 at `100.00%` instead of `10000.00%`.
 
 - [ ] Publish and verify the financial statement unit contract end to end. Evidence: Yahoo V2 money now uses `yfinance_native`, reported currency is marked unverified, and ratio/margin inputs retain period/source/unit provenance. Worker routes pass 40/40, Python sync tests pass 120/120, Android unit tests pass 159/159, JDK 17 debug build succeeds, and the APK installs and launches on SCG01 and emulator-5554. Worker version `4d0c0767-e004-4b90-831a-f9236b1afa37` is live at 100%; production reads for 8058/6721/1301/6269 return contract 6 and unit metadata. The `financial_revision` token remains `2d6dd979696e4992a4d61a916af62228`, so full R2 refresh, device-cache renewal, and full-universe API audit remain pending.

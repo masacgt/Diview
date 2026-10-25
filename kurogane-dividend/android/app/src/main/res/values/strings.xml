@@ -753,6 +753,9 @@
     <string name="settings_message_9">"初期化できませんでした"</string>
     <string name="stock_detail_label">"1万口分配金"</string>
     <string name="stock_detail_label_2">"1株配当 (DPS)"</string>
+    <string name="stock_detail_label_forecast_dps">"予想配当"</string>
+    <string name="stock_detail_label_forecast_yield">"予想利回り"</string>
+    <string name="stock_detail_label_forecast_yoc">"予想取得利回り"</string>
     <string name="stock_detail_label_3">"連続増配"</string>
     <string name="stock_detail_label_4">"配当実績"</string>
     <string name="stock_detail_label_5">"%1$s期"</string>
