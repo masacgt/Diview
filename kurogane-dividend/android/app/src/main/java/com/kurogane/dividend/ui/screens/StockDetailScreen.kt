@@ -428,6 +428,14 @@ fun StockDetailScreen(
     val healthNarrative = remember(healthValues) { StockAnalysisNarrativeGenerator.generate(healthValues) }
     val healthDetailedNarrative = remember(healthValues) { StockAnalysisNarrativeGenerator.generateDetailed(healthValues) }
     val healthExplanationKeys = remember(healthNarrative) { healthNarrative.findings.map { it.key }.toSet() }
+    val positionNarrative = remember(currentHolding, backendAnalysisValues, financial) {
+        StockAnalysisNarrativeGenerator.generatePositionDetailed(
+            (backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())
+        )
+    }
+    val healthPositionNarrative = remember(healthValues) {
+        StockAnalysisNarrativeGenerator.generatePositionDetailed(healthValues)
+    }
     val valuationValues = remember(backendAnalysisValues, financial) {
         ((backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())).filterKeys { it == "per" || it == "pbr" }
     }
@@ -454,14 +462,14 @@ fun StockDetailScreen(
         "fcf_margin" to "FCF余力",
         "dividend_growth_years" to "連続増配年数"
     )
-    val healthFindingsByKey = healthDetailedNarrative.findings.associateBy { it.key }
+    val healthFindingsByKey = healthPositionNarrative.findings.associateBy { it.key }
     val healthPositionItems = healthMetricLabels.mapNotNull { (key, label) ->
         healthFindingsByKey[key]?.toStockAnalysisPositionItem()
-            ?: label.takeIf { it in healthDetailedNarrative.missingLabels }?.let {
+            ?: label.takeIf { it in healthPositionNarrative.missingLabels }?.let {
                 StockAnalysisPositionItem(
                     label = label, formattedValue = "未取得", bandLabel = "評価不可",
                     positionLabel = "データなし", score = null,
-                    text = "${label}は未取得のため、評価基準上の位置を表示できません。"
+                    text = "${label}の値が未取得のため、評価基準内の位置は判定できません。未取得は0や基準外を意味せず、最新データの取得後に再評価します。"
                 )
             }
     }
@@ -476,12 +484,12 @@ fun StockDetailScreen(
                 currentDpsUnavailable -> StockAnalysisPositionItem(
                     label = "配当利回り", formattedValue = "未取得", bandLabel = "比較不可",
                     positionLabel = "評価基準なし", score = null,
-                    text = "DPSが未取得のため現在利回りを算出できません。表示上の0.00%は未取得による値で、無配確定を示しません。"
+                    text = "DPSが未取得で、現在利回りと評価基準内の位置は算出できません。表示上の0.00%は未取得を表し、無配確定ではありません。"
                 )
                 !hasYieldHistory -> StockAnalysisPositionItem(
                     label = "配当利回り", formattedValue = currentYieldText, bandLabel = "過去実績未取得",
                     positionLabel = "比較基準なし", score = null,
-                    text = "利回りは予想配当を株価で割った値です。比較できる過去実績が不足しているため、範囲内の位置は判定できません。株価と予想配当の変化で利回りも動きます。"
+                    text = "現在利回りは予想配当を株価で割った値です。比較できる過去実績がなく、基準内の位置は判定できず、株価や予想配当の変化でも動きます。"
                 )
                 else -> {
                     val yield = currentHolding.yieldRate
@@ -505,12 +513,12 @@ fun StockDetailScreen(
                             "過去平均未満" -> 60
                             else -> 40
                         },
-                        text = "取得できた直近最大5期の実績は最低${profile.yieldRangeMin.financialText(2, "%")}・平均${profile.yieldRangeAvg.financialText(2, "%")}・最高${profile.yieldRangeMax.financialText(2, "%")}です。位置はこの実績範囲との比較です。過去の範囲は将来の利回りや買い時を保証しません。"
+                        text = "直近最大5期の利回りは最低${profile.yieldRangeMin.financialText(2, "%")}・平均${profile.yieldRangeAvg.financialText(2, "%")}・最高${profile.yieldRangeMax.financialText(2, "%")}です。現在値は実績範囲の${position}で、過去期間との比較です。"
                     )
                 }
             }
         )
-        analysisNarrative.findings.filter { it.key == "per" || it.key == "pbr" }.forEach { finding ->
+        positionNarrative.findings.filter { it.key == "per" || it.key == "pbr" }.forEach { finding ->
             add(finding.toStockAnalysisPositionItem())
         }
         missingValuationLabels.forEach { label ->
@@ -518,19 +526,19 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = label, formattedValue = "未取得", bandLabel = "評価不可",
                     positionLabel = "データなし", score = null,
-                    text = "${label}は取得できていないため、評価基準上の位置を表示できません。"
+                    text = "${label}の値が未取得のため、評価基準内の位置は判定できません。未取得は0や基準外を意味せず、最新データの取得後に再評価します。"
                 )
             )
         }
     }
     val growthPositionItems = buildList {
-        analysisNarrative.findings.firstOrNull { it.key == "dividend_growth_years" }?.let { finding ->
+        positionNarrative.findings.firstOrNull { it.key == "dividend_growth_years" }?.let { finding ->
             add(finding.toStockAnalysisPositionItem())
         } ?: add(
             StockAnalysisPositionItem(
                 label = "連続増配年数", formattedValue = "未取得", bandLabel = "評価不可",
                 positionLabel = "データなし", score = null,
-                text = "比較できる配当履歴が不足しているため、連続増配年数の評価基準上の位置を表示できません。"
+                text = "連続する増配履歴が不足しており、評価基準内の位置は判定できません。比較可能な期間が揃った時点で改めて位置を詳しく確認します。"
             )
         )
 
@@ -541,12 +549,24 @@ fun StockDetailScreen(
             val ranges = listOf(0.0 to 1.0, 1.0 to 3.0, 3.0 to 5.0, 5.0 to 10.0, 10.0 to 25.0)
             val scores = listOf(40, 55, 70, 85, 100)
             val range = ranges[bandIndex]
+            val position = positionWithinBand(years, range.first, range.second)
+            val criterionRange = when (bandIndex) {
+                0 -> "1年以下"
+                4 -> "10年超"
+                else -> "${range.first.toInt()}年超${range.second.toInt()}年以下"
+            }
+            val boundary = listOf(1.0, 3.0, 5.0, 10.0).getOrNull(bandIndex)
+            val positionText = if (boundary != null) {
+                "次の境界${boundary.toInt()}年まで${(boundary - years).coerceAtLeast(0.0).financialText(1, "年")}で、横ばい年も含む年数基準上の位置を示します。"
+            } else {
+                "最終境界10年を${(years - 10.0).coerceAtLeast(0.0).financialText(1, "年")}上回り、横ばい年も含む累計です。"
+            }
             add(
                 StockAnalysisPositionItem(
                     label = "非減配年数", formattedValue = "${profile.noCutYears}年",
-                    bandLabel = bandLabels[bandIndex], positionLabel = positionWithinBand(years, range.first, range.second),
+                    bandLabel = bandLabels[bandIndex], positionLabel = position,
                     score = scores[bandIndex],
-                    text = "取得した履歴で配当を減らさなかった年数です。表示区分は連続増配年数と同じ年数基準を用いた位置の目安で、横ばいを含みます。過去実績は将来の配当を保証しません。"
+                    text = "非減配年数の評価基準${criterionRange}で、「${bandLabels[bandIndex]}」帯の${position}です。$positionText"
                 )
             )
         } else {
@@ -554,7 +574,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = "非減配年数", formattedValue = "未取得", bandLabel = "評価不可",
                     positionLabel = "比較期間不足", score = null,
-                    text = "比較できる配当履歴が不足しているため、非減配年数の評価基準上の位置を表示できません。"
+                    text = "非減配年数を比較できる配当履歴が不足しており、評価基準内の位置は判定できません。比較可能な期間が揃った時点で改めて評価します。"
                 )
             )
         }
@@ -571,13 +591,22 @@ fun StockDetailScreen(
                 profile.growthRate < 0.0 -> "基準を下回る"
                 else -> "基準値"
             }
-            val basisNote = if (isCalendarYearDividendHistory) "暦年に観測された配当合計による参考値で、決算期の年間配当額とは集計期間が異なる場合があります。" else "年間配当額を使った年率換算です。"
+            val direction = when {
+                profile.growthRate > 0.0 -> "0%超"
+                profile.growthRate < 0.0 -> "0%未満"
+                else -> "0%"
+            }
+            val basisNote = if (isCalendarYearDividendHistory) {
+                "暦年集計の参考値で、決算期配当とは期間が異なる場合があります。"
+            } else {
+                "直近最大5期の年率換算で、毎年同じ率の増減を示しません。"
+            }
             add(
                 StockAnalysisPositionItem(
                     label = cagrLabel, formattedValue = profile.growthRate.financialSignedText(1, "%"),
                     bandLabel = cagrBand, positionLabel = cagrPosition,
                     score = when { profile.growthRate > 0.0 -> 85; profile.growthRate == 0.0 -> 65; else -> 40 },
-                    text = "判定の基準点は0%です。CAGRは直近最大5年の始点から終点までの変化を年率換算した値で、毎年同じ率で増減したことを示しません。$basisNote"
+                    text = "判定基準は0%で、CAGRは「${direction}」側の位置を示します。$basisNote"
                 )
             )
         } else {
@@ -585,7 +614,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = cagrLabel, formattedValue = "未取得", bandLabel = "評価不可",
                     positionLabel = "比較期間不足", score = null,
-                    text = "連続する複数期の比較に必要な配当履歴が不足しているため、0%基準での位置を表示できません。"
+                    text = "配当CAGRの比較に必要な複数期の履歴が不足しており、0%基準での位置は判定できません。比較可能な期間が揃ってから改めて評価します。"
                 )
             )
         }
@@ -659,7 +688,7 @@ fun StockDetailScreen(
                     label = "銘柄配当依存度", formattedValue = "$divDependencyStr%", bandLabel = band,
                     positionLabel = position,
                     score = when { divDependency <= 10.0 -> 85; divDependency <= 25.0 -> 55; else -> 35 },
-                    text = "この銘柄の年間配当が、選択中の税引設定で算出した保有銘柄の年間配当合計に占める割合です。判定境界は10%・25%で、配当額や保有状況に応じて変わります。"
+                    text = "保有全体の年間配当に占めるこの銘柄の比率は${divDependencyStr}%で、判定境界は10%・25%です。現在は「${band}」帯の${position}にあります。"
                 )
             )
         } else {
@@ -667,7 +696,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = "銘柄配当依存度", formattedValue = "算出不可", bandLabel = "評価不可",
                     positionLabel = "分母またはDPSなし", score = null,
-                    text = "DPSまたは保有銘柄の年間配当合計が不足しているため、依存度を判定できません。算出不可は0%を意味しません。"
+                    text = "DPSまたは保有全体の年間配当が不足し、評価基準内の位置を算出できません。算出不可は0%を意味しないため、データを確認してください。"
                 )
             )
         }
@@ -690,7 +719,7 @@ fun StockDetailScreen(
                     bandLabel = impactBand,
                     positionLabel = impactPosition,
                     score = when { cutImpactRatio <= 5.0 -> 85; cutImpactRatio <= 12.5 -> 55; else -> 35 },
-                    text = "この銘柄の年間配当が50%減る仮定で、全体の年間配当が約¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(displayCutImpact)}減る試算です。帯の境界は銘柄配当依存度の10%・25%を半減した値で、減配予測ではありません。"
+                    text = "配当半減時の影響比率は、銘柄配当依存度の半分を基準に判定します。境界は5%・12.5%で、実際の減配予測ではありません。"
                 )
             )
         } else {
@@ -698,7 +727,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = "配当半減時の影響比率", formattedValue = "算出不可", bandLabel = "評価不可",
                     positionLabel = "分母またはDPSなし", score = null,
-                    text = "DPSまたは年間配当合計が不足しているため、50%減配を仮定した影響の位置を表示できません。"
+                    text = "DPSまたは保有全体の年間配当が不足し、影響比率の評価基準内の位置を算出できません。算出不可は配当への影響がないことを意味しません。"
                 )
             )
         }
@@ -719,7 +748,7 @@ fun StockDetailScreen(
                     label = "$cleanSectorName セクター集中度", formattedValue = "$sectorDependencyStr%",
                     bandLabel = band, positionLabel = position,
                     score = when { sectorDependency <= 20.0 -> 85; sectorDependency <= 30.0 -> 55; else -> 35 },
-                    text = "保有資産の評価額合計に占める${cleanSectorName}の割合です。判定境界は20%・30%で、配当額ではなく評価額を基準にし、株価や保有額に応じて変わります。"
+                    text = "保有評価額のうちセクターが占める割合を示します。判定境界は20%・30%で、現在は「${band}」帯の中で${position}にあります。"
                 )
             )
         } else {
@@ -727,7 +756,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = "$cleanSectorName セクター集中度", formattedValue = "算出不可", bandLabel = "評価不可",
                     positionLabel = "分母なし", score = null,
-                    text = "保有資産の評価額合計がないため、セクター集中度の評価基準上の位置を表示できません。算出不可は0%を意味しません。"
+                    text = "保有資産の評価額合計が不足し、セクター集中度の位置は判定できません。算出不可は0%を意味せず、評価額の取得後に確認します。"
                 )
             )
         }

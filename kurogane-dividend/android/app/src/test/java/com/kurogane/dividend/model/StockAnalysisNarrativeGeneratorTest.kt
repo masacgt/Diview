@@ -87,4 +87,33 @@ class StockAnalysisNarrativeGeneratorTest {
         }
         assertTrue(violations.joinToString("\n"), violations.isEmpty())
     }
+
+    @Test
+    fun evaluationPositionCommentsStayWithinSixtyToNinetyCharactersAndTwoSentences() {
+        val violations = mutableListOf<String>()
+        ranges.forEach { (key, metricRanges) ->
+            metricRanges.forEachIndexed { bandIndex, (low, high) ->
+                (0 until 9).forEach { positionIndex ->
+                    val fraction = (positionIndex + 0.5) / 9.0
+                    val values = baseline.toMutableMap().apply { this[key] = low + (high - low) * fraction }
+                    val text = StockAnalysisNarrativeGenerator.generatePositionDetailed(values)
+                        .findings.single { it.key == key }.text
+                    if (text.length !in 60..90) {
+                        violations += "$key band $bandIndex position $positionIndex: ${text.length} characters"
+                    }
+                    if (text.count { it == '。' } != 2) {
+                        violations += "$key band $bandIndex position $positionIndex: expected two sentences"
+                    }
+                }
+            }
+        }
+        listOf("per" to -1.0, "pbr" to -1.0, "payout_ratio" to -1.0).forEach { (key, value) ->
+            val values = baseline.toMutableMap().apply { this[key] = value }
+            val text = StockAnalysisNarrativeGenerator.generatePositionDetailed(values)
+                .findings.single { it.key == key }.text
+            if (text.length !in 60..90) violations += "$key non-positive: ${text.length} characters"
+            if (text.count { it == '。' } != 2) violations += "$key non-positive: expected two sentences"
+        }
+        assertTrue(violations.joinToString("\n"), violations.isEmpty())
+    }
 }

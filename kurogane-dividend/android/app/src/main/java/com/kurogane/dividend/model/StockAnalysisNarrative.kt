@@ -39,6 +39,8 @@ data class StockAnalysisNarrative(
 
 /** Deterministic 5-band x 9-position narratives for the seven backend stock-analysis metrics. */
 object StockAnalysisNarrativeGenerator {
+    private enum class TextStyle { SUMMARY, DIVIDEND_CONTINUITY, EVALUATION_POSITION }
+
     private data class Band(val label: String, val score: Int, val explanation: String)
     private data class Rule(
         val key: String,
@@ -221,11 +223,14 @@ object StockAnalysisNarrativeGenerator {
         require(rules.all { it.positionText.size == 9 })
     }
 
-    fun generate(values: Map<String, Double?>): StockAnalysisNarrative = generate(values, includeDetailedExplanation = false)
+    fun generate(values: Map<String, Double?>): StockAnalysisNarrative = generate(values, TextStyle.SUMMARY)
 
-    fun generateDetailed(values: Map<String, Double?>): StockAnalysisNarrative = generate(values, includeDetailedExplanation = true)
+    fun generateDetailed(values: Map<String, Double?>): StockAnalysisNarrative = generate(values, TextStyle.DIVIDEND_CONTINUITY)
 
-    private fun generate(values: Map<String, Double?>, includeDetailedExplanation: Boolean): StockAnalysisNarrative {
+    fun generatePositionDetailed(values: Map<String, Double?>): StockAnalysisNarrative =
+        generate(values, TextStyle.EVALUATION_POSITION)
+
+    private fun generate(values: Map<String, Double?>, textStyle: TextStyle): StockAnalysisNarrative {
         val findings = mutableListOf<StockAnalysisFinding>()
         val missing = mutableListOf<String>()
         var weightedScore = 0.0
@@ -254,13 +259,12 @@ object StockAnalysisNarrativeGenerator {
             } else {
                 String.format(Locale.JAPAN, "%.2f%s", value, rule.unit)
             }
-            val findingText = if (includeDetailedExplanation) {
-                nonPositiveValuationExplanations[rule.key]?.takeIf {
+            val findingText = when (textStyle) {
+                TextStyle.SUMMARY -> "${rule.definition} ${band.explanation} ${rule.positionText[detailIndex]}"
+                TextStyle.DIVIDEND_CONTINUITY -> nonPositiveValuationExplanations[rule.key]?.takeIf {
                     value <= 0.0 && (rule.key == "per" || rule.key == "pbr" || rule.key == "payout_ratio")
-                }
-                    ?: dividendContinuityExplanations.getValue(rule.key)[bandIndex]
-            } else {
-                "${rule.definition} ${band.explanation} ${rule.positionText[detailIndex]}"
+                } ?: dividendContinuityExplanations.getValue(rule.key)[bandIndex]
+                TextStyle.EVALUATION_POSITION -> positionExplanation(rule, bandIndex, value, detailIndex)
             }
             findings += StockAnalysisFinding(
                 key = rule.key,
@@ -306,6 +310,40 @@ object StockAnalysisNarrativeGenerator {
             combinationIndex = combinationIndex.takeIf { dimensions == rules.size },
             possibleCombinations = possible
         )
+    }
+
+    private fun positionExplanation(rule: Rule, bandIndex: Int, value: Double, detailIndex: Int): String {
+        val specialCase = when {
+            rule.key == "per" && value <= 0.0 ->
+                "設定基準${formatMetricValue(rule, rule.cutoffs.first())}以下の「${rule.bands.first().label}」帯にあります。赤字などで通常の倍率比較が難しいため、利益の状況も合わせて確認してください。"
+            rule.key == "pbr" && value <= 0.0 ->
+                "設定基準${formatMetricValue(rule, rule.cutoffs.first())}以下の「${rule.bands.first().label}」帯にあります。純資産が負の場合などは比較しにくいため、資産の状況も確認してください。"
+            rule.key == "payout_ratio" && value < 0.0 ->
+                "設定基準${formatMetricValue(rule, rule.cutoffs.first())}以下の「${rule.bands.first().label}」帯です。利益が0以下の場合は比率を通常通り解釈できず、利益と配当額を個別に確認してください。"
+            else -> null
+        }
+        if (specialCase != null) return specialCase
+
+        val criterionRange = when (bandIndex) {
+            0 -> "${formatMetricValue(rule, rule.cutoffs.first())}以下"
+            rule.bands.lastIndex -> "${formatMetricValue(rule, rule.cutoffs.last())}超"
+            else -> "${formatMetricValue(rule, rule.cutoffs[bandIndex - 1])}超${formatMetricValue(rule, rule.cutoffs[bandIndex])}以下"
+        }
+        val firstSentence = "設定基準${criterionRange}の「${rule.bands[bandIndex].label}」帯にあり、${rule.positionText[detailIndex]}"
+        val secondSentence = if (bandIndex < rule.bands.lastIndex) {
+            val boundary = rule.cutoffs[bandIndex]
+            val distance = (boundary - value).coerceAtLeast(0.0)
+            if (rule.key == "dividend_growth_years" && bandIndex == 0) {
+                "次の「${rule.bands[bandIndex + 1].label}」帯との境界${formatMetricValue(rule, boundary)}まで${formatMetricValue(rule, distance)}で、年数基準上の差を示します。"
+            } else {
+                "次の「${rule.bands[bandIndex + 1].label}」帯との境界${formatMetricValue(rule, boundary)}まで${formatMetricValue(rule, distance)}です。"
+            }
+        } else {
+            val boundary = rule.cutoffs.last()
+            val excess = (value - boundary).coerceAtLeast(0.0)
+            "最終境界${formatMetricValue(rule, boundary)}を${formatMetricValue(rule, excess)}上回り、これ以上の評価帯はありません。"
+        }
+        return firstSentence + secondSentence
     }
 
     private fun powerOf45(exponent: Int): Long = (0 until exponent).fold(1L) { acc, _ -> acc * 45L }
