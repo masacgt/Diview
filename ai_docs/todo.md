@@ -2,6 +2,9 @@
 
 ## In Progress
 
+- [x] Create a local J-Quants-only v3 database with project-local two-year daily history and API master, latest valuation, one-day financial summary, and calendar data. Evidence: `local_artifacts/jquants-v3-acquisition-20261025/jquants_v3.sqlite` contains 2,186,594 daily rows through 2026-07-31 and passes SQLite `integrity_check`; its report records coverage and source hashes.
+- [ ] Complete full historical valuation and financial-summary acquisition and add J-Quants dividend/financial details if the account gains access. Current key only produced one valuation and summary date and returned HTTP 403 for Premium-only dividends and statements; exact standalone split-event history is not provided by the personal API. See `scripts/jquants_v3/README.md`.
+
 - [x] Consolidate remaining Android typography by semantic role: supporting 12sp, body 14sp, headings 18sp, and key metrics 24sp, while retaining 9sp chart labels. Evidence: `Typography.kt` centralizes the five sizes and affected financial values use the 24sp metric role; JDK 17 `assembleDebug` succeeds, fresh APKs install and launch on SCG01 (font scale 1.7) and emulator (1.0), and Asset Management, Annual Dividend, Watchlist projection, Stock Detail, Settings, Terms, and Feedback were visually checked.
 - [ ] Review dense chart-label wrapping at font scale 1.7. Evidence: SCG01 Annual Dividend and Stock Detail screens show adjacent chart values wrapping or colliding; chart labels remain 9sp.
 - [ ] Verify new-holding data hydration through manual registration, CSV/DVM import, and app restart on device. Evidence: new positive-share holdings now schedule security/quote, financial/analysis, dividend-month, and seven year-end price fetches into app-private caches; JDK 17 debug build succeeds, but add/import/cache-restore interaction was not exercised.

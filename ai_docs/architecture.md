@@ -2,6 +2,8 @@
 
 ## Runtime and storage
 
+- ローカルの `scripts/jquants_v3/` はJ-QuantsのみのSQLiteスナップショットを作る。日足・月次価格に加えて、J-Quants APIの銘柄マスター、評価指標、財務サマリー、営業日を保存する。2026-10-25時点のキーで取得できる日足等は2026-08-02までの遅延データ（最終取引日は7/31）。配当明細と財務明細はPremium限定で取得不可。実収録範囲と未取得項目は `scripts/jquants_v3/README.md` とDB内 `dataset_coverage` を参照。ローカルデータは `local_artifacts/` に置き、Cloudflareへは配信していない。
+
 - New support feedback is saved with a transactional D1 email outbox (`support_feedback_email`, migration 0006). The Worker notifies the configured verified admin via Cloudflare Email Service; existing hourly cron retries up to 20 pending messages with a 10-minute lease. Delivery is at-least-once; old receipts are not backfilled and deletion removes outbox records. See `data/irbank/cloudflare/docs/feedback-email.md`.
 
 - The current app source is `kurogane-dividend/`; Android builds come from `kurogane-dividend/android/`.
