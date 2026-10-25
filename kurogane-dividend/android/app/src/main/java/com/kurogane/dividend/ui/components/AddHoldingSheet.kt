@@ -785,14 +785,14 @@ fun AddHoldingSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Footer Actions Row
-            AdaptiveRow(
+            // Footer actions use the same full width as the allocation summary.
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
                     onClick = onDismiss,
-                    modifier = Modifier.weight(0.4f).heightIn(min = 48.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainer),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -821,7 +821,7 @@ fun AddHoldingSheet(
                             }
                         }
                     },
-                    modifier = Modifier.weight(0.6f).heightIn(min = 48.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     enabled = inputValid && !isRegistering,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = PrimaryEmeraldContainer,
