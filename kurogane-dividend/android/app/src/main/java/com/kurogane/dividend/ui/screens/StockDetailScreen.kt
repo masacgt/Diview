@@ -2347,7 +2347,11 @@ fun StockDetailScreen(
                 val upcomingDividendEvent = remember(currentHolding.code, dividendEventRevision) {
                     viewModel.upcomingDividendEventFor(currentHolding.code)
                 }
-                val estimatedFromHistory = upcomingDividendEvent?.estimatedFromHistory == true
+                val scheduleStatusText = when {
+                    upcomingDividendEvent?.estimatedFromHistory == true -> null
+                    upcomingDividendEvent != null || nextDividendEvent != null -> "権利日程取得済み"
+                    else -> "配当月情報に基づく目安"
+                }
                 val nextExDividendDate = upcomingDividendEvent?.exDividendDate ?: nextDividendEvent?.date
                 val finalRightsDate = upcomingDividendEvent?.finalRightsDate ?: nextDividendEvent?.finalRightsDate
                 val recordDate = upcomingDividendEvent?.recordDate ?: nextDividendEvent?.recordDate
@@ -2401,7 +2405,7 @@ fun StockDetailScreen(
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            if (estimatedFromHistory) "次回権利落ち日（履歴推定）" else "次回権利落ち日",
+                                            "次回権利落ち日",
                                             color = OnSurfaceVariant,
                                             fontSize = AppTextSize.dense
                                         )
@@ -2419,15 +2423,9 @@ fun StockDetailScreen(
                                             fontSize = AppTextSize.metric,
                                             fontWeight = FontWeight.Black
                                         )
-                                        Text(
-                                            when {
-                                                estimatedFromHistory -> "過去の配当イベント日から推定"
-                                                upcomingDividendEvent != null || nextDividendEvent != null -> "権利日程取得済み"
-                                                else -> "配当月情報に基づく目安"
-                                            },
-                                            color = PrimaryEmerald,
-                                            fontSize = AppTextSize.dense
-                                        )
+                                        scheduleStatusText?.let { status ->
+                                            Text(status, color = PrimaryEmerald, fontSize = AppTextSize.dense)
+                                        }
                                     }
                                 }
                                 Text(
@@ -2447,9 +2445,9 @@ fun StockDetailScreen(
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                                 listOf(
-                                    (if (estimatedFromHistory) "権利付き最終日（計算）" else "権利付き最終日") to finalRightsDateText,
-                                    (if (estimatedFromHistory) "権利落ち日（履歴推定）" else "権利落ち日") to nextExDividendText,
-                                    (if (estimatedFromHistory) "権利確定日（計算）" else "権利確定日（推定）") to recordDateText
+                                    "権利付き最終日" to finalRightsDateText,
+                                    "権利落ち日" to nextExDividendText,
+                                    "権利確定日" to recordDateText
                                 ).forEachIndexed { index, (label, value) ->
                                     if (index > 0) HorizontalDivider(color = BorderColor.copy(alpha = 0.55f))
                                     AdaptiveRow(
