@@ -742,22 +742,41 @@ class EventPartitionPersistenceTests(TestCase):
 
 
 class SyncPolicyTests(TestCase):
-    def test_company_info_rotation_selects_each_security_once_per_five_sessions(self):
+    def test_company_info_rotation_selects_each_security_once_per_twenty_sessions(self):
         for number in range(1000, 1020):
             code = str(number)
             selected = [
-                bucket for bucket in range(sync.FINANCIAL_BUCKETS)
+                bucket for bucket in range(sync.COMPANY_INFO_BUCKETS)
                 if sync.should_refresh_company_info(code, bucket, True, False)
             ]
-            self.assertEqual(selected, [sync.bucket_for(code, sync.FINANCIAL_BUCKETS)])
+            self.assertEqual(selected, [sync.bucket_for(code, sync.COMPANY_INFO_BUCKETS)])
             self.assertTrue(all(
                 sync.should_refresh_company_info(code, bucket, False, False)
-                for bucket in range(sync.FINANCIAL_BUCKETS)
+                for bucket in range(sync.COMPANY_INFO_BUCKETS)
             ))
             self.assertTrue(all(
                 sync.should_refresh_company_info(code, bucket, True, True)
-                for bucket in range(sync.FINANCIAL_BUCKETS)
+                for bucket in range(sync.COMPANY_INFO_BUCKETS)
             ))
+
+    def test_same_session_catalog_item_is_reused_only_when_successful(self):
+        session_date = date(2026, 10, 23)
+        item = {"code": "7203", "status": "ok", "name": "Toyota"}
+        previous_items = {"7203": item}
+
+        reused = sync.reusable_same_session_catalog_item(
+            previous_items, session_date.isoformat(), "7203", session_date,
+        )
+
+        self.assertEqual(reused, item)
+        self.assertIsNot(reused, item)
+        self.assertIsNone(sync.reusable_same_session_catalog_item(
+            previous_items, "2026-10-22", "7203", session_date,
+        ))
+        self.assertIsNone(sync.reusable_same_session_catalog_item(
+            {"7203": {"code": "7203", "status": "partial"}},
+            session_date.isoformat(), "7203", session_date,
+        ))
 
     def test_yahoo_missing_data_and_transient_errors_are_classified(self):
         class YFPricesMissingError(Exception):
@@ -1273,12 +1292,23 @@ class OfflineFinancialSyncTests(TestCase):
 
     def test_repeated_publication_keeps_immutable_generations_and_consistent_references(self):
         legacy_key = sync.object_key("catalog", "generations", "2026-10-19.json")
-        old_item = {"code": "7203", "name": "Toyota", "status": "ok",
+        old_item = {"code": "7203", "name": "Toyota", "status": "ok", "price": 100, "quote_date": "2026-10-18",
                     "income_advice": {"code": "7203", "source_catalog_generation": "2026-10-19"}}
         legacy = {"generation": "2026-10-19", "items": [old_item]}
         store = self.Store({
             legacy_key: legacy,
             sync.object_key("catalog", "current.json"): legacy,
+            sync.object_key("securities", "7203.T", "profile.json"): {"display_name": "Toyota"},
+            sync.object_key("securities", "7203.T", "current.json"): {
+                "price": {"close": 200, "date": "2026-10-19", "currency": "JPY"},
+                "dividend": {"current_fiscal_year_per_share": 10, "yield_basis": "current_fiscal_year"},
+                "field_status": {"dividend_history": "available"},
+                "action_history": {"full_history_coverage_end": "2025-12-31"},
+            },
+            sync.object_key("securities", "7203.T", "dividends", "2024.json"): {
+                "records": [{"date": "2024-03-29", "amount": 10}]},
+            sync.object_key("securities", "7203.T", "dividends", "2025.json"): {
+                "records": [{"date": "2025-03-28", "amount": 10}]},
             sync.object_key("securities", "7203.T", "sync.json"): {
                 "status": "ok", "last_success_session_date": "2026-10-19",
             },
@@ -1301,6 +1331,8 @@ class OfflineFinancialSyncTests(TestCase):
             for _ in range(2):
                 self.assertEqual(sync.run(publish=True, max_workers=1, dry_run=False), 0)
                 catalog = store.documents[sync.object_key("catalog", "current.json")]
+                self.assertEqual(catalog["items"][0]["price"], 200)
+                self.assertEqual(catalog["items"][0]["quote_date"], "2026-10-19")
                 generation = catalog["generation"]
                 generations.append(generation)
                 self.assertRegex(generation, r"^2026-10-19-[0-9a-f]{32}$")

@@ -39,7 +39,8 @@ OLD_ROOT = "market/yfinance"
 MAX_DAILY_ATTEMPTS = 4
 FULL_HISTORY_BUCKETS = 20
 FINANCIAL_BUCKETS = 5
-COMPANY_INFO_REFRESH_POLICY_VERSION = 1
+COMPANY_INFO_BUCKETS = 20
+COMPANY_INFO_REFRESH_POLICY_VERSION = 2
 FINANCIAL_REFRESH_MAX_AGE_DAYS = 45
 FINANCIAL_REFRESH_POLICY_VERSION = 2
 CALENDAR_REFRESH_MAX_AGE_DAYS = 30
@@ -52,6 +53,7 @@ FINANCIAL_GROUPS = ("income_statement", "balance_sheet", "cash_flow", "valuation
 OFFICIAL_NEXT_FY_DPS = {"8214": (120.0, 90.0), "8058": (126.0, 125.0)}
 _YF_CALL_LOCK = threading.Lock()
 _YF_CALLS: dict[str, int] = {}
+_ACTION_HISTORY_REPAIR_TRIGGERS: Counter[str] = Counter()
 _R2_DOCUMENT_CACHE = threading.local()
 _ATTRIBUTE_ERROR_TRACEBACK_LOCK = threading.Lock()
 _ATTRIBUTE_ERROR_TRACEBACK_KEYS: set[tuple[str, str, str, int, str]] = set()
@@ -396,6 +398,12 @@ def count_yfinance_call(name: str) -> None:
         _YF_CALLS[name] = _YF_CALLS.get(name, 0) + 1
 
 
+def count_action_history_repair_trigger(name: str) -> None:
+    """Track overlapping reasons that caused a repaired action-history fetch."""
+    with _YF_CALL_LOCK:
+        _ACTION_HISTORY_REPAIR_TRIGGERS[name] += 1
+
+
 def bucket_for(code: str, count: int) -> int:
     digest = hashlib.sha256(code.encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "big") % count
@@ -405,7 +413,7 @@ def should_refresh_company_info(code: str, active_bucket: int, has_previous_succ
     return (
         retry_pending
         or not has_previous_success
-        or bucket_for(code, FINANCIAL_BUCKETS) == active_bucket
+        or bucket_for(code, COMPANY_INFO_BUCKETS) == active_bucket
     )
 
 
@@ -2248,6 +2256,19 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             ) else "1y"
             prior_full_coverage_end = str(prior_action_history.get("full_history_coverage_end") or "")
             if forced_repair:
+                repair_triggers = []
+                if refresh_full_history:
+                    repair_triggers.append("scheduled_full_history_bucket")
+                if prior_sync.get("long_history_retry_pending") is True:
+                    repair_triggers.append("pending_full_history_retry")
+                if prior_repair_period:
+                    repair_triggers.append(f"pending_action_repair_{prior_repair_period}")
+                if stored_duplicate_events:
+                    repair_triggers.append("duplicate_stored_events")
+                if not repair_triggers:
+                    repair_triggers.append("other_forced_repair")
+                for trigger in set(repair_triggers):
+                    count_action_history_repair_trigger(trigger)
                 fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
                     ticker, as_of, period=repair_period,
                 )
@@ -2289,11 +2310,13 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                         prior_splits.extend(legacy_splits)
                         full_action_history_required = True
                     full_history_attempted = True
+                    count_action_history_repair_trigger("new_split_detected")
                     fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
                         ticker, as_of, period="max",
                     )
                     full_history_refreshed = True
                 elif actions_changed:
+                    count_action_history_repair_trigger("recent_action_candidate_changed")
                     fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end = fetch_repaired_action_history(
                         ticker, as_of, period="1y",
                     )
@@ -3083,6 +3106,34 @@ def catalog_item_from_documents(code: str, security: dict[str, Any], profile: di
     }
 
 
+def restore_catalog_item(client: Any, bucket: str, code: str, security: dict[str, Any],
+                         state: dict[str, Any], session_date: date) -> dict[str, Any]:
+    """Recover a completed per-security write even if catalog publication was interrupted."""
+    symbol = market_symbol(code)
+    safe = safe_symbol(symbol)
+    profile = read_json(client, bucket, object_key("securities", safe, "profile.json")) or {}
+    current = read_json(client, bucket, object_key("securities", safe, "current.json")) or {}
+    item = catalog_item_from_documents(code, security, profile, current, state)
+    if item is None:
+        raise RuntimeError(f"Completed security has no publishable current record: {code}")
+    dividends = load_year_records(client, bucket, symbol, "dividends",
+                                  set(range(session_date.year - 3, session_date.year)), include_archive=False)
+    item["income_advice"] = income_advice_candidate(code, item["name"], current, dividends, session_date)
+    return item
+
+
+def reusable_same_session_catalog_item(
+    previous_items: dict[str, Any], catalog_session_date: Any, code: str, session_date: date,
+) -> dict[str, Any] | None:
+    """Reuse an already published successful item for duplicate runs of one session."""
+    if catalog_session_date != session_date.isoformat():
+        return None
+    item = previous_items.get(code)
+    if not isinstance(item, dict) or item.get("status") != "ok" or item.get("failure_reason"):
+        return None
+    return dict(item)
+
+
 def publish_catalog(client: Any, bucket: str, universe: list[dict[str, str]], session_date: date,
                     previous_catalog: dict[str, Any] | None,
                     processed_items: dict[str, dict[str, Any]] | None = None,
@@ -3188,6 +3239,7 @@ def run(
     started_at = time.perf_counter()
     with _YF_CALL_LOCK:
         _YF_CALLS.clear()
+        _ACTION_HISTORY_REPAIR_TRIGGERS.clear()
     if not publish and not dry_run:
         raise RuntimeError("Specify --publish or --dry-run")
     configure = getattr(collector, "configure_yfinance", None)
@@ -3228,6 +3280,12 @@ def run(
     old_universe = read_json(client, bucket, object_key("universe", "current.json")) or {}
     old_status = {str(row.get("code")): row for row in old_universe.get("securities", []) if isinstance(row, dict)}
     previous_catalog = read_json(client, bucket, object_key("catalog", "current.json"))
+    previous_catalog_items = {
+        str(row.get("code")): row
+        for row in (previous_catalog or {}).get("items", [])
+        if isinstance(row, dict) and row.get("code") is not None
+    }
+    previous_catalog_session_date = (previous_catalog or {}).get("market_data_date")
     schedule_key = object_key("schedules", "current.json")
     schedule_state = read_json(client, bucket, schedule_key) or {}
     phase_seconds["initial_r2_state"] = round(time.perf_counter() - phase_started, 3)
@@ -3249,7 +3307,7 @@ def run(
     print(
         f"Rotation: long_history={full_history_bucket + 1}/{FULL_HISTORY_BUCKETS}, "
         f"financials={financial_bucket + 1}/{FINANCIAL_BUCKETS}, "
-        f"company_info={financial_bucket + 1}/{FINANCIAL_BUCKETS}, "
+        f"company_info={full_history_bucket + 1}/{COMPANY_INFO_BUCKETS}, "
         f"december_price_refresh={december_end_session}",
         flush=True,
     )
@@ -3282,13 +3340,23 @@ def run(
         if (previous_sync.get("status") == "ok"
                 and previous_sync.get("last_success_session_date") == session_date.isoformat()
                 and not reprocess_successful):
-            return {"code": code, "symbol": symbol, "status": "ok", "field_failures": []}
+            catalog_item = reusable_same_session_catalog_item(
+                previous_catalog_items, previous_catalog_session_date, code, session_date,
+            )
+            if catalog_item is None:
+                catalog_item = restore_catalog_item(
+                    client, bucket, code, security_by_code[code], previous_sync, session_date,
+                )
+            return {"code": code, "symbol": symbol, "status": "ok", "field_failures": [],
+                    "catalog_item": catalog_item}
         attempt_limit = MAX_DAILY_ATTEMPTS + (1 if allow_one_extra_attempt else 0)
         if attempts_used >= attempt_limit:
             reason = str(previous_sync.get("failure_reason") or "")
             fields = reason.removeprefix("Field fetch failed: ").split(", ") if reason else []
             if previous_sync.get("status") == "partial":
-                return {"code": code, "symbol": symbol, "status": "partial", "field_failures": fields}
+                return {"code": code, "symbol": symbol, "status": "partial", "field_failures": fields,
+                        "catalog_item": restore_catalog_item(client, bucket, code, security_by_code[code],
+                                                             previous_sync, session_date)}
             raise RuntimeError("Daily per-security attempt limit reached")
         attempt_count = attempts_used + 1
         retry_full_history = (bucket_for(code, FULL_HISTORY_BUCKETS) == full_history_bucket
@@ -3296,7 +3364,7 @@ def run(
         retry_financials = previous_sync.get("financial_retry_pending") is True
         refresh_info = should_refresh_company_info(
             code,
-            financial_bucket,
+            full_history_bucket,
             bool(previous_sync.get("last_success_session_date")),
             previous_sync.get("info_refresh_pending") is True,
         )
@@ -3428,6 +3496,7 @@ def run(
     elapsed_seconds = round(time.perf_counter() - started_at, 3)
     with _YF_CALL_LOCK:
         yfinance_calls = dict(sorted(_YF_CALLS.items()))
+        action_history_repair_triggers = dict(sorted(_ACTION_HISTORY_REPAIR_TRIGGERS.items()))
     company_info_refresh_attempt_count = yfinance_calls.get("ticker_get_info", 0)
     company_info_refreshed_count = sum(1 for row in results.values() if row.get("info_refreshed"))
     publication = {
@@ -3449,6 +3518,7 @@ def run(
         "elapsed_seconds": elapsed_seconds,
         "yfinance_call_count": sum(yfinance_calls.values()),
         "yfinance_calls": yfinance_calls,
+        "action_history_repair_triggers": action_history_repair_triggers,
         "http_max_requests_per_second": rate_limiter.requests_per_second,
         "http_request_count": rate_limiter.request_count,
         "http_429_count": rate_limiter.http_429_count,
@@ -3460,8 +3530,8 @@ def run(
             "full_history_bucket_count": FULL_HISTORY_BUCKETS,
             "financial_bucket": financial_bucket,
             "financial_bucket_count": FINANCIAL_BUCKETS,
-            "company_info_bucket": financial_bucket,
-            "company_info_bucket_count": FINANCIAL_BUCKETS,
+            "company_info_bucket": full_history_bucket,
+            "company_info_bucket_count": COMPANY_INFO_BUCKETS,
             "company_info_refresh_policy_version": COMPANY_INFO_REFRESH_POLICY_VERSION,
             "december_end_session": december_end_session,
         },
@@ -3487,6 +3557,11 @@ def run(
         f"Published v2 generation {generation}: success={len(results)}, failed={len(failures)}, "
         f"catalog={len(catalog['items'])}, elapsed={elapsed_seconds}s, "
         f"yfinance_calls={sum(yfinance_calls.values())} {json.dumps(yfinance_calls, ensure_ascii=False, sort_keys=True)}"
+    )
+    print(
+        "Action-history repair triggers (overlapping): "
+        f"{json.dumps(action_history_repair_triggers, ensure_ascii=False, sort_keys=True)}",
+        flush=True,
     )
     print(
         "Phase timings: " + json.dumps(phase_seconds, ensure_ascii=False, sort_keys=True)
