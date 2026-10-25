@@ -75,6 +75,7 @@ import kotlin.math.atan2
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.util.Locale
@@ -640,7 +641,15 @@ private fun MonthlyDividendEstimateCard(
     var showDividendInfo by remember { mutableStateOf(false) }
     var selectedQuarterIndex by remember { mutableStateOf<Int?>(null) }
     val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
-    val monthlyByCategoryByBasis = remember(holdings, taxRateMode, dividendEventRevision) {
+    val forecastEndDate = LocalDate.now(ZoneId.of("Asia/Tokyo"))
+    val forecastStartDate = forecastEndDate.minusYears(1)
+    val monthlyByCategoryByBasis = remember(
+        holdings,
+        taxRateMode,
+        dividendEventRevision,
+        forecastStartDate,
+        forecastEndDate
+    ) {
         fun monthlyAmountsForBasis(basis: MonthlyDividendChartBasis): List<List<Double>> {
             fun eventMonth(category: Category, event: com.kurogane.dividend.data.CloudflareDividendEvent): Int? {
                 if (category != Category.JAPAN) return event.date.monthValue
@@ -657,7 +666,9 @@ private fun MonthlyDividendEstimateCard(
                 listOf(Category.JAPAN, Category.US, Category.FUND).map { category ->
                     holdings.filter { it.category == category }.sumOf { holding ->
                         viewModel.dividendEventsFor(holding.code).sumOf { event ->
-                            if (eventMonth(category, event) == month) {
+                            val isInForecastWindow =
+                                !event.date.isBefore(forecastStartDate) && !event.date.isAfter(forecastEndDate)
+                            if (isInForecastWindow && eventMonth(category, event) == month) {
                                 holding.copy(dps = event.amountPerShare).getEffectiveAnnualDividend(taxRateMode)
                             } else {
                                 0.0
