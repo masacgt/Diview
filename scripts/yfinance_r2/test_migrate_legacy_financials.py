@@ -139,8 +139,9 @@ class MigrationShardTests(unittest.TestCase):
             }}},
         }
 
-        self.assertFalse(repair_mixed_source_equity_ratio(annual))
+        self.assertTrue(repair_mixed_source_equity_ratio(annual))
         self.assertEqual(annual["equity_ratio_computed"], 38.0)
+        self.assertEqual(annual["field_status"]["equity_ratio_computed"], "available")
 
     def test_unknown_source_equity_ratio_calculation_is_removed(self):
         annual = {

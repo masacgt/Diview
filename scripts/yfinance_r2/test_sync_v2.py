@@ -332,6 +332,7 @@ class SyncPriceTests(TestCase):
             "trailingPE", "priceToBook", "operatingMargins", "payoutRatio",
             "exDividendDate", "lastFiscalYearEnd", "mostRecentQuarter",
         })
+        self.assertTrue({"trailingPE", "priceToBook"}.issubset(sync.DERIVED_STATISTIC_FIELDS))
         self.assertTrue(set(sync.DERIVED_STATISTIC_FIELDS).issubset(sync.CURRENT_FIELDS))
 
     def test_company_info_failure_is_stored_with_class_and_reason(self):
@@ -476,6 +477,7 @@ class CatalogTests(TestCase):
                  "current_fiscal_year_per_share": None,
                  "trailing_12_month_per_share": 630,
                  "yield_rate": 21,
+                 "yield_source": "stale_yield",
                  "dividend_status": "unknown",
              }},
             {"status": "ok"},
@@ -483,6 +485,7 @@ class CatalogTests(TestCase):
 
         self.assertIsNone(item["annual_dividend_per_share"])
         self.assertIsNone(item["yield_rate"])
+        self.assertIsNone(item["yield_source"])
 
     def test_official_forecast_replaces_stale_yahoo_value_and_accepts_an_updated_value(self):
         self.assertEqual(sync.next_fiscal_year_forecast_dps("8214", 120, date(2026, 10, 17)), 90)
@@ -822,6 +825,25 @@ class SyncPolicyTests(TestCase):
                 sync.should_refresh_company_info(code, bucket, True, True)
                 for bucket in range(sync.COMPANY_INFO_BUCKETS)
             ))
+
+    def test_same_session_catalog_item_is_reused_only_when_successful(self):
+        session_date = date(2026, 10, 23)
+        item = {"code": "7203", "status": "ok", "name": "Toyota"}
+        previous_items = {"7203": item}
+
+        reused = sync.reusable_same_session_catalog_item(
+            previous_items, session_date.isoformat(), "7203", session_date,
+        )
+
+        self.assertEqual(reused, item)
+        self.assertIsNot(reused, item)
+        self.assertIsNone(sync.reusable_same_session_catalog_item(
+            previous_items, "2026-10-22", "7203", session_date,
+        ))
+        self.assertIsNone(sync.reusable_same_session_catalog_item(
+            {"7203": {"code": "7203", "status": "partial"}},
+            session_date.isoformat(), "7203", session_date,
+        ))
 
     def test_yahoo_missing_data_and_transient_errors_are_classified(self):
         class YFPricesMissingError(Exception):
@@ -1421,7 +1443,7 @@ class OfflineFinancialSyncTests(TestCase):
 
     def test_repeated_publication_keeps_immutable_generations_and_consistent_references(self):
         legacy_key = sync.object_key("catalog", "generations", "2026-10-19.json")
-        old_item = {"code": "7203", "name": "Toyota", "status": "ok",
+        old_item = {"code": "7203", "name": "Toyota", "status": "ok", "price": 100, "quote_date": "2026-10-18",
                     "income_advice": {"code": "7203", "source_catalog_generation": "2026-10-19"}}
         legacy = {
             "generation": "2026-10-19", "market_data_date": "2026-10-19",
@@ -1430,6 +1452,17 @@ class OfflineFinancialSyncTests(TestCase):
         store = self.Store({
             legacy_key: legacy,
             sync.object_key("catalog", "current.json"): legacy,
+            sync.object_key("securities", "7203.T", "profile.json"): {"display_name": "Toyota"},
+            sync.object_key("securities", "7203.T", "current.json"): {
+                "price": {"close": 200, "date": "2026-10-19", "currency": "JPY"},
+                "dividend": {"current_fiscal_year_per_share": 10, "yield_basis": "current_fiscal_year"},
+                "field_status": {"dividend_history": "available"},
+                "action_history": {"full_history_coverage_end": "2025-12-31"},
+            },
+            sync.object_key("securities", "7203.T", "dividends", "2024.json"): {
+                "records": [{"date": "2024-03-29", "amount": 10}]},
+            sync.object_key("securities", "7203.T", "dividends", "2025.json"): {
+                "records": [{"date": "2025-03-28", "amount": 10}]},
             sync.object_key("securities", "7203.T", "sync.json"): {
                 "status": "ok", "last_success_session_date": "2026-10-19",
             },
@@ -1452,6 +1485,8 @@ class OfflineFinancialSyncTests(TestCase):
             for _ in range(2):
                 self.assertEqual(sync.run(publish=True, max_workers=1, dry_run=False), 0)
                 catalog = store.documents[sync.object_key("catalog", "current.json")]
+                self.assertEqual(catalog["items"][0]["price"], 200)
+                self.assertEqual(catalog["items"][0]["quote_date"], "2026-10-19")
                 generation = catalog["generation"]
                 generations.append(generation)
                 self.assertRegex(generation, r"^2026-10-19-[0-9a-f]{32}$")
