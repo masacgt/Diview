@@ -2321,11 +2321,7 @@ class DividendViewModel @JvmOverloads constructor(
             isNoDividendConfirmed = json.optBoolean("is_no_dividend_confirmed"),
             hasDividendStatus = json.optBoolean("has_dividend_status"),
             dataRetrieval = retrieval,
-            marketYieldSource = json.stringOrNull("market_yield_source"),
-            marketPreviousClose = json.doubleOrNull("market_previous_close"),
-            marketPriceChange = json.doubleOrNull("market_price_change"),
-            marketPriceChangePercent = json.doubleOrNull("market_price_change_percent"),
-            marketPriceDate = json.stringOrNull("market_price_date")
+            marketYieldSource = json.stringOrNull("market_yield_source")
         )
     }.getOrNull()
 
