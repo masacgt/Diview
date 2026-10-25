@@ -635,6 +635,38 @@ def date_value(value: Any) -> date | None:
         return None
 
 
+def canonical_event_date(value: Any) -> str | None:
+    parsed = date_value(value)
+    return parsed.isoformat() if parsed is not None else None
+
+
+def normalize_event_rows(rows: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        copied = dict(row)
+        event_date = canonical_event_date(copied.get(key))
+        if event_date is not None:
+            copied[key] = event_date
+        normalized.append(copied)
+    return normalized
+
+
+def preserve_legacy_event_gaps(
+    rows: list[dict[str, Any]], legacy_rows: list[dict[str, Any]], key: str,
+) -> list[dict[str, Any]]:
+    """Keep legacy events that Yahoo omitted while replacing a refreshed history range."""
+    result = normalize_event_rows(rows, key)
+    seen = {canonical_event_date(row.get(key)) for row in result}
+    for legacy_row in normalize_event_rows(legacy_rows, key):
+        event_date = canonical_event_date(legacy_row.get(key))
+        if event_date is not None and event_date not in seen:
+            result.append(legacy_row)
+            seen.add(event_date)
+    return result
+
+
 def calendar_field_date(calendar: Any, keys: tuple[str, ...]) -> date | None:
     """Read a named date from dictionary or DataFrame yfinance calendar payloads."""
     value: Any = None
@@ -1151,11 +1183,13 @@ def replace_dated_history(
     """Replace all stored actions in a successfully fetched range, including removed/corrected events."""
     start_text = coverage_start.isoformat()
     end_text = coverage_end.isoformat()
+    normalized_previous = normalize_event_rows(previous, key)
+    normalized_fresh = normalize_event_rows(fresh, key)
     retained = [
-        row for row in previous
+        row for row in normalized_previous
         if str(row.get(key) or "")[:10] < start_text or str(row.get(key) or "")[:10] > end_text
     ]
-    return collector.merge_dated(retained, fresh, key)
+    return collector.merge_dated(retained, normalized_fresh, key)
 
 
 def has_duplicate_event_dates(rows: list[dict[str, Any]], key: str = "date") -> bool:
@@ -2038,13 +2072,37 @@ def verify_v2_transfer(client: Any, bucket: str, symbol: str, old: dict[str, Any
         events = (old.get("actions") or {}).get(legacy_key, [])
         if not events:
             continue
-        required_dates = {str(row.get("date"))[:10] for row in events if row.get("date")}
-        stored_dates = {str(row.get("date"))[:10] for row in load_all_year_records(client, bucket, symbol, family)}
+        required_dates: set[str] = set()
+        invalid_dates = 0
+        for row in events:
+            event_date = canonical_event_date(row.get("date")) if isinstance(row, dict) else None
+            if event_date is None:
+                invalid_dates += 1
+            else:
+                required_dates.add(event_date)
+        if invalid_dates:
+            raise RuntimeError(
+                f"legacy {family} events have missing or invalid dates before cleanup for {symbol}: {invalid_dates}"
+            )
+        stored_dates = {
+            event_date
+            for row in load_all_year_records(client, bucket, symbol, family)
+            if (event_date := canonical_event_date(row.get("date"))) is not None
+        }
         archive_prefix = object_key("archive", "events", safe, family) + "/"
         for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=archive_prefix):
             for item in page.get("Contents", []):
                 document = read_json(client, bucket, item["Key"])
-                stored_dates.update(str(row.get("date"))[:10] for row in document.get("records", []) if row.get("date"))
+                if not isinstance(document, dict):
+                    continue
+                records = document.get("records", [])
+                if not isinstance(records, list):
+                    continue
+                stored_dates.update(
+                    event_date
+                    for row in records if isinstance(row, dict)
+                    if (event_date := canonical_event_date(row.get("date"))) is not None
+                )
         missing = required_dates - stored_dates
         if missing:
             raise RuntimeError(f"v2 {family} events missing before legacy cleanup for {symbol}: {len(missing)}")
@@ -2253,8 +2311,12 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         price_status = "failed"
 
     old_actions = old.get("actions") if isinstance(old.get("actions"), dict) else {}
-    legacy_dividends = [row for row in old_actions.get("dividends", []) if isinstance(row, dict)]
-    legacy_splits = [row for row in old_actions.get("stock_splits", []) if isinstance(row, dict)]
+    legacy_dividends = normalize_event_rows(
+        [row for row in old_actions.get("dividends", []) if isinstance(row, dict)], "date",
+    )
+    legacy_splits = normalize_event_rows(
+        [row for row in old_actions.get("stock_splits", []) if isinstance(row, dict)], "date",
+    )
     full_action_history_required = (
         forced_repair_expected
         or bool(legacy_dividends or legacy_splits)
@@ -2417,11 +2479,17 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                 action_retrieval["source"] = "yfinance_history"
                 action_retrieval["repair"] = True
                 action_retrieval["change_detected"] = not forced_repair
-                dividends = replace_dated_history(
-                    prior_dividends, fresh_dividends, "date", action_coverage_start, action_coverage_end,
+                dividends = preserve_legacy_event_gaps(
+                    replace_dated_history(
+                        prior_dividends, fresh_dividends, "date", action_coverage_start, action_coverage_end,
+                    ),
+                    legacy_dividends, "date",
                 )
-                splits = replace_dated_history(
-                    prior_splits, fresh_splits, "date", action_coverage_start, action_coverage_end,
+                splits = preserve_legacy_event_gaps(
+                    replace_dated_history(
+                        prior_splits, fresh_splits, "date", action_coverage_start, action_coverage_end,
+                    ),
+                    legacy_splits, "date",
                 )
                 action_status["dividends"] = "available" if fresh_dividends else "empty"
                 action_status["splits"] = "available" if fresh_splits else "empty"

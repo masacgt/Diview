@@ -1,5 +1,7 @@
 # Trouble
 
+- Legacy dividend/split migration could stop before cleanup when a Yahoo history refresh omitted an event date still present in the legacy object: replacing the refreshed date range discarded that event, and the pre-cleanup verifier correctly rejected the transfer. Normalize event dates, retain legacy events absent from the refreshed rows, and verify every legacy event has a parseable date and exists in hot or archived v2 records before deleting legacy data.
+
 - IRBANK annual monetary seed values are in million JPY, while yfinance financial amounts and Android formulas use JPY. Mixed-source flat values could produce million-fold equity ratios and margins. Preserve per-field source units, normalize known monetary values at the API boundary, and omit ratios without valid same-source provenance or a valid IRBANK-reported value. Confirm the full production migration and API read-back after publication.
 
 - Asset registration disabled its submit button for prices such as 8008's `2,015`: `AddHoldingSheet` used display-formatted prices in editable state, but validation used `toDoubleOrNull()`. Acquisition-price inputs now use an ungrouped, locale-independent plain decimal formatter without display rounding; all four accounts share it for initialization, stock selection, existing-holding prefill, and current-price application. Typed/pasted commas are removed before state is updated; read-only money formatting is unchanged.
