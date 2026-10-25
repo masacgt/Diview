@@ -3298,13 +3298,25 @@ def catalog_item_from_documents(code: str, security: dict[str, Any], profile: di
         round(reported_yield * 100, 4)
         if reported_yield is not None and 0 <= reported_yield <= 1 else None
     )
-    annual_yield = reported_yield_percent if reported_yield_percent is not None else (
-        finite_number(dividend.get("yield_rate"))
-        if dividend.get("yield_rate") is not None else
-        round(annual_dps / close * 100, 4)
-        if annual_dps is not None and close is not None and close > 0 else
-        None
-    )
+    stored_yield = finite_number(dividend.get("yield_rate"))
+    if reported_yield_percent is not None:
+        annual_yield = reported_yield_percent
+        yield_source = "yfinance_reported_dividendYield"
+    elif annual_dps is None:
+        annual_yield = None
+        yield_source = None
+    elif annual_dps == 0:
+        annual_yield = 0.0
+        yield_source = dividend.get("yield_source") or "calculated_from_yfinance_dividend_and_quote"
+    elif stored_yield is not None:
+        annual_yield = stored_yield
+        yield_source = dividend.get("yield_source") or "calculated_from_yfinance_dividend_and_quote"
+    elif close is not None and close > 0:
+        annual_yield = round(annual_dps / close * 100, 4)
+        yield_source = "calculated_from_yfinance_dividend_and_quote"
+    else:
+        annual_yield = None
+        yield_source = None
     return {
         "code": code,
         "name": profile.get("display_name") or previous_name or code,
@@ -3319,8 +3331,7 @@ def catalog_item_from_documents(code: str, security: dict[str, Any], profile: di
         "dividend_period": yield_basis or "unknown",
         "dividend_amount_basis": dividend.get("event_amount_basis"),
         "yield_rate": annual_yield,
-        "yield_source": "yfinance_reported_dividendYield" if reported_yield_percent is not None
-        else dividend.get("yield_source") or ("calculated_from_yfinance_dividend_and_quote" if annual_yield is not None else None),
+        "yield_source": yield_source,
         "yield_basis": dividend.get("yield_basis"),
         "dividend_status": dividend.get("dividend_status", "unknown"),
         "status": sync.get("status") if sync.get("status") in {"ok", "partial", "failed"} else "ok",
