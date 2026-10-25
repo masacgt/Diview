@@ -67,6 +67,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.sync.Semaphore
@@ -848,18 +849,33 @@ class DividendViewModel @JvmOverloads constructor(
         }
     }
 
-    private fun storeDividendEvents(symbol: String, events: List<com.kurogane.dividend.data.CloudflareDividendEvent>) {
+    private fun storeDividendEvents(
+        symbol: String,
+        events: List<com.kurogane.dividend.data.CloudflareDividendEvent>,
+        replaceYears: Set<Int>? = null
+    ) {
+        val normalized = symbol.uppercase(java.util.Locale.ROOT)
+        val existing = dividendEventsFor(normalized)
+        val recentCutoff = LocalDate.now(ZoneId.of("Asia/Tokyo")).minusDays(365)
+        val retained = if (replaceYears == null) {
+            existing.filter { it.date < recentCutoff }
+        } else {
+            existing.filter { it.date.year !in replaceYears }
+        }
+        val mergedEvents = (retained + events)
+            .distinctBy { it.date to it.amountPerShare }
+            .sortedBy { it.date }
         val rows = JSONArray()
-        events.forEach { event ->
+        mergedEvents.forEach { event ->
             rows.put(JSONObject()
                 .put("date", event.date.toString())
                 .put("amount", event.amountPerShare)
                 .put("final_rights_date", event.finalRightsDate?.toString())
                 .put("record_date", event.recordDate?.toString()))
         }
-        marketPreferences.edit().putString("dividend_events_$symbol", rows.toString()).apply()
+        marketPreferences.edit().putString("dividend_events_$normalized", rows.toString()).apply()
         synchronized(dividendEventCacheLock) {
-            dividendEventCache[symbol.uppercase(java.util.Locale.ROOT)] = events.sortedBy { it.date }
+            dividendEventCache[normalized] = mergedEvents
         }
         _dividendEventRevision.update { it + 1 }
     }
@@ -913,36 +929,129 @@ class DividendViewModel @JvmOverloads constructor(
         refreshDividendMonths(symbols)
     }
 
-    fun refreshDividendMonthsForSecurity(category: Category, code: String) {
-        if (!refreshOnStart) return
-        val symbol = yahooSymbol(category, code) ?: return
-        viewModelScope.launch { refreshDividendMonths(listOf(symbol)) }
+    suspend fun refreshDividendMonthsForSecurity(
+        category: Category,
+        code: String,
+        eventYears: List<Int>
+    ): Boolean {
+        if (!refreshOnStart) return true
+        val symbol = yahooSymbol(category, code) ?: return category == Category.FUND
+        return refreshDividendMonthsForSecurity(symbol, eventYears)
     }
 
-    fun refreshDividendEventsForYear(category: Category, code: String, year: Int) {
-        if (!refreshOnStart || year !in 1900..LocalDate.now(ZoneId.of("Asia/Tokyo")).year) return
-        val symbol = yahooSymbol(category, code) ?: return
-        val fetchedKey = "dividend_year_events_fetched_jst_${symbol}_$year"
-        val today = LocalDate.now(ZoneId.of("Asia/Tokyo")).toString()
-        if (marketPreferences.getString(fetchedKey, null) == today) return
-        val attemptKey = "dividend_year_events_attempt_at_${symbol}_$year"
-        val now = System.currentTimeMillis()
-        val previousAttempt = marketPreferences.getLong(attemptKey, 0L)
-        if (now - previousAttempt < 30_000L) return
-        marketPreferences.edit().putLong(attemptKey, now).apply()
-        viewModelScope.launch {
-            val result = runCatchingCancellable {
-                marketRepository.fetchDividendMonths(listOf(symbol), eventYear = year)
+    private suspend fun refreshDividendMonthsForSecurity(symbol: String, eventYears: List<Int>): Boolean =
+        dividendMonthRefreshMutex.withLock {
+            val normalized = symbol.trim().uppercase(java.util.Locale.ROOT)
+            val years = eventYears.distinct().sorted()
+            if (years.isEmpty() || years.size > 10) return@withLock false
+
+            val today = LocalDate.now(ZoneId.of("Asia/Tokyo")).toString()
+            val now = System.currentTimeMillis()
+            val recentAttemptKey = "dividend_fetch_attempt_at_$normalized"
+            val recentAttemptDateKey = "dividend_fetch_attempt_jst_$normalized"
+            val recentMonthDate = marketPreferences.getString("dividend_months_fetched_jst_$normalized", null)
+            val recentEventsDate = marketPreferences.getString("dividend_events_fetched_jst_$normalized", null)
+            val recentDataDue = PriceRefreshPolicy.shouldFetch(
+                now,
+                marketPreferences.getLong(recentAttemptKey, 0L),
+                marketPreferences.getString(recentAttemptDateKey, null) ?: recentEventsDate ?: recentMonthDate
+            ) && (recentMonthDate != today || recentEventsDate != today)
+            val dueYears = years.filter { year ->
+                val fetchedKey = "dividend_year_events_fetched_jst_${normalized}_$year"
+                val attemptKey = "dividend_year_events_attempt_at_${normalized}_$year"
+                marketPreferences.getString(fetchedKey, null) != today &&
+                    now - marketPreferences.getLong(attemptKey, 0L) >= 30_000L
             }
-            result.onFailure { error ->
-                android.util.Log.w("CloudflareMarket", "${year}年の配当イベント取得に失敗しました", error)
-            }.onSuccess { history ->
-                val fetched = history.eventsBySymbol[symbol].orEmpty()
-                storeDividendEvents(
-                    symbol,
-                    (dividendEventsFor(code) + fetched).distinctBy { it.date to it.amountPerShare }.sortedBy { it.date }
-                )
-                marketPreferences.edit().putString(fetchedKey, today).apply()
+            val allYearsFetched = years.all { year ->
+                marketPreferences.getString("dividend_year_events_fetched_jst_${normalized}_$year", null) == today
+            }
+            if (!recentDataDue && dueYears.isEmpty()) return@withLock allYearsFetched
+
+            val attemptEditor = marketPreferences.edit()
+                .putLong("dividend_fetch_attempt_at_$normalized", now)
+                .putString("dividend_fetch_attempt_jst_$normalized", today)
+            dueYears.forEach { year ->
+                attemptEditor.putLong("dividend_year_events_attempt_at_${normalized}_$year", now)
+            }
+            attemptEditor.apply()
+
+            val result = runCatchingCancellable {
+                marketRepository.fetchDividendMonths(listOf(normalized), eventYears = dueYears.takeIf { it.isNotEmpty() })
+            }
+            if (result.isFailure) {
+                android.util.Log.w("CloudflareMarket", "銘柄詳細の配当履歴取得に失敗しました", result.exceptionOrNull())
+                return@withLock false
+            }
+
+            val history = result.getOrThrow()
+            val months = history.monthsBySymbol[normalized]
+            if (months == null) {
+                return@withLock false
+            }
+
+            var fetchedEvents = history.eventsBySymbol[normalized].orEmpty()
+            var fetchedYears = emptySet<Int>()
+            var yearFetchFailed = false
+            if (dueYears.isNotEmpty()) {
+                val acknowledgedYears = history.requestedEventYearsBySymbol[normalized]?.toSet()
+                if (acknowledgedYears == dueYears.toSet()) {
+                    val historyStatus = history.historyStatusBySymbol[normalized] ?: "not_fetched"
+                    if (fetchedEvents.isEmpty() && historyStatus in setOf("not_fetched", "failed", "unavailable")) {
+                        yearFetchFailed = true
+                    } else {
+                        fetchedYears = dueYears.toSet()
+                    }
+                } else {
+                    // Older deployed Workers ignore event_years. Fall back to their supported single-year query.
+                    val yearlyResults = supervisorScope {
+                        dueYears.map { year ->
+                            async {
+                                year to runCatchingCancellable {
+                                    marketRepository.fetchDividendMonths(listOf(normalized), eventYear = year)
+                                }
+                            }
+                        }.awaitAll()
+                    }
+                    val successfulResults = yearlyResults.mapNotNull { (year, yearResult) ->
+                        val yearHistory = yearResult.getOrNull() ?: return@mapNotNull null
+                        val events = yearHistory.eventsBySymbol[normalized].orEmpty()
+                        val status = yearHistory.historyStatusBySymbol[normalized] ?: "not_fetched"
+                        if (events.isEmpty() && status in setOf("not_fetched", "failed", "unavailable")) {
+                            null
+                        } else {
+                            year to yearHistory
+                        }
+                    }
+                    fetchedYears = successfulResults.map { it.first }.toSet()
+                    fetchedEvents = successfulResults.flatMap { (_, yearHistory) ->
+                        yearHistory.eventsBySymbol[normalized].orEmpty()
+                    }
+                    yearFetchFailed = fetchedYears.size != dueYears.size
+                }
+            } else {
+                val historyStatus = history.historyStatusBySymbol[normalized] ?: "not_fetched"
+                if (fetchedEvents.isEmpty() && historyStatus in setOf("not_fetched", "failed", "unavailable")) {
+                    return@withLock false
+                }
+            }
+
+            storeDividendMonths(normalized, months, today)
+            if (dueYears.isEmpty()) {
+                storeDividendEvents(normalized, fetchedEvents)
+            } else if (fetchedYears.isNotEmpty()) {
+                storeDividendEvents(normalized, fetchedEvents, fetchedYears)
+            }
+            storeUpcomingDividendEvent(normalized, history.upcomingEventsBySymbol[normalized])
+            val successEditor = marketPreferences.edit()
+                .putString("dividend_events_fetched_jst_$normalized", today)
+            fetchedYears.forEach { year ->
+                successEditor.putString("dividend_year_events_fetched_jst_${normalized}_$year", today)
+            }
+            successEditor.apply()
+            applyDividendMonths(normalized, months)
+
+            !yearFetchFailed && years.all { year ->
+                marketPreferences.getString("dividend_year_events_fetched_jst_${normalized}_$year", null) == today
             }
         }
     }

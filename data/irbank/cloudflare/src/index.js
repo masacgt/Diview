@@ -1799,6 +1799,8 @@ export default {
       const symbols = [...new Set(rawSymbols.map(value => value.toUpperCase()))];
       const rawEventYear = url.searchParams.get('event_year');
       const requestedEventYear = rawEventYear == null ? null : Number(rawEventYear);
+      const rawEventYears = url.searchParams.get('event_years');
+      const requestedEventYears = rawEventYears == null ? null : rawEventYears.split(',').map(value => Number(value.trim()));
       if (symbols.length === 0 || symbols.length > 50 || symbols.some(symbol => !/^[A-Z0-9.^_=-]{1,32}$/.test(symbol))) {
         return json({ error: 'invalid_request' }, 400);
       }
@@ -1807,7 +1809,13 @@ export default {
         timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit'
       }).formatToParts(new Date()).map(part => [part.type, part.value]));
       const asOf = `${todayParts.year}-${todayParts.month}-${todayParts.day}`;
-      if (rawEventYear != null && (!Number.isInteger(requestedEventYear) || requestedEventYear < 1900 || requestedEventYear > Number(asOf.slice(0, 4)))) {
+      const requestedYears = requestedEventYear != null ? [requestedEventYear] : requestedEventYears;
+      const hasInvalidRequestedYears = requestedYears != null && (
+        requestedYears.length === 0 || requestedYears.length > 10
+        || new Set(requestedYears).size !== requestedYears.length
+        || requestedYears.some(year => !Number.isInteger(year) || year < 1900 || year > Number(asOf.slice(0, 4)))
+      );
+      if ((rawEventYear != null && rawEventYears != null) || hasInvalidRequestedYears) {
         return json({ error: 'invalid_request' }, 400);
       }
       const cutoff = new Date(Date.parse(`${asOf}T00:00:00.000Z`) - 365 * 24 * 60 * 60 * 1000)
@@ -1833,8 +1841,8 @@ export default {
           }
         }
         const items = await Promise.all(symbols.map(async symbol => {
-          const years = requestedEventYear != null
-            ? [requestedEventYear]
+          const years = requestedYears != null
+            ? requestedYears
             : [Number(asOf.slice(0, 4)), Number(asOf.slice(0, 4)) - 1];
           const v2Symbol = yfinanceV2Symbol(symbol);
           const [v2Events, current] = await Promise.all([
@@ -1883,7 +1891,9 @@ export default {
               const amount = finiteNumber(event?.amount);
               const matchesRequestedYear = years.length === 1 && date.startsWith(`${years[0]}-`);
               return /^\d{4}-\d{2}-\d{2}$/.test(date) &&
-                (matchesRequestedYear ? date <= asOf : date >= cutoff && date <= asOf) && amount > 0;
+                (requestedYears != null
+                  ? requestedYears.includes(Number(date.slice(0, 4))) && date <= asOf
+                  : date >= cutoff && date <= asOf) && amount > 0;
             }).map(event => {
               const eventDate = String(event.date);
               const rightsDates = rightsDatesByEvent.get(`${symbol}|${eventDate}`) || {};
@@ -1895,13 +1905,21 @@ export default {
             return {
               symbol,
               history_status: historyStatus,
+              ...(rawEventYears == null ? {} : { requested_event_years: requestedYears }),
               amount_basis: current?.dividend?.event_amount_basis || 'yfinance_split_adjusted_assumption',
-              months: [...new Set(events.map(event => Number(event.date.slice(5, 7))))].sort((a, b) => a - b),
+              months: [...new Set(events
+                .filter(event => rawEventYears == null || event.date >= cutoff)
+                .map(event => Number(event.date.slice(5, 7))))].sort((a, b) => a - b),
               events,
               upcoming_event: upcomingEvent,
             };
           }
-          return { symbol, history_status: historyStatus, months: [], events: [], upcoming_event: upcomingEvent };
+          return {
+            symbol,
+            history_status: historyStatus,
+            ...(rawEventYears == null ? {} : { requested_event_years: requestedYears }),
+            months: [], events: [], upcoming_event: upcomingEvent,
+          };
         }));
         return json({ as_of: asOf, lookback_days: 365,
           rights_dates_generated_at: rightsDatesDocument?.generated_at || null, items });

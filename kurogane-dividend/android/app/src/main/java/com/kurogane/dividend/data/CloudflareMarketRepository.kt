@@ -171,7 +171,9 @@ data class CloudflareDividendMonths(
     val asOf: LocalDate,
     val monthsBySymbol: Map<String, List<Int>>,
     val eventsBySymbol: Map<String, List<CloudflareDividendEvent>> = emptyMap(),
-    val upcomingEventsBySymbol: Map<String, CloudflareUpcomingDividendEvent> = emptyMap()
+    val upcomingEventsBySymbol: Map<String, CloudflareUpcomingDividendEvent> = emptyMap(),
+    val historyStatusBySymbol: Map<String, String> = emptyMap(),
+    val requestedEventYearsBySymbol: Map<String, List<Int>> = emptyMap()
 )
 
 data class CloudflareDividendEvent(
@@ -614,14 +616,27 @@ class CloudflareMarketRepository(
     }
 
     /** Returns dividend months observed in the last 365 days from the Cloudflare R2 history. */
-    suspend fun fetchDividendMonths(symbols: List<String>, eventYear: Int? = null): CloudflareDividendMonths = withContext(ioDispatcher) {
+    suspend fun fetchDividendMonths(
+        symbols: List<String>,
+        eventYear: Int? = null,
+        eventYears: List<Int>? = null
+    ): CloudflareDividendMonths = withContext(ioDispatcher) {
         val normalizedSymbols = symbols.map { it.trim().uppercase(java.util.Locale.ROOT) }.distinct()
         require(normalizedSymbols.isNotEmpty() && normalizedSymbols.size <= 50 &&
             normalizedSymbols.all { it.matches(Regex("[A-Z0-9.^_=-]{1,32}")) }) {
             "配当履歴の銘柄コードは1〜50件で指定してください"
         }
+        require(eventYear == null || eventYears == null) { "配当履歴の年指定は1種類だけ指定してください" }
+        require(eventYears == null || (eventYears.size in 1..10 && eventYears.distinct().size == eventYears.size &&
+            eventYears.all { it in 1900..LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).year })) {
+            "配当履歴の対象年は1〜10年で指定してください"
+        }
         val encodedSymbols = URLEncoder.encode(normalizedSymbols.joinToString(","), Charsets.UTF_8.name())
-        val eventYearQuery = eventYear?.let { "&event_year=$it" }.orEmpty()
+        val eventYearQuery = when {
+            eventYear != null -> "&event_year=$eventYear"
+            eventYears != null -> "&event_years=${eventYears.joinToString(",")}"
+            else -> ""
+        }
         val root = getJson("/api/v1/dividend-months?symbols=$encodedSymbols$eventYearQuery")
         val asOf = runCatching { LocalDate.parse(root.optString("as_of")) }
             .getOrElse { throw IOException("Cloudflareの配当履歴日付が正しくありません", it) }
@@ -661,6 +676,23 @@ class CloudflareMarketRepository(
                 ))
             }
         }
+        val historyStatusBySymbol = buildMap {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val symbol = row.optString("symbol").trim().uppercase(java.util.Locale.ROOT)
+                if (symbol !in requested) continue
+                put(symbol, row.optString("history_status", "not_fetched").ifBlank { "not_fetched" })
+            }
+        }
+        val requestedEventYearsBySymbol = buildMap {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val symbol = row.optString("symbol").trim().uppercase(java.util.Locale.ROOT)
+                if (symbol !in requested) continue
+                val years = row.optJSONArray("requested_event_years") ?: continue
+                put(symbol, (0 until years.length()).mapNotNull { years.optInt(it, -1).takeIf { year -> year >= 1900 } })
+            }
+        }
         val monthsBySymbol = buildMap {
             for (index in 0 until rows.length()) {
                 val row = rows.optJSONObject(index) ?: continue
@@ -675,7 +707,10 @@ class CloudflareMarketRepository(
                 put(symbol, validMonths)
             }
         }
-        CloudflareDividendMonths(asOf, monthsBySymbol, eventsBySymbol, upcomingEventsBySymbol)
+        CloudflareDividendMonths(
+            asOf, monthsBySymbol, eventsBySymbol, upcomingEventsBySymbol,
+            historyStatusBySymbol, requestedEventYearsBySymbol
+        )
     }
 
     suspend fun financialDocument(code: String): JSONObject? = withContext(ioDispatcher) {

@@ -2,6 +2,8 @@
 
 ## In Progress
 
+- [ ] Deploy multi-year dividend-event support and verify Stock Detail preloading through the production API and on device. Evidence: Android now requests and caches the eight-year range during detail initialization and shows loading/failure/empty states; Worker source supports `event_years` with a fallback for older deployments, but publication and live-data verification remain pending.
+
 - [x] Consolidate remaining Android typography by semantic role: supporting 12sp, body 14sp, headings 18sp, and key metrics 24sp, while retaining 9sp chart labels. Evidence: `Typography.kt` centralizes the five sizes and affected financial values use the 24sp metric role; JDK 17 `assembleDebug` succeeds, fresh APKs install and launch on SCG01 (font scale 1.7) and emulator (1.0), and Asset Management, Annual Dividend, Watchlist projection, Stock Detail, Settings, Terms, and Feedback were visually checked.
 - [ ] Review dense chart-label wrapping at font scale 1.7. Evidence: SCG01 Annual Dividend and Stock Detail screens show adjacent chart values wrapping or colliding; chart labels remain 9sp.
 - [ ] Verify new-holding data hydration through manual registration, CSV/DVM import, and app restart on device. Evidence: new positive-share holdings now schedule security/quote, financial/analysis, dividend-month, and seven year-end price fetches into app-private caches; JDK 17 debug build succeeds, but add/import/cache-restore interaction was not exercised.
