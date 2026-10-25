@@ -116,4 +116,54 @@ class StockAnalysisNarrativeGeneratorTest {
         }
         assertTrue(violations.joinToString("\n"), violations.isEmpty())
     }
+
+    @Test
+    fun semanticPositionStatesKeepTheSameLengthAndEvaluationCombination() {
+        data class StateSample(val key: String, val value: Double, val expectedPhrase: String)
+
+        val samples = listOf(
+            StateSample("operating_margin", -0.01, "営業利益はマイナス"),
+            StateSample("operating_margin", -0.005, "営業利益はマイナス"),
+            StateSample("operating_margin", -0.0049, "営業利益はゼロ付近"),
+            StateSample("operating_margin", 0.0, "営業利益はゼロ付近"),
+            StateSample("operating_margin", 0.0049, "営業利益はゼロ付近"),
+            StateSample("operating_margin", 0.005, "営業利益はプラス"),
+            StateSample("operating_margin", 0.01, "営業利益はプラス"),
+            StateSample("fcf_margin", -0.01, "FCFはマイナス"),
+            StateSample("fcf_margin", -0.005, "FCFはマイナス"),
+            StateSample("fcf_margin", -0.0049, "FCFはゼロ付近"),
+            StateSample("fcf_margin", 0.0, "FCFはゼロ付近"),
+            StateSample("fcf_margin", 0.0049, "FCFはゼロ付近"),
+            StateSample("fcf_margin", 0.005, "FCFはプラス"),
+            StateSample("fcf_margin", 0.01, "FCFはプラス"),
+            StateSample("per", -1.0, "通常の倍率比較が難しい"),
+            StateSample("per", 0.0, "通常の倍率比較が難しい"),
+            StateSample("per", 0.1, "次の「やや割安」帯"),
+            StateSample("pbr", -1.0, "純資産が負の場合"),
+            StateSample("pbr", 0.0, "純資産が負の場合"),
+            StateSample("pbr", 0.1, "次の「割安」帯"),
+            StateSample("payout_ratio", -1.0, "通常通り解釈できず"),
+            StateSample("payout_ratio", 0.0, "次の「健全」帯")
+        )
+
+        val violations = mutableListOf<String>()
+        samples.forEach { sample ->
+            val values = baseline.toMutableMap().apply { this[sample.key] = sample.value }
+            val positionResult = StockAnalysisNarrativeGenerator.generatePositionDetailed(values)
+            val text = positionResult.findings.single { it.key == sample.key }.text
+            if (text.length !in 60..90) {
+                violations += "${sample.key}=${sample.value}: ${text.length} characters"
+            }
+            if (text.count { it == '。' } != 2) {
+                violations += "${sample.key}=${sample.value}: expected two sentences"
+            }
+            if (!text.contains(sample.expectedPhrase)) {
+                violations += "${sample.key}=${sample.value}: missing ${sample.expectedPhrase}"
+            }
+            if (StockAnalysisNarrativeGenerator.generate(values).combinationIndex != positionResult.combinationIndex) {
+                violations += "${sample.key}=${sample.value}: evaluation combination changed by text style"
+            }
+        }
+        assertTrue(violations.joinToString("\n"), violations.isEmpty())
+    }
 }
