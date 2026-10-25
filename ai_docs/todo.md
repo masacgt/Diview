@@ -175,3 +175,7 @@
 
 - [x] Complete production rollout of follow-up consistency fixes. Evidence: integrated Python 95, Worker/D1 53, repair planner 1, Android JVM 155 and JDK 17 build passed; live D1 has 49,592 annual rows with zero period mismatches; Worker deployment and R2 run #192 read-back succeeded, and both devices passed startup checks. See `review2-rollout-20261020.md` for scope and remaining UI checks.
 - [ ] Verify revised financial/cache behavior visually on device, including same-year multiple fiscal periods and split-adjusted history.
+
+## 2026-10-25 analysis explanation length
+
+- [x] Keep position explanations to 60–90 characters and about two sentences in the health, buy-signal, annual-dividend-change, and concentration-risk tabs. Evidence: generator tests cover 315 band/position combinations; Android unit tests, Debug build, and release visual regression passed, and physical-device hierarchy checks confirmed two-sentence comments within range in all four tabs.
