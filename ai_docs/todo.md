@@ -21,6 +21,8 @@
 
 ## Completed
 
+- [x] Keep acquisition-price inputs ungrouped for all stocks and all four registration accounts, including stock selection, prefill, current-price application, and pasted commas. Evidence: `AcquisitionPriceInputTest` passes 2 tests, the emulator registration UI regression passes, JDK 17 builds and both device installs pass; SCG01 8008 displays `2015` in all accounts and enables registration with 100 shares. No real holding was added during validation.
+
 - [x] Integrate feedback email notifications (`708d165c`) and the month-filter header fix (`ffd185ff`). Evidence: isolated integration preserves both completion records, all 59 Worker/D1 tests pass, JDK 17 `assembleDebug` succeeds, and the fresh APK installs/launches on SCG01 and emulator with live resumed activities and no process fatal errors. Targeted visual/interaction checks were not repeated during integration; original branch evidence remains above/below.
 
 - [x] Prevent the selected-month Asset Management heading from squeezing the sort button into a tall sliver. Evidence: `AssetManagementScreen.kt` wraps header actions with FlowRow; JDK 17 debug build/install passed on SCG01 (font scale 1.7) and emulator (1.0), June-chart selection followed by Asset Management renders correctly, both clear to the full list, and SCG01 opens the sort sheet.

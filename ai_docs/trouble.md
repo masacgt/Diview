@@ -1,5 +1,7 @@
 # Trouble
 
+- Asset registration disabled its submit button for prices such as 8008's `2,015`: `AddHoldingSheet` used display-formatted prices in editable state, but validation used `toDoubleOrNull()`. Acquisition-price inputs now use an ungrouped, locale-independent plain decimal formatter without display rounding; all four accounts share it for initialization, stock selection, existing-holding prefill, and current-price application. Typed/pasted commas are removed before state is updated; read-only money formatting is unchanged.
+
 - Selecting a month before opening Asset Management could give the sort control almost zero width: the long month-filter heading and actions were measured sequentially in one Row (reproduced on SCG01 at font scale 1.7). The holdings header now uses FlowRow to wrap the actions, and constrains the heading text with weight so the count retains space. Month selection, filtering, and sorting logic are unchanged.
 
 - Google Drive restore previously searched the Drive root through the Drive API using the `drive.file` scope and exact Diview backup filenames. Pre-existing `.dvm` files were not necessarily visible to that API query. Use Android's document picker for restore so the user explicitly grants access to the selected Drive document, while keeping `drive.file` for Diview's own exports.
