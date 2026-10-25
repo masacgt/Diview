@@ -40,7 +40,7 @@
 
 - [x] Integrate the asset-registration copy change after its build and device checks. Evidence: only branch commit `916a5c12` was cherry-picked onto latest `origin/main` as `1b6ed769` and pushed because the source branch contained unrelated commits; JDK 17 `assembleDebug` passed, the installed APK hash matched on SCG01 and the emulator, and the revised labels were confirmed on the emulator.
 
-- [x] Match the Asset Management “キャンセル” and “登録する” buttons to the full width of the allocation summary. Evidence: branch commit `462f828d` was cherry-picked onto main as `e34263bf`; JDK 17 `assembleDebug` and both device installs passed, APK hashes matched, and the emulator showed both button containers spanning the 996 px sheet content width.
+- [x] Place the Asset Management “キャンセル” and “登録する” buttons side by side like the two-column allocation summary. Evidence: branch commit `48286a14` was rebased onto latest `origin/main` (`ee66d91b`) as `f3f32ec0`; the footer uses the same full-width `AdaptiveRow`, 6 dp spacing, and equal weights as the summary cards, the emulator showed the buttons side by side, JDK 17 `clean assembleDebug` succeeded, and the APK SHA-256 (`f42f6dac…d8d7345`) matched on SCG01 and the emulator.
 
 - [x] Keep acquisition-price inputs ungrouped for all stocks and all four registration accounts, including stock selection, prefill, current-price application, and pasted commas. Evidence: `AcquisitionPriceInputTest` passes 2 tests, the emulator registration UI regression passes, JDK 17 builds and both device installs pass; SCG01 8008 displays `2015` in all accounts and enables registration with 100 shares. No real holding was added during validation.
 
