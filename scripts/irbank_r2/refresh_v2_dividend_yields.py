@@ -19,6 +19,8 @@ from refresh_v2_dividends import (
     json_bytes,
     make_r2_client,
     read_r2_document,
+    prepare_dividend_index_shards,
+    activate_dividend_index_shards,
     request_json,
     required_env,
     bump_financial_revision,
@@ -218,6 +220,10 @@ def main() -> int:
     if client:
         wrote_index = False
         try:
+            shard_manifest = (
+                prepare_dividend_index_shards(client, args.bucket, updated)
+                if args.key == DEFAULT_R2_KEY else None
+            )
             response = client.put_object(
                 Bucket=args.bucket,
                 Key=args.key,
@@ -225,14 +231,17 @@ def main() -> int:
                 ContentType="application/json; charset=utf-8",
                 CacheControl="public, max-age=300",
             )
-            wrote_index = True
             saved = client.get_object(Bucket=args.bucket, Key=args.key)["Body"].read()
             if hashlib.sha256(saved).hexdigest() != digest:
                 raise RuntimeError(f"IRBANK v2 dividend-yield read-back mismatch: {args.key}")
+            if shard_manifest is not None:
+                activate_dividend_index_shards(client, args.bucket, shard_manifest)
+            wrote_index = True
             print(json.dumps({
                 "published_key": args.key,
                 "etag": str(response.get("ETag") or "").strip('"'),
                 "read_back_sha256": digest,
+                "shard_count": shard_manifest.get("shard_count") if shard_manifest else None,
             }, ensure_ascii=False))
         finally:
             if wrote_index and args.key == DEFAULT_R2_KEY:

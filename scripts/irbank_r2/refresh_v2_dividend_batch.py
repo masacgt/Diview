@@ -128,6 +128,10 @@ def publish_index(client: Any, bucket: str, key: str, document: dict[str, Any]) 
     digest = hashlib.sha256(payload).hexdigest()
     wrote_index = False
     try:
+        shard_manifest = (
+            refresh.prepare_dividend_index_shards(client, bucket, document)
+            if key == DEFAULT_R2_KEY else None
+        )
         response = client.put_object(
             Bucket=bucket,
             Key=key,
@@ -135,10 +139,12 @@ def publish_index(client: Any, bucket: str, key: str, document: dict[str, Any]) 
             ContentType="application/json; charset=utf-8",
             CacheControl="public, max-age=300",
         )
-        wrote_index = True
         saved = client.get_object(Bucket=bucket, Key=key)["Body"].read()
         if hashlib.sha256(saved).hexdigest() != digest:
             raise RuntimeError(f"IRBANK v2 dividend read-back mismatch: {key}")
+        if shard_manifest is not None:
+            refresh.activate_dividend_index_shards(client, bucket, shard_manifest)
+        wrote_index = True
         return digest, str(response.get("ETag") or "").strip('"')
     finally:
         if wrote_index and key == DEFAULT_R2_KEY:
