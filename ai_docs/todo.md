@@ -2,6 +2,8 @@
 
 ## In Progress
 
+- [ ] Enforce financial field units and server revisions across the Worker, R2 writers, Android cache, and portfolio calculations. Evidence: source unit metadata takes precedence over contract fallbacks; the Worker converts only declared money units, the app validates API units and server revisions, payout ratios use percentage points, and portfolio totals aggregate typed JPY amounts. Build/device checks and production Worker/API verification remain pending.
+
 - [ ] Verify multi-year dividend-event preloading end to end after Worker publication. Evidence: Worker `dividend-months` now accepts up to ten `event_years`; Android batches and caches requested years, and falls back to single-year requests on older Workers. The JDK 17 debug build installed and launched on SCG01 and the emulator; production publication, live API acknowledgement, and event-loading behavior remain unverified.
 
 - [ ] Verify the 20-session company-info rotation and same-session catalog recovery on a regular scheduled sync. Evidence: `sync_v2.py` now rotates company info across 20 groups, reuses successful catalog entries for the same session, reconstructs interrupted entries from R2, and records action-history repair triggers; scheduled-run behavior and publication read-back remain unverified.

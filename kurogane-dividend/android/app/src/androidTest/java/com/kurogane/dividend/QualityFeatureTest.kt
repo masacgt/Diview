@@ -20,7 +20,7 @@ class QualityFeatureTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private lateinit var app: ReviewApplication
     private val stores = mutableListOf<ViewModelStore>()
-    private val document = """{"security":{"code":"7203"},"financials":{"annual":[{"fiscal_year":"2026/03","sales":1000,"operating_profit":100,"equity_ratio_computed":45}]},"dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"calendar_year":2025,"calendar_year_distribution_per_share":95}]},"valuation":{"history":[{"fiscal_year":"2026/03","eps_adjusted":250,"bps_adjusted":2000}]}}"""
+    private val document = """{"security":{"code":"7203"},"financials":{"annual":[{"fiscal_year":"2026/03","sales":1000,"operating_profit":100,"equity_ratio_computed":45,"field_units":{"sales":"jpy","operating_profit":"jpy","equity_ratio_computed":"percent"}}]},"dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"calendar_year":2025,"calendar_year_distribution_per_share":95,"field_units":{"calendar_year_distribution_per_share":"jpy_per_share"}}]},"valuation":{"history":[{"fiscal_year":"2026/03","eps_adjusted":250,"bps_adjusted":2000,"field_units":{"eps_adjusted":"jpy_per_share","bps_adjusted":"jpy_per_share"}}]}}"""
 
     @Before fun prepare() {
         app = ReviewApplication()

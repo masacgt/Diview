@@ -204,8 +204,10 @@ test('financial API aggregates only published v2 yfinance calendar-year events',
   const data = await response.json();
   assert.equal(data.dividends.history_basis, 'calendar_year_observed_distributions');
   assert.deepEqual(data.dividends.records, [
-    { calendar_year: year - 2, calendar_year_distribution_per_share: 25, amount_basis: 'yfinance_split_adjusted_assumption' },
-    { calendar_year: year - 1, calendar_year_distribution_per_share: 30, amount_basis: 'yfinance_split_adjusted_assumption' },
+    { calendar_year: year - 2, calendar_year_distribution_per_share: 25, amount_basis: 'yfinance_split_adjusted_assumption',
+      field_units: { calendar_year_distribution_per_share: 'jpy_per_share' } },
+    { calendar_year: year - 1, calendar_year_distribution_per_share: 30, amount_basis: 'yfinance_split_adjusted_assumption',
+      field_units: { calendar_year_distribution_per_share: 'jpy_per_share' } },
   ]);
 });
 
@@ -257,7 +259,10 @@ test('financial API returns calculated DOE and net D/E from the stored annual ro
   const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
   assert.equal(response.status, 200);
   const data = await response.json();
-  assert.deepEqual(data.financials.annual, [annual]);
+  assert.deepEqual(data.financials.annual, [{
+    ...annual,
+    field_units: { calculated_doe: 'percent', net_de_ratio: 'times' },
+  }]);
 });
 
 test('financial API exposes retained seed values separately from newer yfinance values', async () => {
@@ -270,7 +275,8 @@ test('financial API exposes retained seed values separately from newer yfinance 
     equity_ratio_computed: 24,
     field_status: { sales: 'available' },
     source_values: {
-      seed: { source: 'IRBANK', source_key: 'market/irbank/v1/securities/7203/overview.json', values: { sales: 100 } },
+      seed: { source: 'IRBANK', source_key: 'market/irbank/v1/securities/7203/overview.json',
+        values: { sales: 100 }, field_units: { sales: 'million_jpy', equity_ratio_computed: 'percent' } },
       yfinance: { source: 'Yahoo Finance via yfinance', values: { sales: 120 }, field_status: { sales: 'available' } },
       calculated: { values: { equity_ratio_computed: { value: 24, input_sources: { equity: 'seed', total_assets: 'yfinance' } } } },
     },
@@ -285,7 +291,7 @@ test('financial API exposes retained seed values separately from newer yfinance 
   assert.equal(response.status, 200);
   const data = await response.json();
   assert.equal(data.financials.annual[0].sales, 120);
-  assert.equal(data.financials.annual[0].equity_ratio_computed, 24);
+  assert.equal(Object.hasOwn(data.financials.annual[0], 'equity_ratio_computed'), false);
   assert.deepEqual(data.financials.annual[0].source_values.calculated.values, {});
   assert.equal(data.financials.seed_annual[0].values.sales, 100);
   assert.equal(Object.hasOwn(data.financials.seed_annual[0].values, 'equity_ratio_computed'), false);
@@ -307,6 +313,8 @@ test('financial API retains equity ratios calculated from one source', async () 
             value: 20,
             formula: 'equity / total_assets * 100',
             input_sources: { equity: 'yfinance', total_assets: 'yfinance' },
+            input_units: { equity: 'jpy', total_assets: 'jpy' },
+            unit: 'percent',
           },
         },
       },
@@ -328,9 +336,12 @@ test('financial API does not replace the calculated ratio with a retained seed r
   const annual = { period_end: '2026-03-31', equity_ratio_computed: 60,
     field_status: { equity_ratio_computed: 'available' },
     source_values: {
-      seed: { values: { equity_ratio_computed: 24 } },
-      yfinance: { values: { stockholders_equity: 60, total_assets: 100 } },
-      calculated: { values: { equity_ratio_computed: { value: 60 } } },
+      seed: { source: 'IRBANK', values: { equity_ratio_computed: 24 }, field_units: { equity_ratio_computed: 'percent' } },
+      yfinance: { values: { stockholders_equity: 60, total_assets: 100 }, field_units: { stockholders_equity: 'jpy', total_assets: 'jpy' } },
+      calculated: { values: { equity_ratio_computed: {
+        value: 60, unit: 'percent', input_sources: { equity: 'yfinance', total_assets: 'yfinance' },
+        input_units: { equity: 'jpy', total_assets: 'jpy' },
+      } } },
     } };
   const env = dividendEnvironment(new Map([['market/yfinance/v2/securities/4502.T/financials/2026.json', { annual }]]));
   const response = await worker.fetch(new Request('https://example.com/api/v1/financial-data/4502'), env);
@@ -384,7 +395,12 @@ test('financial API preserves mixed-unit null guards and raw provenance without 
   for (const [field, value] of Object.entries(annual.source_values.seed.values)) {
     assert.equal(data.financials.seed_annual[0].values[field], value);
   }
-  assert.deepEqual(row.source_values, annual.source_values);
+  assert.deepEqual(row.source_values.seed.values, annual.source_values.seed.values);
+  assert.deepEqual(row.source_values.yfinance.values, annual.source_values.yfinance.values);
+  assert.deepEqual(row.source_values.seed.field_units, {
+    sales: 'million_jpy', operating_profit: 'million_jpy', operating_cf: 'million_jpy',
+    investing_cf: 'million_jpy', total_assets: 'million_jpy',
+  });
   assert.equal(row.total_assets, 500000000);
   // With one fresh cash-flow input, the seed-only other side must stay null.
   annual.operating_cf = 30000000;
@@ -423,6 +439,7 @@ test('financial API keeps observed event history separate from legacy fiscal-yea
     calendar_year: currentYear - 1,
     calendar_year_distribution_per_share: 25,
     amount_basis: 'yfinance_split_adjusted_assumption',
+    field_units: { calendar_year_distribution_per_share: 'jpy_per_share' },
   }]);
 });
 

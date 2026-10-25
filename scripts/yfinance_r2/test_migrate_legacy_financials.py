@@ -68,7 +68,8 @@ class MigrationShardTests(unittest.TestCase):
             "equity_ratio_computed": 37975096.6,
             "field_status": {"equity_ratio_computed": "stale"},
             "source_values": {
-                "seed": {"values": {"equity_ratio_computed": 37.975}},
+                "seed": {"source": "IRBANK", "values": {"equity_ratio_computed": 37.975},
+                         "field_units": {"equity_ratio_computed": "percent"}},
                 "calculated": {"values": {
                     "equity_ratio_computed": {
                         "value": 37975096.6,
@@ -116,6 +117,8 @@ class MigrationShardTests(unittest.TestCase):
                 "equity_ratio_computed": {
                     "value": 37.5,
                     "input_sources": {"equity": "yfinance", "total_assets": "yfinance"},
+                        "input_units": {"equity": "jpy", "total_assets": "jpy"},
+                        "unit": "percent",
                 },
             }}},
         }
@@ -130,6 +133,8 @@ class MigrationShardTests(unittest.TestCase):
                 "equity_ratio_computed": {
                     "value": 38.0,
                     "input_sources": {"equity": "jquants", "total_assets": "jquants"},
+                        "input_units": {"equity": "jpy", "total_assets": "jpy"},
+                        "unit": "percent",
                 },
             }}},
         }

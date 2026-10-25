@@ -50,13 +50,17 @@ data class FinancialData(
             val dividendPayload = root.optJSONObject("dividends")
             val issuerDividendPayload = root.optJSONObject("issuer_dividends")
             val forecastSource = issuerDividendPayload?.optJSONObject("forecast")
+            val marketPayload = root.optJSONObject("market")
+            val marketSummary = marketPayload?.optJSONObject("summary")
             val dividendShareBasisStatus = dividendPayload?.optString("share_basis_status")
                 ?.takeIf { it.isNotBlank() } ?: "unknown"
             val forecastAnnualDividend = forecastSource
-                ?.number("annual_dps_current_share_basis")
+                ?.numberWithUnit("annual_dps_current_share_basis", "jpy_per_share")
                 ?.takeIf { it >= 0 }
-            val forecastEps = root.optJSONObject("market")?.optJSONObject("summary")
-                ?.number("forwardEps")?.takeIf { it > 0 }
+            val forecastEps = if (marketPayload?.optJSONObject("summary_field_units")
+                    ?.optString("forwardEps") == "jpy_per_share") {
+                marketSummary?.number("forwardEps")?.takeIf { it > 0 }
+            } else null
             val forecastPayoutRatio = forecastAnnualDividend?.let { dps ->
                 forecastEps?.let { eps -> dps / eps * 100.0 }
             }
@@ -65,7 +69,7 @@ data class FinancialData(
                 .filter { it.optInt("calendar_year") in 1900..2100 }
                 .sortedBy { it.optInt("calendar_year") }
             val dividends = rows.mapNotNull { row ->
-                row.number("calendar_year_distribution_per_share")
+                row.numberWithUnit("calendar_year_distribution_per_share", "jpy_per_share")
                     ?.takeIf { it >= 0 }
                 ?.let { CalendarYearDividend(row.getInt("calendar_year"), it) } }
                 .associateBy { it.year }.values.sortedBy { it.year }
@@ -77,8 +81,8 @@ data class FinancialData(
                 .mapNotNull { row ->
                     val fiscalYear = row.optInt("fiscal_year", -1)
                     if (fiscalYear !in 1900..2100) return@mapNotNull null
-                    val reportedDps = row.number("annual_dps")?.takeIf { it >= 0 }
-                    val adjustedDps = row.number("annual_dps_adjusted")?.takeIf { it >= 0 }
+                    val reportedDps = row.numberWithUnit("annual_dps", "jpy_per_share")?.takeIf { it >= 0 }
+                    val adjustedDps = row.numberWithUnit("annual_dps_adjusted", "jpy_per_share")?.takeIf { it >= 0 }
                     if (reportedDps == null && adjustedDps == null) return@mapNotNull null
                     val periodKey = listOf("period_end", "fiscal_period", "period", "fiscal_year")
                         .firstNotNullOfOrNull { key -> row.optString(key).takeIf { it.isNotBlank() && it != "null" } }
@@ -98,8 +102,8 @@ data class FinancialData(
             val forecastFiscalYear = reportedForecastFiscalYear ?: period.take(4).toIntOrNull()?.plus(1)
                 ?.takeIf { it in 1900..2100 }
             val doeStatus = financial?.optJSONObject("field_status")?.optString("calculated_doe").orEmpty()
-            val calculatedDoe = financial?.number("calculated_doe")
-            val netDeRatio = financial?.number("net_de_ratio")
+            val calculatedDoe = financial?.numberWithUnit("calculated_doe", "percent")
+            val netDeRatio = financial?.numberWithUnit("net_de_ratio", "times")
             val valuationRows = root.optJSONObject("valuation")?.optJSONArray("history")
             val valuations = (0 until (valuationRows?.length() ?: 0)).mapNotNull { valuationRows?.optJSONObject(it) }
             val end = financial?.periodEnd()
@@ -117,15 +121,17 @@ data class FinancialData(
             val dividend = rows.lastOrNull { it.optInt("calendar_year").toString() == period.take(4) }
             fun percent(numerator: Double?, denominator: Double?): Double? =
                 if (numerator != null && denominator != null && denominator > 0) numerator / denominator * 100 else null
-            val sales = financial?.number("sales")
-            val operating = percent(financial?.number("operating_profit"), sales)
-            val cf = financial?.number("operating_cf")?.let { a -> financial.number("investing_cf")?.let { a + it } }
+            val sales = financial?.numberWithUnit("sales", "jpy")
+            val operatingProfit = financial?.numberWithUnit("operating_profit", "jpy")
+            val operating = financial?.numberWithUnit("operating_margin", "percent")
+                ?: percent(operatingProfit, sales)
+            val operatingCf = financial?.numberWithUnit("operating_cf", "jpy")
+            val investingCf = financial?.numberWithUnit("investing_cf", "jpy")
+            val cf = if (operatingCf != null && investingCf != null) operatingCf + investingCf else null
             val fcfMargin = percent(cf, sales)
-            val equity = financial?.number("equity_ratio_computed")
-            // Yahoo's current `payout_ratio` is a fraction; older annual rows
-            // already store the value in percentage points.
-            val payout = dividend?.number("payout_ratio")
-                ?: dividendPayload?.number("payout_ratio")?.times(100.0)
+            val equity = financial?.numberWithUnit("equity_ratio_computed", "percent")
+            val payout = dividend?.numberWithUnit("payout_ratio", "percent")
+                ?: dividendPayload?.numberWithUnit("payout_ratio", "percent")
             var noCut = 0
             for (i in dividends.lastIndex downTo 1) {
                 if (dividends[i].year != dividends[i - 1].year + 1 || dividends[i].dps < dividends[i - 1].dps) break
@@ -144,7 +150,7 @@ data class FinancialData(
             val ranges = valuations
                 .filter { it.periodMonth().take(4).toIntOrNull()?.let { year ->
                     period.take(4).toIntOrNull()?.let { year in (it - 4)..it } } == true }
-                .mapNotNull { it.number("dividend_yield_adjusted") }
+                .mapNotNull { it.numberWithUnit("dividend_yield_adjusted", "percent") }
             val profile = StockFinancialProfile(
                 payoutRatio = payout ?: Double.NaN, equityRatio = equity ?: Double.NaN,
                 consecutiveYears = dividendPayload?.number("consecutive_dividend_increase_years")?.toInt()
@@ -152,8 +158,8 @@ data class FinancialData(
                 noCutYears = dividendPayload?.number("no_cut_years")?.toInt()
                     ?: if (!calendarYearEvents && dividends.size >= 2) noCut else -1,
                 growthRate = growth ?: Double.NaN,
-                eps = valuation?.number("eps_adjusted") ?: Double.NaN,
-                bps = valuation?.number("bps_adjusted") ?: Double.NaN,
+                eps = valuation?.numberWithUnit("eps_adjusted", "jpy_per_share") ?: Double.NaN,
+                bps = valuation?.numberWithUnit("bps_adjusted", "jpy_per_share") ?: Double.NaN,
                 operatingMargin = operating ?: Double.NaN, fcfMargin = fcfMargin,
                 fcfStatus = when { cf == null -> "未取得"; cf >= 0 -> "フリーCF黒字"; else -> "フリーCF赤字" },
                 calculatedDoe = calculatedDoe?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: "未取得",
@@ -187,6 +193,9 @@ data class FinancialData(
 
 internal fun JSONObject.number(key: String): Double? =
     if (!has(key) || isNull(key)) null else optDouble(key).takeIf(Double::isFinite)
+
+private fun JSONObject.numberWithUnit(key: String, expectedUnit: String): Double? =
+    if (optJSONObject("field_units")?.optString(key) == expectedUnit) number(key) else null
 
 private fun JSONObject.hasNoPeriodEnd(): Boolean =
     !has("period_end") || isNull("period_end") || optString("period_end").isBlank()

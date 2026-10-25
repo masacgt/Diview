@@ -8,7 +8,6 @@ import io
 import json
 import re
 import sys
-import uuid
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +15,7 @@ import yfinance as yf
 
 import fetch_and_upload as collector
 import sync_v2 as sync
+from financial_revision import bump_financial_revision
 
 
 def normalize_security_code(code: str) -> str:
@@ -35,11 +35,7 @@ def refresh(code: str) -> dict[str, Any]:
     try:
         return refresh_with_client(code, client, bucket)
     finally:
-        sync.put_json_if_changed(client, bucket, sync.object_key("financial_revision.json"), {
-            "schema_version": 1,
-            "revision": uuid.uuid4().hex,
-            "updated_at": sync.iso_now(),
-        })
+        bump_financial_revision(client, bucket)
 
 
 def refresh_with_client(code: str, client: Any, bucket: str) -> dict[str, Any]:

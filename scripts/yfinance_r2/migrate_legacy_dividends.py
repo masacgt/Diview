@@ -14,6 +14,7 @@ from typing import Any
 
 import boto3
 from botocore.config import Config
+from financial_revision import bump_financial_revision
 
 
 V2_ROOT = "market/yfinance/v2"
@@ -225,6 +226,9 @@ def main() -> int:
             if completed % 100 == 0 or completed == len(securities):
                 with _PROGRESS_LOCK:
                     print(f"Processed {completed}/{len(securities)} securities", flush=True)
+
+    if not args.dry_run and any(int(row.get("inserted_count") or 0) > 0 for row in results):
+        bump_financial_revision(client, bucket)
 
     counts: dict[str, int] = {}
     for result in results:

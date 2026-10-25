@@ -20,6 +20,9 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "yfinance_r2"))
+from financial_revision import bump_financial_revision
+
 
 API_BASE = "https://api.irbank.net/v1"
 DEFAULT_CATALOG_URL = "https://diview-irbank.omasa.workers.dev/api/v1/irbank/catalog"
@@ -448,14 +451,20 @@ def main() -> int:
                       "sha256": digest, "bytes": len(payload), "api_remaining_before_fetch": remaining}, ensure_ascii=False))
 
     if args.publish:
-        response = r2_client.put_object(Bucket=args.bucket, Key=args.key, Body=payload,
-                                        ContentType="application/json; charset=utf-8",
-                                        CacheControl="public, max-age=300")
-        saved = r2_client.get_object(Bucket=args.bucket, Key=args.key)["Body"].read()
-        if hashlib.sha256(saved).hexdigest() != digest:
-            raise RuntimeError(f"IRBANK v2 dividend read-back mismatch: {args.key}")
-        print(json.dumps({"published_key": args.key, "etag": str(response.get("ETag") or "").strip('"'),
-                          "read_back_sha256": digest}, ensure_ascii=False))
+        wrote_index = False
+        try:
+            response = r2_client.put_object(Bucket=args.bucket, Key=args.key, Body=payload,
+                                            ContentType="application/json; charset=utf-8",
+                                            CacheControl="public, max-age=300")
+            wrote_index = True
+            saved = r2_client.get_object(Bucket=args.bucket, Key=args.key)["Body"].read()
+            if hashlib.sha256(saved).hexdigest() != digest:
+                raise RuntimeError(f"IRBANK v2 dividend read-back mismatch: {args.key}")
+            print(json.dumps({"published_key": args.key, "etag": str(response.get("ETag") or "").strip('"'),
+                              "read_back_sha256": digest}, ensure_ascii=False))
+        finally:
+            if wrote_index and args.key == DEFAULT_R2_KEY:
+                bump_financial_revision(r2_client, args.bucket)
     return 0
 
 
