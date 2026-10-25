@@ -42,6 +42,9 @@ FINANCIAL_BUCKETS = 5
 COMPANY_INFO_REFRESH_POLICY_VERSION = 1
 FINANCIAL_REFRESH_MAX_AGE_DAYS = 45
 FINANCIAL_REFRESH_POLICY_VERSION = 2
+CALENDAR_REFRESH_MAX_AGE_DAYS = 30
+CALENDAR_NEAR_EVENT_WINDOW_DAYS = 45
+CALENDAR_NEAR_EVENT_REFRESH_DAYS = 7
 FINANCIAL_GROUPS = ("income_statement", "balance_sheet", "cash_flow", "valuation")
 # Latest company guidance replaces Yahoo's stale dividendRate while it still
 # reports the audited old amount. AOKI: https://ir.aoki-hd.co.jp/ja/news/news/auto_20260508520915/pdfFile.pdf
@@ -1305,6 +1308,32 @@ def financial_refresh_due(
     return initialize_due or retry_pending or marker_changed or stale, marker, marker_changed
 
 
+def should_refresh_dividend_calendar(
+    *, as_of: date, fetched_on: date | None, ex_dividend_date: date | None,
+    last_attempt_session_date: date | None, last_attempt_status: str, status: str,
+) -> bool:
+    days_until_ex_date = (ex_dividend_date - as_of).days if ex_dividend_date is not None else None
+    refresh_interval_days = (
+        CALENDAR_NEAR_EVENT_REFRESH_DAYS
+        if days_until_ex_date is not None
+        and 0 <= days_until_ex_date <= CALENDAR_NEAR_EVENT_WINDOW_DAYS
+        else CALENDAR_REFRESH_MAX_AGE_DAYS
+    )
+    failed = last_attempt_status == "failed" or status == "failed"
+    failed_this_session = (
+        failed
+        and last_attempt_session_date is not None
+        and last_attempt_session_date >= as_of
+    )
+    if failed_this_session:
+        return False
+    return (
+        fetched_on is None
+        or failed
+        or (as_of - fetched_on).days >= refresh_interval_days
+    )
+
+
 def read_monthly_points(client: Any, bucket: str, symbol: str, year: int) -> list[dict[str, Any]]:
     safe = safe_symbol(symbol)
     points: list[dict[str, Any]] = []
@@ -2132,12 +2161,10 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     previous_calendar = prior_current.get("calendar", {})
     if not isinstance(previous_calendar, dict):
         previous_calendar = {}
-    previous_calendar_attempt = date_value(
-        previous_calendar.get("last_attempt_at") or previous_calendar.get("fetched_at")
-    )
-    calendar_refresh_due = (
-        previous_calendar_attempt is None
-        or (as_of - previous_calendar_attempt).days >= 30
+    previous_calendar_attempt_session = date_value(
+        previous_calendar.get("last_attempt_session_date")
+        or previous_calendar.get("last_attempt_at")
+        or previous_calendar.get("fetched_at")
     )
     calendar_ex_date = date_value(previous_calendar.get("ex_dividend_date"))
     calendar_payment_date = date_value(previous_calendar.get("payment_start_date"))
@@ -2149,8 +2176,21 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     calendar_last_attempt_status = str(previous_calendar.get("last_attempt_status") or calendar_status)
     calendar_fetched_at = previous_calendar.get("fetched_at")
     calendar_last_attempt_at = previous_calendar.get("last_attempt_at") or calendar_fetched_at
+    calendar_last_attempt_session_date = (
+        previous_calendar.get("last_attempt_session_date")
+        or (previous_calendar_attempt_session.isoformat() if previous_calendar_attempt_session else None)
+    )
+    calendar_refresh_due = should_refresh_dividend_calendar(
+        as_of=as_of,
+        fetched_on=date_value(calendar_fetched_at),
+        ex_dividend_date=calendar_ex_date,
+        last_attempt_session_date=previous_calendar_attempt_session,
+        last_attempt_status=calendar_last_attempt_status,
+        status=calendar_status,
+    )
     if calendar_refresh_due:
         calendar_last_attempt_at = iso_now()
+        calendar_last_attempt_session_date = as_of.isoformat()
         try:
             count_yfinance_call("ticker_calendar")
             calendar_payload = ticker.calendar
@@ -2172,6 +2212,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "status": calendar_status,
         "last_attempt_status": calendar_last_attempt_status,
         "last_attempt_at": calendar_last_attempt_at,
+        "last_attempt_session_date": calendar_last_attempt_session_date,
         "fetched_at": calendar_fetched_at,
         "source": "Yahoo Finance via yfinance Ticker.calendar",
     }

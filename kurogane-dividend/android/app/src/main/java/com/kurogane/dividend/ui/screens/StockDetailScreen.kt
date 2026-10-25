@@ -213,6 +213,8 @@ fun StockDetailScreen(
     var climateMenuExpanded by remember(currentHolding.code) { mutableStateOf(false) }
     var climateSelectorWidthPx by remember(currentHolding.code) { mutableIntStateOf(0) }
     var showClimateInfo by remember(currentHolding.code) { mutableStateOf(false) }
+    var showDoeInfo by remember(currentHolding.code) { mutableStateOf(false) }
+    var showNetDeRatioInfo by remember(currentHolding.code) { mutableStateOf(false) }
     val density = LocalDensity.current
     var editingBenefitIndex by rememberSaveable(currentHolding.code) { mutableIntStateOf(-1) }
     var newBenefitName by rememberSaveable(currentHolding.code) { mutableStateOf("") }
@@ -1998,7 +2000,13 @@ fun StockDetailScreen(
                                                 modifier = Modifier.weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
-                                                    Text(stringResource(R.string.stock_detail_text_58), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                                    StockDetailMetricTitleWithInfo(
+                                                        title = stringResource(R.string.stock_detail_text_58),
+                                                        contentDescription = stringResource(R.string.stock_detail_doe_info_content_description),
+                                                        description = stringResource(R.string.stock_detail_doe_info_description),
+                                                        expanded = showDoeInfo,
+                                                        onExpandedChange = { showDoeInfo = it }
+                                                    )
                                                     Spacer(modifier = Modifier.height(4.dp))
                                                     Text(profile.calculatedDoe, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
                                                     Spacer(modifier = Modifier.height(2.dp))
@@ -2019,7 +2027,13 @@ fun StockDetailScreen(
                                                 modifier = Modifier.weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
-                                                    Text(stringResource(R.string.stock_detail_text_59), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                                    StockDetailMetricTitleWithInfo(
+                                                        title = stringResource(R.string.stock_detail_text_59),
+                                                        contentDescription = stringResource(R.string.stock_detail_net_de_ratio_info_content_description),
+                                                        description = stringResource(R.string.stock_detail_net_de_ratio_info_description),
+                                                        expanded = showNetDeRatioInfo,
+                                                        onExpandedChange = { showNetDeRatioInfo = it }
+                                                    )
                                                     Spacer(modifier = Modifier.height(4.dp))
                                                     Text(profile.netDeRatio, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
                                                     Spacer(modifier = Modifier.height(2.dp))
@@ -3756,6 +3770,69 @@ private fun StockAnalysisDisclaimerInfo() {
                     fontSize = AppTextSize.caption,
                     lineHeight = 20.sp
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StockDetailMetricTitleWithInfo(
+    title: String,
+    contentDescription: String,
+    description: String,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            title,
+            modifier = Modifier.weight(1f, fill = false),
+            color = OnSurfaceVariant,
+            fontSize = AppTextSize.dense,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
+        )
+        Box {
+            IconButton(onClick = { onExpandedChange(true) }, modifier = Modifier.size(26.dp)) {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = contentDescription,
+                    tint = OnSurfaceVariant,
+                    modifier = Modifier.size(17.dp)
+                )
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { onExpandedChange(false) },
+                modifier = Modifier.widthIn(max = 300.dp),
+                shape = RoundedCornerShape(16.dp),
+                containerColor = SurfaceContainerLow,
+                tonalElevation = 0.dp,
+                shadowElevation = 12.dp
+            ) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = PrimaryEmerald.copy(alpha = 0.14f),
+                            modifier = Modifier.size(30.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Info, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(17.dp))
+                            }
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text(title, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    HorizontalDivider(color = BorderColor, thickness = 0.75.dp)
+                    Spacer(Modifier.height(12.dp))
+                    Text(description, color = OnSurfaceVariant, fontSize = AppTextSize.caption, lineHeight = 20.sp)
+                }
             }
         }
     }
