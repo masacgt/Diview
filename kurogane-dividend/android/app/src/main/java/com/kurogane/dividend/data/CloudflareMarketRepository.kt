@@ -31,7 +31,8 @@ data class CloudflareSearchQuote(
     val isNoDividendConfirmed: Boolean = false,
     val hasDividendStatus: Boolean = false,
     val quoteDate: String? = null,
-    val yieldAsOf: String? = null
+    val yieldAsOf: String? = null,
+    val yieldSource: String? = null
 )
 
 private data class CachedSearchCatalogQuotes(
@@ -48,7 +49,8 @@ data class CloudflareSecurity(
     val marketYieldRate: Double? = null,
     val isNoDividendConfirmed: Boolean = false,
     val hasDividendStatus: Boolean = false,
-    val dataRetrieval: CloudflareDataRetrieval? = null
+    val dataRetrieval: CloudflareDataRetrieval? = null,
+    val marketYieldSource: String? = null
 )
 
 data class CloudflareDataRetrieval(
@@ -96,7 +98,8 @@ data class CloudflareMarketQuote(
     val isNoDividendConfirmed: Boolean = false,
     val hasDividendStatus: Boolean = false,
     val yieldRate: Double? = null,
-    val yieldAsOf: String? = null
+    val yieldAsOf: String? = null,
+    val yieldSource: String? = null
 )
 
 data class CloudflarePriceCatalogSnapshot(
@@ -255,7 +258,8 @@ class CloudflareMarketRepository(
                 if (price != null || yieldRate != null || annualDividend != null) {
                     put(code, CloudflareSearchQuote(
                         price, yieldRate, annualDividend, isNoDividendConfirmed, hasDividendStatus,
-                        live?.quoteDate ?: catalog?.quoteDate, yieldAsOf
+                        live?.quoteDate ?: catalog?.quoteDate, yieldAsOf,
+                        live?.yieldSource ?: catalog?.yieldSource
                     ))
                 }
             }
@@ -310,16 +314,19 @@ class CloudflareMarketRepository(
     private fun parseSearchQuote(row: JSONObject): CloudflareSearchQuote? {
         val price = row.numberOrNull("price")?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }
         val annualDividend = row.annualDividendPerShareOrNull()
+        val yieldSource = row.stringOrNull("yield_source")
         val yieldRate = when {
+            yieldSource == "yfinance_reported_dividendYield" -> row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 }
             row.hasConfirmedNoDividend() -> 0.0
-            row.hasTrailingTwelveMonthPeriod() -> null
+            row.hasTrailingTwelveMonthPeriod() || row.hasUnknownDividendStatus() -> null
             else -> row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 }
         }
         val noDividend = row.hasConfirmedNoDividend()
         val quoteDate = row.optString("quote_date").takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
         val yieldAsOf = row.optString("yield_as_of").takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
         return CloudflareSearchQuote(
-            price, yieldRate, annualDividend, noDividend, row.hasDividendStatus(), quoteDate, yieldAsOf
+            price, yieldRate, annualDividend, noDividend, row.hasDividendStatus(), quoteDate, yieldAsOf,
+            yieldSource
         )
             .takeIf { it.price != null || it.yieldRate != null || it.annualDividendPerShare != null }
     }
@@ -365,9 +372,14 @@ class CloudflareMarketRepository(
             marketPrice = (if (catalogPriceIsNewer) catalogQuote?.price else detailPrice)
                 ?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }
                 ?: catalogQuote?.price,
-            marketYieldRate = (if (irbankDividend != null) root.numberOrNull("market_yield_rate") else null)
-                ?.takeIf { it in 0.0..100.0 }
-                ?: catalogQuote?.yieldRate,
+            marketYieldRate = if (root.hasUnknownDividendStatus()
+                && root.stringOrNull("market_yield_source") != "yfinance_reported_dividendYield") null else
+                root.numberOrNull("market_yield_rate")
+                    ?.takeIf { it in 0.0..100.0 }
+                    ?: catalogQuote?.takeIf {
+                        !root.hasDividendStatus() || it.yieldSource == "yfinance_reported_dividendYield"
+                    }?.yieldRate,
+            marketYieldSource = root.stringOrNull("market_yield_source") ?: catalogQuote?.yieldSource,
             isNoDividendConfirmed = root.hasConfirmedNoDividend() || catalogQuote?.isNoDividendConfirmed == true,
             hasDividendStatus = root.hasDividendStatus() || catalogQuote?.hasDividendStatus == true,
             dataRetrieval = retrievalJson?.let { retrieval ->
@@ -447,7 +459,8 @@ class CloudflareMarketRepository(
                         row.hasConfirmedNoDividend(),
                         row.hasDividendStatus(),
                         yieldRate,
-                        yieldAsOf
+                        yieldAsOf,
+                        row.stringOrNull("yield_source")
                     ))
                 }
             }
