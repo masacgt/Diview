@@ -3007,10 +3007,10 @@ private fun TargetYieldAdjustButton(
                 latestOnAdjust()
             }
         },
-        modifier = Modifier.minimumInteractiveComponentSize().size(36.dp),
+        modifier = Modifier.minimumInteractiveComponentSize().size(46.8.dp),
         interactionSource = interactionSource
     ) {
-        Icon(icon, contentDescription = contentDescription, tint = OnSurface, modifier = Modifier.size(12.dp))
+        Icon(icon, contentDescription = contentDescription, tint = OnSurface, modifier = Modifier.size(15.6.dp))
     }
 }
 
