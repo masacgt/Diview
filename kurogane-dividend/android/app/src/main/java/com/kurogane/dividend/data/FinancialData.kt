@@ -130,6 +130,7 @@ data class FinancialData(
             val cf = if (operatingCf != null && investingCf != null) operatingCf + investingCf else null
             val fcfMargin = financial?.numberWithUnit("fcf_margin", "percent") ?: percent(cf, sales)
             val equity = financial?.numberWithUnit("equity_ratio_computed", "percent")
+            // The unit-aware normalizer below also handles legacy annual-row and Yahoo payload defaults.
             val payout = dividend?.let { row ->
                 normalizePayoutRatio(
                     row.number("payout_ratio"),
