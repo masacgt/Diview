@@ -40,6 +40,7 @@ class ReleaseFailureRegressionTest {
         val repository = CloudflareMarketRepository("https://example.com", connectionFactory = { url ->
             object : HttpURLConnection(url) {
                 override fun getResponseCode(): Int {
+                    if (url.path == "/api/v1/financial-data/revision") return 200
                     if (url.path.startsWith("/api/v1/financial-data/")) {
                         requests.incrementAndGet()
                         failure?.let { throw it }
@@ -48,7 +49,11 @@ class ReleaseFailureRegressionTest {
                     return 200
                 }
                 override fun getInputStream() = ByteArrayInputStream(
-                    (if (url.path.startsWith("/api/v1/financial-data/")) body else """{"items":[]}""")
+                    (when {
+                        url.path == "/api/v1/financial-data/revision" -> """{"revision":"0123456789abcdef"}"""
+                        url.path.startsWith("/api/v1/financial-data/") -> body
+                        else -> """{"items":[]}"""
+                    })
                         .toByteArray(Charsets.UTF_8)
                 )
                 override fun disconnect() = Unit

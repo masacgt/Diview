@@ -4,6 +4,12 @@
 
 - [x] Normalize Android payout ratios from their declared units and prevent percent values from being multiplied again. Evidence: production `/api/v1/financial-data/8984` declares `dividends.payout_ratio=100` as `percent`, while 7203 returns `27.040002` as `percent`; the JDK 17 debug APK built and installed with matching SHA-256 on `emulator-5560` and `RFCNC0E4H8J`, and the emulator now displays 8984 at `100.00%` instead of `10000.00%`.
 
+- [ ] Publish and verify the financial statement unit contract end to end. Evidence: Yahoo V2 money now uses `yfinance_native`, reported currency is marked unverified, and ratio/margin inputs retain period/source/unit provenance. Worker routes pass 40/40, Python sync tests pass 120/120, Android unit tests pass 159/159, JDK 17 debug build succeeds, and the APK installs and launches on SCG01 and emulator-5554. Worker version `4d0c0767-e004-4b90-831a-f9236b1afa37` is live at 100%; production reads for 8058/6721/1301/6269 return contract 6 and unit metadata. The `financial_revision` token remains `2d6dd979696e4992a4d61a916af62228`, so full R2 refresh, device-cache renewal, and full-universe API audit remain pending.
+
+- [x] Run the existing financial-unit parser and portfolio aggregation regression checks before closing the financial integrity work. Evidence: JDK 17 `:app:testDebugUnitTest` passed after merging current main, and the Worker route suite passes 50/50 cases.
+
+- [ ] Complete the 4,355-security financial API unit audit after deploying Worker financial contract version 6 and refreshing R2 records. Previous post-shard runs still had 503 responses from the production Worker CPU limit, so the new version must be scanned again; no v6 production results are available yet.
+
 - [ ] Verify multi-year dividend-event preloading end to end after Worker publication. Evidence: Worker `dividend-months` now accepts up to ten `event_years`; Android batches and caches requested years, and falls back to single-year requests on older Workers. The JDK 17 debug build installed and launched on SCG01 and the emulator; production publication, live API acknowledgement, and event-loading behavior remain unverified.
 
 - [ ] Verify the 20-session company-info rotation and same-session catalog recovery on a regular scheduled sync. Evidence: `sync_v2.py` now rotates company info across 20 groups, reuses successful catalog entries for the same session, reconstructs interrupted entries from R2, and records action-history repair triggers; scheduled-run behavior and publication read-back remain unverified.

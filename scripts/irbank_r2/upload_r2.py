@@ -8,12 +8,16 @@ import getpass
 import json
 import os
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
 
 DEFAULT_OUTPUT = Path.home() / "AppData" / "Local" / "Temp" / "diview-irbank-r2-ready"
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "yfinance_r2"))
+from financial_revision import bump_financial_revision
 
 
 def main() -> int:
@@ -90,6 +94,8 @@ def main() -> int:
         return (0, key)
 
     ordered = sorted(uploads, key=order)
+    successful_uploads: set[str] = set()
+    successful_uploads_lock = threading.Lock()
 
     def put(item: tuple[str, Path]) -> tuple[str, int]:
         key, path = item
@@ -102,6 +108,8 @@ def main() -> int:
                 ContentType="application/json; charset=utf-8",
                 CacheControl="public, max-age=300",
             )
+        with successful_uploads_lock:
+            successful_uploads.add(key)
         head = client.head_object(Bucket=args.bucket, Key=key)
         size = path.stat().st_size
         if head.get("ContentLength") != size:
@@ -110,14 +118,18 @@ def main() -> int:
 
     completed = 0
     worker_count = max(1, min(args.workers, 16))
-    for group_priority in (0, 1, 2):
-        group = [item for item in ordered if order(item)[0] == group_priority]
-        with ThreadPoolExecutor(max_workers=worker_count) as pool:
-            for future in as_completed([pool.submit(put, item) for item in group]):
-                key, size = future.result()
-                completed += 1
-                if completed % 100 == 0 or completed == len(ordered):
-                    print(f"uploaded {completed}/{len(ordered)}; last={key}; bytes={size}", flush=True)
+    try:
+        for group_priority in (0, 1, 2):
+            group = [item for item in ordered if order(item)[0] == group_priority]
+            with ThreadPoolExecutor(max_workers=worker_count) as pool:
+                for future in as_completed([pool.submit(put, item) for item in group]):
+                    key, size = future.result()
+                    completed += 1
+                    if completed % 100 == 0 or completed == len(ordered):
+                        print(f"uploaded {completed}/{len(ordered)}; last={key}; bytes={size}", flush=True)
+    finally:
+        if not prefix and successful_uploads:
+            bump_financial_revision(client, args.bucket)
     print(f"Upload complete: {completed} objects to {args.bucket}.")
     return 0
 

@@ -11,7 +11,6 @@ import re
 import sys
 import threading
 import time
-import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +18,7 @@ from typing import Any
 
 import boto3
 from botocore.config import Config
+from financial_revision import bump_financial_revision
 
 
 V2_ROOT = "market/yfinance/v2"
@@ -35,28 +35,18 @@ PREFERRED_SECURITY_CODES = frozenset({
     "75505",
     "94345",
 })
-ANNUAL_FIELDS = (
-    "sales",
-    "operating_profit",
-    "operating_cf",
-    "investing_cf",
-    "total_assets",
-    "equity_ratio_computed",
+FINANCIAL_UNIT_CONTRACT = json.loads(
+    (Path(__file__).resolve().parents[2] / "data/irbank/cloudflare/src/financial_unit_contract.json")
+    .read_text(encoding="utf-8")
 )
-VALUATION_FIELDS = ("eps_adjusted", "bps_adjusted", "dividend_yield_adjusted")
+ANNUAL_MONEY_FIELDS = tuple(FINANCIAL_UNIT_CONTRACT["irbank"]["annual_money_fields"])
 ANNUAL_FIELD_UNITS = {
-    "sales": "million_jpy",
-    "operating_profit": "million_jpy",
-    "operating_cf": "million_jpy",
-    "investing_cf": "million_jpy",
-    "total_assets": "million_jpy",
-    "equity_ratio_computed": "percent",
+    **{field: "million_jpy" for field in ANNUAL_MONEY_FIELDS},
+    **FINANCIAL_UNIT_CONTRACT["irbank"]["annual_field_units"],
 }
-VALUATION_FIELD_UNITS = {
-    "eps_adjusted": "jpy_per_share",
-    "bps_adjusted": "jpy_per_share",
-    "dividend_yield_adjusted": "percent",
-}
+ANNUAL_FIELDS = tuple(ANNUAL_FIELD_UNITS)
+VALUATION_FIELD_UNITS = FINANCIAL_UNIT_CONTRACT["irbank"]["valuation_field_units"]
+VALUATION_FIELDS = tuple(VALUATION_FIELD_UNITS)
 _PROGRESS_LOCK = threading.Lock()
 
 
@@ -140,10 +130,10 @@ def finite_value(value: Any) -> Any:
     return None
 
 
-def selected_rows(rows: Any, fields: tuple[str, ...]) -> list[tuple[str, str, dict[str, Any]]]:
+def selected_rows(rows: Any, fields: tuple[str, ...]) -> list[tuple[str, str, dict[str, Any], dict[str, str]]]:
     if not isinstance(rows, list):
         return []
-    result: dict[str, tuple[str, str, dict[str, Any]]] = {}
+    result: dict[str, tuple[str, str, dict[str, Any], dict[str, str]]] = {}
     for row in rows:
         period = period_fields(row)
         if period is None:
@@ -152,7 +142,13 @@ def selected_rows(rows: Any, fields: tuple[str, ...]) -> list[tuple[str, str, di
         selected = {field: value for field in fields
                     if (value := finite_value(row.get(field))) is not None}
         if selected:
-            result[fiscal_year] = (fiscal_year, period_end, selected)
+            row_units = row.get("field_units") if isinstance(row.get("field_units"), dict) else {}
+            selected_units = {
+                field: str(row_units[field]).strip()
+                for field in selected
+                if isinstance(row_units.get(field), str) and row_units[field].strip()
+            }
+            result[fiscal_year] = (fiscal_year, period_end, selected, selected_units)
     return [result[key] for key in sorted(result)[-10:]]
 
 
@@ -163,6 +159,8 @@ def merge_row(
     values: dict[str, Any],
     *,
     source_key: str,
+    source_units: dict[str, str] | None = None,
+    known_units: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any], int]:
     row = dict(current) if isinstance(current, dict) else {}
     current_period = str(row.get("fiscal_year") or "")
@@ -185,9 +183,12 @@ def merge_row(
         statuses.setdefault(field, "legacy_migrated")
     if seed_values:
         field_units = dict(seed_record.get("field_units") or {})
-        unit_map = ANNUAL_FIELD_UNITS if set(values).intersection(ANNUAL_FIELD_UNITS) else VALUATION_FIELD_UNITS
+        explicit_units = source_units if isinstance(source_units, dict) else {}
+        unit_map = known_units or {}
         for field in seed_values:
-            if field in unit_map:
+            if field in explicit_units:
+                field_units[field] = explicit_units[field]
+            elif field in unit_map and not field_units.get(field):
                 field_units[field] = unit_map[field]
         seed_record.update({
             "source": "IRBANK",
@@ -212,11 +213,17 @@ def repair_mixed_source_equity_ratio(annual: Any) -> bool:
     calculated_values = calculated.get("values") if isinstance(calculated, dict) else None
     ratio_entry = calculated_values.get("equity_ratio_computed") if isinstance(calculated_values, dict) else None
     input_sources = ratio_entry.get("input_sources") if isinstance(ratio_entry, dict) else None
+    input_units = ratio_entry.get("input_units") if isinstance(ratio_entry, dict) else None
     equity_source = input_sources.get("equity") if isinstance(input_sources, dict) else None
     assets_source = input_sources.get("total_assets") if isinstance(input_sources, dict) else None
     previous_ratio_entry = dict(ratio_entry) if isinstance(ratio_entry, dict) else None
     seed_record = source_values.get("seed")
     seed_values = seed_record.get("values") if isinstance(seed_record, dict) else None
+    seed_field_units = dict(seed_record.get("field_units") or {}) if isinstance(seed_record, dict) else {}
+    if isinstance(seed_record, dict) and "irbank" in str(seed_record.get("source") or seed_record.get("source_key") or "").lower():
+        for field, unit in ANNUAL_FIELD_UNITS.items():
+            if isinstance(seed_values, dict) and field in seed_values and not seed_field_units.get(field):
+                seed_field_units[field] = unit
     seed_ratio = seed_values.get("equity_ratio_computed") if isinstance(seed_values, dict) else None
     ratio_value = ratio_entry.get("value") if isinstance(ratio_entry, dict) else None
     valid_ratio = lambda value: (
@@ -225,14 +232,21 @@ def repair_mixed_source_equity_ratio(annual: Any) -> bool:
         and math.isfinite(float(value))
         and abs(float(value)) <= 1000
     )
+    units_equal = (
+        isinstance(input_units, dict)
+        and isinstance(input_units.get("equity"), str)
+        and input_units.get("equity") == input_units.get("total_assets")
+        and input_units.get("equity") in {"jpy", "million_jpy"}
+    )
     same_source_calculation = (
         isinstance(equity_source, str)
         and equity_source.strip()
         and equity_source.strip().lower() not in {"unknown", "mixed", "unavailable"}
         and equity_source == assets_source
+        and units_equal
         and valid_ratio(ratio_value)
     )
-    seed_ratio_valid = valid_ratio(seed_ratio)
+    seed_ratio_valid = valid_ratio(seed_ratio) and seed_field_units.get("equity_ratio_computed") == "percent"
     if same_source_calculation and equity_source != "seed":
         return False
     statuses = dict(annual.get("field_status") or {})
@@ -255,7 +269,7 @@ def repair_mixed_source_equity_ratio(annual: Any) -> bool:
     else:
         annual.pop("equity_ratio_computed", None)
         statuses["equity_ratio_computed"] = "empty"
-        reasons["equity_ratio_computed"] = ["mixed_source_inputs_not_comparable"]
+        reasons["equity_ratio_computed"] = ["mixed_source_or_units_not_comparable"]
 
     if isinstance(calculated_values, dict) and not same_source_calculation:
         calculated_values.pop("equity_ratio_computed", None)
@@ -353,8 +367,8 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
 
     annual_rows = selected_rows((source.get("financials") or {}).get("annual"), ANNUAL_FIELDS)
     valuation_rows = selected_rows((source.get("valuation") or {}).get("history"), VALUATION_FIELDS)
-    annual_by_period = {fiscal_year: (period_end, values) for fiscal_year, period_end, values in annual_rows}
-    valuation_by_period = {fiscal_year: (period_end, values) for fiscal_year, period_end, values in valuation_rows}
+    annual_by_period = {fiscal_year: (period_end, values, units) for fiscal_year, period_end, values, units in annual_rows}
+    valuation_by_period = {fiscal_year: (period_end, values, units) for fiscal_year, period_end, values, units in valuation_rows}
     period_years = sorted(set(annual_by_period) | set(valuation_by_period))
     if not period_years:
         return {"code": code, "symbol": symbol, "status": "no_app_fields"}
@@ -378,18 +392,20 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
         added = 0
         units_changed = False
         if fiscal_year in annual_by_period:
-            annual_end, annual_values = annual_by_period[fiscal_year]
+            annual_end, annual_values, annual_units = annual_by_period[fiscal_year]
             prior_units = seed_field_units(updated.get("annual"))
             updated["annual"], count = merge_row(
-                updated.get("annual"), fiscal_year, annual_end, annual_values, source_key=source_key,
+                updated.get("annual"), fiscal_year, annual_end, annual_values,
+                source_key=source_key, source_units=annual_units, known_units=ANNUAL_FIELD_UNITS,
             )
             added += count
             units_changed = units_changed or seed_field_units(updated.get("annual")) != prior_units
         if fiscal_year in valuation_by_period:
-            valuation_end, valuation_values = valuation_by_period[fiscal_year]
+            valuation_end, valuation_values, valuation_units = valuation_by_period[fiscal_year]
             prior_units = seed_field_units(updated.get("valuation"))
             updated["valuation"], count = merge_row(
-                updated.get("valuation"), fiscal_year, valuation_end, valuation_values, source_key=source_key,
+                updated.get("valuation"), fiscal_year, valuation_end, valuation_values,
+                source_key=source_key, source_units=valuation_units, known_units=VALUATION_FIELD_UNITS,
             )
             added += count
             units_changed = units_changed or seed_field_units(updated.get("valuation")) != prior_units
@@ -555,13 +571,7 @@ def main() -> int:
     if not args.dry_run:
         # Successful and partially failed migrations may both change annual
         # documents without publishing a new market catalog.
-        client.put_object(
-            Bucket=bucket, Key=f"{V2_ROOT}/financial_revision.json",
-            Body=json_bytes({
-                "schema_version": 1, "revision": uuid.uuid4().hex, "updated_at": iso_now(),
-            }),
-            ContentType="application/json",
-        )
+        bump_financial_revision(client, bucket)
 
     counts: dict[str, int] = {}
     for result in results:

@@ -222,7 +222,7 @@ class LocalImportStore(context: Context) {
 
     private fun JSONObject.toWatchlistStock() = WatchlistStock(
         getString("code"), getString("name"), getString("market"), getString("sector"), getString("category"),
-        getDouble("price"), getString("currency"), getDouble("dps"), getDouble("currentYield"), getDouble("targetYield"),
+        getDouble("price"), optString("currency", if (optString("category") == "us") "$" else "¥"), getDouble("dps"), getDouble("currentYield"), getDouble("targetYield"),
         getDouble("targetPrice"), getString("dailyChange"), getBoolean("isPositive"),
         getJSONArray("payoutMonths").let { months -> (0 until months.length()).map { months.getInt(it) } },
         getString("payoutTiming"), getString("desc"), optBoolean("alertEnabled"),
@@ -230,6 +230,7 @@ class LocalImportStore(context: Context) {
         isNoDividendConfirmed = optBoolean("isNoDividendConfirmed", false)
     ).also {
         require(PortfolioMath.validCode(it.code) && listOf(it.price, it.dps, it.targetPrice).all(PortfolioMath::validMoney) &&
+            PortfolioMath.hasValidMoneyBasis(it.category, it.currency) &&
             it.currentYield.isFinite() && it.targetYield.isFinite() && it.targetYield > 0) { "監視銘柄の保存データが正しくありません" }
     }
 
@@ -293,6 +294,7 @@ class LocalImportStore(context: Context) {
     ).also {
         require(PortfolioMath.validCode(it.code) && it.name.isNotBlank() && it.shares >= 0 &&
             listOf(it.price, it.acqPrice, it.dps).all(PortfolioMath::validMoney) &&
+            PortfolioMath.hasValidMoneyBasis(it.category, it.currency) &&
             (it.taxFreeShares == null || it.taxFreeShares in 0..it.shares)) { "保存データの保有情報が正しくありません" }
     }
     private companion object {

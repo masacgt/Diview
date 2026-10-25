@@ -344,6 +344,9 @@ class DividendViewModel @JvmOverloads constructor(
     private var identities: Map<String, JapaneseSecurityIdentity> = emptyMap()
     private val _financialData = MutableStateFlow<Map<String, FinancialData>>(emptyMap())
     val financialData = _financialData.asStateFlow()
+    private val financialRevisionMutex = Mutex()
+    @Volatile private var financialRevisionCheckedAt = 0L
+    @Volatile private var cachedFinancialRevision: String? = null
     private val _stockAnalysisData = MutableStateFlow<Map<String, CloudflareStockAnalysis>>(emptyMap())
     val stockAnalysisData = _stockAnalysisData.asStateFlow()
     private val _cloudflareSecurityData = MutableStateFlow<Map<String, CloudflareSecurity>>(emptyMap())
@@ -509,10 +512,20 @@ class DividendViewModel @JvmOverloads constructor(
         val attemptKey = "financial_fetch_attempt_at_$normalized"
         val attemptDateKey = "financial_fetch_attempt_jst_$normalized"
         val failureKey = "financial_fetch_failure_$normalized"
+        val serverRevision = currentFinancialRevision()
+        val serverRevisionKey = "financial_server_revision_$normalized"
+        val serverRevisionAttemptKey = "financial_server_revision_attempt_$normalized"
+        val previousServerRevision = marketPreferences.getString(serverRevisionKey, null)
+        val revisionChanged = serverRevision != null && serverRevision != previousServerRevision
+        val revisionAlreadyAttemptedToday = revisionChanged &&
+            marketPreferences.getString(serverRevisionAttemptKey, null) == serverRevision &&
+            marketPreferences.getString(attemptDateKey, null) == today
+        val revisionRefreshDue = revisionChanged && !revisionAlreadyAttemptedToday
+        val requiresRefresh = requiresContractRefresh || revisionRefreshDue
         val contractRefreshAttemptedToday = requiresContractRefresh
             && marketPreferences.getInt(contractAttemptVersionKey, 0) >= FINANCIAL_PAYLOAD_VERSION
             && marketPreferences.getString(attemptDateKey, null) == today
-        if (useFinancialDailyCache(force, requiresContractRefresh,
+        if (useFinancialDailyCache(force, requiresRefresh,
                 marketPreferences.getString("financial_date_$normalized", null) == today)) {
             _financialData.value[normalized]?.let { return it }
             val cached = withContext(Dispatchers.IO) {
@@ -528,7 +541,7 @@ class DividendViewModel @JvmOverloads constructor(
         }
         val now = System.currentTimeMillis()
         // Explicit retry bypasses both successful daily cache and attempt throttling.
-        if (!force && !PriceRefreshPolicy.shouldFetch(
+        if (!force && !revisionRefreshDue && !PriceRefreshPolicy.shouldFetch(
                 now,
                 marketPreferences.getLong(attemptKey, 0L),
                 marketPreferences.getString(attemptDateKey, null)
@@ -554,12 +567,26 @@ class DividendViewModel @JvmOverloads constructor(
                 .putLong(attemptKey, now)
                 .putString(attemptDateKey, PriceRefreshPolicy.japanDate(now))
                 .putInt(contractAttemptVersionKey, FINANCIAL_PAYLOAD_VERSION)
+                .also { editor ->
+                    serverRevision?.let { revision ->
+                        if (revisionRefreshDue) editor.putString(serverRevisionAttemptKey, revision)
+                    }
+                }
                 .apply()
         }
         try {
             val document = financialSlots.withPermit { marketRepository.financialDocument(normalized) }
             if (document == null) {
-                if (generation == dataGeneration.get()) marketPreferences.edit { remove(failureKey) }
+                if (generation == dataGeneration.get()) {
+                    marketPreferences.edit {
+                        remove("financial_$normalized")
+                        remove("financial_date_$normalized")
+                        remove(failureKey)
+                        if (serverRevision != null) putString(serverRevisionKey, serverRevision)
+                    }
+                    _financialData.update { it - normalized }
+                    refreshRuntimeValues(normalized)
+                }
                 return null
             }
             val parsed = withContext(Dispatchers.Default) { FinancialData.parse(document, normalized) }
@@ -573,6 +600,7 @@ class DividendViewModel @JvmOverloads constructor(
             marketPreferences.edit().putString("financial_$normalized", document.toString())
                 .putString("financial_date_$normalized", today)
                 .putInt(contractVersionKey, FINANCIAL_PAYLOAD_VERSION)
+                .also { editor -> if (serverRevision != null) editor.putString(serverRevisionKey, serverRevision) }
                 .remove(failureKey).apply()
             refreshRuntimeValues(normalized)
             saveRequests.trySend(Unit)
@@ -598,6 +626,27 @@ class DividendViewModel @JvmOverloads constructor(
                 android.util.Log.w("CloudflareMarket", "Financial fetch failed (${failure.javaClass.simpleName})")
             }
             throw failure
+        }
+    }
+
+    private suspend fun currentFinancialRevision(): String? {
+        val now = System.currentTimeMillis()
+        if (now - financialRevisionCheckedAt in 0..FINANCIAL_REVISION_CACHE_MILLIS) return cachedFinancialRevision
+        return financialRevisionMutex.withLock {
+            val checkedAt = System.currentTimeMillis()
+            if (checkedAt - financialRevisionCheckedAt in 0..FINANCIAL_REVISION_CACHE_MILLIS) {
+                return@withLock cachedFinancialRevision
+            }
+            val revision = try {
+                marketRepository.financialDataRevision()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            cachedFinancialRevision = revision
+            financialRevisionCheckedAt = checkedAt
+            revision
         }
     }
 
@@ -1079,11 +1128,15 @@ class DividendViewModel @JvmOverloads constructor(
     val assetManagementSummary: StateFlow<AssetManagementSummary> = combine(
         _holdings, _taxRateMode, _calculationBasis
     ) { current, taxMode, basis ->
-        val totalAssets = current.sumOf { it.totalValuation }
-        val totalCost = current.sumOf { it.totalCost }
-        val annualDividend = current.sumOf { it.getEffectiveAnnualDividend(taxMode) }
-        val netAnnualDividend = current.sumOf { it.getEffectiveAnnualDividend("net") }
-        val roadmapDividend = current.sumOf { it.getEffectiveAnnualDividend(taxMode).toLong() }
+        val totalAssetsJpy = PortfolioMath.sumJpyAmounts(current.mapNotNull { it.valuationJpy })
+        val totalCostJpy = PortfolioMath.sumJpyAmounts(current.mapNotNull { it.costJpy })
+        val annualDividendJpy = PortfolioMath.sumJpyAmounts(current.mapNotNull { it.getEffectiveAnnualDividendJpy(taxMode) })
+        val netAnnualDividendJpy = PortfolioMath.sumJpyAmounts(current.mapNotNull { it.getEffectiveAnnualDividendJpy("net") })
+        val totalAssets = totalAssetsJpy.value
+        val totalCost = totalCostJpy.value
+        val annualDividend = annualDividendJpy.value
+        val netAnnualDividend = netAnnualDividendJpy.value
+        val roadmapDividend = annualDividend.toLong()
         val totalGain = totalAssets - totalCost
         AssetManagementSummary(
             totalAssets = totalAssets,
@@ -1093,7 +1146,9 @@ class DividendViewModel @JvmOverloads constructor(
             annualDividend = annualDividend,
             netAnnualDividend = netAnnualDividend,
             roadmapDividend = roadmapDividend,
-            averageYield = PortfolioMath.portfolioYield(annualDividend, totalAssets, totalCost, basis)
+            averageYield = PortfolioMath.portfolioYield(
+                annualDividendJpy, totalAssetsJpy, totalCostJpy, basis
+            )
         )
     }
         .distinctUntilChanged()
@@ -2992,7 +3047,8 @@ class DividendViewModel @JvmOverloads constructor(
         if (!restoration.isCompleted || holdingsLoadFailed) return false
         if (shares < 0 || !PortfolioMath.validMoney(acqPrice) ||
             (currentPrice != null && !PortfolioMath.validMoney(currentPrice))) return false
-        if (_holdings.value.none { it.code.equals(code, true) }) return false
+        val existing = _holdings.value.firstOrNull { it.code.equals(code, true) } ?: return false
+        if (!PortfolioMath.hasValidMoneyBasis(existing.category, existing.currency)) return false
         updatePortfolio(_holdings.value.map { holding ->
             if (!holding.code.equals(code, true)) holding else {
                 val free = if (holding.shares > 0) (shares.toDouble() * holding.effectiveTaxFreeShares / holding.shares).toInt() else 0
@@ -3014,6 +3070,8 @@ class DividendViewModel @JvmOverloads constructor(
 
     fun restoreHolding(holding: Holding): Boolean {
         if (!restoration.isCompleted || holdingsLoadFailed) return false
+        if (!PortfolioMath.hasValidMoneyBasis(holding.category, holding.currency) ||
+            !listOf(holding.price, holding.acqPrice, holding.dps).all(PortfolioMath::validMoney)) return false
         if (_holdings.value.any { it.id == holding.id || it.code.equals(holding.code, true) }) return false
         updatePortfolio(_holdings.value + holding)
         return true
@@ -3282,7 +3340,8 @@ class DividendViewModel @JvmOverloads constructor(
     private companion object {
         const val IRBANK_DIVIDEND_CACHE_VERSION = 3
         const val QUOTE_CHANGE_CONTRACT_VERSION = 1
-        const val FINANCIAL_PAYLOAD_VERSION = 4
+        const val FINANCIAL_PAYLOAD_VERSION = 6
+        const val FINANCIAL_REVISION_CACHE_MILLIS = 60_000L
         const val STOCK_ANALYSIS_PAYLOAD_VERSION = 3
         val WATCHLIST_SORT_CRITERIA = setOf("ach", "yield", "price", "code")
         val WATCHLIST_SORT_DIRECTIONS = setOf("asc", "desc")
