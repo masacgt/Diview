@@ -68,6 +68,7 @@ import com.kurogane.dividend.data.Tse33IndustryMaster
 import java.text.NumberFormat
 import java.util.Locale
 import java.time.ZoneId
+import java.time.LocalDate
 import kotlinx.coroutines.launch
 
 private data class StockDetailDividendPeriod(
@@ -90,6 +91,20 @@ private data class DividendHistoryEditDraft(
     val defaultStockPrice: Double?,
     val defaultAnnualDividend: Double?
 )
+
+private fun formatMarketDailyChange(security: com.kurogane.dividend.data.CloudflareSecurity?): String? {
+    security ?: return null
+    val previousClose = security.marketPreviousClose?.takeIf { it.isFinite() && it > 0.0 } ?: return null
+    val change = security.marketPriceChange?.takeIf { it.isFinite() } ?: return null
+    val changePercent = security.marketPriceChangePercent?.takeIf { it.isFinite() } ?: return null
+    val quoteDate = security.marketPriceDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return null
+    if (previousClose + change <= 0.0) return null
+    val amountSign = if (change < 0.0) "−" else "+"
+    val amount = com.kurogane.dividend.model.formatStockPriceDisplay(
+        kotlin.math.abs(change), security.code, date = quoteDate
+    )
+    return amountSign + amount + " (" + String.format(Locale.JAPAN, "%+.2f%%", changePercent) + ")"
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -168,7 +183,12 @@ fun StockDetailScreen(
         val irbankYieldDps = resolvedSecurity?.annualDividendPerShare
         val irbankYieldRate = resolvedSecurity?.marketYieldRate?.takeIf { dps == irbankYieldDps }
         val displayYield = irbankYieldRate ?: calculatedYield
+        val marketDailyChange = formatMarketDailyChange(resolvedSecurity)
+        val marketChangePositive = resolvedSecurity?.marketPriceChange
+            ?.takeIf { marketDailyChange != null }?.let { it >= 0.0 }
         holding.copy(price = price, dps = dps, yieldRate = displayYield,
+            dailyChange = marketDailyChange ?: holding.dailyChange.takeIf { it.isNotBlank() } ?: "—",
+            isPositive = marketChangePositive ?: holding.isPositive,
             isNoDividendConfirmed = noDividendConfirmed,
             irbankYieldRate = irbankYieldRate,
             irbankYieldDps = irbankYieldDps,
@@ -382,6 +402,7 @@ fun StockDetailScreen(
         (backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())
     ) }
     val healthNarrative = remember(financial) { StockAnalysisNarrativeGenerator.generate(financial?.values.orEmpty()) }
+    val healthExplanationKeys = remember(healthNarrative) { healthNarrative.findings.map { it.key }.toSet() }
     val valuationValues = remember(backendAnalysisValues, financial) {
         ((backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())).filterKeys { it == "per" || it == "pbr" }
     }
@@ -727,27 +748,6 @@ fun StockDetailScreen(
                         }
 
                         Spacer(modifier = Modifier.height(14.dp))
-
-                        resolvedSecurity?.dataRetrieval?.companyInfo?.let { companyInfo ->
-                            val failed = companyInfo.refreshPending
-                                || companyInfo.status == "failed"
-                                || companyInfo.lastAttemptStatus == "failed"
-                            val lastFetched = when {
-                                companyInfo.fetchDateBasis == "last_successful_sync_fallback" ->
-                                    companyInfo.lastFetchedSessionDate
-                                        ?.let { "取得日時未記録（最終同期 $it）" }
-                                        ?: "取得日時未記録"
-                                companyInfo.lastFetchedSessionDate != null ->
-                                    "最終取得 ${companyInfo.lastFetchedSessionDate}"
-                                else -> "未取得"
-                            }
-                            Text(
-                                if (failed) "会社情報・指標: $lastFetched（更新失敗・再取得予定）"
-                                else "会社情報・指標: $lastFetched",
-                                color = if (failed) ErrorRed else OnSurfaceVariant,
-                                fontSize = AppTextSize.dense
-                            )
-                        }
 
                         Spacer(modifier = Modifier.height(14.dp))
 
@@ -2333,7 +2333,7 @@ fun StockDetailScreen(
 
 
             item {
-                StockAnalysisNarrativeCard(analysisNarrative)
+                StockAnalysisNarrativeCard(analysisNarrative, healthExplanationKeys)
             }
 
             // 5. 配当月・通知設定
@@ -2345,7 +2345,11 @@ fun StockDetailScreen(
                 val upcomingDividendEvent = remember(currentHolding.code, dividendEventRevision) {
                     viewModel.upcomingDividendEventFor(currentHolding.code)
                 }
-                val estimatedFromHistory = upcomingDividendEvent?.estimatedFromHistory == true
+                val scheduleStatusText = when {
+                    upcomingDividendEvent?.estimatedFromHistory == true -> null
+                    upcomingDividendEvent != null || nextDividendEvent != null -> "権利日程取得済み"
+                    else -> "配当月情報に基づく目安"
+                }
                 val nextExDividendDate = upcomingDividendEvent?.exDividendDate ?: nextDividendEvent?.date
                 val finalRightsDate = upcomingDividendEvent?.finalRightsDate ?: nextDividendEvent?.finalRightsDate
                 val recordDate = upcomingDividendEvent?.recordDate ?: nextDividendEvent?.recordDate
@@ -2399,7 +2403,7 @@ fun StockDetailScreen(
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            if (estimatedFromHistory) "次回権利落ち日（履歴推定）" else "次回権利落ち日",
+                                            "次回権利落ち日",
                                             color = OnSurfaceVariant,
                                             fontSize = AppTextSize.dense
                                         )
@@ -2417,15 +2421,9 @@ fun StockDetailScreen(
                                             fontSize = AppTextSize.metric,
                                             fontWeight = FontWeight.Black
                                         )
-                                        Text(
-                                            when {
-                                                estimatedFromHistory -> "過去の配当イベント日から推定"
-                                                upcomingDividendEvent != null || nextDividendEvent != null -> "権利日程取得済み"
-                                                else -> "配当月情報に基づく目安"
-                                            },
-                                            color = PrimaryEmerald,
-                                            fontSize = AppTextSize.dense
-                                        )
+                                        scheduleStatusText?.let { status ->
+                                            Text(status, color = PrimaryEmerald, fontSize = AppTextSize.dense)
+                                        }
                                     }
                                 }
                                 Text(
@@ -2445,9 +2443,9 @@ fun StockDetailScreen(
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                                 listOf(
-                                    (if (estimatedFromHistory) "権利付き最終日（計算）" else "権利付き最終日") to finalRightsDateText,
-                                    (if (estimatedFromHistory) "権利落ち日（履歴推定）" else "権利落ち日") to nextExDividendText,
-                                    (if (estimatedFromHistory) "権利確定日（計算）" else "権利確定日（推定）") to recordDateText
+                                    "権利付き最終日" to finalRightsDateText,
+                                    "権利落ち日" to nextExDividendText,
+                                    "権利確定日" to recordDateText
                                 ).forEachIndexed { index, (label, value) ->
                                     if (index > 0) HorizontalDivider(color = BorderColor.copy(alpha = 0.55f))
                                     AdaptiveRow(
@@ -3636,7 +3634,10 @@ private fun sameEditableAmount(left: Double?, right: Double?): Boolean = when {
 }
 
 @Composable
-private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative) {
+private fun StockAnalysisNarrativeCard(
+    analysisNarrative: StockAnalysisNarrative,
+    healthExplanationKeys: Set<String>
+) {
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = BackgroundDark,
@@ -3675,7 +3676,9 @@ private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(finding.text, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
+                    if (finding.key !in healthExplanationKeys) {
+                        Text(finding.text, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
+                    }
                 }
             }
             Text(

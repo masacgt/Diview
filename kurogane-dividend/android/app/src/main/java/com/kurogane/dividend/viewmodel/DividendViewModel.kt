@@ -2075,6 +2075,10 @@ class DividendViewModel @JvmOverloads constructor(
             name = json.getString("name"),
             annualDividendPerShare = json.doubleOrNull("annual_dividend_per_share"),
             marketPrice = json.doubleOrNull("market_price"),
+            marketPreviousClose = json.doubleOrNull("market_previous_close"),
+            marketPriceChange = json.doubleOrNull("market_price_change"),
+            marketPriceChangePercent = json.doubleOrNull("market_price_change_percent"),
+            marketPriceDate = json.stringOrNull("market_price_date"),
             industry = json.stringOrNull("industry"),
             marketYieldRate = json.doubleOrNull("market_yield_rate"),
             isNoDividendConfirmed = json.optBoolean("is_no_dividend_confirmed"),
@@ -2127,6 +2131,10 @@ class DividendViewModel @JvmOverloads constructor(
             put("name", security.name)
             put("annual_dividend_per_share", security.annualDividendPerShare ?: JSONObject.NULL)
             put("market_price", security.marketPrice ?: JSONObject.NULL)
+            put("market_previous_close", security.marketPreviousClose ?: JSONObject.NULL)
+            put("market_price_change", security.marketPriceChange ?: JSONObject.NULL)
+            put("market_price_change_percent", security.marketPriceChangePercent ?: JSONObject.NULL)
+            put("market_price_date", security.marketPriceDate ?: JSONObject.NULL)
             put("industry", security.industry ?: JSONObject.NULL)
             put("market_yield_rate", security.marketYieldRate ?: JSONObject.NULL)
             put("is_no_dividend_confirmed", security.isNoDividendConfirmed)
@@ -2137,6 +2145,7 @@ class DividendViewModel @JvmOverloads constructor(
             .putString("cloudflare_security_snapshot_$normalized", json.toString())
             .putString("cloudflare_security_fetched_jst_$normalized", PriceRefreshPolicy.japanDate(System.currentTimeMillis()))
             .putInt("cloudflare_security_dividend_contract_version_$normalized", IRBANK_DIVIDEND_CACHE_VERSION)
+            .putInt("cloudflare_security_quote_change_contract_version_$normalized", QUOTE_CHANGE_CONTRACT_VERSION)
             .apply()
         _cloudflareSecurityData.update { it + (normalized to security) }
         cacheSecurityQuoteValues(security)
@@ -2196,6 +2205,8 @@ class DividendViewModel @JvmOverloads constructor(
         val attemptDateKey = "cloudflare_security_fetch_attempt_jst_$normalized"
         val dividendContractVersionKey = "cloudflare_security_dividend_contract_version_$normalized"
         val contractRefreshDateKey = "cloudflare_security_contract_refresh_jst_$normalized"
+        val quoteChangeContractVersionKey = "cloudflare_security_quote_change_contract_version_$normalized"
+        val quoteChangeContractRefreshDateKey = "cloudflare_security_quote_change_contract_refresh_jst_$normalized"
         var cached: CloudflareSecurity? = null
         val shouldFetch = cloudflareSecurityMutex.withLock {
             cached = _cloudflareSecurityData.value[normalized]
@@ -2203,11 +2214,14 @@ class DividendViewModel @JvmOverloads constructor(
             val now = System.currentTimeMillis()
             val today = PriceRefreshPolicy.japanDate(now)
             val needsIrbankDividendMigration = marketPreferences.getInt(dividendContractVersionKey, 0) < IRBANK_DIVIDEND_CACHE_VERSION
+            val needsQuoteChangeMigration = marketPreferences.getInt(quoteChangeContractVersionKey, 0) < QUOTE_CHANGE_CONTRACT_VERSION
             val missingCompanyInfoMetadata = cached?.dataRetrieval?.companyInfo == null
-            val shouldRefresh = if (needsIrbankDividendMigration) {
-                marketPreferences.getString(contractRefreshDateKey, null) != today
-            } else {
-                missingCompanyInfoMetadata || PriceRefreshPolicy.shouldFetch(
+            val shouldRefresh = when {
+                needsIrbankDividendMigration ->
+                    marketPreferences.getString(contractRefreshDateKey, null) != today
+                needsQuoteChangeMigration ->
+                    marketPreferences.getString(quoteChangeContractRefreshDateKey, null) != today
+                else -> missingCompanyInfoMetadata || PriceRefreshPolicy.shouldFetch(
                     now,
                     marketPreferences.getLong(attemptKey, 0L),
                     marketPreferences.getString(attemptDateKey, null)
@@ -2219,7 +2233,8 @@ class DividendViewModel @JvmOverloads constructor(
             } else {
                 marketPreferences.edit().putLong(attemptKey, now)
                     .putString(attemptDateKey, today)
-                    .putString(contractRefreshDateKey, today).apply()
+                    .putString(contractRefreshDateKey, today)
+                    .putString(quoteChangeContractRefreshDateKey, today).apply()
                 true
             }
         }
@@ -2259,7 +2274,11 @@ class DividendViewModel @JvmOverloads constructor(
             "cloudflare_security_dividend_contract_version_$normalized",
             0
         ) < IRBANK_DIVIDEND_CACHE_VERSION
-        val security = if (cached?.dataRetrieval?.companyInfo == null || needsIrbankDividendMigration) {
+        val needsQuoteChangeMigration = marketPreferences.getInt(
+            "cloudflare_security_quote_change_contract_version_$normalized",
+            0
+        ) < QUOTE_CHANGE_CONTRACT_VERSION
+        val security = if (cached?.dataRetrieval?.companyInfo == null || needsIrbankDividendMigration || needsQuoteChangeMigration) {
             fetchCloudflareSecurityIfDue(normalized) ?: cached
         } else {
             cached
@@ -3154,6 +3173,7 @@ class DividendViewModel @JvmOverloads constructor(
 
     private companion object {
         const val IRBANK_DIVIDEND_CACHE_VERSION = 3
+        const val QUOTE_CHANGE_CONTRACT_VERSION = 1
         const val FINANCIAL_PAYLOAD_VERSION = 4
         const val STOCK_ANALYSIS_PAYLOAD_VERSION = 3
         val WATCHLIST_SORT_CRITERIA = setOf("ach", "yield", "price", "code")
