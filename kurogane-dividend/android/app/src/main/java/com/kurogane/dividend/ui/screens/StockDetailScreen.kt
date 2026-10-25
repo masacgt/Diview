@@ -412,30 +412,65 @@ fun StockDetailScreen(
     }
     val backendAnalysisValues = stockAnalysisData[currentHolding.code.uppercase(Locale.ROOT).removeSuffix(".T")]?.values
     LaunchedEffect(currentHolding.code) { viewModel.fetchStockAnalysis(currentHolding.code) }
-    val analysisNarrative = remember(currentHolding, backendAnalysisValues, financial) { StockAnalysisNarrativeGenerator.generateDetailed(
-        (backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())
-    ) }
-    val positionNarrative = remember(currentHolding, backendAnalysisValues, financial) {
-        StockAnalysisNarrativeGenerator.generatePositionDetailed(
-            (backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())
-        )
+    val mergedAnalysisValues = remember(backendAnalysisValues, financial) {
+        buildMap {
+            backendAnalysisValues.orEmpty().forEach { (key, value) ->
+                value?.takeIf { it.isFinite() }?.let { put(key, it) }
+            }
+            financial?.values.orEmpty().forEach { (key, value) ->
+                value?.takeIf { it.isFinite() }?.let { put(key, it) }
+            }
+        }
     }
-    val healthNarrative = remember(financial) { StockAnalysisNarrativeGenerator.generate(financial?.values.orEmpty()) }
-    val healthPositionNarrative = remember(financial) {
-        StockAnalysisNarrativeGenerator.generatePositionDetailed(financial?.values.orEmpty())
+    val reportedPer = mergedAnalysisValues["per"]
+    val reportedPbr = mergedAnalysisValues["pbr"]
+    val valuationPer = reportedPer
+        ?: (currentHolding.price / baseProfile.eps).takeIf { baseProfile.eps.isFinite() && baseProfile.eps > 0 && currentHolding.price > 0 }
+    val valuationPbr = reportedPbr
+        ?: (currentHolding.price / baseProfile.bps).takeIf { baseProfile.bps.isFinite() && baseProfile.bps > 0 && currentHolding.price > 0 }
+    val detailAnalysisValues = remember(mergedAnalysisValues, valuationPer, valuationPbr) {
+        buildMap {
+            putAll(mergedAnalysisValues)
+            valuationPer?.takeIf { it.isFinite() }?.let { put("per", it) }
+            valuationPbr?.takeIf { it.isFinite() }?.let { put("pbr", it) }
+        }
     }
-    val valuationValues = remember(backendAnalysisValues, financial) {
-        ((backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())).filterKeys { it == "per" || it == "pbr" }
+    val healthValues = remember(mergedAnalysisValues) {
+        mergedAnalysisValues.filterKeys {
+            it in setOf("payout_ratio", "equity_ratio", "operating_margin", "fcf_margin", "dividend_growth_years")
+        }
     }
-    val reportedPer = backendAnalysisValues?.get("per")?.takeIf { it.isFinite() }
-    val reportedPbr = backendAnalysisValues?.get("pbr")?.takeIf { it.isFinite() }
-    val reportedOperatingMargin = backendAnalysisValues?.get("operating_margin")?.takeIf { it.isFinite() }
+    val analysisNarrative = remember(currentHolding, detailAnalysisValues) {
+        StockAnalysisNarrativeGenerator.generateDetailed(detailAnalysisValues)
+    }
+    val positionNarrative = remember(currentHolding, detailAnalysisValues) {
+        StockAnalysisNarrativeGenerator.generatePositionDetailed(detailAnalysisValues)
+    }
+    val healthNarrative = remember(healthValues) { StockAnalysisNarrativeGenerator.generate(healthValues) }
+    val healthPositionNarrative = remember(healthValues) {
+        StockAnalysisNarrativeGenerator.generatePositionDetailed(healthValues)
+    }
+    val valuationValues = remember(detailAnalysisValues) {
+        detailAnalysisValues.filterKeys { it == "per" || it == "pbr" }
+    }
+    val reportedOperatingMargin = mergedAnalysisValues["operating_margin"]
     val valuationNarrative = remember(valuationValues) { StockAnalysisNarrativeGenerator.generate(valuationValues) }
     val missingValuationLabels = valuationNarrative.missingLabels.filter { it == "PER" || it == "PBR" }
     val profile = baseProfile.copy(
         perEvaluation = "取得値を優先／未取得時は決算EPSから計算",
         pbrEvaluation = "取得値を優先／未取得時は決算BPSから計算",
+        payoutRatio = healthValues["payout_ratio"] ?: baseProfile.payoutRatio,
+        equityRatio = healthValues["equity_ratio"] ?: baseProfile.equityRatio,
         operatingMargin = reportedOperatingMargin ?: baseProfile.operatingMargin,
+        fcfMargin = healthValues["fcf_margin"] ?: baseProfile.fcfMargin,
+        fcfStatus = when {
+            baseProfile.fcfStatus != "未取得" -> baseProfile.fcfStatus
+            healthValues["fcf_margin"]?.let { it >= 0.0 } == true -> "フリーCF黒字"
+            healthValues["fcf_margin"]?.let { it < 0.0 } == true -> "フリーCF赤字"
+            else -> baseProfile.fcfStatus
+        },
+        consecutiveYears = baseProfile.consecutiveYears.takeIf { it >= 0 }
+            ?: healthValues["dividend_growth_years"]?.takeIf { it >= 0.0 }?.toInt() ?: -1,
         healthGrade = healthNarrative.grade ?: "未判定", healthScore = healthNarrative.score ?: -1,
         healthEvaluation = healthNarrative.title, healthDiagnosisComment = healthNarrative.findings.joinToString(" ") { it.text }.ifBlank { "財務指標のデータが未取得のため、解説を表示できません。" },
         valuationScore = valuationNarrative.score ?: -1,
