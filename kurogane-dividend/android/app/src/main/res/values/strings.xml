@@ -495,8 +495,8 @@
     <string name="stock_detail_text_76">"配当権利通知（保有銘柄共通）"</string>
     <string name="stock_detail_text_77">"保有情報を編集"</string>
     <string name="stock_detail_text_78">"保有解除"</string>
-    <string name="stock_detail_text_79">"銘柄総合評価（指標別）"</string>
-    <string name="stock_detail_text_80">"各指標の数値・評価帯・位置"</string>
+    <string name="stock_detail_text_79">"銘柄総合分析の詳細判定"</string>
+    <string name="stock_detail_text_80">"数値・評価位置（健全性の解説は上部）"</string>
     <string name="stock_detail_text_81">"%1$s %2$s点"</string>
     <string name="stock_detail_text_82">"総合評価: %1$s。評価できた%2$s指標を重み付けして算出しています。"</string>
     <string name="stock_detail_text_83">"全7指標の文章パターン: 45^7 = %1$s通り。今回の入力で選択可能な組合せ: %2$s通り。"</string>
