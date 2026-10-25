@@ -61,11 +61,17 @@ class ReleaseAuditRegressionTest {
         application.cleanUp()
     }
 
-    private fun model(response: (URL) -> String): DividendViewModel {
+    private fun model(
+        revisionResponse: () -> String = { """{"revision":"0123456789abcdef"}""" },
+        response: (URL) -> String
+    ): DividendViewModel {
         val repository = CloudflareMarketRepository("https://example.com", connectionFactory = { url ->
             object : HttpURLConnection(url) {
                 override fun getResponseCode() = 200
-                override fun getInputStream() = ByteArrayInputStream(response(url).toByteArray(Charsets.UTF_8))
+                override fun getInputStream() = ByteArrayInputStream(
+                    (if (url.path == "/api/v1/financial-data/revision") revisionResponse() else response(url))
+                        .toByteArray(Charsets.UTF_8)
+                )
                 override fun connect() = Unit
                 override fun disconnect() = Unit
                 override fun usingProxy() = false
@@ -101,6 +107,16 @@ class ReleaseAuditRegressionTest {
         assertThrows(CancellationException::class.java) { runBlocking { vm.fetchFinancialData("1306") } }
         assertNotNull(runBlocking { vm.fetchFinancialData("1306", force = true) })
         assertEquals(2, attempts.get())
+    }
+
+    @Test fun cancellingFinancialRevisionCheckDoesNotStartThePayloadRequest() {
+        val payloadRequests = AtomicInteger()
+        val vm = model(revisionResponse = { throw CancellationException() }) {
+            payloadRequests.incrementAndGet()
+            """{"security":{"code":"1306"}}"""
+        }
+        assertThrows(CancellationException::class.java) { runBlocking { vm.fetchFinancialData("1306") } }
+        assertEquals(0, payloadRequests.get())
     }
 
     @Test fun messageLessSplitFailureShowsRetryAndRetryPerformsARequest() {

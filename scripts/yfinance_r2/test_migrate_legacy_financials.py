@@ -68,7 +68,8 @@ class MigrationShardTests(unittest.TestCase):
             "equity_ratio_computed": 37975096.6,
             "field_status": {"equity_ratio_computed": "stale"},
             "source_values": {
-                "seed": {"values": {"equity_ratio_computed": 37.975}},
+                "seed": {"source": "IRBANK", "values": {"equity_ratio_computed": 37.975},
+                         "field_units": {"equity_ratio_computed": "percent"}},
                 "calculated": {"values": {
                     "equity_ratio_computed": {
                         "value": 37975096.6,
@@ -105,7 +106,7 @@ class MigrationShardTests(unittest.TestCase):
         self.assertEqual(annual["field_status"]["equity_ratio_computed"], "empty")
         self.assertEqual(
             annual["field_status_reason"]["equity_ratio_computed"],
-            ["mixed_source_inputs_not_comparable"],
+            ["mixed_source_or_units_not_comparable"],
         )
 
     def test_same_source_equity_ratio_calculation_is_preserved(self):
@@ -116,6 +117,8 @@ class MigrationShardTests(unittest.TestCase):
                 "equity_ratio_computed": {
                     "value": 37.5,
                     "input_sources": {"equity": "yfinance", "total_assets": "yfinance"},
+                        "input_units": {"equity": "jpy", "total_assets": "jpy"},
+                        "unit": "percent",
                 },
             }}},
         }
@@ -130,6 +133,8 @@ class MigrationShardTests(unittest.TestCase):
                 "equity_ratio_computed": {
                     "value": 38.0,
                     "input_sources": {"equity": "jquants", "total_assets": "jquants"},
+                        "input_units": {"equity": "jpy", "total_assets": "jpy"},
+                        "unit": "percent",
                 },
             }}},
         }
@@ -222,7 +227,10 @@ class MigrationShardTests(unittest.TestCase):
         }
         client = FakeS3Client({source_key: source, target_key: existing}, ignore_put=True)
 
-        with self.assertRaisesRegex(RuntimeError, "source_values.calculated"):
+        with self.assertRaisesRegex(
+            RuntimeError,
+            r"v2 read-back mismatch for annual\.(?:field_status_reason|source_values\.calculated)",
+        ):
             migrate_one(
                 client,
                 "test-bucket",

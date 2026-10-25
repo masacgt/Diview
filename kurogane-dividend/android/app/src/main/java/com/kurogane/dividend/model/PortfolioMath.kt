@@ -5,8 +5,15 @@ import kotlin.math.round
 
 data class HoldingAllocation(val shares: Int, val acquisitionPrice: Double, val accountType: String)
 
+/** Portfolio aggregates carry JPY explicitly after quote-currency and price-basis conversion. */
+@JvmInline
+value class JpyAmount(val value: Double)
+
 /** Validation and arithmetic shared by imports, editing and multi-account registration. */
 object PortfolioMath {
+    fun portfolioYield(dividend: JpyAmount, valuation: JpyAmount, cost: JpyAmount, basis: String): Double =
+        portfolioYield(dividend.value, valuation.value, cost.value, basis)
+
     fun portfolioYield(dividend: Double, valuation: Double, cost: Double, basis: String): Double {
         val denominator = if (basis == "cost") cost else valuation
         return if (denominator > 0) (dividend / denominator * 100).takeIf(Double::isFinite) ?: 0.0 else 0.0
@@ -22,6 +29,35 @@ object PortfolioMath {
     }
 
     fun validMoney(value: Double): Boolean = value.isFinite() && value >= 0.0 && value <= 1.0e12
+
+    fun hasValidMoneyBasis(category: Category, currency: String): Boolean = when (category) {
+        Category.JAPAN, Category.FUND -> currency == "¥"
+        Category.US -> currency == "$"
+    }
+
+    fun hasValidMoneyBasis(category: String, currency: String): Boolean = when (category) {
+        "jp" -> currency == "¥"
+        "us" -> currency == "$"
+        else -> false
+    }
+
+    fun validHoldingQuoteAmount(value: Double, category: Category, currency: String): Boolean =
+        validMoney(value) && hasValidMoneyBasis(category, currency)
+
+    fun holdingJpyAmount(holding: Holding, amount: Double, quantity: Long = holding.shares.toLong()): JpyAmount? {
+        if (!validHoldingQuoteAmount(amount, holding.category, holding.currency) || quantity < 0) return null
+        val currencyFactor = when (holding.currency) {
+            "¥" -> 1.0
+            "$" -> holding.usdJpyRate?.takeIf { it.isFinite() && it > 0.0 } ?: return null
+            else -> return null
+        }
+        val priceBasis = if (holding.category == Category.FUND) 10_000.0 else 1.0
+        val jpy = amount * quantity.toDouble() / priceBasis * currencyFactor
+        return JpyAmount(jpy).takeIf { jpy.isFinite() }
+    }
+
+    fun sumJpyAmounts(amounts: Iterable<JpyAmount>): JpyAmount =
+        JpyAmount(amounts.sumOf { it.value })
 
     fun wholeShares(value: Double?): Int? = value?.takeIf {
         it.isFinite() && it >= 0.0 && it <= Int.MAX_VALUE.toDouble() && it % 1.0 == 0.0
@@ -60,6 +96,7 @@ object PortfolioMath {
 
     fun mergeAllocations(holding: Holding, allocations: List<HoldingAllocation>): Holding {
         require(allocations.isNotEmpty()) { "口座を指定してください" }
+        require(hasValidMoneyBasis(holding.category, holding.currency)) { "通貨と銘柄区分が一致しません" }
         require(allocations.all { it.shares >= 0 && validMoney(it.acquisitionPrice) && it.accountType.isNotBlank() }) {
             "数量・取得単価・口座を確認してください"
         }

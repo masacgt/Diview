@@ -17,11 +17,40 @@ function environment(limit = 1, storageFails = false) {
   };
 }
 
-function dividendEnvironment(documents, marketAvailable = true) {
+function dividendEnvironment(documents, marketAvailable = true, reads = null) {
+  const indexKey = 'market/yfinance/v2/issuer_dividends/current.json';
+  const manifestKey = 'market/yfinance/v2/issuer_dividends/shards/current.json';
+  if (documents.has(indexKey) && !documents.has(manifestKey)) {
+    const index = documents.get(indexKey);
+    const grouped = new Map();
+    for (const [code, item] of Object.entries(index?.items || {})) {
+      const prefix = code.slice(0, 2).toUpperCase();
+      if (!grouped.has(prefix)) grouped.set(prefix, {});
+      grouped.get(prefix)[code.toUpperCase()] = item;
+    }
+    const slot = 'a';
+    documents.set(manifestKey, {
+      schema_version: 1,
+      slot,
+      prefix_length: 2,
+      prefixes: [...grouped.keys()].sort(),
+      item_count: Object.keys(index?.items || {}).length,
+      source: index.source,
+      attribution: index.attribution,
+    });
+    for (const [prefix, items] of grouped) {
+      documents.set(`market/yfinance/v2/issuer_dividends/shards/${slot}/${prefix}.json`, {
+        schema_version: 1, prefix, items,
+      });
+    }
+  }
   return {
     APP_DEFINITIONS: { get: async () => null },
     MARKET_DATA: marketAvailable ? {
-      get: async key => documents.has(key) ? { json: async () => documents.get(key) } : null,
+      get: async key => {
+        reads?.push(key);
+        return documents.has(key) ? { json: async () => documents.get(key) } : null;
+      },
       list: async ({ prefix }) => ({
         objects: [...documents.keys()].filter(key => key.startsWith(prefix)).map(key => ({ key })),
         truncated: false,
@@ -55,6 +84,44 @@ test('financial API only returns the necessary public document fields', async ()
   assert.equal((await worker.fetch(new Request('https://example.com/api/v1/financial-data/7203', { method: 'POST' }), environment())).status, 405);
 });
 
+test('financial API reads only the active issuer-dividend shard for one security', async () => {
+  const base = 'market/yfinance/v2/securities/7203.T';
+  const indexKey = 'market/yfinance/v2/issuer_dividends/current.json';
+  const documents = new Map([
+    [`${base}/profile.json`, { display_name: 'トヨタ自動車', symbol: '7203.T' }],
+    [`${base}/current.json`, { dividend: { calendar_year_metrics: { annual_records: [] } } }],
+    [`market/irbank/v1/securities/7203/overview.json`, { dividends: { records: [] } }],
+    [`${base}/financials/2025-03-31.json`, {
+      annual: { fiscal_year: '2025/03', period_end: '2025-03-31', field_status: {} },
+    }],
+    ['market/yfinance/v2/issuer_dividends/shards/current.json', {
+      schema_version: 1, slot: 'b', prefix_length: 2, prefixes: ['72'], source: 'IRBANK Connect',
+      attribution: { source_label: 'IRBANK' },
+    }],
+    ['market/yfinance/v2/issuer_dividends/shards/b/72.json', {
+      schema_version: 1, prefix: '72', items: {
+        '7203': {
+          code: '7203', actual_status: 'available',
+          actual: { fiscal_year: 2025, period_end: '2025-03-31', annual_dps: 100 },
+          forecast_status: 'not_requested', forecast: null,
+        },
+      },
+    }],
+  ]);
+  const reads = [];
+  const response = await worker.fetch(
+    new Request('https://example.com/api/v1/financial-data/7203'),
+    dividendEnvironment(documents, true, reads),
+  );
+
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.issuer_dividends.latest_actual.annual_dps, 100);
+  assert.equal(data.issuer_dividends.source, 'IRBANK Connect');
+  assert.ok(reads.includes('market/yfinance/v2/issuer_dividends/shards/b/72.json'));
+  assert.ok(!reads.includes(indexKey));
+});
+
 test('security API exposes yfinance retrieval metadata and stored dividend history bounds', async () => {
   const base = 'market/yfinance/v2/securities/7203.T';
   const documents = new Map([
@@ -65,7 +132,7 @@ test('security API exposes yfinance retrieval metadata and stored dividend histo
     [`${base}/current.json`, {
       code: '7203', symbol: '7203.T', source: 'Yahoo Finance via yfinance',
       price: { close: 3000, currency: 'JPY' },
-      statistics: { trailingEps: 200, bookValue: 1000, trailingPE: 4, priceToBook: 0.5 },
+      statistics: { trailingEps: 200, bookValue: 1000 },
       statistics_last_fetched_session_date: '2026-10-15',
       dividend: { dividend_status: 'has_dividend' },
       field_status: { dividend_history: 'available', statistics_refresh: 'failed' },
@@ -104,7 +171,7 @@ test('security API exposes yfinance retrieval metadata and stored dividend histo
   assert.deepEqual(data.valuation, {
     per: 15,
     pbr: 3,
-    source: 'daily_close_divided_by_latest_yfinance_eps_bps',
+    source: 'yfinance_reported_with_daily_calculation_fallback',
     price_date: null,
     statistics_last_fetched_session_date: '2026-10-15',
     formulas: {
@@ -204,9 +271,106 @@ test('financial API aggregates only published v2 yfinance calendar-year events',
   const data = await response.json();
   assert.equal(data.dividends.history_basis, 'calendar_year_observed_distributions');
   assert.deepEqual(data.dividends.records, [
-    { calendar_year: year - 2, calendar_year_distribution_per_share: 25, amount_basis: 'yfinance_split_adjusted_assumption' },
-    { calendar_year: year - 1, calendar_year_distribution_per_share: 30, amount_basis: 'yfinance_split_adjusted_assumption' },
+    { calendar_year: year - 2, calendar_year_distribution_per_share: 25, amount_basis: 'yfinance_split_adjusted_assumption',
+      field_units: { calendar_year_distribution_per_share: 'jpy_per_share' } },
+    { calendar_year: year - 1, calendar_year_distribution_per_share: 30, amount_basis: 'yfinance_split_adjusted_assumption',
+      field_units: { calendar_year_distribution_per_share: 'jpy_per_share' } },
   ]);
+});
+
+test('financial API avoids rereading dividend partitions when current annual aggregates exist', async () => {
+  const code = '8058';
+  const base = `market/yfinance/v2/securities/${code}.T`;
+  const env = dividendEnvironment(new Map([
+    [`${base}/profile.json`, { display_name: '三菱商事' }],
+    [`${base}/current.json`, {
+      dividend: {
+        calendar_year_metrics: {
+          status: 'available', latest_completed_year: 2025,
+          annual_records: [{ calendar_year: 2025, calendar_year_distribution_per_share: 50 }],
+        },
+      },
+      field_status: { dividend_history: 'available' },
+    }],
+    [`${base}/dividends/2025.json`, { records: [{ date: '2025-03-31', amount: 999 }] }],
+  ]));
+  let dividendListCalls = 0;
+  const list = env.MARKET_DATA.list;
+  env.MARKET_DATA.list = async options => {
+    if (options.prefix === `${base}/dividends/`) dividendListCalls += 1;
+    return list(options);
+  };
+
+  const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.dividends.records[0].calendar_year_distribution_per_share, 50);
+  assert.equal(dividendListCalls, 0);
+});
+
+test('financial API labels dividend yield as percent only when the stored calculated yield corroborates it', async () => {
+  const code = '8058';
+  const base = `market/yfinance/v2/securities/${code}.T`;
+  const current = {
+    statistics: { dividendYield: 2.67 },
+    statistics_field_units: { dividendYield: 'ratio' },
+    dividend: {
+      yield_rate: 2.6511,
+      yield_source: 'calculated_from_yfinance_dividend_and_quote',
+      calendar_year_metrics: { annual_records: [] },
+    },
+  };
+  const documents = new Map([[`${base}/current.json`, current]]);
+  const response = await worker.fetch(
+    new Request(`https://example.com/api/v1/financial-data/${code}`), dividendEnvironment(documents),
+  );
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.market.summary.dividendYield, 2.67);
+  assert.equal(data.market.summary_field_units.dividendYield, 'percent');
+
+  current.dividend = { calendar_year_metrics: { annual_records: [] } };
+  const uncorroborated = await worker.fetch(
+    new Request(`https://example.com/api/v1/financial-data/${code}`), dividendEnvironment(documents),
+  );
+  assert.equal(uncorroborated.status, 200);
+  const uncorroboratedData = await uncorroborated.json();
+  assert.equal(Object.hasOwn(uncorroboratedData.market.summary_field_units, 'dividendYield'), false);
+});
+
+test('financial API normalizes payout ratio only from an explicit ratio or percent unit', async () => {
+  const base = 'market/yfinance/v2/securities/8058.T';
+  const documents = new Map([[`${base}/current.json`, {
+    statistics: { payoutRatio: 0.25 },
+    statistics_field_units: { payoutRatio: 'ratio' },
+    field_status: { dividend_history: 'empty' },
+  }]]);
+  const fetchPayload = async () => {
+    const response = await worker.fetch(new Request('https://example.com/api/v1/financial-data/8058'),
+      dividendEnvironment(documents));
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+
+  let data = await fetchPayload();
+  assert.equal(data.dividends.payout_ratio, 25);
+  assert.equal(data.dividends.field_units.payout_ratio, 'percent');
+
+  documents.set(`${base}/current.json`, {
+    statistics: { payoutRatio: 25 },
+    statistics_field_units: { payoutRatio: 'percent' },
+    field_status: { dividend_history: 'empty' },
+  });
+  data = await fetchPayload();
+  assert.equal(data.dividends.payout_ratio, 25);
+
+  documents.set(`${base}/current.json`, {
+    statistics: { payoutRatio: 25 },
+    statistics_field_units: { payoutRatio: 'unknown' },
+    field_status: { dividend_history: 'empty' },
+  });
+  data = await fetchPayload();
+  assert.equal(data.dividends.payout_ratio, null);
 });
 
 test('financial API marks 8303 share basis unverified without changing stored dividend amounts', async () => {
@@ -257,7 +421,11 @@ test('financial API returns calculated DOE and net D/E from the stored annual ro
   const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
   assert.equal(response.status, 200);
   const data = await response.json();
-  assert.deepEqual(data.financials.annual, [annual]);
+  assert.deepEqual(data.financials.annual, [{
+    ...annual,
+    field_status: { ...annual.field_status, equity_ratio_computed: 'empty' },
+    field_units: { calculated_doe: 'percent', net_de_ratio: 'times' },
+  }]);
 });
 
 test('financial API exposes retained seed values separately from newer yfinance values', async () => {
@@ -267,10 +435,13 @@ test('financial API exposes retained seed values separately from newer yfinance 
     fiscal_year: '2025/03',
     period_end: '2025-03-31',
     sales: 120,
+    operating_margin: 12,
     equity_ratio_computed: 24,
     field_status: { sales: 'available' },
     source_values: {
-      seed: { source: 'IRBANK', source_key: 'market/irbank/v1/securities/7203/overview.json', values: { sales: 100 } },
+      seed: { source: 'IRBANK', source_key: 'market/irbank/v1/securities/7203/overview.json',
+        values: { sales: 100, operating_margin: 12 },
+        field_units: { sales: 'million_jpy', operating_margin: 'percent', equity_ratio_computed: 'percent' } },
       yfinance: { source: 'Yahoo Finance via yfinance', values: { sales: 120 }, field_status: { sales: 'available' } },
       calculated: { values: { equity_ratio_computed: { value: 24, input_sources: { equity: 'seed', total_assets: 'yfinance' } } } },
     },
@@ -284,15 +455,19 @@ test('financial API exposes retained seed values separately from newer yfinance 
   const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
   assert.equal(response.status, 200);
   const data = await response.json();
-  assert.equal(data.financials.annual[0].sales, 120);
-  assert.equal(data.financials.annual[0].equity_ratio_computed, 24);
+  assert.equal(data.financials.annual[0].sales, 100_000_000);
+  assert.equal(data.financials.annual[0].field_units.sales, 'jpy');
+  assert.equal(data.financials.annual[0].operating_margin, 12);
+  assert.equal(data.financials.annual[0].field_units.operating_margin, 'percent');
+  assert.equal(Object.hasOwn(data.financials.annual[0], 'equity_ratio_computed'), false);
   assert.deepEqual(data.financials.annual[0].source_values.calculated.values, {});
   assert.equal(data.financials.seed_annual[0].values.sales, 100);
+  assert.deepEqual(data.financials.annual[0].source_values.yfinance.unverified_fields, ['sales']);
   assert.equal(Object.hasOwn(data.financials.seed_annual[0].values, 'equity_ratio_computed'), false);
   assert.equal(data.financials.seed_annual[0].source, 'IRBANK');
 });
 
-test('financial API retains equity ratios calculated from one source', async () => {
+test('financial API keeps same-source ratios and marks Yahoo statement amounts as native units', async () => {
   const code = '9984';
   const base = `market/yfinance/v2/securities/${code}.T`;
   const annual = {
@@ -307,7 +482,33 @@ test('financial API retains equity ratios calculated from one source', async () 
             value: 20,
             formula: 'equity / total_assets * 100',
             input_sources: { equity: 'yfinance', total_assets: 'yfinance' },
+            input_units: { equity: 'yfinance_native', total_assets: 'yfinance_native' },
+            unit: 'percent',
           },
+          operating_margin: {
+            value: 10, formula: 'operating_profit / sales * 100',
+            input_sources: { operating_profit: 'yfinance', sales: 'yfinance' },
+            input_units: { operating_profit: 'yfinance_native', sales: 'yfinance_native' }, unit: 'percent',
+          },
+          fcf_margin: {
+            value: 5, formula: '(operating_cf + investing_cf) / sales * 100',
+            input_sources: { operating_cf: 'yfinance', investing_cf: 'yfinance', sales: 'yfinance' },
+            input_units: { operating_cf: 'yfinance_native', investing_cf: 'yfinance_native', sales: 'yfinance_native' }, unit: 'percent',
+          },
+        },
+      },
+      yfinance: {
+        values: {
+          stockholders_equity: 40, total_assets: 200, sales: 100,
+          operating_profit: 10, operating_cf: 8, investing_cf: -3,
+        },
+        field_units: {
+          stockholders_equity: 'yfinance_native', total_assets: 'yfinance_native', sales: 'yfinance_native',
+          operating_profit: 'yfinance_native', operating_cf: 'yfinance_native', investing_cf: 'yfinance_native',
+        },
+        field_reported_currencies: {
+          stockholders_equity: 'JPY', total_assets: 'JPY', sales: 'JPY',
+          operating_profit: 'JPY', operating_cf: 'JPY', investing_cf: 'JPY',
         },
       },
     },
@@ -321,16 +522,138 @@ test('financial API retains equity ratios calculated from one source', async () 
   const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
   assert.equal(response.status, 200);
   const data = await response.json();
-  assert.equal(data.financials.annual[0].source_values.calculated.values.equity_ratio_computed.value, 20);
+  assert.equal(data.financial_contract_version, 6);
+  const row = data.financials.annual[0];
+  assert.equal(row.source_values.calculated.values.equity_ratio_computed.value, 20);
+  assert.equal(row.field_units.stockholders_equity, 'yfinance_native');
+  assert.equal(row.source_values.yfinance.field_reported_currencies.stockholders_equity, 'JPY');
+  assert.equal(row.operating_margin, 10);
+  assert.equal(row.field_units.operating_margin, 'percent');
+  assert.equal(row.fcf_margin, 5);
+});
+
+test('financial API omits legacy Yahoo money fields whose statement currency was never verified', async () => {
+  const annual = {
+    period_end: '2025-03-31',
+    sales: 7_070_000_000,
+    equity_ratio_computed: 35.15,
+    field_status: { sales: 'available', equity_ratio_computed: 'available' },
+    field_units: { sales: 'jpy', equity_ratio_computed: 'percent' },
+    source_values: {
+      yfinance: {
+        values: { sales: 7_070_000_000 },
+        field_units: { sales: 'jpy' },
+        field_currencies: { sales: 'JPY' },
+      },
+      calculated: {
+        values: { equity_ratio_computed: {
+          value: 35.15, unit: 'percent',
+          input_sources: { equity: 'yfinance', total_assets: 'yfinance' },
+          input_units: { equity: 'jpy', total_assets: 'jpy' },
+        } },
+      },
+    },
+  };
+  const env = dividendEnvironment(new Map([
+    ['market/yfinance/v2/securities/1301.T/financials/2025-03-31.json', { annual }],
+  ]));
+  const response = await worker.fetch(new Request('https://example.com/api/v1/financial-data/1301'), env);
+  const body = await response.json();
+  const row = body.financials.annual[0];
+  assert.equal(Object.hasOwn(row, 'sales'), false);
+  assert.equal(row.equity_ratio_computed, 35.15);
+  assert.equal(row.field_status.sales, 'unsupported');
+  assert.deepEqual(row.field_status_reason.sales, ['financial_currency_unverified']);
+  assert.deepEqual(row.source_values.yfinance.field_units, {});
+  assert.equal(Object.hasOwn(row.source_values.yfinance, 'field_currencies'), false);
+  assert.deepEqual(row.source_values.yfinance.unverified_fields, ['sales']);
+  assert.equal(row.source_values.calculated.values.equity_ratio_computed.value, 35.15);
+});
+
+test('financial API retains seed values and same-source ratio when Yahoo native scale differs greatly', async () => {
+  const annual = {
+    fiscal_year: '2022/12',
+    period_end: '2022-12-31',
+    sales: 363_593_000_000,
+    total_assets: 416_206_000_000,
+    equity_ratio_computed: 25.8795,
+    field_status: { sales: 'legacy_migrated', total_assets: 'legacy_migrated', equity_ratio_computed: 'available' },
+    source_values: {
+      seed: {
+        source: 'IRBANK',
+        values: { sales: 363593, total_assets: 416206, equity_ratio_computed: 25.8795 },
+        field_units: { sales: 'million_jpy', total_assets: 'million_jpy', equity_ratio_computed: 'percent' },
+      },
+      yfinance: {
+        values: { stockholders_equity: 811_640_000, total_assets: 3_136_213_000 },
+        field_units: { stockholders_equity: 'yfinance_native', total_assets: 'yfinance_native' },
+        field_reported_currencies: { stockholders_equity: 'JPY', total_assets: 'JPY' },
+      },
+      calculated: {
+        values: { equity_ratio_computed: {
+          value: 25.8795, unit: 'percent',
+          input_sources: { equity: 'yfinance', total_assets: 'yfinance' },
+          input_units: { equity: 'yfinance_native', total_assets: 'yfinance_native' },
+        } },
+      },
+    },
+  };
+  const env = dividendEnvironment(new Map([
+    ['market/yfinance/v2/securities/6269.T/financials/2022-12-31.json', { annual }],
+  ]));
+  const response = await worker.fetch(new Request('https://example.com/api/v1/financial-data/6269'), env);
+  const body = await response.json();
+  const row = body.financials.annual[0];
+  assert.equal(row.equity_ratio_computed, 25.8795);
+  assert.equal(row.total_assets, 3_136_213_000);
+  assert.equal(row.field_units.total_assets, 'yfinance_native');
+  assert.equal(body.financials.seed_annual[0].values.total_assets, 416206);
+  assert.equal(body.financials.seed_annual[0].validation_status, 'available');
+});
+
+test('financial API prefers a same-period Yahoo calculation over a retained seed ratio', async () => {
+  const annual = {
+    fiscal_year: '2023/03', period_end: '2023-03-31',
+    equity_ratio_computed: 35.15439778,
+    field_status: { equity_ratio_computed: 'legacy_migrated' },
+    source_values: {
+      seed: { source: 'IRBANK', values: { total_assets: 6073, equity_ratio_computed: 35.15439778 },
+        field_units: { total_assets: 'million_jpy', equity_ratio_computed: 'percent' } },
+      yfinance: {
+        values: { stockholders_equity: 47_541_000_000, total_assets: 146_294_000_000 },
+        field_units: { stockholders_equity: 'yfinance_native', total_assets: 'yfinance_native' },
+        field_reported_currencies: { stockholders_equity: 'JPY', total_assets: 'JPY' },
+      },
+      calculated: { values: { equity_ratio_computed: {
+        value: 32.4953, unit: 'percent',
+        input_sources: { equity: 'yfinance', total_assets: 'yfinance' },
+        input_units: { equity: 'yfinance_native', total_assets: 'yfinance_native' },
+      } } },
+    },
+  };
+  const env = dividendEnvironment(new Map([
+    ['market/yfinance/v2/securities/1301.T/financials/2023-03-31.json', { annual }],
+  ]));
+  const response = await worker.fetch(new Request('https://example.com/api/v1/financial-data/1301'), env);
+  const body = await response.json();
+  const row = body.financials.annual[0];
+  assert.equal(row.equity_ratio_computed, 32.4953);
+  assert.equal(row.field_units.equity_ratio_computed, 'percent');
+  assert.equal(body.financials.seed_annual[0].values.equity_ratio_computed, 35.15439778);
 });
 
 test('financial API does not replace the calculated ratio with a retained seed ratio', async () => {
   const annual = { period_end: '2026-03-31', equity_ratio_computed: 60,
     field_status: { equity_ratio_computed: 'available' },
     source_values: {
-      seed: { values: { equity_ratio_computed: 24 } },
-      yfinance: { values: { stockholders_equity: 60, total_assets: 100 } },
-      calculated: { values: { equity_ratio_computed: { value: 60 } } },
+      seed: { source: 'IRBANK', values: { equity_ratio_computed: 24 }, field_units: { equity_ratio_computed: 'percent' } },
+      yfinance: { values: { stockholders_equity: 60, total_assets: 100 },
+        field_units: { stockholders_equity: 'yfinance_native', total_assets: 'yfinance_native' },
+        field_reported_currencies: { stockholders_equity: 'JPY', total_assets: 'JPY' } },
+      calculated: { values: { equity_ratio_computed: {
+        value: 60, unit: 'percent', input_sources: { equity: 'yfinance', total_assets: 'yfinance' },
+        input_units: { equity: 'jpy', total_assets: 'jpy' },
+      } } },
     } };
   const env = dividendEnvironment(new Map([['market/yfinance/v2/securities/4502.T/financials/2026.json', { annual }]]));
   const response = await worker.fetch(new Request('https://example.com/api/v1/financial-data/4502'), env);
@@ -368,7 +691,11 @@ test('financial API preserves mixed-unit null guards and raw provenance without 
     field_status_reason: Object.fromEntries(fields.map(field => [field, ['mixed_source_units_not_comparable']])),
     source_values: {
       seed: { source: 'IRBANK', values: { sales: 100, operating_profit: 20, operating_cf: 30, investing_cf: -10, total_assets: 500 } },
-      yfinance: { values: { total_assets: 500000000 } },
+      yfinance: {
+        values: { total_assets: 500000000 },
+        field_units: { total_assets: 'yfinance_native' },
+        field_reported_currencies: { total_assets: 'JPY' },
+      },
     },
   };
   const documents = new Map([[`${base}/financials/2026-03-31.json`, { annual }]]);
@@ -384,17 +711,25 @@ test('financial API preserves mixed-unit null guards and raw provenance without 
   for (const [field, value] of Object.entries(annual.source_values.seed.values)) {
     assert.equal(data.financials.seed_annual[0].values[field], value);
   }
-  assert.deepEqual(row.source_values, annual.source_values);
+  assert.deepEqual(row.source_values.seed.values, annual.source_values.seed.values);
+  assert.deepEqual(row.source_values.yfinance.values, annual.source_values.yfinance.values);
+  assert.deepEqual(row.source_values.seed.field_units, {
+    sales: 'million_jpy', operating_profit: 'million_jpy', operating_cf: 'million_jpy',
+    investing_cf: 'million_jpy', total_assets: 'million_jpy',
+  });
   assert.equal(row.total_assets, 500000000);
   // With one fresh cash-flow input, the seed-only other side must stay null.
   annual.operating_cf = 30000000;
   annual.source_values.yfinance.values.operating_cf = 30000000;
+  annual.source_values.yfinance.field_units.operating_cf = 'yfinance_native';
+  annual.source_values.yfinance.field_reported_currencies.operating_cf = 'JPY';
   delete annual.field_status_reason.operating_cf;
   annual.field_status_reason.sales = ['different_reason'];
   const mixed = (await fetchData()).financials.annual[0];
   assert.equal(mixed.operating_cf, 30000000);
   assert.equal(mixed.investing_cf, null);
-  assert.equal(mixed.sales, 100);
+  assert.equal(mixed.sales, null);
+  assert.equal(mixed.field_status.sales, 'unsupported');
 });
 
 test('financial API keeps observed event history separate from legacy fiscal-year DPS', async () => {
@@ -423,6 +758,7 @@ test('financial API keeps observed event history separate from legacy fiscal-yea
     calendar_year: currentYear - 1,
     calendar_year_distribution_per_share: 25,
     amount_basis: 'yfinance_split_adjusted_assumption',
+    field_units: { calendar_year_distribution_per_share: 'jpy_per_share' },
   }]);
 });
 

@@ -225,6 +225,7 @@ object DvmBackupImporter {
         val code = PortfolioMath.normalizeCode(item.optString("code"))
         val name = item.optString("name").trim()
         val category = item.optString("category").lowercase(java.util.Locale.ROOT)
+        val currency = item.optString("currency", if (category == "us") "$" else "¥")
         val price = item.optDouble("price", Double.NaN)
         val dps = item.optDouble("dps", Double.NaN)
         val currentYield = item.optDouble("currentYield", Double.NaN)
@@ -236,6 +237,7 @@ object DvmBackupImporter {
         val payoutMonths = (0 until months.length()).map { months.getInt(it) }
         val usdJpyRate = if (item.has("usdJpyRate") && !item.isNull("usdJpyRate")) item.optDouble("usdJpyRate", Double.NaN) else null
         require(PortfolioMath.validCode(code) && name.isNotBlank() && category in setOf("jp", "us") &&
+            PortfolioMath.hasValidMoneyBasis(category, currency) &&
             listOf(price, dps, targetPrice).all(PortfolioMath::validMoney) &&
             currentYield.isFinite() && targetYield.isFinite() && targetYield > 0.0 &&
             defaultShares > 0 && payoutMonths.all { it in 1..12 } &&
@@ -249,7 +251,7 @@ object DvmBackupImporter {
             sector = item.optString("sector"),
             category = category,
             price = price,
-            currency = item.optString("currency", "¥"),
+            currency = currency,
             dps = dps,
             currentYield = currentYield,
             targetYield = targetYield,

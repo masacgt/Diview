@@ -1,6 +1,6 @@
 # IRBANK → Cloudflare D1
 
-このディレクトリには、Cloudflare D1/R2を使うWorker APIがあります。D1は運用・分析データ、R2はIRBANKの保存データと市場データを保持します。検索・日次価格・月次価格・暦年の配当イベントは `market/yfinance/v2/` を参照します。現在の年間DPSと利回りは同じv2名前空間のIRBANK配当インデックスを優先し、IRBANK会社予想、次に分割調整済み実績を使います。R2バケットは非公開で、アプリにはWorker APIを通じて配信します。
+このディレクトリには、Cloudflare D1/R2を使うWorker APIがあります。D1は運用・分析データ、R2はIRBANKの保存データと市場データを保持します。検索・日次価格・月次価格・暦年の配当イベントは `market/yfinance/v2/` を参照します。現在の年間DPSと利回りは同じv2名前空間のIRBANK配当インデックスを優先し、IRBANK会社予想、次に分割調整済み実績を使います。銘柄別APIは全銘柄インデックスではなく、`issuer_dividends/shards/current.json` が示すコード先頭2文字のシャードを読みます。R2バケットは非公開で、アプリにはWorker APIを通じて配信します。
 
 ## Android財務・問い合わせAPI
 

@@ -11,10 +11,13 @@ function fixture() {
   const documents = new Map([
     [`${root}/securities/7203.T/current.json`, {
       updated_at: new Date().toISOString(), price: { close: 100, date: '2026-10-20' },
-      statistics: { trailingEps: 10 }, dividend: {},
+      statistics: { trailingEps: 10 }, statistics_field_units: { trailingEps: 'jpy_per_share', payoutRatio: 'ratio' }, dividend: {},
     }],
     [`${root}/securities/7203.T/financials/2026-03-31.json`, {
-      year: '2026', annual: { fiscal_year: '2026', period_end: '2026-03-31', equity_ratio: 20 },
+      year: '2026', annual: {
+        fiscal_year: '2026', period_end: '2026-03-31', equity_ratio_computed: 20,
+        source_values: { seed: { source: 'IRBANK', values: { equity_ratio_computed: 20 }, field_units: { equity_ratio_computed: 'percent' } } },
+      },
     }],
   ]);
   const state = { source: null, snapshots: [], headKeys: [], failPersistence: false };
@@ -86,7 +89,9 @@ test('scheduled analysis persists unwatched securities on either v2 source chang
   assert.equal(f.state.snapshots.at(-1).values.per, 20);
 
   f.heads.set(`${f.root}/financial_revision.json`, { etag: 'financial-b' });
-  f.documents.get(`${f.root}/securities/7203.T/financials/2026-03-31.json`).annual.equity_ratio = 40;
+  const annual = f.documents.get(`${f.root}/securities/7203.T/financials/2026-03-31.json`).annual;
+  annual.equity_ratio_computed = 40;
+  annual.source_values.seed.values.equity_ratio_computed = 40;
   assert.equal((await f.run()).source_tag_advanced, true);
   assert.equal(f.state.snapshots.length, 3);
   assert.equal(f.state.snapshots.at(-1).values.equity_ratio, 40);

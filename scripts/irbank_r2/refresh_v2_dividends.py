@@ -20,10 +20,16 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "yfinance_r2"))
+from financial_revision import bump_financial_revision
+
 
 API_BASE = "https://api.irbank.net/v1"
 DEFAULT_CATALOG_URL = "https://diview-irbank.omasa.workers.dev/api/v1/irbank/catalog"
 DEFAULT_R2_KEY = "market/yfinance/v2/issuer_dividends/current.json"
+DIVIDEND_SHARD_MANIFEST_KEY = "market/yfinance/v2/issuer_dividends/shards/current.json"
+DIVIDEND_SHARD_ROOT = "market/yfinance/v2/issuer_dividends/shards"
+DIVIDEND_SHARD_PREFIX_LENGTH = 2
 DEFAULT_OUTPUT = Path(tempfile.gettempdir()) / "diview-irbank-v2-dividends-current.json"
 EDINET_CODE_RE = re.compile(r"^[EG]\d{5}$")
 SECURITY_CODE_RE = re.compile(r"^[A-Z0-9]{4}$")
@@ -342,6 +348,82 @@ def json_bytes(document: dict[str, Any]) -> bytes:
     return json.dumps(document, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
 
 
+def build_dividend_index_shards(document: dict[str, Any], slot: str) -> tuple[dict[str, bytes], dict[str, Any]]:
+    if slot not in {"a", "b"}:
+        raise ValueError(f"Invalid issuer-dividend shard slot: {slot}")
+    items = document.get("items")
+    if not isinstance(items, dict) or not items:
+        raise ValueError("Issuer dividend index does not contain a non-empty items{}")
+
+    grouped: dict[str, dict[str, Any]] = {}
+    for code, item in items.items():
+        normalized = str(code).strip().upper()
+        if not SECURITY_CODE_RE.fullmatch(normalized) or not isinstance(item, dict):
+            raise ValueError(f"Invalid issuer-dividend index item: {code}")
+        prefix = normalized[:DIVIDEND_SHARD_PREFIX_LENGTH]
+        if normalized in grouped.get(prefix, {}):
+            raise ValueError(f"Duplicate normalized issuer-dividend code: {normalized}")
+        grouped.setdefault(prefix, {})[normalized] = item
+
+    shard_payloads = {
+        f"{DIVIDEND_SHARD_ROOT}/{slot}/{prefix}.json": json_bytes({
+            "schema_version": 1,
+            "prefix": prefix,
+            "items": {code: prefix_items[code] for code in sorted(prefix_items)},
+        })
+        for prefix, prefix_items in sorted(grouped.items())
+    }
+    manifest = {
+        "schema_version": 1,
+        "slot": slot,
+        "prefix_length": DIVIDEND_SHARD_PREFIX_LENGTH,
+        "prefixes": sorted(grouped),
+        "item_count": sum(len(prefix_items) for prefix_items in grouped.values()),
+        "generated_at": document.get("generated_at"),
+        "source": document.get("source"),
+        "attribution": document.get("attribution"),
+    }
+    return shard_payloads, manifest
+
+
+def _put_verified_r2_object(client: Any, bucket: str, key: str, payload: bytes) -> str:
+    digest = hashlib.sha256(payload).hexdigest()
+    client.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=payload,
+        ContentType="application/json; charset=utf-8",
+        CacheControl="public, max-age=300",
+    )
+    saved = client.get_object(Bucket=bucket, Key=key)["Body"].read()
+    if hashlib.sha256(saved).hexdigest() != digest:
+        raise RuntimeError(f"IRBANK v2 dividend shard read-back mismatch: {key}")
+    return digest
+
+
+def prepare_dividend_index_shards(client: Any, bucket: str, document: dict[str, Any]) -> dict[str, Any]:
+    current = read_r2_document(client, bucket, DIVIDEND_SHARD_MANIFEST_KEY)
+    active_slot = current.get("slot") if isinstance(current, dict) else None
+    next_slot = "b" if active_slot == "a" else "a"
+    payloads, manifest = build_dividend_index_shards(document, next_slot)
+    digests = {
+        key: _put_verified_r2_object(client, bucket, key, payload)
+        for key, payload in payloads.items()
+    }
+    manifest["shard_count"] = len(payloads)
+    manifest["shards_sha256"] = hashlib.sha256(
+        "\n".join(f"{key}:{digests[key]}" for key in sorted(digests)).encode("utf-8")
+    ).hexdigest()
+    return manifest
+
+
+def activate_dividend_index_shards(client: Any, bucket: str, manifest: dict[str, Any]) -> str:
+    if manifest.get("schema_version") != 1 or manifest.get("slot") not in {"a", "b"}:
+        raise ValueError("Invalid issuer-dividend shard manifest")
+    payload = json_bytes(manifest)
+    return _put_verified_r2_object(client, bucket, DIVIDEND_SHARD_MANIFEST_KEY, payload)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog-url", default=DEFAULT_CATALOG_URL)
@@ -448,14 +530,30 @@ def main() -> int:
                       "sha256": digest, "bytes": len(payload), "api_remaining_before_fetch": remaining}, ensure_ascii=False))
 
     if args.publish:
-        response = r2_client.put_object(Bucket=args.bucket, Key=args.key, Body=payload,
-                                        ContentType="application/json; charset=utf-8",
-                                        CacheControl="public, max-age=300")
-        saved = r2_client.get_object(Bucket=args.bucket, Key=args.key)["Body"].read()
-        if hashlib.sha256(saved).hexdigest() != digest:
-            raise RuntimeError(f"IRBANK v2 dividend read-back mismatch: {args.key}")
-        print(json.dumps({"published_key": args.key, "etag": str(response.get("ETag") or "").strip('"'),
-                          "read_back_sha256": digest}, ensure_ascii=False))
+        wrote_index = False
+        try:
+            shard_manifest = (
+                prepare_dividend_index_shards(r2_client, args.bucket, document)
+                if args.key == DEFAULT_R2_KEY else None
+            )
+            response = r2_client.put_object(Bucket=args.bucket, Key=args.key, Body=payload,
+                                            ContentType="application/json; charset=utf-8",
+                                            CacheControl="public, max-age=300")
+            saved = r2_client.get_object(Bucket=args.bucket, Key=args.key)["Body"].read()
+            if hashlib.sha256(saved).hexdigest() != digest:
+                raise RuntimeError(f"IRBANK v2 dividend read-back mismatch: {args.key}")
+            if shard_manifest is not None:
+                activate_dividend_index_shards(r2_client, args.bucket, shard_manifest)
+            wrote_index = True
+            print(json.dumps({"published_key": args.key, "etag": str(response.get("ETag") or "").strip('"'),
+                              "read_back_sha256": digest,
+                              "shard_count": shard_manifest.get("shard_count") if shard_manifest else None,
+                              "shard_manifest_sha256": (
+                                  hashlib.sha256(json_bytes(shard_manifest)).hexdigest() if shard_manifest else None
+                              )}, ensure_ascii=False))
+        finally:
+            if wrote_index and args.key == DEFAULT_R2_KEY:
+                bump_financial_revision(r2_client, args.bucket)
     return 0
 
 

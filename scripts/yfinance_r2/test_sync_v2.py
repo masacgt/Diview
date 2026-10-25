@@ -105,30 +105,62 @@ class NetDeRatioTests(TestCase):
                 "equity_ratio_computed": 37.829768942,
             },
             {"stockholders_equity": 39_918_854_000_000},
+            {"total_assets": "million_jpy", "equity_ratio_computed": "percent"},
+            {"stockholders_equity": "jpy"},
         )
 
         self.assertEqual(result["value"], 37.829768942)
         self.assertEqual(result["source"], "seed")
         self.assertEqual(result["reason"], "mixed_source_inputs_not_recalculated")
 
-    def test_equity_ratio_is_calculated_when_both_inputs_share_yfinance_source(self):
+    def test_equity_ratio_is_calculated_when_yfinance_inputs_share_native_unit(self):
         result = sync.equity_ratio_result(
             {"total_assets": 100},
             {"stockholders_equity": 40, "total_assets": 200},
+            {},
+            {"stockholders_equity": "yfinance_native", "total_assets": "yfinance_native"},
         )
 
         self.assertEqual(result["value"], 20)
         self.assertEqual(result["source"], "calculated")
         self.assertEqual(result["input_sources"], {"equity": "yfinance", "total_assets": "yfinance"})
 
+    def test_yfinance_native_ratio_replaces_stale_seed_ratio_without_cross_source_amount_comparison(self):
+        result = sync.equity_ratio_result(
+            {"total_assets": 6073, "equity_ratio_computed": 35.15439778},
+            {"stockholders_equity": 47_541_000_000, "total_assets": 146_294_000_000},
+            {"total_assets": "million_jpy", "equity_ratio_computed": "percent"},
+            {"stockholders_equity": "yfinance_native", "total_assets": "yfinance_native"},
+        )
+
+        self.assertAlmostEqual(result["value"], 32.495, places=2)
+        self.assertEqual(result["source"], "calculated")
+        self.assertEqual(result["input_units"], {
+            "equity": "yfinance_native", "total_assets": "yfinance_native",
+        })
+
+    def test_seed_ratio_is_preserved_when_yfinance_native_amount_is_not_comparable(self):
+        result = sync.equity_ratio_result(
+            {"total_assets": 416206, "equity_ratio_computed": 25.8795},
+            {"stockholders_equity": 811640000},
+            {"total_assets": "million_jpy", "equity_ratio_computed": "percent"},
+            {"stockholders_equity": "yfinance_native"},
+        )
+
+        self.assertEqual(result["value"], 25.8795)
+        self.assertEqual(result["source"], "seed")
+
     def test_equity_ratio_stays_unavailable_for_mixed_sources_without_same_source_seed_ratio(self):
         result = sync.equity_ratio_result(
             {"total_assets": 100},
             {"stockholders_equity": 40},
+            {"total_assets": "million_jpy"},
+            {"stockholders_equity": "yfinance_native"},
         )
 
         self.assertIsNone(result["value"])
         self.assertEqual(result["reason"], "mixed_source_inputs_not_comparable")
+
 
     def test_financial_source_values_keep_seed_and_yfinance_rows_separate(self):
         seed, yfinance = sync.financial_source_values({
@@ -243,6 +275,37 @@ class NetDeRatioTests(TestCase):
         self.assertEqual(reasons["net_de_ratio"], ["cash_input_missing"])
 
 
+class IncomeAdviceFinancialUnitTests(TestCase):
+    def test_payout_ratio_uses_declared_ratio_or_percent_unit(self):
+        ratio_value = sync.income_advice_metrics({
+            "statistics": {"payoutRatio": 0.25},
+            "statistics_field_units": {"payoutRatio": "ratio"},
+            "field_status": {"statistics_payoutRatio": "available"},
+        }, [], None)
+        percent_value = sync.income_advice_metrics({
+            "statistics": {"payoutRatio": 25, "operatingMargins": 10},
+            "statistics_field_units": {"payoutRatio": "percent", "operatingMargins": "percent"},
+            "field_status": {"statistics_payoutRatio": "available"},
+        }, [], None)
+        ratio_operating_margin = sync.income_advice_metrics({
+            "statistics": {"operatingMargins": 0.1},
+            "statistics_field_units": {"operatingMargins": "ratio"},
+            "field_status": {"statistics_operatingMargins": "available"},
+        }, [], None)
+        unknown_unit = sync.income_advice_metrics({
+            "statistics": {"payoutRatio": 25},
+            "statistics_field_units": {"payoutRatio": "unknown"},
+            "field_status": {"statistics_payoutRatio": "available"},
+        }, [], None)
+
+        self.assertEqual(ratio_value["payout_ratio"], 25)
+        self.assertEqual(percent_value["payout_ratio"], 25)
+        self.assertEqual(percent_value["operating_margin"], 10)
+        self.assertEqual(ratio_operating_margin["operating_margin"], 10)
+        self.assertIsNone(unknown_unit["payout_ratio"])
+        self.assertEqual(unknown_unit["fields"]["payout_ratio"], "unsupported")
+
+
 class SyncPriceTests(TestCase):
     def test_daily_valuation_uses_close_and_latest_eps_or_book_value(self):
         self.assertEqual(
@@ -266,10 +329,11 @@ class SyncPriceTests(TestCase):
     def test_v2_current_fields_keep_only_used_inputs_and_update_markers(self):
         self.assertEqual(set(sync.CURRENT_FIELDS), {
             "trailingEps", "forwardEps", "bookValue", "dividendRate", "dividendYield",
-            "trailingPE", "priceToBook", "operatingMargins",
-            "payoutRatio", "exDividendDate", "lastFiscalYearEnd", "mostRecentQuarter",
+            "trailingPE", "priceToBook", "operatingMargins", "payoutRatio",
+            "exDividendDate", "lastFiscalYearEnd", "mostRecentQuarter",
         })
         self.assertTrue({"trailingPE", "priceToBook"}.issubset(sync.DERIVED_STATISTIC_FIELDS))
+        self.assertTrue(set(sync.DERIVED_STATISTIC_FIELDS).issubset(sync.CURRENT_FIELDS))
 
     def test_company_info_failure_is_stored_with_class_and_reason(self):
         error = TimeoutError("request timed out")
@@ -280,16 +344,17 @@ class SyncPriceTests(TestCase):
         })
 
     def test_unused_previous_statistics_are_archived_once(self):
-        previous = {"trailingPE": 12.5, "enterpriseValue": 1000, "forwardEps": 42.0}
+        previous = {
+            "trailingPE": 12.5, "priceToBook": 2.3, "operatingMargins": 0.1,
+            "enterpriseValue": 1000, "forwardEps": 42.0,
+        }
         with patch.object(sync, "read_json", return_value=None), \
              patch.object(sync, "put_json_if_changed") as write:
             sync.archive_unused_statistics(object(), "bucket", "7203.T", previous)
 
         self.assertEqual(write.call_count, 1)
         archived = write.call_args.args[3]
-        self.assertEqual(archived["statistics"], {
-            "enterpriseValue": 1000,
-        })
+        self.assertEqual(archived["statistics"], {"enterpriseValue": 1000})
 
     def test_monthly_price_point_date_is_normalized_without_changing_close(self):
         point = {"month": "2024-12", "date": "2024-12-01", "close": 3146.0}
@@ -1087,6 +1152,13 @@ class OfflineFinancialSyncTests(TestCase):
             self.writes.append(key)
             return True
 
+        def put_object(self, *, Bucket, Key, Body, **kwargs):
+            self.documents[Key] = json.loads(Body.decode("utf-8"))
+
+        def get_object(self, *, Bucket, Key):
+            body = json.dumps(self.documents[Key], sort_keys=True).encode("utf-8")
+            return {"Body": io.BytesIO(body)}
+
         def get_paginator(self, name):
             return self
 
@@ -1111,7 +1183,9 @@ class OfflineFinancialSyncTests(TestCase):
     def test_compact_statement_keys_and_unsupported_valuation(self):
         ticker = self.ticker()
         with patch.object(sync, "read_json", return_value=None):
-            annual, valuations, status, _ = sync.collect_financials(ticker, {}, self.Store(), "b", "7203.T")
+            annual, valuations, status, _ = sync.collect_financials(
+                ticker, {}, self.Store(), "b", "7203.T", financial_currency="JPY",
+            )
         row = annual[0]
         for field, value in {"sales": 1000, "operating_profit": 100, "total_assets": 800,
                              "operating_cf": 120, "investing_cf": -30, "calculated_doe": 5}.items():
@@ -1120,10 +1194,69 @@ class OfflineFinancialSyncTests(TestCase):
         self.assertEqual(status["valuation"], "unsupported")
         self.assertEqual(valuations[0]["field_status"]["eps_adjusted"], "unsupported")
         self.assertNotIn("eps_adjusted", valuations[0])
+        self.assertEqual(annual[0]["source_values"]["yfinance"]["field_units"]["total_assets"], "yfinance_native")
+        self.assertEqual(annual[0]["source_values"]["yfinance"]["field_reported_currencies"]["total_assets"], "JPY")
+        self.assertEqual(annual[0]["source_values"]["yfinance"]["reported_financial_currency_status"], "reported_unverified")
+        self.assertEqual(row["operating_margin"], 10)
+        self.assertEqual(row["fcf_margin"], 9)
+        self.assertEqual(row["source_values"]["calculated"]["values"]["operating_margin"]["input_units"], {
+            "operating_profit": "yfinance_native", "sales": "yfinance_native",
+        })
         ticker.get_valuation_measures.assert_not_called()
         for mapping in (sync.INCOME_FIELDS, sync.BALANCE_FIELDS, sync.CASH_FLOW_FIELDS):
             for key, value in mapping.items():
                 self.assertEqual(mapping[key.replace(" ", "")], value)
+
+    def test_statement_money_uses_native_unit_even_when_reported_currency_is_missing(self):
+        ticker = self.ticker()
+        with patch.object(sync, "read_json", return_value=None):
+            annual, _, _, _ = sync.collect_financials(
+                ticker, {}, self.Store(), "b", "6269.T", financial_currency="USD",
+            )
+        row = annual[0]
+        self.assertEqual(row["source_values"]["yfinance"]["field_units"]["total_assets"], "yfinance_native")
+        self.assertEqual(row["source_values"]["yfinance"]["field_reported_currencies"]["total_assets"], "USD")
+        self.assertEqual(row["source_values"]["yfinance"]["reported_financial_currency_status"], "reported_unverified")
+
+        ticker = self.ticker()
+        with patch.object(sync, "read_json", return_value=None):
+            annual, _, _, _ = sync.collect_financials(ticker, {}, self.Store(), "b", "6269.T")
+        row = annual[0]
+        self.assertEqual(row["total_assets"], 800)
+        self.assertEqual(row["source_values"]["yfinance"]["field_units"]["total_assets"], "yfinance_native")
+        self.assertIsNone(row["source_values"]["yfinance"]["reported_financial_currency"])
+        self.assertEqual(row["source_values"]["yfinance"]["reported_financial_currency_status"], "not_reported")
+
+    def test_same_period_yfinance_ratio_replaces_stale_seed_ratio(self):
+        ticker = self.ticker()
+        ticker.get_income_stmt.return_value = pd.DataFrame({"2023-03-31": {"TotalRevenue": 272_167_000_000}})
+        ticker.get_balance_sheet.return_value = pd.DataFrame({"2023-03-31": {
+            "StockholdersEquity": 47_541_000_000, "TotalAssets": 146_294_000_000,
+        }})
+        ticker.get_cash_flow.return_value = pd.DataFrame({"2023-03-31": {"CashDividendsPaid": -972_000_000}})
+        key = sync.object_key("securities", "1301.T", "financials", "2023-03-31.json")
+        seed = {
+            "source": "IRBANK",
+            "values": {"total_assets": 6073, "equity_ratio_computed": 35.15439778},
+            "field_units": {"total_assets": "million_jpy", "equity_ratio_computed": "percent"},
+        }
+        store = self.Store({key: {"annual": {
+            "fiscal_year": "2023/03", "period_end": "2023-03-31",
+            "total_assets": 6073, "equity_ratio_computed": 35.15439778,
+            "field_status": {"equity_ratio_computed": "legacy_migrated"},
+            "source_values": {"seed": seed},
+        }}})
+        with patch.object(sync, "read_json", side_effect=store.read):
+            rows, _, _, _ = sync.collect_financials(
+                ticker, {}, store, "b", "1301.T", financial_currency="JPY",
+            )
+
+        row = rows[0]
+        self.assertAlmostEqual(row["equity_ratio_computed"], 32.495, places=2)
+        self.assertEqual(row["source_values"]["calculated"]["values"]["equity_ratio_computed"]["input_units"], {
+            "equity": "yfinance_native", "total_assets": "yfinance_native",
+        })
+        self.assertEqual(row["source_values"]["seed"]["values"]["equity_ratio_computed"], 35.15439778)
 
     def test_slash_dates_and_legacy_valuation_are_retained_stale(self):
         old = {"valuation_history": {"yearly": [{"period_end": "03/31/2026", "values": {
@@ -1174,7 +1307,9 @@ class OfflineFinancialSyncTests(TestCase):
         ticker = self.ticker()
         ticker.get_balance_sheet.side_effect = RuntimeError("offline simulated failure")
         with patch.object(sync, "read_json", side_effect=store.read):
-            rows, _, status, _ = sync.collect_financials(ticker, {}, store, "b", "7203.T")
+            rows, _, status, _ = sync.collect_financials(
+                ticker, {}, store, "b", "7203.T", financial_currency="JPY",
+            )
         self.assertEqual(rows[0]["calculated_doe"], 4)
         self.assertEqual(rows[0]["field_status"]["calculated_doe"], "stale")
         self.assertEqual(status["balance_sheet"], "failed")
@@ -1194,14 +1329,11 @@ class OfflineFinancialSyncTests(TestCase):
         for field, value in seed["values"].items():
             self.assertEqual(rows[0][field], value)
             self.assertEqual(rows[0]["field_status"][field], "legacy_migrated")
-        self.assertEqual(rows[0]["source_values"]["seed"], {
-            **seed,
-            "field_units": {
-                "sales": "million_jpy",
-                "operating_profit": "million_jpy",
-                "operating_cf": "million_jpy",
-                "investing_cf": "million_jpy",
-            },
+        actual_seed = rows[0]["source_values"]["seed"]
+        self.assertEqual({key: value for key, value in actual_seed.items() if key != "field_units"}, seed)
+        self.assertEqual(actual_seed["field_units"], {
+            "sales": "million_jpy", "operating_profit": "million_jpy",
+            "operating_cf": "million_jpy", "investing_cf": "million_jpy",
         })
 
     def test_margin_guard_nulls_seed_in_both_failure_directions_and_survives_reread(self):
@@ -1214,15 +1346,10 @@ class OfflineFinancialSyncTests(TestCase):
                         "unit": "million_JPY",
                         "values": {"sales": 1000, "operating_profit": 100,
                                    "operating_cf": 120, "investing_cf": -30}}
-                expected_seed = {
-                    **seed,
-                    "field_units": {
-                        "sales": "million_jpy",
-                        "operating_profit": "million_jpy",
-                        "operating_cf": "million_jpy",
-                        "investing_cf": "million_jpy",
-                    },
-                }
+                expected_seed = {**seed, "field_units": {
+                    "sales": "million_jpy", "operating_profit": "million_jpy",
+                    "operating_cf": "million_jpy", "investing_cf": "million_jpy",
+                }}
                 key = sync.object_key("securities", "7203.T", "financials", "2026-03-31.json")
                 store = self.Store({key: {"annual": {
                     "period_end": "2026-03-31", "source_values": {"seed": seed},
@@ -1233,7 +1360,9 @@ class OfflineFinancialSyncTests(TestCase):
                 method.side_effect = RuntimeError("offline simulated failure")
                 with patch.object(sync, "read_json", side_effect=store.read):
                     for attempt in range(2):
-                        rows, _, status, _ = sync.collect_financials(ticker, {}, store, "b", "7203.T")
+                        rows, _, status, _ = sync.collect_financials(
+                            ticker, {}, store, "b", "7203.T", financial_currency="JPY",
+                        )
                         row = rows[0]
                         self.assertEqual(status[failed], "failed")
                         self.assertEqual(row["source_values"]["seed"], expected_seed)
@@ -1249,7 +1378,7 @@ class OfflineFinancialSyncTests(TestCase):
                         store.documents[key] = {"annual": deepcopy(row)}
                     # A later unscheduled run must not resurrect the flat seed amounts.
                     rows, _, _, _ = sync.collect_financials(
-                        ticker, {}, store, "b", "7203.T", fetch_groups=set(),
+                        ticker, {}, store, "b", "7203.T", fetch_groups=set(), financial_currency="JPY",
                     )
                     for field in guarded:
                         self.assertIsNone(rows[0][field])
@@ -1266,17 +1395,14 @@ class OfflineFinancialSyncTests(TestCase):
         ticker.get_income_stmt.return_value = pd.DataFrame({"2026-03-31": {"OperatingIncome": 0}})
         with patch.object(sync, "read_json", side_effect=store.read):
             rows, _, _, _ = sync.collect_financials(
-                ticker, {}, store, "b", "7203.T", fetch_groups={"income_statement"},
+                ticker, {}, store, "b", "7203.T", fetch_groups={"income_statement"}, financial_currency="JPY",
             )
         self.assertIsNone(rows[0]["sales"])
         self.assertEqual(rows[0]["operating_profit"], 0)
-        self.assertEqual(rows[0]["source_values"]["seed"], {
-            **seed,
-            "field_units": {
-                "sales": "million_jpy",
-                "operating_profit": "million_jpy",
-            },
-        })
+        expected_seed = {**seed, "field_units": {
+            "sales": "million_jpy", "operating_profit": "million_jpy",
+        }}
+        self.assertEqual(rows[0]["source_values"]["seed"], expected_seed)
 
     def test_collect_symbol_persists_annual_valuation_and_daily_multiples(self):
         prefix = sync.object_key("securities", "7203.T")
@@ -1319,7 +1445,10 @@ class OfflineFinancialSyncTests(TestCase):
         legacy_key = sync.object_key("catalog", "generations", "2026-10-19.json")
         old_item = {"code": "7203", "name": "Toyota", "status": "ok", "price": 100, "quote_date": "2026-10-18",
                     "income_advice": {"code": "7203", "source_catalog_generation": "2026-10-19"}}
-        legacy = {"generation": "2026-10-19", "items": [old_item]}
+        legacy = {
+            "generation": "2026-10-19", "market_data_date": "2026-10-19",
+            "items": [old_item],
+        }
         store = self.Store({
             legacy_key: legacy,
             sync.object_key("catalog", "current.json"): legacy,

@@ -75,6 +75,7 @@ import kotlin.math.atan2
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.util.Locale
@@ -640,7 +641,15 @@ private fun MonthlyDividendEstimateCard(
     var showDividendInfo by remember { mutableStateOf(false) }
     var selectedQuarterIndex by remember { mutableStateOf<Int?>(null) }
     val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
-    val monthlyByCategoryByBasis = remember(holdings, taxRateMode, dividendEventRevision) {
+    val forecastEndDate = LocalDate.now(ZoneId.of("Asia/Tokyo"))
+    val forecastStartDate = forecastEndDate.minusYears(1)
+    val monthlyByCategoryByBasis = remember(
+        holdings,
+        taxRateMode,
+        dividendEventRevision,
+        forecastStartDate,
+        forecastEndDate
+    ) {
         fun monthlyAmountsForBasis(basis: MonthlyDividendChartBasis): List<List<Double>> {
             fun eventMonth(category: Category, event: com.kurogane.dividend.data.CloudflareDividendEvent): Int? {
                 if (category != Category.JAPAN) return event.date.monthValue
@@ -657,7 +666,9 @@ private fun MonthlyDividendEstimateCard(
                 listOf(Category.JAPAN, Category.US, Category.FUND).map { category ->
                     holdings.filter { it.category == category }.sumOf { holding ->
                         viewModel.dividendEventsFor(holding.code).sumOf { event ->
-                            if (eventMonth(category, event) == month) {
+                            val isInForecastWindow =
+                                !event.date.isBefore(forecastStartDate) && !event.date.isAfter(forecastEndDate)
+                            if (isInForecastWindow && eventMonth(category, event) == month) {
                                 holding.copy(dps = event.amountPerShare).getEffectiveAnnualDividend(taxRateMode)
                             } else {
                                 0.0
@@ -668,6 +679,12 @@ private fun MonthlyDividendEstimateCard(
             }
         }
         MonthlyDividendChartBasis.entries.associateWith(::monthlyAmountsForBasis)
+    }
+    // The basis switch redistributes events across months; keep the average independent of bar animation values.
+    val monthlyAverageAmount = remember(monthlyByCategoryByBasis) {
+        monthlyByCategoryByBasis
+            .getValue(MonthlyDividendChartBasis.EX_DIVIDEND_MONTH)
+            .sumOf { categories -> categories.sum() } / 12.0
     }
     val targetMonthlyByCategory = monthlyByCategoryByBasis.getValue(chartBasis)
     var monthlyChartVisible by remember { mutableStateOf(false) }
@@ -1047,7 +1064,7 @@ private fun MonthlyDividendEstimateCard(
                         text = selectedMonth?.let { month ->
                             val amount = monthlyDividends.firstOrNull { it.first == month }?.second ?: 0.0
                             "${month}月: ¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(amount)}"
-                        } ?: "月平均: ¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(monthlyDividends.sumOf { it.second } / 12)}",
+                        } ?: "月平均: ¥${com.kurogane.dividend.model.formatFinancialAmountDisplay(monthlyAverageAmount)}",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         color = NeonGreenLight,
                         fontSize = AppTextSize.dense,
