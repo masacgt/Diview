@@ -23,6 +23,18 @@ from botocore.config import Config
 
 V2_ROOT = "market/yfinance/v2"
 LEGACY_ROOT = "market/irbank/v1/securities"
+# These J-Quants symbols are preferred-share issues. Their financials do not
+# have a separate four-character IRBANK issuer record, so do not map them to
+# the issuer's ordinary-share record during migration.
+PREFERRED_SECURITY_CODES = frozenset({
+    "92025",
+    "25935",
+    "92015",
+    "94346",
+    "50765",
+    "75505",
+    "94345",
+})
 ANNUAL_FIELDS = (
     "sales",
     "operating_profit",
@@ -321,6 +333,13 @@ def write_report(path: Path, report: dict[str, Any]) -> None:
 def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
     code = str(security.get("code") or "").strip().upper()
     symbol = str(security.get("symbol") or "").strip().upper()
+    if code in PREFERRED_SECURITY_CODES:
+        return {
+            "code": code,
+            "symbol": symbol,
+            "status": "preferred_security_excluded",
+            "reason": "preferred_share_has_no_separate_irbank_issuer_record",
+        }
     legacy = legacy_code(code)
     if not re.fullmatch(r"[A-Z0-9]{4,5}\.T", symbol) or not legacy:
         return {"code": code, "status": "unsupported_code"}
