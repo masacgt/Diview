@@ -1461,7 +1461,8 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .background(SurfaceContainerHigh)
-                            .padding(2.dp)
+                            .padding(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
