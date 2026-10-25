@@ -1,5 +1,7 @@
 # Trouble
 
+- IRBANK annual monetary seed values are in million JPY, while yfinance financial amounts and Android formulas use JPY. Mixed-source flat values could produce million-fold equity ratios and margins. Preserve per-field source units, normalize known monetary values at the API boundary, and omit ratios without valid same-source provenance or a valid IRBANK-reported value. Confirm the full production migration and API read-back after publication.
+
 - Asset registration disabled its submit button for prices such as 8008's `2,015`: `AddHoldingSheet` used display-formatted prices in editable state, but validation used `toDoubleOrNull()`. Acquisition-price inputs now use an ungrouped, locale-independent plain decimal formatter without display rounding; all four accounts share it for initialization, stock selection, existing-holding prefill, and current-price application. Typed/pasted commas are removed before state is updated; read-only money formatting is unchanged.
 
 - Selecting a month before opening Asset Management could give the sort control almost zero width: the long month-filter heading and actions were measured sequentially in one Row (reproduced on SCG01 at font scale 1.7). The holdings header now uses FlowRow to wrap the actions, and constrains the heading text with weight so the count retains space. Month selection, filtering, and sorting logic are unchanged.
