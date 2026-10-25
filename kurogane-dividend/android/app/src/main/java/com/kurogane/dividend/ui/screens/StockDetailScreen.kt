@@ -209,10 +209,6 @@ fun StockDetailScreen(
         return
     }
 
-    LaunchedEffect(currentHolding.category, currentHolding.code) {
-        viewModel.refreshDividendMonthsForSecurity(currentHolding.category, currentHolding.code)
-    }
-
     val currentDpsUnavailable = lookupFinished && lookupError == null &&
         resolvedSecurity?.annualDividendPerShare == null && !currentHolding.isNoDividendConfirmed
     val uriHandler = LocalUriHandler.current
@@ -259,6 +255,7 @@ fun StockDetailScreen(
     val fiscalMonth = financial?.period?.substringAfterLast('/')?.toIntOrNull()?.takeIf { it in 1..12 }
     val currentCalendarYear = java.time.Year.now(ZoneId.of("Asia/Tokyo")).value
     val currentCalendarDate = java.time.LocalDate.now(ZoneId.of("Asia/Tokyo"))
+    val dividendEventYears = (currentCalendarYear - 7..currentCalendarYear).toList()
     val chartForecastYear = financial?.takeIf {
         it.forecastAnnualDividend != null &&
             it.forecastFiscalYear?.let { year -> year >= currentCalendarYear } == true
@@ -267,14 +264,24 @@ fun StockDetailScreen(
     val chartDividendEvents = remember(currentHolding.code, dividendEventRevision) {
         viewModel.dividendEventsFor(currentHolding.code)
     }
+    var dividendEventsLoading by remember(currentHolding.code) { mutableStateOf(true) }
+    var dividendEventsLoadFailed by remember(currentHolding.code) { mutableStateOf(false) }
+    LaunchedEffect(currentHolding.category, currentHolding.code, dividendEventYears) {
+        dividendEventsLoading = true
+        dividendEventsLoadFailed = false
+        val loaded = com.kurogane.dividend.data.runCatchingCancellable {
+            viewModel.refreshDividendMonthsForSecurity(
+                currentHolding.category,
+                currentHolding.code,
+                dividendEventYears
+            )
+        }.getOrDefault(false)
+        dividendEventsLoading = false
+        dividendEventsLoadFailed = !loaded
+    }
     var selectedDividendYear by rememberSaveable(currentHolding.code) { mutableStateOf<Int?>(currentCalendarYear) }
     LaunchedEffect(currentHolding.code, currentCalendarYear) {
         if (selectedDividendYear == null) selectedDividendYear = currentCalendarYear
-    }
-    LaunchedEffect(currentHolding.code, selectedDividendYear) {
-        selectedDividendYear?.let { year ->
-            viewModel.refreshDividendEventsForYear(currentHolding.category, currentHolding.code, year)
-        }
     }
     val selectedYearMonthlyDividends = remember(selectedDividendYear, chartDividendEvents) {
         selectedDividendYear?.let { year ->
@@ -1043,10 +1050,13 @@ fun StockDetailScreen(
                                 .joinToString("　") { (month, amount) ->
                                     "${month}月${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(amount)}/株"
                                 }
-                            val selectedYearAmount = if (selectedForecastDps != null) {
-                                "予想${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(selectedForecastDps)}/株"
-                            } else {
-                                monthlyAmounts.ifBlank { "配当履歴なし" }
+                            val selectedYearAmount = when {
+                                selectedForecastDps != null ->
+                                    "予想${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(selectedForecastDps)}/株"
+                                monthlyAmounts.isNotBlank() -> monthlyAmounts
+                                dividendEventsLoading -> "配当イベント取得中"
+                                dividendEventsLoadFailed -> "配当イベントを取得できません"
+                                else -> "この年の配当イベントなし"
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
