@@ -60,6 +60,7 @@ import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.StockAnalysisNarrative
 import com.kurogane.dividend.model.StockAnalysisNarrativeGenerator
+import com.kurogane.dividend.model.StockDetailCommentGenerator
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import com.kurogane.dividend.model.ShareholderBenefit
 import com.kurogane.dividend.model.StockClimate
@@ -513,7 +514,12 @@ fun StockDetailScreen(
                             "過去平均未満" -> 60
                             else -> 40
                         },
-                        text = "直近最大5期の利回りは最低${profile.yieldRangeMin.financialText(2, "%")}・平均${profile.yieldRangeAvg.financialText(2, "%")}・最高${profile.yieldRangeMax.financialText(2, "%")}です。現在値は実績範囲の${position}で、過去期間との比較です。"
+                        text = StockDetailCommentGenerator.dividendYield(
+                            yield,
+                            profile.yieldRangeMin,
+                            profile.yieldRangeAvg,
+                            profile.yieldRangeMax
+                        )
                     )
                 }
             }
@@ -533,7 +539,11 @@ fun StockDetailScreen(
     }
     val growthPositionItems = buildList {
         positionNarrative.findings.firstOrNull { it.key == "dividend_growth_years" }?.let { finding ->
-            add(finding.toStockAnalysisPositionItem())
+            add(
+                finding.toStockAnalysisPositionItem().copy(
+                    text = StockDetailCommentGenerator.dividendIncreaseYears(finding.value.toInt())
+                )
+            )
         } ?: add(
             StockAnalysisPositionItem(
                 label = "連続増配年数", formattedValue = "未取得", bandLabel = "評価不可",
@@ -550,23 +560,12 @@ fun StockDetailScreen(
             val scores = listOf(40, 55, 70, 85, 100)
             val range = ranges[bandIndex]
             val position = positionWithinBand(years, range.first, range.second)
-            val criterionRange = when (bandIndex) {
-                0 -> "1年以下"
-                4 -> "10年超"
-                else -> "${range.first.toInt()}年超${range.second.toInt()}年以下"
-            }
-            val boundary = listOf(1.0, 3.0, 5.0, 10.0).getOrNull(bandIndex)
-            val positionText = if (boundary != null) {
-                "次の境界${boundary.toInt()}年まで${(boundary - years).coerceAtLeast(0.0).financialText(1, "年")}で、横ばい年も含む年数基準上の位置を示します。"
-            } else {
-                "最終境界10年を${(years - 10.0).coerceAtLeast(0.0).financialText(1, "年")}上回り、横ばい年も含む累計です。"
-            }
             add(
                 StockAnalysisPositionItem(
                     label = "非減配年数", formattedValue = "${profile.noCutYears}年",
                     bandLabel = bandLabels[bandIndex], positionLabel = position,
                     score = scores[bandIndex],
-                    text = "非減配年数の評価基準${criterionRange}で、「${bandLabels[bandIndex]}」帯の${position}です。$positionText"
+                    text = StockDetailCommentGenerator.nonCutYears(profile.noCutYears)
                 )
             )
         } else {
@@ -591,22 +590,15 @@ fun StockDetailScreen(
                 profile.growthRate < 0.0 -> "基準を下回る"
                 else -> "基準値"
             }
-            val direction = when {
-                profile.growthRate > 0.0 -> "0%超"
-                profile.growthRate < 0.0 -> "0%未満"
-                else -> "0%"
-            }
-            val basisNote = if (isCalendarYearDividendHistory) {
-                "暦年集計の参考値で、決算期配当とは期間が異なる場合があります。"
-            } else {
-                "直近最大5期の年率換算で、毎年同じ率の増減を示しません。"
-            }
             add(
                 StockAnalysisPositionItem(
                     label = cagrLabel, formattedValue = profile.growthRate.financialSignedText(1, "%"),
                     bandLabel = cagrBand, positionLabel = cagrPosition,
                     score = when { profile.growthRate > 0.0 -> 85; profile.growthRate == 0.0 -> 65; else -> 40 },
-                    text = "判定基準は0%で、CAGRは「${direction}」側の位置を示します。$basisNote"
+                    text = StockDetailCommentGenerator.annualDividendCagr(
+                        profile.growthRate,
+                        isCalendarYearDividendHistory
+                    )
                 )
             )
         } else {
@@ -688,7 +680,7 @@ fun StockDetailScreen(
                     label = "銘柄配当依存度", formattedValue = "$divDependencyStr%", bandLabel = band,
                     positionLabel = position,
                     score = when { divDependency <= 10.0 -> 85; divDependency <= 25.0 -> 55; else -> 35 },
-                    text = "保有全体の年間配当に占めるこの銘柄の比率は${divDependencyStr}%で、判定境界は10%・25%です。現在は「${band}」帯の${position}にあります。"
+                    text = StockDetailCommentGenerator.dividendDependency(divDependency, band, position)
                 )
             )
         } else {
@@ -719,7 +711,7 @@ fun StockDetailScreen(
                     bandLabel = impactBand,
                     positionLabel = impactPosition,
                     score = when { cutImpactRatio <= 5.0 -> 85; cutImpactRatio <= 12.5 -> 55; else -> 35 },
-                    text = "配当半減時の影響比率は、銘柄配当依存度の半分を基準に判定します。境界は5%・12.5%で、実際の減配予測ではありません。"
+                    text = StockDetailCommentGenerator.halfDividendImpact(cutImpactRatio, impactBand, impactPosition)
                 )
             )
         } else {
@@ -748,7 +740,12 @@ fun StockDetailScreen(
                     label = "$cleanSectorName セクター集中度", formattedValue = "$sectorDependencyStr%",
                     bandLabel = band, positionLabel = position,
                     score = when { sectorDependency <= 20.0 -> 85; sectorDependency <= 30.0 -> 55; else -> 35 },
-                    text = "保有評価額のうちセクターが占める割合を示します。判定境界は20%・30%で、現在は「${band}」帯の中で${position}にあります。"
+                    text = StockDetailCommentGenerator.sectorConcentration(
+                        cleanSectorName,
+                        sectorDependency,
+                        band,
+                        position
+                    )
                 )
             )
         } else {
