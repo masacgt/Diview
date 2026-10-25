@@ -441,7 +441,7 @@
     <string name="stock_detail_text_28">"④ 集中リスク"</string>
     <string name="stock_detail_1_s_2_s">"%1$s %2$s%%"</string>
     <string name="stock_detail_text_29" formatted="false">"上限目安10%"</string>
-    <string name="stock_detail_text_30">"集中リスク詳細分析"</string>
+    <string name="stock_detail_text_30">"集中リスク評価（指標別）"</string>
     <string name="stock_detail_text_31">"ポートフォリオ配当依存度"</string>
     <string name="stock_detail_text_32" formatted="false">"0% (低依存)"</string>
     <string name="stock_detail_text_33" formatted="false">"推奨目安 10%未満"</string>
@@ -453,7 +453,7 @@
     <string name="stock_detail_text_38">"年間配当への影響度: %1$s"</string>
     <string name="stock_detail_text_39">"リバランス推奨"</string>
     <string name="stock_detail_text_40">"他セクター優先投資を推奨"</string>
-    <string name="stock_detail_text_41">"買場シグナル詳細分析"</string>
+    <string name="stock_detail_text_41">"買場シグナル評価（指標別）"</string>
     <string name="stock_detail_text_42">"配当利回りレンジ判定"</string>
     <string name="stock_detail_text_43">"期末最小 %1$s%%"</string>
     <string name="stock_detail_text_44">"取得期平均 %1$s%%"</string>
@@ -462,7 +462,7 @@
     <string name="stock_detail_text_47">"PBR (純資産倍率)"</string>
     <string name="stock_detail_text_48">"買場シグナル総合スコア"</string>
     <string name="stock_detail_text_49">"↗ 割安度スコア %1$s"</string>
-    <string name="stock_detail_text_50">"財務健全性の解説"</string>
+    <string name="stock_detail_text_50">"健全性評価（指標別）"</string>
     <string name="stock_detail_text_51">"評価：%1$s"</string>
     <string name="stock_detail_1_s_2">"（ %1$s ）"</string>
     <string name="stock_detail_text_52">"配当性向 (当期見込)"</string>
@@ -479,7 +479,7 @@
     <string name="stock_detail_text_63">"売上から残る現金"</string>
     <string name="stock_detail_text_64">"健全性スコア: %1$s"</string>
     <string name="stock_detail_text_65">"総合自動診断：%1$s"</string>
-    <string name="stock_detail_text_66">"年間配当の増減詳細分析"</string>
+    <string name="stock_detail_text_66">"年間配当増減評価（指標別）"</string>
     <string name="stock_detail_text_67">"連続増配実績"</string>
     <string name="stock_detail_text_68">"年平均増配率 +%1$s"</string>
     <string name="stock_detail_text_69">"非減配年数"</string>

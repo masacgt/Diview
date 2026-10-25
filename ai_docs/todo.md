@@ -2,6 +2,8 @@
 
 ## In Progress
 
+- [x] Rework all seven stock evaluation comments around dividend-continuity strengths and limits, and align the four detailed-analysis labels. Evidence: `StockAnalysisNarrative.kt` provides band-specific comments, the unit test enforces the requested character ranges, and `strings.xml` uses the updated labels; JDK 17 unit tests/build and `ReleaseVisualRegressionTest` passed, and the APK installed and launched on emulator `emulator-5554` and device `RFCNC0E4H8J`.
+
 - [ ] Deploy multi-year dividend-event support and verify Stock Detail preloading through the production API and on device. Evidence: Android now requests and caches the eight-year range during detail initialization and shows loading/failure/empty states; Worker source supports `event_years` with a fallback for older deployments, but publication and live-data verification remain pending.
 
 - [x] Verify the yfinance `Ticker.calendar` refresh policy under success, near-event, and failure cases. Evidence: `sync_v2.py` implements a 30-day normal interval, 7 days when a stored ex-dividend date is within 45 days, and retries a failed request on the next XTKS session; Actions #214 on `d674fe7` passed all 111 tests, including the calendar-policy regressions. Actions #227 used byte-identical sync/workflow files and published R2 generation `2026-10-23-6d5e222d5ea843feb349574dd3c7e6e5` (4,380 successes, 64 failed securities; overall job failed). The Worker catalog returned that generation with 4,362 items; API reads for 2060, 7203, 2914, and 8058 returned available calendars whose 2026-10-17 fetch times were correctly retained because they were not due.
