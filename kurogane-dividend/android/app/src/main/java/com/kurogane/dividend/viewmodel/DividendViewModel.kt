@@ -637,7 +637,13 @@ class DividendViewModel @JvmOverloads constructor(
             if (checkedAt - financialRevisionCheckedAt in 0..FINANCIAL_REVISION_CACHE_MILLIS) {
                 return@withLock cachedFinancialRevision
             }
-            val revision = runCatching { marketRepository.financialDataRevision() }.getOrNull()
+            val revision = try {
+                marketRepository.financialDataRevision()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
             cachedFinancialRevision = revision
             financialRevisionCheckedAt = checkedAt
             revision

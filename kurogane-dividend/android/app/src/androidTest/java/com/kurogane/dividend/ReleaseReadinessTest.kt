@@ -260,6 +260,7 @@ class ReleaseReadinessTest {
         switch.assertIsNotEnabled().assertIsOff()
         compose.onNodeWithText(app.getString(R.string.settings_label_42)).performScrollTo().performClick()
         switch.performScrollTo().assertIsEnabled().assertIsOff().performClick().assertIsOn()
+        compose.onNodeWithText("構成比の小さい項目を「その他」に集約").performScrollTo()
         assertTrue(vm.isOledBlack.value)
         val slider = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo))
         slider.performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { assertTrue(it(8f)) }
