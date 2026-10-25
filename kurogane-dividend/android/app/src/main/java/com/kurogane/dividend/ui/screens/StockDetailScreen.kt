@@ -3927,7 +3927,8 @@ private fun StockAnalysisPositionRow(item: StockAnalysisPositionItem) {
 
 @Composable
 private fun StockAnalysisNarrativeCard(
-    analysisNarrative: StockAnalysisNarrative
+    analysisNarrative: StockAnalysisNarrative,
+    healthExplanationKeys: Set<String>
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
