@@ -359,27 +359,7 @@ fun AddHoldingSheet(
                                     fontSize = AppTextSize.body
                                 )
                             }
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(PrimaryEmeraldContainer.copy(alpha = 0.2f))
-                                    .border(0.5.dp, PrimaryEmeraldContainer, RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 4.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    stringResource(R.string.add_holding_text_2),
-                                    color = PrimaryEmerald,
-                                    fontSize = AppTextSize.dense,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
                         }
-                        Text(
-                            stringResource(R.string.add_holding_text_3),
-                            color = OnSurfaceVariant,
-                            fontSize = AppTextSize.dense
-                        )
                     }
                 }
 

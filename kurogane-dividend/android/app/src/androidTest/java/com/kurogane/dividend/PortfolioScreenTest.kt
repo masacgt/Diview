@@ -119,7 +119,7 @@ class PortfolioScreenTest {
         compose.onAllNodes(hasSetTextAction())[1].performScrollTo().performTextReplacement("2,015")
         compose.onAllNodes(hasSetTextAction())[1].assertTextEquals("2015")
         compose.onAllNodes(hasSetTextAction())[2].performScrollTo().performTextReplacement("100")
-        compose.onNodeWithText("すべての口座にまとめて登録する")
+        compose.onNodeWithText("登録する")
             .performScrollTo().assertIsEnabled().performClick()
         compose.waitUntil(10_000) { registeredPrice != null }
         compose.runOnIdle { assertEquals(2015.0, registeredPrice!!, 0.0) }
@@ -141,7 +141,7 @@ class PortfolioScreenTest {
         // Account quantities default to zero; enter valid data before testing duplicate taps.
         compose.onAllNodes(hasSetTextAction())[1].performScrollTo().performTextReplacement("1000")
         compose.onAllNodes(hasSetTextAction())[2].performScrollTo().performTextReplacement("100")
-        compose.onNodeWithText("すべての口座にまとめて登録する").performScrollTo().performClick()
+        compose.onNodeWithText("登録する").performScrollTo().performClick()
         compose.waitUntil(10_000) { requests == 1 }
         compose.onNodeWithText("銘柄情報を確認中…").assertIsDisplayed()
         compose.onNodeWithText("銘柄情報を確認中…").performClick()

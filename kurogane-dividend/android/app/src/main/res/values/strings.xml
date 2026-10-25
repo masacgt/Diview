@@ -31,7 +31,6 @@
     <string name="draft_clear_failed">送信は完了しましたが、下書きを削除できませんでした。</string>
 
     <string name="add_holding_text">資産登録</string>
-    <string name="add_holding_text_2">"マトリックス同時入力"</string>
     <string name="add_holding_text_3">"口座間の株数・取得単価を1画面でまとめて設定"</string>
     <string name="add_holding_text_4">"銘柄コード / 企業名"</string>
     <string name="add_holding_text_5">"%1$s (利回り %2$s)"</string>
@@ -47,7 +46,7 @@
     <string name="add_holding_text_13">"-100"</string>
     <string name="add_holding_text_14">"+100"</string>
     <string name="add_holding_text_15">"取得単価"</string>
-    <string name="add_holding_text_16">"全口座 総合アロケーションサマリー"</string>
+    <string name="add_holding_text_16">"全口座配分サマリー"</string>
     <string name="add_holding_text_17">"手取り最大化"</string>
     <string name="add_holding_text_18">"合計保有株数"</string>
     <string name="add_holding_text_19">"%1$s 株"</string>
@@ -833,7 +832,7 @@
 
 
     <string name="add_holding_label">"銘柄情報を確認中…"</string>
-    <string name="add_holding_label_2">"すべての口座にまとめて登録する"</string>
+    <string name="add_holding_label_2">"登録する"</string>
     <string name="search_label">銘柄を検索しています…</string>
     <string name="search_label_2">"候補銘柄 (%1$s件)"</string>
     <string name="search_label_3">"再投資型"</string>
