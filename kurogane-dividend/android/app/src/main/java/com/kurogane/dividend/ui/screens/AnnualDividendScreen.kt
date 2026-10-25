@@ -1514,7 +1514,13 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(
                                         modifier = Modifier
-                                            .clickable { chartMode = "yield" }
+                                            .clickable {
+                                                if (chartMode == "yield") {
+                                                    yieldBasisMenuExpanded = true
+                                                } else {
+                                                    chartMode = "yield"
+                                                }
+                                            }
                                             .padding(start = 6.dp, top = 3.dp, bottom = 3.dp, end = 0.dp)
                                     ) {
                                         Text(
