@@ -681,6 +681,26 @@ test('financial API uses IRBANK canonical fiscal DPS instead of yfinance issuer 
   assert.equal(body.issuer_dividends.records[0].source, 'IRBANK');
 });
 
+test('issuer corrections replace only the matching fiscal period and retain ambiguous years', async () => {
+  const index = { items: { '7203': { actual_status: 'available', actual: {
+    fiscal_year: 2026, period_end: '2026-12-31', annual_dps: 25,
+  } } } };
+  const documents = new Map([
+    ['market/irbank/v1/securities/7203/overview.json', { dividends: { records: [
+      { fiscal_year: 2026, period: '2026/03', annual_dps: 10 },
+      { fiscal_year: 2026, period: '2026/12', annual_dps: 20 },
+    ] } }],
+    ['market/yfinance/v2/issuer_dividends/current.json', index],
+  ]);
+  const read = async () => (await (await worker.fetch(new Request('https://example.com/api/v1/financial-data/7203'),
+    dividendEnvironment(documents))).json()).issuer_dividends.records;
+  assert.deepEqual((await read()).map(r => [r.fiscal_period, r.annual_dps]), [['2026-03', 10], ['2026-12-31', 25]]);
+  index.items['7203'].actual = { fiscal_year: 2026, period: '2026/03', annual_dps: 12 };
+  assert.deepEqual((await read()).map(r => [r.fiscal_period, r.annual_dps]), [['2026-03', 12], ['2026-12', 20]]);
+  index.items['7203'].actual = { fiscal_year: 2026, annual_dps: 99 };
+  assert.deepEqual((await read()).map(r => r.annual_dps), [10, 20]);
+});
+
 test('financial API preserves mixed-unit null guards and raw provenance without changing other merges', async () => {
   const base = 'market/yfinance/v2/securities/7203.T';
   const fields = ['sales', 'operating_profit', 'operating_cf', 'investing_cf'];

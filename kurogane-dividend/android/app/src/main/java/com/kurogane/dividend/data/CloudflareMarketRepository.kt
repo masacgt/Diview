@@ -21,7 +21,8 @@ data class CloudflareSearchHit(
     val annualDividendPerShare: Double? = null,
     val industry: String? = null,
     val marketYieldRate: Double? = null,
-    val isNoDividendConfirmed: Boolean = false
+    val isNoDividendConfirmed: Boolean = false,
+    val yieldSource: String? = null
 )
 
 data class CloudflareSearchQuote(
@@ -225,7 +226,8 @@ class CloudflareMarketRepository(
                     cachedPrice = row.numberOrNull("price")?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 },
                     annualDividendPerShare = row.annualDividendPerShareOrNull(),
                     marketYieldRate = row.numberOrNull("yield_rate")?.takeIf { it in 0.0..100.0 },
-                    isNoDividendConfirmed = row.hasConfirmedNoDividend()
+                    isNoDividendConfirmed = row.hasConfirmedNoDividend(),
+                    yieldSource = row.stringOrNull("yield_source")
                 )
             }
         }
@@ -334,7 +336,7 @@ class CloudflareMarketRepository(
             price, yieldRate, annualDividend, noDividend, row.hasDividendStatus(), quoteDate, yieldAsOf,
             yieldSource
         )
-            .takeIf { it.price != null || it.yieldRate != null || it.annualDividendPerShare != null }
+            .takeIf { it.price != null || it.yieldRate != null || it.annualDividendPerShare != null || it.hasDividendStatus }
     }
 
     private companion object {
@@ -355,9 +357,10 @@ class CloudflareMarketRepository(
             it.has("yield_basis") || it.has("trailing_12_month_per_share") || it.optJSONObject("field_status") != null
         }
         val catalogQuote = runCatching { searchCatalogQuotes()[normalized] }.getOrNull()
-        val detailPrice = root.optJSONObject("market_price")?.numberOrNull("close")
+        val marketQuote = root.optJSONObject("market_price")
+        val detailPrice = marketQuote?.numberOrNull("close")
             ?: root.numberOrNull("market_price")
-        val detailQuoteDate = root.optJSONObject("market_price")?.optString("date")
+        val detailQuoteDate = marketQuote?.optString("date")
             ?.takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
             ?: root.optString("quote_date").takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
         val catalogPriceIsNewer = catalogQuote?.price != null &&
@@ -371,20 +374,21 @@ class CloudflareMarketRepository(
                 require(it.equals(normalized, true)) { "応答の銘柄コードが一致しません" }
             },
             name = root.optString("name").takeIf(String::isNotBlank) ?: return@withContext null,
-            annualDividendPerShare = (if (root.hasUnknownDividendStatus() && !root.hasConfirmedNoDividend()) null else
-                (irbankDividend?.numberOrNull("annual_dps_adjusted")
-                    ?: irbankDividend?.numberOrNull("annual_dps"))?.takeIf(PortfolioMath::validMoney))
-                ?: catalogQuote?.takeIf { it.hasDividendStatus }?.annualDividendPerShare,
+            annualDividendPerShare = if (root.hasConfirmedNoDividend()) 0.0
+                else if (root.hasUnknownDividendStatus()) null
+                else (irbankDividend?.numberOrNull("annual_dps_adjusted")
+                    ?: irbankDividend?.numberOrNull("annual_dps"))?.takeIf(PortfolioMath::validMoney)
+                    ?: catalogQuote?.takeIf { !root.hasDividendStatus() && it.hasDividendStatus }?.annualDividendPerShare,
             marketPrice = (if (catalogPriceIsNewer) catalogQuote?.price else detailPrice)
                 ?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }
                 ?: catalogQuote?.price,
-            marketPreviousClose = root.optJSONObject("market_price")?.numberOrNull("previous_close")
+            marketPreviousClose = marketQuote?.numberOrNull("previous_close")
                 ?.takeIf { !catalogPriceIsNewer && PortfolioMath.validMoney(it) && it > 0.0 },
-            marketPriceChange = root.optJSONObject("market_price")?.numberOrNull("change")
+            marketPriceChange = marketQuote?.numberOrNull("change")
                 ?.takeIf { !catalogPriceIsNewer },
-            marketPriceChangePercent = root.optJSONObject("market_price")?.numberOrNull("change_percent")
+            marketPriceChangePercent = marketQuote?.numberOrNull("change_percent")
                 ?.takeIf { !catalogPriceIsNewer },
-            marketPriceDate = detailQuoteDate.takeIf { !catalogPriceIsNewer },
+            marketPriceDate = if (catalogPriceIsNewer) catalogQuote?.quoteDate else detailQuoteDate,
             marketYieldRate = if (root.hasUnknownDividendStatus()
                 && root.stringOrNull("market_yield_source") != "yfinance_reported_dividendYield") null else
                 root.numberOrNull("market_yield_rate")
@@ -393,7 +397,8 @@ class CloudflareMarketRepository(
                         !root.hasDividendStatus() || it.yieldSource == "yfinance_reported_dividendYield"
                     }?.yieldRate,
             marketYieldSource = root.stringOrNull("market_yield_source") ?: catalogQuote?.yieldSource,
-            isNoDividendConfirmed = root.hasConfirmedNoDividend() || catalogQuote?.isNoDividendConfirmed == true,
+            isNoDividendConfirmed = if (root.hasDividendStatus()) root.hasConfirmedNoDividend()
+                else catalogQuote?.isNoDividendConfirmed == true,
             hasDividendStatus = root.hasDividendStatus() || catalogQuote?.hasDividendStatus == true,
             dataRetrieval = retrievalJson?.let { retrieval ->
                 CloudflareDataRetrieval(
@@ -570,8 +575,8 @@ class CloudflareMarketRepository(
 
     /** Returns month-end closes from R2 for up to 20 listed Japanese securities. */
     suspend fun fetchMonthlyPriceHistory(codes: List<String>, months: List<String>): List<CloudflareMonthlyPriceSeries> = withContext(Dispatchers.IO) {
-        val normalizedCodes = codes.map { it.trim().uppercase(java.util.Locale.ROOT).removeSuffix(".T") }.distinct()
-        require(normalizedCodes.isNotEmpty() && normalizedCodes.size <= 20 && normalizedCodes.all { it.matches(Regex("[A-Z0-9]{4}")) }) {
+        val normalizedCodes = codes.map(::normalizeJapaneseSecurityCode).distinct()
+        require(normalizedCodes.isNotEmpty() && normalizedCodes.size <= 20 && normalizedCodes.all { it.matches(Regex("[A-Z0-9]{4,5}")) }) {
             "銘柄コードは日本株20銘柄以内で指定してください"
         }
         val monthKeys = months.distinct()
@@ -603,8 +608,8 @@ class CloudflareMarketRepository(
 
     /** Returns split and reverse-split events from the published yfinance R2 history. */
     suspend fun fetchShareSplitHistory(code: String, from: LocalDate, to: LocalDate): CloudflareShareSplitHistory = withContext(ioDispatcher) {
-        val normalizedCode = code.trim().uppercase(java.util.Locale.ROOT).removeSuffix(".T")
-        require(normalizedCode.matches(Regex("[A-Z0-9]{4}")) && from <= to && to.year - from.year <= 9) {
+        val normalizedCode = normalizeJapaneseSecurityCode(code)
+        require(normalizedCode.matches(Regex("[A-Z0-9]{4,5}")) && from <= to && to.year - from.year <= 9) {
             "銘柄コードまたは対象期間が正しくありません"
         }
         val safeCode = URLEncoder.encode(normalizedCode, Charsets.UTF_8.name())
@@ -731,8 +736,8 @@ class CloudflareMarketRepository(
     }
 
     suspend fun financialDocument(code: String): JSONObject? = withContext(ioDispatcher) {
-        val normalized = PortfolioMath.normalizeCode(code).removeSuffix(".T")
-        if (!normalized.matches(Regex("[A-Z0-9]{4}"))) return@withContext null
+        val normalized = normalizeJapaneseSecurityCode(code)
+        if (!normalized.matches(Regex("[A-Z0-9]{4,5}"))) return@withContext null
         try { getJson("/api/v1/financial-data/$normalized") }
         catch (error: MarketHttpException) { if (error.status == 404) null else throw error }
     }

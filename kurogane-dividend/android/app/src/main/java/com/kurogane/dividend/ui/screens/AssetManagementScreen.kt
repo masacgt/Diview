@@ -258,6 +258,10 @@ fun AssetManagementScreen(
     }
     val listItemsSnapshot by listItemsFlow.collectAsStateWithLifecycle(initialValue = null)
     val listItems = listItemsSnapshot.orEmpty()
+    val heldCodes = remember(listItems) { listItems.filter { it.category == Category.JAPAN }.map { it.code }.sorted() }
+    LaunchedEffect(viewModel, holdingsRestored, heldCodes) {
+        if (holdingsRestored) viewModel.refreshAssetManagementData()
+    }
     val categoryCounts = remember(listItems) { listItems.groupingBy { it.category }.eachCount() }
     val hasMissingExchangeRate = remember(listItems) { listItems.any { it.missingExchangeRate } }
 

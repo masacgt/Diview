@@ -47,6 +47,33 @@ class CloudflareMarketRepositoryTest {
         assertNull(stock.marketPrice)
     }
 
+    @Test fun explicitUnknownDoesNotFallBackToTheCachedCatalogDividend() = runBlocking {
+        val urls = mutableListOf<String>()
+        val repo = repository(mutableListOf(
+            Connection(200, """{"code":"7203","name":"Toyota","dividend_status":"unknown","market_price":{"close":2000}}"""),
+            Connection(200, """{"items":[{"code":"7203","price":2000,"dividend_status":"no_dividend","annual_dividend_per_share":0,"yield_rate":0}]}"""),
+        ), urls)
+        val stock = repo.getSecurity("7203")!!
+        assertNull(stock.annualDividendPerShare)
+        assertNull(stock.marketYieldRate)
+        assertFalse(stock.isNoDividendConfirmed)
+        assertTrue(stock.hasDividendStatus)
+    }
+
+    @Test fun classShareCodeReachesFinancialPriceAndSplitEndpointsUnchanged() = runBlocking {
+        val urls = mutableListOf<String>()
+        val repo = repository(mutableListOf(
+            Connection(200, """{"security":{"code":"25935"}}"""),
+            Connection(200, """{"items":[{"code":"25935","prices":[{"month":"2025-12","date":"2025-12-30","close":3000}]}]}"""),
+            Connection(200, """{"code":"25935","history_status":"available","events":[{"date":"2025-04-01","ratio":2}]}"""),
+        ), urls)
+        assertEquals("25935", repo.financialDocument("25935.T")!!.getJSONObject("security").getString("code"))
+        assertEquals(3000.0, repo.fetchMonthlyPriceHistory(listOf("25935.T"), listOf("2025-12")).single().prices.single().close, 0.0)
+        assertEquals("25935", repo.fetchShareSplitHistory("25935.T", java.time.LocalDate.parse("2025-01-01"), java.time.LocalDate.parse("2025-12-31")).code)
+        assertTrue(urls.all { "25935" in it })
+        assertFalse(urls.any { "2593&" in it || it.endsWith("/2593") })
+    }
+
     @Test fun trailingTwelveMonthDistributionsAreNotParsedAsAnnualDps() = runBlocking {
         val quotes = repository(Connection(200, """{"items":[
             {"code":"8214","price":1800,"annual_dividend_per_share":630,
