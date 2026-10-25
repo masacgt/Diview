@@ -430,9 +430,12 @@
     <string name="stock_detail_text_21">"-10"</string>
     <string name="stock_detail_a11y">"リセット"</string>
     <string name="stock_detail_text_22">"銘柄総合分析ステータス"</string>
-    <string name="stock_detail_analysis_info_content_description">銘柄総合分析の説明</string>
-    <string name="stock_detail_analysis_info_title">分析について</string>
-    <string name="stock_detail_analysis_info_description">銘柄総合分析は、画面に表示されている情報をもとに、配当や財務などの観点から銘柄の状態を整理したものです。情報の更新状況や取得できるデータによって、判定が不完全または実態と異なる場合があります。将来の株価や配当、投資成果を保証するものではありません。投資判断は、ご自身の状況や最新の情報を踏まえて行ってください。</string>
+    <string name="stock_detail_analysis_status_info_content_description">銘柄総合分析ステータスの説明</string>
+    <string name="stock_detail_analysis_status_info_title">分析ステータスについて</string>
+    <string name="stock_detail_analysis_status_info_description">この欄は、健全性・買場シグナル・年間配当の増減・集中リスクの4項目を一覧します。健全性は配当継続を支える財務指標、買場シグナルは現在利回りとPER判定、年間配当の増減は増配率や非減配年数、集中リスクは保有全体の配当と資産の偏りを示します。カードをタップすると選んだ項目の詳細に切り替わります。必要な値や履歴が未取得の場合、判定は取得できたデータの範囲に限られます。各項目は参考情報であり、将来の株価や配当、投資成果を保証するものではありません。</string>
+    <string name="stock_detail_indicator_evaluation_info_content_description">銘柄総合評価（指標別）の説明</string>
+    <string name="stock_detail_indicator_evaluation_info_title">指標別評価について</string>
+    <string name="stock_detail_indicator_evaluation_info_description">この評価は、PER・PBR・配当性向・自己資本比率・営業利益率・FCF余力・連続増配年数の7指標を評価基準に照らし、各指標の数値・評価帯・帯内位置と総合点を表示します。総合点は取得できた指標に重みを付けて算出し、未取得の指標は含めません。各コメントでは、配当継続上の強み・弱みと、その指標だけでは判断できない点を説明します。取得時点や業種の違いも確認してください。評価は参考情報で、将来の配当や投資成果を保証しません。</string>
     <string name="stock_detail_text_23">"タップで切替"</string>
     <string name="stock_detail_text_24">"① 健全性"</string>
     <string name="stock_detail_text_25">"② 買場シグナル"</string>
