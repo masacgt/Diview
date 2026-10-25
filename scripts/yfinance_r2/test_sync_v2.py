@@ -266,9 +266,10 @@ class SyncPriceTests(TestCase):
     def test_v2_current_fields_keep_only_used_inputs_and_update_markers(self):
         self.assertEqual(set(sync.CURRENT_FIELDS), {
             "trailingEps", "forwardEps", "bookValue", "dividendRate", "dividendYield",
-            "payoutRatio", "exDividendDate", "lastFiscalYearEnd", "mostRecentQuarter",
+            "trailingPE", "priceToBook", "operatingMargins", "payoutRatio",
+            "exDividendDate", "lastFiscalYearEnd", "mostRecentQuarter",
         })
-        self.assertTrue({"trailingPE", "priceToBook"}.isdisjoint(sync.CURRENT_FIELDS))
+        self.assertTrue(set(sync.DERIVED_STATISTIC_FIELDS).issubset(sync.CURRENT_FIELDS))
 
     def test_company_info_failure_is_stored_with_class_and_reason(self):
         error = TimeoutError("request timed out")
@@ -279,17 +280,17 @@ class SyncPriceTests(TestCase):
         })
 
     def test_unused_previous_statistics_are_archived_once(self):
-        previous = {"trailingPE": 12.5, "enterpriseValue": 1000, "forwardEps": 42.0}
+        previous = {
+            "trailingPE": 12.5, "priceToBook": 2.3, "operatingMargins": 0.1,
+            "enterpriseValue": 1000, "forwardEps": 42.0,
+        }
         with patch.object(sync, "read_json", return_value=None), \
              patch.object(sync, "put_json_if_changed") as write:
             sync.archive_unused_statistics(object(), "bucket", "7203.T", previous)
 
         self.assertEqual(write.call_count, 1)
         archived = write.call_args.args[3]
-        self.assertEqual(archived["statistics"], {
-            "trailingPE": 12.5,
-            "enterpriseValue": 1000,
-        })
+        self.assertEqual(archived["statistics"], {"enterpriseValue": 1000})
 
     def test_monthly_price_point_date_is_normalized_without_changing_close(self):
         point = {"month": "2024-12", "date": "2024-12-01", "close": 3146.0}
@@ -742,21 +743,21 @@ class EventPartitionPersistenceTests(TestCase):
 
 
 class SyncPolicyTests(TestCase):
-    def test_company_info_rotation_selects_each_security_once_per_five_sessions(self):
+    def test_company_info_rotation_selects_each_security_once_per_twenty_sessions(self):
         for number in range(1000, 1020):
             code = str(number)
             selected = [
-                bucket for bucket in range(sync.FINANCIAL_BUCKETS)
+                bucket for bucket in range(sync.COMPANY_INFO_BUCKETS)
                 if sync.should_refresh_company_info(code, bucket, True, False)
             ]
-            self.assertEqual(selected, [sync.bucket_for(code, sync.FINANCIAL_BUCKETS)])
+            self.assertEqual(selected, [sync.bucket_for(code, sync.COMPANY_INFO_BUCKETS)])
             self.assertTrue(all(
                 sync.should_refresh_company_info(code, bucket, False, False)
-                for bucket in range(sync.FINANCIAL_BUCKETS)
+                for bucket in range(sync.COMPANY_INFO_BUCKETS)
             ))
             self.assertTrue(all(
                 sync.should_refresh_company_info(code, bucket, True, True)
-                for bucket in range(sync.FINANCIAL_BUCKETS)
+                for bucket in range(sync.COMPANY_INFO_BUCKETS)
             ))
 
     def test_yahoo_missing_data_and_transient_errors_are_classified(self):
@@ -1173,7 +1174,12 @@ class OfflineFinancialSyncTests(TestCase):
         for field, value in seed["values"].items():
             self.assertEqual(rows[0][field], value)
             self.assertEqual(rows[0]["field_status"][field], "legacy_migrated")
-        self.assertEqual(rows[0]["source_values"]["seed"], seed)
+        actual_seed = rows[0]["source_values"]["seed"]
+        self.assertEqual({key: value for key, value in actual_seed.items() if key != "field_units"}, seed)
+        self.assertEqual(actual_seed["field_units"], {
+            "sales": "million_jpy", "operating_profit": "million_jpy",
+            "operating_cf": "million_jpy", "investing_cf": "million_jpy",
+        })
 
     def test_margin_guard_nulls_seed_in_both_failure_directions_and_survives_reread(self):
         for failed, guarded in (
@@ -1185,6 +1191,10 @@ class OfflineFinancialSyncTests(TestCase):
                         "unit": "million_JPY",
                         "values": {"sales": 1000, "operating_profit": 100,
                                    "operating_cf": 120, "investing_cf": -30}}
+                expected_seed = {**seed, "field_units": {
+                    "sales": "million_jpy", "operating_profit": "million_jpy",
+                    "operating_cf": "million_jpy", "investing_cf": "million_jpy",
+                }}
                 key = sync.object_key("securities", "7203.T", "financials", "2026-03-31.json")
                 store = self.Store({key: {"annual": {
                     "period_end": "2026-03-31", "source_values": {"seed": seed},
@@ -1198,7 +1208,7 @@ class OfflineFinancialSyncTests(TestCase):
                         rows, _, status, _ = sync.collect_financials(ticker, {}, store, "b", "7203.T")
                         row = rows[0]
                         self.assertEqual(status[failed], "failed")
-                        self.assertEqual(row["source_values"]["seed"], seed)
+                        self.assertEqual(row["source_values"]["seed"], expected_seed)
                         for field in guarded:
                             self.assertIn(field, row)
                             self.assertIsNone(row[field])
@@ -1215,7 +1225,7 @@ class OfflineFinancialSyncTests(TestCase):
                     )
                     for field in guarded:
                         self.assertIsNone(rows[0][field])
-                    self.assertEqual(rows[0]["source_values"]["seed"], seed)
+                    self.assertEqual(rows[0]["source_values"]["seed"], expected_seed)
 
     def test_margin_guard_handles_partial_statement_and_zero_yahoo_amount(self):
         seed = {"source": "IRBANK", "source_key": "legacy/7203.json",
@@ -1232,7 +1242,10 @@ class OfflineFinancialSyncTests(TestCase):
             )
         self.assertIsNone(rows[0]["sales"])
         self.assertEqual(rows[0]["operating_profit"], 0)
-        self.assertEqual(rows[0]["source_values"]["seed"], seed)
+        expected_seed = {**seed, "field_units": {
+            "sales": "million_jpy", "operating_profit": "million_jpy",
+        }}
+        self.assertEqual(rows[0]["source_values"]["seed"], expected_seed)
 
     def test_collect_symbol_persists_annual_valuation_and_daily_multiples(self):
         prefix = sync.object_key("securities", "7203.T")
@@ -1275,7 +1288,10 @@ class OfflineFinancialSyncTests(TestCase):
         legacy_key = sync.object_key("catalog", "generations", "2026-10-19.json")
         old_item = {"code": "7203", "name": "Toyota", "status": "ok",
                     "income_advice": {"code": "7203", "source_catalog_generation": "2026-10-19"}}
-        legacy = {"generation": "2026-10-19", "items": [old_item]}
+        legacy = {
+            "generation": "2026-10-19", "market_data_date": "2026-10-19",
+            "items": [old_item],
+        }
         store = self.Store({
             legacy_key: legacy,
             sync.object_key("catalog", "current.json"): legacy,
