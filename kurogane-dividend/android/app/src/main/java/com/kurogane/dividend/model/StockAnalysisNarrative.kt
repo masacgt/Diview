@@ -40,6 +40,10 @@ data class StockAnalysisNarrative(
 /** Deterministic 5-band x 9-position narratives for the seven backend stock-analysis metrics. */
 object StockAnalysisNarrativeGenerator {
     private enum class TextStyle { SUMMARY, DIVIDEND_CONTINUITY, EVALUATION_POSITION }
+    private enum class SemanticPositionState { STANDARD, NON_POSITIVE, NEGATIVE, NEAR_ZERO, POSITIVE }
+
+    // These percentage metrics are displayed to two decimal places; values rounding to 0.00 are treated as near zero.
+    private const val POSITION_ZERO_DISPLAY_THRESHOLD = 0.005
 
     private data class Band(val label: String, val score: Int, val explanation: String)
     private data class Rule(
@@ -313,13 +317,14 @@ object StockAnalysisNarrativeGenerator {
     }
 
     private fun positionExplanation(rule: Rule, bandIndex: Int, value: Double, detailIndex: Int): String {
-        val specialCase = when {
-            rule.key == "per" && value <= 0.0 ->
-                "設定基準${formatMetricValue(rule, rule.cutoffs.first())}以下の「${rule.bands.first().label}」帯にあります。赤字などで通常の倍率比較が難しいため、利益の状況も合わせて確認してください。"
-            rule.key == "pbr" && value <= 0.0 ->
-                "設定基準${formatMetricValue(rule, rule.cutoffs.first())}以下の「${rule.bands.first().label}」帯にあります。純資産が負の場合などは比較しにくいため、資産の状況も確認してください。"
-            rule.key == "payout_ratio" && value < 0.0 ->
-                "設定基準${formatMetricValue(rule, rule.cutoffs.first())}以下の「${rule.bands.first().label}」帯です。利益が0以下の場合は比率を通常通り解釈できず、利益と配当額を個別に確認してください。"
+        val semanticState = semanticPositionState(rule.key, value)
+        val specialCase = when (semanticState) {
+            SemanticPositionState.NON_POSITIVE -> when (rule.key) {
+                "per" -> "設定基準${formatMetricValue(rule, rule.cutoffs.first())}以下の「${rule.bands.first().label}」帯にあります。赤字などで通常の倍率比較が難しいため、利益の状況も合わせて確認してください。"
+                "pbr" -> "設定基準${formatMetricValue(rule, rule.cutoffs.first())}以下の「${rule.bands.first().label}」帯にあります。純資産が負の場合などは比較しにくいため、資産の状況も確認してください。"
+                "payout_ratio" -> "設定基準${formatMetricValue(rule, rule.cutoffs.first())}以下の「${rule.bands.first().label}」帯です。利益が0以下の場合は比率を通常通り解釈できず、利益と配当額を個別に確認してください。"
+                else -> null
+            }
             else -> null
         }
         if (specialCase != null) return specialCase
@@ -330,7 +335,25 @@ object StockAnalysisNarrativeGenerator {
             else -> "${formatMetricValue(rule, rule.cutoffs[bandIndex - 1])}超${formatMetricValue(rule, rule.cutoffs[bandIndex])}以下"
         }
         val firstSentence = "設定基準${criterionRange}の「${rule.bands[bandIndex].label}」帯にあり、${rule.positionText[detailIndex]}"
-        val secondSentence = if (bandIndex < rule.bands.lastIndex) {
+        val semanticSentence = when (semanticState) {
+            SemanticPositionState.NEGATIVE -> when (rule.key) {
+                "operating_margin" -> "営業利益はマイナスで、本業の利益だけでは配当を支えにくい状態です。"
+                "fcf_margin" -> "FCFはマイナスで、配当原資は手元資金なども含めて確認します。"
+                else -> null
+            }
+            SemanticPositionState.NEAR_ZERO -> when (rule.key) {
+                "operating_margin" -> "営業利益はゼロ付近で、小幅な悪化でも赤字になり得ます。"
+                "fcf_margin" -> "FCFはゼロ付近で、投資後に残る配当余力は限られます。"
+                else -> null
+            }
+            SemanticPositionState.POSITIVE -> when (rule.key) {
+                "operating_margin" -> "営業利益はプラスですが、利益率だけでは配当余力を測れません。"
+                "fcf_margin" -> "FCFはプラスですが、投資負担や複数年の安定性も確認します。"
+                else -> null
+            }
+            else -> null
+        }
+        val secondSentence = semanticSentence ?: if (bandIndex < rule.bands.lastIndex) {
             val boundary = rule.cutoffs[bandIndex]
             val distance = (boundary - value).coerceAtLeast(0.0)
             if (rule.key == "dividend_growth_years" && bandIndex == 0) {
@@ -344,6 +367,17 @@ object StockAnalysisNarrativeGenerator {
             "最終境界${formatMetricValue(rule, boundary)}を${formatMetricValue(rule, excess)}上回り、これ以上の評価帯はありません。"
         }
         return firstSentence + secondSentence
+    }
+
+    private fun semanticPositionState(key: String, value: Double): SemanticPositionState = when (key) {
+        "per", "pbr" -> if (value <= 0.0) SemanticPositionState.NON_POSITIVE else SemanticPositionState.STANDARD
+        "payout_ratio" -> if (value < 0.0) SemanticPositionState.NON_POSITIVE else SemanticPositionState.STANDARD
+        "operating_margin", "fcf_margin" -> when {
+            value <= -POSITION_ZERO_DISPLAY_THRESHOLD -> SemanticPositionState.NEGATIVE
+            value >= POSITION_ZERO_DISPLAY_THRESHOLD -> SemanticPositionState.POSITIVE
+            else -> SemanticPositionState.NEAR_ZERO
+        }
+        else -> SemanticPositionState.STANDARD
     }
 
     private fun powerOf45(exponent: Int): Long = (0 until exponent).fold(1L) { acc, _ -> acc * 45L }
