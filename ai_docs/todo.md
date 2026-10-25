@@ -2,6 +2,8 @@
 
 ## In Progress
 
+- [ ] Run the GitHub Actions `refresh-company-info` mode across the active V2 universe and inspect the publication summary plus R2 catalog read-back. The isolated workflow and collector change are prepared; production results are pending.
+
 - [ ] Publish and backfill IRBANK financial-unit corrections. Local code preserves source units, normalizes known IRBANK annual money values for app consumers, and repairs unproven equity ratios; production Worker publication, full-universe `migrate-financials` read-back, and regeneration/upload of IRBANK v1 unit metadata remain to be verified.
 
 - [x] Create a local J-Quants-only v3 database with project-local two-year daily history and API master, latest valuation, one-day financial summary, and calendar data. Evidence: `local_artifacts/jquants-v3-acquisition-20261025/jquants_v3.sqlite` contains 2,186,594 daily rows through 2026-07-31 and passes SQLite `integrity_check`; its report records coverage and source hashes.
