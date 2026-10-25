@@ -128,6 +128,16 @@ object StockAnalysisNarrativeGenerator {
         "payout_ratio" to "配当性向が負の値で、赤字や利益の符号が影響し、通常の配当余力を比率から読み取れない可能性があるため、利益、実際の配当額、営業キャッシュフローを個別に確認します。低い値だけで安全とは判断できず、特別損益も見ます。"
     )
 
+    private val evaluationPositionLimitations = mapOf(
+        "per" to "PERは市場の利益評価で、配当を支払う現金を直接表しません。利益予想の達成度、配当性向、営業キャッシュフローも確かめます。",
+        "pbr" to "PBRは資産への市場評価で、換金できる現金や配当支払力とは異なります。負債、資産の質、利益とキャッシュフローも見ます。",
+        "payout_ratio" to "配当性向だけでは手元資金や投資後の支払余力は分かりません。特別損益を除く利益、FCF、配当方針の変化も確認し、複数期の利益・配当推移も見ます。",
+        "equity_ratio" to "自己資本は損失への備えですが、すぐ配当に使える現金とは異なります。現預金、返済期限、資産の換金性も見ます。自己資本の厚みと配当実績を同じものと捉えず、比率だけでは配当余力を測れない点にも注意します。",
+        "operating_margin" to "営業利益率は最終利益や現金回収、投資負担を示しません。営業キャッシュフローと複数年の利益変動も合わせて確認します。",
+        "fcf_margin" to "FCFは投資時期や運転資金で変動します。複数年の推移、設備投資、配当後の現金残高と借入返済も合わせて見ます。",
+        "dividend_growth_years" to "増配年数は増配幅や利益に対する配当負担を示しません。配当性向、FCF、利益推移と配当額の変化も確認します。景気後退や資金需要が変わった局面の実績に加え、増配の背景が利益成長か一時的な方針変更かも見ておきます。"
+    )
+
     private val rules = listOf(
         Rule(
             key = "per", label = "PER", definition = "PERは株価が1株当たり利益の何倍で評価されているかを示します。", unit = "倍", weight = 15,
@@ -268,7 +278,7 @@ object StockAnalysisNarrativeGenerator {
                 TextStyle.DIVIDEND_CONTINUITY -> nonPositiveValuationExplanations[rule.key]?.takeIf {
                     value <= 0.0 && (rule.key == "per" || rule.key == "pbr" || rule.key == "payout_ratio")
                 } ?: dividendContinuityExplanations.getValue(rule.key)[bandIndex]
-                TextStyle.EVALUATION_POSITION -> positionExplanation(rule, bandIndex, value, detailIndex)
+                TextStyle.EVALUATION_POSITION -> evaluationPositionComment(rule, bandIndex, value, detailIndex)
             }
             findings += StockAnalysisFinding(
                 key = rule.key,
@@ -316,25 +326,27 @@ object StockAnalysisNarrativeGenerator {
         )
     }
 
-    private fun positionExplanation(rule: Rule, bandIndex: Int, value: Double, detailIndex: Int): String {
+    private fun evaluationPositionComment(rule: Rule, bandIndex: Int, value: Double, detailIndex: Int): String {
         val semanticState = semanticPositionState(rule.key, value)
-        val specialCase = when (semanticState) {
+        val position = when (detailIndex / 3) {
+            0 -> "下端寄り"
+            1 -> "中央付近"
+            else -> "上端寄り"
+        }
+        val openingSentence = when (semanticState) {
             SemanticPositionState.NON_POSITIVE -> when (rule.key) {
-                "per" -> "設定基準${formatMetricValue(rule, rule.cutoffs.first())}以下の「${rule.bands.first().label}」帯にあります。赤字などで通常の倍率比較が難しいため、利益の状況も合わせて確認してください。"
-                "pbr" -> "設定基準${formatMetricValue(rule, rule.cutoffs.first())}以下の「${rule.bands.first().label}」帯にあります。純資産が負の場合などは比較しにくいため、資産の状況も確認してください。"
-                "payout_ratio" -> "設定基準${formatMetricValue(rule, rule.cutoffs.first())}以下の「${rule.bands.first().label}」帯です。利益が0以下の場合は比率を通常通り解釈できず、利益と配当額を個別に確認してください。"
-                else -> null
+                "per" -> "PERは${formatMetricValue(rule, value)}で、赤字などでは通常の倍率比較に注意が必要です。"
+                "pbr" -> "PBRは${formatMetricValue(rule, value)}で、負の純資産などでは通常の比較が難しい値です。"
+                "payout_ratio" -> "配当性向は${formatMetricValue(rule, value)}で、赤字時は通常の余力評価と分けて見ます。"
+                else -> "${rule.label}は${formatMetricValue(rule, value)}で、通常の評価帯比較に注意が必要です。"
             }
-            else -> null
+            else -> "${rule.label}は${formatMetricValue(rule, value)}で、「${rule.bands[bandIndex].label}」帯の${position}にあります。"
         }
-        if (specialCase != null) return specialCase
-
-        val criterionRange = when (bandIndex) {
-            0 -> "${formatMetricValue(rule, rule.cutoffs.first())}以下"
-            rule.bands.lastIndex -> "${formatMetricValue(rule, rule.cutoffs.last())}超"
-            else -> "${formatMetricValue(rule, rule.cutoffs[bandIndex - 1])}超${formatMetricValue(rule, rule.cutoffs[bandIndex])}以下"
+        val continuityExplanation = when {
+            rule.key in setOf("per", "pbr") && value <= 0.0 -> nonPositiveValuationExplanations.getValue(rule.key)
+            rule.key == "payout_ratio" && value < 0.0 -> nonPositiveValuationExplanations.getValue(rule.key)
+            else -> dividendContinuityExplanations.getValue(rule.key)[bandIndex]
         }
-        val firstSentence = "設定基準${criterionRange}の「${rule.bands[bandIndex].label}」帯にあり、${rule.positionText[detailIndex]}"
         val semanticSentence = when (semanticState) {
             SemanticPositionState.NEGATIVE -> when (rule.key) {
                 "operating_margin" -> "営業利益はマイナスで、本業の利益だけでは配当を支えにくい状態です。"
@@ -353,20 +365,12 @@ object StockAnalysisNarrativeGenerator {
             }
             else -> null
         }
-        val secondSentence = semanticSentence ?: if (bandIndex < rule.bands.lastIndex) {
-            val boundary = rule.cutoffs[bandIndex]
-            val distance = (boundary - value).coerceAtLeast(0.0)
-            if (rule.key == "dividend_growth_years" && bandIndex == 0) {
-                "次の「${rule.bands[bandIndex + 1].label}」帯との境界${formatMetricValue(rule, boundary)}まで${formatMetricValue(rule, distance)}で、年数基準上の差を示します。"
-            } else {
-                "次の「${rule.bands[bandIndex + 1].label}」帯との境界${formatMetricValue(rule, boundary)}まで${formatMetricValue(rule, distance)}です。"
-            }
-        } else {
-            val boundary = rule.cutoffs.last()
-            val excess = (value - boundary).coerceAtLeast(0.0)
-            "最終境界${formatMetricValue(rule, boundary)}を${formatMetricValue(rule, excess)}上回り、これ以上の評価帯はありません。"
-        }
-        return firstSentence + secondSentence
+        return listOfNotNull(
+            openingSentence,
+            continuityExplanation,
+            semanticSentence,
+            evaluationPositionLimitations.getValue(rule.key)
+        ).joinToString(" ")
     }
 
     private fun semanticPositionState(key: String, value: Double): SemanticPositionState = when (key) {
