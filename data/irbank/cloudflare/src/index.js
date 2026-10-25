@@ -1029,11 +1029,16 @@ async function readV2FinancialPayload(env, code) {
   const latestIssuerActual = irbankDividendItem?.actual;
   if (irbankDividendItem?.actual_status === 'available' && latestIssuerActual && finiteNumber(latestIssuerActual.fiscal_year) !== null) {
     const fiscalYear = Number(latestIssuerActual.fiscal_year);
-    const period = String(latestIssuerActual.period_end || latestIssuerActual.fiscal_period || fiscalYear).replaceAll('/', '-');
-    for (const [existingPeriod, record] of issuerDividendRecordsByPeriod.entries()) {
-      if (Number(record.fiscal_year) === fiscalYear) issuerDividendRecordsByPeriod.delete(existingPeriod);
+    let period = String(latestIssuerActual.period_end || latestIssuerActual.fiscal_period || latestIssuerActual.period || fiscalYear).replaceAll('/', '-');
+    const candidates = [...issuerDividendRecordsByPeriod.keys()].filter(key =>
+      key === period || (key.startsWith(period + '-') || period.startsWith(key + '-')));
+    // Coarser year/month keys identify a period only when the match is unambiguous.
+    if (candidates.length === 1) {
+      const matched = candidates[0];
+      issuerDividendRecordsByPeriod.delete(matched);
+      if (matched.length > period.length) period = matched;
     }
-    issuerDividendRecordsByPeriod.set(period, {
+    if (candidates.length <= 1 || issuerDividendRecordsByPeriod.has(period)) issuerDividendRecordsByPeriod.set(period, {
       ...latestIssuerActual,
       fiscal_year: fiscalYear,
       fiscal_period: period,
@@ -1528,9 +1533,11 @@ async function splitLegacyMarketQueueMessage(env, body) {
 }
 
 async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
-  const [marketData, v2Payload] = await Promise.all([
+  const symbol = yfinanceV2Symbol(security.security_code_display);
+  const [marketData, v2Payload, yfinanceCurrent] = await Promise.all([
     latestMarketForSecurity(env, security.security_code_display, marketIndex),
     readV2FinancialPayload(env, security.security_code_display),
+    symbol ? readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`) : null,
   ]);
   const latestV2Dividend = v2Payload?.dividends?.records?.at(-1) || null;
   const dividendYear = latestV2Dividend?.calendar_year ?? null;
@@ -2329,7 +2336,6 @@ export default {
             const events = v2Events.filter(event => {
               const date = String(event?.date || '');
               const amount = finiteNumber(event?.amount);
-              const matchesRequestedYear = years.length === 1 && date.startsWith(`${years[0]}-`);
               return /^\d{4}-\d{2}-\d{2}$/.test(date) &&
                 (requestedYears != null
                   ? requestedYears.includes(Number(date.slice(0, 4))) && date <= asOf
@@ -2618,6 +2624,11 @@ export default {
             : null;
           const dividend = current?.dividend;
           if (!dividend) {
+            const reportedYield = current?.statistics?.dividendYield;
+            const yieldRate = yieldFromDividend(
+              current?.price?.close ?? item.price, irbankDividend.annual_dps,
+              irbankDividend.yield_rate, reportedYield, catalogYield,
+            );
             return {
               ...item,
               price: finiteNumber(current?.price?.close) ?? item.price,
@@ -2637,6 +2648,10 @@ export default {
             };
           }
           const close = finiteNumber(current.price?.close) ?? finiteNumber(row.price);
+          const reportedYield = current?.statistics?.dividendYield;
+          const yieldRate = yieldFromDividend(
+            close, irbankDividend.annual_dps, irbankDividend.yield_rate, reportedYield, catalogYield,
+          );
           return {
             ...item,
             price: close ?? item.price,
@@ -2690,6 +2705,10 @@ export default {
         ...v2Catalog,
         items: v2Catalog.items.map(({ income_advice, ...row }) => {
           const dividend = irbankDividendForCode(irbankDividendIndex, row.code);
+          const catalogYield = row.yield_source === 'yfinance_reported_dividendYield' ? row.yield_rate : null;
+          const yieldRate = yieldFromDividend(
+            row.price, dividend.annual_dps, dividend.yield_rate, null, catalogYield,
+          );
           return {
             ...row,
             annual_dividend_per_share: dividend.annual_dps,
@@ -2739,6 +2758,10 @@ export default {
         .slice(0, 30)
         .map(row => {
           const dividend = irbankDividendForCode(irbankDividendIndex, row.code);
+          const catalogYield = row.yield_source === 'yfinance_reported_dividendYield' ? row.yield_rate : null;
+          const yieldRate = yieldFromDividend(
+            row.price, dividend.annual_dps, dividend.yield_rate, null, catalogYield,
+          );
           return {
             code: row.code,
             name: row.name,
@@ -3054,6 +3077,9 @@ export default {
       const payoutRatio = ratioAsPercent(rawPayoutRatio, yfinanceStatisticsFieldUnit(v2Current, 'payoutRatio'));
       const valuation = calculateDailyValuation(v2Current);
       const selectedDividend = irbankDividendForCode(irbankDividendIndex, code);
+      const marketYieldRate = yieldFromDividend(
+        v2Current.price?.close, selectedDividend.annual_dps, selectedDividend.yield_rate, stats.dividendYield,
+      );
       return json({
         code,
         canonical_code: `${code}0`,

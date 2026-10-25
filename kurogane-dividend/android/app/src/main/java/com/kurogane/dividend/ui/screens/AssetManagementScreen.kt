@@ -258,6 +258,10 @@ fun AssetManagementScreen(
     }
     val listItemsSnapshot by listItemsFlow.collectAsStateWithLifecycle(initialValue = null)
     val listItems = listItemsSnapshot.orEmpty()
+    val heldCodes = remember(listItems) { listItems.filter { it.category == Category.JAPAN }.map { it.code }.sorted() }
+    LaunchedEffect(viewModel, holdingsRestored, heldCodes) {
+        if (holdingsRestored) viewModel.refreshAssetManagementData()
+    }
     val categoryCounts = remember(listItems) { listItems.groupingBy { it.category }.eachCount() }
     val hasMissingExchangeRate = remember(listItems) { listItems.any { it.missingExchangeRate } }
 
@@ -1846,7 +1850,7 @@ private fun HoldingMetricTile(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(label, color = SoftGray, fontSize = AppTextSize.chartLabel, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
+            Text(label, color = SoftGray, fontSize = AppTextSize.tiny, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
             if (showEditHint) {
                 Icon(
                     Icons.Default.Edit,
@@ -1857,7 +1861,7 @@ private fun HoldingMetricTile(
             }
         }
         Text(value, color = valueColor, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, fontFamily = AppNumericFontFamily, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
-        Text(detail, color = detailColor, fontSize = AppTextSize.tiny, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
+        Text(detail, color = detailColor, fontSize = AppTextSize.chartLabel, maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1)
     }
 }
 

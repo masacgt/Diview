@@ -3433,9 +3433,9 @@ def income_advice_candidate(code: str, name: str, current: dict[str, Any],
         "score_metric_source": {
             "payout_ratio": "securities/{symbol}/current.json:statistics.payoutRatio",
             "equity_ratio": "latest annual financial row:equity_ratio_computed",
-            "operating_margin": "latest annual financial row:operating_profit/sales",
-            "per": "securities/{symbol}/current.json:statistics.trailingPE",
-            "pbr": "securities/{symbol}/current.json:statistics.priceToBook",
+            "operating_margin": "current.statistics.operatingMargins * 100; fallback latest annual operating_profit/sales",
+            "per": "current.statistics.trailingPE; fallback price.close/statistics.trailingEps",
+            "pbr": "current.statistics.priceToBook; fallback price.close/statistics.bookValue",
             "consecutive_increase_years": "securities/{symbol}/current.json:dividend.calendar_year_metrics",
             "no_cut_years": "securities/{symbol}/current.json:dividend.calendar_year_metrics",
         },
@@ -3727,6 +3727,8 @@ def run(
         f"december_price_refresh={december_end_session}",
         flush=True,
     )
+    if refresh_company_info:
+        print("Manual full-universe mode: forcing yfinance Ticker.get_info() for every active security.", flush=True)
     securities = [row["security_code_display"] for row in fetched]
     security_by_code = {row["security_code_display"]: row for row in fetched}
     results: dict[str, dict[str, Any]] = {}

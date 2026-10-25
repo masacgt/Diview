@@ -127,6 +127,8 @@ test('malformed numeric/period values, bad CSV, headers and input errors reject 
   for (const row of [
     ['13010','annual','2025/13','J-GAAP','true','{}'],
     ['13010','annual','2025/03','J-GAAP','bogus','{}'],
+    ['13010','annual','2025/03','','true','{}'],
+    ['13010','annual','2025/03','J-GAAP','','{}'],
   ]) {
     const options=fixtures(t);
     fs.appendFileSync(path.join(options.inputDir,'financial_periods.csv'),csv(row));
@@ -146,6 +148,23 @@ test('malformed numeric/period values, bad CSV, headers and input errors reject 
   fs.rmSync(options.outputDir, { recursive: true, force: true });
   fs.unlinkSync(path.join(options.inputDir,'financial_periods.csv'));
   await assert.rejects(main(options),/ENOENT/);
+});
+
+test('financial key migration preserves existing rows and rejects nullable new keys', t => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close());
+  db.exec(base);
+  db.exec("INSERT INTO securities VALUES ('13010','1301','E0001','fixture','[]')");
+  db.exec("INSERT INTO financial_periods VALUES ('13010','annual','2025/03',NULL,1,'{}')");
+  migrations.forEach(s => db.exec(s));
+  const put = db.prepare('INSERT OR REPLACE INTO financial_periods VALUES (?,?,?,?,?,?)');
+  for (const [standard, consolidated] of [[null, 1], ['', 1], ['J-GAAP', null]]) {
+    assert.throws(() => put.run('13010','annual','2025/03',standard,consolidated,'{}'), /requires/);
+  }
+  assert.equal(db.prepare('SELECT count(*) n FROM financial_periods').get().n, 1);
+  db.exec("UPDATE financial_periods SET accounting_standard='J-GAAP'");
+  put.run('13010','annual','2025/03','J-GAAP',1,'{"sales":200}');
+  assert.equal(db.prepare('SELECT count(*) n FROM financial_periods').get().n, 1);
+  assert.throws(() => db.exec('UPDATE financial_periods SET is_consolidated=NULL'), /requires/);
 });
 
 test('validated import refuses directory reuse and preserves both issuer periods', async t => {

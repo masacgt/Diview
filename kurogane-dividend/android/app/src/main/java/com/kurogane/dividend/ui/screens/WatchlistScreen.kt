@@ -121,7 +121,7 @@ private class WatchlistDerivedMetricsCache {
         stock: WatchlistStock,
         resources: android.content.res.Resources
     ): StockMetrics {
-        val currentYield = com.kurogane.dividend.model.PortfolioMath.yieldPercent(stock.dps, stock.price)
+        val currentYield = stock.liveYield
         var standardBadgeWidthCandidate: String? = null
         var dynamicBadgeWidthCandidate: String? = null
         when {
@@ -1104,10 +1104,11 @@ fun WatchlistScreen(
                     label = "watchlist-exit-alpha-${stock.code}"
                 )
                 val currentYield = watchlistMetrics.currentYields[stock.code]
+                    ?: stock.yfinanceYieldRate?.takeIf { it.isFinite() && it in 0.0..100.0 }
                     ?: com.kurogane.dividend.model.PortfolioMath.yieldPercent(stock.dps, stock.price)
                 val currentYieldLabel = stringResource(R.string.stock_detail_text_4)
                 val currentYieldDisplay = com.kurogane.dividend.model.formatDividendYieldDisplay(
-                    stock.currentYield,
+                    currentYield,
                     stock.isNoDividendConfirmed
                 )
                 val useCompactYieldValue = LocalDensity.current.fontScale >= 1.8f

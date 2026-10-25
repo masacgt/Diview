@@ -52,6 +52,9 @@ const sql = (value) => value === '' || value == null ? 'NULL' : `'${String(value
 
 // Types are table-specific: annual periods are YYYY/MM TEXT, dividend years INTEGER.
 function sqlValue(config, column, value) {
+  if (config.table === 'financial_periods' &&
+      ['security_code', 'period_type', 'fiscal_year', 'accounting_standard', 'is_consolidated'].includes(column) &&
+      (value == null || String(value).trim() === '')) throw new Error(`Invalid ${config.table}.${column}: missing key`);
   if (value === '' || value == null) return 'NULL';
   if (column === 'fiscal_year') {
     const pattern = config.table === 'financial_periods' ? /^\d{4}\/(0[1-9]|1[0-2])$/ : /^\d{4}$/;
