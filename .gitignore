@@ -99,3 +99,6 @@ app.*.map.json
 /data/market/yfinance/*.csv
 /data/market/yfinance/*.json
 
+# Personal and account CSV exports must stay out of Git history
+/ai_docs/samples/haitou-apk-v16.5/sampleCsv/*.csv
+/archive/legacy-projects/DiviewApp-before-kurogane-dividend/android/app/src/test/resources/apk-fixtures/assets/sampleCsv/*.csv

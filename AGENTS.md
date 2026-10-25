@@ -8,11 +8,19 @@
 - Determine screen behavior from the current code under `kurogane-dividend/` and the user's latest instructions.
 - Keep `archive/` as historical material. Do not delete or restore its contents unless the user asks.
 
+## Work location and directories
+
+- Work only within the working folder supplied for the task. Do not create or write task files elsewhere unless the user authorizes the destination.
+- Do not create folders under `C:\` without authorization. Reuse suitable folders in the supplied working folder.
+- When explicitly authorized, create task-specific isolated scratch folders under `C:\Codex`, outside the repository root, and keep repository copies out of cloud-synced locations.
+- If no suitable authorized location exists, ask for a destination before writing files.
+
 ## Git and generated files
 
 - Keep app source, scripts, documentation, and required bundled data in Git.
 - Do not commit local environment files, signing credentials, Gradle caches, IDE state, or generated build outputs/APKs.
 - Refresh the bundled TSE 33-industry mapping with `python scripts/sync_tse33_industry_master.py` from `kurogane-dividend/` and review the data changes before committing.
+- Do not commit personal or account CSV exports. The two `sampleCsv/*.csv` locations below are ignored.
 
 ## AI-maintained project notes
 
