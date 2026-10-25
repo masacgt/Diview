@@ -2,7 +2,7 @@
 
 ## In Progress
 
-- [ ] Publish and verify the financial statement unit contract end to end. Evidence: Yahoo V2 money now uses `yfinance_native`, reported currency is marked unverified, and ratio/margin inputs retain period/source/unit provenance. Worker routes pass 40/40, Python sync tests pass 120/120, Android unit tests pass 159/159, JDK 17 debug build succeeds, and the APK installs and launches on SCG01 and emulator-5554; production deployment, data refresh, device-cache renewal, and full-universe API audit remain pending.
+- [ ] Publish and verify the financial statement unit contract end to end. Evidence: Yahoo V2 money now uses `yfinance_native`, reported currency is marked unverified, and ratio/margin inputs retain period/source/unit provenance. Worker routes pass 40/40, Python sync tests pass 120/120, Android unit tests pass 159/159, JDK 17 debug build succeeds, and the APK installs and launches on SCG01 and emulator-5554. Worker version `4d0c0767-e004-4b90-831a-f9236b1afa37` is live at 100%; production reads for 8058/6721/1301/6269 return contract 6 and unit metadata. The `financial_revision` token remains `2d6dd979696e4992a4d61a916af62228`, so full R2 refresh, device-cache renewal, and full-universe API audit remain pending.
 
 - [x] Run the existing financial-unit parser and portfolio aggregation regression checks before closing the financial integrity work. Evidence: JDK 17 `:app:testDebugUnitTest` passed after merging current main, and the Worker route suite passes 50/50 cases.
 
