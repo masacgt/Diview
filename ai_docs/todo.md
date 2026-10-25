@@ -2,6 +2,8 @@
 
 ## In Progress
 
+- [ ] Publish and backfill IRBANK financial-unit corrections. Local code preserves source units, normalizes known IRBANK annual money values for app consumers, and repairs unproven equity ratios; production Worker publication, full-universe `migrate-financials` read-back, and regeneration/upload of IRBANK v1 unit metadata remain to be verified.
+
 - [x] Create a local J-Quants-only v3 database with project-local two-year daily history and API master, latest valuation, one-day financial summary, and calendar data. Evidence: `local_artifacts/jquants-v3-acquisition-20261025/jquants_v3.sqlite` contains 2,186,594 daily rows through 2026-07-31 and passes SQLite `integrity_check`; its report records coverage and source hashes.
 - [ ] Complete full historical valuation and financial-summary acquisition and add J-Quants dividend/financial details if the account gains access. Current key only produced one valuation and summary date and returned HTTP 403 for Premium-only dividends and statements; exact standalone split-event history is not provided by the personal API. See `scripts/jquants_v3/README.md`.
 

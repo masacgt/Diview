@@ -2279,7 +2279,7 @@ class DividendViewModel @JvmOverloads constructor(
             val attemptKey = "stock_analysis_fetch_attempt_at_$normalized"
             val attemptDateKey = "stock_analysis_fetch_attempt_jst_$normalized"
             val versionKey = "stock_analysis_contract_version_$normalized"
-            if (!force && marketPreferences.getInt(versionKey, 0) >= 2 && !PriceRefreshPolicy.shouldFetch(
+            if (!force && marketPreferences.getInt(versionKey, 0) >= STOCK_ANALYSIS_PAYLOAD_VERSION && !PriceRefreshPolicy.shouldFetch(
                     now,
                     marketPreferences.getLong(attemptKey, 0L),
                     marketPreferences.getString(attemptDateKey, null)
@@ -2307,7 +2307,7 @@ class DividendViewModel @JvmOverloads constructor(
                         result.values.forEach { (key, value) -> put(key, value ?: JSONObject.NULL) }
                     }
                     marketPreferences.edit().putString("stock_analysis_$normalized", json.toString())
-                        .putInt(versionKey, 2).apply()
+                        .putInt(versionKey, STOCK_ANALYSIS_PAYLOAD_VERSION).apply()
                     succeeded = true
                 }
                 if (generation == dataGeneration.get()) result ?: _stockAnalysisData.value[normalized] else null
@@ -3154,7 +3154,8 @@ class DividendViewModel @JvmOverloads constructor(
 
     private companion object {
         const val IRBANK_DIVIDEND_CACHE_VERSION = 3
-        const val FINANCIAL_PAYLOAD_VERSION = 3
+        const val FINANCIAL_PAYLOAD_VERSION = 4
+        const val STOCK_ANALYSIS_PAYLOAD_VERSION = 3
         val WATCHLIST_SORT_CRITERIA = setOf("ach", "yield", "price", "code")
         val WATCHLIST_SORT_DIRECTIONS = setOf("asc", "desc")
         val SAMPLE_HOLDING_IDS = setOf("h-7203", "h-2914", "h-8306", "h-8316", "h-8058", "h-9432", "h-9433", "h-8766", "h-8031", "h-4502", "h-apple", "h-emaxis")
