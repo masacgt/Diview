@@ -1073,6 +1073,13 @@ class OfflineFinancialSyncTests(TestCase):
             self.writes.append(key)
             return True
 
+        def put_object(self, *, Bucket, Key, Body, **kwargs):
+            self.documents[Key] = json.loads(Body.decode("utf-8"))
+
+        def get_object(self, *, Bucket, Key):
+            body = json.dumps(self.documents[Key], sort_keys=True).encode("utf-8")
+            return {"Body": io.BytesIO(body)}
+
         def get_paginator(self, name):
             return self
 

@@ -106,7 +106,7 @@ class MigrationShardTests(unittest.TestCase):
         self.assertEqual(annual["field_status"]["equity_ratio_computed"], "empty")
         self.assertEqual(
             annual["field_status_reason"]["equity_ratio_computed"],
-            ["mixed_source_inputs_not_comparable"],
+            ["mixed_source_or_units_not_comparable"],
         )
 
     def test_same_source_equity_ratio_calculation_is_preserved(self):
@@ -226,7 +226,10 @@ class MigrationShardTests(unittest.TestCase):
         }
         client = FakeS3Client({source_key: source, target_key: existing}, ignore_put=True)
 
-        with self.assertRaisesRegex(RuntimeError, "source_values.calculated"):
+        with self.assertRaisesRegex(
+            RuntimeError,
+            r"v2 read-back mismatch for annual\.(?:field_status_reason|source_values\.calculated)",
+        ):
             migrate_one(
                 client,
                 "test-bucket",

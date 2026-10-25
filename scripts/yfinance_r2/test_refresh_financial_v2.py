@@ -88,6 +88,7 @@ class FinancialRefreshContractTests(TestCase):
                 with patch.object(migration.sys, "argv", argv), \
                         patch.object(migration, "required_env", return_value="test"), \
                         patch.object(migration, "make_client", return_value=client), \
+                        patch.object(migration, "bump_financial_revision") as bump_revision, \
                         patch.object(migration, "read_json", return_value={
                             "securities": [{"code": "4502", "status": "active"}]
                         }), \
@@ -95,7 +96,6 @@ class FinancialRefreshContractTests(TestCase):
                         redirect_stdout(io.StringIO()):
                     self.assertEqual(migration.main(), 1)
                 if dry_run:
-                    client.put_object.assert_not_called()
+                    bump_revision.assert_not_called()
                 else:
-                    self.assertEqual(client.put_object.call_args.kwargs["Key"],
-                                     "market/yfinance/v2/financial_revision.json")
+                    bump_revision.assert_called_once_with(client, "test")
