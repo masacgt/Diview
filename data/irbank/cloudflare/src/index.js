@@ -540,6 +540,47 @@ function financialPeriodKey(row) {
   return String(row?.period_end || row?.fiscal_year || row?.year || '').replaceAll('/', '-');
 }
 
+const IRBANK_ANNUAL_FIELD_UNITS = {
+  sales: 'million_jpy',
+  operating_profit: 'million_jpy',
+  operating_cf: 'million_jpy',
+  investing_cf: 'million_jpy',
+  total_assets: 'million_jpy',
+  equity_ratio_computed: 'percent',
+};
+const IRBANK_VALUATION_FIELD_UNITS = {
+  eps_adjusted: 'jpy_per_share',
+  bps_adjusted: 'jpy_per_share',
+  dividend_yield_adjusted: 'percent',
+};
+const FINANCIAL_ANNUAL_MONEY_FIELDS = new Set([
+  ...Object.entries(IRBANK_ANNUAL_FIELD_UNITS)
+    .filter(([field]) => field !== 'equity_ratio_computed')
+    .map(([field]) => field),
+  'stockholders_equity', 'total_equity_gross_minority_interest', 'net_debt',
+  'total_debt', 'cash_and_short_term_investments', 'cash_and_equivalents',
+  'cash_equivalents', 'cash_dividends_paid', 'common_stock_dividend_paid',
+  'doe_dividend_total',
+]);
+
+function isReasonableEquityRatio(value) {
+  const ratio = finiteNumber(value);
+  return ratio !== null && Math.abs(ratio) <= 1000;
+}
+
+function seedFieldUnits(section, seedValues, seedRecord, row) {
+  const units = { ...(seedRecord?.field_units && typeof seedRecord.field_units === 'object' ? seedRecord.field_units : {}) };
+  const sourceHint = [seedRecord?.source, seedRecord?.source_key, row?.migration_source]
+    .filter(Boolean).join(' ').toLowerCase();
+  if (sourceHint.includes('irbank')) {
+    const knownUnits = section === 'annual' ? IRBANK_ANNUAL_FIELD_UNITS : IRBANK_VALUATION_FIELD_UNITS;
+    for (const [field, unit] of Object.entries(knownUnits)) {
+      if (Object.hasOwn(seedValues, field)) units[field] = unit;
+    }
+  }
+  return units;
+}
+
 async function readV2FinancialPayload(env, code) {
   const symbol = yfinanceV2Symbol(code);
   if (!symbol || !env.MARKET_DATA) return null;
@@ -565,31 +606,89 @@ async function readV2FinancialPayload(env, code) {
     const row = document[section];
     if (!row || typeof row !== 'object') return null;
     const explicit = row.source_values && typeof row.source_values === 'object' ? row.source_values : null;
-    const seedValues = { ...(explicit?.seed?.values && typeof explicit.seed.values === 'object' ? explicit.seed.values : {}) };
+    const seedRecord = explicit?.seed && typeof explicit.seed === 'object' ? explicit.seed : {};
+    const seedValues = { ...(seedRecord.values && typeof seedRecord.values === 'object' ? seedRecord.values : {}) };
     const yfinanceValues = { ...(explicit?.yfinance?.values && typeof explicit.yfinance.values === 'object' ? explicit.yfinance.values : {}) };
     const calculatedValues = explicit?.calculated?.values && typeof explicit.calculated.values === 'object' ? explicit.calculated.values : {};
-    const compatibleCalculatedValues = Object.fromEntries(Object.entries(calculatedValues).filter(([field, calculation]) => {
-      if (field !== 'equity_ratio_computed') return true;
-      const sources = calculation?.input_sources;
-      return Boolean(sources?.equity && sources?.total_assets && sources.equity === sources.total_assets);
-    }));
-    const sourceValues = explicit ? {
-      ...explicit,
-      ...(explicit.calculated && typeof explicit.calculated === 'object' ? {
-        calculated: { ...explicit.calculated, values: compatibleCalculatedValues },
-      } : {}),
-    } : null;
     for (const [key, value] of Object.entries(row)) {
-      if (['fiscal_year', 'period_end', 'field_status', 'migration_source', 'source_values'].includes(key)
+      if (['fiscal_year', 'period_end', 'field_status', 'field_status_reason', 'field_units', 'migration_source', 'source_values'].includes(key)
         || Object.hasOwn(seedValues, key) || Object.hasOwn(yfinanceValues, key)
         || Object.hasOwn(calculatedValues, key)) continue;
       if (row.field_status?.[key] === 'available' && !row.migration_source) yfinanceValues[key] = value;
       else seedValues[key] = value;
     }
-    const mergedRow = { ...row, ...seedValues, ...yfinanceValues };
-    // Preserve legacy source fallback, but never undo a finalized calculation.
-    for (const field of ['equity_ratio_computed', 'calculated_doe', 'net_de_ratio']) {
+    const seedUnits = seedFieldUnits(section, seedValues, seedRecord, row);
+    const ratioCalculation = calculatedValues.equity_ratio_computed;
+    const ratioSources = ratioCalculation?.input_sources;
+    const ratioSource = ratioSources?.equity;
+    const sameSourceCalculation = Boolean(
+      typeof ratioSource === 'string' && ratioSource.trim()
+      && ratioSource === ratioSources?.total_assets
+      && !['unknown', 'mixed', 'unavailable'].includes(String(ratioSource).toLowerCase())
+      && isReasonableEquityRatio(ratioCalculation?.value),
+    );
+    const compatibleCalculatedValues = Object.fromEntries(Object.entries(calculatedValues).filter(([field]) => {
+      if (field !== 'equity_ratio_computed') return true;
+      return sameSourceCalculation;
+    }));
+    const sourceValues = explicit ? {
+      ...explicit,
+      ...(explicit.seed && typeof explicit.seed === 'object' ? {
+        seed: { ...explicit.seed, values: seedValues, field_units: seedUnits },
+      } : {}),
+      ...(explicit.calculated && typeof explicit.calculated === 'object' ? {
+        calculated: { ...explicit.calculated, values: compatibleCalculatedValues },
+      } : {}),
+    } : null;
+    const flatSeedValues = { ...seedValues };
+    const effectiveFieldUnits = {};
+    const knownFlatUnits = section === 'annual'
+      ? { ...IRBANK_ANNUAL_FIELD_UNITS, ...Object.fromEntries([...FINANCIAL_ANNUAL_MONEY_FIELDS].map(field => [field, 'jpy'])) }
+      : IRBANK_VALUATION_FIELD_UNITS;
+    for (const field of Object.keys(knownFlatUnits)) {
+      if (Object.hasOwn(yfinanceValues, field)) {
+        effectiveFieldUnits[field] = knownFlatUnits[field];
+        continue;
+      }
+      if (!Object.hasOwn(seedValues, field)) continue;
+      const sourceUnit = seedUnits[field];
+      if (['million_jpy', 'million_JPY'].includes(sourceUnit) && FINANCIAL_ANNUAL_MONEY_FIELDS.has(field)) {
+        const amount = finiteNumber(seedValues[field]);
+        if (amount !== null) flatSeedValues[field] = amount * 1_000_000;
+        effectiveFieldUnits[field] = 'jpy';
+      } else if (sourceUnit) {
+        effectiveFieldUnits[field] = sourceUnit;
+      }
+    }
+    const mergedRow = { ...row, ...flatSeedValues, ...yfinanceValues };
+    // A flat legacy ratio is trusted only when its source calculation is proven,
+    // or when IRBANK supplied a valid ratio directly. Otherwise the API omits it.
+    for (const field of ['calculated_doe', 'net_de_ratio']) {
       if (Object.hasOwn(row, field)) mergedRow[field] = row[field];
+    }
+    if (section === 'annual') {
+      const seedRatio = seedValues.equity_ratio_computed;
+      const yfinanceEquity = finiteNumber(yfinanceValues.stockholders_equity)
+        ?? finiteNumber(yfinanceValues.total_equity_gross_minority_interest);
+      const yfinanceAssets = finiteNumber(yfinanceValues.total_assets);
+      const recalculatedYfinanceRatio = yfinanceEquity !== null && yfinanceAssets !== null && yfinanceAssets > 0
+        ? yfinanceEquity / yfinanceAssets * 100
+        : null;
+      const safeRatio = sameSourceCalculation
+        ? finiteNumber(ratioCalculation.value)
+        : isReasonableEquityRatio(seedRatio)
+          ? finiteNumber(seedRatio)
+          : isReasonableEquityRatio(recalculatedYfinanceRatio)
+            ? recalculatedYfinanceRatio
+            : null;
+      delete mergedRow.equity_ratio;
+      delete mergedRow.equity_ratio_computed;
+      if (safeRatio !== null) {
+        mergedRow.equity_ratio_computed = safeRatio;
+        effectiveFieldUnits.equity_ratio_computed = 'percent';
+      } else {
+        mergedRow.field_status = { ...(row.field_status || {}), equity_ratio_computed: 'empty' };
+      }
     }
     for (const field of ['sales', 'operating_profit', 'operating_cf', 'investing_cf']) {
       if (Array.isArray(row.field_status_reason?.[field])
@@ -597,14 +696,32 @@ async function readV2FinancialPayload(env, code) {
         mergedRow[field] = null;
       }
     }
+    if (section === 'annual') {
+      const marginFields = ['sales', 'operating_profit', 'operating_cf', 'investing_cf'];
+      if (marginFields.some(field => Object.hasOwn(yfinanceValues, field))) {
+        const blockedFields = marginFields.filter(field =>
+          Object.hasOwn(seedValues, field) && !Object.hasOwn(yfinanceValues, field));
+        for (const field of blockedFields) mergedRow[field] = null;
+        if (blockedFields.length) {
+          mergedRow.field_status = { ...(mergedRow.field_status || {}) };
+          mergedRow.field_status_reason = { ...(mergedRow.field_status_reason || {}) };
+          for (const field of blockedFields) {
+            mergedRow.field_status[field] = 'unsupported';
+            mergedRow.field_status_reason[field] = ['mixed_source_units_not_comparable'];
+          }
+        }
+      }
+    }
+    if (Object.keys(effectiveFieldUnits).length) mergedRow.field_units = effectiveFieldUnits;
     return {
       row: { ...mergedRow, ...(sourceValues ? { source_values: sourceValues } : {}) },
       seed: Object.keys(seedValues).length ? {
         fiscal_year: row.fiscal_year,
         period_end: row.period_end,
-        source: explicit?.seed?.source || (row.migration_source ? 'IRBANK' : 'existing v2 snapshot'),
-        source_key: explicit?.seed?.source_key || row.migration_source || null,
+        source: seedRecord.source || (row.migration_source ? 'IRBANK' : 'existing v2 snapshot'),
+        source_key: seedRecord.source_key || row.migration_source || null,
         values: seedValues,
+        field_units: seedUnits,
       } : null,
     };
   }).filter(Boolean);
