@@ -91,6 +91,7 @@
   },
   "api_units": {
     "financial_money": "jpy",
+    "yfinance_native_financial_money": "yfinance_native",
     "ratio": "percent",
     "per_share": "jpy_per_share",
     "multiple": "times"

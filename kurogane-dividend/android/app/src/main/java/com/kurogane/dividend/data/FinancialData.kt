@@ -128,10 +128,21 @@ data class FinancialData(
             val operatingCf = financial?.numberWithUnit("operating_cf", "jpy")
             val investingCf = financial?.numberWithUnit("investing_cf", "jpy")
             val cf = if (operatingCf != null && investingCf != null) operatingCf + investingCf else null
-            val fcfMargin = percent(cf, sales)
+            val fcfMargin = financial?.numberWithUnit("fcf_margin", "percent") ?: percent(cf, sales)
             val equity = financial?.numberWithUnit("equity_ratio_computed", "percent")
-            val payout = dividend?.numberWithUnit("payout_ratio", "percent")
-                ?: dividendPayload?.numberWithUnit("payout_ratio", "percent")
+            val payout = dividend?.let { row ->
+                normalizePayoutRatio(
+                    row.number("payout_ratio"),
+                    row.optJSONObject("field_units")?.optString("payout_ratio"),
+                    defaultUnit = "percent"
+                )
+            } ?: dividendPayload?.let { payload ->
+                normalizePayoutRatio(
+                    payload.number("payout_ratio"),
+                    payload.optJSONObject("field_units")?.optString("payout_ratio"),
+                    defaultUnit = "ratio"
+                )
+            }
             var noCut = 0
             for (i in dividends.lastIndex downTo 1) {
                 if (dividends[i].year != dividends[i - 1].year + 1 || dividends[i].dps < dividends[i - 1].dps) break
@@ -161,7 +172,13 @@ data class FinancialData(
                 eps = valuation?.numberWithUnit("eps_adjusted", "jpy_per_share") ?: Double.NaN,
                 bps = valuation?.numberWithUnit("bps_adjusted", "jpy_per_share") ?: Double.NaN,
                 operatingMargin = operating ?: Double.NaN, fcfMargin = fcfMargin,
-                fcfStatus = when { cf == null -> "未取得"; cf >= 0 -> "フリーCF黒字"; else -> "フリーCF赤字" },
+                fcfStatus = when {
+                    cf != null && cf >= 0 -> "フリーCF黒字"
+                    cf != null -> "フリーCF赤字"
+                    fcfMargin == null -> "未取得"
+                    fcfMargin >= 0 -> "フリーCF黒字"
+                    else -> "フリーCF赤字"
+                },
                 calculatedDoe = calculatedDoe?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: "未取得",
                 netDeRatio = netDeRatio?.let { String.format(Locale.JAPAN, "%.2f倍", it) } ?: "未取得",
                 calculatedDoeSub = when {
@@ -193,6 +210,15 @@ data class FinancialData(
 
 internal fun JSONObject.number(key: String): Double? =
     if (!has(key) || isNull(key)) null else optDouble(key).takeIf(Double::isFinite)
+
+private fun normalizePayoutRatio(value: Double?, unit: String?, defaultUnit: String): Double? {
+    if (value == null) return null
+    return when (unit?.trim()?.lowercase(Locale.ROOT)?.takeIf { it.isNotEmpty() && it != "null" } ?: defaultUnit) {
+        "percent", "percentage", "percentage_points", "percent_points" -> value
+        "ratio", "fraction" -> value * 100.0
+        else -> null
+    }
+}
 
 private fun JSONObject.numberWithUnit(key: String, expectedUnit: String): Double? =
     if (optJSONObject("field_units")?.optString(key) == expectedUnit) number(key) else null
