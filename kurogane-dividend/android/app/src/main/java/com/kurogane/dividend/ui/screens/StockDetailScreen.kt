@@ -561,9 +561,6 @@ fun StockDetailScreen(
                         color = ErrorRed, actionLabel = resources.getString(R.string.retry), onAction = { financialRetry++ })
                     financial == null -> StatusMessage(resources.getString(R.string.financial_empty),
                         actionLabel = resources.getString(R.string.retry), onAction = { financialRetry++ })
-                    financial?.profile?.let { it.calculatedDoe == "未取得" || it.netDeRatio == "未取得" } == true ->
-                        StatusMessage("一部の財務指標が未取得です。",
-                            actionLabel = resources.getString(R.string.retry), onAction = { financialRetry++ })
                 }
                 if (financial?.issuerDividends.orEmpty().groupBy { it.fiscalYear }.any { it.value.size > 1 }) {
                     StatusMessage("同一年に複数の決算期がある配当実績は、年単位のグラフでは未取得として表示します。")
