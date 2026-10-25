@@ -4,6 +4,8 @@
 
 - [ ] Verify multi-year dividend-event preloading end to end after Worker publication. Evidence: Worker `dividend-months` now accepts up to ten `event_years`; Android batches and caches requested years, and falls back to single-year requests on older Workers. The JDK 17 debug build installed and launched on SCG01 and the emulator; production publication, live API acknowledgement, and event-loading behavior remain unverified.
 
+- [ ] Verify the 20-session company-info rotation and same-session catalog recovery on a regular scheduled sync. Evidence: `sync_v2.py` now rotates company info across 20 groups, reuses successful catalog entries for the same session, reconstructs interrupted entries from R2, and records action-history repair triggers; scheduled-run behavior and publication read-back remain unverified.
+
 - [ ] Run the GitHub Actions `refresh-company-info` mode across the active V2 universe and inspect the publication summary plus R2 catalog read-back. The isolated workflow and collector change are prepared; production results are pending.
 
 - [x] Publish and backfill IRBANK financial-unit corrections. Evidence: PR #29 (`02b1e6d`) is live as Worker version `8ee553fa-3e66-49fd-99b0-d2f4a0d00d65`; the IRBANK v1 unit-metadata overlay covers 3,963 securities with zero hash mismatches; Actions run `40154919113` completed all four shards for 4,444 securities (3,693 migrated, 517 legacy records missing, 227 with no app fields, 7 unsupported codes), repaired 14,583 derived fields, and verified unit metadata on all 36,017 migrated documents; production 6721 FY2025 reports sales ¥429,000,000, assets ¥919,000,000, and equity ratio 37.362826218% with no equity-ratio anomaly; JDK 17 build, install, and launch checks succeeded on SCG01 and the emulator.

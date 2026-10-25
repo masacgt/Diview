@@ -44,6 +44,7 @@ on:
         options:
           - "16"
           - "24"
+          - "32"
         default: "16"
         required: true
       target_code:
@@ -370,12 +371,13 @@ jobs:
           cache-dependency-path: scripts/yfinance_r2/requirements.txt
       - name: Install collection dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
-      - name: Measure 20 and 500 security workloads at 16 and 24 workers
+      - name: Measure 20 and 500 security workloads at 16, 24 and 32 workers
         run: |
           set -euo pipefail
           YFINANCE_BENCHMARK_SAMPLE_SIZE=20 YFINANCE_BENCHMARK_WORKERS=16 YFINANCE_BENCHMARK_ACTION_REPORT_PATH=benchmark-action-20-16.json python scripts/yfinance_r2/benchmark_v2.py 2>&1 | tee -a benchmark-output.txt
           YFINANCE_BENCHMARK_SAMPLE_SIZE=500 YFINANCE_BENCHMARK_WORKERS=16 YFINANCE_BENCHMARK_ACTION_REPORT_PATH=benchmark-action-500-16.json python scripts/yfinance_r2/benchmark_v2.py 2>&1 | tee -a benchmark-output.txt
           YFINANCE_BENCHMARK_SAMPLE_SIZE=500 YFINANCE_BENCHMARK_WORKERS=24 YFINANCE_BENCHMARK_ACTION_REPORT_PATH=benchmark-action-500-24.json python scripts/yfinance_r2/benchmark_v2.py 2>&1 | tee -a benchmark-output.txt
+          YFINANCE_BENCHMARK_SAMPLE_SIZE=500 YFINANCE_BENCHMARK_WORKERS=32 YFINANCE_BENCHMARK_ACTION_REPORT_PATH=benchmark-action-500-32.json python scripts/yfinance_r2/benchmark_v2.py 2>&1 | tee -a benchmark-output.txt
         shell: bash
         env:
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
