@@ -647,7 +647,9 @@ private fun MonthlyDividendEstimateCard(
                 val monthDate = when (basis) {
                     MonthlyDividendChartBasis.EX_DIVIDEND_MONTH -> event.date
                     MonthlyDividendChartBasis.RECEIPT_MONTH ->
-                        event.paymentStartDate ?: event.recordDate?.plusMonths(3)
+                        event.paymentStartDate
+                            ?: event.recordDate?.plusMonths(3)
+                            ?: event.date.plusMonths(3)
                 }
                 return monthDate?.monthValue
             }
