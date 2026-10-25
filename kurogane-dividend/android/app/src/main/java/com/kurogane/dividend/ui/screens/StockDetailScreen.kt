@@ -402,6 +402,7 @@ fun StockDetailScreen(
         (backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())
     ) }
     val healthNarrative = remember(financial) { StockAnalysisNarrativeGenerator.generate(financial?.values.orEmpty()) }
+    val healthExplanationKeys = remember(healthNarrative) { healthNarrative.findings.map { it.key }.toSet() }
     val valuationValues = remember(backendAnalysisValues, financial) {
         ((backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())).filterKeys { it == "per" || it == "pbr" }
     }
@@ -2335,7 +2336,7 @@ fun StockDetailScreen(
 
 
             item {
-                StockAnalysisNarrativeCard(analysisNarrative)
+                StockAnalysisNarrativeCard(analysisNarrative, healthExplanationKeys)
             }
 
             // 5. 配当月・通知設定
@@ -3636,7 +3637,10 @@ private fun sameEditableAmount(left: Double?, right: Double?): Boolean = when {
 }
 
 @Composable
-private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative) {
+private fun StockAnalysisNarrativeCard(
+    analysisNarrative: StockAnalysisNarrative,
+    healthExplanationKeys: Set<String>
+) {
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = BackgroundDark,
@@ -3675,7 +3679,9 @@ private fun StockAnalysisNarrativeCard(analysisNarrative: StockAnalysisNarrative
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(finding.text, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
+                    if (finding.key !in healthExplanationKeys) {
+                        Text(finding.text, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
+                    }
                 }
             }
             Text(
