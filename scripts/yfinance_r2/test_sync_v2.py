@@ -105,6 +105,8 @@ class NetDeRatioTests(TestCase):
                 "equity_ratio_computed": 37.829768942,
             },
             {"stockholders_equity": 39_918_854_000_000},
+            {"total_assets": "million_jpy", "equity_ratio_computed": "percent"},
+            {"stockholders_equity": "jpy"},
         )
 
         self.assertEqual(result["value"], 37.829768942)
@@ -115,6 +117,8 @@ class NetDeRatioTests(TestCase):
         result = sync.equity_ratio_result(
             {"total_assets": 100},
             {"stockholders_equity": 40, "total_assets": 200},
+            {},
+            {"stockholders_equity": "jpy", "total_assets": "jpy"},
         )
 
         self.assertEqual(result["value"], 20)
@@ -125,6 +129,8 @@ class NetDeRatioTests(TestCase):
         result = sync.equity_ratio_result(
             {"total_assets": 100},
             {"stockholders_equity": 40},
+            {"total_assets": "million_jpy"},
+            {"stockholders_equity": "jpy"},
         )
 
         self.assertIsNone(result["value"])
@@ -1066,6 +1072,13 @@ class OfflineFinancialSyncTests(TestCase):
             self.documents[key] = deepcopy(value)
             self.writes.append(key)
             return True
+
+        def put_object(self, *, Bucket, Key, Body, **kwargs):
+            self.documents[Key] = json.loads(Body.decode("utf-8"))
+
+        def get_object(self, *, Bucket, Key):
+            body = json.dumps(self.documents[Key], sort_keys=True).encode("utf-8")
+            return {"Body": io.BytesIO(body)}
 
         def get_paginator(self, name):
             return self

@@ -39,18 +39,25 @@ class FinancialRefreshContractTests(TestCase):
 
     def test_financial_revision_changes_even_after_partial_write_failure(self):
         client = object()
+        published_revisions = []
+
+        def publish_revision(*_args):
+            revision = f"revision-{len(published_revisions) + 1}"
+            published_revisions.append(revision)
+            return revision
+
         with patch.object(refresh.collector, "configure_yfinance"), \
                 patch.object(refresh.collector, "required_env", return_value="test"), \
                 patch.object(refresh.collector, "get_client", return_value=client), \
                 patch.object(refresh, "refresh_with_client", side_effect=RuntimeError("read-back failed")), \
-                patch.object(refresh.sync, "put_json_if_changed") as write:
+                patch.object(refresh, "bump_financial_revision", side_effect=publish_revision) as bump_revision:
             for _ in range(2):
                 with self.assertRaisesRegex(RuntimeError, "read-back failed"):
                     refresh.refresh("4502")
-            self.assertEqual(write.call_count, 2)
-            first, second = write.call_args_list
-            self.assertEqual(first.args[2], "market/yfinance/v2/financial_revision.json")
-            self.assertNotEqual(first.args[3]["revision"], second.args[3]["revision"])
+            self.assertEqual(bump_revision.call_count, 2)
+            self.assertEqual(bump_revision.call_args_list[0].args, (client, "test"))
+            self.assertEqual(bump_revision.call_args_list[1].args, (client, "test"))
+            self.assertNotEqual(*published_revisions)
 
     def test_income_advice_uses_market_date_with_opaque_generation(self):
         generation = "2026-10-19-" + "a" * 32
@@ -88,6 +95,7 @@ class FinancialRefreshContractTests(TestCase):
                 with patch.object(migration.sys, "argv", argv), \
                         patch.object(migration, "required_env", return_value="test"), \
                         patch.object(migration, "make_client", return_value=client), \
+                        patch.object(migration, "bump_financial_revision") as bump_revision, \
                         patch.object(migration, "read_json", return_value={
                             "securities": [{"code": "4502", "status": "active"}]
                         }), \
@@ -95,7 +103,6 @@ class FinancialRefreshContractTests(TestCase):
                         redirect_stdout(io.StringIO()):
                     self.assertEqual(migration.main(), 1)
                 if dry_run:
-                    client.put_object.assert_not_called()
+                    bump_revision.assert_not_called()
                 else:
-                    self.assertEqual(client.put_object.call_args.kwargs["Key"],
-                                     "market/yfinance/v2/financial_revision.json")
+                    bump_revision.assert_called_once_with(client, "test")

@@ -126,17 +126,23 @@ def count_pending(items: dict[str, dict[str, Any]], codes: list[str], generated_
 def publish_index(client: Any, bucket: str, key: str, document: dict[str, Any]) -> tuple[str, str]:
     payload = refresh.json_bytes(document)
     digest = hashlib.sha256(payload).hexdigest()
-    response = client.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=payload,
-        ContentType="application/json; charset=utf-8",
-        CacheControl="public, max-age=300",
-    )
-    saved = client.get_object(Bucket=bucket, Key=key)["Body"].read()
-    if hashlib.sha256(saved).hexdigest() != digest:
-        raise RuntimeError(f"IRBANK v2 dividend read-back mismatch: {key}")
-    return digest, str(response.get("ETag") or "").strip('"')
+    wrote_index = False
+    try:
+        response = client.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=payload,
+            ContentType="application/json; charset=utf-8",
+            CacheControl="public, max-age=300",
+        )
+        wrote_index = True
+        saved = client.get_object(Bucket=bucket, Key=key)["Body"].read()
+        if hashlib.sha256(saved).hexdigest() != digest:
+            raise RuntimeError(f"IRBANK v2 dividend read-back mismatch: {key}")
+        return digest, str(response.get("ETag") or "").strip('"')
+    finally:
+        if wrote_index and key == DEFAULT_R2_KEY:
+            refresh.bump_financial_revision(client, bucket)
 
 
 def main() -> int:

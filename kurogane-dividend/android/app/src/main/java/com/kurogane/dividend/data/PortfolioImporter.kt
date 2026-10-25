@@ -37,6 +37,7 @@ object PortfolioImporter {
             require(PortfolioMath.validMoney(price) && PortfolioMath.validMoney(cost)) { "単価が正しくありません" }
             val currency = first.currency ?: old?.currency ?: if (!first.isFund && code.matches(Regex("[A-Z]+"))) "$" else "¥"
             val category = if (first.isFund) Category.FUND else if (currency == "$") Category.US else Category.JAPAN
+            require(PortfolioMath.hasValidMoneyBasis(category, currency)) { "通貨と銘柄区分が一致しません" }
             val activeAccounts = allocations.filter { it.shares > 0 || "shares" !in fields }.map { it.accountType }.distinct()
             val account = if ("account" in fields) activeAccounts.singleOrNull() ?: if (activeAccounts.isEmpty()) old?.accountType ?: "特定口座" else "複数口座" else old?.accountType ?: "特定口座"
             val taxFree = if ("account" in fields && "shares" in fields) allocations.filter { PortfolioMath.isTaxFree(it.accountType) }.sumOf { it.shares }

@@ -29,6 +29,7 @@ yf.config.debug.hide_exceptions = False
 
 import fetch_and_upload as collector
 from fetch_jquants_universe import fetch_securities
+from financial_revision import bump_financial_revision
 from monthly_price_calendar import last_xtks_session_in_december, normalize_december_price_point as normalize_monthly_price_point
 
 
@@ -1587,21 +1588,21 @@ def prior_financial_maps(
     return statements, valuations, document_keys, records
 
 
-FINANCIAL_RECORD_METADATA = {"fiscal_year", "period_end", "field_status", "field_status_reason", "migration_source", "source_values"}
+FINANCIAL_RECORD_METADATA = {
+    "fiscal_year", "period_end", "field_status", "field_status_reason",
+    "field_units", "migration_source", "source_values",
+}
 FINANCIAL_DERIVED_FIELDS = {"equity_ratio_computed"}
+FINANCIAL_UNIT_CONTRACT = json.loads(
+    (Path(__file__).resolve().parents[2] / "data/irbank/cloudflare/src/financial_unit_contract.json")
+    .read_text(encoding="utf-8")
+)
+IRBANK_ANNUAL_MONEY_FIELDS = frozenset(FINANCIAL_UNIT_CONTRACT["irbank"]["annual_money_fields"])
 IRBANK_ANNUAL_FIELD_UNITS = {
-    "sales": "million_jpy",
-    "operating_profit": "million_jpy",
-    "operating_cf": "million_jpy",
-    "investing_cf": "million_jpy",
-    "total_assets": "million_jpy",
-    "equity_ratio_computed": "percent",
+    **{field: "million_jpy" for field in IRBANK_ANNUAL_MONEY_FIELDS},
+    **FINANCIAL_UNIT_CONTRACT["irbank"]["annual_field_units"],
 }
-IRBANK_VALUATION_FIELD_UNITS = {
-    "eps_adjusted": "jpy_per_share",
-    "bps_adjusted": "jpy_per_share",
-    "dividend_yield_adjusted": "percent",
-}
+IRBANK_VALUATION_FIELD_UNITS = FINANCIAL_UNIT_CONTRACT["irbank"]["valuation_field_units"]
 YFINANCE_FINANCIAL_MONEY_FIELDS = (
     set(INCOME_FIELDS.values()) | set(BALANCE_FIELDS.values()) | set(CASH_FLOW_FIELDS.values())
     | {"doe_dividend_total"}
@@ -1613,13 +1614,15 @@ def source_field_units(values: dict[str, Any], source: Any, existing: Any,
     units = dict(existing) if isinstance(existing, dict) else {}
     if "irbank" in str(source or "").lower():
         for field, unit in known_units.items():
-            if field in values:
+            if field in values and not units.get(field):
                 units[field] = unit
     return units
 
 
-def equity_ratio_result(seed_values: dict[str, Any], yfinance_values: dict[str, Any]) -> dict[str, Any]:
-    """Calculate equity ratio only from inputs with a shared source and unit basis."""
+def equity_ratio_result(seed_values: dict[str, Any], yfinance_values: dict[str, Any],
+                        seed_units: dict[str, Any] | None = None,
+                        yfinance_units: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Calculate equity ratio only from inputs with a shared source and explicit unit."""
     equity_field = next((
         field for field in ("stockholders_equity", "total_equity_gross_minority_interest")
         if finite_number(yfinance_values.get(field)) is not None
@@ -1635,20 +1638,32 @@ def equity_ratio_result(seed_values: dict[str, Any], yfinance_values: dict[str, 
     if finite_number(yfinance_values.get("total_assets")) is not None:
         assets_source = "yfinance"
         assets = finite_number(yfinance_values.get("total_assets"))
+        assets_field = "total_assets"
     else:
         assets_source = "seed" if finite_number(seed_values.get("total_assets")) is not None else None
         assets = finite_number(seed_values.get("total_assets"))
+        assets_field = "total_assets"
 
     equity_values = yfinance_values if equity_source == "yfinance" else seed_values
     equity = finite_number(equity_values.get(equity_field)) if equity_field else None
+    seed_units = seed_units if isinstance(seed_units, dict) else {}
+    yfinance_units = yfinance_units if isinstance(yfinance_units, dict) else {}
+    def canonical_unit(value: Any) -> str | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        return value.strip().lower().replace("-", "_")
+    equity_unit = canonical_unit((yfinance_units if equity_source == "yfinance" else seed_units).get(equity_field)) if equity_field else None
+    assets_unit = canonical_unit((yfinance_units if assets_source == "yfinance" else seed_units).get(assets_field)) if assets_field else None
     ratio_out_of_range = False
-    if equity is not None and assets is not None and assets > 0 and equity_source == assets_source:
+    units_match = equity_unit is not None and equity_unit == assets_unit and equity_unit in {"jpy", "million_jpy"}
+    if equity is not None and assets is not None and assets > 0 and equity_source == assets_source and units_match:
         calculated_ratio = equity / assets * 100
         if math.isfinite(calculated_ratio) and abs(calculated_ratio) <= 1000:
             return {
                 "value": calculated_ratio,
                 "source": "calculated",
                 "input_sources": {"equity": equity_source, "total_assets": assets_source},
+                "input_units": {"equity": equity_unit, "total_assets": assets_unit},
                 "reason": None,
             }
         ratio_out_of_range = True
@@ -1657,18 +1672,23 @@ def equity_ratio_result(seed_values: dict[str, Any], yfinance_values: dict[str, 
     # yfinance balance-sheet amounts are JPY. Keep the seed's same-source
     # ratio when one input has been refreshed from a different provider.
     seed_ratio = finite_number(seed_values.get("equity_ratio_computed"))
-    if seed_ratio is not None and abs(seed_ratio) <= 1000:
+    seed_ratio_unit = canonical_unit(seed_units.get("equity_ratio_computed"))
+    if seed_ratio is not None and seed_ratio_unit == "percent" and abs(seed_ratio) <= 1000:
         return {
             "value": seed_ratio,
             "source": "seed",
             "input_sources": {"equity": "seed", "total_assets": "seed"},
+            "input_units": {"equity_ratio_computed": "percent"},
             "reason": "mixed_source_inputs_not_recalculated",
         }
     return {
         "value": None,
         "source": None,
         "input_sources": {"equity": equity_source, "total_assets": assets_source},
+        "input_units": {"equity": equity_unit, "total_assets": assets_unit},
         "reason": "equity_ratio_out_of_range" if ratio_out_of_range
+        else "mixed_source_inputs_not_comparable" if equity_source and assets_source and equity_source != assets_source
+        else "incompatible_input_units" if equity is not None and assets is not None and not units_match
         else "mixed_source_inputs_not_comparable" if equity_source and assets_source else "required_input_missing",
     }
 
@@ -1770,7 +1790,27 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
         if net_de_metrics:
             yfinance_values.update(net_de_metrics)
             values.update(net_de_metrics)
-        equity_ratio = equity_ratio_result(seed_values, yfinance_values)
+        prior_annual = prior_record.get("annual") if isinstance(prior_record.get("annual"), dict) else {}
+        prior_sources = prior_annual.get("source_values")
+        prior_seed = prior_sources.get("seed") if isinstance(prior_sources, dict) else None
+        prior_seed = prior_seed if isinstance(prior_seed, dict) else {}
+        seed_source = (
+            prior_seed.get("source")
+            or ("IRBANK migration seed" if prior_annual.get("migration_source") else "existing v2 snapshot")
+        )
+        prior_flat_units = prior_annual.get("field_units")
+        prior_flat_units = prior_flat_units if isinstance(prior_flat_units, dict) else {}
+        prior_seed_units = prior_seed.get("field_units")
+        prior_seed_units = prior_seed_units if isinstance(prior_seed_units, dict) else {}
+        seed_field_units = source_field_units(
+            seed_values, seed_source,
+            {**prior_flat_units, **prior_seed_units},
+            IRBANK_ANNUAL_FIELD_UNITS,
+        )
+        yfinance_field_units = {
+            field: "jpy" for field in yfinance_values if field in YFINANCE_FINANCIAL_MONEY_FIELDS
+        }
+        equity_ratio = equity_ratio_result(seed_values, yfinance_values, seed_field_units, yfinance_field_units)
         if equity_ratio["value"] is not None:
             values["equity_ratio_computed"] = equity_ratio["value"]
         else:
@@ -1850,21 +1890,6 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
                     values[field] = None
                     annual_field_status[field] = "unsupported"
                     annual_field_status_reason[field] = ["mixed_source_units_not_comparable"]
-        prior_annual = prior_record.get("annual") if isinstance(prior_record.get("annual"), dict) else {}
-        prior_sources = prior_annual.get("source_values")
-        prior_seed = prior_sources.get("seed") if isinstance(prior_sources, dict) else None
-        prior_seed = prior_seed if isinstance(prior_seed, dict) else {}
-        seed_source = (
-            (prior_annual.get("source_values") or {}).get("seed", {}).get("source")
-            if isinstance(prior_annual.get("source_values"), dict) else None
-        ) or ("IRBANK migration seed" if prior_annual.get("migration_source") else "existing v2 snapshot")
-        prior_seed_units = prior_seed.get("field_units")
-        seed_field_units = source_field_units(
-            seed_values, seed_source, prior_seed_units, IRBANK_ANNUAL_FIELD_UNITS,
-        )
-        yfinance_field_units = {
-            field: "jpy" for field in yfinance_values if field in YFINANCE_FINANCIAL_MONEY_FIELDS
-        }
         annual_sources = {
             "seed": {
                 **prior_seed,
@@ -1884,6 +1909,8 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
                         "value": values["equity_ratio_computed"],
                         "formula": "equity / total_assets * 100",
                         "input_sources": equity_ratio["input_sources"],
+                        "input_units": equity_ratio["input_units"],
+                        "unit": "percent",
                     }
                 } if "equity_ratio_computed" in values and equity_ratio["source"] == "calculated" else {},
             },
@@ -1908,8 +1935,13 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             valuation_source = (
                 prior_valuation_seed.get("source")
             ) or ("IRBANK migration seed" if isinstance(prior_valuation, dict) and prior_valuation.get("migration_source") else "existing v2 snapshot")
+            prior_valuation_flat_units = prior_valuation.get("field_units") if isinstance(prior_valuation, dict) else None
+            prior_valuation_flat_units = prior_valuation_flat_units if isinstance(prior_valuation_flat_units, dict) else {}
+            prior_valuation_seed_units = prior_valuation_seed.get("field_units")
+            prior_valuation_seed_units = prior_valuation_seed_units if isinstance(prior_valuation_seed_units, dict) else {}
             valuation_seed_units = source_field_units(
-                seed_valuation, valuation_source, prior_valuation_seed.get("field_units"),
+                seed_valuation, valuation_source,
+                {**prior_valuation_flat_units, **prior_valuation_seed_units},
                 IRBANK_VALUATION_FIELD_UNITS,
             )
             valuation_yfinance_units = {
@@ -2752,6 +2784,17 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             "calendar_year_metrics": calendar_year_metrics,
         },
         "statistics": {key: collector.json_safe(info[key]) for key in CURRENT_FIELDS if info.get(key) is not None},
+        "statistics_field_units": {
+            "trailingEps": "jpy_per_share",
+            "forwardEps": "jpy_per_share",
+            "bookValue": "jpy_per_share",
+            "dividendRate": "jpy_per_share",
+            "dividendYield": "ratio",
+            "operatingMargins": "ratio",
+            "payoutRatio": "ratio",
+            "trailingPE": "times",
+            "priceToBook": "times",
+        },
         "statistics_last_fetched_session_date": info_last_fetched_session_date,
         "statistics_last_fetched_at": info_last_fetched_at,
         "calendar": calendar,
@@ -3670,6 +3713,12 @@ def run(
                         f"yfinance_calls={partial_call_count}",
                         flush=True,
                     )
+
+    if publish:
+        # Current statistics, annual statements, and dividend history are read
+        # together by the financial endpoint. Advance one shared token after
+        # the parallel writes finish, including partial per-security runs.
+        bump_financial_revision(client, bucket)
 
     collection_ended = time.perf_counter()
     phase_seconds["security_collection"] = round(collection_ended - phase_started, 3)

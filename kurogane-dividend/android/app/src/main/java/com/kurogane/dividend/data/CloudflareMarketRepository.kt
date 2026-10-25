@@ -737,13 +737,28 @@ class CloudflareMarketRepository(
         catch (error: MarketHttpException) { if (error.status == 404) null else throw error }
     }
 
-    private fun getJson(path: String): JSONObject {
+    suspend fun financialDataRevision(): String? = withContext(ioDispatcher) {
+        try {
+            getJson("/api/v1/financial-data/revision", bypassHttpCache = true)
+                .optString("revision")
+                .takeIf { it.matches(Regex("[a-fA-F0-9-]{16,64}")) }
+        } catch (error: MarketHttpException) {
+            if (error.status == 404 || error.status == 503) null else throw error
+        }
+    }
+
+    private fun getJson(path: String, bypassHttpCache: Boolean = false): JSONObject {
         val base = URI(baseUrl)
         require(base.scheme == "https" && !base.host.isNullOrBlank() && base.userInfo == null && base.query == null && base.fragment == null) { "Cloudflare API URLは認証情報を含まないHTTPSで設定してください" }
         val connection = connectionFactory(URL(baseUrl.trimEnd('/') + path))
         try {
             connection.requestMethod = "GET"
             connection.instanceFollowRedirects = false
+            if (bypassHttpCache) {
+                connection.useCaches = false
+                connection.setRequestProperty("Cache-Control", "no-cache, no-store")
+                connection.setRequestProperty("Pragma", "no-cache")
+            }
             connection.connectTimeout = 8_000
             connection.readTimeout = 12_000
             connection.setRequestProperty("Accept", "application/json")

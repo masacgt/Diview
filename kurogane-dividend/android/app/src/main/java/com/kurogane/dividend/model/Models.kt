@@ -32,28 +32,43 @@ data class Holding(
     val priceUnit: Double get() = if (category == Category.FUND) 10_000.0 else 1.0
     val effectiveTaxFreeShares: Int get() =
         (taxFreeShares ?: if (PortfolioMath.isTaxFree(accountType)) shares else 0).coerceIn(0, shares.coerceAtLeast(0))
-    val currencyFactor: Double get() = if (currency == "$") usdJpyRate?.takeIf { it.isFinite() && it > 0 } ?: 0.0 else 1.0
-    val totalValuation: Double get() = shares * price / priceUnit * currencyFactor
-    val totalCost: Double get() = shares * acqPrice / priceUnit * currencyFactor
+    val currencyFactor: Double get() = when {
+        !PortfolioMath.hasValidMoneyBasis(category, currency) -> 0.0
+        currency == "$" -> usdJpyRate?.takeIf { it.isFinite() && it > 0 } ?: 0.0
+        else -> 1.0
+    }
+    val valuationJpy: JpyAmount? get() = PortfolioMath.holdingJpyAmount(this, price)
+    val costJpy: JpyAmount? get() = PortfolioMath.holdingJpyAmount(this, acqPrice)
+    val annualDividendJpy: JpyAmount? get() = PortfolioMath.holdingJpyAmount(this, dps)
+    val totalValuation: Double get() = valuationJpy?.value ?: 0.0
+    val totalCost: Double get() = costJpy?.value ?: 0.0
     val gainLoss: Double get() = totalValuation - totalCost
     val gainLossPercent: Double get() = if (totalCost > 0) (gainLoss / totalCost) * 100 else 0.0
-    val annualDividend: Double get() = shares * dps / priceUnit * currencyFactor
+    val annualDividend: Double get() = annualDividendJpy?.value ?: 0.0
     val liveYield: Double get() = irbankYieldRate
         ?.takeIf { it.isFinite() && it in 0.0..100.0 && irbankYieldDps == dps }
         ?: PortfolioMath.yieldPercent(dps, price)
     val liveYoc: Double get() = PortfolioMath.yieldPercent(dps, acqPrice)
 
-    fun getEffectiveAnnualDividend(taxRateMode: String): Double = getEffectiveDividendForShares(shares.toLong(), taxRateMode)
+    fun getEffectiveAnnualDividend(taxRateMode: String): Double =
+        getEffectiveAnnualDividendJpy(taxRateMode)?.value ?: 0.0
+
+    fun getEffectiveAnnualDividendJpy(taxRateMode: String): JpyAmount? =
+        effectiveDividendJpy(shares.toLong(), taxRateMode)
 
     fun getEffectiveDividendForShares(shareCount: Long, taxRateMode: String): Double {
-        val gross = shareCount.coerceAtLeast(0) * dps / priceUnit * currencyFactor
-        if (!gross.isFinite() || gross < 0) return 0.0
-        return if (taxRateMode == "net") {
+        return effectiveDividendJpy(shareCount, taxRateMode)?.value ?: 0.0
+    }
+
+    private fun effectiveDividendJpy(shareCount: Long, taxRateMode: String): JpyAmount? {
+        val gross = PortfolioMath.holdingJpyAmount(this, dps, shareCount.coerceAtLeast(0))?.value ?: return null
+        val net = if (taxRateMode == "net") {
             val freeRatio = if (shares > 0) effectiveTaxFreeShares.toDouble() / shares else if (PortfolioMath.isTaxFree(accountType)) 1.0 else 0.0
             DividendTax.net(gross, freeRatio, category == Category.US && usWithholdingEnabled)
         } else {
             gross
         }
+        return net.takeIf(Double::isFinite)?.let(::JpyAmount)
     }
 }
 
@@ -139,7 +154,11 @@ data class WatchlistStock(
     val usdJpyRate: Double? = null,
     val isNoDividendConfirmed: Boolean = false
 ) {
-    val currencyFactor: Double get() = if (currency == "$") usdJpyRate?.takeIf { it.isFinite() && it > 0 } ?: 0.0 else 1.0
+    val currencyFactor: Double get() = when {
+        !PortfolioMath.hasValidMoneyBasis(category, currency) -> 0.0
+        currency == "$" -> usdJpyRate?.takeIf { it.isFinite() && it > 0 } ?: 0.0
+        else -> 1.0
+    }
     val isReady: Boolean get() = targetYield.isFinite() && targetYield > 0.0 && currentYield.isFinite() && currentYield >= targetYield
     val achievementRate: Int get() = if (targetYield.isFinite() && targetYield > 0.0 && currentYield.isFinite())
         ((currentYield / targetYield) * 100).toInt().coerceIn(0, 100) else 0
