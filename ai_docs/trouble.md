@@ -1,5 +1,7 @@
 # Trouble
 
+- The multi-year dividend-history refresh uses an expression-bodied `withLock` function; its only closing brace closes the lambda. An extra brace closes `DividendViewModel` early and triggers unrelated unresolved-reference errors. JDK 17 `assembleDebug` succeeded after removing the extra brace.
+
 - Legacy dividend/split migration could stop before cleanup when a Yahoo history refresh omitted an event date still present in the legacy object: replacing the refreshed date range discarded that event, and the pre-cleanup verifier correctly rejected the transfer. Normalize event dates, retain legacy events absent from the refreshed rows, and verify every legacy event has a parseable date and exists in hot or archived v2 records before deleting legacy data.
 
 - IRBANK annual monetary seed values are in million JPY, while yfinance financial amounts and Android formulas use JPY. Mixed-source flat values could produce million-fold equity ratios and margins. Preserve per-field source units, normalize known monetary values at the API boundary, and omit ratios without valid same-source provenance or a valid IRBANK-reported value. Confirm the full production migration and API read-back after publication.

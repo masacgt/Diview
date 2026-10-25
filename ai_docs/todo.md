@@ -2,7 +2,7 @@
 
 ## In Progress
 
-- [ ] Verify multi-year dividend-event preloading end to end after Worker publication. Evidence: Worker `dividend-months` now accepts up to ten `event_years`; Android batches and caches requested years, and falls back to single-year requests on older Workers. Production publication, live API acknowledgement, and Stock Detail behavior remain unverified.
+- [ ] Verify multi-year dividend-event preloading end to end after Worker publication. Evidence: Worker `dividend-months` now accepts up to ten `event_years`; Android batches and caches requested years, and falls back to single-year requests on older Workers. The JDK 17 debug build installed and launched on SCG01 and the emulator; production publication, live API acknowledgement, and event-loading behavior remain unverified.
 
 - [ ] Run the GitHub Actions `refresh-company-info` mode across the active V2 universe and inspect the publication summary plus R2 catalog read-back. The isolated workflow and collector change are prepared; production results are pending.
 

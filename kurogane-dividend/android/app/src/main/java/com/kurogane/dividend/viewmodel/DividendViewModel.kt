@@ -1058,7 +1058,6 @@ class DividendViewModel @JvmOverloads constructor(
                 marketPreferences.getString("dividend_year_events_fetched_jst_${normalized}_$year", null) == today
             }
         }
-    }
 
     private var dividendHistoryRefreshStarted = false
 
