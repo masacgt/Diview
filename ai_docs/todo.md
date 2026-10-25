@@ -2,7 +2,9 @@
 
 ## In Progress
 
-- [ ] Enforce financial field units and server revisions across the Worker, R2 writers, Android cache, and portfolio calculations. Evidence: source unit metadata takes precedence over contract fallbacks; the Worker converts only declared money units, the app validates API units and server revisions, payout ratios use percentage points, and portfolio totals aggregate typed JPY amounts. Build/device checks and production Worker/API verification remain pending.
+- [ ] Enforce financial field units and server revisions across the Worker, R2 writers, Android cache, and portfolio calculations. Evidence: production Worker version `89a90492-512e-4c20-adcd-7be237b829f6` returns contract version 5; live API and device caches show 8058 at 39.0886%/45.93% and 6721 at 37.3628% with assets of ¥919,000,000; JDK 17 build and launch succeeded on SCG01 and emulator, and both saved the published revision. Automated financial-parser and portfolio regression checks were not run.
+
+- [ ] Run the existing financial-unit parser and portfolio aggregation regression checks before closing the financial integrity work.
 
 - [ ] Verify multi-year dividend-event preloading end to end after Worker publication. Evidence: Worker `dividend-months` now accepts up to ten `event_years`; Android batches and caches requested years, and falls back to single-year requests on older Workers. The JDK 17 debug build installed and launched on SCG01 and the emulator; production publication, live API acknowledgement, and event-loading behavior remain unverified.
 
