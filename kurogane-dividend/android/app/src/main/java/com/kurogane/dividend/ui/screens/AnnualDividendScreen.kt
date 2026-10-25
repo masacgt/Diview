@@ -982,7 +982,8 @@ private fun MonthlyDividendEstimateCard(
 
 @Composable
 private fun AnnualDividendHistoryInfo(
-    description: String
+    description: String,
+    contentDescription: String? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -992,7 +993,8 @@ private fun AnnualDividendHistoryInfo(
         ) {
             Icon(
                 Icons.Default.Info,
-                contentDescription = stringResource(R.string.annual_dividend_info_content_description),
+                contentDescription = contentDescription
+                    ?: stringResource(R.string.annual_dividend_info_content_description),
                 tint = OnSurfaceVariant,
                 modifier = Modifier.size(18.dp)
             )
@@ -1453,6 +1455,11 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 fontWeight = FontWeight.Bold,
                                 color = OnSurface
                             )
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        AnnualDividendHistoryInfo(
+                            description = stringResource(R.string.annual_dividend_composition_info_description),
+                            contentDescription = stringResource(R.string.annual_dividend_composition_info_content_description)
                         )
                     }
 
