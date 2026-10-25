@@ -8,6 +8,12 @@
 - Determine screen behavior from the current code under `kurogane-dividend/` and the user's latest instructions.
 - Keep `archive/` as historical material. Do not delete or restore its contents unless the user asks.
 
+## Work location and directories
+
+- Work only within the working folder supplied for the task; do not create or write task files elsewhere.
+- Do not create new folders anywhere under `C:\`, at any depth. Reuse existing folders inside the supplied working folder.
+- If no suitable existing folder is available, ask for a destination before writing files.
+
 ## Git and generated files
 
 - Keep app source, scripts, documentation, and required bundled data in Git.
