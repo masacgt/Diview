@@ -100,6 +100,31 @@ class PortfolioScreenTest {
         compose.runOnIdle { assertEquals(0, dismissals) }
     }
 
+    @Test fun acquisitionPricesHaveNoGroupingAndPastedPriceCanRegister() {
+        var registeredPrice: Double? = null
+        compose.setContent { KuroganeDividendTheme {
+            AddHoldingSheet(
+                true, "8058", {},
+                onSearchSecurities = { emptyList() },
+                onResolveSecurity = { null },
+                onRegisterCollective = { _, allocations, _ ->
+                    registeredPrice = allocations.first().acquisitionPrice
+                    true
+                }
+            )
+        } }
+        listOf(1, 3, 5, 7).forEach { index ->
+            compose.onAllNodes(hasSetTextAction())[index].performScrollTo().assertTextEquals("3240")
+        }
+        compose.onAllNodes(hasSetTextAction())[1].performScrollTo().performTextReplacement("2,015")
+        compose.onAllNodes(hasSetTextAction())[1].assertTextEquals("2015")
+        compose.onAllNodes(hasSetTextAction())[2].performScrollTo().performTextReplacement("100")
+        compose.onNodeWithText("すべての口座にまとめて登録する")
+            .performScrollTo().assertIsEnabled().performClick()
+        compose.waitUntil(10_000) { registeredPrice != null }
+        compose.runOnIdle { assertEquals(2015.0, registeredPrice!!, 0.0) }
+    }
+
     @Test fun repeatedRegistrationTapStartsOnlyOneRequest() {
         var requests = 0
         val pending = CompletableDeferred<Boolean>()

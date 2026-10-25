@@ -39,7 +39,8 @@ import com.kurogane.dividend.data.runCatchingCancellable
 import com.kurogane.dividend.model.HoldingAllocation
 import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.PortfolioMath
-import com.kurogane.dividend.model.formatStockPriceDisplay
+import com.kurogane.dividend.model.formatAcquisitionPriceInput
+import com.kurogane.dividend.model.normalizeAcquisitionPriceInput
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -109,16 +110,16 @@ fun AddHoldingSheet(
 
     // Accounts Matrix States
     var nisaShares by remember { mutableStateOf("0") }
-    var nisaPrice by remember { mutableStateOf(formatStockPriceDisplay(selectedStock.price, selectedStock.code)) }
+    var nisaPrice by remember { mutableStateOf(formatAcquisitionPriceInput(selectedStock.price)) }
 
     var tsumitateShares by remember { mutableStateOf("0") }
-    var tsumitatePrice by remember { mutableStateOf(formatStockPriceDisplay(selectedStock.price, selectedStock.code)) }
+    var tsumitatePrice by remember { mutableStateOf(formatAcquisitionPriceInput(selectedStock.price)) }
 
     var tokuteiShares by remember { mutableStateOf("0") }
-    var tokuteiPrice by remember { mutableStateOf(formatStockPriceDisplay(selectedStock.price, selectedStock.code)) }
+    var tokuteiPrice by remember { mutableStateOf(formatAcquisitionPriceInput(selectedStock.price)) }
 
     var generalShares by remember { mutableStateOf("0") }
-    var generalPrice by remember { mutableStateOf(formatStockPriceDisplay(selectedStock.price, selectedStock.code)) }
+    var generalPrice by remember { mutableStateOf(formatAcquisitionPriceInput(selectedStock.price)) }
     var downwardDragPx by remember { mutableFloatStateOf(0f) }
     var isSwipeGesture by remember { mutableStateOf(false) }
     val dismissDragThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) {
@@ -191,7 +192,7 @@ fun AddHoldingSheet(
         tsumitateShares = sharesByAccount[1].toString()
         tokuteiShares = sharesByAccount[2].toString()
         generalShares = sharesByAccount[3].toString()
-        val acquisitionPrice = holding.acqPrice.toString()
+        val acquisitionPrice = formatAcquisitionPriceInput(holding.acqPrice)
         nisaPrice = acquisitionPrice
         tsumitatePrice = acquisitionPrice
         tokuteiPrice = acquisitionPrice
@@ -203,8 +204,8 @@ fun AddHoldingSheet(
         selectedStock = stock
         stockCodeInput = stock.code
         val existingAcquisitionPrice = existingHoldings.firstOrNull { it.code.equals(stock.code, ignoreCase = true) }?.acqPrice
-        val inputPrice = existingAcquisitionPrice?.toString()
-            ?: formatStockPriceDisplay(stock.price, stock.code)
+        val inputPrice = existingAcquisitionPrice?.let(::formatAcquisitionPriceInput)
+            ?: formatAcquisitionPriceInput(stock.price)
         nisaPrice = inputPrice
         tsumitatePrice = inputPrice
         tokuteiPrice = inputPrice
@@ -568,7 +569,7 @@ fun AddHoldingSheet(
                             .background(PrimaryEmeraldContainer.copy(alpha = 0.15f))
                             .heightIn(min = 48.dp)
                             .clickable {
-                                val currentPrice = formatStockPriceDisplay(selectedStock.price, selectedStock.code)
+                                val currentPrice = formatAcquisitionPriceInput(selectedStock.price)
                                 nisaPrice = currentPrice
                                 tsumitatePrice = currentPrice
                                 tokuteiPrice = currentPrice
@@ -673,7 +674,7 @@ fun AddHoldingSheet(
                                     Text(stringResource(R.string.add_holding_text_15), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     CompactAccountTextField(
                                         value = priceVal,
-                                        onValueChange = onPriceChange,
+                                        onValueChange = { onPriceChange(normalizeAcquisitionPriceInput(it)) },
                                         contentDescription = resources.getString(R.string.account_input_label, title, resources.getString(R.string.add_holding_text_15)),
                                         keyboardType = KeyboardType.Decimal
                                     )
