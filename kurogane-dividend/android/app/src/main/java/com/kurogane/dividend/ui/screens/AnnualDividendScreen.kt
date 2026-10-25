@@ -1069,7 +1069,8 @@ private fun MonthlyDividendEstimateCard(
 
 @Composable
 private fun AnnualDividendHistoryInfo(
-    description: String
+    description: String,
+    contentDescription: String? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -1079,7 +1080,8 @@ private fun AnnualDividendHistoryInfo(
         ) {
             Icon(
                 Icons.Default.Info,
-                contentDescription = stringResource(R.string.annual_dividend_info_content_description),
+                contentDescription = contentDescription
+                    ?: stringResource(R.string.annual_dividend_info_content_description),
                 tint = OnSurfaceVariant,
                 modifier = Modifier.size(18.dp)
             )
@@ -1541,6 +1543,11 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 color = OnSurface
                             )
                         )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        AnnualDividendHistoryInfo(
+                            description = stringResource(R.string.annual_dividend_composition_info_description),
+                            contentDescription = stringResource(R.string.annual_dividend_composition_info_content_description)
+                        )
                     }
 
                     // Pill Toggle Switch: 構成比率 / 配当比率 / 利回り率
@@ -1548,7 +1555,8 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .background(SurfaceContainerHigh)
-                            .padding(2.dp)
+                            .padding(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
@@ -1600,7 +1608,13 @@ private fun CompositionAnalysisSection(holdings: List<com.kurogane.dividend.mode
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(
                                         modifier = Modifier
-                                            .clickable { chartMode = "yield" }
+                                            .clickable {
+                                                if (chartMode == "yield") {
+                                                    yieldBasisMenuExpanded = true
+                                                } else {
+                                                    chartMode = "yield"
+                                                }
+                                            }
                                             .padding(start = 6.dp, top = 3.dp, bottom = 3.dp, end = 0.dp)
                                     ) {
                                         Text(

@@ -23,6 +23,10 @@
     <string name="close">閉じる</string>
     <string name="stock_lookup_failed">銘柄情報を取得できませんでした</string>
     <string name="stock_climate_info_content_description">景気特性の説明</string>
+    <string name="stock_detail_doe_info_content_description">株主資本配当率の説明</string>
+    <string name="stock_detail_doe_info_description">当期の配当総額を期末株主資本で割って算出した割合です。利益に対する配当負担を示す配当性向とは異なり、株主資本に対する配当水準を見る指標です。この画面では取得できた最新決算の計算値を表示します。</string>
+    <string name="stock_detail_net_de_ratio_info_content_description">純負債資本倍率の説明</string>
+    <string name="stock_detail_net_de_ratio_info_description">純負債（有利子負債から現金・短期投資を差し引いた額）を株主資本で割った倍率です。倍率が低いほど、株主資本に対する純負債の負担が小さい傾向を示します。この画面では取得できた最新決算の計算値を表示します。</string>
     <string name="draft_save_failed">下書きを保存できませんでした。もう一度保存してください。</string>
     <string name="draft_clear_failed">送信は完了しましたが、下書きを削除できませんでした。</string>
 
@@ -87,6 +91,8 @@
     <string name="annual_dividend_text_8">"銘柄別内訳"</string>
     <string name="annual_dividend_text_9">"構成比率"</string>
     <string name="annual_dividend_text_10">"配当比率"</string>
+    <string name="annual_dividend_composition_info_content_description">銘柄別内訳の説明</string>
+    <string name="annual_dividend_composition_info_description">構成比率：各銘柄の評価額が、保有銘柄全体の評価額に占める割合です。\n配当比率：各銘柄の年間配当見込みが、保有銘柄全体の年間配当見込みに占める割合です。\n利回り率：各銘柄の利回りが、全銘柄の利回り合計に占める割合です。\n利回り率の基準は、下矢印から「現在利回り」または「取得利回り」を選択できます。</string>
     <string name="annual_dividend_text_11">"配当支払い銘柄がありません。"</string>
     <string name="annual_dividend_text_12">"セクター別比率"</string>
     <string name="annual_dividend_text_13">"%1$s業種分散"</string>
@@ -466,8 +472,8 @@
     <string name="stock_detail_text_55" formatted="false">"適正目安 30〜50%"</string>
     <string name="stock_detail_text_56" formatted="false">"100% (高負担)"</string>
     <string name="stock_detail_text_57">"自己資本比率"</string>
-    <string name="stock_detail_text_58">"計算DOE"</string>
-    <string name="stock_detail_text_59">"ネットD/Eレシオ"</string>
+    <string name="stock_detail_text_58">"株主資本配当率"</string>
+    <string name="stock_detail_text_59">"純負債資本倍率"</string>
     <string name="stock_detail_text_60">"財務余力・借入健全性"</string>
     <string name="stock_detail_text_61">"営業利益率"</string>
     <string name="stock_detail_text_62">"稼ぐ力・本業収益性"</string>
