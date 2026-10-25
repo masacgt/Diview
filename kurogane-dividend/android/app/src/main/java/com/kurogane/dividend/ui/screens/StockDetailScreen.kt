@@ -405,7 +405,7 @@ fun StockDetailScreen(
     }
     val backendAnalysisValues = stockAnalysisData[currentHolding.code.uppercase(Locale.ROOT).removeSuffix(".T")]?.values
     LaunchedEffect(currentHolding.code) { viewModel.fetchStockAnalysis(currentHolding.code) }
-    val analysisNarrative = remember(currentHolding, backendAnalysisValues, financial) { StockAnalysisNarrativeGenerator.generate(
+    val analysisNarrative = remember(currentHolding, backendAnalysisValues, financial) { StockAnalysisNarrativeGenerator.generateDetailed(
         (backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())
     ) }
     val healthNarrative = remember(financial) { StockAnalysisNarrativeGenerator.generate(financial?.values.orEmpty()) }
