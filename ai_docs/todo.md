@@ -2,9 +2,11 @@
 
 ## In Progress
 
-- [ ] Enforce financial field units and server revisions across the Worker, R2 writers, Android cache, and portfolio calculations. Evidence: production Worker version `89a90492-512e-4c20-adcd-7be237b829f6` returns contract version 5; live API and device caches show 8058 at 39.0886%/45.93% and 6721 at 37.3628% with assets of ¥919,000,000; JDK 17 build and launch succeeded on SCG01 and emulator, and both saved the published revision. Automated financial-parser and portfolio regression checks were not run.
+- [ ] Enforce financial field units and server revisions across the Worker, R2 writers, Android cache, and portfolio calculations. Evidence: production Worker version `89a90492-512e-4c20-adcd-7be237b829f6` returns contract version 5; live API and device caches show 8058 at 39.0886%/45.93% and 6721 at 37.3628% with assets of ¥919,000,000; JDK 17 build and launch succeeded on SCG01 and emulator, and both saved the published revision. Android unit tests and 50 Worker tests pass. Full-catalog responses showed no annual financial unit/provenance anomaly among 1,928 successful responses; 2,427 calls hit Worker CPU limits, and 8058 exposed a separate dividend-yield unit-label mismatch. Branch fixes and production read-back remain pending.
 
-- [ ] Run the existing financial-unit parser and portfolio aggregation regression checks before closing the financial integrity work.
+- [x] Run the existing financial-unit parser and portfolio aggregation regression checks before closing the financial integrity work. Evidence: JDK 17 `:app:testDebugUnitTest` passed after merging current main, and the Worker route suite passes 50/50 cases.
+
+- [ ] Complete the 4,355-security financial API unit audit after the Worker CPU fix is published. The first full-catalog pass had 1,928 HTTP 200 responses, 2,427 HTTP 503 responses, and no parse failures; Cloudflare tail confirmed `exceededCpu` for `/api/v1/financial-data/1580` on Worker version `89a90492-512e-4c20-adcd-7be237b829f6`.
 
 - [ ] Verify multi-year dividend-event preloading end to end after Worker publication. Evidence: Worker `dividend-months` now accepts up to ten `event_years`; Android batches and caches requested years, and falls back to single-year requests on older Workers. The JDK 17 debug build installed and launched on SCG01 and the emulator; production publication, live API acknowledgement, and event-loading behavior remain unverified.
 

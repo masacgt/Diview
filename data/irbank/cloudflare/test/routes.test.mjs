@@ -65,7 +65,7 @@ test('security API exposes yfinance retrieval metadata and stored dividend histo
     [`${base}/current.json`, {
       code: '7203', symbol: '7203.T', source: 'Yahoo Finance via yfinance',
       price: { close: 3000, currency: 'JPY' },
-      statistics: { trailingEps: 200, bookValue: 1000, trailingPE: 4, priceToBook: 0.5 },
+      statistics: { trailingEps: 200, bookValue: 1000 },
       statistics_last_fetched_session_date: '2026-10-15',
       dividend: { dividend_status: 'has_dividend' },
       field_status: { dividend_history: 'available', statistics_refresh: 'failed' },
@@ -104,7 +104,7 @@ test('security API exposes yfinance retrieval metadata and stored dividend histo
   assert.deepEqual(data.valuation, {
     per: 15,
     pbr: 3,
-    source: 'daily_close_divided_by_latest_yfinance_eps_bps',
+    source: 'yfinance_reported_with_daily_calculation_fallback',
     price_date: null,
     statistics_last_fetched_session_date: '2026-10-15',
     formulas: {
@@ -211,6 +211,66 @@ test('financial API aggregates only published v2 yfinance calendar-year events',
   ]);
 });
 
+test('financial API avoids rereading dividend partitions when current annual aggregates exist', async () => {
+  const code = '8058';
+  const base = `market/yfinance/v2/securities/${code}.T`;
+  const env = dividendEnvironment(new Map([
+    [`${base}/profile.json`, { display_name: '三菱商事' }],
+    [`${base}/current.json`, {
+      dividend: {
+        calendar_year_metrics: {
+          status: 'available', latest_completed_year: 2025,
+          annual_records: [{ calendar_year: 2025, calendar_year_distribution_per_share: 50 }],
+        },
+      },
+      field_status: { dividend_history: 'available' },
+    }],
+    [`${base}/dividends/2025.json`, { records: [{ date: '2025-03-31', amount: 999 }] }],
+  ]));
+  let dividendListCalls = 0;
+  const list = env.MARKET_DATA.list;
+  env.MARKET_DATA.list = async options => {
+    if (options.prefix === `${base}/dividends/`) dividendListCalls += 1;
+    return list(options);
+  };
+
+  const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.dividends.records[0].calendar_year_distribution_per_share, 50);
+  assert.equal(dividendListCalls, 0);
+});
+
+test('financial API labels dividend yield as percent only when the stored calculated yield corroborates it', async () => {
+  const code = '8058';
+  const base = `market/yfinance/v2/securities/${code}.T`;
+  const current = {
+    statistics: { dividendYield: 2.67 },
+    statistics_field_units: { dividendYield: 'ratio' },
+    dividend: {
+      yield_rate: 2.6511,
+      yield_source: 'calculated_from_yfinance_dividend_and_quote',
+      calendar_year_metrics: { annual_records: [] },
+    },
+  };
+  const documents = new Map([[`${base}/current.json`, current]]);
+  const response = await worker.fetch(
+    new Request(`https://example.com/api/v1/financial-data/${code}`), dividendEnvironment(documents),
+  );
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.market.summary.dividendYield, 2.67);
+  assert.equal(data.market.summary_field_units.dividendYield, 'percent');
+
+  current.dividend = { calendar_year_metrics: { annual_records: [] } };
+  const uncorroborated = await worker.fetch(
+    new Request(`https://example.com/api/v1/financial-data/${code}`), dividendEnvironment(documents),
+  );
+  assert.equal(uncorroborated.status, 200);
+  const uncorroboratedData = await uncorroborated.json();
+  assert.equal(Object.hasOwn(uncorroboratedData.market.summary_field_units, 'dividendYield'), false);
+});
+
 test('financial API marks 8303 share basis unverified without changing stored dividend amounts', async () => {
   const base = 'market/yfinance/v2/securities/8303.T';
   const env = dividendEnvironment(new Map([
@@ -261,6 +321,7 @@ test('financial API returns calculated DOE and net D/E from the stored annual ro
   const data = await response.json();
   assert.deepEqual(data.financials.annual, [{
     ...annual,
+    field_status: { ...annual.field_status, equity_ratio_computed: 'empty' },
     field_units: { calculated_doe: 'percent', net_de_ratio: 'times' },
   }]);
 });
@@ -410,7 +471,8 @@ test('financial API preserves mixed-unit null guards and raw provenance without 
   const mixed = (await fetchData()).financials.annual[0];
   assert.equal(mixed.operating_cf, 30000000);
   assert.equal(mixed.investing_cf, null);
-  assert.equal(mixed.sales, 100);
+  assert.equal(mixed.sales, null);
+  assert.equal(mixed.field_status.sales, 'unsupported');
 });
 
 test('financial API keeps observed event history separate from legacy fiscal-year DPS', async () => {

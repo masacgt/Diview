@@ -1,6 +1,6 @@
 import { readFeedback, saveFeedback } from './feedback.mjs';
 import { safelyDeliverFeedbackEmail, retryFeedbackEmails } from './feedback-email.mjs';
-import financialUnitContract from './financial_unit_contract.json';
+import financialUnitContract from './financial_unit_contract.json' with { type: 'json' };
 
 const ANALYSIS_CONCURRENCY = 8;
 
@@ -606,6 +606,19 @@ function yfinanceStatisticsFieldUnits(current) {
       declared[field] = YFINANCE_STATISTICS_FIELD_UNITS[field];
     }
   }
+  const rawDividendYield = finiteNumber(current?.statistics?.dividendYield);
+  if (rawDividendYield !== null && rawDividendYield > 1
+    && normalizedFinancialUnit(declared.dividendYield) === 'ratio') {
+    const calculatedYield = finiteNumber(current?.dividend?.yield_rate);
+    const tolerance = Math.max(0.05, Math.abs(rawDividendYield) * 0.03);
+    if (current?.dividend?.yield_source === 'calculated_from_yfinance_dividend_and_quote'
+      && calculatedYield !== null
+      && Math.abs(rawDividendYield - calculatedYield) <= tolerance) {
+      declared.dividendYield = 'percent';
+    } else {
+      delete declared.dividendYield;
+    }
+  }
   return declared;
 }
 
@@ -644,11 +657,17 @@ async function readV2FinancialPayload(env, code) {
   const symbol = yfinanceV2Symbol(code);
   if (!symbol || !env.MARKET_DATA) return null;
   const base = `${YFINANCE_V2_ROOT}/securities/${symbol}`;
+  const currentPromise = readV2Json(env, `${base}/current.json`);
+  const dividendDocumentsPromise = currentPromise.then(current =>
+    Array.isArray(current?.dividend?.calendar_year_metrics?.annual_records)
+      ? []
+      : listV2Documents(env, `${base}/dividends/`),
+  );
   const [profile, current, financialDocuments, dividendDocuments, irbankDividendIndex, irbankOverview] = await Promise.all([
     readV2Json(env, `${base}/profile.json`),
-    readV2Json(env, `${base}/current.json`),
+    currentPromise,
     listV2Documents(env, `${base}/financials/`),
-    listV2Documents(env, `${base}/dividends/`),
+    dividendDocumentsPromise,
     readIrbankDividendIndex(env),
     irbankR2Code(code)
       ? readV2Json(env, `market/irbank/v1/securities/${irbankR2Code(code)}/overview.json`)
