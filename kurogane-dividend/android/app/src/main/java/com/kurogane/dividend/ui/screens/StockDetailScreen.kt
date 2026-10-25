@@ -1279,7 +1279,11 @@ fun StockDetailScreen(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(stringResource(R.string.stock_detail_text_22), fontWeight = FontWeight.Bold, color = OnSurface, fontSize = AppTextSize.body)
                                 Spacer(modifier = Modifier.width(2.dp))
-                                StockAnalysisDisclaimerInfo()
+                                StockAnalysisInfoPopup(
+                                    contentDescription = stringResource(R.string.stock_detail_analysis_status_info_content_description),
+                                    title = stringResource(R.string.stock_detail_analysis_status_info_title),
+                                    description = stringResource(R.string.stock_detail_analysis_status_info_description)
+                                )
                             }
                             Text(stringResource(R.string.stock_detail_text_23), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                         }
@@ -3869,7 +3873,11 @@ private fun StockAnalysisNarrativeCard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(stringResource(R.string.stock_detail_text_79), color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(2.dp))
-                        StockAnalysisDisclaimerInfo()
+                        StockAnalysisInfoPopup(
+                            contentDescription = stringResource(R.string.stock_detail_indicator_evaluation_info_content_description),
+                            title = stringResource(R.string.stock_detail_indicator_evaluation_info_title),
+                            description = stringResource(R.string.stock_detail_indicator_evaluation_info_description)
+                        )
                     }
                     Text(stringResource(R.string.stock_detail_text_80), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                 }
@@ -3938,13 +3946,17 @@ private fun ExternalResearchLink(
 }
 
 @Composable
-private fun StockAnalysisDisclaimerInfo() {
+private fun StockAnalysisInfoPopup(
+    contentDescription: String,
+    title: String,
+    description: String
+) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }, modifier = Modifier.size(28.dp)) {
             Icon(
                 Icons.Default.Info,
-                contentDescription = stringResource(R.string.stock_detail_analysis_info_content_description),
+                contentDescription = contentDescription,
                 tint = OnSurfaceVariant,
                 modifier = Modifier.size(18.dp)
             )
@@ -3971,7 +3983,7 @@ private fun StockAnalysisDisclaimerInfo() {
                     }
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        stringResource(R.string.stock_detail_analysis_info_title),
+                        title,
                         color = OnSurface,
                         fontWeight = FontWeight.Bold,
                         fontSize = AppTextSize.body
@@ -3981,7 +3993,7 @@ private fun StockAnalysisDisclaimerInfo() {
                 HorizontalDivider(color = BorderBlue, thickness = 0.75.dp)
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    stringResource(R.string.stock_detail_analysis_info_description),
+                    description,
                     color = OnSurfaceVariant,
                     fontSize = AppTextSize.caption,
                     lineHeight = 20.sp
