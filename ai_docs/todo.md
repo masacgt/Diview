@@ -1,6 +1,7 @@
 # Todo
 
 ## In Progress
+- [ ] Apply the agreed no-dividend display fallback to the Stock Detail top card when no valid forecast or current annual DPS is available, then verify representative securities across the shared forecast paths. Evidence: `as-is-specification.md` records ¥0 and 0.00% as the user-facing no-dividend display; only 8984's ¥6,571 / 6.01% / 5.33% card-to-chart match has device evidence, and the no-value path remains to be implemented and checked.
 
 - [x] Use forecast DPS and matching forecast yields in the Stock Detail top card. Evidence: `FinancialData.kt` accepts Yahoo `dividendRate` only with `jpy_per_share` units, and `StockDetailScreen.kt` prioritizes issuer forecasts then the existing dividend-event estimate; JDK 17 `assembleDebug` succeeded, 8984 displays ¥6,571 / 6.01% / 5.33% matching the chart on `emulator-5560`, and the installed APK SHA-256 matches on the emulator and SCG01.
 
