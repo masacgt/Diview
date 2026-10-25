@@ -2,6 +2,8 @@
 
 ## In Progress
 
+- [x] Normalize Android payout ratios from their declared units and prevent percent values from being multiplied again. Evidence: production `/api/v1/financial-data/8984` declares `dividends.payout_ratio=100` as `percent`, while 7203 returns `27.040002` as `percent`; the JDK 17 debug APK built and installed with matching SHA-256 on `emulator-5560` and `RFCNC0E4H8J`, and the emulator now displays 8984 at `100.00%` instead of `10000.00%`.
+
 - [ ] Verify multi-year dividend-event preloading end to end after Worker publication. Evidence: Worker `dividend-months` now accepts up to ten `event_years`; Android batches and caches requested years, and falls back to single-year requests on older Workers. The JDK 17 debug build installed and launched on SCG01 and the emulator; production publication, live API acknowledgement, and event-loading behavior remain unverified.
 
 - [ ] Verify the 20-session company-info rotation and same-session catalog recovery on a regular scheduled sync. Evidence: `sync_v2.py` now rotates company info across 20 groups, reuses successful catalog entries for the same session, reconstructs interrupted entries from R2, and records action-history repair triggers; scheduled-run behavior and publication read-back remain unverified.

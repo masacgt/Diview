@@ -122,10 +122,21 @@ data class FinancialData(
             val cf = financial?.number("operating_cf")?.let { a -> financial.number("investing_cf")?.let { a + it } }
             val fcfMargin = percent(cf, sales)
             val equity = financial?.number("equity_ratio_computed")
-            // Yahoo's current `payout_ratio` is a fraction; older annual rows
-            // already store the value in percentage points.
-            val payout = dividend?.number("payout_ratio")
-                ?: dividendPayload?.number("payout_ratio")?.times(100.0)
+            // Prefer the declared field unit. Legacy annual rows use percentage
+            // points, while legacy top-level Yahoo values use a fractional ratio.
+            val payout = dividend?.let { row ->
+                normalizePayoutRatio(
+                    row.number("payout_ratio"),
+                    row.optJSONObject("field_units")?.optString("payout_ratio"),
+                    defaultUnit = "percent"
+                )
+            } ?: dividendPayload?.let { payload ->
+                normalizePayoutRatio(
+                    payload.number("payout_ratio"),
+                    payload.optJSONObject("field_units")?.optString("payout_ratio"),
+                    defaultUnit = "ratio"
+                )
+            }
             var noCut = 0
             for (i in dividends.lastIndex downTo 1) {
                 if (dividends[i].year != dividends[i - 1].year + 1 || dividends[i].dps < dividends[i - 1].dps) break
@@ -187,6 +198,15 @@ data class FinancialData(
 
 internal fun JSONObject.number(key: String): Double? =
     if (!has(key) || isNull(key)) null else optDouble(key).takeIf(Double::isFinite)
+
+private fun normalizePayoutRatio(value: Double?, unit: String?, defaultUnit: String): Double? {
+    if (value == null) return null
+    return when (unit?.trim()?.lowercase(Locale.ROOT)?.takeIf { it.isNotEmpty() && it != "null" } ?: defaultUnit) {
+        "percent", "percentage", "percentage_points", "percent_points" -> value
+        "ratio", "fraction" -> value * 100.0
+        else -> null
+    }
+}
 
 private fun JSONObject.hasNoPeriodEnd(): Boolean =
     !has("period_end") || isNull("period_end") || optString("period_end").isBlank()
