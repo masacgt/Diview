@@ -68,6 +68,7 @@ import com.kurogane.dividend.data.Tse33IndustryMaster
 import java.text.NumberFormat
 import java.util.Locale
 import java.time.ZoneId
+import java.time.LocalDate
 import kotlinx.coroutines.launch
 
 private data class StockDetailDividendPeriod(
@@ -90,6 +91,20 @@ private data class DividendHistoryEditDraft(
     val defaultStockPrice: Double?,
     val defaultAnnualDividend: Double?
 )
+
+private fun formatMarketDailyChange(security: com.kurogane.dividend.data.CloudflareSecurity?): String? {
+    security ?: return null
+    val previousClose = security.marketPreviousClose?.takeIf { it.isFinite() && it > 0.0 } ?: return null
+    val change = security.marketPriceChange?.takeIf { it.isFinite() } ?: return null
+    val changePercent = security.marketPriceChangePercent?.takeIf { it.isFinite() } ?: return null
+    val quoteDate = security.marketPriceDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return null
+    if (previousClose + change <= 0.0) return null
+    val amountSign = if (change < 0.0) "−" else "+"
+    val amount = com.kurogane.dividend.model.formatStockPriceDisplay(
+        kotlin.math.abs(change), security.code, date = quoteDate
+    )
+    return amountSign + amount + " (" + String.format(Locale.JAPAN, "%+.2f%%", changePercent) + ")"
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -168,7 +183,12 @@ fun StockDetailScreen(
         val irbankYieldDps = resolvedSecurity?.annualDividendPerShare
         val irbankYieldRate = resolvedSecurity?.marketYieldRate?.takeIf { dps == irbankYieldDps }
         val displayYield = irbankYieldRate ?: calculatedYield
+        val marketDailyChange = formatMarketDailyChange(resolvedSecurity)
+        val marketChangePositive = resolvedSecurity?.marketPriceChange
+            ?.takeIf { marketDailyChange != null }?.let { it >= 0.0 }
         holding.copy(price = price, dps = dps, yieldRate = displayYield,
+            dailyChange = marketDailyChange ?: holding.dailyChange.takeIf { it.isNotBlank() } ?: "—",
+            isPositive = marketChangePositive ?: holding.isPositive,
             isNoDividendConfirmed = noDividendConfirmed,
             irbankYieldRate = irbankYieldRate,
             irbankYieldDps = irbankYieldDps,

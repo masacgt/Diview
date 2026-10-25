@@ -48,7 +48,11 @@ data class CloudflareSecurity(
     val marketYieldRate: Double? = null,
     val isNoDividendConfirmed: Boolean = false,
     val hasDividendStatus: Boolean = false,
-    val dataRetrieval: CloudflareDataRetrieval? = null
+    val dataRetrieval: CloudflareDataRetrieval? = null,
+    val marketPreviousClose: Double? = null,
+    val marketPriceChange: Double? = null,
+    val marketPriceChangePercent: Double? = null,
+    val marketPriceDate: String? = null
 )
 
 data class CloudflareDataRetrieval(
@@ -363,6 +367,13 @@ class CloudflareMarketRepository(
             marketPrice = (if (catalogPriceIsNewer) catalogQuote?.price else detailPrice)
                 ?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 }
                 ?: catalogQuote?.price,
+            marketPreviousClose = root.optJSONObject("market_price")?.numberOrNull("previous_close")
+                ?.takeIf { !catalogPriceIsNewer && PortfolioMath.validMoney(it) && it > 0.0 },
+            marketPriceChange = root.optJSONObject("market_price")?.numberOrNull("change")
+                ?.takeIf { !catalogPriceIsNewer },
+            marketPriceChangePercent = root.optJSONObject("market_price")?.numberOrNull("change_percent")
+                ?.takeIf { !catalogPriceIsNewer },
+            marketPriceDate = detailQuoteDate.takeIf { !catalogPriceIsNewer },
             marketYieldRate = (if (irbankDividend != null) root.numberOrNull("market_yield_rate") else null)
                 ?.takeIf { it in 0.0..100.0 }
                 ?: catalogQuote?.yieldRate,
