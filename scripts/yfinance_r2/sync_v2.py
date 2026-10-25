@@ -298,6 +298,7 @@ class GlobalHttpRateLimiter:
 PROFILE_FIELDS: tuple[str, ...] = ()
 CURRENT_FIELDS = (
     "trailingEps", "forwardEps", "bookValue", "dividendRate", "dividendYield",
+    "trailingPE", "priceToBook", "operatingMargins",
     "payoutRatio", "exDividendDate", "lastFiscalYearEnd", "mostRecentQuarter",
 )
 DERIVED_STATISTIC_FIELDS = ("trailingPE", "priceToBook")
@@ -540,14 +541,19 @@ def finite_number(value: Any) -> float | None:
     return result if math.isfinite(result) else None
 
 
-def calculate_daily_valuation(close: Any, trailing_eps: Any, book_value: Any) -> dict[str, float | None]:
-    """Calculate valuation multiples from the latest close and latest available yfinance inputs."""
+def calculate_daily_valuation(
+    close: Any, trailing_eps: Any, book_value: Any,
+    reported_per: Any = None, reported_pbr: Any = None,
+) -> dict[str, float | None]:
+    """Prefer reported yfinance valuation multiples and calculate only missing values."""
     price = finite_number(close)
     eps = finite_number(trailing_eps)
     bps = finite_number(book_value)
+    per = finite_number(reported_per)
+    pbr = finite_number(reported_pbr)
     return {
-        "trailingPE": round(price / eps, 6) if price is not None and price > 0 and eps is not None and eps > 0 else None,
-        "priceToBook": round(price / bps, 6) if price is not None and price > 0 and bps is not None and bps > 0 else None,
+        "trailingPE": per if per is not None else round(price / eps, 6) if price is not None and price > 0 and eps is not None and eps > 0 else None,
+        "priceToBook": pbr if pbr is not None else round(price / bps, 6) if price is not None and price > 0 and bps is not None and bps > 0 else None,
     }
 
 
@@ -1536,6 +1542,33 @@ def prior_financial_maps(
 
 FINANCIAL_RECORD_METADATA = {"fiscal_year", "period_end", "field_status", "field_status_reason", "migration_source", "source_values"}
 FINANCIAL_DERIVED_FIELDS = {"equity_ratio_computed"}
+IRBANK_ANNUAL_FIELD_UNITS = {
+    "sales": "million_jpy",
+    "operating_profit": "million_jpy",
+    "operating_cf": "million_jpy",
+    "investing_cf": "million_jpy",
+    "total_assets": "million_jpy",
+    "equity_ratio_computed": "percent",
+}
+IRBANK_VALUATION_FIELD_UNITS = {
+    "eps_adjusted": "jpy_per_share",
+    "bps_adjusted": "jpy_per_share",
+    "dividend_yield_adjusted": "percent",
+}
+YFINANCE_FINANCIAL_MONEY_FIELDS = (
+    set(INCOME_FIELDS.values()) | set(BALANCE_FIELDS.values()) | set(CASH_FLOW_FIELDS.values())
+    | {"doe_dividend_total"}
+)
+
+
+def source_field_units(values: dict[str, Any], source: Any, existing: Any,
+                       known_units: dict[str, str]) -> dict[str, str]:
+    units = dict(existing) if isinstance(existing, dict) else {}
+    if "irbank" in str(source or "").lower():
+        for field, unit in known_units.items():
+            if field in values:
+                units[field] = unit
+    return units
 
 
 def equity_ratio_result(seed_values: dict[str, Any], yfinance_values: dict[str, Any]) -> dict[str, Any]:
@@ -1561,19 +1594,23 @@ def equity_ratio_result(seed_values: dict[str, Any], yfinance_values: dict[str, 
 
     equity_values = yfinance_values if equity_source == "yfinance" else seed_values
     equity = finite_number(equity_values.get(equity_field)) if equity_field else None
+    ratio_out_of_range = False
     if equity is not None and assets is not None and assets > 0 and equity_source == assets_source:
-        return {
-            "value": equity / assets * 100,
-            "source": "calculated",
-            "input_sources": {"equity": equity_source, "total_assets": assets_source},
-            "reason": None,
-        }
+        calculated_ratio = equity / assets * 100
+        if math.isfinite(calculated_ratio) and abs(calculated_ratio) <= 1000:
+            return {
+                "value": calculated_ratio,
+                "source": "calculated",
+                "input_sources": {"equity": equity_source, "total_assets": assets_source},
+                "reason": None,
+            }
+        ratio_out_of_range = True
 
     # IRBANK seed balance-sheet amounts are stored in million JPY, while
     # yfinance balance-sheet amounts are JPY. Keep the seed's same-source
     # ratio when one input has been refreshed from a different provider.
     seed_ratio = finite_number(seed_values.get("equity_ratio_computed"))
-    if seed_ratio is not None:
+    if seed_ratio is not None and abs(seed_ratio) <= 1000:
         return {
             "value": seed_ratio,
             "source": "seed",
@@ -1584,7 +1621,8 @@ def equity_ratio_result(seed_values: dict[str, Any], yfinance_values: dict[str, 
         "value": None,
         "source": None,
         "input_sources": {"equity": equity_source, "total_assets": assets_source},
-        "reason": "mixed_source_inputs_not_comparable" if equity_source and assets_source else "required_input_missing",
+        "reason": "equity_ratio_out_of_range" if ratio_out_of_range
+        else "mixed_source_inputs_not_comparable" if equity_source and assets_source else "required_input_missing",
     }
 
 
@@ -1773,11 +1811,24 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
             (prior_annual.get("source_values") or {}).get("seed", {}).get("source")
             if isinstance(prior_annual.get("source_values"), dict) else None
         ) or ("IRBANK migration seed" if prior_annual.get("migration_source") else "existing v2 snapshot")
+        prior_seed_units = prior_seed.get("field_units")
+        seed_field_units = source_field_units(
+            seed_values, seed_source, prior_seed_units, IRBANK_ANNUAL_FIELD_UNITS,
+        )
+        yfinance_field_units = {
+            field: "jpy" for field in yfinance_values if field in YFINANCE_FINANCIAL_MONEY_FIELDS
+        }
         annual_sources = {
-            "seed": {**prior_seed, "source": seed_source, "values": seed_values},
+            "seed": {
+                **prior_seed,
+                "source": seed_source,
+                "values": seed_values,
+                "field_units": seed_field_units,
+            },
             "yfinance": {
                 "source": "Yahoo Finance via yfinance",
                 "values": yfinance_values,
+                "field_units": yfinance_field_units,
                 "field_status": {field: "available" if field in fresh_values or field in net_de_metrics else "stale" for field in yfinance_values},
             },
             "calculated": {
@@ -1804,10 +1855,28 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
         yfinance_valuation_values = {**prior_yfinance_valuation, **legacy_valuation.get(period_end, {}), **fresh_valuation}
         valuation_values = {**seed_valuation, **yfinance_valuation_values}
         if valuation_values or "valuation" in requested_groups:
+            prior_valuation_sources = prior_valuation.get("source_values") if isinstance(prior_valuation, dict) else None
+            prior_valuation_seed = prior_valuation_sources.get("seed") if isinstance(prior_valuation_sources, dict) else None
+            prior_valuation_seed = prior_valuation_seed if isinstance(prior_valuation_seed, dict) else {}
             valuation_source = (
-                (prior_valuation.get("source_values") or {}).get("seed", {}).get("source")
-                if isinstance(prior_valuation, dict) and isinstance(prior_valuation.get("source_values"), dict) else None
+                prior_valuation_seed.get("source")
             ) or ("IRBANK migration seed" if isinstance(prior_valuation, dict) and prior_valuation.get("migration_source") else "existing v2 snapshot")
+            valuation_seed_units = source_field_units(
+                seed_valuation, valuation_source, prior_valuation_seed.get("field_units"),
+                IRBANK_VALUATION_FIELD_UNITS,
+            )
+            valuation_yfinance_units = {
+                field: "jpy_per_share" for field in yfinance_valuation_values
+                if field in {"eps_adjusted", "bps_adjusted"}
+            }
+            if "dividend_yield_adjusted" in yfinance_valuation_values:
+                valuation_yfinance_units["dividend_yield_adjusted"] = "percent"
+            valuation_seed_record = {
+                **prior_valuation_seed,
+                "source": valuation_source,
+                "values": seed_valuation,
+                "field_units": valuation_seed_units,
+            }
             valuation_rows.append({
                 "fiscal_year": f"{period_end[:4]}/{period_end[5:7]}",
                 "period_end": period_end,
@@ -1820,10 +1889,11 @@ def collect_financials(ticker: Any, old: dict[str, Any], client: Any, bucket: st
                     for field in unsupported_valuation_fields
                 },
                 "source_values": {
-                    "seed": {"source": valuation_source, "values": seed_valuation},
+                    "seed": valuation_seed_record,
                     "yfinance": {
                         "source": "Yahoo Finance via yfinance",
                         "values": yfinance_valuation_values,
+                        "field_units": valuation_yfinance_units,
                         "field_status": {field: "available" if field in fresh_valuation else "stale" for field in yfinance_valuation_values},
                     },
                 },
@@ -1994,6 +2064,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                    *, attempt_count: int = 1, refresh_full_history: bool = False,
                    refresh_financials: bool = False, refresh_monthly: bool = False,
                    refresh_info: bool = False,
+                   force_refresh_info: bool = False,
                    initialize_monthly: bool = False, retry_monthly: bool = False,
                    universe_entry: dict[str, Any] | None = None,
                    prior_sync_document: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -2047,11 +2118,12 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         prior_sync.get("info_last_fetched_at")
         or (prior_sync.get("last_success_at") if cached_info_available else None)
     )
-    refresh_info_now = refresh_info or info_refresh_pending_before_attempt or not cached_info_available
+    refresh_info_now = refresh_info or force_refresh_info or info_refresh_pending_before_attempt or not cached_info_available
     already_fetched_this_session = (
         same_session_retry
         and info_last_fetched_session_date == as_of.isoformat()
         and not info_refresh_pending_before_attempt
+        and not force_refresh_info
     )
     info_attempted = False
     info_fetched = False
@@ -2501,6 +2573,10 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     has_forecast_dps = forecast_dps is not None and forecast_dps > 0
     current_fy_dps = fiscal_year_events(dividends, info, as_of)
     reported_yield = finite_number(info.get("dividendYield"))
+    reported_yield_percent = (
+        round(reported_yield * 100, 4)
+        if reported_yield is not None and 0 <= reported_yield <= 1 else None
+    )
     no_dividend = (
         not has_forecast_dps
         and current_fy_dps is None
@@ -2512,7 +2588,13 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     yield_basis = "next_fiscal_year_forecast" if has_forecast_dps else (
         "current_fiscal_year" if current_fy_dps is not None else "yfinance_reported_no_dividend" if no_dividend else None
     )
-    dividend_yield = round(yield_dps / close * 100, 4) if yield_dps is not None and close and close > 0 else None
+    calculated_yield = round(yield_dps / close * 100, 4) if yield_dps is not None and close and close > 0 else None
+    dividend_yield = reported_yield_percent if reported_yield_percent is not None else calculated_yield
+    dividend_yield_source = (
+        "yfinance_reported_dividendYield" if reported_yield_percent is not None
+        else "calculated_from_yfinance_dividend_and_quote" if calculated_yield is not None
+        else None
+    )
     dividend_history_failed = action_status["dividends"] == "failed"
     dividend_status = "no_dividend" if no_dividend else "has_dividend" if yield_dps is not None and yield_dps > 0 else "unknown"
     current_fiscal_status = (
@@ -2521,7 +2603,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         else "available" if current_fy_dps is not None else "empty"
     )
     dividend_yield_status = (
-        "failed" if dividend_history_failed and yield_basis is None
+        "available" if reported_yield_percent is not None
+        else "failed" if dividend_history_failed and yield_basis is None
         else "stale" if dividend_history_failed and yield_basis == "current_fiscal_year"
         else "empty" if dividend_yield is None else "available"
     )
@@ -2570,6 +2653,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             "next_fiscal_year_forecast_per_share": forecast_dps,
             "current_fiscal_year_per_share": current_fy_dps,
             "yield_rate": dividend_yield,
+            "yield_source": dividend_yield_source,
             "yield_basis": yield_basis,
             "event_amount_basis": "yfinance_split_adjusted_assumption",
             "split_adjustment_policy": "assume_yfinance_returned_amounts_are_split_adjusted",
@@ -2608,30 +2692,59 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         for field in CURRENT_FIELDS
     })
     previous_statistics = prior_current.get("statistics", {})
+    prior_valuation = prior_current.get("valuation_calculation")
+    prior_valuation_source = prior_valuation.get("source") if isinstance(prior_valuation, dict) else None
+    prior_valuation_sources = prior_valuation.get("sources") if isinstance(prior_valuation, dict) else None
+    if not isinstance(prior_valuation_sources, dict):
+        prior_valuation_sources = {}
+    prior_valuation_was_derived = prior_valuation_source == "yfinance_v2_daily_calculation"
     archive_unused_statistics(client, bucket, symbol, previous_statistics)
+    if not info_fetched:
+        for field in DERIVED_STATISTIC_FIELDS:
+            if prior_valuation_was_derived or prior_valuation_sources.get(field) == "calculated_fallback":
+                current["statistics"].pop(field, None)
+                current["field_status"][f"statistics_{field}"] = "empty"
     for field, value in (previous_statistics.items() if isinstance(previous_statistics, dict) else []):
         if field in CURRENT_FIELDS and current["statistics"].get(field) is None and value is not None:
+            if field in DERIVED_STATISTIC_FIELDS and (
+                info_fetched
+                or prior_valuation_was_derived
+                or prior_valuation_sources.get(field) == "calculated_fallback"
+            ):
+                continue
             current["statistics"][field] = value
             current["field_status"][f"statistics_{field}"] = "stale"
     daily_valuation = calculate_daily_valuation(
         close,
         current["statistics"].get("trailingEps"),
         current["statistics"].get("bookValue"),
+        current["statistics"].get("trailingPE"),
+        current["statistics"].get("priceToBook"),
     )
     valuation_status = (
         "available" if price_status == "available" else "stale"
     )
+    valuation_sources: dict[str, str] = {}
     for field, value in daily_valuation.items():
+        reported_value = finite_number(current["statistics"].get(field))
         if value is not None:
             current["statistics"][field] = value
-        current["field_status"][f"statistics_{field}"] = (
-            valuation_status if value is not None else "empty"
+        valuation_sources[field] = (
+            "yfinance_reported" if reported_value is not None
+            else "calculated_fallback" if value is not None
+            else "unavailable"
         )
+        if reported_value is None:
+            current["field_status"][f"statistics_{field}"] = valuation_status if value is not None else "empty"
     current["valuation_calculation"] = {
-        "source": "yfinance_v2_daily_calculation",
+        "source": "yfinance_reported_with_daily_calculation_fallback",
         "price_date": price_date.isoformat() if price_date else None,
         "statistics_last_fetched_session_date": info_last_fetched_session_date,
         "formulas": {"trailingPE": "price.close / statistics.trailingEps", "priceToBook": "price.close / statistics.bookValue"},
+        "sources": {
+            "trailingPE": valuation_sources["trailingPE"],
+            "priceToBook": valuation_sources["priceToBook"],
+        },
     }
     current["field_status"]["statistics_refresh"] = (
         "failed" if info_refresh_failed else "available" if info_fetched else "stale"
@@ -2891,6 +3004,8 @@ def income_advice_metrics(current: dict[str, Any], statements: list[dict[str, An
     if latest_statement is not None:
         annual_status = latest_statement.get("field_status") if isinstance(latest_statement.get("field_status"), dict) else {}
         equity_ratio = finite_number(latest_statement.get("equity_ratio_computed"))
+        if equity_ratio is not None and abs(equity_ratio) > 1000:
+            equity_ratio = None
         sales = finite_number(latest_statement.get("sales"))
         operating_profit = finite_number(latest_statement.get("operating_profit"))
         operating_margin = operating_profit / sales * 100 if sales is not None and sales > 0 and operating_profit is not None else None
@@ -2913,6 +3028,11 @@ def income_advice_metrics(current: dict[str, Any], statements: list[dict[str, An
     for metric, statistic in (("per", "trailingPE"), ("pbr", "priceToBook")):
         values[metric] = finite_number(statistics.get(statistic))
         statuses[metric] = str(field_status.get(f"statistics_{statistic}", "empty"))
+
+    reported_operating_margin = finite_number(statistics.get("operatingMargins"))
+    if reported_operating_margin is not None:
+        values["operating_margin"] = reported_operating_margin * 100
+        statuses["operating_margin"] = str(field_status.get("statistics_operatingMargins", "available"))
 
     dividend = current.get("dividend") if isinstance(current.get("dividend"), dict) else {}
     streak = dividend.get("calendar_year_metrics") if isinstance(dividend.get("calendar_year_metrics"), dict) else {}
@@ -3045,9 +3165,9 @@ def income_advice_candidate(code: str, name: str, current: dict[str, Any],
         "score_metric_source": {
             "payout_ratio": "securities/{symbol}/current.json:statistics.payoutRatio",
             "equity_ratio": "latest annual financial row:equity_ratio_computed",
-            "operating_margin": "latest annual financial row:operating_profit/sales",
-            "per": "securities/{symbol}/current.json:statistics.trailingPE",
-            "pbr": "securities/{symbol}/current.json:statistics.priceToBook",
+            "operating_margin": "current.statistics.operatingMargins * 100; fallback latest annual operating_profit/sales",
+            "per": "current.statistics.trailingPE; fallback price.close/statistics.trailingEps",
+            "pbr": "current.statistics.priceToBook; fallback price.close/statistics.bookValue",
             "consecutive_increase_years": "securities/{symbol}/current.json:dividend.calendar_year_metrics",
             "no_cut_years": "securities/{symbol}/current.json:dividend.calendar_year_metrics",
         },
@@ -3080,7 +3200,15 @@ def catalog_item_from_documents(code: str, security: dict[str, Any], profile: di
         annual_dps = next_fiscal_year_forecast_dps(
             code, annual_dps, date_value(current.get("updated_at")) or date.today()
         )
-    annual_yield = (
+    current_statistics = current.get("statistics") if isinstance(current.get("statistics"), dict) else {}
+    reported_yield = finite_number(current_statistics.get("dividendYield"))
+    reported_yield_percent = (
+        round(reported_yield * 100, 4)
+        if reported_yield is not None and 0 <= reported_yield <= 1 else None
+    )
+    annual_yield = reported_yield_percent if reported_yield_percent is not None else (
+        finite_number(dividend.get("yield_rate"))
+        if dividend.get("yield_rate") is not None else
         round(annual_dps / close * 100, 4)
         if annual_dps is not None and close is not None and close > 0 else
         None
@@ -3099,6 +3227,8 @@ def catalog_item_from_documents(code: str, security: dict[str, Any], profile: di
         "dividend_period": yield_basis or "unknown",
         "dividend_amount_basis": dividend.get("event_amount_basis"),
         "yield_rate": annual_yield,
+        "yield_source": "yfinance_reported_dividendYield" if reported_yield_percent is not None
+        else dividend.get("yield_source") or ("calculated_from_yfinance_dividend_and_quote" if annual_yield is not None else None),
         "yield_basis": dividend.get("yield_basis"),
         "dividend_status": dividend.get("dividend_status", "unknown"),
         "status": sync.get("status") if sync.get("status") in {"ok", "partial", "failed"} else "ok",
@@ -3234,6 +3364,7 @@ def run(
     dry_run: bool,
     reprocess_successful: bool = False,
     allow_one_extra_attempt: bool = False,
+    refresh_company_info: bool = False,
     target_session: date | None = None,
 ) -> int:
     started_at = time.perf_counter()
@@ -3311,6 +3442,8 @@ def run(
         f"december_price_refresh={december_end_session}",
         flush=True,
     )
+    if refresh_company_info:
+        print("Manual full-universe mode: forcing yfinance Ticker.get_info() for every active security.", flush=True)
     securities = [row["security_code_display"] for row in fetched]
     security_by_code = {row["security_code_display"]: row for row in fetched}
     results: dict[str, dict[str, Any]] = {}
@@ -3367,7 +3500,7 @@ def run(
             full_history_bucket,
             bool(previous_sync.get("last_success_session_date")),
             previous_sync.get("info_refresh_pending") is True,
-        )
+        ) or refresh_company_info
         initialize_financials = (
             not previous_sync
             or (bucket_for(code, FINANCIAL_BUCKETS) == financial_bucket
@@ -3391,6 +3524,7 @@ def run(
                 refresh_full_history=retry_full_history,
                 refresh_financials=initialize_financials,
                 refresh_info=refresh_info,
+                force_refresh_info=refresh_company_info,
                 refresh_monthly=december_end_session,
                 initialize_monthly=initialize_monthly,
                 retry_monthly=retry_monthly,
@@ -3589,6 +3723,10 @@ def main() -> int:
         "--allow-one-extra-attempt", action="store_true",
         help="Allow one additional per-security attempt beyond the daily cap for a controlled manual backfill",
     )
+    parser.add_argument(
+        "--refresh-company-info", action="store_true",
+        help="Refresh yfinance company profile and current statistics for every active security",
+    )
     args = parser.parse_args()
     return run(
         publish=args.publish,
@@ -3596,6 +3734,7 @@ def main() -> int:
         dry_run=args.dry_run,
         reprocess_successful=args.reprocess_successful,
         allow_one_extra_attempt=args.allow_one_extra_attempt,
+        refresh_company_info=args.refresh_company_info,
         target_session=args.session_date,
     )
 

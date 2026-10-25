@@ -26,4 +26,16 @@ class StockDetailResolverTest {
     @Test fun mismatchedResponseIsRejected() {
         assertNull(StockDetailResolver.resolve("130A", emptyList(), emptyList(), CloudflareSecurity("9999", "誤応答", null, null)))
     }
+
+    @Test fun withdrawnDividendDoesNotReuseHeldDpsOrConfirmNoDividend() {
+        val held = holding().copy(dps = 100.0, irbankYieldRate = 5.0, irbankYieldDps = 100.0)
+        val security = CloudflareSecurity("7203", "Toyota", null, 2000.0, hasDividendStatus = true)
+        val resolved = StockDetailResolver.resolve("7203", listOf(held), emptyList(), security)!!
+        assertEquals(held.shares, resolved.shares)
+        assertEquals(held.acqPrice, resolved.acqPrice, 0.0)
+        assertEquals(0.0, resolved.dps, 0.0)
+        assertEquals(0.0, resolved.annualDividend, 0.0)
+        assertNull(resolved.irbankYieldRate)
+        assertFalse(resolved.isNoDividendConfirmed)
+    }
 }

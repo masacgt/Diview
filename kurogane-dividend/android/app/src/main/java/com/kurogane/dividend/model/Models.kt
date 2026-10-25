@@ -27,7 +27,8 @@ data class Holding(
     val financialProfile: StockFinancialProfile? = null,
     val isNoDividendConfirmed: Boolean = false,
     val irbankYieldRate: Double? = null,
-    val irbankYieldDps: Double? = null
+    val irbankYieldDps: Double? = null,
+    val yfinanceYieldRate: Double? = null
 ) {
     val priceUnit: Double get() = if (category == Category.FUND) 10_000.0 else 1.0
     val effectiveTaxFreeShares: Int get() =
@@ -38,7 +39,9 @@ data class Holding(
     val gainLoss: Double get() = totalValuation - totalCost
     val gainLossPercent: Double get() = if (totalCost > 0) (gainLoss / totalCost) * 100 else 0.0
     val annualDividend: Double get() = shares * dps / priceUnit * currencyFactor
-    val liveYield: Double get() = irbankYieldRate
+    val liveYield: Double get() = yfinanceYieldRate
+        ?.takeIf { it.isFinite() && it in 0.0..100.0 }
+        ?: irbankYieldRate
         ?.takeIf { it.isFinite() && it in 0.0..100.0 && irbankYieldDps == dps }
         ?: PortfolioMath.yieldPercent(dps, price)
     val liveYoc: Double get() = PortfolioMath.yieldPercent(dps, acqPrice)
@@ -103,8 +106,16 @@ data class StockFinancialProfile(
     val buySignalBadge: String = "指標別診断を確認",
     val buySignalComment: String = "未取得項目を補完せず、取得済みの指標のみで診断します。"
 ) {
-    fun getPer(price: Double): String = if (eps.isFinite() && eps > 0 && price > 0) String.format(java.util.Locale.JAPAN, "%.1f倍", price / eps) else "未取得"
-    fun getPbr(price: Double): String = if (bps.isFinite() && bps > 0 && price > 0) String.format(java.util.Locale.JAPAN, "%.2f倍", price / bps) else "未取得"
+    fun getPer(price: Double, reportedPer: Double? = null): String {
+        val value = reportedPer?.takeIf { it.isFinite() }
+            ?: (price / eps).takeIf { eps.isFinite() && eps > 0 && price > 0 }
+        return value?.let { String.format(java.util.Locale.JAPAN, "%.1f倍", it) } ?: "未取得"
+    }
+    fun getPbr(price: Double, reportedPbr: Double? = null): String {
+        val value = reportedPbr?.takeIf { it.isFinite() }
+            ?: (price / bps).takeIf { bps.isFinite() && bps > 0 && price > 0 }
+        return value?.let { String.format(java.util.Locale.JAPAN, "%.2f倍", it) } ?: "未取得"
+    }
     fun getValuationStatus(price: Double, dps: Double): String {
         if (!eps.isFinite() || eps <= 0 || price <= 0) return "未判定"
         val per = price / eps
@@ -137,9 +148,16 @@ data class WatchlistStock(
     val badge: String? = null,
     val defaultShares: Int = 100,
     val usdJpyRate: Double? = null,
-    val isNoDividendConfirmed: Boolean = false
+    val isNoDividendConfirmed: Boolean = false,
+    val yfinanceYieldRate: Double? = null,
+    val irbankYieldRate: Double? = null,
+    val irbankYieldDps: Double? = null
 ) {
     val currencyFactor: Double get() = if (currency == "$") usdJpyRate?.takeIf { it.isFinite() && it > 0 } ?: 0.0 else 1.0
+    val liveYield: Double get() = yfinanceYieldRate
+        ?.takeIf { it.isFinite() && it in 0.0..100.0 }
+        ?: irbankYieldRate?.takeIf { it.isFinite() && it in 0.0..100.0 && irbankYieldDps == dps }
+        ?: PortfolioMath.yieldPercent(dps, price)
     val isReady: Boolean get() = targetYield.isFinite() && targetYield > 0.0 && currentYield.isFinite() && currentYield >= targetYield
     val achievementRate: Int get() = if (targetYield.isFinite() && targetYield > 0.0 && currentYield.isFinite())
         ((currentYield / targetYield) * 100).toInt().coerceIn(0, 100) else 0

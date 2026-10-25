@@ -71,7 +71,7 @@ class WatchlistProjection private constructor(
             val inputs = inputsFor(stock)
             val shares = if (stock.category == "us") 1 else 100
             val annual = stock.dps * shares * stock.currencyFactor
-            val currentYield = PortfolioMath.yieldPercent(stock.dps, stock.price)
+            val currentYield = stock.liveYield
             val monthlyAmounts = (1..12).map { month ->
                 if (month in inputs.months) annual / inputs.months.size else 0.0
             }

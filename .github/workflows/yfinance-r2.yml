@@ -15,13 +15,14 @@ on:
   workflow_dispatch:
     inputs:
       run_mode:
-        description: Run tests, a benchmark, the full R2 sync, publish the initial income-advice catalog from stored V2 data, refresh one security's annual financials, refresh financials for all active securities, reaggregate stored dividend streaks, normalize December-price dates, audit split-transition dividends, seed app-used financial values into v2, or migrate legacy IRBANK fiscal-year dividend records into v2
+        description: Run tests, a benchmark, the full R2 sync, force-refresh yfinance company info for the full universe, publish derived data, refresh financials, or run a data maintenance task
         type: choice
         options:
           - test
           - benchmark
           - check-calendar
           - sync
+          - refresh-company-info
           - generate-income-advice
           - refresh-financials
           - refresh-all-financials
@@ -61,7 +62,7 @@ concurrency:
 
 jobs:
   market-calendar:
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'sync') || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'check-calendar')
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'sync') || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'refresh-company-info') || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'check-calendar')
     runs-on: ubuntu-latest
     outputs:
       is_open: ${{ steps.check.outputs.is_open }}
@@ -79,7 +80,7 @@ jobs:
         id: check
         run: python scripts/yfinance_r2/check_market_day.py
         env:
-          ALLOW_CLOSED_MARKET: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode == 'sync' }}
+          ALLOW_CLOSED_MARKET: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'sync' || inputs.run_mode == 'refresh-company-info') }}
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -87,7 +88,7 @@ jobs:
 
   v2-daily-sync:
     needs: market-calendar
-    if: needs.market-calendar.outputs.is_open == 'true' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'sync'))
+    if: needs.market-calendar.outputs.is_open == 'true' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'sync' || inputs.run_mode == 'refresh-company-info')))
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -104,6 +105,9 @@ jobs:
           args=(--publish --workers 24 --session-date "$YFINANCE_SESSION_DATE")
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             args+=(--reprocess-successful --allow-one-extra-attempt)
+          fi
+          if [[ "${{ inputs.run_mode }}" == "refresh-company-info" ]]; then
+            args+=(--refresh-company-info)
           fi
           python scripts/yfinance_r2/sync_v2.py "${args[@]}"
         shell: bash

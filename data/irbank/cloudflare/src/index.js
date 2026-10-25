@@ -320,10 +320,15 @@ function calculateDailyValuation(current) {
   const statistics = current?.statistics || {};
   const eps = finiteNumber(statistics.trailingEps);
   const bookValue = finiteNumber(statistics.bookValue);
+  const reportedPer = finiteNumber(statistics.trailingPE);
+  const reportedPbr = finiteNumber(statistics.priceToBook);
+  const sources = current?.valuation_calculation?.sources || {};
   return {
-    per: price > 0 && eps > 0 ? Math.round(price / eps * 1e6) / 1e6 : null,
-    pbr: price > 0 && bookValue > 0 ? Math.round(price / bookValue * 1e6) / 1e6 : null,
-    source: 'daily_close_divided_by_latest_yfinance_eps_bps',
+    per: reportedPer ?? (price > 0 && eps > 0 ? Math.round(price / eps * 1e6) / 1e6 : null),
+    pbr: reportedPbr ?? (price > 0 && bookValue > 0 ? Math.round(price / bookValue * 1e6) / 1e6 : null),
+    source: 'yfinance_reported_with_daily_calculation_fallback',
+    per_source: sources.trailingPE || (reportedPer !== null ? 'stored_statistic' : 'calculated_fallback'),
+    pbr_source: sources.priceToBook || (reportedPbr !== null ? 'stored_statistic' : 'calculated_fallback'),
     price_date: current?.price?.date || null,
     statistics_last_fetched_session_date: current?.statistics_last_fetched_session_date || null,
     formulas: {
@@ -410,13 +415,34 @@ function irbankDividendForCode(index, code) {
   return normalized ? selectedIrbankDividend(index?.items?.[normalized]) : selectedIrbankDividend(null);
 }
 
-function yieldFromDividend(price, annualDps, irbankYield = null) {
+function yfinanceDividendYieldPercent(value) {
+  const fraction = finiteNumber(value);
+  return fraction !== null && fraction >= 0 && fraction <= 1
+    ? Math.round(fraction * 100 * 10000) / 10000
+    : null;
+}
+
+function yieldFromDividend(price, annualDps, irbankYield = null, yfinanceYield = null, catalogYfinanceYield = null) {
+  const yfinanceRate = yfinanceDividendYieldPercent(yfinanceYield)
+    ?? finiteNumber(catalogYfinanceYield);
+  if (yfinanceRate !== null && yfinanceRate >= 0) return yfinanceRate;
   const reportedYield = finiteNumber(irbankYield);
   if (reportedYield !== null && reportedYield >= 0) return reportedYield;
   const close = finiteNumber(price);
   return close !== null && close > 0 && annualDps !== null
     ? Math.round((annualDps / close * 100) * 10000) / 10000
     : null;
+}
+
+function yieldSourceFromDividend(yieldRate, irbankYield, irbankSource, yfinanceYield = null, catalogYfinanceYield = null) {
+  if (yfinanceDividendYieldPercent(yfinanceYield) !== null
+    || (finiteNumber(catalogYfinanceYield) !== null && finiteNumber(catalogYfinanceYield) >= 0)) {
+    return 'yfinance_reported_dividendYield';
+  }
+  if (finiteNumber(irbankYield) !== null && finiteNumber(irbankYield) >= 0) {
+    return irbankSource || 'IRBANK screening dividendYield';
+  }
+  return yieldRate !== null ? 'calculated_from_irbank_dividend_and_quote' : null;
 }
 
 async function readV2Json(env, key) {
@@ -525,6 +551,47 @@ function financialPeriodKey(row) {
   return String(row?.period_end || row?.fiscal_year || row?.year || '').replaceAll('/', '-');
 }
 
+const IRBANK_ANNUAL_FIELD_UNITS = {
+  sales: 'million_jpy',
+  operating_profit: 'million_jpy',
+  operating_cf: 'million_jpy',
+  investing_cf: 'million_jpy',
+  total_assets: 'million_jpy',
+  equity_ratio_computed: 'percent',
+};
+const IRBANK_VALUATION_FIELD_UNITS = {
+  eps_adjusted: 'jpy_per_share',
+  bps_adjusted: 'jpy_per_share',
+  dividend_yield_adjusted: 'percent',
+};
+const FINANCIAL_ANNUAL_MONEY_FIELDS = new Set([
+  ...Object.entries(IRBANK_ANNUAL_FIELD_UNITS)
+    .filter(([field]) => field !== 'equity_ratio_computed')
+    .map(([field]) => field),
+  'stockholders_equity', 'total_equity_gross_minority_interest', 'net_debt',
+  'total_debt', 'cash_and_short_term_investments', 'cash_and_equivalents',
+  'cash_equivalents', 'cash_dividends_paid', 'common_stock_dividend_paid',
+  'doe_dividend_total',
+]);
+
+function isReasonableEquityRatio(value) {
+  const ratio = finiteNumber(value);
+  return ratio !== null && Math.abs(ratio) <= 1000;
+}
+
+function seedFieldUnits(section, seedValues, seedRecord, row) {
+  const units = { ...(seedRecord?.field_units && typeof seedRecord.field_units === 'object' ? seedRecord.field_units : {}) };
+  const sourceHint = [seedRecord?.source, seedRecord?.source_key, row?.migration_source]
+    .filter(Boolean).join(' ').toLowerCase();
+  if (sourceHint.includes('irbank')) {
+    const knownUnits = section === 'annual' ? IRBANK_ANNUAL_FIELD_UNITS : IRBANK_VALUATION_FIELD_UNITS;
+    for (const [field, unit] of Object.entries(knownUnits)) {
+      if (Object.hasOwn(seedValues, field)) units[field] = unit;
+    }
+  }
+  return units;
+}
+
 async function readV2FinancialPayload(env, code) {
   const symbol = yfinanceV2Symbol(code);
   if (!symbol || !env.MARKET_DATA) return null;
@@ -550,31 +617,89 @@ async function readV2FinancialPayload(env, code) {
     const row = document[section];
     if (!row || typeof row !== 'object') return null;
     const explicit = row.source_values && typeof row.source_values === 'object' ? row.source_values : null;
-    const seedValues = { ...(explicit?.seed?.values && typeof explicit.seed.values === 'object' ? explicit.seed.values : {}) };
+    const seedRecord = explicit?.seed && typeof explicit.seed === 'object' ? explicit.seed : {};
+    const seedValues = { ...(seedRecord.values && typeof seedRecord.values === 'object' ? seedRecord.values : {}) };
     const yfinanceValues = { ...(explicit?.yfinance?.values && typeof explicit.yfinance.values === 'object' ? explicit.yfinance.values : {}) };
     const calculatedValues = explicit?.calculated?.values && typeof explicit.calculated.values === 'object' ? explicit.calculated.values : {};
-    const compatibleCalculatedValues = Object.fromEntries(Object.entries(calculatedValues).filter(([field, calculation]) => {
-      if (field !== 'equity_ratio_computed') return true;
-      const sources = calculation?.input_sources;
-      return Boolean(sources?.equity && sources?.total_assets && sources.equity === sources.total_assets);
-    }));
-    const sourceValues = explicit ? {
-      ...explicit,
-      ...(explicit.calculated && typeof explicit.calculated === 'object' ? {
-        calculated: { ...explicit.calculated, values: compatibleCalculatedValues },
-      } : {}),
-    } : null;
     for (const [key, value] of Object.entries(row)) {
-      if (['fiscal_year', 'period_end', 'field_status', 'migration_source', 'source_values'].includes(key)
+      if (['fiscal_year', 'period_end', 'field_status', 'field_status_reason', 'field_units', 'migration_source', 'source_values'].includes(key)
         || Object.hasOwn(seedValues, key) || Object.hasOwn(yfinanceValues, key)
         || Object.hasOwn(calculatedValues, key)) continue;
       if (row.field_status?.[key] === 'available' && !row.migration_source) yfinanceValues[key] = value;
       else seedValues[key] = value;
     }
-    const mergedRow = { ...row, ...seedValues, ...yfinanceValues };
-    // Preserve legacy source fallback, but never undo a finalized calculation.
-    for (const field of ['equity_ratio_computed', 'calculated_doe', 'net_de_ratio']) {
+    const seedUnits = seedFieldUnits(section, seedValues, seedRecord, row);
+    const ratioCalculation = calculatedValues.equity_ratio_computed;
+    const ratioSources = ratioCalculation?.input_sources;
+    const ratioSource = ratioSources?.equity;
+    const sameSourceCalculation = Boolean(
+      typeof ratioSource === 'string' && ratioSource.trim()
+      && ratioSource === ratioSources?.total_assets
+      && !['unknown', 'mixed', 'unavailable'].includes(String(ratioSource).toLowerCase())
+      && isReasonableEquityRatio(ratioCalculation?.value),
+    );
+    const compatibleCalculatedValues = Object.fromEntries(Object.entries(calculatedValues).filter(([field]) => {
+      if (field !== 'equity_ratio_computed') return true;
+      return sameSourceCalculation;
+    }));
+    const sourceValues = explicit ? {
+      ...explicit,
+      ...(explicit.seed && typeof explicit.seed === 'object' ? {
+        seed: { ...explicit.seed, values: seedValues, field_units: seedUnits },
+      } : {}),
+      ...(explicit.calculated && typeof explicit.calculated === 'object' ? {
+        calculated: { ...explicit.calculated, values: compatibleCalculatedValues },
+      } : {}),
+    } : null;
+    const flatSeedValues = { ...seedValues };
+    const effectiveFieldUnits = {};
+    const knownFlatUnits = section === 'annual'
+      ? { ...IRBANK_ANNUAL_FIELD_UNITS, ...Object.fromEntries([...FINANCIAL_ANNUAL_MONEY_FIELDS].map(field => [field, 'jpy'])) }
+      : IRBANK_VALUATION_FIELD_UNITS;
+    for (const field of Object.keys(knownFlatUnits)) {
+      if (Object.hasOwn(yfinanceValues, field)) {
+        effectiveFieldUnits[field] = knownFlatUnits[field];
+        continue;
+      }
+      if (!Object.hasOwn(seedValues, field)) continue;
+      const sourceUnit = seedUnits[field];
+      if (['million_jpy', 'million_JPY'].includes(sourceUnit) && FINANCIAL_ANNUAL_MONEY_FIELDS.has(field)) {
+        const amount = finiteNumber(seedValues[field]);
+        if (amount !== null) flatSeedValues[field] = amount * 1_000_000;
+        effectiveFieldUnits[field] = 'jpy';
+      } else if (sourceUnit) {
+        effectiveFieldUnits[field] = sourceUnit;
+      }
+    }
+    const mergedRow = { ...row, ...flatSeedValues, ...yfinanceValues };
+    // A flat legacy ratio is trusted only when its source calculation is proven,
+    // or when IRBANK supplied a valid ratio directly. Otherwise the API omits it.
+    for (const field of ['calculated_doe', 'net_de_ratio']) {
       if (Object.hasOwn(row, field)) mergedRow[field] = row[field];
+    }
+    if (section === 'annual') {
+      const seedRatio = seedValues.equity_ratio_computed;
+      const yfinanceEquity = finiteNumber(yfinanceValues.stockholders_equity)
+        ?? finiteNumber(yfinanceValues.total_equity_gross_minority_interest);
+      const yfinanceAssets = finiteNumber(yfinanceValues.total_assets);
+      const recalculatedYfinanceRatio = yfinanceEquity !== null && yfinanceAssets !== null && yfinanceAssets > 0
+        ? yfinanceEquity / yfinanceAssets * 100
+        : null;
+      const safeRatio = sameSourceCalculation
+        ? finiteNumber(ratioCalculation.value)
+        : isReasonableEquityRatio(seedRatio)
+          ? finiteNumber(seedRatio)
+          : isReasonableEquityRatio(recalculatedYfinanceRatio)
+            ? recalculatedYfinanceRatio
+            : null;
+      delete mergedRow.equity_ratio;
+      delete mergedRow.equity_ratio_computed;
+      if (safeRatio !== null) {
+        mergedRow.equity_ratio_computed = safeRatio;
+        effectiveFieldUnits.equity_ratio_computed = 'percent';
+      } else {
+        mergedRow.field_status = { ...(row.field_status || {}), equity_ratio_computed: 'empty' };
+      }
     }
     for (const field of ['sales', 'operating_profit', 'operating_cf', 'investing_cf']) {
       if (Array.isArray(row.field_status_reason?.[field])
@@ -582,14 +707,32 @@ async function readV2FinancialPayload(env, code) {
         mergedRow[field] = null;
       }
     }
+    if (section === 'annual') {
+      const marginFields = ['sales', 'operating_profit', 'operating_cf', 'investing_cf'];
+      if (marginFields.some(field => Object.hasOwn(yfinanceValues, field))) {
+        const blockedFields = marginFields.filter(field =>
+          Object.hasOwn(seedValues, field) && !Object.hasOwn(yfinanceValues, field));
+        for (const field of blockedFields) mergedRow[field] = null;
+        if (blockedFields.length) {
+          mergedRow.field_status = { ...(mergedRow.field_status || {}) };
+          mergedRow.field_status_reason = { ...(mergedRow.field_status_reason || {}) };
+          for (const field of blockedFields) {
+            mergedRow.field_status[field] = 'unsupported';
+            mergedRow.field_status_reason[field] = ['mixed_source_units_not_comparable'];
+          }
+        }
+      }
+    }
+    if (Object.keys(effectiveFieldUnits).length) mergedRow.field_units = effectiveFieldUnits;
     return {
       row: { ...mergedRow, ...(sourceValues ? { source_values: sourceValues } : {}) },
       seed: Object.keys(seedValues).length ? {
         fiscal_year: row.fiscal_year,
         period_end: row.period_end,
-        source: explicit?.seed?.source || (row.migration_source ? 'IRBANK' : 'existing v2 snapshot'),
-        source_key: explicit?.seed?.source_key || row.migration_source || null,
+        source: seedRecord.source || (row.migration_source ? 'IRBANK' : 'existing v2 snapshot'),
+        source_key: seedRecord.source_key || row.migration_source || null,
         values: seedValues,
+        field_units: seedUnits,
       } : null,
     };
   }).filter(Boolean);
@@ -644,11 +787,16 @@ async function readV2FinancialPayload(env, code) {
   const latestIssuerActual = irbankDividendItem?.actual;
   if (irbankDividendItem?.actual_status === 'available' && latestIssuerActual && finiteNumber(latestIssuerActual.fiscal_year) !== null) {
     const fiscalYear = Number(latestIssuerActual.fiscal_year);
-    const period = String(latestIssuerActual.period_end || latestIssuerActual.fiscal_period || fiscalYear).replaceAll('/', '-');
-    for (const [existingPeriod, record] of issuerDividendRecordsByPeriod.entries()) {
-      if (Number(record.fiscal_year) === fiscalYear) issuerDividendRecordsByPeriod.delete(existingPeriod);
+    let period = String(latestIssuerActual.period_end || latestIssuerActual.fiscal_period || latestIssuerActual.period || fiscalYear).replaceAll('/', '-');
+    const candidates = [...issuerDividendRecordsByPeriod.keys()].filter(key =>
+      key === period || (key.startsWith(period + '-') || period.startsWith(key + '-')));
+    // Coarser year/month keys identify a period only when the match is unambiguous.
+    if (candidates.length === 1) {
+      const matched = candidates[0];
+      issuerDividendRecordsByPeriod.delete(matched);
+      if (matched.length > period.length) period = matched;
     }
-    issuerDividendRecordsByPeriod.set(period, {
+    if (candidates.length <= 1 || issuerDividendRecordsByPeriod.has(period)) issuerDividendRecordsByPeriod.set(period, {
       ...latestIssuerActual,
       fiscal_year: fiscalYear,
       fiscal_period: period,
@@ -1102,9 +1250,11 @@ async function splitLegacyMarketQueueMessage(env, body) {
 }
 
 async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
-  const [marketData, v2Payload] = await Promise.all([
+  const symbol = yfinanceV2Symbol(security.security_code_display);
+  const [marketData, v2Payload, yfinanceCurrent] = await Promise.all([
     latestMarketForSecurity(env, security.security_code_display, marketIndex),
     readV2FinancialPayload(env, security.security_code_display),
+    symbol ? readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`) : null,
   ]);
   const latestV2Dividend = v2Payload?.dividends?.records?.at(-1) || null;
   const dividendYear = latestV2Dividend?.calendar_year ?? null;
@@ -1117,23 +1267,31 @@ async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
     ? (typeof financial.data_json === 'string' ? JSON.parse(financial.data_json || '{}') : financial)
     : null;
   const summary = marketData?.summary || null;
+  const statistics = yfinanceCurrent?.statistics || {};
+  const dailyValuation = calculateDailyValuation(yfinanceCurrent);
   const sales = finiteNumber(financialData?.sales);
   const operatingProfit = finiteNumber(financialData?.operating_profit);
-  const operatingMargin = finiteNumber(financialData?.operating_margin)
+  const reportedOperatingMargin = finiteNumber(statistics.operatingMargins)
+    ?? finiteNumber(summary?.operatingMargins);
+  const operatingMargin = reportedOperatingMargin !== null
+    ? reportedOperatingMargin * 100
+    : finiteNumber(financialData?.operating_margin)
     ?? (sales > 0 && operatingProfit != null ? operatingProfit / sales * 100 : null);
   const fcf = finiteNumber(financialData?.operating_cf) != null && finiteNumber(financialData?.investing_cf) != null
     ? finiteNumber(financialData.operating_cf) + finiteNumber(financialData.investing_cf)
     : null;
   const values = {
-    per: finiteNumber(summary?.trailingPE),
-    pbr: finiteNumber(summary?.priceToBook),
+    per: dailyValuation.per ?? finiteNumber(summary?.trailingPE),
+    pbr: dailyValuation.pbr ?? finiteNumber(summary?.priceToBook),
     payout_ratio: finiteNumber(dividendData?.payout_ratio) == null ? null : dividendData.payout_ratio * 100,
     equity_ratio: finiteNumber(financialData?.equity_ratio_computed ?? financialData?.equity_ratio),
     operating_margin: operatingMargin,
     fcf_margin: finiteNumber(financialData?.fcf_margin) ?? (fcf != null && sales > 0 ? fcf / sales * 100 : null),
     dividend_growth_years: finiteNumber(dividendData?.consecutive_dividend_increase_years),
   };
-  const currentYield = finiteNumber(marketData?.dividend?.yield_rate);
+  const currentYield = yfinanceDividendYieldPercent(statistics.dividendYield)
+    ?? yfinanceDividendYieldPercent(summary?.dividendYield)
+    ?? finiteNumber(marketData?.dividend?.yield_rate);
   return {
     dividendYear,
     dividendHistoryBasis: v2Payload?.dividends?.history_basis || null,
@@ -1889,7 +2047,6 @@ export default {
             const events = v2Events.filter(event => {
               const date = String(event?.date || '');
               const amount = finiteNumber(event?.amount);
-              const matchesRequestedYear = years.length === 1 && date.startsWith(`${years[0]}-`);
               return /^\d{4}-\d{2}-\d{2}$/.test(date) &&
                 (requestedYears != null
                   ? requestedYears.includes(Number(date.slice(0, 4))) && date <= asOf
@@ -1983,9 +2140,14 @@ export default {
         if (!(currentPrice > 0)) return null;
         const dividend = irbankDividendForCode(irbankDividendIndex, code);
         const dps = dividend.annual_dps;
-        const yieldRate = dps !== null && dps >= 0
-          ? yieldFromDividend(currentPrice, dps, dividend.yield_rate)
+        const symbol = yfinanceV2Symbol(code);
+        const current = symbol
+          ? await readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`)
           : null;
+        const catalogYield = row.yield_source === 'yfinance_reported_dividendYield' ? row.yield_rate : null;
+        const yieldRate = yieldFromDividend(
+          currentPrice, dps, dividend.yield_rate, current?.statistics?.dividendYield, catalogYield,
+        );
         return {
           code,
           name: String(row.name || code),
@@ -1995,7 +2157,10 @@ export default {
           acquisition_date: point.date,
           annual_dividend_per_share: dps !== null && dps >= 0 ? dps : null,
           yield_rate: yieldRate,
-          yield_source: dividend.yield_source || (yieldRate !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
+          yield_source: yieldSourceFromDividend(
+            yieldRate, dividend.yield_rate, dividend.yield_source,
+            current?.statistics?.dividendYield, catalogYield,
+          ),
           yield_as_of: dividend.yield_as_of,
           yield_attribution: dividend.yield_attribution,
           estimated_average_trading_value_20d: finiteNumber(row.estimated_average_trading_value_20d),
@@ -2132,6 +2297,10 @@ export default {
         const items = await Promise.all(requestedItems.map(async row => {
           const code = String(row.code || '').toUpperCase();
           const irbankDividend = irbankDividendForCode(irbankDividendIndex, code);
+          const catalogYield = row.yield_source === 'yfinance_reported_dividendYield' ? row.yield_rate : null;
+          const catalogYieldRate = yieldFromDividend(
+            row.price, irbankDividend.annual_dps, irbankDividend.yield_rate, null, catalogYield,
+          );
           const item = {
             code: row.code,
             price: row.price,
@@ -2140,8 +2309,10 @@ export default {
             trailing_12_month_distribution_per_share: row.trailing_12_month_distribution_per_share,
             dividend_period: irbankDividend.dividend_period,
             dividend_amount_basis: irbankDividend.dividend_amount_basis,
-            yield_rate: yieldFromDividend(row.price, irbankDividend.annual_dps, irbankDividend.yield_rate),
-            yield_source: irbankDividend.yield_source || (irbankDividend.annual_dps !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
+            yield_rate: catalogYieldRate,
+            yield_source: yieldSourceFromDividend(
+              catalogYieldRate, irbankDividend.yield_rate, irbankDividend.yield_source, null, catalogYield,
+            ),
             yield_as_of: irbankDividend.yield_as_of,
             yield_attribution: irbankDividend.yield_attribution,
             yield_basis: irbankDividend.yield_basis,
@@ -2160,22 +2331,35 @@ export default {
             : null;
           const dividend = current?.dividend;
           if (!dividend) {
+            const reportedYield = current?.statistics?.dividendYield;
+            const yieldRate = yieldFromDividend(
+              current?.price?.close ?? item.price, irbankDividend.annual_dps,
+              irbankDividend.yield_rate, reportedYield, catalogYield,
+            );
             return {
               ...item,
               price: finiteNumber(current?.price?.close) ?? item.price,
               quote_date: current?.price?.date ?? item.quote_date,
-              yield_rate: yieldFromDividend(current?.price?.close ?? item.price, irbankDividend.annual_dps, irbankDividend.yield_rate),
-              yield_source: irbankDividend.yield_source || (irbankDividend.annual_dps !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
+              yield_rate: yieldRate,
+              yield_source: yieldSourceFromDividend(
+                yieldRate, irbankDividend.yield_rate, irbankDividend.yield_source, reportedYield, catalogYield,
+              ),
             };
           }
           const close = finiteNumber(current.price?.close) ?? finiteNumber(row.price);
+          const reportedYield = current?.statistics?.dividendYield;
+          const yieldRate = yieldFromDividend(
+            close, irbankDividend.annual_dps, irbankDividend.yield_rate, reportedYield, catalogYield,
+          );
           return {
             ...item,
             price: close ?? item.price,
             quote_date: current.price?.date ?? item.quote_date,
             trailing_12_month_distribution_per_share: finiteNumber(dividend.trailing_12_month_per_share),
-            yield_rate: yieldFromDividend(close, irbankDividend.annual_dps, irbankDividend.yield_rate),
-            yield_source: irbankDividend.yield_source || (irbankDividend.annual_dps !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
+            yield_rate: yieldRate,
+            yield_source: yieldSourceFromDividend(
+              yieldRate, irbankDividend.yield_rate, irbankDividend.yield_source, reportedYield, catalogYield,
+            ),
           };
         }));
         const nextOffset = offset + items.length;
@@ -2212,13 +2396,19 @@ export default {
         ...v2Catalog,
         items: v2Catalog.items.map(({ income_advice, ...row }) => {
           const dividend = irbankDividendForCode(irbankDividendIndex, row.code);
+          const catalogYield = row.yield_source === 'yfinance_reported_dividendYield' ? row.yield_rate : null;
+          const yieldRate = yieldFromDividend(
+            row.price, dividend.annual_dps, dividend.yield_rate, null, catalogYield,
+          );
           return {
             ...row,
             annual_dividend_per_share: dividend.annual_dps,
             dividend_period: dividend.dividend_period,
             dividend_amount_basis: dividend.dividend_amount_basis,
-            yield_rate: yieldFromDividend(row.price, dividend.annual_dps, dividend.yield_rate),
-            yield_source: dividend.yield_source || (dividend.annual_dps !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
+            yield_rate: yieldRate,
+            yield_source: yieldSourceFromDividend(
+              yieldRate, dividend.yield_rate, dividend.yield_source, null, catalogYield,
+            ),
             yield_as_of: dividend.yield_as_of,
             yield_attribution: dividend.yield_attribution,
             yield_basis: dividend.yield_basis,
@@ -2251,6 +2441,10 @@ export default {
         .slice(0, 30)
         .map(row => {
           const dividend = irbankDividendForCode(irbankDividendIndex, row.code);
+          const catalogYield = row.yield_source === 'yfinance_reported_dividendYield' ? row.yield_rate : null;
+          const yieldRate = yieldFromDividend(
+            row.price, dividend.annual_dps, dividend.yield_rate, null, catalogYield,
+          );
           return {
             code: row.code,
             name: row.name,
@@ -2259,8 +2453,10 @@ export default {
             trailing_12_month_distribution_per_share: row.trailing_12_month_distribution_per_share,
             dividend_period: dividend.dividend_period,
             dividend_amount_basis: dividend.dividend_amount_basis,
-            yield_rate: yieldFromDividend(row.price, dividend.annual_dps, dividend.yield_rate),
-            yield_source: dividend.yield_source || (dividend.annual_dps !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
+            yield_rate: yieldRate,
+            yield_source: yieldSourceFromDividend(
+              yieldRate, dividend.yield_rate, dividend.yield_source, null, catalogYield,
+            ),
             yield_as_of: dividend.yield_as_of,
             yield_attribution: dividend.yield_attribution,
             yield_basis: dividend.yield_basis,
@@ -2301,6 +2497,10 @@ export default {
       const selectedDividend = irbankDividendForCode(irbankDividendIndex, code);
       const selectedDps = selectedDividend.annual_dps;
       const valuation = calculateDailyValuation(current);
+      const reportedYield = current.statistics?.dividendYield;
+      const marketYieldRate = yieldFromDividend(
+        current.price?.close, selectedDps, selectedDividend.yield_rate, reportedYield,
+      );
       const infoFailure = sync?.info_refresh_failure || {};
       const companyInfoHasData = Boolean(
         profile.display_name || profile.short_name || profile.long_name
@@ -2332,9 +2532,10 @@ export default {
           },
         },
         market_price: current.price || null,
-        market_yield_rate: yieldFromDividend(current.price?.close, selectedDps, selectedDividend.yield_rate),
-        market_yield_source: selectedDividend.yield_source
-          || (selectedDps !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
+        market_yield_rate: marketYieldRate,
+        market_yield_source: yieldSourceFromDividend(
+          marketYieldRate, selectedDividend.yield_rate, selectedDividend.yield_source, reportedYield,
+        ),
         market_yield_as_of: selectedDividend.yield_as_of,
         market_yield_attribution: selectedDividend.yield_attribution,
         dividend_status: selectedDividend.dividend_status,
@@ -2543,6 +2744,9 @@ export default {
       const stats = v2Current.statistics || {};
       const valuation = calculateDailyValuation(v2Current);
       const selectedDividend = irbankDividendForCode(irbankDividendIndex, code);
+      const marketYieldRate = yieldFromDividend(
+        v2Current.price?.close, selectedDividend.annual_dps, selectedDividend.yield_rate, stats.dividendYield,
+      );
       return json({
         code,
         canonical_code: `${code}0`,
@@ -2558,9 +2762,10 @@ export default {
           source: 'IRBANK API',
           payout_ratio: stats.payoutRatio ?? null,
         } : null,
-        market_yield_rate: yieldFromDividend(v2Current.price?.close, selectedDividend.annual_dps, selectedDividend.yield_rate),
-        market_yield_source: selectedDividend.yield_source
-          || (selectedDividend.annual_dps !== null ? 'calculated_from_irbank_dividend_and_quote' : null),
+        market_yield_rate: marketYieldRate,
+        market_yield_source: yieldSourceFromDividend(
+          marketYieldRate, selectedDividend.yield_rate, selectedDividend.yield_source, stats.dividendYield,
+        ),
         market_yield_as_of: selectedDividend.yield_as_of,
         market_yield_attribution: selectedDividend.yield_attribution,
         dividend_status: selectedDividend.dividend_status,

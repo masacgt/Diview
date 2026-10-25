@@ -103,7 +103,7 @@ private fun formatMarketDailyChange(security: com.kurogane.dividend.data.Cloudfl
     val amount = com.kurogane.dividend.model.formatStockPriceDisplay(
         kotlin.math.abs(change), security.code, date = quoteDate
     )
-    return amountSign + amount + " (" + String.format(Locale.JAPAN, "%+.2f%%", changePercent) + ")"
+    return "$amountSign$amount (${String.format(Locale.JAPAN, "%+.2f%%", changePercent)})"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -181,8 +181,13 @@ fun StockDetailScreen(
         }
         val calculatedYield = com.kurogane.dividend.model.PortfolioMath.yieldPercent(dps, price)
         val irbankYieldDps = resolvedSecurity?.annualDividendPerShare
-        val irbankYieldRate = resolvedSecurity?.marketYieldRate?.takeIf { dps == irbankYieldDps }
-        val displayYield = irbankYieldRate ?: calculatedYield
+        val yfinanceYieldRate = resolvedSecurity?.marketYieldRate?.takeIf {
+            resolvedSecurity?.marketYieldSource == "yfinance_reported_dividendYield" && it.isFinite() && it in 0.0..100.0
+        }
+        val irbankYieldRate = resolvedSecurity?.marketYieldRate?.takeIf {
+            resolvedSecurity?.marketYieldSource != "yfinance_reported_dividendYield" && dps == irbankYieldDps
+        }
+        val displayYield = yfinanceYieldRate ?: irbankYieldRate ?: calculatedYield
         val marketDailyChange = formatMarketDailyChange(resolvedSecurity)
         val marketChangePositive = resolvedSecurity?.marketPriceChange
             ?.takeIf { marketDailyChange != null }?.let { it >= 0.0 }
@@ -192,6 +197,7 @@ fun StockDetailScreen(
             isNoDividendConfirmed = noDividendConfirmed,
             irbankYieldRate = irbankYieldRate,
             irbankYieldDps = irbankYieldDps,
+            yfinanceYieldRate = yfinanceYieldRate,
             yoc = com.kurogane.dividend.model.PortfolioMath.yieldPercent(dps, holding.acqPrice),
             usdJpyRate = exchangeRate?.usdJpy, usWithholdingEnabled = usTaxDeduction)
     }
@@ -414,9 +420,15 @@ fun StockDetailScreen(
     val valuationValues = remember(backendAnalysisValues, financial) {
         ((backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())).filterKeys { it == "per" || it == "pbr" }
     }
+    val reportedPer = backendAnalysisValues?.get("per")?.takeIf { it.isFinite() }
+    val reportedPbr = backendAnalysisValues?.get("pbr")?.takeIf { it.isFinite() }
+    val reportedOperatingMargin = backendAnalysisValues?.get("operating_margin")?.takeIf { it.isFinite() }
     val valuationNarrative = remember(valuationValues) { StockAnalysisNarrativeGenerator.generate(valuationValues) }
     val missingValuationLabels = valuationNarrative.missingLabels.filter { it == "PER" || it == "PBR" }
     val profile = baseProfile.copy(
+        perEvaluation = "取得値を優先／未取得時は決算EPSから計算",
+        pbrEvaluation = "取得値を優先／未取得時は決算BPSから計算",
+        operatingMargin = reportedOperatingMargin ?: baseProfile.operatingMargin,
         healthGrade = healthNarrative.grade ?: "未判定", healthScore = healthNarrative.score ?: -1,
         healthEvaluation = healthNarrative.title, healthDiagnosisComment = healthNarrative.findings.joinToString(" ") { it.text }.ifBlank { "財務指標のデータが未取得のため、解説を表示できません。" },
         valuationScore = valuationNarrative.score ?: -1,
@@ -1844,7 +1856,7 @@ fun StockDetailScreen(
                                                         Icon(Icons.Default.Tune, contentDescription = null, tint = OnSurfaceVariant, modifier = Modifier.size(13.dp))
                                                     }
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(profile.getPer(currentHolding.price), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
+                                                    Text(profile.getPer(currentHolding.price, reportedPer), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(profile.perEvaluation, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
                                                 }
@@ -1867,7 +1879,7 @@ fun StockDetailScreen(
                                                         Icon(Icons.Default.Tune, contentDescription = null, tint = OnSurfaceVariant, modifier = Modifier.size(13.dp))
                                                     }
                                                     Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(profile.getPbr(currentHolding.price), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
+                                                    Text(profile.getPbr(currentHolding.price, reportedPbr), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(profile.pbrEvaluation, color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                 }

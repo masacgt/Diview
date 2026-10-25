@@ -197,7 +197,7 @@ private fun OdometerAmount(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun AssetManagementScreen(
     viewModel: DividendViewModel,
@@ -258,6 +258,10 @@ fun AssetManagementScreen(
     }
     val listItemsSnapshot by listItemsFlow.collectAsStateWithLifecycle(initialValue = null)
     val listItems = listItemsSnapshot.orEmpty()
+    val heldCodes = remember(listItems) { listItems.filter { it.category == Category.JAPAN }.map { it.code }.sorted() }
+    LaunchedEffect(viewModel, holdingsRestored, heldCodes) {
+        if (holdingsRestored) viewModel.refreshAssetManagementData()
+    }
     val categoryCounts = remember(listItems) { listItems.groupingBy { it.category }.eachCount() }
     val hasMissingExchangeRate = remember(listItems) { listItems.any { it.missingExchangeRate } }
 
@@ -680,16 +684,17 @@ fun AssetManagementScreen(
 
             // ================= HOLDINGS LIST HEADER & SORT =================
             item(key = "holdings_header", contentType = "header") {
-                AdaptiveRow(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Inventory2, contentDescription = null, tint = NeonGreenLight, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (selectedMonth != null) resources.getString(R.string.asset_management_label_15, (selectedMonth).toString()) else resources.getString(R.string.asset_management_label_16),
+                            modifier = Modifier.weight(1f, fill = false),
                             fontSize = AppTextSize.body,
                             fontWeight = FontWeight.Bold,
                             color = OnSurface
