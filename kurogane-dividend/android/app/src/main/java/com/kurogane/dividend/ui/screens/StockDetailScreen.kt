@@ -408,7 +408,18 @@ fun StockDetailScreen(
     val analysisNarrative = remember(currentHolding, backendAnalysisValues, financial) { StockAnalysisNarrativeGenerator.generateDetailed(
         (backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())
     ) }
-    val healthNarrative = remember(financial) { StockAnalysisNarrativeGenerator.generate(financial?.values.orEmpty()) }
+    val healthValues = remember(backendAnalysisValues, financial) {
+        val financialValues = financial?.values.orEmpty()
+        val payoutRatio = financialValues["payout_ratio"]?.takeIf { it.isFinite() }
+            ?: backendAnalysisValues?.get("payout_ratio")?.takeIf { it.isFinite() }
+        financialValues + ("payout_ratio" to payoutRatio)
+    }
+    val forecastHealthPayoutRatio = financial?.forecastPayoutRatio?.takeIf { it.isFinite() }
+    val actualHealthPayoutRatio = healthValues["payout_ratio"]?.takeIf { it.isFinite() }
+    val healthCardPayoutRatio = forecastHealthPayoutRatio ?: actualHealthPayoutRatio
+    val healthCardPayoutIsForecast = forecastHealthPayoutRatio != null
+    val healthCardPayoutIsActual = !healthCardPayoutIsForecast && actualHealthPayoutRatio != null
+    val healthNarrative = remember(healthValues) { StockAnalysisNarrativeGenerator.generate(healthValues) }
     val healthExplanationKeys = remember(healthNarrative) { healthNarrative.findings.map { it.key }.toSet() }
     val valuationValues = remember(backendAnalysisValues, financial) {
         ((backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())).filterKeys { it == "per" || it == "pbr" }
@@ -416,6 +427,7 @@ fun StockDetailScreen(
     val valuationNarrative = remember(valuationValues) { StockAnalysisNarrativeGenerator.generate(valuationValues) }
     val missingValuationLabels = valuationNarrative.missingLabels.filter { it == "PER" || it == "PBR" }
     val profile = baseProfile.copy(
+        payoutRatio = healthValues["payout_ratio"]?.takeIf { it.isFinite() } ?: baseProfile.payoutRatio,
         healthGrade = healthNarrative.grade ?: "未判定", healthScore = healthNarrative.score ?: -1,
         healthEvaluation = healthNarrative.title, healthDiagnosisComment = healthNarrative.findings.joinToString(" ") { it.text }.ifBlank { "財務指標のデータが未取得のため、解説を表示できません。" },
         valuationScore = valuationNarrative.score ?: -1,
@@ -1181,7 +1193,7 @@ fun StockDetailScreen(
                                             Text(profile.healthEvaluation, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp), color = healthBadgeColor, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                         }
                                     }
-                                    Text("予想配当性向 ${financial?.forecastPayoutRatio?.financialText(1, "%") ?: "未取得"}", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    Text("${if (healthCardPayoutIsActual) "配当性向 (実績)" else "予想配当性向"} ${healthCardPayoutRatio?.financialText(1, "%") ?: "未取得"}", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
 
@@ -1957,14 +1969,14 @@ fun StockDetailScreen(
                                                         verticalAlignment = Alignment.CenterVertically,
                                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                                     ) {
-                                                        Text(stringResource(R.string.stock_detail_text_52), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
+                                                        Text(if (healthCardPayoutIsActual) "配当性向 (実績)" else stringResource(R.string.stock_detail_text_52), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.caption)
                                                         Surface(
                                                             shape = RoundedCornerShape(4.dp),
                                                             color = PrimaryEmerald.copy(alpha = 0.12f),
                                                             border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
                                                         ) {
                                                             Text(
-                                                                if (financial?.forecastPayoutRatio != null) "予想" else "予想未取得",
+                                                                when { healthCardPayoutIsForecast -> "予想"; healthCardPayoutIsActual -> "実績"; else -> "予想未取得" },
                                                                 color = PrimaryEmerald,
                                                                 fontSize = AppTextSize.dense,
                                                                 fontWeight = FontWeight.Bold,
@@ -1973,7 +1985,7 @@ fun StockDetailScreen(
                                                         }
                                                     }
                                                     Text(
-                                                        financial?.forecastPayoutRatio?.financialText(1, "%") ?: "未取得",
+                                                        healthCardPayoutRatio?.financialText(1, "%") ?: "未取得",
                                                         color = PrimaryEmerald,
                                                         fontWeight = FontWeight.ExtraBold,
                                                         fontSize = AppTextSize.metric,
