@@ -3341,13 +3341,19 @@ def catalog_item_from_documents(code: str, security: dict[str, Any], profile: di
         round(reported_yield * 100, 4)
         if reported_yield is not None and 0 <= reported_yield <= 1 else None
     )
-    annual_yield = reported_yield_percent if reported_yield_percent is not None else (
+    stored_yield = (
         finite_number(dividend.get("yield_rate"))
-        if dividend.get("yield_rate") is not None else
-        round(annual_dps / close * 100, 4)
-        if annual_dps is not None and close is not None and close > 0 else
-        None
+        if yield_basis in {"current_fiscal_year", "next_fiscal_year_forecast"} and annual_dps is not None
+        else None
     )
+    if reported_yield_percent is not None:
+        annual_yield = reported_yield_percent
+    elif stored_yield is not None:
+        annual_yield = stored_yield
+    elif annual_dps is not None and close is not None and close > 0:
+        annual_yield = round(annual_dps / close * 100, 4)
+    else:
+        annual_yield = None
     return {
         "code": code,
         "name": profile.get("display_name") or previous_name or code,
