@@ -38,7 +38,8 @@ data class FinancialData(
     val forecastFiscalYear: Int? = null,
     val forecastPayoutRatio: Double? = null,
     val dividendShareBasisStatus: String = "unknown",
-    val issuerDividendShareBasisStatus: String = "unknown"
+    val issuerDividendShareBasisStatus: String = "unknown",
+    val yahooForwardAnnualDividendRate: Double? = null
 ) {
     companion object {
         fun parse(root: JSONObject, expectedCode: String): FinancialData {
@@ -52,6 +53,10 @@ data class FinancialData(
             val forecastSource = issuerDividendPayload?.optJSONObject("forecast")
             val marketPayload = root.optJSONObject("market")
             val marketSummary = marketPayload?.optJSONObject("summary")
+            val yahooForwardAnnualDividendRate = if (marketPayload?.optJSONObject("summary_field_units")
+                    ?.optString("dividendRate") == "jpy_per_share") {
+                marketSummary?.number("dividendRate")?.takeIf { it >= 0 }
+            } else null
             val dividendShareBasisStatus = dividendPayload?.optString("share_basis_status")
                 ?.takeIf { it.isNotBlank() } ?: "unknown"
             val forecastAnnualDividend = forecastSource
@@ -204,7 +209,7 @@ data class FinancialData(
                     ?: dividend?.number("consecutive_dividend_increase_years"))
             ), historyBasis, issuerDividends, issuerDividendHistoryStatus,
                 forecastAnnualDividend, forecastEps, forecastFiscalYear, forecastPayoutRatio,
-                dividendShareBasisStatus, issuerDividendShareBasisStatus)
+                dividendShareBasisStatus, issuerDividendShareBasisStatus, yahooForwardAnnualDividendRate)
         }
     }
 }
