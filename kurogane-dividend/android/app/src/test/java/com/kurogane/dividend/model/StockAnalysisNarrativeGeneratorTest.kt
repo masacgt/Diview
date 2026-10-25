@@ -74,6 +74,7 @@ class StockAnalysisNarrativeGeneratorTest {
                     .findings.single { it.key == key }.text
                 val allowed = if (key == "per" || key == "pbr") 130..170 else 100..140
                 if (text.length !in allowed) violations += "$key band $bandIndex: ${text.length} characters"
+                if (text.count { it == '。' } != 2) violations += "$key band $bandIndex: expected about two sentences"
             }
         }
         listOf("per" to -1.0, "pbr" to -1.0, "payout_ratio" to -10.0).forEach { (key, value) ->
@@ -82,6 +83,7 @@ class StockAnalysisNarrativeGeneratorTest {
                 .findings.single { it.key == key }.text
             val allowed = if (key == "per" || key == "pbr") 130..170 else 100..140
             if (text.length !in allowed) violations += "$key non-positive: ${text.length} characters"
+            if (text.count { it == '。' } != 2) violations += "$key non-positive: expected about two sentences"
         }
         assertTrue(violations.joinToString("\n"), violations.isEmpty())
     }

@@ -2,7 +2,7 @@
 
 ## In Progress
 
-- [x] Rework all seven stock evaluation comments around dividend-continuity strengths and limits, and align the four detailed-analysis labels. Evidence: `StockAnalysisNarrative.kt` provides band-specific comments, the unit test enforces the requested character ranges, and `strings.xml` uses the updated labels; JDK 17 unit tests/build and `ReleaseVisualRegressionTest` passed, and the APK installed and launched on emulator `emulator-5554` and device `RFCNC0E4H8J`.
+- [x] Rework all seven stock evaluation comments around dividend-continuity strengths and limits, and align the four detailed-analysis labels. Evidence: `StockAnalysisNarrative.kt` provides band-specific comments, the unit test enforces the requested character ranges and two-sentence structure, and `strings.xml` uses the updated labels; JDK 17 unit tests/build and `ReleaseVisualRegressionTest` passed, and the APK installed and launched on emulator `emulator-5554` and device `RFCNC0E4H8J`.
 
 - [ ] Deploy multi-year dividend-event support and verify Stock Detail preloading through the production API and on device. Evidence: Android now requests and caches the eight-year range during detail initialization and shows loading/failure/empty states; Worker source supports `event_years` with a fallback for older deployments, but publication and live-data verification remain pending.
 
