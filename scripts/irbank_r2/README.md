@@ -2,7 +2,7 @@
 
 ## Prepare
 
-From the repository root, build one compact overview per security. Overview JSON groups organization details, annual/quarterly/semiannual financial periods, dividends, valuation history, segments, shareholders, and source attribution. Full daily price and weekly margin histories are separate objects so the app can load them only when needed.
+From the repository root, build one compact overview per security. Overview JSON groups organization details, annual/quarterly/semiannual financial periods, dividends, valuation history, segments, shareholders, and source attribution. `prepare_dataset.py` preserves IRBANK `fields[].unit` metadata as per-record `field_units`; values remain in their source units. For example, financial and segment monetary rows can be `million_jpy`, valuation market capitalization can be `hundred_million_jpy`, and per-share values use `jpy_per_share`. Full daily price and weekly margin histories are separate objects so the app can load them only when needed.
 
 ```powershell
 python scripts/irbank_r2/prepare_dataset.py

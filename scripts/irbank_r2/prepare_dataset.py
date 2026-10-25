@@ -37,6 +37,61 @@ def attribution(document: Any) -> Any:
     return document.get("attribution") if isinstance(document, dict) else None
 
 
+def unit_metadata(document: Any, *, prefix: str = "") -> dict[str, str]:
+    if not isinstance(document, dict) or not isinstance(document.get("fields"), list):
+        return {}
+    units: dict[str, str] = {}
+    for field in document["fields"]:
+        if not isinstance(field, dict):
+            continue
+        key = str(field.get("key") or field.get("field") or "").strip()
+        unit = str(field.get("unit") or "").strip()
+        if prefix:
+            if not key.startswith(prefix):
+                continue
+            key = key[len(prefix):]
+        if key and "." not in key and "[]" not in key and unit:
+            units[key] = unit
+    return units
+
+
+def attach_field_units(rows: Any, document: Any, *, prefix: str = "") -> Any:
+    units = unit_metadata(document, prefix=prefix)
+    if not units or not isinstance(rows, list):
+        return rows
+    result = []
+    for row in rows:
+        if not isinstance(row, dict):
+            result.append(row)
+            continue
+        existing = row.get("field_units") if isinstance(row.get("field_units"), dict) else {}
+        result.append({**row, "field_units": {**units, **existing}})
+    return result
+
+
+def attach_object_field_units(value: Any, document: Any, *, prefix: str) -> Any:
+    units = unit_metadata(document, prefix=prefix)
+    if not units or not isinstance(value, dict):
+        return value
+    existing = value.get("field_units") if isinstance(value.get("field_units"), dict) else {}
+    return {**value, "field_units": {**units, **existing}}
+
+
+def attach_nested_field_units(rows: Any, document: Any, *, prefix: str, child_key: str) -> Any:
+    units = unit_metadata(document, prefix=prefix)
+    if not units or not isinstance(rows, list):
+        return rows
+    result = []
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get(child_key), dict):
+            result.append(row)
+            continue
+        nested = row[child_key]
+        existing = nested.get("field_units") if isinstance(nested.get("field_units"), dict) else {}
+        result.append({**row, child_key: {**nested, "field_units": {**units, **existing}}})
+    return result
+
+
 def security_display_code(row: dict[str, Any]) -> str:
     display = str(row.get("security_code_display") or "").strip()
     canonical = str(row.get("security_code") or "").strip()
@@ -74,7 +129,7 @@ def financial_periods(source: Path) -> tuple[dict[str, dict[str, Any]], dict[str
             for result in doc.get("results", []):
                 edinet = str(result.get("edinet_code") or "")
                 if edinet:
-                    by_edinet[edinet][period_type] = result.get("periods", [])
+                    by_edinet[edinet][period_type] = attach_field_units(result.get("periods", []), doc)
     return by_edinet, source_attribution
 
 
@@ -138,7 +193,7 @@ def main() -> int:
                     target = app_required_docs.setdefault(str(result["edinet_code"]), {})
                     period_type = path.stem.split("_")[-1]
                     if period_type in FINANCIAL_PERIODS:
-                        target[f"financials_{period_type}"] = result["periods"]
+                        target[f"financials_{period_type}"] = attach_field_units(result["periods"], document)
         if isinstance(document.get("fields"), list):
             edinet = str(document.get("edinet_code") or "")
             if edinet:
@@ -160,11 +215,15 @@ def main() -> int:
                 response = financial_bundle.get(period_type)
                 result = next((row for row in response.get("results", []) if row.get("edinet_code")), None) if isinstance(response, dict) else None
                 if result:
-                    app_required_docs.setdefault(str(result["edinet_code"]), {})[f"financials_{period_type}"] = result.get("periods", [])
+                    app_required_docs.setdefault(str(result["edinet_code"]), {})[f"financials_{period_type}"] = attach_field_units(
+                        result.get("periods", []), response,
+                    )
         if isinstance(document.get("results"), list):
             result = next((row for row in document["results"] if row.get("edinet_code")), None)
             if result:
-                app_required_docs.setdefault(str(result["edinet_code"]), {})[f"financials_{path.stem.rsplit('_', 1)[-1]}"] = result.get("periods", [])
+                app_required_docs.setdefault(str(result["edinet_code"]), {})[f"financials_{path.stem.rsplit('_', 1)[-1]}"] = attach_field_units(
+                    result.get("periods", []), document,
+                )
 
     catalog: list[dict[str, Any]] = []
     index: list[dict[str, Any]] = []
@@ -199,30 +258,32 @@ def main() -> int:
             if family == "organization":
                 company[family] = {
                     "basic": document.get("basic", {}),
-                    "financials": document.get("financials", {}),
-                    "securities": document.get("securities", []),
+                    "financials": attach_object_field_units(document.get("financials", {}), document, prefix="financials."),
+                    "securities": attach_nested_field_units(document.get("securities", []), document,
+                                                             prefix="securities[].valuation.", child_key="valuation"),
                     "disclosures": document.get("disclosures", []),
-                    "officers": document.get("officers", []),
+                    "officers": attach_field_units(document.get("officers", []), document, prefix="officers[]."),
                 }
             elif family == "dividends":
-                company[family] = {"records": document.get("records", [])}
+                records = attach_field_units(document.get("records", []), document)
+                company[family] = {"records": records}
                 dividend_bundle = {
                     "schema_version": 1,
                     "source": "IRBANK Connect",
                     "security_code": code,
-                    "records": document.get("records", []),
+                    "records": records,
                     "attribution": attribution(document),
                 }
             elif family == "valuation":
                 company[family] = {
-                    "history": document.get("history", []),
+                    "history": attach_field_units(document.get("history", []), document),
                     "per_5y_avg": document.get("per_5y_avg"),
                 }
             elif family == "disclosures":
                 company[family] = {"records": document.get("records", [])}
             else:
                 collection = "segments" if family == "segments" else "shareholders"
-                company[family] = {"records": document.get(collection, [])}
+                company[family] = {"records": attach_field_units(document.get(collection, []), document)}
             if attribution(document):
                 company["sources"][family] = attribution(document)
 
@@ -251,15 +312,21 @@ def main() -> int:
                 if not document:
                     continue
                 if family == "organization":
-                    company[family] = {"basic": document.get("basic", {}), "financials": document.get("financials", {}),
-                        "securities": document.get("securities", []), "disclosures": document.get("disclosures", []), "officers": document.get("officers", [])}
+                    company[family] = {
+                        "basic": document.get("basic", {}),
+                        "financials": attach_object_field_units(document.get("financials", {}), document, prefix="financials."),
+                        "securities": attach_nested_field_units(document.get("securities", []), document,
+                                                                 prefix="securities[].valuation.", child_key="valuation"),
+                        "disclosures": document.get("disclosures", []),
+                        "officers": attach_field_units(document.get("officers", []), document, prefix="officers[]."),
+                    }
                 elif family == "dividends":
-                    company[family] = {"records": document.get("records", [])}
+                    company[family] = {"records": attach_field_units(document.get("records", []), document)}
                 elif family == "valuation":
-                    company[family] = {"history": document.get("history", []), "per_5y_avg": document.get("per_5y_avg")}
+                    company[family] = {"history": attach_field_units(document.get("history", []), document), "per_5y_avg": document.get("per_5y_avg")}
                 else:
                     collection = "segments" if family == "segments" else "shareholders"
-                    company[family] = {"records": document.get(collection, [])}
+                    company[family] = {"records": attach_field_units(document.get(collection, []), document)}
                 if attribution(document):
                     company["sources"][family] = attribution(document)
             financial_override = {period: app_required.get(f"financials_{period}") for period in FINANCIAL_PERIODS}
@@ -273,15 +340,21 @@ def main() -> int:
                 if not document:
                     continue
                 if family == "organization":
-                    company[family] = {"basic": document.get("basic", {}), "financials": document.get("financials", {}),
-                        "securities": document.get("securities", []), "disclosures": document.get("disclosures", []), "officers": document.get("officers", [])}
+                    company[family] = {
+                        "basic": document.get("basic", {}),
+                        "financials": attach_object_field_units(document.get("financials", {}), document, prefix="financials."),
+                        "securities": attach_nested_field_units(document.get("securities", []), document,
+                                                                 prefix="securities[].valuation.", child_key="valuation"),
+                        "disclosures": document.get("disclosures", []),
+                        "officers": attach_field_units(document.get("officers", []), document, prefix="officers[]."),
+                    }
                 elif family == "dividends":
-                    company[family] = {"records": document.get("records", [])}
+                    company[family] = {"records": attach_field_units(document.get("records", []), document)}
                 elif family == "valuation":
-                    company[family] = {"history": document.get("history", []), "per_5y_avg": document.get("per_5y_avg")}
+                    company[family] = {"history": attach_field_units(document.get("history", []), document), "per_5y_avg": document.get("per_5y_avg")}
                 else:
                     collection = "segments" if family == "segments" else "shareholders"
-                    company[family] = {"records": document.get(collection, [])}
+                    company[family] = {"records": attach_field_units(document.get(collection, []), document)}
                 if attribution(document):
                     company["sources"][family] = attribution(document)
             financial_override = {period: app_required.get(f"financials_{period}") for period in FINANCIAL_PERIODS}

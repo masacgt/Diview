@@ -32,6 +32,19 @@ ANNUAL_FIELDS = (
     "equity_ratio_computed",
 )
 VALUATION_FIELDS = ("eps_adjusted", "bps_adjusted", "dividend_yield_adjusted")
+ANNUAL_FIELD_UNITS = {
+    "sales": "million_jpy",
+    "operating_profit": "million_jpy",
+    "operating_cf": "million_jpy",
+    "investing_cf": "million_jpy",
+    "total_assets": "million_jpy",
+    "equity_ratio_computed": "percent",
+}
+VALUATION_FIELD_UNITS = {
+    "eps_adjusted": "jpy_per_share",
+    "bps_adjusted": "jpy_per_share",
+    "dividend_yield_adjusted": "percent",
+}
 _PROGRESS_LOCK = threading.Lock()
 
 
@@ -159,7 +172,17 @@ def merge_row(
             row[field] = value
         statuses.setdefault(field, "legacy_migrated")
     if seed_values:
-        seed_record.update({"source": "IRBANK", "source_key": source_key, "values": seed_values})
+        field_units = dict(seed_record.get("field_units") or {})
+        unit_map = ANNUAL_FIELD_UNITS if set(values).intersection(ANNUAL_FIELD_UNITS) else VALUATION_FIELD_UNITS
+        for field in seed_values:
+            if field in unit_map:
+                field_units[field] = unit_map[field]
+        seed_record.update({
+            "source": "IRBANK",
+            "source_key": source_key,
+            "values": seed_values,
+            "field_units": field_units,
+        })
         source_values["seed"] = seed_record
         row["source_values"] = source_values
     row["field_status"] = statuses
@@ -172,49 +195,78 @@ def repair_mixed_source_equity_ratio(annual: Any) -> bool:
     if not isinstance(annual, dict):
         return False
     source_values = annual.get("source_values")
-    if not isinstance(source_values, dict):
-        return False
+    source_values = source_values if isinstance(source_values, dict) else {}
     calculated = source_values.get("calculated")
     calculated_values = calculated.get("values") if isinstance(calculated, dict) else None
     ratio_entry = calculated_values.get("equity_ratio_computed") if isinstance(calculated_values, dict) else None
-    if not isinstance(ratio_entry, dict):
-        return False
-    input_sources = ratio_entry.get("input_sources")
+    input_sources = ratio_entry.get("input_sources") if isinstance(ratio_entry, dict) else None
     equity_source = input_sources.get("equity") if isinstance(input_sources, dict) else None
     assets_source = input_sources.get("total_assets") if isinstance(input_sources, dict) else None
-    if (
+    previous_ratio_entry = dict(ratio_entry) if isinstance(ratio_entry, dict) else None
+    seed_record = source_values.get("seed")
+    seed_values = seed_record.get("values") if isinstance(seed_record, dict) else None
+    seed_ratio = seed_values.get("equity_ratio_computed") if isinstance(seed_values, dict) else None
+    ratio_value = ratio_entry.get("value") if isinstance(ratio_entry, dict) else None
+    valid_ratio = lambda value: (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+        and abs(float(value)) <= 1000
+    )
+    same_source_calculation = (
         isinstance(equity_source, str)
         and equity_source.strip()
         and equity_source.strip().lower() not in {"unknown", "mixed", "unavailable"}
         and equity_source == assets_source
-    ):
-        return False
-
-    calculated_values.pop("equity_ratio_computed", None)
-    seed_record = source_values.get("seed")
-    seed_values = seed_record.get("values") if isinstance(seed_record, dict) else None
-    seed_ratio = seed_values.get("equity_ratio_computed") if isinstance(seed_values, dict) else None
-    valid_seed_ratio = (
-        isinstance(seed_ratio, (int, float))
-        and not isinstance(seed_ratio, bool)
-        and math.isfinite(float(seed_ratio))
+        and valid_ratio(ratio_value)
     )
+    seed_ratio_valid = valid_ratio(seed_ratio)
     statuses = dict(annual.get("field_status") or {})
     reasons = dict(annual.get("field_status_reason") or {})
-    if valid_seed_ratio:
-        annual["equity_ratio_computed"] = seed_ratio
+    previous_value = annual.get("equity_ratio_computed")
+    previous_status = statuses.get("equity_ratio_computed")
+    previous_reason = reasons.get("equity_ratio_computed")
+
+    if same_source_calculation:
+        annual["equity_ratio_computed"] = float(ratio_value)
+        if equity_source == "seed":
+            statuses["equity_ratio_computed"] = "legacy_migrated"
+        elif statuses.get("equity_ratio_computed") not in {"available", "stale"}:
+            statuses["equity_ratio_computed"] = "available"
+        reasons.pop("equity_ratio_computed", None)
+    elif seed_ratio_valid:
+        annual["equity_ratio_computed"] = float(seed_ratio)
         statuses["equity_ratio_computed"] = "legacy_migrated"
         reasons.pop("equity_ratio_computed", None)
     else:
         annual.pop("equity_ratio_computed", None)
         statuses["equity_ratio_computed"] = "empty"
         reasons["equity_ratio_computed"] = ["mixed_source_inputs_not_comparable"]
+
+    if isinstance(calculated_values, dict) and not same_source_calculation:
+        calculated_values.pop("equity_ratio_computed", None)
+    changed = (
+        annual.get("equity_ratio_computed") != previous_value
+        or statuses.get("equity_ratio_computed") != previous_status
+        or reasons.get("equity_ratio_computed") != previous_reason
+        or (calculated_values.get("equity_ratio_computed") if isinstance(calculated_values, dict) else None)
+        != previous_ratio_entry
+    )
     annual["field_status"] = statuses
     if reasons:
         annual["field_status_reason"] = reasons
     else:
         annual.pop("field_status_reason", None)
-    return True
+    return changed
+
+
+def seed_field_units(row: Any) -> dict[str, str]:
+    if not isinstance(row, dict):
+        return {}
+    source_values = row.get("source_values")
+    seed = source_values.get("seed") if isinstance(source_values, dict) else None
+    field_units = seed.get("field_units") if isinstance(seed, dict) else None
+    return dict(field_units) if isinstance(field_units, dict) else {}
 
 
 def json_bytes(value: dict[str, Any]) -> bytes:
@@ -290,6 +342,7 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
     changed_documents = 0
     migrated_fields = 0
     repaired_derived_fields = 0
+    upgraded_unit_metadata = 0
     for fiscal_year in period_years:
         period_end = (annual_by_period.get(fiscal_year) or valuation_by_period[fiscal_year])[0]
         year = period_end[:4]
@@ -302,22 +355,28 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
         }
         updated = dict(document)
         added = 0
+        units_changed = False
         if fiscal_year in annual_by_period:
             annual_end, annual_values = annual_by_period[fiscal_year]
+            prior_units = seed_field_units(updated.get("annual"))
             updated["annual"], count = merge_row(
                 updated.get("annual"), fiscal_year, annual_end, annual_values, source_key=source_key,
             )
             added += count
+            units_changed = units_changed or seed_field_units(updated.get("annual")) != prior_units
         if fiscal_year in valuation_by_period:
             valuation_end, valuation_values = valuation_by_period[fiscal_year]
+            prior_units = seed_field_units(updated.get("valuation"))
             updated["valuation"], count = merge_row(
                 updated.get("valuation"), fiscal_year, valuation_end, valuation_values, source_key=source_key,
             )
             added += count
+            units_changed = units_changed or seed_field_units(updated.get("valuation")) != prior_units
         repaired_ratio = repair_mixed_source_equity_ratio(updated.get("annual"))
-        if added == 0 and not repaired_ratio:
+        if added == 0 and not repaired_ratio and not units_changed:
             continue
         repaired_derived_fields += int(repaired_ratio)
+        upgraded_unit_metadata += int(units_changed)
         retrieval_status = dict(updated.get("retrieval_status") or {})
         retrieval_status["legacy_migration"] = "seeded"
         updated["retrieval_status"] = retrieval_status
@@ -357,6 +416,10 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
             for field, value in expected_seed.items():
                 if actual_seed.get(field) != value:
                     raise RuntimeError(f"v2 read-back seed mismatch for {section}.{field}: {key}")
+            expected_units = seed_field_units(expected_row)
+            actual_units = seed_field_units(actual_row)
+            if actual_units != expected_units:
+                raise RuntimeError(f"v2 read-back seed unit mismatch for {section}: {key}")
         changed_documents += 1
 
     return {
@@ -366,6 +429,7 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
         "document_count": changed_documents,
         "field_count": migrated_fields,
         "repaired_derived_field_count": repaired_derived_fields,
+        "unit_metadata_document_count": upgraded_unit_metadata,
     }
 
 
