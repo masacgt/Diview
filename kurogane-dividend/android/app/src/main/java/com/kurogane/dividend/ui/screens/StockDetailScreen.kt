@@ -409,6 +409,7 @@ fun StockDetailScreen(
         (backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())
     ) }
     val healthNarrative = remember(financial) { StockAnalysisNarrativeGenerator.generate(financial?.values.orEmpty()) }
+    val healthDetailedNarrative = remember(financial) { StockAnalysisNarrativeGenerator.generateDetailed(financial?.values.orEmpty()) }
     val healthExplanationKeys = remember(healthNarrative) { healthNarrative.findings.map { it.key }.toSet() }
     val valuationValues = remember(backendAnalysisValues, financial) {
         ((backendAnalysisValues ?: emptyMap()) + (financial?.values ?: emptyMap())).filterKeys { it == "per" || it == "pbr" }
@@ -422,7 +423,24 @@ fun StockDetailScreen(
         buySignalTitle = valuationNarrative.title,
         buySignalComment = valuationNarrative.findings.joinToString(" ") { it.text }.ifBlank { "PER・PBRが未取得のため、株価指標の解説を表示できません。" }
     )
-    val healthDiagnosisItems = healthNarrative.findings.map { it.text }.ifEmpty { listOf("財務指標のデータが未取得のため、解説を表示できません。") }
+    val healthMetricLabels = listOf(
+        "payout_ratio" to "配当性向",
+        "equity_ratio" to "自己資本比率",
+        "operating_margin" to "営業利益率",
+        "fcf_margin" to "FCF余力",
+        "dividend_growth_years" to "連続増配年数"
+    )
+    val healthFindingsByKey = healthDetailedNarrative.findings.associateBy { it.key }
+    val healthPositionItems = healthMetricLabels.mapNotNull { (key, label) ->
+        healthFindingsByKey[key]?.toStockAnalysisPositionItem()
+            ?: label.takeIf { it in healthDetailedNarrative.missingLabels }?.let {
+                StockAnalysisPositionItem(
+                    label = label, formattedValue = "未取得", bandLabel = "評価不可",
+                    positionLabel = "データなし", score = null,
+                    text = "${label}は未取得のため、評価基準上の位置を表示できません。"
+                )
+            }
+    }
     val buySignalPositionItems = buildList {
         val hasYieldHistory = profile.yieldRangeMin.isFinite() &&
             profile.yieldRangeAvg.isFinite() && profile.yieldRangeMax.isFinite()
@@ -2253,14 +2271,8 @@ fun StockDetailScreen(
                                                     }
                                                 }
                                                 Spacer(modifier = Modifier.height(6.dp))
-                                                Text("解説", color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
-                                                healthDiagnosisItems.forEachIndexed { index, item ->
-                                                    Text(
-                                                        "${index + 1}. $item",
-                                                        color = OnSurface.copy(alpha = 0.95f),
-                                                        fontSize = AppTextSize.dense,
-                                                        lineHeight = 18.sp
-                                                    )
+                                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    healthPositionItems.forEach { item -> StockAnalysisPositionRow(item) }
                                                 }
                                             }
                                         }
