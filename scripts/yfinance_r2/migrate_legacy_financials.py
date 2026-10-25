@@ -247,8 +247,6 @@ def repair_mixed_source_equity_ratio(annual: Any) -> bool:
         and valid_ratio(ratio_value)
     )
     seed_ratio_valid = valid_ratio(seed_ratio) and seed_field_units.get("equity_ratio_computed") == "percent"
-    if same_source_calculation and equity_source != "seed":
-        return False
     statuses = dict(annual.get("field_status") or {})
     reasons = dict(annual.get("field_status_reason") or {})
     previous_value = annual.get("equity_ratio_computed")

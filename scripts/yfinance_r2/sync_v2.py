@@ -3544,6 +3544,9 @@ def reusable_same_session_catalog_item(
     item = previous_items.get(code)
     if not isinstance(item, dict) or item.get("status") != "ok" or item.get("failure_reason"):
         return None
+    quote_date = date_value(item.get("quote_date"))
+    if quote_date is not None and quote_date < session_date:
+        return None
     return dict(item)
 
 
