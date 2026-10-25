@@ -2246,7 +2246,11 @@ class DividendViewModel @JvmOverloads constructor(
             marketYieldRate = json.doubleOrNull("market_yield_rate"),
             isNoDividendConfirmed = json.optBoolean("is_no_dividend_confirmed"),
             hasDividendStatus = json.optBoolean("has_dividend_status"),
-            dataRetrieval = retrieval
+            dataRetrieval = retrieval,
+            marketPreviousClose = json.doubleOrNull("market_previous_close"),
+            marketPriceChange = json.doubleOrNull("market_price_change"),
+            marketPriceChangePercent = json.doubleOrNull("market_price_change_percent"),
+            marketPriceDate = json.stringOrNull("market_price_date")
         )
     }.getOrNull()
 
@@ -2294,12 +2298,12 @@ class DividendViewModel @JvmOverloads constructor(
             put("name", security.name)
             put("annual_dividend_per_share", security.annualDividendPerShare ?: JSONObject.NULL)
             put("market_price", security.marketPrice ?: JSONObject.NULL)
+            put("industry", security.industry ?: JSONObject.NULL)
+            put("market_yield_rate", security.marketYieldRate ?: JSONObject.NULL)
             put("market_previous_close", security.marketPreviousClose ?: JSONObject.NULL)
             put("market_price_change", security.marketPriceChange ?: JSONObject.NULL)
             put("market_price_change_percent", security.marketPriceChangePercent ?: JSONObject.NULL)
             put("market_price_date", security.marketPriceDate ?: JSONObject.NULL)
-            put("industry", security.industry ?: JSONObject.NULL)
-            put("market_yield_rate", security.marketYieldRate ?: JSONObject.NULL)
             put("is_no_dividend_confirmed", security.isNoDividendConfirmed)
             put("has_dividend_status", security.hasDividendStatus)
             put("data_retrieval", retrieval ?: JSONObject.NULL)
