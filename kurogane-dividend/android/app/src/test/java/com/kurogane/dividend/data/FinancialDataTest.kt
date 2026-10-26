@@ -167,7 +167,7 @@ class FinancialDataTest {
 
         assertEquals(10.0, data.profile.operatingMargin, 0.0)
         assertEquals(15.0, data.profile.fcfMargin!!, 0.0)
-        assertEquals("フリーCF黒字", data.profile.fcfStatus)
+        assertEquals("フリーキャッシュフロー黒字", data.profile.fcfStatus)
         assertEquals(40.0, data.profile.equityRatio, 0.0)
         assertNull(data.values["sales"])
     }
@@ -270,7 +270,7 @@ class FinancialDataTest {
         val data = parseFixture(root, "7203")
         assertTrue(data.profile.operatingMargin.isNaN())
         assertNull(data.profile.fcfMargin)
-        assertEquals("フリーCF赤字", data.profile.fcfStatus)
+        assertEquals("フリーキャッシュフロー赤字", data.profile.fcfStatus)
     }
     @Test fun portfolioHistoryHasMissingGapsAndUsesCurrentAccountAllocation() {
         val data = parseFixture(document(), "7203")

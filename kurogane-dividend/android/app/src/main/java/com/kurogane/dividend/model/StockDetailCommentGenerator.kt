@@ -17,8 +17,8 @@ object StockDetailCommentGenerator {
             else -> "購入額に対する配当収入を得やすい一方、株価下落が背景かも確かめます。"
         }
         val limitation = if (minimum.isFinite() && average.isFinite() && maximum.isFinite())
-            "予想配当と期末実績は時点が異なり、安全性は利益とFCFも見ます。"
-            else "利回りだけでは配当の安全性は分からず、利益とFCFも確認します。"
+            "予想配当と期末実績は時点が異なり、安全性は利益とフリーキャッシュフローも見ます。"
+            else "利回りだけでは配当の安全性は分からず、利益とフリーキャッシュフローも確認します。"
         return StockMetricCommentary.contextual(base, "dividend_yield", context, limitation)
     }
 
@@ -30,7 +30,7 @@ object StockDetailCommentGenerator {
             else -> "複数の環境で配当を増やした実績は、還元姿勢を支える材料です。"
         }
         return StockMetricCommentary.contextual(base, "dividend_growth_years", context,
-            "年数だけで将来余力は分からず、増配幅、配当性向とFCFも見ます。")
+            "年数だけで将来余力は分からず、増配幅、配当性向とフリーキャッシュフローも見ます。")
     }
 
     fun nonCutYears(years: Int, band: String, position: String,
@@ -55,7 +55,7 @@ object StockDetailCommentGenerator {
             else -> "配当は大きく伸びており、継続的な利益成長か一時的な増額かを見ます。"
         }
         val limitation = if (isCalendarYearBasis) "暦年と決算期は異なり、年率平均は途中の減配や急増を示しません。"
-            else "年率平均は途中の減配や急増を示さず、配当性向とFCFも確認します。"
+            else "年率平均は途中の減配や急増を示さず、配当性向とフリーキャッシュフローも確認します。"
         return StockMetricCommentary.contextual(base, "dividend_cagr", context, limitation)
     }
 
