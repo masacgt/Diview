@@ -1,5 +1,7 @@
 # Todo
 
+- [x] Integrate the four pending evaluation/comment commits with current main labels and explanation wording. Evidence: all 208 Android unit tests and the JDK 17 build pass; physical RFCNC0E4H8J and emulator-5560 show all four evaluation panels and the dividend explanation, with matching installed APK hashes and no fresh fatal exceptions. See `ai_docs/branch-integration-20261027.md`; unrelated dirty work and account CSV history are preserved.
+
 ## In Progress
 - [x] Add the complete-universe Worker security-category API and Android's 45-day per-code cache, displaying REIT/ETF only for unclassified Japanese holdings. Evidence: Worker 58 tests and Android 178 unit tests pass; JDK 17 builds and five dedicated-emulator category/display/list regression tests pass with matching APK hashes; the new API logic returns all 4,451 codes from a production R2 snapshot. See `ai_docs/security-product-categories.md`.
 - [ ] Publish the security-category Worker API and verify production API-to-Android communication. Local code integration, physical-device installation, emulator fixtures, and production R2 input have been checked; the new production endpoint has not been deployed.

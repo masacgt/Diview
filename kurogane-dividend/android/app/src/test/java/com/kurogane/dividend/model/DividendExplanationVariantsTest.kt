@@ -110,8 +110,8 @@ class DividendExplanationVariantsTest {
     }
 
     @Test fun expandedCopyFitsTheFormerInputBudgetWithoutCuttingSentences() {
-        val core = "還元と事業投資を両立しやすい配当負担の範囲です。"
-        val fullLimit = "利益に対する配当負担だけでは、手元資金や投資・借入返済後の支払余力は分かりません。特別損益を除く利益の安定性、営業キャッシュフロー、FCFと配当方針も確認します。"
+        val core = "配当負担が抑えられており、株主還元と事業投資を両立しやすい水準です。"
+        val fullLimit = "配当性向だけでは、手元資金や投資・借入返済後の支払余力は分かりません。特別損益を除いた利益が安定しているか、営業キャッシュフローやフリーキャッシュフロー、配当方針もあわせて確認します。"
         val previous = core + fullLimit
         val actual = text("payout_ratio", 50.0)
         assertTrue("${actual.length} > ${previous.length}: $actual", actual.length <= previous.length)
