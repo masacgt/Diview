@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -26,6 +27,18 @@ def bump_financial_revision(client: Any, bucket: str) -> str:
         CacheControl="no-store",
     )
     saved = client.get_object(Bucket=bucket, Key=REVISION_KEY)["Body"].read()
-    if json.loads(saved).get("revision") != revision:
-        raise RuntimeError("Financial revision read-back mismatch")
-    return revision
+    try:
+        saved_document = json.loads(saved)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("Financial revision read-back is invalid JSON") from exc
+
+    # Several full-universe refresh shards may publish concurrently. Another
+    # valid writer can replace our token between PUT and GET; its token also
+    # invalidates app caches, so a different well-formed token is success.
+    saved_schema_version = saved_document.get("schema_version") if isinstance(saved_document, dict) else None
+    saved_revision = saved_document.get("revision") if isinstance(saved_document, dict) else None
+    if (saved_schema_version != 1
+            or not isinstance(saved_revision, str)
+            or re.fullmatch(r"[0-9a-f]{32}", saved_revision) is None):
+        raise RuntimeError("Financial revision read-back is invalid")
+    return saved_revision
