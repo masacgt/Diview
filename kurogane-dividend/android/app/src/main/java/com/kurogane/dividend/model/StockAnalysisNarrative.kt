@@ -257,7 +257,7 @@ object StockAnalysisNarrativeGenerator {
                 String.format(Locale.JAPAN, "%.2f%s", value, rule.unit)
             }
             val findingText = if (textStyle == TextStyle.EVALUATION_POSITION) {
-                StockEvaluationPositionComment.threshold(value, rule.cutoffs, rule.unit)
+                StockEvaluationPositionComment.threshold(value, rule.cutoffs, rule.unit, key = rule.key)
             } else StockMetricCommentary.comment(
                 rule.key, value, positionBandExplanations.getValue(rule.key)[bandIndex], context,
                 detailed = textStyle == TextStyle.DIVIDEND_CONTINUITY,

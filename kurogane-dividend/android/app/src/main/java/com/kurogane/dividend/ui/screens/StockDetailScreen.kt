@@ -497,7 +497,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = label, formattedValue = "未取得", bandLabel = "評価不可",
                     positionLabel = "データなし", score = null,
-                    text = "${label}の値が未取得のため、評価基準内の位置は判定できません。未取得は0や基準外を意味せず、最新データの取得後に再評価します。"
+                    text = StockEvaluationPositionComment.unavailable("${label}の値が未取得のため、評価基準内の位置は判定できません。")
                 )
             }
     }
@@ -512,7 +512,7 @@ fun StockDetailScreen(
                 currentDpsUnavailable -> StockAnalysisPositionItem(
                     label = "配当利回り", formattedValue = "未取得", bandLabel = "比較不可",
                     positionLabel = "評価基準なし", score = null,
-                    text = "DPSが未取得で、現在利回りと評価基準内の位置は算出できません。表示上の0.00%は未取得を表し、無配確定ではありません。"
+                    text = StockEvaluationPositionComment.unavailable("DPSが未取得で、現在利回りと評価基準内の位置は算出できません。")
                 )
                 !hasYieldHistory -> StockAnalysisPositionItem(
                     label = "配当利回り", formattedValue = currentYieldText, bandLabel = "過去実績未取得",
@@ -561,7 +561,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = label, formattedValue = "未取得", bandLabel = "評価不可",
                     positionLabel = "データなし", score = null,
-                    text = "${label}の値が未取得のため、評価基準内の位置は判定できません。未取得は0や基準外を意味せず、最新データの取得後に再評価します。"
+                    text = StockEvaluationPositionComment.unavailable("${label}の値が未取得のため、評価基準内の位置は判定できません。")
                 )
             )
         }
@@ -575,7 +575,7 @@ fun StockDetailScreen(
             StockAnalysisPositionItem(
                 label = "連続増配年数", formattedValue = "未取得", bandLabel = "評価不可",
                 positionLabel = "データなし", score = null,
-                text = "連続増配年数が未取得のため、判定帯・帯内位置・境界との差は算出できません。"
+                text = StockEvaluationPositionComment.unavailable("連続増配年数が未取得のため、判定帯・帯内位置・境界との差は算出できません。")
             )
         )
 
@@ -592,7 +592,7 @@ fun StockDetailScreen(
                     label = "非減配年数", formattedValue = "${profile.noCutYears}年",
                     bandLabel = bandLabels[bandIndex], positionLabel = position,
                     score = scores[bandIndex],
-                    text = StockEvaluationPositionComment.threshold(years, listOf(1.0, 3.0, 5.0, 10.0), "年", minimum = 0.0)
+                    text = StockEvaluationPositionComment.threshold(years, listOf(1.0, 3.0, 5.0, 10.0), "年", minimum = 0.0, key = "non_cut_years")
                 )
             )
         } else {
@@ -600,7 +600,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = "非減配年数", formattedValue = "未取得", bandLabel = "評価不可",
                     positionLabel = "比較期間不足", score = null,
-                    text = "非減配年数の比較期間が不足しているため、判定帯・帯内位置・境界との差は算出できません。"
+                    text = StockEvaluationPositionComment.unavailable("非減配年数の比較期間が不足しているため、判定帯・帯内位置・境界との差は算出できません。")
                 )
             )
         }
@@ -630,7 +630,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = cagrLabel, formattedValue = "未取得", bandLabel = "評価不可",
                     positionLabel = "比較期間不足", score = null,
-                    text = "配当CAGRの比較期間が不足しているため、0%の判定境界に対する位置と差は算出できません。"
+                    text = StockEvaluationPositionComment.unavailable("配当CAGRの比較期間が不足しているため、0%の判定境界に対する位置と差は算出できません。")
                 )
             )
         }
@@ -704,7 +704,7 @@ fun StockDetailScreen(
                     label = "銘柄配当依存度", formattedValue = "$divDependencyStr%", bandLabel = band,
                     positionLabel = position,
                     score = when { divDependency <= 10.0 -> 85; divDependency <= 25.0 -> 55; else -> 35 },
-                    text = StockEvaluationPositionComment.threshold(divDependency, listOf(10.0, 25.0), "%", minimum = 0.0)
+                    text = StockEvaluationPositionComment.threshold(divDependency, listOf(10.0, 25.0), "%", minimum = 0.0, key = "dividend_dependency")
                 )
             )
         } else {
@@ -712,7 +712,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = "銘柄配当依存度", formattedValue = "算出不可", bandLabel = "評価不可",
                     positionLabel = "分母またはDPSなし", score = null,
-                    text = "DPSまたは保有全体の年間配当が不足し、評価基準内の位置を算出できません。算出不可は0%を意味しないため、データを確認してください。"
+                    text = StockEvaluationPositionComment.unavailable("DPSまたは保有全体の年間配当が不足し、評価基準内の位置を算出できません。")
                 )
             )
         }
@@ -735,7 +735,7 @@ fun StockDetailScreen(
                     bandLabel = impactBand,
                     positionLabel = impactPosition,
                     score = when { cutImpactRatio <= 5.0 -> 85; cutImpactRatio <= 12.5 -> 55; else -> 35 },
-                    text = StockEvaluationPositionComment.threshold(cutImpactRatio, listOf(5.0, 12.5), "%", minimum = 0.0)
+                    text = StockEvaluationPositionComment.threshold(cutImpactRatio, listOf(5.0, 12.5), "%", minimum = 0.0, key = "half_dividend_impact")
                 )
             )
         } else {
@@ -743,7 +743,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = "配当半減時の影響比率", formattedValue = "算出不可", bandLabel = "評価不可",
                     positionLabel = "分母またはDPSなし", score = null,
-                    text = "DPSまたは保有全体の年間配当が不足し、影響比率の評価基準内の位置を算出できません。算出不可は配当への影響がないことを意味しません。"
+                    text = StockEvaluationPositionComment.unavailable("DPSまたは保有全体の年間配当が不足し、影響比率の評価基準内の位置を算出できません。")
                 )
             )
         }
@@ -764,7 +764,7 @@ fun StockDetailScreen(
                     label = "$cleanSectorName セクター集中度", formattedValue = "$sectorDependencyStr%",
                     bandLabel = band, positionLabel = position,
                     score = when { sectorDependency <= 20.0 -> 85; sectorDependency <= 30.0 -> 55; else -> 35 },
-                    text = StockEvaluationPositionComment.threshold(sectorDependency, listOf(20.0, 30.0), "%", minimum = 0.0)
+                    text = StockEvaluationPositionComment.threshold(sectorDependency, listOf(20.0, 30.0), "%", minimum = 0.0, key = "sector_concentration")
                 )
             )
         } else {
@@ -772,7 +772,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = "$cleanSectorName セクター集中度", formattedValue = "算出不可", bandLabel = "評価不可",
                     positionLabel = "分母なし", score = null,
-                    text = "保有資産の評価額合計が不足し、セクター集中度の位置は判定できません。算出不可は0%を意味せず、評価額の取得後に確認します。"
+                    text = StockEvaluationPositionComment.unavailable("保有資産の評価額合計が不足し、セクター集中度の位置は判定できません。")
                 )
             )
         }
