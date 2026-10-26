@@ -70,6 +70,63 @@ object StockAnalysisNarrativeGenerator {
         "この評価帯の上端に近い位置です。"
     )
 
+    private val finePositionLabels = listOf(
+        "下端に近い位置", "下端寄り", "下側寄り", "中央より下", "中央付近",
+        "中央より上", "上側寄り", "上端寄り", "上端に近い位置"
+    )
+
+    private val positionBandExplanations = mapOf(
+        "per" to listOf(
+            "低い倍率は割安感がありますが、利益縮小への警戒も含み得ます。",
+            "やや低めの倍率は利益期待が控えめな一方、景気による減益懸念も含み得ます。",
+            "中位の評価で、株価の利益期待は極端ではありません。",
+            "高めの倍率に成長期待が含まれ、未達なら評価が下がり得ます。",
+            "期待が高く、利益未達時は株価評価が下がりやすい水準です。"
+        ),
+        "pbr" to listOf(
+            "純資産を下回る評価ですが、資産の収益性への懸念もあり得ます。",
+            "資産への評価は控えめでも、配当余力が大きいとは限りません。",
+            "資産への評価は中位で、配当原資の十分さは別に確認します。",
+            "市場は資産の収益力を評価していますが、配当支払力とは別です。",
+            "資産への期待が高く、実際の収益が伴うか確かめます。"
+        ),
+        "payout_ratio" to listOf(
+            "利益に対する配当負担は小さく、減益への余地を残す範囲です。",
+            "還元と事業投資を両立しやすい配当負担の範囲です。",
+            "利益の半分程度を配当に回し、現状の維持を支える水準です。",
+            "利益の多くを配当に充て、減益で余裕が縮みやすい状態です。",
+            "利益の大半またはそれ以上を配当に回し、負担が高い状態です。"
+        ),
+        "equity_ratio" to listOf(
+            "自己資本が薄く、業績悪化時に負債負担が重くなりやすい範囲です。",
+            "自己資本はやや少なめで、借入や利益変動への備えを見ます。",
+            "標準的な厚みで、財務の耐性は中位の水準です。",
+            "自己資本が厚く、損失を吸収する余地が比較的大きい状態です。",
+            "自己資本は非常に厚く、財務面の備えを支える強みです。"
+        ),
+        "operating_margin" to listOf(
+            "利益率は低めで、コスト上昇や売上減少が利益に響きやすい範囲です。",
+            "利益率はやや薄く、売上の変化が本業利益に影響しやすい状態です。",
+            "標準的な利益率で、本業の収益を確保している水準です。",
+            "良好な利益率は、配当を支える収益力の一つです。",
+            "高い利益率が強みですが、業種や好況の影響も確かめます。"
+        ),
+        "fcf_margin" to listOf(
+            "投資後の現金が残りにくく、配当には手元資金も必要な範囲です。",
+            "FCFは小さめで、投資負担により赤字化しやすい水準です。",
+            "FCFは確保されていますが、配当余力に大きな余裕はありません。",
+            "投資後に現金が残り、配当を支える資金面の強みです。",
+            "大きなFCFがあり、投資後の配当余力を支える水準です。"
+        ),
+        "dividend_growth_years" to listOf(
+            "増配履歴は短く、継続性を判断する材料が限られます。",
+            "数年の実績は、還元方針の一貫性を示す一材料です。",
+            "複数年の増配実績があり、還元姿勢を支える強みです。",
+            "長めの履歴があり、複数の環境で配当を伸ばしています。",
+            "長期の増配実績は強みですが、将来も続くとは限りません。"
+        )
+    )
+
     private val dividendContinuityExplanations = mapOf(
         "per" to listOf(
             "PERが低く株価に織り込まれた利益期待は控えめですが、利益縮小への懸念が反映される場合もあり、配当の強さとは言えず、PERは利益に対する株価倍率で配当原資や支払余力を直接測らないため、利益推移、配当性向、営業キャッシュフローも確認します。特に景気で利益が振れる企業は、好況期の値だけで判断しないことが大切です。",
@@ -129,13 +186,19 @@ object StockAnalysisNarrativeGenerator {
     )
 
     private val evaluationPositionLimitations = mapOf(
-        "per" to "PERは市場の利益評価で、配当を支払う現金を直接表しません。利益予想の達成度、配当性向、営業キャッシュフローも確かめます。",
-        "pbr" to "PBRは資産への市場評価で、換金できる現金や配当支払力とは異なります。負債、資産の質、利益とキャッシュフローも見ます。",
-        "payout_ratio" to "配当性向だけでは手元資金や投資後の支払余力は分かりません。特別損益を除く利益、FCF、配当方針の変化も確認し、複数期の利益・配当推移も見ます。",
-        "equity_ratio" to "自己資本は損失への備えですが、すぐ配当に使える現金とは異なります。現預金、返済期限、資産の換金性も見ます。自己資本の厚みと配当実績を同じものと捉えず、比率だけでは配当余力を測れない点にも注意します。",
-        "operating_margin" to "営業利益率は最終利益や現金回収、投資負担を示しません。営業キャッシュフローと複数年の利益変動も合わせて確認します。",
-        "fcf_margin" to "FCFは投資時期や運転資金で変動します。複数年の推移、設備投資、配当後の現金残高と借入返済も合わせて見ます。",
-        "dividend_growth_years" to "増配年数は増配幅や利益に対する配当負担を示しません。配当性向、FCF、利益推移と配当額の変化も確認します。景気後退や資金需要が変わった局面の実績に加え、増配の背景が利益成長か一時的な方針変更かも見ておきます。"
+        "per" to "PERだけでは配当原資や予想利益の達成度は分からないため、利益推移、配当性向、営業CFも合わせて確かめます。",
+        "pbr" to "PBRだけでは現金や配当支払力、資産の収益性は分からないため、負債、資産の質、利益と現金収支も見ます。",
+        "payout_ratio" to "配当性向だけでは現金余力や利益の一時要因は分からないため、FCF、複数期の利益、実際の配当額も確認します。",
+        "equity_ratio" to "自己資本比率だけでは現金や返済時期は分からないため、負債、資産の換金性、営業CFも合わせて見ます。",
+        "operating_margin" to "利益率だけでは現金回収や投資負担は分からず、営業CFと投資額も確かめます。",
+        "fcf_margin" to "FCFは投資時期や運転資金で変動するため、複数期の推移、投資計画、配当後に残る資金も見ます。",
+        "dividend_growth_years" to "増配年数だけでは増配幅や将来余力は分からないため、利益の安定性、配当性向、FCFと配当方針も見ます。"
+    )
+
+    private val nonPositivePositionExplanations = mapOf(
+        "per" to "赤字や一時要因で倍率比較が難しく、配当支払力も示しません。利益推移や営業CFも確かめます。",
+        "pbr" to "負の純資産などで通常の比較が難しく、資産の質や配当支払力も分かりません。負債と現金余力を確かめます。",
+        "payout_ratio" to "赤字時は比率の符号に注意が必要で、低い値も余力を示しません。利益、実際の配当額、営業CFを個別に見ます。"
     )
 
     private val rules = listOf(
@@ -328,34 +391,26 @@ object StockAnalysisNarrativeGenerator {
 
     private fun evaluationPositionComment(rule: Rule, bandIndex: Int, value: Double, detailIndex: Int): String {
         val semanticState = semanticPositionState(rule.key, value)
-        val position = when (detailIndex / 3) {
-            0 -> "下端寄り"
-            1 -> "中央付近"
-            else -> "上端寄り"
+        val nonPositiveValuation = semanticState == SemanticPositionState.NON_POSITIVE
+        val openingSentence = if (nonPositiveValuation) {
+            "${rule.label}は${formatMetricValue(rule, value)}で、通常の評価帯比較には注意が必要です。"
+        } else {
+            "${rule.label}は${formatMetricValue(rule, value)}で「${rule.bands[bandIndex].label}」帯の${finePositionLabels[detailIndex]}です。"
         }
-        val openingSentence = when (semanticState) {
-            SemanticPositionState.NON_POSITIVE -> when (rule.key) {
-                "per" -> "PERは${formatMetricValue(rule, value)}で、赤字などでは通常の倍率比較に注意が必要です。"
-                "pbr" -> "PBRは${formatMetricValue(rule, value)}で、負の純資産などでは通常の比較が難しい値です。"
-                "payout_ratio" -> "配当性向は${formatMetricValue(rule, value)}で、赤字時は通常の余力評価と分けて見ます。"
-                else -> "${rule.label}は${formatMetricValue(rule, value)}で、通常の評価帯比較に注意が必要です。"
-            }
-            else -> "${rule.label}は${formatMetricValue(rule, value)}で、「${rule.bands[bandIndex].label}」帯の${position}にあります。"
-        }
-        val continuityExplanation = when {
-            rule.key in setOf("per", "pbr") && value <= 0.0 -> nonPositiveValuationExplanations.getValue(rule.key)
-            rule.key == "payout_ratio" && value < 0.0 -> nonPositiveValuationExplanations.getValue(rule.key)
-            else -> dividendContinuityExplanations.getValue(rule.key)[bandIndex]
+        val bandExplanation = if (nonPositiveValuation) {
+            nonPositivePositionExplanations.getValue(rule.key)
+        } else {
+            positionBandExplanations.getValue(rule.key)[bandIndex]
         }
         val semanticSentence = when (semanticState) {
             SemanticPositionState.NEGATIVE -> when (rule.key) {
-                "operating_margin" -> "営業利益はマイナスで、本業の利益だけでは配当を支えにくい状態です。"
-                "fcf_margin" -> "FCFはマイナスで、配当原資は手元資金なども含めて確認します。"
+                "operating_margin" -> "本業赤字のため、配当には現預金や借入余力も必要です。"
+                "fcf_margin" -> "投資後の不足分を補える現預金や営業CFも確かめます。"
                 else -> null
             }
             SemanticPositionState.NEAR_ZERO -> when (rule.key) {
-                "operating_margin" -> "営業利益はゼロ付近で、小幅な悪化でも赤字になり得ます。"
-                "fcf_margin" -> "FCFはゼロ付近で、投資後に残る配当余力は限られます。"
+                "operating_margin" -> "営業利益はゼロ付近で、少しの利益低下でも赤字化し得ます。"
+                "fcf_margin" -> "FCFはゼロ付近で、投資負担が増えると配当原資が不足し得ます。"
                 else -> null
             }
             SemanticPositionState.POSITIVE -> when (rule.key) {
@@ -365,11 +420,20 @@ object StockAnalysisNarrativeGenerator {
             }
             else -> null
         }
+        val limitation = if (nonPositiveValuation) {
+            when (rule.key) {
+                "per" -> "特別損益の影響、配当性向と配当方針も確かめます。"
+                "pbr" -> "資産の収益性、利益と現預金の推移も見ます。"
+                else -> evaluationPositionLimitations.getValue(rule.key)
+            }
+        } else {
+            evaluationPositionLimitations.getValue(rule.key)
+        }
         return listOfNotNull(
             openingSentence,
-            continuityExplanation,
+            bandExplanation,
             semanticSentence,
-            evaluationPositionLimitations.getValue(rule.key)
+            limitation
         ).joinToString(" ")
     }
 

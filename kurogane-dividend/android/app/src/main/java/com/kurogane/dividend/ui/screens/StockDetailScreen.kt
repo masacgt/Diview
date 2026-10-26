@@ -450,7 +450,6 @@ fun StockDetailScreen(
     }
     val healthNarrative = remember(healthValues) { StockAnalysisNarrativeGenerator.generate(healthValues) }
     val healthDetailedNarrative = remember(healthValues) { StockAnalysisNarrativeGenerator.generateDetailed(healthValues) }
-    val healthExplanationKeys = remember(healthNarrative) { healthNarrative.findings.map { it.key }.toSet() }
     val positionNarrative = remember(currentHolding, detailAnalysisValues) {
         StockAnalysisNarrativeGenerator.generatePositionDetailed(detailAnalysisValues)
     }
@@ -569,7 +568,9 @@ fun StockDetailScreen(
         positionNarrative.findings.firstOrNull { it.key == "dividend_growth_years" }?.let { finding ->
             add(
                 finding.toStockAnalysisPositionItem().copy(
-                    text = StockDetailCommentGenerator.dividendIncreaseYears(finding.value.toInt())
+                    text = StockDetailCommentGenerator.dividendIncreaseYears(
+                        finding.value.toInt(), finding.bandLabel, finding.position.label
+                    )
                 )
             )
         } ?: add(
@@ -593,7 +594,7 @@ fun StockDetailScreen(
                     label = "非減配年数", formattedValue = "${profile.noCutYears}年",
                     bandLabel = bandLabels[bandIndex], positionLabel = position,
                     score = scores[bandIndex],
-                    text = StockDetailCommentGenerator.nonCutYears(profile.noCutYears)
+                    text = StockDetailCommentGenerator.nonCutYears(profile.noCutYears, bandLabels[bandIndex], position)
                 )
             )
         } else {
@@ -625,7 +626,9 @@ fun StockDetailScreen(
                     score = when { profile.growthRate > 0.0 -> 85; profile.growthRate == 0.0 -> 65; else -> 40 },
                     text = StockDetailCommentGenerator.annualDividendCagr(
                         profile.growthRate,
-                        isCalendarYearDividendHistory
+                        isCalendarYearDividendHistory,
+                        cagrBand,
+                        cagrPosition
                     )
                 )
             )
@@ -2567,7 +2570,7 @@ fun StockDetailScreen(
 
 
             item {
-                StockAnalysisNarrativeCard(analysisNarrative, healthExplanationKeys)
+                StockAnalysisNarrativeCard(analysisNarrative)
             }
 
             // 5. 配当月・通知設定
@@ -3890,11 +3893,12 @@ private fun positionWithinBand(value: Double, lower: Double, upper: Double): Str
     val width = upper - lower
     if (!width.isFinite() || width <= 0.0) return "中央"
     val relativePosition = ((value - lower) / width).coerceIn(0.0, 1.0)
-    return when {
-        relativePosition < 1.0 / 3.0 -> "下限寄り"
-        relativePosition < 2.0 / 3.0 -> "中央"
-        else -> "上限寄り"
-    }
+    val labels = listOf(
+        "下端に近い位置", "下端寄り", "下側寄り", "中央より下", "中央付近",
+        "中央より上", "上側寄り", "上端寄り", "上端に近い位置"
+    )
+    val index = (relativePosition * labels.size).toInt().coerceIn(labels.indices)
+    return labels[index]
 }
 
 @Composable
@@ -3927,8 +3931,7 @@ private fun StockAnalysisPositionRow(item: StockAnalysisPositionItem) {
 
 @Composable
 private fun StockAnalysisNarrativeCard(
-    analysisNarrative: StockAnalysisNarrative,
-    healthExplanationKeys: Set<String>
+    analysisNarrative: StockAnalysisNarrative
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
@@ -3972,9 +3975,7 @@ private fun StockAnalysisNarrativeCard(
                         fontSize = AppTextSize.dense,
                         fontWeight = FontWeight.Bold
                     )
-                    if (finding.key !in healthExplanationKeys) {
-                        Text(finding.text, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
-                    }
+                    Text(finding.text, color = OnSurfaceVariant, fontSize = AppTextSize.dense, lineHeight = 15.sp)
                 }
             }
             Text(
