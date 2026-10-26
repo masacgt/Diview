@@ -260,7 +260,9 @@ object StockAnalysisNarrativeGenerator {
                 StockEvaluationPositionComment.threshold(value, rule.cutoffs, rule.unit)
             } else StockMetricCommentary.comment(
                 rule.key, value, positionBandExplanations.getValue(rule.key)[bandIndex], context,
-                detailed = textStyle == TextStyle.DIVIDEND_CONTINUITY
+                detailed = textStyle == TextStyle.DIVIDEND_CONTINUITY,
+                currentValues = values,
+                nearBoundary = (detailIndex == 0 && bandIndex > 0) || (detailIndex == 8 && bandIndex < 4)
             )
             findings += StockAnalysisFinding(
                 key = rule.key,

@@ -8,13 +8,17 @@ internal object StockMetricCommentary {
     private data class Evidence(val short: String, val full: String = short)
 
     fun comment(key: String, value: Double, base: String, context: StockAnalysisContext,
-                detailed: Boolean = false): String {
+                detailed: Boolean = false, currentValues: Map<String, Double?> = emptyMap(),
+                nearBoundary: Boolean = false): String {
         val core = extreme(key, value) ?: base
         val trend = trend(key, context)
         val relation = relation(key, context)
         val limit = limitations.getValue(key)
         return if (detailed) {
-            listOfNotNull(core, trend?.full, relation?.full, limit.second).joinToString("")
+            val previous = listOfNotNull(core, trend?.full, relation?.full, limit.second).joinToString("")
+            DividendExplanationVariants.compose(key, value, core, context, currentValues, nearBoundary,
+                trend?.let { listOf(it.short, it.full) }, relation?.let { listOf(it.short, it.full) },
+                limit, previous.length)
         } else {
             compact(core, trend?.short, relation?.short, limit.first)
         }
