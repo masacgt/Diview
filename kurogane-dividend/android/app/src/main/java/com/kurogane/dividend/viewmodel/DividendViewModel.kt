@@ -3463,7 +3463,7 @@ class DividendViewModel @JvmOverloads constructor(
     private companion object {
         const val IRBANK_DIVIDEND_CACHE_VERSION = 3
         const val QUOTE_CHANGE_CONTRACT_VERSION = 1
-        const val FINANCIAL_PAYLOAD_VERSION = 6
+        const val FINANCIAL_PAYLOAD_VERSION = 7
         const val FINANCIAL_REVISION_CACHE_MILLIS = 60_000L
         const val STOCK_ANALYSIS_PAYLOAD_VERSION = 3
         val WATCHLIST_SORT_CRITERIA = setOf("ach", "yield", "price", "code")
