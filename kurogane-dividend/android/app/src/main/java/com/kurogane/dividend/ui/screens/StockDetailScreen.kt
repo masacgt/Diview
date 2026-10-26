@@ -445,16 +445,16 @@ fun StockDetailScreen(
     val healthCardPayoutRatio = forecastHealthPayoutRatio ?: actualHealthPayoutRatio
     val healthCardPayoutIsForecast = forecastHealthPayoutRatio != null
     val healthCardPayoutIsActual = !healthCardPayoutIsForecast && actualHealthPayoutRatio != null
-    val analysisNarrative = remember(currentHolding, detailAnalysisValues) {
-        StockAnalysisNarrativeGenerator.generateDetailed(detailAnalysisValues)
+    val analysisContext = financial?.analysisContext ?: com.kurogane.dividend.model.StockAnalysisContext()
+    val analysisNarrative = remember(detailAnalysisValues, analysisContext) {
+        StockAnalysisNarrativeGenerator.generateDetailed(detailAnalysisValues, analysisContext)
     }
     val healthNarrative = remember(healthValues) { StockAnalysisNarrativeGenerator.generate(healthValues) }
-    val healthDetailedNarrative = remember(healthValues) { StockAnalysisNarrativeGenerator.generateDetailed(healthValues) }
-    val positionNarrative = remember(currentHolding, detailAnalysisValues) {
-        StockAnalysisNarrativeGenerator.generatePositionDetailed(detailAnalysisValues)
+    val positionNarrative = remember(detailAnalysisValues, analysisContext) {
+        StockAnalysisNarrativeGenerator.generatePositionDetailed(detailAnalysisValues, analysisContext)
     }
-    val healthPositionNarrative = remember(healthValues) {
-        StockAnalysisNarrativeGenerator.generatePositionDetailed(healthValues)
+    val healthPositionNarrative = remember(healthValues, analysisContext) {
+        StockAnalysisNarrativeGenerator.generatePositionDetailed(healthValues, analysisContext)
     }
     val valuationValues = remember(detailAnalysisValues) {
         detailAnalysisValues.filterKeys { it == "per" || it == "pbr" }
@@ -517,7 +517,9 @@ fun StockDetailScreen(
                 !hasYieldHistory -> StockAnalysisPositionItem(
                     label = "配当利回り", formattedValue = currentYieldText, bandLabel = "過去実績未取得",
                     positionLabel = "比較基準なし", score = null,
-                    text = "現在利回りは予想配当を株価で割った値です。比較できる過去実績がなく、基準内の位置は判定できず、株価や予想配当の変化でも動きます。"
+                    text = StockDetailCommentGenerator.dividendYield(
+                        currentHolding.yieldRate, Double.NaN, Double.NaN, Double.NaN, analysisContext
+                    )
                 )
                 else -> {
                     val yield = currentHolding.yieldRate
@@ -545,7 +547,8 @@ fun StockDetailScreen(
                             yield,
                             profile.yieldRangeMin,
                             profile.yieldRangeAvg,
-                            profile.yieldRangeMax
+                            profile.yieldRangeMax,
+                            analysisContext
                         )
                     )
                 }
@@ -569,7 +572,7 @@ fun StockDetailScreen(
             add(
                 finding.toStockAnalysisPositionItem().copy(
                     text = StockDetailCommentGenerator.dividendIncreaseYears(
-                        finding.value.toInt(), finding.bandLabel, finding.position.label
+                        finding.value.toInt(), finding.bandLabel, finding.position.label, analysisContext
                     )
                 )
             )
@@ -577,7 +580,7 @@ fun StockDetailScreen(
             StockAnalysisPositionItem(
                 label = "連続増配年数", formattedValue = "未取得", bandLabel = "評価不可",
                 positionLabel = "データなし", score = null,
-                text = "連続する増配履歴が不足しており、評価基準内の位置は判定できません。比較可能な期間が揃った時点で改めて位置を詳しく確認します。"
+                text = "配当額の増え方が利益成長に沿うかを確認します。将来の増配余力は、配当性向、FCFと最新の配当方針も合わせて見ます。"
             )
         )
 
@@ -594,7 +597,7 @@ fun StockDetailScreen(
                     label = "非減配年数", formattedValue = "${profile.noCutYears}年",
                     bandLabel = bandLabels[bandIndex], positionLabel = position,
                     score = scores[bandIndex],
-                    text = StockDetailCommentGenerator.nonCutYears(profile.noCutYears, bandLabels[bandIndex], position)
+                    text = StockDetailCommentGenerator.nonCutYears(profile.noCutYears, bandLabels[bandIndex], position, analysisContext)
                 )
             )
         } else {
@@ -602,7 +605,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = "非減配年数", formattedValue = "未取得", bandLabel = "評価不可",
                     positionLabel = "比較期間不足", score = null,
-                    text = "非減配年数を比較できる配当履歴が不足しており、評価基準内の位置は判定できません。比較可能な期間が揃った時点で改めて評価します。"
+                    text = "配当維持の姿勢と、利益が落ちた際の対応を確認します。増配の勢いとは分けて、利益と現金収支に無理がないかを見ます。"
                 )
             )
         }
@@ -628,7 +631,8 @@ fun StockDetailScreen(
                         profile.growthRate,
                         isCalendarYearDividendHistory,
                         cagrBand,
-                        cagrPosition
+                        cagrPosition,
+                        analysisContext
                     )
                 )
             )
@@ -637,7 +641,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = cagrLabel, formattedValue = "未取得", bandLabel = "評価不可",
                     positionLabel = "比較期間不足", score = null,
-                    text = "配当CAGRの比較に必要な複数期の履歴が不足しており、0%基準での位置は判定できません。比較可能な期間が揃ってから改めて評価します。"
+                    text = "配当額の伸びと、利益や現金創出の関係を確認します。途中の減配や一時的な増額にも注意し、最新の配当方針も合わせて見ます。"
                 )
             )
         }
@@ -711,7 +715,7 @@ fun StockDetailScreen(
                     label = "銘柄配当依存度", formattedValue = "$divDependencyStr%", bandLabel = band,
                     positionLabel = position,
                     score = when { divDependency <= 10.0 -> 85; divDependency <= 25.0 -> 55; else -> 35 },
-                    text = StockDetailCommentGenerator.dividendDependency(divDependency, band, position)
+                    text = StockDetailCommentGenerator.dividendDependency(divDependency, band, position, analysisContext)
                 )
             )
         } else {
@@ -742,7 +746,7 @@ fun StockDetailScreen(
                     bandLabel = impactBand,
                     positionLabel = impactPosition,
                     score = when { cutImpactRatio <= 5.0 -> 85; cutImpactRatio <= 12.5 -> 55; else -> 35 },
-                    text = StockDetailCommentGenerator.halfDividendImpact(cutImpactRatio, impactBand, impactPosition)
+                    text = StockDetailCommentGenerator.halfDividendImpact(cutImpactRatio, impactBand, impactPosition, analysisContext)
                 )
             )
         } else {
@@ -775,7 +779,8 @@ fun StockDetailScreen(
                         cleanSectorName,
                         sectorDependency,
                         band,
-                        position
+                        position,
+                        analysisContext
                     )
                 )
             )

@@ -1,6 +1,7 @@
 package com.kurogane.dividend.data
 
 import com.kurogane.dividend.model.StockFinancialProfile
+import com.kurogane.dividend.model.StockAnalysisContext
 import org.json.JSONObject
 import java.util.Locale
 import java.time.LocalDate
@@ -39,7 +40,8 @@ data class FinancialData(
     val forecastPayoutRatio: Double? = null,
     val dividendShareBasisStatus: String = "unknown",
     val issuerDividendShareBasisStatus: String = "unknown",
-    val yahooForwardAnnualDividendRate: Double? = null
+    val yahooForwardAnnualDividendRate: Double? = null,
+    val analysisContext: StockAnalysisContext = StockAnalysisContext()
 ) {
     companion object {
         fun parse(root: JSONObject, expectedCode: String): FinancialData {
@@ -209,7 +211,7 @@ data class FinancialData(
                     ?: dividend?.number("consecutive_dividend_increase_years"))
             ), historyBasis, issuerDividends, issuerDividendHistoryStatus,
                 forecastAnnualDividend, forecastEps, forecastFiscalYear, forecastPayoutRatio,
-                dividendShareBasisStatus, issuerDividendShareBasisStatus, yahooForwardAnnualDividendRate)
+                dividendShareBasisStatus, issuerDividendShareBasisStatus, yahooForwardAnnualDividendRate, FinancialHistoryParser.parse(root))
         }
     }
 }

@@ -33,18 +33,13 @@ data class StockAnalysisNarrative(
     val complete: Boolean get() = missingLabels.isEmpty()
 
     companion object {
-        const val TOTAL_COMBINATIONS: Long = 373_669_453_125L // 45^7
+        const val TOTAL_COMBINATIONS: Long = 373_669_453_125L // Rating band/position combinations: 45^7
     }
 }
 
-/** Deterministic 5-band x 9-position narratives for the seven backend stock-analysis metrics. */
+/** Keeps 5-band x 9-position rating codes stable while adding evidence-dependent commentary. */
 object StockAnalysisNarrativeGenerator {
     private enum class TextStyle { SUMMARY, DIVIDEND_CONTINUITY, EVALUATION_POSITION }
-    private enum class SemanticPositionState { STANDARD, NON_POSITIVE, NEGATIVE, NEAR_ZERO, POSITIVE }
-
-    // These percentage metrics are displayed to two decimal places; values rounding to 0.00 are treated as near zero.
-    private const val POSITION_ZERO_DISPLAY_THRESHOLD = 0.005
-
     private data class Band(val label: String, val score: Int, val explanation: String)
     private data class Rule(
         val key: String,
@@ -68,11 +63,6 @@ object StockAnalysisNarrativeGenerator {
         "この評価帯の中央から上側へ寄った位置です。",
         "この評価帯の上端寄りに位置します。",
         "この評価帯の上端に近い位置です。"
-    )
-
-    private val finePositionLabels = listOf(
-        "下端に近い位置", "下端寄り", "下側寄り", "中央より下", "中央付近",
-        "中央より上", "上側寄り", "上端寄り", "上端に近い位置"
     )
 
     private val positionBandExplanations = mapOf(
@@ -125,80 +115,6 @@ object StockAnalysisNarrativeGenerator {
             "長めの履歴があり、複数の環境で配当を伸ばしています。",
             "長期の増配実績は強みですが、将来も続くとは限りません。"
         )
-    )
-
-    private val dividendContinuityExplanations = mapOf(
-        "per" to listOf(
-            "PERが低く株価に織り込まれた利益期待は控えめですが、利益縮小への懸念が反映される場合もあり、配当の強さとは言えず、PERは利益に対する株価倍率で配当原資や支払余力を直接測らないため、利益推移、配当性向、営業キャッシュフローも確認します。特に景気で利益が振れる企業は、好況期の値だけで判断しないことが大切です。",
-            "PERはやや低めで成長期待は控えめですが、利益見通しの弱さを市場が織り込んでいる可能性もあり、PERは配当原資や支払余力を直接示さないため、利益推移、配当性向、営業キャッシュフローを見て安定性を判断します。利益が景気で変動する企業では、過去の好業績にも注意が必要です。",
-            "PERは中位で株価の利益期待は極端ではありませんが、利益が安定して配当を支えられるかは別に確認が必要で、PERは配当原資や支払余力を直接示さないため、利益推移、配当性向、営業キャッシュフローも合わせて判断します。特別利益を除いた本業の傾向と、利益の変動幅も確認します。",
-            "PERは高めで将来の利益成長への期待が株価に含まれ、期待を下回る利益が続けば評価が下がる可能性もあり、PERは配当原資や支払余力を測らないため、利益の実績、配当性向、営業キャッシュフローを確認します。成長投資と配当の両立状況、利益の達成度や予想の確かさも見ておきます。",
-            "PERは高く利益成長への期待が強く織り込まれており、利益が伸びない局面では株価評価が見直されやすく、PERだけでは配当を続ける力は分からないため、利益推移、配当性向、営業キャッシュフローを確認します。期待先行か実績を伴う成長か、複数年の業績と計画で見極めます。"
-        ),
-        "pbr" to listOf(
-            "PBRが低く株価は帳簿上の純資産を下回りますが、資産の収益性や含み損への懸念が反映される場合もあり、PBRは市場評価で現金残高や配当支払力を示さないため、利益、キャッシュフロー、負債と資産の中身も確認します。資産が利益や現金を生んでいるか、換金性と収入の継続性も見ます。",
-            "PBRは低めで純資産に対する株価評価は控えめですが、その差が配当余力の大きさを示すとは限らず、PBRは現金残高や配当支払力を直接示さないため、利益、キャッシュフロー、負債と資産の中身も合わせて判断します。含み損や遊休資産、資産の換金性と質、回収可能性にも注意します。",
-            "PBRは中位で純資産に対する株価評価は極端ではありませんが、配当を賄う利益や現金があるかは別の指標で見る必要があり、PBRは配当支払力を示さないため、利益、キャッシュフロー、負債も合わせて確認します。資産の構成や収益への貢献、換金性と質、現金化のしやすさも確認します。",
-            "PBRは高めで市場が資産の収益性や成長を評価している可能性がありますが、評価の高さが配当原資の確保を意味するわけではなく、利益、キャッシュフロー、負債と資産の中身を見て配当支払力を別に確認します。期待が利益に結び付くか、資産が稼ぐ力と収益性、利益の継続性も見ます。",
-            "PBRは高く将来収益への期待が株価に含まれる場合がありますが、期待を下回ると株価評価が変わりやすく、PBRは配当支払力を示さないため、利益、キャッシュフロー、負債と資産の中身も確認します。資産価値だけで配当の持続性は判断できず、資産の質や収益力、負債との均衡も見ます。"
-        ),
-        "payout_ratio" to listOf(
-            "配当性向が低く利益の多くを社内に残せるため、減益時にも配当を維持する余地を確保しやすい状態です。利益は年度で変動し手元資金や将来方針は示さないため、複数年の利益推移と営業キャッシュフロー、特別損益の影響も確認します。",
-            "配当性向は抑えめで利益の一部を再投資や内部留保に回せるため、業績変動時にも配当余地が比較的残ります。利益は年度で変動し現金や将来方針までは示さないため、複数年の利益推移と営業キャッシュフロー、利益の質も確認します。",
-            "配当性向は中位で利益と配当を両立している水準ですが、大幅な減益が起きると維持余力が縮む可能性があります。単年度の値だけでは手元資金を把握できないため、利益推移と営業キャッシュフローに加え、投資や借入返済の負担も確認します。",
-            "利益の多くを配当に回しており、利益が落ちると配当維持に必要な余裕が小さくなるおそれがあります。営業キャッシュフロー、手元資金、負債負担や配当方針も合わせて、利益変動時の支えと投資資金の必要額を複数年で確認します。",
-            "配当が利益に近い、または上回る水準で、利益面の余裕は限られ、減益が続くと配当負担が重くなり得ます。単年度利益だけで結論を出さず、営業キャッシュフロー、手元資金、借入返済、配当方針の変化や利益の一時要因も確認します。"
-        ),
-        "equity_ratio" to listOf(
-            "自己資本が薄く負債への依存が大きいため、業績悪化や借入負担の増加が配当を続ける余地を狭めることがあります。比率だけでは現金残高や返済期限、利益の安定性は分からないため、負債、営業キャッシュフロー、現預金の水準も合わせて見ます。",
-            "自己資本の厚みは控えめで、外部資金への依存が続くと業績変動時に配当余力が影響を受けやすい構成です。比率だけでは現金残高や返済期限は分からないため、負債、営業キャッシュフロー、現預金と業種特性も確認します。",
-            "自己資本比率は中位で財務構成に一定の安定感がありますが、配当維持には利益と現金収支も必要です。比率だけでは現金残高や返済期限は分からないため、負債、営業キャッシュフロー、現預金と業種特性も見て、資金繰りを確かめます。",
-            "自己資本が厚めで負債に頼り過ぎない構成は、業績変動時に配当を支える財務上の余地になります。比率だけでは現金残高や返済期限を示さないため、負債、営業キャッシュフロー、現預金と業種特性も確認し、返済余力を見ます。",
-            "自己資本が厚く財務面の耐性は配当継続を支える一材料ですが、現金や返済負担まで表すものではありません。負債と営業キャッシュフロー、現預金、業種特性を合わせ、配当を支える資金が続くか、借入返済に無理がないか確認します。"
-        ),
-        "operating_margin" to listOf(
-            "本業の利益率が低く、売上減やコスト上昇が続くと配当を支える利益が細りやすい状態です。営業利益率は最終利益や配当用の現金とは一致しないため、営業キャッシュフロー、投資負担、赤字になりにくい売上構成も確認します。",
-            "本業の収益余力は大きくなく、コスト増や需要減への耐性が限られる可能性があります。営業利益率は最終利益や配当用の現金とは一致しないため、営業キャッシュフロー、投資負担、利益率の複数年推移と利益の変動幅も確認します。",
-            "本業の利益が配当を支える基礎になっていますが、利益率は景気や費用の変化で低下することがあります。営業利益率は最終利益や配当用の現金とは一致しないため、営業キャッシュフロー、投資負担、過去の変動幅も確認します。",
-            "本業の利益率は比較的高く、コスト上昇を吸収できれば配当原資を保ちやすい状態です。利益率の持続性に加え、最終利益、営業キャッシュフロー、投資負担と一時的な価格要因、過去の利益変動や安定度、利益変動への耐性も確認します。",
-            "本業の収益力は配当を支える材料で、高い利益率が続くか、単年度の特殊要因でないかを見ます。営業利益率は配当用の現金とは一致しないため、営業キャッシュフロー、投資負担、需要やコストの変化、利益の複数年推移も確認します。"
-        ),
-        "fcf_margin" to listOf(
-            "FCFが大きくマイナスで、投資後の内部資金だけでは配当を賄えない可能性があります。設備投資や運転資金の時期で変動するため、複数年の推移、投資計画、資金不足を補う借入や現預金、配当負担と投資の一時性も見ます。",
-            "FCFは小幅なマイナスで、直近は投資後の現金が不足しており、続く場合は手元資金や利益の補完が必要です。設備投資や運転資金の時期で変動するため、複数年の推移と投資計画、配当後の資金残高や借入、返済予定も見ます。",
-            "FCFはプラスで配当に回せる現金が残っていますが、余裕は大きくなく、投資増で細る可能性があります。設備投資や運転資金の時期で変動するため、複数年の推移、投資計画、配当後に残る現金と借入負担も確認します。",
-            "投資後にもFCFが残り、配当を内部資金で支えやすい状態です。設備更新や運転資金の変化で水準が変わるため、複数年の推移、投資計画、営業キャッシュフローの安定性、利益との整合性や配当後の余力、利益と配当のバランスも見ます。",
-            "FCFが売上に対して大きく、投資後の資金創出は配当を支える強みです。資産売却や運転資金の一時変動で膨らむ場合があるため、複数年の推移、投資の必要額、営業キャッシュフローと配当後の残高、創出力の継続性も見ます。"
-        ),
-        "dividend_growth_years" to listOf(
-            "連続増配の実績が短く、増配を続ける力はまだ判断しにくい状況で、景気後退時の維持実績も読み取れないため、利益と現金収支を確認し、配当額や配当性向の変化も追います。過去の年数は将来の増配や減配回避を保証しません。",
-            "数年の増配実績は配当方針の一貫性を示す手掛かりですが、長期の景気変動を乗り越えた実績とは限らず、利益と現金収支、配当額や配当性向の推移を確認します。過去の年数は将来の増配や減配回避を保証せず、決算ごとの増配幅も見ます。",
-            "複数年の増配は、利益成長を配当に反映してきた可能性を示す材料ですが、今後も同じ余力が続くとは限らないため、利益と現金収支、配当性向や配当額の推移を確認します。過去の年数は将来の増配や減配回避を保証しません。",
-            "長めの増配履歴は、配当を継続して引き上げてきた実績として支えになります。利益や現金収支が弱まれば余力も変わるため、減配の有無や配当性向、配当額の推移も見て、将来の増配と減配への耐性、配当額の増え方を判断します。",
-            "長期の増配実績は、複数の環境下で配当を伸ばした履歴として強みです。利益と現金収支が続くかは別途確認が必要で、過去の年数だけでは将来の増配や減配回避を保証しないため、配当性向、配当額、直近の利益も見ます。"
-        )
-    )
-
-    private val nonPositiveValuationExplanations = mapOf(
-        "per" to "PERが0以下で、赤字や一時要因により通常の倍率比較が難しい可能性があり、配当原資や支払余力を直接示さないため、利益推移、配当性向、営業キャッシュフローで確認します。単年の値だけでは継続力を判断できず、特別損益を含む利益の中身や回復の見通し、配当方針も確かめます。",
-        "pbr" to "PBRが0以下で、負の純資産や一時要因の影響により通常の倍率比較が難しい可能性があり、現金残高や配当支払力を示さないため、利益、キャッシュフロー、負債を合わせて確認します。資産の評価や収益への貢献、換金性、含み損の有無、事業継続への影響と回収可能性も確かめます。",
-        "payout_ratio" to "配当性向が負の値で、赤字や利益の符号が影響し、通常の配当余力を比率から読み取れない可能性があるため、利益、実際の配当額、営業キャッシュフローを個別に確認します。低い値だけで安全とは判断できず、特別損益も見ます。"
-    )
-
-    private val evaluationPositionLimitations = mapOf(
-        "per" to "PERだけでは配当原資や予想利益の達成度は分からないため、利益推移、配当性向、営業CFも合わせて確かめます。",
-        "pbr" to "PBRだけでは現金や配当支払力、資産の収益性は分からないため、負債、資産の質、利益と現金収支も見ます。",
-        "payout_ratio" to "配当性向だけでは現金余力や利益の一時要因は分からないため、FCF、複数期の利益、実際の配当額も確認します。",
-        "equity_ratio" to "自己資本比率だけでは現金や返済時期は分からないため、負債、資産の換金性、営業CFも合わせて見ます。",
-        "operating_margin" to "利益率だけでは現金回収や投資負担は分からず、営業CFと投資額も確かめます。",
-        "fcf_margin" to "FCFは投資時期や運転資金で変動するため、複数期の推移、投資計画、配当後に残る資金も見ます。",
-        "dividend_growth_years" to "増配年数だけでは増配幅や将来余力は分からないため、利益の安定性、配当性向、FCFと配当方針も見ます。"
-    )
-
-    private val nonPositivePositionExplanations = mapOf(
-        "per" to "赤字や一時要因で倍率比較が難しく、配当支払力も示しません。利益推移や営業CFも確かめます。",
-        "pbr" to "負の純資産などで通常の比較が難しく、資産の質や配当支払力も分かりません。負債と現金余力を確かめます。",
-        "payout_ratio" to "赤字時は比率の符号に注意が必要で、低い値も余力を示しません。利益、実際の配当額、営業CFを個別に見ます。"
     )
 
     private val rules = listOf(
@@ -300,14 +216,16 @@ object StockAnalysisNarrativeGenerator {
         require(rules.all { it.positionText.size == 9 })
     }
 
-    fun generate(values: Map<String, Double?>): StockAnalysisNarrative = generate(values, TextStyle.SUMMARY)
+    fun generate(values: Map<String, Double?>, context: StockAnalysisContext = StockAnalysisContext()): StockAnalysisNarrative =
+        generate(values, TextStyle.SUMMARY, context)
 
-    fun generateDetailed(values: Map<String, Double?>): StockAnalysisNarrative = generate(values, TextStyle.DIVIDEND_CONTINUITY)
+    fun generateDetailed(values: Map<String, Double?>, context: StockAnalysisContext = StockAnalysisContext()): StockAnalysisNarrative =
+        generate(values, TextStyle.DIVIDEND_CONTINUITY, context)
 
-    fun generatePositionDetailed(values: Map<String, Double?>): StockAnalysisNarrative =
-        generate(values, TextStyle.EVALUATION_POSITION)
+    fun generatePositionDetailed(values: Map<String, Double?>, context: StockAnalysisContext = StockAnalysisContext()): StockAnalysisNarrative =
+        generate(values, TextStyle.EVALUATION_POSITION, context)
 
-    private fun generate(values: Map<String, Double?>, textStyle: TextStyle): StockAnalysisNarrative {
+    private fun generate(values: Map<String, Double?>, textStyle: TextStyle, context: StockAnalysisContext): StockAnalysisNarrative {
         val findings = mutableListOf<StockAnalysisFinding>()
         val missing = mutableListOf<String>()
         var weightedScore = 0.0
@@ -316,6 +234,7 @@ object StockAnalysisNarrativeGenerator {
 
         rules.forEach { rule ->
             val value = values[rule.key]?.takeIf(Double::isFinite)
+                ?.takeIf { rule.key != "dividend_growth_years" || it >= 0 }
             if (value == null) {
                 missing += rule.label
                 return@forEach
@@ -336,13 +255,10 @@ object StockAnalysisNarrativeGenerator {
             } else {
                 String.format(Locale.JAPAN, "%.2f%s", value, rule.unit)
             }
-            val findingText = when (textStyle) {
-                TextStyle.SUMMARY -> "${rule.definition} ${band.explanation} ${rule.positionText[detailIndex]}"
-                TextStyle.DIVIDEND_CONTINUITY -> nonPositiveValuationExplanations[rule.key]?.takeIf {
-                    value <= 0.0 && (rule.key == "per" || rule.key == "pbr" || rule.key == "payout_ratio")
-                } ?: dividendContinuityExplanations.getValue(rule.key)[bandIndex]
-                TextStyle.EVALUATION_POSITION -> evaluationPositionComment(rule, bandIndex, value, detailIndex)
-            }
+            val findingText = StockMetricCommentary.comment(
+                rule.key, value, positionBandExplanations.getValue(rule.key)[bandIndex], context,
+                detailed = textStyle == TextStyle.DIVIDEND_CONTINUITY
+            )
             findings += StockAnalysisFinding(
                 key = rule.key,
                 label = rule.label,
@@ -389,70 +305,6 @@ object StockAnalysisNarrativeGenerator {
         )
     }
 
-    private fun evaluationPositionComment(rule: Rule, bandIndex: Int, value: Double, detailIndex: Int): String {
-        val semanticState = semanticPositionState(rule.key, value)
-        val nonPositiveValuation = semanticState == SemanticPositionState.NON_POSITIVE
-        val openingSentence = if (nonPositiveValuation) {
-            "${rule.label}は${formatMetricValue(rule, value)}で、通常の評価帯比較には注意が必要です。"
-        } else {
-            "${rule.label}は${formatMetricValue(rule, value)}で「${rule.bands[bandIndex].label}」帯の${finePositionLabels[detailIndex]}です。"
-        }
-        val bandExplanation = if (nonPositiveValuation) {
-            nonPositivePositionExplanations.getValue(rule.key)
-        } else {
-            positionBandExplanations.getValue(rule.key)[bandIndex]
-        }
-        val semanticSentence = when (semanticState) {
-            SemanticPositionState.NEGATIVE -> when (rule.key) {
-                "operating_margin" -> "本業赤字のため、配当には現預金や借入余力も必要です。"
-                "fcf_margin" -> "投資後の不足分を補える現預金や営業CFも確かめます。"
-                else -> null
-            }
-            SemanticPositionState.NEAR_ZERO -> when (rule.key) {
-                "operating_margin" -> "営業利益はゼロ付近で、少しの利益低下でも赤字化し得ます。"
-                "fcf_margin" -> "FCFはゼロ付近で、投資負担が増えると配当原資が不足し得ます。"
-                else -> null
-            }
-            SemanticPositionState.POSITIVE -> when (rule.key) {
-                "operating_margin" -> "営業利益はプラスですが、利益率だけでは配当余力を測れません。"
-                "fcf_margin" -> "FCFはプラスですが、投資負担や複数年の安定性も確認します。"
-                else -> null
-            }
-            else -> null
-        }
-        val limitation = if (nonPositiveValuation) {
-            when (rule.key) {
-                "per" -> "特別損益の影響、配当性向と配当方針も確かめます。"
-                "pbr" -> "資産の収益性、利益と現預金の推移も見ます。"
-                else -> evaluationPositionLimitations.getValue(rule.key)
-            }
-        } else {
-            evaluationPositionLimitations.getValue(rule.key)
-        }
-        return listOfNotNull(
-            openingSentence,
-            bandExplanation,
-            semanticSentence,
-            limitation
-        ).joinToString(" ")
-    }
-
-    private fun semanticPositionState(key: String, value: Double): SemanticPositionState = when (key) {
-        "per", "pbr" -> if (value <= 0.0) SemanticPositionState.NON_POSITIVE else SemanticPositionState.STANDARD
-        "payout_ratio" -> if (value < 0.0) SemanticPositionState.NON_POSITIVE else SemanticPositionState.STANDARD
-        "operating_margin", "fcf_margin" -> when {
-            value <= -POSITION_ZERO_DISPLAY_THRESHOLD -> SemanticPositionState.NEGATIVE
-            value >= POSITION_ZERO_DISPLAY_THRESHOLD -> SemanticPositionState.POSITIVE
-            else -> SemanticPositionState.NEAR_ZERO
-        }
-        else -> SemanticPositionState.STANDARD
-    }
-
     private fun powerOf45(exponent: Int): Long = (0 until exponent).fold(1L) { acc, _ -> acc * 45L }
 
-    private fun formatMetricValue(rule: Rule, value: Double): String = if (rule.key == "dividend_growth_years") {
-        String.format(Locale.JAPAN, "%d%s", value.toInt(), rule.unit)
-    } else {
-        String.format(Locale.JAPAN, "%.2f%s", value, rule.unit)
-    }
 }

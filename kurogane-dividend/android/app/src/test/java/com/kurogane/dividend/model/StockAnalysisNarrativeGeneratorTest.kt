@@ -4,6 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 class StockAnalysisNarrativeGeneratorTest {
@@ -64,251 +66,151 @@ class StockAnalysisNarrativeGeneratorTest {
         assertNull(result.combinationIndex)
     }
 
-    @Test
-    fun detailedDividendContinuityCommentsStayWithinTheRequestedLength() {
-        val violations = mutableListOf<String>()
-        ranges.forEach { (key, metricRanges) ->
-            metricRanges.forEachIndexed { bandIndex, (low, high) ->
-                val values = baseline.toMutableMap().apply { this[key] = (low + high) / 2.0 }
-                val text = StockAnalysisNarrativeGenerator.generateDetailed(values)
-                    .findings.single { it.key == key }.text
-                val allowed = if (key == "per" || key == "pbr") 130..170 else 100..140
-                if (text.length !in allowed) violations += "$key band $bandIndex: ${text.length} characters"
-                if (text.count { it == '。' } != 2) violations += "$key band $bandIndex: expected about two sentences"
-            }
+    private fun context(key: String, values: List<Double>, source: String = "yfinance") = StockAnalysisContext(
+        mapOf(key to values.mapIndexed { index, value ->
+            MetricHistoryPoint(java.time.LocalDate.of(2021 + index, 3, 31), value, source)
+        })
+    )
+
+    @Test fun payoutExtremeExplainsMeaningWithoutEchoingItsLabel() {
+        val result = StockAnalysisNarrativeGenerator.generatePositionDetailed(mapOf("payout_ratio" to 280.18))
+        val text = result.findings.single().text
+        assertTrue(text.contains("配当額が利益を大きく超え"))
+        for (repetition in listOf("280.18", "要警戒", "上限寄り", "上端", "帯の", "「")) {
+            assertFalse(text, text.contains(repetition))
         }
-        listOf("per" to -1.0, "pbr" to -1.0, "payout_ratio" to -10.0).forEach { (key, value) ->
-            val values = baseline.toMutableMap().apply { this[key] = value }
-            val text = StockAnalysisNarrativeGenerator.generateDetailed(values)
-                .findings.single { it.key == key }.text
-            val allowed = if (key == "per" || key == "pbr") 130..170 else 100..140
-            if (text.length !in allowed) violations += "$key non-positive: ${text.length} characters"
-            if (text.count { it == '。' } != 2) violations += "$key non-positive: expected about two sentences"
-        }
-        assertTrue(violations.joinToString("\n"), violations.isEmpty())
+        assertTrue(text.contains("現金"))
     }
 
-    @Test
-    fun evaluationPositionCommentsStayWithinOneHundredToOneHundredFortyCharacters() {
-        val violations = mutableListOf<String>()
-        ranges.forEach { (key, metricRanges) ->
-            metricRanges.forEachIndexed { bandIndex, (low, high) ->
-                (0 until 9).forEach { positionIndex ->
-                    val fraction = (positionIndex + 0.5) / 9.0
-                    val values = baseline.toMutableMap().apply { this[key] = low + (high - low) * fraction }
-                    val text = StockAnalysisNarrativeGenerator.generatePositionDetailed(values)
-                        .findings.single { it.key == key }.text
-                    if (text.length !in 100..140) {
-                        violations += "$key band $bandIndex position $positionIndex: ${text.length} characters"
-                    }
-                    if (text.count { it == '。' } !in 2..4) {
-                        violations += "$key band $bandIndex position $positionIndex: expected two to four sentences"
-                    }
-                }
-            }
-        }
-        listOf("per" to -1.0, "pbr" to -1.0, "payout_ratio" to -1.0).forEach { (key, value) ->
-            val values = baseline.toMutableMap().apply { this[key] = value }
-            val text = StockAnalysisNarrativeGenerator.generatePositionDetailed(values)
-                .findings.single { it.key == key }.text
-            if (text.length !in 100..140) violations += "$key non-positive: ${text.length} characters"
-            if (text.count { it == '。' } !in 2..4) violations += "$key non-positive: expected two to four sentences"
-        }
-        assertTrue(violations.joinToString("\n"), violations.isEmpty())
-    }
-
-    @Test
-    fun everyMetricUsesFortyFiveDistinctShortCommentPatterns() {
-        val violations = mutableListOf<String>()
-        ranges.forEach { (key, metricRanges) ->
-            val patterns = metricRanges.flatMap { (low, high) ->
-                (0 until 9).map { positionIndex ->
-                    val fraction = (positionIndex + 0.5) / 9.0
-                    val values = baseline.toMutableMap().apply { this[key] = low + (high - low) * fraction }
-                    val finding = StockAnalysisNarrativeGenerator.generatePositionDetailed(values)
-                        .findings.single { it.key == key }
-                    finding.text.replace(finding.formattedValue, "<value>")
-                }
-            }.toSet()
-            if (patterns.size != 45) violations += "$key: ${patterns.size} distinct patterns"
-        }
-        assertTrue(violations.joinToString("\n"), violations.isEmpty())
-    }
-
-    @Test
-    fun semanticPositionStatesKeepShortCommentsAndEvaluationCombination() {
-        data class StateSample(val key: String, val value: Double, val expectedPhrase: String)
-
-        val samples = listOf(
-            StateSample("operating_margin", -0.01, "本業赤字"),
-            StateSample("operating_margin", -0.005, "本業赤字"),
-            StateSample("operating_margin", -0.0049, "営業利益はゼロ付近"),
-            StateSample("operating_margin", 0.0, "営業利益はゼロ付近"),
-            StateSample("operating_margin", 0.0049, "営業利益はゼロ付近"),
-            StateSample("operating_margin", 0.005, "営業利益はプラス"),
-            StateSample("operating_margin", 0.01, "営業利益はプラス"),
-            StateSample("fcf_margin", -0.01, "投資後の不足分"),
-            StateSample("fcf_margin", -0.005, "投資後の不足分"),
-            StateSample("fcf_margin", -0.0049, "FCFはゼロ付近"),
-            StateSample("fcf_margin", 0.0, "FCFはゼロ付近"),
-            StateSample("fcf_margin", 0.0049, "FCFはゼロ付近"),
-            StateSample("fcf_margin", 0.005, "FCFはプラス"),
-            StateSample("fcf_margin", 0.01, "FCFはプラス"),
-            StateSample("per", -1.0, "通常の評価帯比較には注意"),
-            StateSample("per", 0.0, "通常の評価帯比較には注意"),
-            StateSample("per", 0.1, "「割安」帯の下端に近い位置"),
-            StateSample("pbr", -1.0, "負の純資産などで通常の比較が難しく"),
-            StateSample("pbr", 0.0, "負の純資産などで通常の比較が難しく"),
-            StateSample("pbr", 0.1, "「資産面で割安」帯"),
-            StateSample("payout_ratio", -1.0, "赤字時は比率の符号に注意が必要"),
-            StateSample("payout_ratio", 0.0, "「余力大」帯の下端に近い位置")
+    @Test fun approvedExtremeBoundariesHaveDifferentEconomicMeaning() {
+        val pairs = listOf(
+            Triple("per", 5.0, 4.99), Triple("per", 60.0, 60.01), Triple("per", 100.0, 100.01),
+            Triple("pbr", 0.3, 0.29), Triple("pbr", 7.0, 7.01), Triple("pbr", 10.0, 10.01),
+            Triple("payout_ratio", 100.0, 100.01), Triple("payout_ratio", 120.0, 120.01),
+            Triple("payout_ratio", 200.0, 200.01), Triple("equity_ratio", 10.0, 9.99),
+            Triple("equity_ratio", 100.0, 100.01), Triple("operating_margin", -20.0, -20.01),
+            Triple("operating_margin", 30.0, 30.01), Triple("fcf_margin", -30.0, -30.01),
+            Triple("fcf_margin", 30.0, 30.01), Triple("dividend_growth_years", 9.0, 10.0),
+            Triple("dividend_growth_years", 19.0, 20.0)
         )
-
-        val violations = mutableListOf<String>()
-        samples.forEach { sample ->
-            val values = baseline.toMutableMap().apply { this[sample.key] = sample.value }
-            val positionResult = StockAnalysisNarrativeGenerator.generatePositionDetailed(values)
-            val text = positionResult.findings.single { it.key == sample.key }.text
-            if (text.length !in 100..140) {
-                violations += "${sample.key}=${sample.value}: ${text.length} characters"
-            }
-            if (text.count { it == '。' } !in 2..4) {
-                violations += "${sample.key}=${sample.value}: expected two to four sentences"
-            }
-            if (!text.contains(sample.expectedPhrase)) {
-                violations += "${sample.key}=${sample.value}: missing ${sample.expectedPhrase}"
-            }
-            if (StockAnalysisNarrativeGenerator.generate(values).combinationIndex != positionResult.combinationIndex) {
-                violations += "${sample.key}=${sample.value}: evaluation combination changed by text style"
-            }
+        pairs.forEach { (key, boundary, outside) ->
+            val a = StockAnalysisNarrativeGenerator.generatePositionDetailed(mapOf(key to boundary)).findings.single()
+            val b = StockAnalysisNarrativeGenerator.generatePositionDetailed(mapOf(key to outside)).findings.single()
+            assertNotEquals("$key at $boundary / $outside", a.text, b.text)
+            assertEquals(StockAnalysisNarrativeGenerator.generate(mapOf(key to outside)).score, b.score)
         }
-        assertTrue(violations.joinToString("\n"), violations.isEmpty())
+        assertNotEquals(StockMetricCommentary.extreme("per", -1.0), StockMetricCommentary.extreme("per", 0.0))
+        assertNotEquals(StockMetricCommentary.extreme("equity_ratio", -1.0), StockMetricCommentary.extreme("equity_ratio", 0.0))
+        assertNotNull(StockMetricCommentary.extreme("operating_margin", -0.0049))
+        assertNull(StockMetricCommentary.extreme("operating_margin", 0.005))
     }
 
-    @Test
-    fun customAnalysisCommentsStayWithinOneHundredToOneHundredFortyCharacters() {
-        val comments = buildList {
-            addAll(
-                listOf(1.5, 2.65, 3.3, 4.2).map {
-                    StockDetailCommentGenerator.dividendYield(it, 2.02, 2.99, 3.81)
-                }
-            )
-            val yearsBands = listOf("1年以内", "1年超3年以内", "3年超5年以内", "5年超10年以内", "10年超")
-            val yearsPositions = listOf("下端に近い位置", "中央付近", "中央付近", "中央付近", "下端寄り")
-            val years = listOf(0, 2, 4, 8, 12)
-            addAll(years.mapIndexed { index, value ->
-                StockDetailCommentGenerator.dividendIncreaseYears(value, yearsBands[index], yearsPositions[index])
-            })
-            addAll(years.mapIndexed { index, value ->
-                StockDetailCommentGenerator.nonCutYears(value, yearsBands[index], yearsPositions[index])
-            })
-            addAll(
-                listOf(-5.0, 0.0, 5.0).flatMap { rate ->
-                    listOf(false, true).map { isCalendarYear ->
-                        val band = when {
-                            rate < 0.0 -> "0%未満・減少傾向"
-                            rate > 0.0 -> "0%超・増加傾向"
-                            else -> "0%・横ばい"
-                        }
-                        val position = when {
-                            rate < 0.0 -> "基準を下回る"
-                            rate > 0.0 -> "基準を上回る"
-                            else -> "基準値"
-                        }
-                        StockDetailCommentGenerator.annualDividendCagr(rate, isCalendarYear, band, position)
-                    }
-                }
-            )
-            addAll(
-                listOf(
-                    Triple(5.0, "適正範囲", "中央付近"),
-                    Triple(13.3, "やや高め", "下端寄り"),
-                    Triple(30.0, "高リスク・要分散", "基準超過")
-                ).map { (value, band, position) ->
-                    StockDetailCommentGenerator.dividendDependency(value, band, position)
-                }
-            )
-            addAll(
-                listOf(
-                    Triple(2.5, "依存度10%以内の半分相当", "中央付近"),
-                    Triple(8.0, "依存度10%超25%以内の半分相当", "中央より下"),
-                    Triple(15.0, "依存度25%超の半分相当", "基準超過")
-                ).map { (value, band, position) ->
-                    StockDetailCommentGenerator.halfDividendImpact(value, band, position)
-                }
-            )
-            addAll(
-                listOf(
-                    Triple(10.0, "適正分散", "中央付近"),
-                    Triple(25.0, "やや集中", "中央付近"),
-                    Triple(40.0, "高集中", "基準超過")
-                ).map { (value, band, position) ->
-                    StockDetailCommentGenerator.sectorConcentration("卸売業", value, band, position)
-                }
-            )
-        }
-
-        val violations = comments.mapIndexedNotNull { index, text ->
-            if (text.length !in 100..140 || text.count { it == '。' } !in 2..4) {
-                "comment $index: ${text.length} characters, ${text.count { it == '。' }} sentences"
-            } else null
-        }
-        assertTrue(violations.joinToString("\n"), violations.isEmpty())
+    @Test fun annualChangeUsesActualHistoryWithoutAppendingTodaysQuote() {
+        val historical = context("per", listOf(10.0, 12.0)).copy(history = context("per", listOf(10.0, 12.0)).history.mapValues { (_, points) ->
+            points.map { it.copy(basis = MetricHistoryPoint.YEAR_END) }
+        })
+        val result = StockAnalysisNarrativeGenerator.generatePositionDetailed(mapOf("per" to 19.67), historical)
+        val text = result.findings.single().text
+        assertTrue(text, text.contains("2.00倍"))
+        assertTrue(text, text.contains("期末実績"))
+        assertFalse(text, text.contains("19.67"))
+        assertFalse(text, text.contains("9.67"))
     }
 
-    @Test
-    fun customAnalysisCommentsUseMorePositionSpecificPatterns() {
-        val positions = listOf(
-            "下端に近い位置", "下端寄り", "下側寄り", "中央より下", "中央付近",
-            "中央より上", "上側寄り", "上端寄り", "上端に近い位置"
-        )
-        val yearsBands = listOf("1年以内", "1年超3年以内", "3年超5年以内", "5年超10年以内", "10年超")
-        val years = listOf(0, 2, 4, 8, 12)
+    @Test fun recoversToPositiveAndDetectsAReversalRatherThanOnlyNetChange() {
+        val recovery = StockAnalysisNarrativeGenerator.generatePositionDetailed(
+            mapOf("operating_margin" to 2.0), context("operating_margin", listOf(-5.0, -2.0, 2.0))
+        ).findings.single().text
+        assertTrue(recovery, recovery.contains("プラスに転じ"))
+        val volatile = StockAnalysisNarrativeGenerator.generateDetailed(
+            mapOf("operating_margin" to 2.0), context("operating_margin", listOf(2.0, 8.0, 2.0))
+        ).findings.single().text
+        assertTrue(volatile, volatile.contains("上下の変動"))
+    }
 
-        val increasePatterns = years.indices.flatMap { bandIndex ->
-            positions.map { position ->
-                StockDetailCommentGenerator.dividendIncreaseYears(
-                    years[bandIndex], yearsBands[bandIndex], position
-                ).replace(Regex("\\d+"), "<n>")
-            }
-        }.toSet()
-        val nonCutPatterns = years.indices.flatMap { bandIndex ->
-            positions.map { position ->
-                StockDetailCommentGenerator.nonCutYears(
-                    years[bandIndex], yearsBands[bandIndex], position
-                ).replace("${years[bandIndex]}年", "<year>年")
-            }
-        }.toSet()
+    @Test fun missingHistoryAndSourceOrPeriodChangesUseAvailableFacts() {
+        val values = mapOf("payout_ratio" to 45.93)
+        val simple = StockAnalysisNarrativeGenerator.generatePositionDetailed(values).findings.single().text
+        val points = context("payout_ratio", listOf(20.0, 30.0, 40.0)).history.getValue("payout_ratio")
+        val switched = StockAnalysisContext(mapOf("payout_ratio" to points.mapIndexed { index, point ->
+            if (index == 2) point.copy(source = "IRBANK") else point
+        }))
+        assertEquals(simple, StockAnalysisNarrativeGenerator.generatePositionDetailed(values, switched).findings.single().text)
+        val gap = StockAnalysisContext(mapOf("payout_ratio" to listOf(points.first(), points.last())))
+        assertEquals(simple, StockAnalysisNarrativeGenerator.generatePositionDetailed(values, gap).findings.single().text)
+        for (text in listOf(simple, StockAnalysisNarrativeGenerator.generateDetailed(values).findings.single().text)) {
+            for (phrase in listOf("複数年分", "履歴がない", "履歴不足", "データがない", "比較できません")) assertFalse(text, text.contains(phrase))
+        }
+    }
 
-        val riskSamples = listOf(
-            Triple(StockDetailCommentGenerator::dividendDependency, listOf(5.0, 15.0, 30.0), listOf("適正範囲", "やや高め", "高リスク・要分散")),
-            Triple(StockDetailCommentGenerator::halfDividendImpact, listOf(2.5, 8.0, 15.0), listOf("低依存", "中依存", "高依存"))
-        )
-        val riskPatterns = riskSamples.flatMap { (generator, values, bands) ->
-            values.indices.flatMap { bandIndex ->
-                positions.map { position ->
-                    generator(values[bandIndex], bands[bandIndex], position)
-                        .replace(Regex("\\d+(?:\\.\\d+)?%"), "<percent>")
-                }
-            }
-        }.toSet()
+    @Test fun relatedIndicatorsRequireTheLatestMatchingActualPeriod() {
+        val payout = context("payout_ratio", listOf(40.0, 45.0)).history.getValue("payout_ratio")
+        val fcf = context("fcf_margin", listOf(-1.0, -2.0)).history.getValue("fcf_margin")
+        fun text(points: List<MetricHistoryPoint>) = StockAnalysisNarrativeGenerator.generateDetailed(
+            mapOf("payout_ratio" to 45.0), StockAnalysisContext(mapOf("payout_ratio" to payout, "fcf_margin" to points))
+        ).findings.single().text
+        assertTrue(text(fcf), text(fcf).contains("投資後の資金不足"))
+        assertTrue(text(fcf), text(fcf).contains("2022/03"))
+        assertFalse(text(fcf.dropLast(1)).contains("投資後の資金不足"))
+        assertFalse(text(fcf.map { it.copy(basis = MetricHistoryPoint.CALENDAR_ACTUAL) }).contains("投資後の資金不足"))
+        assertFalse(text(fcf.map { it.copy(periodPrecision = "month") }).contains("投資後の資金不足"))
+    }
 
-        val yieldPatterns = buildSet {
-            listOf(2.02 to 2.99, 2.99 to 3.81).forEach { (lower, upper) ->
-                positions.indices.forEach { index ->
-                    val fraction = (index + 0.5) / positions.size
-                    val value = lower + (upper - lower) * fraction
-                    add(
-                        StockDetailCommentGenerator.dividendYield(value, 2.02, 2.99, 3.81)
-                            .replace(Regex("\\d+(?:\\.\\d+)?%"), "<percent>")
-                    )
-                }
+    @Test fun dividendRestartIsInferredFromObservedCompletedYearsOnly() {
+        val history = context("dividend_dps", listOf(20.0, 10.0, 15.0)).history.mapValues { (_, points) ->
+            points.map { it.copy(basis = MetricHistoryPoint.CALENDAR_ACTUAL) }
+        }
+        val text = StockDetailCommentGenerator.dividendIncreaseYears(1, "短期実績", "下限寄り", StockAnalysisContext(history))
+        assertTrue(text, text.contains("減配後に再び"))
+        assertFalse(text.contains("1年"))
+        assertFalse(text.contains("短期実績"))
+        assertFalse(text.contains("下限寄り"))
+    }
+
+    @Test fun shortCommentsStayWithinBudgetEvenWhenAllEvidenceIsPresent() {
+        val history = baseline.keys.associateWith { key ->
+            context(key, when (key) {
+                "payout_ratio" -> listOf(60.0, 110.0, 150.0)
+                "fcf_margin" -> listOf(2.0, -1.0, -5.0)
+                else -> listOf(1.0, 2.0, 3.0)
+            }).history.getValue(key)
+        }
+        val rich = StockAnalysisContext(history)
+        val extremes = mapOf("per" to 105.0, "pbr" to 11.0, "payout_ratio" to 280.18,
+            "equity_ratio" to -5.0, "operating_margin" to -25.0, "fcf_margin" to -35.0, "dividend_growth_years" to 25.0)
+        for (values in listOf(baseline, extremes)) {
+            val score = StockAnalysisNarrativeGenerator.generate(values)
+            val short = StockAnalysisNarrativeGenerator.generatePositionDetailed(values, rich)
+            assertEquals(score.score, short.score)
+            assertEquals(score.combinationIndex, short.combinationIndex)
+            short.findings.forEach { finding ->
+                assertTrue("${finding.key}: ${finding.text.length} ${finding.text}", finding.text.length <= 140)
+                assertFalse(finding.text.contains(finding.formattedValue))
+                assertTrue(finding.text.endsWith("。"))
             }
         }
+        val additional = listOf(
+            StockDetailCommentGenerator.dividendYield(2.65, 2.0, 3.0, 4.0, rich),
+            StockDetailCommentGenerator.nonCutYears(15, "10年超", "中央", rich),
+            StockDetailCommentGenerator.annualDividendCagr(2.4, true, "増加", "基準超過", rich),
+            StockDetailCommentGenerator.dividendDependency(30.0, "高リスク", "基準超過", rich),
+            StockDetailCommentGenerator.halfDividendImpact(15.0, "高依存", "基準超過", rich),
+            StockDetailCommentGenerator.sectorConcentration("卸売業", 40.0, "高集中", "基準超過", rich)
+        )
+        additional.forEach { assertTrue("${it.length}: $it", it.length <= 140) }
+    }
 
-        assertEquals(45, increasePatterns.size)
-        assertEquals(45, nonCutPatterns.size)
-        assertEquals(54, riskPatterns.size)
-        assertEquals(18, yieldPatterns.size)
+    @Test fun extremeFiniteInputsDoNotLeakArithmeticOverflowIntoComments() {
+        val overflow = context("equity_ratio", listOf(-Double.MAX_VALUE, Double.MAX_VALUE))
+        val normal = StockAnalysisNarrativeGenerator.generatePositionDetailed(mapOf("equity_ratio" to 45.0))
+        val result = StockAnalysisNarrativeGenerator.generatePositionDetailed(mapOf("equity_ratio" to 45.0), overflow)
+        assertEquals(normal.findings.single().text, result.findings.single().text)
+        val huge = StockAnalysisNarrativeGenerator.generateDetailed(
+            mapOf("equity_ratio" to 45.0), context("equity_ratio", listOf(1.0, 1e100))
+        ).findings.single().text
+        assertFalse(huge.contains("Infinity"))
+        assertFalse(huge.contains("NaN"))
+        assertTrue(huge, huge.contains("大幅に上昇"))
+        assertTrue(huge.length < 350)
     }
 }

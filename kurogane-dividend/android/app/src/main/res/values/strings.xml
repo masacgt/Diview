@@ -435,7 +435,7 @@
     <string name="stock_detail_analysis_status_info_description">この欄は、健全性・買場シグナル・年間配当の増減・集中リスクの4項目を一覧します。健全性は配当継続を支える財務指標、買場シグナルは現在利回りとPER判定、年間配当の増減は増配率や非減配年数、集中リスクは保有全体の配当と資産の偏りを示します。カードをタップすると選んだ項目の詳細に切り替わります。必要な値や履歴が未取得の場合、判定は取得できたデータの範囲に限られます。各項目は参考情報であり、将来の株価や配当、投資成果を保証するものではありません。</string>
     <string name="stock_detail_indicator_evaluation_info_content_description">銘柄総合分析の説明</string>
     <string name="stock_detail_indicator_evaluation_info_title">指標別評価について</string>
-    <string name="stock_detail_indicator_evaluation_info_description">この評価は、PER・PBR・配当性向・自己資本比率・営業利益率・FCF余力・連続増配年数の7指標を評価基準に照らし、各指標の数値・評価帯・帯内位置と総合点を表示します。総合点は取得できた指標に重みを付けて算出し、未取得の指標は含めません。各コメントでは、配当継続上の強み・弱みと、その指標だけでは判断できない点を説明します。取得時点や業種の違いも確認してください。評価は参考情報で、将来の配当や投資成果を保証しません。</string>
+    <string name="stock_detail_indicator_evaluation_info_description">この評価は、PER・PBR・配当性向・自己資本比率・営業利益率・FCF余力・連続増配年数の7指標を評価基準に照らし、各指標の数値・評価帯・帯内位置と総合点を表示します。総合点は取得できた指標に重みを付けて算出し、未取得の指標は含めません。各コメントでは、極端な値の意味、比較条件の合う直近5期までの実績の変化、関連指標との関係を踏まえ、配当継続上の強み・弱みと、その指標だけでは判断できない点を説明します。取得時点や業種の違いも確認してください。評価は参考情報で、将来の配当や投資成果を保証しません。</string>
     <string name="stock_detail_text_23">"タップで切替"</string>
     <string name="stock_detail_text_24">"① 健全性"</string>
     <string name="stock_detail_text_25">"② 買場シグナル"</string>
@@ -499,7 +499,7 @@
     <string name="stock_detail_text_80">"7指標で見る配当継続の強み・弱み"</string>
     <string name="stock_detail_text_81">"%1$s %2$s点"</string>
     <string name="stock_detail_text_82">"総合評価: %1$s。評価できた%2$s指標を重み付けして算出しています。"</string>
-    <string name="stock_detail_text_83">"全7指標の文章パターン: 45^7 = %1$s通り。今回の入力で選択可能な組合せ: %2$s通り。"</string>
+    <string name="stock_detail_text_83">"全7指標の評価帯・位置の組合せ: 45^7 = %1$s通り。今回の入力で選択可能な組合せ: %2$s通り。"</string>
     <string name="stock_detail_text_84">"市場指標は最新の市場データ、財務指標は取得済みの決算実績を使用します。未取得の値は未評価です。"</string>
     <string name="stock_detail_text_85">"評価パターン %1$s / %2$s"</string>
     <string name="stock_detail_text_86">"未取得の指標: %1$s。データがない項目は評価に含めません。"</string>
