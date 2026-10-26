@@ -61,7 +61,7 @@ class StockAnalysisNarrativeGeneratorTest {
         val result = StockAnalysisNarrativeGenerator.generate(values)
 
         assertEquals(6, result.findings.size)
-        assertEquals(listOf("FCF余力"), result.missingLabels)
+        assertEquals(listOf("フリーキャッシュフロー余力"), result.missingLabels)
         assertEquals(45L * 45L * 45L * 45L * 45L * 45L, result.possibleCombinations)
         assertNull(result.combinationIndex)
     }

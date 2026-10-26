@@ -471,8 +471,8 @@ fun StockDetailScreen(
         fcfMargin = healthValues["fcf_margin"] ?: baseProfile.fcfMargin,
         fcfStatus = when {
             baseProfile.fcfStatus != "未取得" -> baseProfile.fcfStatus
-            healthValues["fcf_margin"]?.let { it >= 0.0 } == true -> "フリーCF黒字"
-            healthValues["fcf_margin"]?.let { it < 0.0 } == true -> "フリーCF赤字"
+            healthValues["fcf_margin"]?.let { it >= 0.0 } == true -> "フリーキャッシュフロー黒字"
+            healthValues["fcf_margin"]?.let { it < 0.0 } == true -> "フリーキャッシュフロー赤字"
             else -> baseProfile.fcfStatus
         },
         consecutiveYears = baseProfile.consecutiveYears.takeIf { it >= 0 }
@@ -487,7 +487,7 @@ fun StockDetailScreen(
         "payout_ratio" to "配当性向",
         "equity_ratio" to "自己資本比率",
         "operating_margin" to "営業利益率",
-        "fcf_margin" to "FCF余力",
+        "fcf_margin" to "フリーキャッシュフロー余力",
         "dividend_growth_years" to "連続増配年数"
     )
     val healthFindingsByKey = healthPositionNarrative.findings.associateBy { it.key }
@@ -580,7 +580,7 @@ fun StockDetailScreen(
             StockAnalysisPositionItem(
                 label = "連続増配年数", formattedValue = "未取得", bandLabel = "評価不可",
                 positionLabel = "データなし", score = null,
-                text = "配当額の増え方が利益成長に沿うかを確認します。将来の増配余力は、配当性向、FCFと最新の配当方針も合わせて見ます。"
+                text = "配当額の増え方が利益成長に沿うかを確認します。将来の増配余力は、配当性向、フリーキャッシュフローと最新の配当方針も合わせて見ます。"
             )
         )
 
@@ -610,7 +610,7 @@ fun StockDetailScreen(
             )
         }
 
-        val cagrLabel = if (isCalendarYearDividendHistory) "暦年配当CAGR" else "年間配当CAGR"
+        val cagrLabel = if (isCalendarYearDividendHistory) "暦年配当の年平均成長率" else "年間配当の年平均成長率"
         if (profile.growthRate.isFinite()) {
             val cagrBand = when {
                 profile.growthRate > 0.0 -> "0%超・増加傾向"
@@ -730,9 +730,9 @@ fun StockDetailScreen(
 
         if (!currentDpsUnavailable && totalPortfolioDiv > 0) {
             val impactBand = when {
-                cutImpactRatio <= 5.0 -> "依存度10%以内の半分相当"
-                cutImpactRatio <= 12.5 -> "依存度10%超25%以内の半分相当"
-                else -> "依存度25%超の半分相当"
+                cutImpactRatio <= 5.0 -> "小さめ"
+                cutImpactRatio <= 12.5 -> "中程度"
+                else -> "大きめ"
             }
             val impactPosition = when {
                 cutImpactRatio <= 5.0 -> positionWithinBand(cutImpactRatio, 0.0, 5.0)
@@ -772,7 +772,7 @@ fun StockDetailScreen(
             }
             add(
                 StockAnalysisPositionItem(
-                    label = "$cleanSectorName セクター集中度", formattedValue = "$sectorDependencyStr%",
+                    label = "セクター集中度", formattedValue = "$sectorDependencyStr%",
                     bandLabel = band, positionLabel = position,
                     score = when { sectorDependency <= 20.0 -> 85; sectorDependency <= 30.0 -> 55; else -> 35 },
                     text = StockDetailCommentGenerator.sectorConcentration(
@@ -787,7 +787,7 @@ fun StockDetailScreen(
         } else {
             add(
                 StockAnalysisPositionItem(
-                    label = "$cleanSectorName セクター集中度", formattedValue = "算出不可", bandLabel = "評価不可",
+                    label = "セクター集中度", formattedValue = "算出不可", bandLabel = "評価不可",
                     positionLabel = "分母なし", score = null,
                     text = "保有資産の評価額合計が不足し、セクター集中度の位置は判定できません。算出不可は0%を意味せず、評価額の取得後に確認します。"
                 )
@@ -1671,7 +1671,7 @@ fun StockDetailScreen(
                                                 Spacer(modifier = Modifier.height(2.dp))
                                                 Text(stringResource(R.string.settings_1_s , sectorDependencyStr), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
                                                 Spacer(modifier = Modifier.height(2.dp))
-                                                Text(stringResource(R.string.stock_detail_text_36 , cleanSectorName, sectorRiskText), color = AccentAmber, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
+                                                Text(stringResource(R.string.stock_detail_text_36, sectorRiskText), color = AccentAmber, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                             }
                                         }
 

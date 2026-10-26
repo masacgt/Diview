@@ -181,11 +181,11 @@ data class FinancialData(
                 bps = valuation?.numberWithUnit("bps_adjusted", "jpy_per_share") ?: Double.NaN,
                 operatingMargin = operating ?: Double.NaN, fcfMargin = fcfMargin,
                 fcfStatus = when {
-                    cf != null && cf >= 0 -> "フリーCF黒字"
-                    cf != null -> "フリーCF赤字"
+                    cf != null && cf >= 0 -> "フリーキャッシュフロー黒字"
+                    cf != null -> "フリーキャッシュフロー赤字"
                     fcfMargin == null -> "未取得"
-                    fcfMargin >= 0 -> "フリーCF黒字"
-                    else -> "フリーCF赤字"
+                    fcfMargin >= 0 -> "フリーキャッシュフロー黒字"
+                    else -> "フリーキャッシュフロー赤字"
                 },
                 calculatedDoe = calculatedDoe?.let { String.format(Locale.JAPAN, "%.2f%%", it) } ?: "未取得",
                 netDeRatio = netDeRatio?.let { String.format(Locale.JAPAN, "%.2f倍", it) } ?: "未取得",
