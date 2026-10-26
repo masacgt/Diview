@@ -36,6 +36,8 @@ import com.kurogane.dividend.data.DividendHistoryOverride
 import com.kurogane.dividend.data.PriceRefreshPolicy
 import com.kurogane.dividend.data.MarketFetchPolicy
 import com.kurogane.dividend.data.Tse33IndustryMaster
+import com.kurogane.dividend.data.SecurityCategoryCache
+import com.kurogane.dividend.data.assetManagementSectorLabel
 import com.kurogane.dividend.data.JPXTickSizeMaster
 import com.kurogane.dividend.data.CsvHoldingRow
 import com.kurogane.dividend.data.DvmBackupPreview
@@ -148,6 +150,11 @@ class DividendViewModel @JvmOverloads constructor(
 
     private val displayPreferences = application.getSharedPreferences("display_preferences", Context.MODE_PRIVATE)
     private val marketPreferences = application.getSharedPreferences("cloudflare_market_cache", Context.MODE_PRIVATE)
+    private val securityCategoryMutex = Mutex()
+    private val securityCategoryAttempts = mutableMapOf<String, Long>()
+    private val _securityCategoryCache = MutableStateFlow(
+        SecurityCategoryCache.decode(marketPreferences.getString("security_categories_v1", null))
+    )
     private val marketQuoteCacheLock = Any()
     private val incomeAdviceMutex = Mutex()
     private val _incomeAdviceCatalog = MutableStateFlow(loadCachedIncomeAdviceCatalog())
@@ -173,6 +180,7 @@ class DividendViewModel @JvmOverloads constructor(
     fun refreshAssetManagementData(): Job {
         return viewModelScope.launch {
             restoration.await()
+            launch { refreshHoldingSecurityCategories() }
             assetDataRefreshMutex.withLock {
                 val targets = _holdings.value.filter { it.category == Category.JAPAN && it.shares > 0 }
                     .distinctBy { normalizeJapaneseSecurityCode(it.code) }
@@ -215,6 +223,32 @@ class DividendViewModel @JvmOverloads constructor(
             }
         }
     }
+    private suspend fun refreshHoldingSecurityCategories() = withContext(Dispatchers.IO) {
+        securityCategoryMutex.withLock {
+            val generation = dataGeneration.get()
+            val now = System.currentTimeMillis()
+            val codes = _holdings.value.filter {
+                it.category == Category.JAPAN && it.sector == "東証33業種未分類"
+            }.map { normalizeJapaneseSecurityCode(it.code) }.filter { it.matches(Regex("[A-Z0-9]{4,5}")) }
+            val due = _securityCategoryCache.value.dueCodes(codes, now).filter { code ->
+                securityCategoryAttempts[code]?.let { now - it in 0 until 30_000L } != true
+            }
+            if (due.isEmpty()) return@withLock
+            due.forEach { securityCategoryAttempts[it] = now }
+            runCatchingCancellable {
+                val categories = marketRepository.fetchSecurityCategories(due)
+                if (categories.isEmpty()) return@runCatchingCancellable
+                synchronized(financialGenerationLock) {
+                    if (generation == dataGeneration.get()) {
+                        val cache = _securityCategoryCache.value.updated(categories, System.currentTimeMillis())
+                        check(marketPreferences.edit().putString("security_categories_v1", cache.encode()).commit())
+                        _securityCategoryCache.value = cache
+                    }
+                }
+            }
+        }
+    }
+
     private val localImportStore = LocalImportStore(application)
     private val _shareholderBenefits = MutableStateFlow<Map<String, List<ShareholderBenefit>>>(emptyMap())
     val shareholderBenefits: StateFlow<Map<String, List<ShareholderBenefit>>> = _shareholderBenefits.asStateFlow()
@@ -1262,8 +1296,8 @@ class DividendViewModel @JvmOverloads constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, AssetManagementUpcomingDividend())
 
     fun assetManagementListItems(sortCriteria: String): Flow<List<AssetManagementListItem>> = combine(
-        _holdings, _taxRateMode, _calculationBasis
-    ) { current, taxRateMode, calculationBasis ->
+        _holdings, _taxRateMode, _calculationBasis, _securityCategoryCache
+    ) { current, taxRateMode, calculationBasis, categoryCache ->
             current.map { holding ->
                 val sortValue = when (sortCriteria) {
                     "val" -> holding.totalValuation
@@ -1276,7 +1310,8 @@ class DividendViewModel @JvmOverloads constructor(
                     id = holding.id,
                     code = holding.code,
                     displayName = japaneseDisplayName(holding.code, holding.name),
-                    sector = holding.sector,
+                    sector = assetManagementSectorLabel(holding.category, holding.sector,
+                        categoryCache.entries[normalizeJapaneseSecurityCode(holding.code)]?.category),
                     category = holding.category,
                     dividendMonths = holding.dividendMonths,
                     missingExchangeRate = holding.currency == "$" && holding.usdJpyRate == null,
@@ -3345,6 +3380,15 @@ class DividendViewModel @JvmOverloads constructor(
             _watchlistSortSelection.value = null
             _holdings.value = emptyList()
             _watchlist.value = emptyList()
+            securityCategoryMutex.withLock {
+                // A request that began during reset may have observed the new generation.
+                // Once holdings are empty and this lock is held, no lookup can repopulate it.
+                withContext(Dispatchers.IO) {
+                    check(marketPreferences.edit().remove("security_categories_v1").commit())
+                }
+                _securityCategoryCache.value = SecurityCategoryCache()
+                securityCategoryAttempts.clear()
+            }
             _dividendEventRevision.update { it + 1 }
             shareholderBenefitsSaveJob?.cancel()
             _shareholderBenefits.value = emptyMap()

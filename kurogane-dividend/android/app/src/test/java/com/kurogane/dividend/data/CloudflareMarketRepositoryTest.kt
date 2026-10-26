@@ -12,6 +12,24 @@ import java.net.SocketTimeoutException
 import java.net.URL
 
 class CloudflareMarketRepositoryTest {
+    @Test fun productCategoriesUseTheFullUniverseApiAndPreserveUnknownAndFiveDigitCodes() = runBlocking {
+        val urls = mutableListOf<String>()
+        val repo = repository(mutableListOf(Connection(200, """{"categories":{"1306":"014","8951":"013","25935":"011","285A":null,"9999":"014"}}""")), urls)
+        assertEquals(mapOf("1306" to "014", "8951" to "013", "25935" to "011", "285A" to null),
+            repo.fetchSecurityCategories(listOf("13060", "8951.T", "25935", "285a")))
+        assertEquals(1, urls.size)
+        assertTrue(urls.single().contains("/api/v1/security-categories?codes="))
+    }
+
+    @Test fun malformedProductCategoryResponsesFailInsteadOfCachingAnEmptyResult() = runBlocking {
+        for (body in listOf("{}", """{"categories":{"1306":"ETF"}}""")) {
+            try {
+                repository(Connection(200, body)).fetchSecurityCategories(listOf("1306"))
+                fail("Malformed category responses must fail")
+            } catch (_: java.io.IOException) { }
+        }
+    }
+
     private class Connection(private val status: Int, private val body: String,
                              private val failure: Exception? = null) : HttpURLConnection(URL("https://example.com")) {
         var disconnected = false

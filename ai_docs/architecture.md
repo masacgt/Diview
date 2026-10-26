@@ -2,6 +2,8 @@
 
 ## Runtime and storage
 
+- Asset-management industry labels can be supplemented by J-Quants `ProdCat`. `GET /api/v1/security-categories` reads the complete R2 `market/yfinance/v2/universe/current.json`, including securities without price/catalog entries, and supports optional batches of up to 200 codes. Android persists successful per-code lookups for 45 days in `cloudflare_market_cache/security_categories_v1`; failed refreshes retain cached labels without renewing their timestamp. Only unclassified Japanese holdings display `013` as `REIT（不動産投資信託）` or `014` as `ETF（上場投資信託）`; persisted holdings and industry analysis keep the TSE33 industry. The existing Actions ingestion schedule is unchanged. See `ai_docs/security-product-categories.md` for validation and publication status.
+
 - ローカルの `scripts/jquants_v3/` はJ-QuantsのみのSQLiteスナップショットを作る。日足・月次価格に加えて、J-Quants APIの銘柄マスター、評価指標、財務サマリー、営業日を保存する。2026-10-25時点のキーで取得できる日足等は2026-08-02までの遅延データ（最終取引日は7/31）。配当明細と財務明細はPremium限定で取得不可。実収録範囲と未取得項目は `scripts/jquants_v3/README.md` とDB内 `dataset_coverage` を参照。ローカルデータは `local_artifacts/` に置き、Cloudflareへは配信していない。
 
 - New support feedback is saved with a transactional D1 email outbox (`support_feedback_email`, migration 0006). The Worker notifies the configured verified admin via Cloudflare Email Service; existing hourly cron retries up to 20 pending messages with a 10-minute lease. Delivery is at-least-once; old receipts are not backfilled and deletion removes outbox records. See `data/irbank/cloudflare/docs/feedback-email.md`.

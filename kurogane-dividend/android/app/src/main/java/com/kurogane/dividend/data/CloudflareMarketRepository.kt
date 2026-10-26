@@ -233,6 +233,28 @@ class CloudflareMarketRepository(
         }
     }
 
+    suspend fun fetchSecurityCategories(codes: Collection<String>): Map<String, String?> = withContext(ioDispatcher) {
+        val requested = codes.map(::normalizeJapaneseSecurityCode).distinct()
+        require(requested.all { it.matches(Regex("[A-Z0-9]{4,5}")) }) { "銘柄コードが正しくありません" }
+        if (requested.isEmpty()) return@withContext emptyMap()
+        buildMap {
+            for (batch in requested.chunked(200)) {
+                val encoded = URLEncoder.encode(batch.joinToString(","), Charsets.UTF_8.name())
+                val root = getJson("/api/v1/security-categories?codes=$encoded")
+                val categories = root.optJSONObject("categories")
+                    ?: throw IOException("Cloudflareの銘柄カテゴリ一覧がありません")
+                categories.keys().forEach { code ->
+                    if (code !in batch) return@forEach
+                    val category = if (categories.isNull(code)) null else categories.getString(code)
+                    if (category != null && !category.matches(Regex("\\d{3}"))) {
+                        throw IOException("Cloudflareの銘柄カテゴリが正しくありません")
+                    }
+                    put(code, category)
+                }
+            }
+        }
+    }
+
     suspend fun fetchSearchQuotes(codes: Collection<String>): Map<String, CloudflareSearchQuote> = withContext(ioDispatcher) {
         val requestedCodes = codes.map { it.trim().uppercase(java.util.Locale.ROOT) }
             .filter(::isSecurityCode)

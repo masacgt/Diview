@@ -258,6 +258,7 @@ fun AssetManagementScreen(
     }
     val listItemsSnapshot by listItemsFlow.collectAsStateWithLifecycle(initialValue = null)
     val listItems = listItemsSnapshot.orEmpty()
+    val listItemsById = remember(listItems) { listItems.associateBy { it.id } }
     val heldCodes = remember(listItems) { listItems.filter { it.category == Category.JAPAN }.map { it.code }.sorted() }
     LaunchedEffect(viewModel, holdingsRestored, heldCodes) {
         if (holdingsRestored) viewModel.refreshAssetManagementData()
@@ -1053,12 +1054,17 @@ fun AssetManagementScreen(
                                                 }
                                             }
                                             Spacer(modifier = Modifier.width(4.dp))
+                                            val sectorLabel = listItemsById[holding.id]?.sector ?: holding.sector
                                             Text(
-                                                holding.sector,
+                                                sectorLabel,
                                                 modifier = Modifier.weight(1f),
                                                 color = SoftGray,
                                                 fontSize = AppTextSize.dense,
-                                                maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
+                                                maxLines = when {
+                                                    androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f -> Int.MAX_VALUE
+                                                    sectorLabel != holding.sector -> 2
+                                                    else -> 1
+                                                },
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                         }

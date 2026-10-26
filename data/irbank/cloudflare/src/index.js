@@ -2091,6 +2091,7 @@ export default {
       url.pathname === '/api/v1/health' ||
       url.pathname === '/api/v1/security-search' ||
       url.pathname === '/api/v1/search-catalog' ||
+      url.pathname === '/api/v1/security-categories' ||
       url.pathname === '/api/v1/live-quotes' ||
       url.pathname === '/api/v1/irbank/manifest' ||
       url.pathname === '/api/v1/irbank/catalog' ||
@@ -2694,6 +2695,46 @@ export default {
         return response;
       } catch {
         return json({ error: 'income_advice_unavailable' }, 503);
+      }
+    }
+
+    if (url.pathname === '/api/v1/security-categories') {
+      const rawCodes = url.searchParams.get('codes');
+      const requestedCodes = rawCodes === null ? null : [...new Set(rawCodes.split(',').map(yfinanceV2Code))];
+      if (requestedCodes && (!requestedCodes.length || requestedCodes.includes(null) || requestedCodes.length > 200)) {
+        return json({ error: 'invalid_codes' }, 400);
+      }
+      try {
+        // The full universe includes securities without quotes or a search-catalog entry.
+        const universe = await readV2Json(env, `${YFINANCE_V2_ROOT}/universe/current.json`);
+        if (!Array.isArray(universe?.securities) || universe.securities.length === 0 || !universe.updated_at) {
+          return json({ error: 'security_categories_unavailable' }, 503);
+        }
+        const categories = new Map();
+        for (const row of universe.securities) {
+          const code = yfinanceV2Code(row?.code);
+          if (!code) continue;
+          const category = row.jquants_product_category;
+          // Never silently turn corrupt upstream data into a 45-day negative cache.
+          if (category != null && !/^\d{3}$/.test(category)) {
+            return json({ error: 'security_categories_invalid' }, 503);
+          }
+          categories.set(code, category == null ? null : String(category));
+        }
+        if (!categories.size) return json({ error: 'security_categories_unavailable' }, 503);
+        const codes = requestedCodes || [...categories.keys()];
+        const response = json({
+          schema_version: 1,
+          source: 'J-Quants API v2',
+          updated_at: universe.updated_at,
+          session_date: universe.session_date || null,
+          categories: Object.fromEntries(codes.filter(code => categories.has(code)).map(code => [code, categories.get(code)])),
+          not_found: codes.filter(code => !categories.has(code)),
+        });
+        response.headers.set('cache-control', 'public, max-age=300');
+        return response;
+      } catch {
+        return json({ error: 'security_categories_unavailable' }, 503);
       }
     }
 

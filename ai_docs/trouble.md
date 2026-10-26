@@ -1,5 +1,7 @@
 # Trouble
 
+- Shared emulator installations can invalidate an otherwise successful build verification. During category-display checks on `emulator-5560`, the installed APK hash differed from the APK built in the task worktree, and category requests were absent. A dedicated read-only `DiviewReleaseAudit35` instance on port 5572, with its data under the task's ignored Android build directory, passed all five category/list tests; the installed APK hash matched before and after the run. Select JDK 17 and verify APK hashes around device tests when other tasks may install the same package.
+
 - The multi-year dividend-history refresh uses an expression-bodied `withLock` function; its only closing brace closes the lambda. An extra brace closes `DividendViewModel` early and triggers unrelated unresolved-reference errors. JDK 17 `assembleDebug` succeeded after removing the extra brace.
 
 - Legacy dividend/split migration could stop before cleanup when a Yahoo history refresh omitted an event date still present in the legacy object: replacing the refreshed date range discarded that event, and the pre-cleanup verifier correctly rejected the transfer. Normalize event dates, retain legacy events absent from the refreshed rows, and verify every legacy event has a parseable date and exists in hot or archived v2 records before deleting legacy data.
