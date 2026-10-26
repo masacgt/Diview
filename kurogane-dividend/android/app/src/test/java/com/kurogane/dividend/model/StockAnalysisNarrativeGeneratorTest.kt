@@ -73,7 +73,7 @@ class StockAnalysisNarrativeGeneratorTest {
     )
 
     @Test fun payoutExtremeExplainsMeaningWithoutEchoingItsLabel() {
-        val result = StockAnalysisNarrativeGenerator.generatePositionDetailed(mapOf("payout_ratio" to 280.18))
+        val result = StockAnalysisNarrativeGenerator.generate(mapOf("payout_ratio" to 280.18))
         val text = result.findings.single().text
         assertTrue(text.contains("配当額が利益を大きく超え"))
         for (repetition in listOf("280.18", "要警戒", "上限寄り", "上端", "帯の", "「")) {
@@ -94,8 +94,8 @@ class StockAnalysisNarrativeGeneratorTest {
             Triple("dividend_growth_years", 19.0, 20.0)
         )
         pairs.forEach { (key, boundary, outside) ->
-            val a = StockAnalysisNarrativeGenerator.generatePositionDetailed(mapOf(key to boundary)).findings.single()
-            val b = StockAnalysisNarrativeGenerator.generatePositionDetailed(mapOf(key to outside)).findings.single()
+            val a = StockAnalysisNarrativeGenerator.generate(mapOf(key to boundary)).findings.single()
+            val b = StockAnalysisNarrativeGenerator.generate(mapOf(key to outside)).findings.single()
             assertNotEquals("$key at $boundary / $outside", a.text, b.text)
             assertEquals(StockAnalysisNarrativeGenerator.generate(mapOf(key to outside)).score, b.score)
         }
@@ -109,7 +109,7 @@ class StockAnalysisNarrativeGeneratorTest {
         val historical = context("per", listOf(10.0, 12.0)).copy(history = context("per", listOf(10.0, 12.0)).history.mapValues { (_, points) ->
             points.map { it.copy(basis = MetricHistoryPoint.YEAR_END) }
         })
-        val result = StockAnalysisNarrativeGenerator.generatePositionDetailed(mapOf("per" to 19.67), historical)
+        val result = StockAnalysisNarrativeGenerator.generate(mapOf("per" to 19.67), historical)
         val text = result.findings.single().text
         assertTrue(text, text.contains("2.00倍"))
         assertTrue(text, text.contains("期末実績"))
@@ -118,7 +118,7 @@ class StockAnalysisNarrativeGeneratorTest {
     }
 
     @Test fun recoversToPositiveAndDetectsAReversalRatherThanOnlyNetChange() {
-        val recovery = StockAnalysisNarrativeGenerator.generatePositionDetailed(
+        val recovery = StockAnalysisNarrativeGenerator.generate(
             mapOf("operating_margin" to 2.0), context("operating_margin", listOf(-5.0, -2.0, 2.0))
         ).findings.single().text
         assertTrue(recovery, recovery.contains("プラスに転じ"))
@@ -130,14 +130,14 @@ class StockAnalysisNarrativeGeneratorTest {
 
     @Test fun missingHistoryAndSourceOrPeriodChangesUseAvailableFacts() {
         val values = mapOf("payout_ratio" to 45.93)
-        val simple = StockAnalysisNarrativeGenerator.generatePositionDetailed(values).findings.single().text
+        val simple = StockAnalysisNarrativeGenerator.generate(values).findings.single().text
         val points = context("payout_ratio", listOf(20.0, 30.0, 40.0)).history.getValue("payout_ratio")
         val switched = StockAnalysisContext(mapOf("payout_ratio" to points.mapIndexed { index, point ->
             if (index == 2) point.copy(source = "IRBANK") else point
         }))
-        assertEquals(simple, StockAnalysisNarrativeGenerator.generatePositionDetailed(values, switched).findings.single().text)
+        assertEquals(simple, StockAnalysisNarrativeGenerator.generate(values, switched).findings.single().text)
         val gap = StockAnalysisContext(mapOf("payout_ratio" to listOf(points.first(), points.last())))
-        assertEquals(simple, StockAnalysisNarrativeGenerator.generatePositionDetailed(values, gap).findings.single().text)
+        assertEquals(simple, StockAnalysisNarrativeGenerator.generate(values, gap).findings.single().text)
         for (text in listOf(simple, StockAnalysisNarrativeGenerator.generateDetailed(values).findings.single().text)) {
             for (phrase in listOf("複数年分", "履歴がない", "履歴不足", "データがない", "比較できません")) assertFalse(text, text.contains(phrase))
         }
@@ -180,7 +180,7 @@ class StockAnalysisNarrativeGeneratorTest {
             "equity_ratio" to -5.0, "operating_margin" to -25.0, "fcf_margin" to -35.0, "dividend_growth_years" to 25.0)
         for (values in listOf(baseline, extremes)) {
             val score = StockAnalysisNarrativeGenerator.generate(values)
-            val short = StockAnalysisNarrativeGenerator.generatePositionDetailed(values, rich)
+            val short = StockAnalysisNarrativeGenerator.generate(values, rich)
             assertEquals(score.score, short.score)
             assertEquals(score.combinationIndex, short.combinationIndex)
             short.findings.forEach { finding ->
@@ -202,8 +202,8 @@ class StockAnalysisNarrativeGeneratorTest {
 
     @Test fun extremeFiniteInputsDoNotLeakArithmeticOverflowIntoComments() {
         val overflow = context("equity_ratio", listOf(-Double.MAX_VALUE, Double.MAX_VALUE))
-        val normal = StockAnalysisNarrativeGenerator.generatePositionDetailed(mapOf("equity_ratio" to 45.0))
-        val result = StockAnalysisNarrativeGenerator.generatePositionDetailed(mapOf("equity_ratio" to 45.0), overflow)
+        val normal = StockAnalysisNarrativeGenerator.generate(mapOf("equity_ratio" to 45.0))
+        val result = StockAnalysisNarrativeGenerator.generate(mapOf("equity_ratio" to 45.0), overflow)
         assertEquals(normal.findings.single().text, result.findings.single().text)
         val huge = StockAnalysisNarrativeGenerator.generateDetailed(
             mapOf("equity_ratio" to 45.0), context("equity_ratio", listOf(1.0, 1e100))

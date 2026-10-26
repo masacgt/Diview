@@ -18,7 +18,8 @@ data class StockAnalysisFinding(
     val score: Int,
     val position: BandPosition,
     val text: String,
-    val combinationDigit: Int
+    val combinationDigit: Int,
+    val evaluationPositionLabel: String? = null
 )
 
 data class StockAnalysisNarrative(
@@ -255,7 +256,9 @@ object StockAnalysisNarrativeGenerator {
             } else {
                 String.format(Locale.JAPAN, "%.2f%s", value, rule.unit)
             }
-            val findingText = StockMetricCommentary.comment(
+            val findingText = if (textStyle == TextStyle.EVALUATION_POSITION) {
+                StockEvaluationPositionComment.threshold(value, rule.cutoffs, rule.unit)
+            } else StockMetricCommentary.comment(
                 rule.key, value, positionBandExplanations.getValue(rule.key)[bandIndex], context,
                 detailed = textStyle == TextStyle.DIVIDEND_CONTINUITY
             )
@@ -268,7 +271,12 @@ object StockAnalysisNarrativeGenerator {
                 score = band.score,
                 position = position,
                 text = findingText,
-                combinationDigit = digit
+                combinationDigit = digit,
+                evaluationPositionLabel = if (textStyle != TextStyle.EVALUATION_POSITION) null else when (bandIndex) {
+                    0 -> if (value == rule.cutoffs.first()) "上側境界上" else "上側境界未満"
+                    rule.cutoffs.size -> "下側境界超"
+                    else -> null
+                }
             )
             weightedScore += band.score * rule.weight
             totalWeight += rule.weight

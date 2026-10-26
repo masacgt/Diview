@@ -244,3 +244,5 @@
 - yfinance同期測定記録 `e3dc666b` はmainに含まれることを確認した。今回追加のコード変更はなく、ブランチ削除後のリモート確認では未統合扱いの5本が残っている。
 
 - [x] Integrate pending category labels and contextual financial-history comments while retaining current main labels and unrelated dirty worktrees. Evidence: JDK 17 build, 191 Android unit tests, 70 Worker tests, five emulator UI tests, and matching physical/emulator APK hashes; see `ai_docs/branch-integration-20261026.md`.
+
+- [x] Separate the four Stock Detail evaluation panels into numeric band/boundary/position/distance comments, retaining dividend-continuity explanations in the dedicated card. Evidence: `StockEvaluationPositionComment` uses real cutoffs and percentage-point gaps, with explicit open-ended/equality handling; all 198 unit tests and the JDK 17 build pass. Physical RFCNC0E4H8J and emulator-5560 show all four numeric panels and the unchanged continuity explanation; installed APK SHA-256 matches the build (`1b8b5eaf1a5786ac4df6e2f327e328c749df93283639c32a18a16c59b8b25cc9`), with no fresh AndroidRuntime fatal entries.

@@ -60,7 +60,7 @@ import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.StockAnalysisNarrative
 import com.kurogane.dividend.model.StockAnalysisNarrativeGenerator
-import com.kurogane.dividend.model.StockDetailCommentGenerator
+import com.kurogane.dividend.model.StockEvaluationPositionComment
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import com.kurogane.dividend.model.ShareholderBenefit
 import com.kurogane.dividend.model.StockClimate
@@ -517,8 +517,8 @@ fun StockDetailScreen(
                 !hasYieldHistory -> StockAnalysisPositionItem(
                     label = "配当利回り", formattedValue = currentYieldText, bandLabel = "過去実績未取得",
                     positionLabel = "比較基準なし", score = null,
-                    text = StockDetailCommentGenerator.dividendYield(
-                        currentHolding.yieldRate, Double.NaN, Double.NaN, Double.NaN, analysisContext
+                    text = StockEvaluationPositionComment.yield(
+                        currentHolding.yieldRate, Double.NaN, Double.NaN, Double.NaN
                     )
                 )
                 else -> {
@@ -543,12 +543,11 @@ fun StockDetailScreen(
                             "過去平均未満" -> 60
                             else -> 40
                         },
-                        text = StockDetailCommentGenerator.dividendYield(
+                        text = StockEvaluationPositionComment.yield(
                             yield,
                             profile.yieldRangeMin,
                             profile.yieldRangeAvg,
-                            profile.yieldRangeMax,
-                            analysisContext
+                            profile.yieldRangeMax
                         )
                     )
                 }
@@ -570,17 +569,13 @@ fun StockDetailScreen(
     val growthPositionItems = buildList {
         positionNarrative.findings.firstOrNull { it.key == "dividend_growth_years" }?.let { finding ->
             add(
-                finding.toStockAnalysisPositionItem().copy(
-                    text = StockDetailCommentGenerator.dividendIncreaseYears(
-                        finding.value.toInt(), finding.bandLabel, finding.position.label, analysisContext
-                    )
-                )
+                finding.toStockAnalysisPositionItem()
             )
         } ?: add(
             StockAnalysisPositionItem(
                 label = "連続増配年数", formattedValue = "未取得", bandLabel = "評価不可",
                 positionLabel = "データなし", score = null,
-                text = "配当額の増え方が利益成長に沿うかを確認します。将来の増配余力は、配当性向、FCFと最新の配当方針も合わせて見ます。"
+                text = "連続増配年数が未取得のため、判定帯・帯内位置・境界との差は算出できません。"
             )
         )
 
@@ -591,13 +586,13 @@ fun StockDetailScreen(
             val ranges = listOf(0.0 to 1.0, 1.0 to 3.0, 3.0 to 5.0, 5.0 to 10.0, 10.0 to 25.0)
             val scores = listOf(40, 55, 70, 85, 100)
             val range = ranges[bandIndex]
-            val position = positionWithinBand(years, range.first, range.second)
+            val position = if (bandIndex == 4) "下側境界超" else positionWithinBand(years, range.first, range.second)
             add(
                 StockAnalysisPositionItem(
                     label = "非減配年数", formattedValue = "${profile.noCutYears}年",
                     bandLabel = bandLabels[bandIndex], positionLabel = position,
                     score = scores[bandIndex],
-                    text = StockDetailCommentGenerator.nonCutYears(profile.noCutYears, bandLabels[bandIndex], position, analysisContext)
+                    text = StockEvaluationPositionComment.threshold(years, listOf(1.0, 3.0, 5.0, 10.0), "年", minimum = 0.0)
                 )
             )
         } else {
@@ -605,7 +600,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = "非減配年数", formattedValue = "未取得", bandLabel = "評価不可",
                     positionLabel = "比較期間不足", score = null,
-                    text = "配当維持の姿勢と、利益が落ちた際の対応を確認します。増配の勢いとは分けて、利益と現金収支に無理がないかを見ます。"
+                    text = "非減配年数の比較期間が不足しているため、判定帯・帯内位置・境界との差は算出できません。"
                 )
             )
         }
@@ -627,13 +622,7 @@ fun StockDetailScreen(
                     label = cagrLabel, formattedValue = profile.growthRate.financialSignedText(1, "%"),
                     bandLabel = cagrBand, positionLabel = cagrPosition,
                     score = when { profile.growthRate > 0.0 -> 85; profile.growthRate == 0.0 -> 65; else -> 40 },
-                    text = StockDetailCommentGenerator.annualDividendCagr(
-                        profile.growthRate,
-                        isCalendarYearDividendHistory,
-                        cagrBand,
-                        cagrPosition,
-                        analysisContext
-                    )
+                    text = StockEvaluationPositionComment.cagr(profile.growthRate)
                 )
             )
         } else {
@@ -641,7 +630,7 @@ fun StockDetailScreen(
                 StockAnalysisPositionItem(
                     label = cagrLabel, formattedValue = "未取得", bandLabel = "評価不可",
                     positionLabel = "比較期間不足", score = null,
-                    text = "配当額の伸びと、利益や現金創出の関係を確認します。途中の減配や一時的な増額にも注意し、最新の配当方針も合わせて見ます。"
+                    text = "配当CAGRの比較期間が不足しているため、0%の判定境界に対する位置と差は算出できません。"
                 )
             )
         }
@@ -715,7 +704,7 @@ fun StockDetailScreen(
                     label = "銘柄配当依存度", formattedValue = "$divDependencyStr%", bandLabel = band,
                     positionLabel = position,
                     score = when { divDependency <= 10.0 -> 85; divDependency <= 25.0 -> 55; else -> 35 },
-                    text = StockDetailCommentGenerator.dividendDependency(divDependency, band, position, analysisContext)
+                    text = StockEvaluationPositionComment.threshold(divDependency, listOf(10.0, 25.0), "%", minimum = 0.0)
                 )
             )
         } else {
@@ -746,7 +735,7 @@ fun StockDetailScreen(
                     bandLabel = impactBand,
                     positionLabel = impactPosition,
                     score = when { cutImpactRatio <= 5.0 -> 85; cutImpactRatio <= 12.5 -> 55; else -> 35 },
-                    text = StockDetailCommentGenerator.halfDividendImpact(cutImpactRatio, impactBand, impactPosition, analysisContext)
+                    text = StockEvaluationPositionComment.threshold(cutImpactRatio, listOf(5.0, 12.5), "%", minimum = 0.0)
                 )
             )
         } else {
@@ -775,13 +764,7 @@ fun StockDetailScreen(
                     label = "$cleanSectorName セクター集中度", formattedValue = "$sectorDependencyStr%",
                     bandLabel = band, positionLabel = position,
                     score = when { sectorDependency <= 20.0 -> 85; sectorDependency <= 30.0 -> 55; else -> 35 },
-                    text = StockDetailCommentGenerator.sectorConcentration(
-                        cleanSectorName,
-                        sectorDependency,
-                        band,
-                        position,
-                        analysisContext
-                    )
+                    text = StockEvaluationPositionComment.threshold(sectorDependency, listOf(20.0, 30.0), "%", minimum = 0.0)
                 )
             )
         } else {
@@ -3889,7 +3872,7 @@ private fun com.kurogane.dividend.model.StockAnalysisFinding.toStockAnalysisPosi
         label = label,
         formattedValue = formattedValue,
         bandLabel = bandLabel,
-        positionLabel = position.label,
+        positionLabel = evaluationPositionLabel ?: position.label,
         score = score,
         text = text
     )
