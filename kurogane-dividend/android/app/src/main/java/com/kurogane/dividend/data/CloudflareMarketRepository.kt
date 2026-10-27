@@ -14,6 +14,9 @@ import java.net.URI
 import java.io.IOException
 import java.time.LocalDate
 
+private val defaultMarketConnectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection }
+private val sharedMarketRequests = MarketRequestSharing()
+
 data class CloudflareSearchHit(
     val code: String,
     val name: String,
@@ -200,8 +203,11 @@ data class CloudflareUpcomingDividendEvent(
 class CloudflareMarketRepository(
     private val baseUrl: String = BuildConfig.DIVIEW_D1_API_BASE_URL,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection }
+    private val connectionFactory: (URL) -> HttpURLConnection = defaultMarketConnectionFactory
 ) {
+    // Production repositories used by screens and WorkManager share in-flight I/O.
+    // Injected transports remain isolated so tests/custom endpoints cannot cross-talk.
+    private val requests = if (connectionFactory === defaultMarketConnectionFactory) sharedMarketRequests else MarketRequestSharing()
     @Volatile
     private var cachedSearchCatalogQuotes: CachedSearchCatalogQuotes? = null
     private val searchCatalogQuotesLock = Any()
@@ -310,22 +316,26 @@ class CloudflareMarketRepository(
                     return@synchronized cached.quotesByCode
                 }
             }
-            val rows = getJson("/api/v1/search-catalog").optJSONArray("items")
-                ?: throw IOException("Cloudflareの銘柄カタログにitemsがありません")
-            val quotes = buildMap {
-                for (index in 0 until rows.length()) {
-                    val row = rows.optJSONObject(index) ?: continue
-                    val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT)
-                    if (!isSecurityCode(code)) continue
-                    val quote = parseSearchQuote(row) ?: continue
-                    put(code, quote)
-                }
-            }
-            if (quotes.isNotEmpty()) {
-                cachedSearchCatalogQuotes = CachedSearchCatalogQuotes(lockedNow, quotes)
-            }
-            quotes
+            cacheSearchCatalog(getJson("/api/v1/search-catalog"), lockedNow)
         }
+    }
+
+    private fun cacheSearchCatalog(root: JSONObject, loadedAt: Long): Map<String, CloudflareSearchQuote> {
+        val rows = root.optJSONArray("items")
+            ?: throw IOException("Cloudflareの銘柄カタログにitemsがありません")
+        val quotes = buildMap {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT)
+                if (!isSecurityCode(code)) continue
+                val quote = parseSearchQuote(row) ?: continue
+                put(code, quote)
+            }
+        }
+        // Empty responses must not leave an older dividend or price snapshot active.
+        cachedSearchCatalogQuotes = quotes.takeIf { it.isNotEmpty() }
+            ?.let { CachedSearchCatalogQuotes(loadedAt, it) }
+        return quotes
     }
 
     private fun parseSearchQuotes(root: JSONObject, allowedCodes: Set<String>): Map<String, CloudflareSearchQuote> {
@@ -366,11 +376,13 @@ class CloudflareMarketRepository(
         const val NANOS_PER_MILLISECOND = 1_000_000L
     }
 
-    suspend fun getSecurity(code: String, allowCatalogFallback: Boolean = true): CloudflareSecurity? = withContext(ioDispatcher) {
+    suspend fun getSecurity(code: String, allowCatalogFallback: Boolean = true,
+                           includeHistoryBounds: Boolean = true): CloudflareSecurity? = withContext(ioDispatcher) {
         val normalized = PortfolioMath.normalizeCode(code)
         require(isSecurityCode(normalized)) { "銘柄コードが正しくありません" }
         val safeCode = URLEncoder.encode(normalized, Charsets.UTF_8.name())
-        val root = try { getJson("/api/v1/securities/$safeCode") }
+        val historyQuery = if (includeHistoryBounds) "" else "?include_history_bounds=false"
+        val root = try { getJson("/api/v1/securities/$safeCode$historyQuery") }
             catch (error: MarketHttpException) { if (error.status == 404) return@withContext null else throw error }
         val dividend = root.optJSONObject("dividend")
         // Current annual DPS and yield are provided from the IRBANK v2 dividend index.
@@ -478,7 +490,13 @@ class CloudflareMarketRepository(
 
     /** Fetches the published end-of-day catalog. Prices are never refreshed live by the app. */
     suspend fun fetchPriceCatalogSnapshot(): CloudflarePriceCatalogSnapshot = withContext(ioDispatcher) {
-        val root = getJson("/api/v1/search-catalog")
+        // Keep explicit catalog refreshes fresh, while making their response
+        // available to subsequent search/detail fallback without another download.
+        val root = synchronized(searchCatalogQuotesLock) {
+            getJson("/api/v1/search-catalog").also {
+                cacheSearchCatalog(it, System.nanoTime() / NANOS_PER_MILLISECOND)
+            }
+        }
         val rows = root.optJSONArray("items") ?: error("Cloudflareの銘柄カタログにitemsがありません")
         val catalogDate = root.optString("market_data_date").takeIf(String::isNotBlank)
         val quotes = buildMap {
@@ -777,6 +795,12 @@ class CloudflareMarketRepository(
     private fun getJson(path: String, bypassHttpCache: Boolean = false): JSONObject {
         val base = URI(baseUrl)
         require(base.scheme == "https" && !base.host.isNullOrBlank() && base.userInfo == null && base.query == null && base.fragment == null) { "Cloudflare API URLは認証情報を含まないHTTPSで設定してください" }
+        val key = "${baseUrl.trimEnd('/')}$path|bypass=$bypassHttpCache"
+        // Parse separately for each caller; JSONObject is mutable.
+        return JSONObject(requests.read(key) { readJsonBody(path, bypassHttpCache) })
+    }
+
+    private fun readJsonBody(path: String, bypassHttpCache: Boolean): String {
         val connection = connectionFactory(URL(baseUrl.trimEnd('/') + path))
         try {
             connection.requestMethod = "GET"
@@ -792,7 +816,7 @@ class CloudflareMarketRepository(
             val status = connection.responseCode
             if (status !in 200..299) throw MarketHttpException(status)
             val body = connection.inputStream.use { it.readBoundedBytes(8 * 1024 * 1024).toString(Charsets.UTF_8) }
-            return JSONObject(body)
+            return body
         } finally {
             connection.disconnect()
         }

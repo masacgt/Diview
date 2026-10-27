@@ -1,5 +1,8 @@
 # Todo
 
+- [x] Implement bounded fetch-efficiency improvements while preserving display/notification contracts. Evidence: Worker 66/66, Android JDK 17 unit tests 220/220, each device 24 instrumentation tests, and 66/66 before/after PNGs pixel-identical; source and installed APK hashes match. See `data-fetch-efficiency-implementation-20261027.md`.
+- [ ] Publish the tested production-only Worker delta after explicit approval, then compare 27 production API responses and confirm the opt-out path. Evidence: the deployed version 67 and its candidate passed 108 mock response comparisons and upload dry-run; automatic approval review rejected the actual upload before execution.
+
 - [x] Share Stock Detail forecast yield and no-dividend status with the buy-signal summary/detail and yield comparisons. Evidence: `StockDetailScreen.kt`; JDK 17 build and 216 unit tests pass, and emulator Compose regression confirms 2.67% under a stale zero quote; both installed APK hashes match. See `ai_docs/stock-signal-yield-20261027.md`.
 - [ ] Visually verify live 8953 production buy-signal yield on physical SCG01; the final integrated build passes 216 unit tests and isolated buy-signal UI regression on both SCG01 and emulator, with matching installed APK hashes, but live 8953 values remain unverified.
 

@@ -12,6 +12,34 @@ import java.net.SocketTimeoutException
 import java.net.URL
 
 class CloudflareMarketRepositoryTest {
+    @Test fun catalogRefreshSeedsFallbackWithoutChangingEitherProjectionOrRefreshFreshness() = runBlocking {
+        val urls = mutableListOf<String>()
+        val catalog = """{"market_data_date":"2026-10-26","items":[
+            {"code":"7203","price":3000,"quote_date":"2026-10-26","annual_dividend_per_share":100,"yield_rate":3},
+            {"code":"25935","price":4000,"annual_dividend_per_share":80,"yield_rate":2,"dividend_period":"trailing_12_months"}
+        ]}"""
+        val detail = """{"code":"7203","name":"Toyota","market_price":null}"""
+        val repo = repository(mutableListOf(Connection(200, catalog), Connection(200, detail),
+            Connection(200, catalog.replace("3000", "3100"))), urls)
+        val first = repo.fetchPriceCatalogSnapshot()
+        assertEquals(3000.0, first.quotes.getValue("7203").price, 0.0)
+        assertEquals(2.0, first.quotes.getValue("25935").yieldRate!!, 0.0)
+        assertEquals(3000.0, repo.getSecurity("7203")!!.marketPrice!!, 0.0)
+        assertEquals(1, urls.count { "search-catalog" in it })
+        assertEquals(3100.0, repo.fetchPriceCatalogSnapshot().quotes.getValue("7203").price, 0.0)
+        assertEquals(2, urls.count { "search-catalog" in it })
+    }
+
+    @Test fun historyBoundsCanBeOmittedWithoutChangingTheSecurityParser() = runBlocking {
+        val urls = mutableListOf<String>()
+        val repo = repository(mutableListOf(Connection(200,
+            """{"code":"7203","name":"Toyota","market_price":3000,"dividend":{"yield_basis":"annual","annual_dps":100}}""")), urls)
+        val result = repo.getSecurity("7203", allowCatalogFallback = false, includeHistoryBounds = false)!!
+        assertEquals(3000.0, result.marketPrice!!, 0.0)
+        assertEquals(100.0, result.annualDividendPerShare!!, 0.0)
+        assertTrue(urls.single().endsWith("?include_history_bounds=false"))
+    }
+
     @Test fun targetedRefreshNeverDownloadsTheCatalogForMissingFields() = runBlocking {
         val urls = mutableListOf<String>()
         val repo = repository(mutableListOf(

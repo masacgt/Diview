@@ -1,5 +1,7 @@
 # Trouble
 
+- A current main Worker can contain unrelated unpublished behavior. During fetch-efficiency work, production was still version 67 (financial unit contract v6), while main also included the unpublished security-category route. Preserve the deployed module, prepare only the intended delta, and compare its responses independently before publishing; a local-main test pass does not prove a wholesale deployment preserves production output. The targeted candidate passed 108 differential cases; publication remained pending explicit approval after the automatic reviewer rejected upload.
+
 - Shared emulator installations can invalidate an otherwise successful build verification. During category-display checks on `emulator-5560`, the installed APK hash differed from the APK built in the task worktree, and category requests were absent. A dedicated read-only `DiviewReleaseAudit35` instance on port 5572, with its data under the task's ignored Android build directory, passed all five category/list tests; the installed APK hash matched before and after the run. Select JDK 17 and verify APK hashes around device tests when other tasks may install the same package.
 
 - The multi-year dividend-history refresh uses an expression-bodied `withLock` function; its only closing brace closes the lambda. An extra brace closes `DividendViewModel` early and triggers unrelated unresolved-reference errors. JDK 17 `assembleDebug` succeeded after removing the extra brace.

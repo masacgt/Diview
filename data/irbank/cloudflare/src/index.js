@@ -1,6 +1,7 @@
 import { readFeedback, saveFeedback } from './feedback.mjs';
 import { safelyDeliverFeedbackEmail, retryFeedbackEmails } from './feedback-email.mjs';
 import financialUnitContract from './financial_unit_contract.json' with { type: 'json' };
+import { withMarketReadCache, sharedMarketJson, sharedMarketDocuments } from './market-read-cache.mjs';
 
 const ANALYSIS_CONCURRENCY = 8;
 
@@ -229,13 +230,12 @@ async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
   const normalizedCode = yfinanceV2Code(displayCode);
   if (normalizedCode) {
     const symbol = `${normalizedCode}.T`;
-    const [currentObject, profileObject] = await Promise.all([
-      env.MARKET_DATA.get(`${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`),
-      env.MARKET_DATA.get(`${YFINANCE_V2_ROOT}/securities/${symbol}/profile.json`),
+    const [current, profileDocument] = await Promise.all([
+      readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`),
+      readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/profile.json`),
     ]);
-    if (currentObject) {
-      const current = await currentObject.json();
-      const profile = profileObject ? await profileObject.json() : {};
+    if (current) {
+      const profile = profileDocument || {};
       const price = current.price || {};
       const valuation = calculateDailyValuation(current);
       const summary = {
@@ -481,11 +481,17 @@ function yieldSourceFromDividend(yieldRate, irbankYield, irbankSource, yfinanceY
 }
 
 async function readV2Json(env, key) {
-  const object = await env.MARKET_DATA?.get(key);
-  return object ? object.json() : null;
+  return sharedMarketJson(env, key, async () => {
+    const object = await env.MARKET_DATA?.get(key);
+    return object ? object.json() : null;
+  });
 }
 
 async function listV2Documents(env, prefix) {
+  return sharedMarketDocuments(env, prefix, () => loadV2Documents(env, prefix));
+}
+
+async function loadV2Documents(env, prefix) {
   const documents = [];
   let cursor;
   do {
@@ -1533,6 +1539,7 @@ async function splitLegacyMarketQueueMessage(env, body) {
 }
 
 async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
+  env = withMarketReadCache(env);
   const symbol = yfinanceV2Symbol(security.security_code_display);
   const [marketData, v2Payload, yfinanceCurrent] = await Promise.all([
     latestMarketForSecurity(env, security.security_code_display, marketIndex),
@@ -2043,6 +2050,7 @@ function yfinanceV2Code(value) {
 
 export default {
   async fetch(request, env, ctx) {
+    env = withMarketReadCache(env);
     const url = new URL(request.url);
 
     const config = await backendConfig(env);
@@ -2846,11 +2854,15 @@ export default {
       const symbol = yfinanceV2Symbol(code);
       if (!symbol) return json({ error: 'invalid_security_code' }, 400);
       const base = `${YFINANCE_V2_ROOT}/securities/${symbol}`;
+      // Older clients retain the complete retrieval metadata. Current screens
+      // can explicitly omit the unrendered, potentially unbounded history scan.
+      const includeHistoryBounds = url.searchParams.get('include_history_bounds') !== 'false';
       const [profile, current, sync, dividendHistoryBounds, irbankDividendIndex] = await Promise.all([
         readV2Json(env, `${base}/profile.json`),
         readV2Json(env, `${base}/current.json`),
         readV2Json(env, `${base}/sync.json`),
-        readV2DividendHistoryBounds(env, symbol),
+        includeHistoryBounds ? readV2DividendHistoryBounds(env, symbol)
+          : Promise.resolve({ status: 'not_requested', start: null, end: null }),
         readIrbankDividendIndex(env, code),
       ]);
       if (!profile || !current) return json({ error: 'security_data_unavailable' }, 503);

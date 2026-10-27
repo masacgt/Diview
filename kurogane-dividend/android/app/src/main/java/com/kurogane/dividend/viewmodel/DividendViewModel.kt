@@ -2487,7 +2487,9 @@ class DividendViewModel @JvmOverloads constructor(
         if (!shouldFetch) return cached
         try {
             val fetched = runCatchingCancellable {
-                cloudflareSecuritySlots.withPermit { marketRepository.getSecurity(normalized, allowCatalogFallback = false) }
+                cloudflareSecuritySlots.withPermit {
+                    marketRepository.getSecurity(normalized, allowCatalogFallback = false, includeHistoryBounds = false)
+                }
             }.onFailure {
                 recordFetchOutcome(attemptKey, true)
                 android.util.Log.w("CloudflareMarket", "銘柄情報の取得に失敗しました: $normalized", it)
@@ -2667,6 +2669,9 @@ class DividendViewModel @JvmOverloads constructor(
                 val codesForBatch = codeBatch.filter { code ->
                     missingByCode[code].orEmpty().any { it in monthBatch }
                 }
+                val monthsForBatch = monthBatch.filter { month ->
+                    codesForBatch.any { code -> month in missingByCode[code].orEmpty() }
+                }
                 if (codesForBatch.isNotEmpty()) {
                     val attemptEditor = marketPreferences.edit()
                     codesForBatch.forEach { code ->
@@ -2677,12 +2682,12 @@ class DividendViewModel @JvmOverloads constructor(
                     }
                     attemptEditor.apply()
                     try {
-                        marketRepository.fetchMonthlyPriceHistory(codesForBatch, monthBatch).forEach { series ->
+                        marketRepository.fetchMonthlyPriceHistory(codesForBatch, monthsForBatch).forEach { series ->
                             val merged = readCachedMonthlyPrices(series.code).toMutableMap()
                             series.prices.forEach { price -> merged[price.month] = price }
                             if (merged.isNotEmpty()) saveCachedMonthlyPrices(series.code, merged)
                         }
-                        codesForBatch.forEach { code -> monthBatch.forEach { month ->
+                        codesForBatch.forEach { code -> monthBatch.filter { it in missingByCode[code].orEmpty() }.forEach { month ->
                             recordFetchOutcome("monthly_price_fetch_attempt_at_${code}_$month", false)
                         } }
                     } catch (error: Exception) {

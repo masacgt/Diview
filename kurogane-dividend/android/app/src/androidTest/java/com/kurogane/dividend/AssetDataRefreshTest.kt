@@ -29,6 +29,8 @@ class AssetDataRefreshTest {
     private val app = AuditApplication()
     private val models = ViewModelStore()
     private val requests = CopyOnWriteArrayList<String>()
+    private val requestUrls = CopyOnWriteArrayList<String>()
+    @Volatile private var monthlyFixture = false
     @Volatile private var offline = false
     @Volatile private var emptyFinancial = false
     @Volatile private var forecastDps: Double? = null
@@ -42,6 +44,7 @@ class AssetDataRefreshTest {
             object : HttpURLConnection(url) {
                 override fun getResponseCode(): Int {
                     requests.add(url.path)
+                    requestUrls.add(url.toString())
                     if (offline) throw IOException("test offline")
                     return 200
                 }
@@ -63,6 +66,8 @@ class AssetDataRefreshTest {
                         }
                         url.path.endsWith("dividend-months") ->
                             """{"as_of":"2026-10-25","items":[{"symbol":"7203.T","months":[6,12],"events":[]},{"symbol":"2914.T","months":[3,9],"events":[]}]}"""
+                        url.path.endsWith("monthly-price-history") && monthlyFixture ->
+                            """{"items":[{"code":"7203","prices":[{"month":"2024-12","date":"2024-12-30","close":2400},{"month":"2025-12","date":"2025-12-30","close":2800}]}]}"""
                         else -> """{"items":[]}"""
                     }
                     return ByteArrayInputStream(body.toByteArray())
@@ -263,5 +268,22 @@ class AssetDataRefreshTest {
         // A matching split response is covered by the Repository tests; here verify it reaches HTTP again.
         runCatching { runBlocking { vm.loadShareSplitHistory("7203", from, to) } }
         assertEquals(2, requests.count { it.contains("share-split-history") })
+    }
+
+    @Test fun monthlyRefreshRequestsOnlyDueMonthsAndReturnsTheCompleteCachedSeries() {
+        monthlyFixture = true
+        val vm = model()
+        val first = runBlocking { vm.loadMonthlyPriceHistory(listOf("7203"), listOf("2024-12")) }
+        assertEquals(2400.0, first.single().prices.single().close, 0.0)
+        val result = runBlocking {
+            vm.loadMonthlyPriceHistory(listOf("7203"), listOf("2024-12", "2025-12"))
+        }.single().prices
+        assertEquals(listOf("2024-12", "2025-12"), result.map { it.month })
+        assertEquals(listOf(2400.0, 2800.0), result.map { it.close })
+        val monthlyRequests = requestUrls.filter { "monthly-price-history" in it }
+        assertEquals(2, monthlyRequests.size)
+        assertTrue(monthlyRequests.last().endsWith("months=2025-12"))
+        runBlocking { vm.loadMonthlyPriceHistory(listOf("7203"), listOf("2024-12", "2025-12")) }
+        assertEquals(2, requestUrls.count { "monthly-price-history" in it })
     }
 }
