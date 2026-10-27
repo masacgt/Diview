@@ -12,11 +12,19 @@ Regression coverage includes the reported 8953 values (6018 / 106900 * 100 = 5.6
 - Emulator `AssetDataRefreshTest#forecastReplacesNoDividendQuoteAndSurvivesCachedRefreshForEveryHeldJapaneseCode` passed (1 test, 9.771 seconds), including the buy-signal `2.67%` assertion under a zero/no-dividend quote.
 - Installed and launched on emulator-5560 and physical RFCNC0E4H8J (SCG01). Both installed base.apk hashes match the built APK: `45700f86b3e0d8b291dee3b08472ab8f9bd110801c06101e6c84deca3cf391eb`.
 - Physical UI and live 8953 production values were not visually verified; 8953 numeric expectations are covered by the unit regression. Build warnings were existing Compose deprecations, SDK metadata version and unstripped native library notices.
-- Publication authorized on 2026-10-27. The buy-signal correction is being committed and integrated with the reviewed asset-card acquisition-yield change; final validation and publication evidence will be recorded below.
+- Publication authorized on 2026-10-27. Correction commit `c90b58f2` is based on refreshed main `594dd116`, which already includes acquisition-yield caption commit `dcb2e98b`. Rebase skipped our duplicate acquisition-caption cherry-pick; `git diff 6e85b5a5 HEAD -- kurogane-dividend/android` confirms identical validated Android sources.
+- Final integrated JDK 17 unit/debug/test-APK build passed (216 unit tests). The isolated buy-signal Compose regression passed on emulator-5560 (8.305 seconds) and physical RFCNC0E4H8J (4.685 seconds). Both devices installed/launched the exact same-worktree APK, and both base.apk hashes match `6c165cdef2535ab547189e6f2d26cab3325ff4e2689a8563c284a0ab3a6056c1`. These are synthetic regression values; live 8953 production UI remains unverified.
+
+## Branch integration review
+
+- Reviewed 99 non-ancestor local/remote refs and all 103 registered worktrees; 13 refs were patch-equivalent at audit time. Preserve dirty worktrees, attachments and CSV samples, including historical temporary worktrees with deleted-file states.
+- Other unmatched historical patches are already represented or superseded on main (stock comments/finite metric fallback, category labels, financial revision, yfinance contracts/tests, J-Quants tools and expanded legacy audit). Existing review records in `branch-integration-20261027.md`, `asset-acquisition-yield-main-integration-20261027.md` and `todo.md` remain applicable. Current code confirms hidden schedule method labels and removed company-info status. J-Quants v3 source matches the historical tool patch; current legacy audit is expanded.
+- Exclude the `67a63751` lineage (14 CSV paths). No historical branches or worktrees are deleted or blindly merged. Final main diff contains only this buy-signal correction, its regressions and project notes; the asset-caption change is already in main.
+- Publish the correction branch and fast-forward main without force after a final fetch and ancestry/diff checks.
 
 Worktree: `C:/Codex/Diview/.task-worktrees/stock-signal-yield`, base main `dd20fb86`.
 
-## Reproduce and optional publication
+## Reproduce build/install and publication
 
 ```powershell
 $taskRoot = 'C:\Codex\Diview\.task-worktrees\stock-signal-yield'
@@ -34,7 +42,7 @@ foreach ($targetSerial in @('emulator-5560', 'RFCNC0E4H8J')) {
     if ($LASTEXITCODE -ne 0) { throw "Install failed: $targetSerial" }
     & "$env:ANDROID_HOME\platform-tools\adb.exe" -s $targetSerial shell am start -n com.kurogane.dividend/.MainActivity
 }
-# Optional commit/push of only this correction:
+# Publication commands used after committing only this correction:
 Set-Location $taskRoot
 git add -- ai_docs/stock-signal-yield-20261027.md ai_docs/todo.md kurogane-dividend/android/app/src/main/java/com/kurogane/dividend/ui/screens/StockDetailScreen.kt kurogane-dividend/android/app/src/test/java/com/kurogane/dividend/model/AnnualDividendResolverTest.kt kurogane-dividend/android/app/src/androidTest/java/com/kurogane/dividend/AssetDataRefreshTest.kt
 git diff --cached --check

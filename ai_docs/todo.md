@@ -1,7 +1,7 @@
 # Todo
 
 - [x] Share Stock Detail forecast yield and no-dividend status with the buy-signal summary/detail and yield comparisons. Evidence: `StockDetailScreen.kt`; JDK 17 build and 216 unit tests pass, and emulator Compose regression confirms 2.67% under a stale zero quote; both installed APK hashes match. See `ai_docs/stock-signal-yield-20261027.md`.
-- [ ] Visually verify live 8953 buy-signal yield on physical SCG01; installation/hash are confirmed, but physical UI and current live values remain unverified.
+- [ ] Visually verify live 8953 production buy-signal yield on physical SCG01; the final integrated build passes 216 unit tests and isolated buy-signal UI regression on both SCG01 and emulator, with matching installed APK hashes, but live 8953 values remain unverified.
 
 - [x] Prepare the shared asset/Stock Detail forecast resolver for main integration after reviewing local/remote branches and preserving dirty/CSV worktrees. Evidence: source matches validated `fd52cbf2`; JDK 17 unit/build tasks succeed with all 213 prior unit results current, all 12 prior UI/refresh cases pass, and both devices install/launch with matching APK hashes. See `ai_docs/asset-dividend-source-main-integration-20261027.md`.
 
@@ -278,3 +278,7 @@
 
 - Reviewed 97 local/remote refs not ancestral to `origin/main` and the registered worktrees. Integrate `1448897d` from `codex/startup-fetch-policy-20261027` onto `a1b7fb9f`; its effective diff is nine intended Android/test/note files, without CSVs, credentials, or generated APKs. Thirteen refs are patch-equivalent; remaining historical candidates contain the old CSV-bearing `67a63751` lineage or code/notes already represented or superseded on current main (including category labels, financial metric fallbacks, evaluation comments, yfinance tests, and the expanded legacy audit). Preserve those refs and all dirty worktrees.
 - Integration validation: application source is identical to the previously tested `1448897d`; explicit-JDK-17 `testDebugUnitTest` / `assembleDebug` recheck succeeded with tasks up-to-date. Existing evidence remains 215 JVM tests and 26 isolated emulator tests passing, plus installation and matching base-APK SHA-256 on the real device and emulator. Production-data transition timing and real-device visual acceptance remain open in the follow-up above.
+
+### Buy-signal yield main integration (2026-10-27)
+
+- [x] Integrate the forecast-based buy-signal fix onto latest main including the acquisition-yield caption. Evidence: `c90b58f2` on main base `594dd116`; 216 JDK 17 unit tests and both device UI regressions pass, and installed hashes match `6c165cde...a6056c1`. Reviewed 99 non-ancestor refs and 103 worktrees; historical/CSV-bearing and dirty work is preserved. See `stock-signal-yield-20261027.md`.
