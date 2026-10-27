@@ -1016,7 +1016,7 @@ fun WatchlistScreen(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                stringResource(R.string.watchlist_1_s_2_s , currentLabel, currentDirLabel),
+                                if (savedSortSelection == null) "登録順" else stringResource(R.string.watchlist_1_s_2_s , currentLabel, currentDirLabel),
                                 color = SoftGray,
                                 fontSize = AppTextSize.dense,
                                 fontWeight = FontWeight.Bold

@@ -23,6 +23,17 @@ class StockDetailResolverTest {
         assertEquals(2.5, stock.liveYield, 0.0)
     }
 
+    @Test fun displayedYieldUsesDisplayedPriceAndDividendInsteadOfAnOlderProviderYield() {
+        val stock = holding().copy(price = 3117.0, dps = 95.0, yfinanceYieldRate = 3.22,
+            irbankYieldRate = 3.22, irbankYieldDps = 95.0)
+        assertEquals(95.0 / 3117.0 * 100.0, stock.liveYield, 0.00001)
+    }
+
+    @Test fun confirmedZeroDividendDoesNotReuseAnOlderProviderYield() {
+        val stock = holding().copy(price = 3117.0, dps = 0.0, isNoDividendConfirmed = true, yfinanceYieldRate = 3.22)
+        assertEquals(0.0, stock.liveYield, 0.0)
+    }
+
     @Test fun mismatchedResponseIsRejected() {
         assertNull(StockDetailResolver.resolve("130A", emptyList(), emptyList(), CloudflareSecurity("9999", "誤応答", null, null)))
     }

@@ -226,6 +226,7 @@ fun AssetManagementScreen(
         }
     }
     val isPrivacyActive by viewModel.isPrivacyActive.collectAsStateWithLifecycle()
+    val calculationBasis by viewModel.calculationBasis.collectAsStateWithLifecycle()
     val selectedMonth by viewModel.selectedMonth.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
 
@@ -279,6 +280,7 @@ fun AssetManagementScreen(
 
     val displayedHoldings = remember(filteredHoldings, sortCriteria, sortDirection) {
         filteredHoldings.sortedWith { a, b ->
+            if (a.sortMissing != b.sortMissing) return@sortedWith if (a.sortMissing) 1 else -1
             val comp = if (sortCriteria == "code") a.code.compareTo(b.code) else a.sortValue.compareTo(b.sortValue)
             if (sortDirection == "desc") -comp else comp
         }
@@ -492,7 +494,7 @@ fun AssetManagementScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.AutoMirrored.Filled.TrendingUp, contentDescription = null, tint = if (totalGainVal >= 0) StatusSuccess else ErrorRed, modifier = Modifier.size(12.dp))
                                     Spacer(modifier = Modifier.width(3.dp))
-                                    val gainText = if (isPrivacyActive) "+¥••••••" else {
+                                    val gainText = if (isPrivacyActive) "+¥••••••" else if (summary.hasMissingValuation) "損益未取得" else {
                                         val sign = if (totalGainVal >= 0) "+" else ""
                                         "$sign¥${javaCurrencyFormat.format(totalGainVal.toLong())} ($sign${String.format(java.util.Locale.JAPAN, "%.1f", gainPctVal)}%)"
                                     }
@@ -511,6 +513,8 @@ fun AssetManagementScreen(
                                 fontFamily = FontFamily.SansSerif,
                                 letterSpacing = (-0.5).sp
                             )
+                        } else if (summary.hasMissingValuation) {
+                            Text("評価額未取得", fontSize = AppTextSize.hero, fontWeight = FontWeight.ExtraBold, color = OnSurface)
                         } else {
                             OdometerAmount(
                                 targetValue = totalAssetsVal.toLong(),
@@ -525,6 +529,9 @@ fun AssetManagementScreen(
                             fontWeight = FontWeight.Medium,
                             color = SoftGray
                         )
+                        if (summary.hasMissingValuation) {
+                            Text("価格または為替が未取得の銘柄があります", fontSize = AppTextSize.dense, color = OnSurfaceVariant)
+                        }
 
                         Spacer(modifier = Modifier.height(8.dp))
                         HorizontalDivider(color = BorderBlue, thickness = 0.5.dp)
@@ -554,14 +561,14 @@ fun AssetManagementScreen(
                                     Text(stringResource(R.string.asset_management_text_3), fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, color = SoftGray)
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_4) else resources.getString(R.string.add_holding_text_22, com.kurogane.dividend.model.formatFinancialAmountDisplay(totalAnnualDivVal)),
+                                        text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_4) else if (summary.hasMissingDividend) "配当未取得" else resources.getString(R.string.add_holding_text_22, com.kurogane.dividend.model.formatFinancialAmountDisplay(totalAnnualDivVal)),
                                         fontSize = AppTextSize.metric,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = NeonGreen
                                     )
                                     Spacer(modifier = Modifier.height(1.dp))
                                     Text(
-                                        text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_6) else resources.getString(R.string.asset_management_label_7, com.kurogane.dividend.model.formatFinancialAmountDisplay(netAnnualDivVal)),
+                                        text = if (isPrivacyActive) resources.getString(R.string.asset_management_label_6) else if (summary.hasMissingDividend) "一部銘柄の配当が未取得" else resources.getString(R.string.asset_management_label_7, com.kurogane.dividend.model.formatFinancialAmountDisplay(netAnnualDivVal)),
                                         fontSize = AppTextSize.dense,
                                         color = SoftGray
                                     )
@@ -585,7 +592,7 @@ fun AssetManagementScreen(
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Row(verticalAlignment = Alignment.Bottom) {
                                         Text(
-                                            text = if (isPrivacyActive) "•••" else String.format(java.util.Locale.JAPAN, "%.2f", avgYield),
+                                            text = if (isPrivacyActive) "•••" else if (summary.hasMissingIncludedDividend || (summary.hasMissingIncludedValuation && calculationBasis != "cost")) "未取得" else String.format(java.util.Locale.JAPAN, "%.2f", avgYield),
                                             fontSize = AppTextSize.metric,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = OnSurface
@@ -600,7 +607,7 @@ fun AssetManagementScreen(
                                     ) {
                                         Icon(badgeIcon, contentDescription = null, tint = badgeColor, modifier = Modifier.size(10.dp))
                                         Spacer(modifier = Modifier.width(2.dp))
-                                        Text(badgeText, fontSize = AppTextSize.dense, fontWeight = FontWeight.Black, color = badgeColor)
+                                        Text(if (summary.hasMissingIncludedDividend) "配当未取得" else if (summary.hasMissingIncludedValuation && calculationBasis != "cost") "評価額未取得" else badgeText, fontSize = AppTextSize.dense, fontWeight = FontWeight.Black, color = badgeColor)
                                     }
                                 }
                             }
@@ -622,7 +629,9 @@ fun AssetManagementScreen(
                 val currentMonthlyTarget = roadmapMonthlyTargets.firstOrNull { monthlyIncomeForRoadmap < it }
                     ?: roadmapMonthlyTargets.last()
                 val currentAnnualTarget = currentMonthlyTarget * 12
-                Card(
+                if (summary.hasMissingDividend) {
+                    Text("一部銘柄の配当が未取得のため、目標の進捗を表示できません。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                } else Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = CardDark),
@@ -1072,7 +1081,7 @@ fun AssetManagementScreen(
 
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
-                                        stringResource(R.string.add_holding_1_s , javaCurrencyFormat.format(curVal.toLong())),
+                                        if (holding.valuationJpy == null && holding.shares > 0) "評価額未取得" else stringResource(R.string.add_holding_1_s , javaCurrencyFormat.format(curVal.toLong())),
                                         fontWeight = FontWeight.Bold,
                                         color = OnSurface,
                                         fontSize = AppTextSize.body,
@@ -1080,7 +1089,7 @@ fun AssetManagementScreen(
                                     )
                                     val sign = if (diff >= 0) "+" else ""
                                     Text(
-                                        stringResource(R.string.asset_management_1_s_2_s_3_s_4_s , sign, javaCurrencyFormat.format(diff.toLong()), sign, String.format(java.util.Locale.JAPAN, "%.1f", diffPct)),
+                                        if (holding.valuationJpy == null && holding.shares > 0) "損益未取得" else stringResource(R.string.asset_management_1_s_2_s_3_s_4_s , sign, javaCurrencyFormat.format(diff.toLong()), sign, String.format(java.util.Locale.JAPAN, "%.1f", diffPct)),
                                         fontWeight = FontWeight.Bold,
                                         color = if (diff >= 0) StatusSuccess else ErrorRed,
                                         fontSize = AppTextSize.dense,
@@ -1099,18 +1108,18 @@ fun AssetManagementScreen(
                                 latestDividendChange >= 0.0 -> NeonGreenLight
                                 else -> ErrorRed
                             }
-                            val yieldValue = com.kurogane.dividend.model.formatDividendYieldDisplay(
+                            val yieldValue = if (!holding.hasKnownAnnualDividend || (calculationBasis == "cost" && holding.acqPrice <= 0.0) || (calculationBasis != "cost" && holding.price <= 0.0)) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(
                                 if (calculationBasis == "cost") holding.liveYoc else holding.liveYield,
                                 holding.isNoDividendConfirmed
                             )
                             val yieldDetail = resources.getString(
                                 R.string.asset_management_acquisition_yield_detail,
-                                com.kurogane.dividend.model.formatDividendYieldDisplay(
+                                if (!holding.hasKnownAnnualDividend || holding.acqPrice <= 0.0) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(
                                     holding.liveYoc,
                                     holding.isNoDividendConfirmed
                                 ).replace('%', '％')
                             )
-                            val annualDividendValue = if (annualDiv > 0) "¥${javaCurrencyFormat.format(annualDiv.toLong())}/年" else "¥0/年"
+                            val annualDividendValue = if (!holding.hasKnownAnnualDividend || holding.getEffectiveAnnualDividendJpy(taxRateMode) == null) "未取得" else if (annualDiv > 0) "¥${javaCurrencyFormat.format(annualDiv.toLong())}/年" else "¥0/年"
                             val dividendGrowthValue = latestDividendGrowth?.let {
                                 if (it == 0.0) "0.0%" else String.format(java.util.Locale.JAPAN, "%+.1f%%", it)
                             } ?: "0.0%"
@@ -1119,7 +1128,7 @@ fun AssetManagementScreen(
                                 "年額 $sign¥${javaCurrencyFormat.format(kotlin.math.abs(it).toLong())}"
                             } ?: "年額 ¥0"
                             val sharesValue = "${holding.shares}株"
-                            val sharesDetail = "@${holding.currency}${com.kurogane.dividend.model.formatStockPriceDisplay(holding.price, holding.code)}"
+                            val sharesDetail = if (holding.price <= 0.0) "価格未取得" else "@${holding.currency}${com.kurogane.dividend.model.formatStockPriceDisplay(holding.price, holding.code)}"
                             val metricCardModifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))

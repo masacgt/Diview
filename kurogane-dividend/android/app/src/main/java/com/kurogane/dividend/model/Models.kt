@@ -31,6 +31,7 @@ data class Holding(
     val yfinanceYieldRate: Double? = null
 ) {
     val priceUnit: Double get() = if (category == Category.FUND) 10_000.0 else 1.0
+    val hasKnownAnnualDividend: Boolean get() = shares <= 0 || dps > 0.0 || isNoDividendConfirmed
     val effectiveTaxFreeShares: Int get() =
         (taxFreeShares ?: if (PortfolioMath.isTaxFree(accountType)) shares else 0).coerceIn(0, shares.coerceAtLeast(0))
     val currencyFactor: Double get() = when {
@@ -38,7 +39,8 @@ data class Holding(
         currency == "$" -> usdJpyRate?.takeIf { it.isFinite() && it > 0 } ?: 0.0
         else -> 1.0
     }
-    val valuationJpy: JpyAmount? get() = PortfolioMath.holdingJpyAmount(this, price)
+    val valuationJpy: JpyAmount? get() =
+        if (shares > 0 && price <= 0.0) null else PortfolioMath.holdingJpyAmount(this, price)
     val costJpy: JpyAmount? get() = PortfolioMath.holdingJpyAmount(this, acqPrice)
     val annualDividendJpy: JpyAmount? get() = PortfolioMath.holdingJpyAmount(this, dps)
     val totalValuation: Double get() = valuationJpy?.value ?: 0.0
@@ -46,7 +48,9 @@ data class Holding(
     val gainLoss: Double get() = totalValuation - totalCost
     val gainLossPercent: Double get() = if (totalCost > 0) (gainLoss / totalCost) * 100 else 0.0
     val annualDividend: Double get() = annualDividendJpy?.value ?: 0.0
-    val liveYield: Double get() = yfinanceYieldRate
+    val liveYield: Double get() = if (isNoDividendConfirmed) 0.0 else if (dps.isFinite() && dps > 0.0 && price.isFinite() && price > 0.0) {
+        PortfolioMath.yieldPercent(dps, price)
+    } else yfinanceYieldRate
         ?.takeIf { it.isFinite() && it in 0.0..100.0 }
         ?: irbankYieldRate
         ?.takeIf { it.isFinite() && it in 0.0..100.0 && irbankYieldDps == dps }
@@ -173,13 +177,15 @@ data class WatchlistStock(
         currency == "$" -> usdJpyRate?.takeIf { it.isFinite() && it > 0 } ?: 0.0
         else -> 1.0
     }
-    val liveYield: Double get() = yfinanceYieldRate
+    val liveYield: Double get() = if (isNoDividendConfirmed) 0.0 else if (dps.isFinite() && dps > 0.0 && price.isFinite() && price > 0.0) {
+        PortfolioMath.yieldPercent(dps, price)
+    } else yfinanceYieldRate
         ?.takeIf { it.isFinite() && it in 0.0..100.0 }
         ?: irbankYieldRate?.takeIf { it.isFinite() && it in 0.0..100.0 && irbankYieldDps == dps }
         ?: PortfolioMath.yieldPercent(dps, price)
-    val isReady: Boolean get() = targetYield.isFinite() && targetYield > 0.0 && currentYield.isFinite() && currentYield >= targetYield
-    val achievementRate: Int get() = if (targetYield.isFinite() && targetYield > 0.0 && currentYield.isFinite())
-        ((currentYield / targetYield) * 100).toInt().coerceIn(0, 100) else 0
+    val isReady: Boolean get() = targetYield.isFinite() && targetYield > 0.0 && liveYield.isFinite() && liveYield >= targetYield
+    val achievementRate: Int get() = if (targetYield.isFinite() && targetYield > 0.0 && liveYield.isFinite())
+        ((liveYield / targetYield) * 100).toInt().coerceIn(0, 100) else 0
 }
 
 data class RoadmapStep(

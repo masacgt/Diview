@@ -17,7 +17,8 @@ object AnnualDividendResolver {
         val observed = events.filter { !it.date.isAfter(today) && it.amountPerShare.isFinite() && it.amountPerShare >= 0.0 }
         val currentYearDps = observed.filter { it.date.year == today.year }.sumOf { it.amountPerShare }
         return when {
-            upcoming.exDividendDate.year > today.year -> currentYearDps
+            // Completed observations are historical distributions, not a forecast.
+            upcoming.exDividendDate.year > today.year -> null
             upcoming.exDividendDate.year == today.year -> observed.maxByOrNull { it.date }
                 ?.let { currentYearDps + it.amountPerShare }
             else -> null

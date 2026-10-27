@@ -116,6 +116,10 @@ fun AnnualDividendScreen(
     val compositionOtherEnabled by viewModel.compositionOtherEnabled.collectAsStateWithLifecycle()
 
     val totalAssets = remember(holdings) { holdings.sumOf { it.totalValuation } }
+    val hasMissingValuation = remember(holdings) { holdings.any { it.shares > 0 && it.valuationJpy == null } }
+    val hasMissingDividend = remember(holdings, taxRateMode) {
+        holdings.any { !it.hasKnownAnnualDividend || (it.shares > 0 && it.getEffectiveAnnualDividendJpy(taxRateMode) == null) }
+    }
     val totalCost = remember(holdings) { holdings.sumOf { it.totalCost } }
     val grossAnnualDividend = remember(holdings) { holdings.sumOf { it.getEffectiveAnnualDividend("gross") } }
     val netAnnualDividend = remember(holdings) { holdings.sumOf { it.getEffectiveAnnualDividend("net") } }
@@ -253,6 +257,10 @@ fun AnnualDividendScreen(
                     )
                 }
 
+                if (hasMissingDividend) item {
+                    Text("一部銘柄の配当が未取得です。集計とグラフは取得済みの銘柄のみを含みます。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                }
+
             // Hero Card: Annual Expected Dividend
             if (page == 0) item {
                 Card(
@@ -366,7 +374,7 @@ fun AnnualDividendScreen(
                                 Spacer(modifier = Modifier.height(1.dp))
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
-                                        text = if (isPrivacyActive) "•••" else String.format(Locale.JAPAN, "%.2f", yieldOnCost),
+                                        text = if (isPrivacyActive) "•••" else if (hasMissingDividend) "未取得" else String.format(Locale.JAPAN, "%.2f", yieldOnCost),
                                         fontSize = AppTextSize.metric,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = PrimaryEmerald,
@@ -403,7 +411,7 @@ fun AnnualDividendScreen(
                                 Spacer(modifier = Modifier.height(1.dp))
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
-                                        text = if (isPrivacyActive) "•••" else String.format(Locale.JAPAN, "%.2f", yieldOnValuation),
+                                        text = if (isPrivacyActive) "•••" else if (hasMissingValuation || hasMissingDividend) "未取得" else String.format(Locale.JAPAN, "%.2f", yieldOnValuation),
                                         fontSize = AppTextSize.metric,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = PrimaryEmerald,
@@ -416,7 +424,7 @@ fun AnnualDividendScreen(
                                 }
                                 Spacer(modifier = Modifier.height(1.dp))
                                 Text(
-                                    text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_13) else resources.getString(R.string.annual_dividend_label_14, (currencyFormat.format(totalAssets.toLong())).toString()),
+                                    text = if (isPrivacyActive) resources.getString(R.string.annual_dividend_label_13) else if (hasMissingValuation) "評価額未取得" else resources.getString(R.string.annual_dividend_label_14, (currencyFormat.format(totalAssets.toLong())).toString()),
                                     fontSize = AppTextSize.dense,
                                     color = OnSurfaceVariant,
                                     maxLines = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f) Int.MAX_VALUE else 1,
@@ -430,7 +438,11 @@ fun AnnualDividendScreen(
             // Tab 2: Sector & Composition Analysis
             if (page == 2) {
                 item {
-                    CompositionAnalysisSection(holdings = holdings, taxRateMode = taxRateMode, totalAssets = totalAssets, totalAnnualDiv = totalAnnualDiv, compositionThreshold = compositionThreshold, compositionOtherEnabled = compositionOtherEnabled, viewModel = viewModel, onNavigateToDetail = onNavigateToDetail)
+                    if (hasMissingValuation) {
+                        Text("価格または為替が未取得の銘柄があるため、構成分析を表示できません。", color = OnSurfaceVariant)
+                    } else {
+                        CompositionAnalysisSection(holdings = holdings, taxRateMode = taxRateMode, totalAssets = totalAssets, totalAnnualDiv = totalAnnualDiv, compositionThreshold = compositionThreshold, compositionOtherEnabled = compositionOtherEnabled, viewModel = viewModel, onNavigateToDetail = onNavigateToDetail)
+                    }
                 }
             }
 

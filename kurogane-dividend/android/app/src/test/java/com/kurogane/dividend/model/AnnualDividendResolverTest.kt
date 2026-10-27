@@ -62,8 +62,8 @@ class AnnualDividendResolverTest {
     @Test fun eventEstimateUsesJstYearAndIgnoresFutureObservations() {
         val future = events + CloudflareDividendEvent(today.plusDays(1), 100.0)
         assertEquals(60.0, AnnualDividendResolver.eventForecast(future, upcoming, today)!!, 0.0)
-        assertEquals(30.0, AnnualDividendResolver.eventForecast(events,
-            upcoming.copy(exDividendDate = LocalDate.of(2027, 1, 1)), today)!!, 0.0)
+        assertNull(AnnualDividendResolver.eventForecast(events,
+            upcoming.copy(exDividendDate = LocalDate.of(2027, 1, 1)), today))
         assertNull(AnnualDividendResolver.eventForecast(emptyList(), upcoming, today))
     }
 

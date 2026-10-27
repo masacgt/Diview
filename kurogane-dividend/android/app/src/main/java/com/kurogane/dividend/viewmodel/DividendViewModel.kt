@@ -114,7 +114,8 @@ data class AssetManagementListItem(
     val category: Category,
     val dividendMonths: List<Int>,
     val missingExchangeRate: Boolean,
-    val sortValue: Double
+    val sortValue: Double,
+    val sortMissing: Boolean = false
 )
 
 data class AssetManagementSummary(
@@ -125,7 +126,11 @@ data class AssetManagementSummary(
     val annualDividend: Double = 0.0,
     val netAnnualDividend: Double = 0.0,
     val roadmapDividend: Long = 0L,
-    val averageYield: Double = 0.0
+    val averageYield: Double = 0.0,
+    val hasMissingValuation: Boolean = false,
+    val hasMissingIncludedValuation: Boolean = false,
+    val hasMissingDividend: Boolean = false,
+    val hasMissingIncludedDividend: Boolean = false
 )
 
 data class AssetManagementUpcomingDividend(
@@ -508,7 +513,7 @@ class DividendViewModel @JvmOverloads constructor(
         usWithholdingEnabled = _usTaxDeduction.value,
         financialProfile = _financialData.value[holding.code]?.profile,
         dps = dps,
-        yieldRate = yfinanceYieldRate ?: irbankYieldRate ?: PortfolioMath.yieldPercent(dps, price),
+        yieldRate = if (noDividendConfirmed) 0.0 else if (dps > 0.0 && price > 0.0) PortfolioMath.yieldPercent(dps, price) else yfinanceYieldRate ?: irbankYieldRate ?: 0.0,
         irbankYieldRate = irbankYieldRate,
         irbankYieldDps = quoteDps?.takeIf { irbankYieldRate != null },
         yfinanceYieldRate = yfinanceYieldRate,
@@ -570,7 +575,7 @@ class DividendViewModel @JvmOverloads constructor(
                 price = price,
                 usdJpyRate = _exchangeRate.value?.usdJpy,
                 dps = dps,
-                currentYield = yfinanceYieldRate ?: marketYieldRate ?: PortfolioMath.yieldPercent(dps, price),
+                currentYield = if (noDividendConfirmed) 0.0 else if (dps > 0.0 && price > 0.0) PortfolioMath.yieldPercent(dps, price) else yfinanceYieldRate ?: marketYieldRate ?: 0.0,
                 yfinanceYieldRate = yfinanceYieldRate,
                 irbankYieldRate = marketYieldRate,
                 irbankYieldDps = quoteDps?.takeIf { marketYieldRate != null },
@@ -1239,7 +1244,14 @@ class DividendViewModel @JvmOverloads constructor(
             annualDividend = annualDividend,
             netAnnualDividend = netAnnualDividend,
             roadmapDividend = roadmapDividend,
-            averageYield = PortfolioMath.portfolioYieldForHoldings(current, excludedCodes, taxMode, basis)
+            averageYield = PortfolioMath.portfolioYieldForHoldings(current, excludedCodes, taxMode, basis),
+            hasMissingValuation = current.any { it.shares > 0 && it.valuationJpy == null },
+            hasMissingIncludedValuation = current.any { it.shares > 0 && it.valuationJpy == null && PortfolioMath.normalizeCode(it.code) !in excludedCodes },
+            hasMissingDividend = current.any { !it.hasKnownAnnualDividend || (it.shares > 0 && it.getEffectiveAnnualDividendJpy(taxMode) == null) },
+            hasMissingIncludedDividend = current.any {
+                (!it.hasKnownAnnualDividend || (it.shares > 0 && it.getEffectiveAnnualDividendJpy(taxMode) == null)) &&
+                    PortfolioMath.normalizeCode(it.code) !in excludedCodes
+            }
         )
     }
         .distinctUntilChanged()
@@ -1300,7 +1312,13 @@ class DividendViewModel @JvmOverloads constructor(
                     category = holding.category,
                     dividendMonths = holding.dividendMonths,
                     missingExchangeRate = holding.currency == "$" && holding.usdJpyRate == null,
-                    sortValue = sortValue
+                    sortValue = sortValue,
+                    sortMissing = when (sortCriteria) {
+                        "val", "gain" -> holding.shares > 0 && holding.valuationJpy == null
+                        "div" -> !holding.hasKnownAnnualDividend || (calculationBasis != "cost" && holding.price <= 0.0)
+                        "div_amt" -> !holding.hasKnownAnnualDividend || (holding.shares > 0 && holding.getEffectiveAnnualDividendJpy(taxRateMode) == null)
+                        else -> false
+                    }
                 )
             }
         }
@@ -2891,7 +2909,7 @@ class DividendViewModel @JvmOverloads constructor(
             }
             val yfinanceYieldRate = yfinanceYieldRates[code]?.takeIf { it.isFinite() && it in 0.0..100.0 }
             val marketYieldRate = yieldRates[code]?.takeIf { quoteDps != null && dps == quoteDps }
-            val currentYield = yfinanceYieldRate ?: marketYieldRate ?: PortfolioMath.yieldPercent(dps, price)
+            val currentYield = if (noDividendConfirmed) 0.0 else if (dps > 0.0 && price > 0.0) PortfolioMath.yieldPercent(dps, price) else yfinanceYieldRate ?: marketYieldRate ?: 0.0
             if (price == stock.price && dps == stock.dps && currentYield == stock.currentYield
                 && yfinanceYieldRate == stock.yfinanceYieldRate
                 && marketYieldRate == stock.irbankYieldRate

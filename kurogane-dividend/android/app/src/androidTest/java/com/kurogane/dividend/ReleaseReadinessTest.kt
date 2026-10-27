@@ -161,16 +161,18 @@ class ReleaseReadinessTest {
 
         revealFirstWatchlistCard()
         val initialOrderObservedAt = android.os.SystemClock.elapsedRealtime()
-        compose.waitUntil(30_000) {
-            firstVisibleWatchlistCardCode(compose) == "3000" &&
-                android.os.SystemClock.elapsedRealtime() - initialOrderObservedAt >= 750L
+        try {
+            compose.waitUntil(30_000) {
+                firstVisibleWatchlistCardCode(compose) == "3000" &&
+                    android.os.SystemClock.elapsedRealtime() - initialOrderObservedAt >= 750L
+            }
+        } catch (failure: Throwable) {
+            val nodes = compose.onAllNodes(watchlistCardMatcher(), useUnmergedTree = true).fetchSemanticsNodes()
+                .map { "${it.config[SemanticsProperties.TestTag]}:${it.boundsInRoot}" }
+            throw AssertionError("初期順序を確認できません: 保存=${vm.watchlist.value.map { it.code }}, 表示=$nodes, 選択=${vm.watchlistSortSelection.value}", failure)
         }
 
-        val defaultSortLabel = app.getString(
-            R.string.watchlist_1_s_2_s,
-            app.getString(R.string.watchlist_label_15),
-            app.getString(R.string.watchlist_label_19)
-        )
+        val defaultSortLabel = "登録順"
         revealWatchlistListItem(hasText(defaultSortLabel))
         compose.onNodeWithText(defaultSortLabel).performClick()
         compose.onNodeWithText(app.getString(R.string.watchlist_label_4)).performScrollTo().performClick()
@@ -225,7 +227,7 @@ class ReleaseReadinessTest {
             watchlistCardMatcher(),
             useUnmergedTree = true
         ).fetchSemanticsNodes().filter { it.boundsInRoot.height > 0f }
-            .minByOrNull { it.boundsInRoot.top }?.let { node ->
+            .firstOrNull()?.let { node ->
             node.config[SemanticsProperties.TestTag].removePrefix("watchlist_card_")
         }
 

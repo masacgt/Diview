@@ -191,6 +191,11 @@ fun RoadmapScreen(viewModel: DividendViewModel, scrollToTopRequest: Int = 0) {
                 .padding(horizontal = 14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            if (holdings.any { !it.hasKnownAnnualDividend || (it.shares > 0 && it.valuationJpy == null) }) {
+                item {
+                    Text("一部銘柄の価格・為替または配当が未取得です。進捗と試算は取得済みデータに基づきます。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                }
+            }
             // Quest Hero Card Dashboard
             item {
                 Card(

@@ -3,6 +3,24 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { marketReadFixture } from './fixtures/market-read-fixture.mjs';
 
+test('empty issuer records remain unknown across security, quotes, and search; explicit zero remains no dividend', async () => {
+  for (const [fixtureStatus, expected] of [['unknown', 'unknown'], ['no_dividend', 'no_dividend']]) {
+    const f = marketReadFixture('8984', fixtureStatus);
+    const current = f.documents.get(`${f.base}/current.json`);
+    current.dividend = { trailing_12_month_per_share: 6571 };
+    const paths = ['/api/v1/securities/8984', '/api/v1/live-quotes?codes=8984', '/api/v1/security-search?q=8984', '/api/v1/search-catalog'];
+    for (const path of paths) {
+      const response = await worker.fetch(new Request(`https://example.com${path}`), f.env);
+      assert.equal(response.status, 200, path);
+      const body = await response.json();
+      const item = body.items?.[0] ?? body;
+      assert.equal(item.dividend_status, expected, path);
+      const dps = item.annual_dividend_per_share ?? item.dividend?.annual_dps ?? null;
+      assert.equal(dps, fixtureStatus === 'unknown' ? null : 0, path);
+    }
+  }
+});
+
 for (const code of ['7203', '25935', '285A']) {
   test(`analysis reads each market object once and sees updates on the next request: ${code}`, async () => {
     const f = marketReadFixture(code);

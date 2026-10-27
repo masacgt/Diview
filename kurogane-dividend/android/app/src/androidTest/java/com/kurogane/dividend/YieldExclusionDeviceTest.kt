@@ -41,7 +41,7 @@ class YieldExclusionDeviceTest {
         category = Category.JAPAN, price = 1000.0, shares = 100, acqPrice = 1000.0,
         dps = dps, yieldRate = dps / 10.0, yoc = dps / 10.0, nextPayoutTiming = "",
         nextPayoutAmount = "", dividendMonths = emptyList(), dividendType = "", accountType = "特定口座",
-        dailyChange = "—", isPositive = true
+        dailyChange = "—", isPositive = true, isNoDividendConfirmed = dps == 0.0
     )
 
     private fun model(key: String): DividendViewModel {

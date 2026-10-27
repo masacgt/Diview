@@ -41,6 +41,7 @@ import com.kurogane.dividend.ui.components.showDiviewSnackbar
 import com.kurogane.dividend.ui.networkErrorMessage
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -126,6 +127,7 @@ fun StockDetailScreen(
     val dividendHistoryOverrides by viewModel.dividendHistoryOverrides.collectAsStateWithLifecycle()
     val taxRateMode by viewModel.taxRateMode.collectAsStateWithLifecycle()
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
+    val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
     val stockAnalysisData by viewModel.stockAnalysisData.collectAsStateWithLifecycle()
     val cloudflareSecurityData by viewModel.cloudflareSecurityData.collectAsStateWithLifecycle()
     val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
@@ -171,8 +173,11 @@ fun StockDetailScreen(
     val currentHolding = com.kurogane.dividend.model.StockDetailResolver.resolve(stockCode, holdings, watchlist, resolvedSecurity)?.let { holding ->
         val price = resolvedSecurity?.marketPrice?.takeIf { it.isFinite() && it > 0.0 } ?: holding.price
         val securityHasDividend = resolvedSecurity?.annualDividendPerShare?.let { it > 0.0 } == true
-        val noDividendConfirmed = !securityHasDividend &&
-            (resolvedSecurity?.isNoDividendConfirmed == true || holding.isNoDividendConfirmed)
+        val noDividendConfirmed = when {
+            securityHasDividend -> false
+            resolvedSecurity?.hasDividendStatus == true -> resolvedSecurity?.isNoDividendConfirmed == true
+            else -> holding.isNoDividendConfirmed
+        }
         val currentDps = resolvedSecurity?.annualDividendPerShare
         val dps = when {
             noDividendConfirmed -> 0.0
@@ -193,7 +198,7 @@ fun StockDetailScreen(
         val marketDailyChange = formatMarketDailyChange(resolvedSecurity)
         val marketChangePositive = resolvedSecurity?.marketPriceChange
             ?.takeIf { marketDailyChange != null }?.let { it >= 0.0 }
-        holding.copy(price = price, dps = dps, yieldRate = displayYield,
+        val resolved = holding.copy(price = price, dps = dps, yieldRate = displayYield,
             dailyChange = marketDailyChange ?: holding.dailyChange.takeIf { it.isNotBlank() } ?: "—",
             isPositive = marketChangePositive ?: holding.isPositive,
             isNoDividendConfirmed = noDividendConfirmed,
@@ -202,6 +207,13 @@ fun StockDetailScreen(
             yfinanceYieldRate = yfinanceYieldRate,
             yoc = com.kurogane.dividend.model.PortfolioMath.yieldPercent(dps, holding.acqPrice),
             usdJpyRate = exchangeRate?.usdJpy, usWithholdingEnabled = usTaxDeduction)
+        val forecast = remember(holding.code, dividendEventRevision, financialData[holding.code]) {
+            com.kurogane.dividend.model.AnnualDividendResolver.forecast(
+                holding.category, financialData[holding.code], viewModel.dividendEventsFor(holding.code),
+                viewModel.upcomingDividendEventFor(holding.code)
+            )
+        }
+        com.kurogane.dividend.model.AnnualDividendResolver.applyForecast(resolved, forecast)
     }
     if (currentHolding == null) {
         Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center,
@@ -217,8 +229,7 @@ fun StockDetailScreen(
         return
     }
 
-    val currentDpsUnavailable = lookupFinished && lookupError == null &&
-        resolvedSecurity?.annualDividendPerShare == null && !currentHolding.isNoDividendConfirmed
+    val currentDpsUnavailable = !currentHolding.isNoDividendConfirmed && currentHolding.dps <= 0.0
     val uriHandler = LocalUriHandler.current
     val researchSecurityCode = currentHolding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T")
     val yahooFinanceCode = if (currentHolding.code.trim().endsWith(".T", ignoreCase = true)) {
@@ -250,7 +261,6 @@ fun StockDetailScreen(
     var showBuyUpSimulator by rememberSaveable(stockCode) { mutableStateOf(false) }
     val simAddedShares = simAddedSharesInput.toIntOrNull() ?: 0
     val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
-    val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
     val notificationAccess = com.kurogane.dividend.ui.components.rememberNotificationAccess {
         viewModel.setNotificationEnabled(com.kurogane.dividend.notifications.NotificationKind.DIVIDEND, true)
     }
@@ -326,13 +336,16 @@ fun StockDetailScreen(
         }.getOrDefault(emptyMap())
     }
     val defaultDividendPeriods = dividendHistoryYears.map { year ->
-        val isForecast = year == chartForecastYear
-        val annualDividend = if (isForecast) {
+        val forecast = if (year == chartForecastYear) {
             financial?.takeIf { it.forecastFiscalYear == year }?.forecastAnnualDividend
                 ?: currentYearForecastDps
-        } else {
-            sourceDividendsByYear[year]
-        }
+        } else null
+        val isForecast = forecast != null
+        val observedCurrentYear = chartDividendEvents.filter {
+            it.date.year == year && !it.date.isAfter(currentCalendarDate)
+        }.takeIf { year == currentCalendarYear && financial?.issuerDividends.orEmpty().isEmpty() && it.isNotEmpty() }
+            ?.sumOf { it.amountPerShare }
+        val annualDividend = forecast ?: sourceDividendsByYear[year] ?: observedCurrentYear
         StockDetailDividendPeriod(
             year,
             if (isForecast) null else yearEndPrices[year],
@@ -655,31 +668,35 @@ fun StockDetailScreen(
     val cutImpact = (currentHolding.getEffectiveAnnualDividend(taxRateMode) / 2).toLong()
     val displayCutImpact = currentHolding.getEffectiveAnnualDividend(taxRateMode) / 2.0
 
-    val totalPortfolioDiv = if (currentDpsUnavailable) 0L else
-        holdings.sumOf { it.getEffectiveAnnualDividend(taxRateMode).toLong() }
-    val currentStockAnnualDiv = currentHolding.getEffectiveAnnualDividend(taxRateMode).toLong()
-    val divDependency = if (totalPortfolioDiv > 0) (currentStockAnnualDiv.toDouble() / totalPortfolioDiv.toDouble()) * 100.0 else 0.0
-    val divDependencyStr = if (currentDpsUnavailable) "未取得" else String.format(java.util.Locale.JAPAN, "%.1f", divDependency)
+    // A concentration ratio is meaningful only when every included dividend can be converted to JPY.
+    val portfolioDividendUnavailable = currentDpsUnavailable || holdings.any {
+        it.shares > 0 && (!it.hasKnownAnnualDividend || it.getEffectiveAnnualDividendJpy(taxRateMode) == null)
+    } || (currentHolding.shares > 0 && currentHolding.getEffectiveAnnualDividendJpy(taxRateMode) == null)
+    val totalPortfolioDiv = holdings.sumOf { it.getEffectiveAnnualDividendJpy(taxRateMode)?.value ?: 0.0 }
+    val currentStockAnnualDiv = currentHolding.getEffectiveAnnualDividendJpy(taxRateMode)?.value ?: 0.0
+    val divDependency = if (totalPortfolioDiv > 0) currentStockAnnualDiv / totalPortfolioDiv * 100.0 else 0.0
+    val divDependencyStr = if (portfolioDividendUnavailable) "未取得" else String.format(java.util.Locale.JAPAN, "%.1f", divDependency)
 
     val totalPortfolioVal = holdings.sumOf { it.totalValuation.toLong() }
+    val portfolioValuationUnavailable = holdings.any { it.shares > 0 && it.valuationJpy == null }
     val sectorVal = holdings.filter { it.sector == currentHolding.sector }.sumOf { it.totalValuation.toLong() }
     val sectorDependency = if (totalPortfolioVal > 0) (sectorVal.toDouble() / totalPortfolioVal.toDouble()) * 100.0 else 0.0
     val sectorDependencyStr = String.format(java.util.Locale.JAPAN, "%.1f", sectorDependency)
     val cleanSectorName = currentHolding.sector.replace(Regex("^.*[•·]\\s*"), "")
-    val sectorRiskText = if (sectorDependency > 30.0) "高集中" else if (sectorDependency > 20.0) "やや集中" else "適正分散"
+    val sectorRiskText = if (portfolioValuationUnavailable) "評価額未取得" else if (sectorDependency > 30.0) "高集中" else if (sectorDependency > 20.0) "やや集中" else "適正分散"
 
-    val isHighRisk = !currentDpsUnavailable && divDependency > 10.0
+    val isHighRisk = !portfolioDividendUnavailable && divDependency > 10.0
     val riskBadgeText = when {
-        currentDpsUnavailable -> "配当データ未取得"
+        portfolioDividendUnavailable -> "配当データ未取得"
         divDependency > 25.0 -> "高リスク・要分散"
         divDependency > 10.0 -> "やや高め"
         else -> "適正範囲"
     }
-    val cutImpactRatio = if (totalPortfolioDiv > 0) cutImpact.toDouble() / totalPortfolioDiv * 100.0 else 0.0
+    val cutImpactRatio = if (totalPortfolioDiv > 0) currentStockAnnualDiv / 2.0 / totalPortfolioDiv * 100.0 else 0.0
     val currencyFormat = NumberFormat.getNumberInstance(Locale.JAPAN)
     val detailListState = rememberLazyListState()
     val riskPositionItems = buildList {
-        if (!currentDpsUnavailable && totalPortfolioDiv > 0) {
+        if (!portfolioDividendUnavailable && totalPortfolioDiv > 0) {
             val band = when {
                 divDependency <= 10.0 -> "適正範囲"
                 divDependency <= 25.0 -> "やや高め"
@@ -708,7 +725,7 @@ fun StockDetailScreen(
             )
         }
 
-        if (!currentDpsUnavailable && totalPortfolioDiv > 0) {
+        if (!portfolioDividendUnavailable && totalPortfolioDiv > 0) {
             val impactBand = when {
                 cutImpactRatio <= 5.0 -> "小さめ"
                 cutImpactRatio <= 12.5 -> "中程度"
@@ -739,7 +756,7 @@ fun StockDetailScreen(
             )
         }
 
-        if (totalPortfolioVal > 0) {
+        if (totalPortfolioVal > 0 && !portfolioValuationUnavailable) {
             val band = when {
                 sectorDependency <= 20.0 -> "適正分散"
                 sectorDependency <= 30.0 -> "やや集中"
@@ -940,7 +957,7 @@ fun StockDetailScreen(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    stringResource(R.string.add_holding_1_s_2_s_2 , currentHolding.currency, com.kurogane.dividend.model.formatStockPriceDisplay(currentHolding.price, currentHolding.code)),
+                                    if (currentHolding.price <= 0.0) "未取得" else stringResource(R.string.add_holding_1_s_2_s_2 , currentHolding.currency, com.kurogane.dividend.model.formatStockPriceDisplay(currentHolding.price, currentHolding.code)),
                                     fontSize = AppTextSize.largeMetric,
                                     fontWeight = FontWeight.Black,
                                     color = OnSurface,
@@ -1015,7 +1032,7 @@ fun StockDetailScreen(
                                         fontSize = AppTextSize.dense
                                     )
                                     Text(
-                                        com.kurogane.dividend.model.formatDividendYieldDisplay(topCardYield, topCardNoDividendConfirmed),
+                                        if ((topCardDpsUnavailable && resolvedSecurity?.marketYieldRate == null) || (topCardForecastDps != null && currentPrice <= 0.0)) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(topCardYield, topCardNoDividendConfirmed),
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryEmerald,
                                         fontSize = AppTextSize.caption,
@@ -1038,7 +1055,7 @@ fun StockDetailScreen(
                                         fontSize = AppTextSize.dense
                                     )
                                     Text(
-                                        if (topCardDpsUnavailable) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(topCardYoc, topCardNoDividendConfirmed),
+                                        if (topCardDpsUnavailable || currentHolding.acqPrice <= 0.0) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(topCardYoc, topCardNoDividendConfirmed),
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryEmerald,
                                         fontSize = AppTextSize.caption,
@@ -1184,8 +1201,8 @@ fun StockDetailScreen(
                                     val dps = point.annualDividend ?: 0.0
                                     val dpsText = point.annualDividend
                                         ?.let { com.kurogane.dividend.model.formatFinancialAmountDisplay(it) }
-                                        ?: "0"
-                                    val fiscalPeriodLabel = "${point.year}期"
+                                        ?: "未取得"
+                                    val fiscalPeriodLabel = if (financial?.issuerDividends.orEmpty().isNotEmpty()) "${point.year}期" else "${point.year}年"
                                     Triple(
                                         fiscalPeriodLabel,
                                         stringResource(R.string.add_holding_1_s_2_s_2, prefix, dpsText),
@@ -1200,7 +1217,7 @@ fun StockDetailScreen(
                                         animationSpec = tween(durationMillis = 560, delayMillis = index * 30),
                                         label = "Dividend bar height"
                                     )
-                                    val isProjected = history[index].isForecast || term == bars.lastOrNull()?.first
+                                    val isProjected = history[index].isForecast
                                     val isSelected = selectedDividendYear == history[index].year
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1471,7 +1488,7 @@ fun StockDetailScreen(
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        if (currentDpsUnavailable) "配当依存度：未取得" else stringResource(
+                                        if (portfolioDividendUnavailable) "配当依存度：未取得" else stringResource(
                                             R.string.stock_detail_1_s_2_s,
                                             if (isHighRisk) resources.getString(R.string.stock_detail_label_21) else resources.getString(R.string.stock_detail_label_22),
                                             divDependencyStr
@@ -1481,7 +1498,7 @@ fun StockDetailScreen(
                                         fontSize = AppTextSize.body
                                     )
                                     Text(
-                                        if (currentDpsUnavailable) "配当情報未取得のため判定できません" else stringResource(R.string.stock_detail_text_29),
+                                        if (portfolioDividendUnavailable) "配当情報未取得のため判定できません" else stringResource(R.string.stock_detail_text_29),
                                         color = AccentAmber,
                                         fontSize = AppTextSize.dense
                                     )
@@ -1563,20 +1580,20 @@ fun StockDetailScreen(
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Surface(
                                                 shape = RoundedCornerShape(4.dp),
-                                                color = if (currentDpsUnavailable) SurfaceContainerHigh else if (isHighRisk) AccentAmber.copy(alpha = 0.15f) else PrimaryEmerald.copy(alpha = 0.15f)
+                                                color = if (portfolioDividendUnavailable) SurfaceContainerHigh else if (isHighRisk) AccentAmber.copy(alpha = 0.15f) else PrimaryEmerald.copy(alpha = 0.15f)
                                             ) {
                                                 Text(
-                                                    if (currentDpsUnavailable) "未取得" else if (isHighRisk) resources.getString(R.string.stock_detail_label_23) else resources.getString(R.string.stock_detail_label_24),
+                                                    if (portfolioDividendUnavailable) "未取得" else if (isHighRisk) resources.getString(R.string.stock_detail_label_23) else resources.getString(R.string.stock_detail_label_24),
                                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                                    color = if (currentDpsUnavailable) OnSurfaceVariant else if (isHighRisk) AccentAmber else PrimaryEmerald,
+                                                    color = if (portfolioDividendUnavailable) OnSurfaceVariant else if (isHighRisk) AccentAmber else PrimaryEmerald,
                                                     fontSize = AppTextSize.dense,
                                                     fontWeight = FontWeight.Bold
                                                 )
                                             }
                                         }
                                         Text(
-                                            if (currentDpsUnavailable) "未取得" else stringResource(R.string.settings_1_s, divDependencyStr),
-                                            color = if (currentDpsUnavailable) OnSurfaceVariant else if (isHighRisk) AccentAmber else PrimaryEmerald,
+                                            if (portfolioDividendUnavailable) "未取得" else stringResource(R.string.settings_1_s, divDependencyStr),
+                                            color = if (portfolioDividendUnavailable) OnSurfaceVariant else if (isHighRisk) AccentAmber else PrimaryEmerald,
                                             fontSize = AppTextSize.metric,
                                             fontWeight = FontWeight.Black,
                                             fontFamily = AppNumericFontFamily
@@ -1585,7 +1602,7 @@ fun StockDetailScreen(
 
                                             Spacer(modifier = Modifier.height(8.dp))
 
-                                    if (currentDpsUnavailable) {
+                                    if (portfolioDividendUnavailable) {
                                         Text("配当データ未取得のため算出できません", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                     } else {
                                         // Gradient Progress Bar
@@ -1618,7 +1635,7 @@ fun StockDetailScreen(
                                         Text(stringResource(R.string.stock_detail_text_32), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                         Text(stringResource(R.string.stock_detail_text_33), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                         Text(
-                                            if (currentDpsUnavailable) "配当依存度：未取得" else stringResource(R.string.stock_detail_text_34, currentHolding.name, divDependencyStr),
+                                            if (portfolioDividendUnavailable) "配当依存度：未取得" else stringResource(R.string.stock_detail_text_34, currentHolding.name, divDependencyStr),
                                             color = OnSurfaceVariant,
                                             fontSize = AppTextSize.dense
                                         )
@@ -1643,7 +1660,7 @@ fun StockDetailScreen(
                                             Column(modifier = Modifier.padding(10.dp)) {
                                                 Text(stringResource(R.string.stock_detail_text_35), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                 Spacer(modifier = Modifier.height(2.dp))
-                                                Text(stringResource(R.string.settings_1_s , sectorDependencyStr), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
+                                                Text(if (portfolioValuationUnavailable) "未取得" else stringResource(R.string.settings_1_s , sectorDependencyStr), color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
                                                 Spacer(modifier = Modifier.height(2.dp))
                                                 Text(stringResource(R.string.stock_detail_text_36, sectorRiskText), color = AccentAmber, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                                             }
@@ -3654,7 +3671,7 @@ private fun DividendHistoryEditorSheet(
                         lineHeight = 15.sp,
                         modifier = Modifier.weight(1f)
                     )
-                    TextButton(onClick = onRetrySplitHistory, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
+                    TextButton(onClick = onRetrySplitHistory, modifier = Modifier.testTag("dividend_history_split_retry"), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
                         Text("再試行", color = PrimaryEmerald)
                     }
                 }

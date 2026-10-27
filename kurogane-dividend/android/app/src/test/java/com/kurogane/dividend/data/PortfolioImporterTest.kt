@@ -59,6 +59,18 @@ class PortfolioImporterTest {
         assertTrue(PortfolioImporter.importRows(emptyList(), listOf(row().copy(currentPrice = 0.0)), fields).single().yieldRate.isFinite())
     }
 
+    @Test fun missingFundPriceIsUnavailableAndReimportedPriceRestoresValuation() {
+        val fund = CsvHoldingRow("FUND:ABC", "ファンドABC", 50_000.0, 20_000.0, null, "NISA", true)
+        val missing = PortfolioImporter.importRows(emptyList(), listOf(fund), fields).single()
+        assertNull(missing.valuationJpy)
+        assertFalse(missing.hasKnownAnnualDividend)
+        assertTrue(missing.copy(isNoDividendConfirmed = true).hasKnownAnnualDividend)
+        assertEquals(100_000.0, missing.costJpy!!.value, 0.0)
+        val updated = PortfolioImporter.importRows(listOf(missing), listOf(fund.copy(currentPrice = 24_460.0)), fields).single()
+        assertEquals(122_300.0, updated.valuationJpy!!.value, 0.0)
+        assertEquals(22_300.0, updated.gainLoss, 0.0)
+    }
+
     @Test fun legacyMixedAccountsKeepTheNisaQuantity() {
         val stock = DvmStock("7203", "トヨタ", 300.0, 2000.0, 3000.0, "複数口座", 100.0)
         val imported = PortfolioImporter.importStocks(listOf(holding()), listOf(stock)).single()
