@@ -9,7 +9,9 @@ import androidx.compose.ui.test.performScrollToKey
 import androidx.lifecycle.ViewModelStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.kurogane.dividend.data.CloudflareMarketRepository
+import com.kurogane.dividend.data.CloudflareSecurity
 import com.kurogane.dividend.data.LocalImportStore
+import com.kurogane.dividend.data.PriceRefreshPolicy
 import com.kurogane.dividend.model.Category
 import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.ui.screens.AssetManagementScreen
@@ -47,7 +49,7 @@ class SecurityCategoryDisplayTest {
         dividendMonths = emptyList(), dividendType = "配当金", accountType = "特定口座", dailyChange = "—", isPositive = true,
     )
 
-    private fun model(offline: Boolean = false): DividendViewModel {
+    private fun model(offline: Boolean = false, refreshOnStart: Boolean = false): DividendViewModel {
         val repo = CloudflareMarketRepository("https://example.com", connectionFactory = { url ->
             if (url.path != "/api/v1/security-categories") throw IOException("Other market data is offline")
             categoryRequests.incrementAndGet()
@@ -55,7 +57,7 @@ class SecurityCategoryDisplayTest {
             if (offline) throw IOException("Category service is offline")
             object : HttpURLConnection(url) {
                 override fun getResponseCode() = 200
-                override fun getInputStream() = ByteArrayInputStream("""{"categories":{"1306":"014","8951":"013"}}""".toByteArray())
+                override fun getInputStream() = ByteArrayInputStream("""{"categories":{"1306":"014","8951":"013","8953":"013"}}""".toByteArray())
                 override fun connect() = Unit
                 override fun disconnect() = Unit
                 override fun usingProxy() = false
@@ -63,11 +65,41 @@ class SecurityCategoryDisplayTest {
         })
         lateinit var model: DividendViewModel
         compose.runOnIdle {
-            model = DividendViewModel(app, false, repo, notificationScheduler = { _, _ -> })
+            model = DividendViewModel(app, refreshOnStart, repo, notificationScheduler = { _, _ -> })
             stores.put("categories", model)
         }
         runBlocking { model.awaitRestoration() }
         return model
+    }
+
+    @Test fun openingAssetsFetchesMissingCategoryEvenWhenDailyStartupRefreshWasAlreadyAttempted() {
+        LocalImportStore(app).saveHoldings(listOf(holding("8953")))
+        val now = System.currentTimeMillis()
+        app.getSharedPreferences("cloudflare_market_cache", Context.MODE_PRIVATE).edit()
+            .putLong("startup_fetch_attempt_at", now)
+            .putString("startup_fetch_attempt_jst", PriceRefreshPolicy.japanDate(now))
+            .commit()
+        val vm = model(refreshOnStart = true)
+        compose.setContent { KuroganeDividendTheme { AssetManagementScreen(vm) } }
+        compose.waitUntil(10_000) { categoryRequests.get() == 1 &&
+            runBlocking { vm.assetManagementListItems("val").first() }.any { it.code == "8953" && it.sector == "REIT（不動産投資信託）" } }
+        compose.onNodeWithText("REIT（不動産投資信託）").assertIsDisplayed()
+    }
+
+    @Test fun addingHoldingFetchesItsCategoryWhileAssetsScreenRemainsOpen() {
+        LocalImportStore(app).saveHoldings(emptyList())
+        val vm = model()
+        compose.setContent { KuroganeDividendTheme { AssetManagementScreen(vm) } }
+        compose.waitForIdle()
+        assertEquals(0, categoryRequests.get())
+        compose.runOnIdle {
+            assertTrue(vm.addOrUpdateHolding("8953", 1, 1000.0, "特定口座",
+                CloudflareSecurity("8953", "日本都市ファンド投資法人", null, 2000.0)))
+        }
+        compose.waitUntil(10_000) { categoryRequests.get() == 1 &&
+            runBlocking { vm.assetManagementListItems("val").first() }.any { it.code == "8953" && it.sector == "REIT（不動産投資信託）" } }
+        compose.onNodeWithTag("asset_management_list").performScrollToKey("holding:holding-8953")
+        compose.onNodeWithText("REIT（不動産投資信託）").assertIsDisplayed()
     }
 
     @Test fun categoryResponseUpdatesVisibleLabelsAndSurvivesModelRestartWithoutChangingIndustries() {

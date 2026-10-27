@@ -17,13 +17,20 @@
 - 本番R2の `updated_at=2026-10-26T10:22:55.953673+00:00` のスナップショット4,451件を読み出し、追加Worker処理への入力として全4,451コードの応答を確認。実値は1306・1343・1540が `014`、8951が `013`。これは本番Workerへ新APIを公開した検証ではない。
 - Workerの本番公開、リモートへのpush、実機インストール、本番の新APIとAndroidの実通信確認は未実施。
 
+## 本番・実機確認（2026-10-27）
+
+- 本番APIは全4,452銘柄を返し、8953のカテゴリは `013`。WorkerのカテゴリAPIはv70で公開され、v71にも引き継がれた。
+- 実機で8953のカテゴリキャッシュが存在せず未分類のままだった原因は、手動追加時の取得漏れと同日の起動時更新制限。資産管理画面を開いたときと保有銘柄を追加したときにカテゴリの期限を確認するよう修正した。
+- JDK 17のビルドとAndroid単体220件が成功。専用エミュレータでは新規追加、同日制限、45日キャッシュ、資産管理一覧を含む19件が成功した。
+- SCG01 `RFCNC0E4H8J` に修正版APKを上書き導入し、ビルドと端末のSHA-256 `5bfd454aa7b6ce588e5aac7fffc1183421bb2e48184be999bd12ebf095c5c4a7` の一致、本番APIの `8953: 013` のキャッシュ、および「REIT（不動産投資信託）」表示を確認した。
+
 ## 確認コマンド
 
 Worker: `node --test test/*.test.mjs`。Androidは `kurogane-dividend/android/` でJDK 17を選択し、`:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest` を実行する。画面テストは `com.kurogane.dividend.SecurityCategoryDisplayTest` を対象に、既存の `ReleaseFixtureInstrumentation` で実行する。テストは専用の保存領域と模擬応答を使い、端末の利用者の保有データを変更しない。
 
-## プッシュ・端末導入の手順
+## 旧作業ブランチ時点の手順（2026-10-26）
 
-コミットとエミュレータでの導入・検証は作業ブランチで実施済み。本番表示にはWorker側の公開も必要で、公開手順は `data/irbank/cloudflare/README.md` を参照する。以下はリモートへのプッシュと実機導入を行う場合のコマンド。エミュレータへ導入する場合は `$taskDevice` に対象エミュレータのIDを指定する。
+以下は当時の作業ブランチについての記録であり、2026-10-27の修正を含まない。
 
 ```powershell
 Set-Location C:\Codex\Diview-worktrees\holding-product-categories-20261026

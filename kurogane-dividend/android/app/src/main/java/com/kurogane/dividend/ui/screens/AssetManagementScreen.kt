@@ -216,6 +216,9 @@ fun AssetManagementScreen(
         viewModel.awaitRestoration()
         holdingsRestored = true
     }
+    LaunchedEffect(viewModel, holdingsRestored) {
+        if (holdingsRestored) viewModel.refreshAssetManagementSecurityCategories()
+    }
     LaunchedEffect(holdingsRestored) {
         if (holdingsRestored) {
             kotlinx.coroutines.delay(400)

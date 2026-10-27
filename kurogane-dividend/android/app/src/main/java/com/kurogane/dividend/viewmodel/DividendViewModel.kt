@@ -182,6 +182,11 @@ class DividendViewModel @JvmOverloads constructor(
         MarketFetchPolicy.shouldFetch(now, marketPreferences.getLong(key, 0L),
             marketPreferences.getString(dateKey, null) ?: fallbackDate, fetchFailed(key))
 
+    fun refreshAssetManagementSecurityCategories(): Job = viewModelScope.launch {
+        restoration.await()
+        refreshHoldingSecurityCategories()
+    }
+
     /** Use the same security, financial and event sources as Stock Detail, with their daily caches. */
     fun refreshAssetManagementData(): Job {
         return viewModelScope.launch {
@@ -1340,6 +1345,7 @@ class DividendViewModel @JvmOverloads constructor(
         val targets = holdings.filter { it.shares > 0 }.distinctBy { normalizedSecurityCode(it.code) }
         if (targets.isEmpty()) return
         viewModelScope.launch {
+            launch { refreshHoldingSecurityCategories() }
             // Include the new holding in the normal quote refresh before per-security data is fetched.
             runCatchingCancellable { refreshMarketPricesIfDue() }
             val dividendSymbols = targets.mapNotNull { yahooSymbol(it.category, it.code) }
