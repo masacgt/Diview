@@ -22,7 +22,7 @@ The financial request-count assertion formerly counted `/api/v1/financial-data/r
 
 ## Publication
 
-Worktree: `C:/Codex/Diview/.task-worktrees/asset-dividend-source`; branch: `codex/asset-dividend-source-20261027`, based on main `8887c9a4`. Shared dirty source, strings, project notes, AGENTS.md and account CSV exports are preserved. Remote publication has not been requested.
+Worktree: `C:/Codex/Diview/.task-worktrees/asset-dividend-source`; branch: `codex/asset-dividend-source-20261027`, based on main `8887c9a4`. Shared dirty source, strings, project notes, AGENTS.md and account CSV exports are preserved. The task branch was pushed at `fd52cbf2`; main integration is documented in `asset-dividend-source-main-integration-20261027.md`.
 
 
 ## Rebuild, install, and optional publication
