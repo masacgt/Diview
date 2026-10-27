@@ -290,3 +290,6 @@
 ### Buy-signal yield main integration (2026-10-27)
 
 - [x] Integrate the forecast-based buy-signal fix onto latest main including the acquisition-yield caption. Evidence: `c90b58f2` on main base `594dd116`; 216 JDK 17 unit tests and both device UI regressions pass, and installed hashes match `6c165cde...a6056c1`. Reviewed 99 non-ancestor refs and 103 worktrees; historical/CSV-bearing and dirty work is preserved. See `stock-signal-yield-20261027.md`.
+
+- [x] 銘柄別の平均配当利回り除外設定。根拠: JDK 17で単体テスト222件とビルドが成功し、SCG01とエミュレータで各7件の画面操作・設定保持・DVMおよび自動バックアップ復元テストが成功した（検証データを使用）。
+- [ ] 銘柄別の平均配当利回り除外設定について、Google Driveの画面操作を含むバックアップ・復元を実データに影響しない環境で確認する。
