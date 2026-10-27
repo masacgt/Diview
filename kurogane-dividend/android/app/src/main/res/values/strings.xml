@@ -1091,4 +1091,5 @@
     <string name="annual_dividend_quarterly_cashflow_title">四半期キャッシュフロー対比</string>
     <string name="annual_dividend_quarterly_max_month_share">最大月の構成比: %1$s</string>
     <string name="annual_dividend_quarterly_quarter_label">Q%1$d (%2$d-%3$d月)</string>
+    <string name="asset_management_acquisition_yield_detail">取得利回り%1$s</string>
 </resources>

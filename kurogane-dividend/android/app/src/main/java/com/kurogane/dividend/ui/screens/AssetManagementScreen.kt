@@ -1100,7 +1100,13 @@ fun AssetManagementScreen(
                                 if (calculationBasis == "cost") holding.liveYoc else holding.liveYield,
                                 holding.isNoDividendConfirmed
                             )
-                            val yieldDetail = if (calculationBasis == "cost") resources.getString(R.string.yield_basis_cost_detail) else "現在株価比"
+                            val yieldDetail = resources.getString(
+                                R.string.asset_management_acquisition_yield_detail,
+                                com.kurogane.dividend.model.formatDividendYieldDisplay(
+                                    holding.liveYoc,
+                                    holding.isNoDividendConfirmed
+                                ).replace('%', '％')
+                            )
                             val annualDividendValue = if (annualDiv > 0) "¥${javaCurrencyFormat.format(annualDiv.toLong())}/年" else "¥0/年"
                             val dividendGrowthValue = latestDividendGrowth?.let {
                                 if (it == 0.0) "0.0%" else String.format(java.util.Locale.JAPAN, "%+.1f%%", it)

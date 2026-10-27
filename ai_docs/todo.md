@@ -267,6 +267,10 @@
 - [x] Gate automatic startup refresh by JST date and 12-hour interval, restrict quote requests to held/watchlisted codes, remove Asset Management entry refresh and speculative history preloads, and reuse parsed preference JSON. Evidence: `DividendViewModel.kt`, `AssetManagementScreen.kt`, `CloudflareMarketRepository.kt`, and `ParsedPreferenceCache.kt`; JDK 17 `testDebugUnitTest` (215 tests), debug/test APK builds, and 26 isolated emulator acquisition/UI/failure tests passed; debug APK installed on `RFCNC0E4H8J` and `emulator-5560`, with both installed base APK hashes matching the build (`b89ece18...cb15951`). Real-device display acceptance remains open below.
 - [ ] Verify startup/revisit behavior on real production data and measure Asset Management transition latency after the change.
 
+## 2026-10-27 Asset card acquisition yield
+
+- [x] Replace the card's lower yield caption with `取得利回り5.19％` using each holding's `liveYoc`; preserve the upper yield and existing text styles. Evidence: `AssetManagementScreen.kt` and a formatted string resource; JDK 17 `assembleDebug` and existing `PortfolioMathTest` pass. Installed APK SHA-256 `3956ee9288afcdcf7987df1443332b541126a85af6fce98976f434425d964c4b` matches on SCG01 and emulator-5560; both screenshots show the caption fitting, and emulator Takeda displays exactly `取得利回り5.19％` (physical-device holdings differ).
+
 ### Startup refresh branch integration review (2026-10-27)
 
 - Reviewed 97 local/remote refs not ancestral to `origin/main` and the registered worktrees. Integrate `1448897d` from `codex/startup-fetch-policy-20261027` onto `a1b7fb9f`; its effective diff is nine intended Android/test/note files, without CSVs, credentials, or generated APKs. Thirteen refs are patch-equivalent; remaining historical candidates contain the old CSV-bearing `67a63751` lineage or code/notes already represented or superseded on current main (including category labels, financial metric fallbacks, evaluation comments, yfinance tests, and the expanded legacy audit). Preserve those refs and all dirty worktrees.
