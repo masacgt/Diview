@@ -120,6 +120,7 @@ fun StockDetailScreen(
     val resources = LocalContext.current.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
     val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
+    val yieldExcludedCodes by viewModel.yieldExcludedCodes.collectAsStateWithLifecycle()
     val shareholderBenefits by viewModel.shareholderBenefits.collectAsStateWithLifecycle()
     val stockClimateOverrides by viewModel.stockClimateOverrides.collectAsStateWithLifecycle()
     val dividendHistoryOverrides by viewModel.dividendHistoryOverrides.collectAsStateWithLifecycle()
@@ -2752,6 +2753,21 @@ fun StockDetailScreen(
                         }
 
                         HorizontalDivider(color = BorderColor.copy(alpha = 0.7f))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("平均配当利回りから除外", color = OnSurface, fontSize = AppTextSize.section, fontWeight = FontWeight.Bold)
+                                Text("この銘柄の配当額と評価額・取得額を平均の計算に含めません。", color = OnSurfaceVariant, fontSize = AppTextSize.caption)
+                            }
+                            Switch(
+                                checked = com.kurogane.dividend.model.PortfolioMath.normalizeCode(currentHolding.code) in yieldExcludedCodes,
+                                onCheckedChange = { viewModel.setYieldExcluded(currentHolding.code, it) },
+                                modifier = Modifier.semantics { contentDescription = "平均配当利回りから除外" }
+                            )
+                        }
 
                         if (currentHolding.category == com.kurogane.dividend.model.Category.JAPAN) {
                             Card(

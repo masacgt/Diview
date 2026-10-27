@@ -5,6 +5,18 @@ import org.junit.Test
 import java.util.Locale
 
 class PortfolioMathTest {
+    @Test fun excludedSecuritiesAreRemovedFromBothSidesOfAverageYield() {
+        val dividend = holding()
+        val zero = holding().copy(id = "zero", code = "abcd", dps = 0.0)
+        val nonzero = holding().copy(id = "excluded", code = "ABCD", dps = 50.0)
+        val positions = listOf(dividend, zero, nonzero)
+        assertEquals(2.5, PortfolioMath.portfolioYieldForHoldings(positions, emptySet(), "gross", "eval"), 0.0001)
+        assertEquals(5.0, PortfolioMath.portfolioYieldForHoldings(positions, setOf("ABCD"), "gross", "eval"), 0.0001)
+        assertEquals(10.0, PortfolioMath.portfolioYieldForHoldings(positions, setOf("ABCD"), "gross", "cost"), 0.0001)
+        assertEquals(3.98425, PortfolioMath.portfolioYieldForHoldings(positions, setOf("ABCD"), "net", "eval"), 0.0001)
+        assertEquals(0.0, PortfolioMath.portfolioYieldForHoldings(positions, setOf("7203", "ABCD"), "gross", "eval"), 0.0)
+    }
+
     @Test fun fundPricesAreQuotedPerTenThousandUnits() {
         val fund = holding().copy(category = Category.FUND, shares = 50_000, price = 24_460.0, acqPrice = 20_000.0, dps = 100.0)
         assertEquals(122_300.0, fund.totalValuation, 0.0)

@@ -12,6 +12,16 @@ object PortfolioMath {
         return if (denominator > 0) (dividend / denominator * 100).takeIf(Double::isFinite) ?: 0.0 else 0.0
     }
 
+    fun portfolioYieldForHoldings(holdings: List<Holding>, excludedCodes: Set<String>, taxMode: String, basis: String): Double {
+        val included = holdings.filterNot { normalizeCode(it.code) in excludedCodes }
+        return portfolioYield(
+            included.sumOf { it.getEffectiveAnnualDividend(taxMode) },
+            included.sumOf { it.totalValuation },
+            included.sumOf { it.totalCost },
+            basis
+        )
+    }
+
     /** Each position occurs once; positions strictly below the threshold form the final group when enabled. */
     fun compositionGroups(values: List<Double>, thresholdPercent: Int, aggregateOther: Boolean = true): List<List<Int>> {
         if (!aggregateOther) return values.indices.map(::listOf)

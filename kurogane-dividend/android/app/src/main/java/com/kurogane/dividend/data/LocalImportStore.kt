@@ -90,6 +90,24 @@ class LocalImportStore(context: Context) {
             }
         }.orEmpty()
 
+    fun saveYieldExcludedCodes(codes: Set<String>) {
+        val json = JSONObject().apply { codes.forEach { put(it, true) } }
+        save("yield_excluded_codes", json.toString().toByteArray(Charsets.UTF_8))
+        writeAutoBackupSnapshot(loadHoldings().orEmpty(), loadWatchlist().orEmpty())
+    }
+
+    fun loadYieldExcludedCodes(): Set<String> = loadPortableOverride("yield_excluded_codes")?.let { bytes ->
+        val json = JSONObject(bytes.toString(Charsets.UTF_8))
+        buildSet {
+            val codes = json.keys()
+            while (codes.hasNext()) {
+                val rawCode = codes.next()
+                val code = PortfolioMath.normalizeCode(rawCode)
+                if (json.optBoolean(rawCode) && PortfolioMath.validCode(code)) add(code)
+            }
+        }
+    }.orEmpty()
+
     fun saveStockClimateOverrides(overrides: Map<String, StockClimate>) {
         val json = JSONObject().apply { overrides.forEach { (code, climate) -> put(code, climate.name) } }
         save("stock_climate_overrides", json.toString().toByteArray(Charsets.UTF_8))
@@ -296,7 +314,7 @@ class LocalImportStore(context: Context) {
             (it.taxFreeShares == null || it.taxFreeShares in 0..it.shares)) { "保存データの保有情報が正しくありません" }
     }
     private companion object {
-        val PORTABLE_OVERRIDE_KEYS = listOf("shareholder_benefits", "stock_climate_overrides", "dividend_history_overrides")
+        val PORTABLE_OVERRIDE_KEYS = listOf("shareholder_benefits", "stock_climate_overrides", "dividend_history_overrides", "yield_excluded_codes")
         const val KEY_ALIAS = "diview.local.import.aes"
         val KEY_LOCK = Any()
     }

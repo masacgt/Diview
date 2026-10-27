@@ -50,7 +50,8 @@ object DvmBackupExporter {
         shareholderBenefits: Map<String, List<ShareholderBenefit>>,
         stockClimateOverrides: Map<String, StockClimate>,
         dividendHistoryOverrides: Map<String, List<DividendHistoryOverride>>,
-        watchlist: List<WatchlistStock> = emptyList()
+        watchlist: List<WatchlistStock> = emptyList(),
+        yieldExcludedCodes: Set<String> = emptySet()
     ): ByteArray {
         val payload = JSONObject().apply {
             put("format", "diview-portable-data-v1")
@@ -90,6 +91,7 @@ object DvmBackupExporter {
                     })
                 }
             })
+            put("yieldExcludedCodes", JSONArray(yieldExcludedCodes.sorted()))
             put("stockClimateOverrides", JSONObject().apply {
                 stockClimateOverrides.forEach { (code, climate) -> put(code, climate.name) }
             })

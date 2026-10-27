@@ -60,6 +60,7 @@ fun GoogleDvmBackupCard(
     stockClimateOverrides: Map<String, StockClimate> = emptyMap(),
     dividendHistoryOverrides: Map<String, List<DividendHistoryOverride>> = emptyMap(),
     watchlist: List<WatchlistStock> = emptyList(),
+    yieldExcludedCodes: Set<String> = emptySet(),
     onImportDvm: suspend (List<DvmBackupPreview>) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -75,7 +76,7 @@ fun GoogleDvmBackupCard(
     val exportAction: suspend (String) -> String = { accessToken ->
         val encrypted = withContext(Dispatchers.IO) { DvmBackupExporter.export(holdings) }
         val encryptedExtras = withContext(Dispatchers.IO) {
-            DvmBackupExporter.exportExtras(shareholderBenefits, stockClimateOverrides, dividendHistoryOverrides, watchlist)
+            DvmBackupExporter.exportExtras(shareholderBenefits, stockClimateOverrides, dividendHistoryOverrides, watchlist, yieldExcludedCodes)
         }
         withContext(Dispatchers.IO) {
             GoogleDriveBackupClient.upload(accessToken, DvmBackupKind.STOCKS.fileName, encrypted)

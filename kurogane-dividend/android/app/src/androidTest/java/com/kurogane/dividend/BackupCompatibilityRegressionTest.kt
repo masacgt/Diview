@@ -3,6 +3,7 @@ package com.kurogane.dividend
 import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.kurogane.dividend.data.DvmBackupExporter
 import com.kurogane.dividend.data.DvmBackupImporter
 import com.kurogane.dividend.data.DvmBackupKind
 import com.kurogane.dividend.data.LocalImportStore
@@ -191,6 +192,7 @@ class BackupCompatibilityRegressionTest {
     }
 
     private val benefits = mapOf("1306" to listOf(ShareholderBenefit("検証優待", "1000")))
+    private val excludedCodes = setOf("1306", "AAPL")
     private val climate = mapOf("1306" to StockClimate.DEFENSIVE)
     private val history = mapOf("1306" to listOf(DividendHistoryOverride(2025, 1000.0, 80.0, true, true)))
 
@@ -198,25 +200,33 @@ class BackupCompatibilityRegressionTest {
         store.saveShareholderBenefits(benefits)
         store.saveStockClimateOverrides(climate)
         store.saveDividendHistoryOverrides(history)
+        store.saveYieldExcludedCodes(excludedCodes)
     }
 
     private fun assertOverrides(store: LocalImportStore) {
         assertEquals(benefits, store.loadShareholderBenefits())
         assertEquals(climate, store.loadStockClimateOverrides())
         assertEquals(history, store.loadDividendHistoryOverrides())
+        assertEquals(excludedCodes, store.loadYieldExcludedCodes())
     }
 
-    @Test fun allThreeManualOverridesSurviveDevicePreferenceRemoval() {
+    @Test fun allManualOverridesSurviveDevicePreferenceRemoval() {
         val store = LocalImportStore(application)
         saveOverrides(store)
         store.saveFeedbackDraft(JSONObject().put("email", "fixture@example.invalid").put("message", "検証下書き"))
         val json = JSONObject(snapshot.readText())
         assertEquals(1, json.getInt("version"))
-        assertEquals(3, json.getJSONObject("overrides").length())
+        assertEquals(4, json.getJSONObject("overrides").length())
         assertFalse("Contact drafts must stay out of portable backups", snapshot.readText().contains("fixture@example.invalid"))
         removeDeviceEncryptedPreferences()
         assertOverrides(LocalImportStore(application))
         assertNull(LocalImportStore(application).loadFeedbackDraft())
+    }
+
+    @Test fun yieldExclusionsSurvivePortableBackupRoundTrip() {
+        val exported = DvmBackupExporter.exportExtras(benefits, climate, history, yieldExcludedCodes = excludedCodes)
+        val preview = DvmBackupImporter.parse(DvmBackupKind.DIVIEW_EXTRAS.fileName, exported)
+        assertEquals(excludedCodes, preview.extras.yieldExcludedCodes)
     }
 
     @Test fun savingHoldingsImmediatelyAfterTransferKeepsEveryManualOverride() {
@@ -237,6 +247,7 @@ class BackupCompatibilityRegressionTest {
         assertEquals(benefits, restored.loadShareholderBenefits())
         assertEquals(replacement, restored.loadStockClimateOverrides())
         assertEquals(history, restored.loadDividendHistoryOverrides())
+        assertEquals(excludedCodes, restored.loadYieldExcludedCodes())
     }
 
     @Test fun olderVersionOneWithoutOptionalOverridesRetainsItsData() {
@@ -251,6 +262,7 @@ class BackupCompatibilityRegressionTest {
         assertTrue(restored.loadShareholderBenefits().isEmpty())
         assertTrue(restored.loadStockClimateOverrides().isEmpty())
         assertTrue(restored.loadDividendHistoryOverrides().isEmpty())
+        assertTrue(restored.loadYieldExcludedCodes().isEmpty())
     }
 
     @Test fun missingRequiredFieldsAndWrongRootTypesNeverBecomeEmptyRestores() {
@@ -272,7 +284,7 @@ class BackupCompatibilityRegressionTest {
         saveOverrides(LocalImportStore(application))
         val valid = snapshot.readText()
         removeDeviceEncryptedPreferences()
-        for (key in listOf("shareholder_benefits", "stock_climate_overrides", "dividend_history_overrides")) {
+        for (key in listOf("shareholder_benefits", "stock_climate_overrides", "dividend_history_overrides", "yield_excluded_codes")) {
             val invalid = JSONObject(valid).apply { getJSONObject("overrides").put(key, "invalid") }
             snapshot.writeText(invalid.toString())
             val original = snapshot.readBytes()
@@ -290,6 +302,7 @@ class BackupCompatibilityRegressionTest {
         assertTrue(store.loadShareholderBenefits().isEmpty())
         assertTrue(store.loadStockClimateOverrides().isEmpty())
         assertTrue(store.loadDividendHistoryOverrides().isEmpty())
+        assertTrue(store.loadYieldExcludedCodes().isEmpty())
         assertFalse(snapshot.exists())
     }
 }
