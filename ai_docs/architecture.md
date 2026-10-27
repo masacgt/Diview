@@ -65,3 +65,8 @@
 ## Financial statement unit contract (2026-10-26)
 
 - Yahoo Finance statement amounts use the explicit `yfinance_native` unit. The reported `financialCurrency` is retained as unverified provenance and does not establish the unit of those amounts. The Worker omits legacy Yahoo monetary fields without the native-unit marker; Android reads absolute financial amounts only when their unit is `jpy`. Equity ratio, operating margin, and FCF margin are accepted only from same-period, same-source inputs with matching units. Worker financial contract version 6 and Android payload contract version 6 trigger client refreshes after this contract change.
+
+
+## Annual dividend source shared by assets and Stock Detail (2026-10-27)
+
+`AnnualDividendResolver` selects current/future issuer fiscal-year forecast DPS, then the current JST year dividend-event estimate, then the unit-validated Yahoo forward annual dividend from `FinancialData`. Stock Detail's top card and runtime portfolio holdings call this same resolver. Forecast DPS determines annual dividends, evaluation/cost yields and confirmed-zero status, overriding cached trailing dividend/yield values. Quote and event refreshes reapply the forecast. Fund distributions retain their existing 10,000-unit basis and do not use stock forecasts. Asset refresh requests the same financial endpoint and current-year dividend events using the existing daily cache policies; no Worker data source is added.

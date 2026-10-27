@@ -176,47 +176,39 @@ class DividendViewModel @JvmOverloads constructor(
         MarketFetchPolicy.shouldFetch(now, marketPreferences.getLong(key, 0L),
             marketPreferences.getString(dateKey, null) ?: fallbackDate, fetchFailed(key))
 
-    /** Recheck existing holdings as well as new imports; successful empty responses stay daily-cached. */
+    /** Use the same security, financial and event sources as Stock Detail, with their daily caches. */
     fun refreshAssetManagementData(): Job {
         return viewModelScope.launch {
             restoration.await()
             launch { refreshHoldingSecurityCategories() }
             assetDataRefreshMutex.withLock {
-                val targets = _holdings.value.filter { it.category == Category.JAPAN && it.shares > 0 }
-                    .distinctBy { normalizeJapaneseSecurityCode(it.code) }
+                val targets = _holdings.value.filter { it.category != Category.FUND && it.shares > 0 }
+                    .distinctBy { normalizedSecurityCode(it.code) }
+                val year = LocalDate.now(ZoneId.of("Asia/Tokyo")).year
                 for (batch in targets.chunked(8)) {
                     coroutineScope {
                         batch.map { holding -> async {
-                            val code = normalizeJapaneseSecurityCode(holding.code)
+                            val code = normalizedSecurityCode(holding.code)
                             coroutineScope {
                                 listOf(
                                     async {
-                                        val security = cachedCloudflareSecurity(code)
-                                        if (security == null || security.marketPrice == null || !security.hasDividendStatus ||
-                                            readCachedPrices()[code] == null ||
-                                            (readCachedDividendPerShare(code) == null && !security.isNoDividendConfirmed) ||
-                                            fetchFailed("cloudflare_security_fetch_attempt_at_$code")) {
+                                        if (holding.category == Category.JAPAN) {
                                             runCatchingCancellable {
                                                 fetchCloudflareSecurityIfDue(code)?.let(::cacheSecurityQuoteValues)
                                             }
                                         }
                                     },
+                                    async { runCatchingCancellable { fetchFinancialData(code) } },
                                     async {
-                                        if (_financialData.value[code]?.dividends?.zipWithNext()?.any { (a, b) -> b.year == a.year + 1 } != true ||
-                                            fetchFailed("financial_fetch_attempt_at_$code") ||
-                                            marketPreferences.contains("financial_fetch_failure_$code")) {
-                                            runCatchingCancellable { fetchFinancialData(code) }
-                                        }
-                                    },
-                                    async {
-                                        val symbol = "$code.T"
-                                        if (holding.dividendMonths.isEmpty() || !marketPreferences.contains("dividend_months_$symbol") ||
-                                            fetchFailed("dividend_fetch_attempt_at_$symbol")) {
-                                            runCatchingCancellable { refreshDividendMonths(listOf(symbol)) }
+                                        // Fetch the current year even when the saved month list is populated.
+                                        // This supplies the same observed/next-event forecast as Stock Detail.
+                                        yahooSymbol(holding.category, code)?.let { symbol ->
+                                            runCatchingCancellable { refreshDividendMonthsForSecurity(symbol, listOf(year)) }
                                         }
                                     }
                                 ).awaitAll()
                             }
+                            refreshRuntimeValues(code)
                         } }.awaitAll()
                     }
                 }
@@ -489,11 +481,12 @@ class DividendViewModel @JvmOverloads constructor(
             code, quoteDps, holding.isNoDividendConfirmed, cachedNoDividendCodes, cachedDividendStatusCodes
         )
         val dps = resolveAnnualDividend(quoteDps, noDividendConfirmed, code in cachedDividendStatusCodes) {
-            _financialData.value[holding.code]?.dividends?.lastOrNull()?.dps ?: holding.dps
+            if (_financialData.value[normalizedSecurityCode(holding.code)]?.dividendHistoryBasis ==
+                "calendar_year_observed_distributions" || cachedCloudflareSecurity(code) != null) 0.0 else holding.dps
         }
         val yfinanceYieldRate = cachedYfinanceYieldRates[code]?.takeIf { it.isFinite() && it in 0.0..100.0 }
         val irbankYieldRate = cachedYieldRates[code]?.takeIf { quoteDps != null && dps == quoteDps }
-        return holding.copy(
+        val current = holding.copy(
         name = japaneseDisplayName(holding.code, holding.name),
         sector = if (holding.category == Category.JAPAN) identities[Tse33IndustryMaster.normalizeCode(holding.code)]?.industry ?: "東証33業種未分類" else holding.sector,
         price = price,
@@ -508,6 +501,17 @@ class DividendViewModel @JvmOverloads constructor(
         yoc = PortfolioMath.yieldPercent(dps, holding.acqPrice),
         isNoDividendConfirmed = noDividendConfirmed
         ).refreshPayout()
+        return withDividendForecast(current)
+    }
+
+    private fun withDividendForecast(holding: Holding): Holding {
+        val code = normalizedSecurityCode(holding.code)
+        return com.kurogane.dividend.model.AnnualDividendResolver.applyForecast(
+            holding,
+            com.kurogane.dividend.model.AnnualDividendResolver.forecast(
+                holding.category, _financialData.value[code], dividendEventsFor(code), upcomingDividendEventFor(code)
+            )
+        )
     }
 
     private fun normalizedSecurityCode(code: String): String =
@@ -872,7 +876,7 @@ class DividendViewModel @JvmOverloads constructor(
         _holdings.update { list ->
             list.map { holding ->
                 if (yahooSymbol(holding.category, holding.code) == symbol)
-                    holding.copy(dividendMonths = months).refreshPayout()
+                    withDividendForecast(holding.copy(dividendMonths = months).refreshPayout())
                 else holding
             }
         }
@@ -892,7 +896,7 @@ class DividendViewModel @JvmOverloads constructor(
             val months = yahooSymbol(holding.category, holding.code)?.let { symbol ->
                 cachedDividendMonths(symbol)
             } ?: emptyList()
-            holding.copy(dividendMonths = months).refreshPayout()
+            withDividendForecast(holding.copy(dividendMonths = months).refreshPayout())
         } }
         _watchlist.update { list -> list.map { stock ->
             val months = yahooSymbol(stock)?.let { symbol ->
@@ -1007,6 +1011,8 @@ class DividendViewModel @JvmOverloads constructor(
         synchronized(dividendEventCacheLock) {
             upcomingDividendEventCache[normalized] = event
         }
+        _dividendEventRevision.update { it + 1 }
+        refreshRuntimeValues(normalized.removeSuffix(".T"))
     }
 
     private fun storeDividendEvents(
@@ -3017,28 +3023,8 @@ class DividendViewModel @JvmOverloads constructor(
         if (prices.isEmpty() && dividendsPerShare.isEmpty() && noDividendCodes.isEmpty()
             && knownStatusCodes.isEmpty() && yieldRates.isEmpty() && yfinanceYieldRates.isEmpty()) return
         _holdings.update { list -> list.map { holding ->
-            val code = holding.code.uppercase(java.util.Locale.ROOT)
-            val price = prices[code] ?: holding.price
-            val quoteDps = dividendsPerShare[code]
-            val noDividendConfirmed = resolveNoDividendStatus(
-                code, quoteDps, holding.isNoDividendConfirmed, noDividendCodes, knownStatusCodes
-            )
-            val dps = resolveAnnualDividend(quoteDps, noDividendConfirmed, code in knownStatusCodes) {
-                _financialData.value[holding.code]?.dividends?.lastOrNull()?.dps ?: holding.dps
-            }
-            val yfinanceYieldRate = yfinanceYieldRates[code]?.takeIf { it.isFinite() && it in 0.0..100.0 }
-            val irbankYieldRate = yieldRates[code]?.takeIf { quoteDps != null && dps == quoteDps }
-            val yieldRate = yfinanceYieldRate ?: irbankYieldRate ?: PortfolioMath.yieldPercent(dps, price)
-            if (price == holding.price && dps == holding.dps && yieldRate == holding.yieldRate
-                && irbankYieldRate == holding.irbankYieldRate
-                && yfinanceYieldRate == holding.yfinanceYieldRate
-                && (irbankYieldRate == null || quoteDps == holding.irbankYieldDps)
-                && noDividendConfirmed == holding.isNoDividendConfirmed) holding
-            else holding.copy(price = price, dps = dps, yieldRate = yieldRate,
-                irbankYieldRate = irbankYieldRate,
-                irbankYieldDps = quoteDps?.takeIf { irbankYieldRate != null },
-                yfinanceYieldRate = yfinanceYieldRate,
-                isNoDividendConfirmed = noDividendConfirmed).refreshPayout()
+            runtimeHolding(holding, prices, dividendsPerShare, noDividendCodes,
+                knownStatusCodes, yieldRates, yfinanceYieldRates)
         } }
         _watchlist.update { list -> list.map { stock ->
             val code = stock.code.uppercase(java.util.Locale.ROOT)

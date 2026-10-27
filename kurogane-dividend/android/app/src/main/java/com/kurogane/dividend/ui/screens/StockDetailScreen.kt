@@ -302,20 +302,9 @@ fun StockDetailScreen(
     val chartUpcomingDividend = remember(currentHolding.code, dividendEventRevision) {
         viewModel.upcomingDividendEventFor(currentHolding.code)
     }
-    val currentYearObservedDps = chartDividendEvents
-        .filter { it.date.year == currentCalendarYear && !it.date.isAfter(currentCalendarDate) }
-        .sumOf { it.amountPerShare }
-    val lastObservedDividendAmount = chartDividendEvents
-        .filter { !it.date.isAfter(currentCalendarDate) }
-        .maxByOrNull { it.date }
-        ?.amountPerShare
-    val currentYearForecastDps = when {
-        chartUpcomingDividend == null -> null
-        chartUpcomingDividend.exDividendDate.year > currentCalendarYear -> currentYearObservedDps
-        chartUpcomingDividend.exDividendDate.year == currentCalendarYear && lastObservedDividendAmount != null ->
-            currentYearObservedDps + lastObservedDividendAmount
-        else -> null
-    }
+    val currentYearForecastDps = com.kurogane.dividend.model.AnnualDividendResolver.eventForecast(
+        chartDividendEvents, chartUpcomingDividend, currentCalendarDate
+    )
     val normalizedDividendCode = currentHolding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T")
     val savedDividendOverrides = dividendHistoryOverrides[normalizedDividendCode].orEmpty().associateBy { it.year }
     val issuerFiscalDividendsByYear = financial?.issuerDividends.orEmpty().groupBy { it.fiscalYear }.mapNotNull { (year, periods) ->
@@ -638,9 +627,9 @@ fun StockDetailScreen(
     }
     val liveYield = currentHolding.liveYield
     val liveYoc = if (currentHolding.acqPrice > 0) (dps / currentHolding.acqPrice) * 100.0 else liveYield
-    val topCardForecastDps = if (currentHolding.category == com.kurogane.dividend.model.Category.FUND) null else
-        financial?.takeIf { it.forecastFiscalYear == chartForecastYear }?.forecastAnnualDividend
-            ?: currentYearForecastDps ?: financial?.yahooForwardAnnualDividendRate
+    val topCardForecastDps = com.kurogane.dividend.model.AnnualDividendResolver.forecast(
+        currentHolding.category, financial, chartDividendEvents, chartUpcomingDividend, currentCalendarDate
+    )
     val topCardDps = topCardForecastDps ?: dps
     val topCardDpsUnavailable = currentDpsUnavailable && topCardForecastDps == null
     val topCardNoDividendConfirmed = topCardForecastDps?.let { it == 0.0 }

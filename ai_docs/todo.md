@@ -1,5 +1,8 @@
 # Todo
 
+- [x] Unify Asset Management annual DPS and yields with the Stock Detail forecast sources for all supported non-fund holdings. Evidence: `AnnualDividendResolver.kt` shares issuer forecast, current-year event estimate, and Yahoo forward annual DPS; asset refresh loads the financial/event sources and applies forecasts after quote updates. JDK 17 build and all 213 unit tests pass; eight asset acquisition/UI cases and four tab navigation cases pass; installed APK hashes match on SCG01 and emulator-5560. Final emulator 8984 shows 5.93% and ¥20,944/year for four shares after withholding. See `ai_docs/asset-dividend-source-20261027.md`.
+- [ ] Verify the updated asset dividend display on the unlocked physical SCG01. Installation, launch request, and APK hash are verified; physical UI acceptance remains unverified while the device is locked.
+
 - [x] Integrate the four pending evaluation/comment commits with current main labels and explanation wording. Evidence: all 208 Android unit tests and the JDK 17 build pass; physical RFCNC0E4H8J and emulator-5560 show all four evaluation panels and the dividend explanation, with matching installed APK hashes and no fresh fatal exceptions. See `ai_docs/branch-integration-20261027.md`; unrelated dirty work and account CSV history are preserved.
 
 ## In Progress
