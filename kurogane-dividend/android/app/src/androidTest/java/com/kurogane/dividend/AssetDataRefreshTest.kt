@@ -36,7 +36,7 @@ class AssetDataRefreshTest {
     @Volatile private var eventForecast = false
     private val prefs get() = app.getSharedPreferences("cloudflare_market_cache", Context.MODE_PRIVATE)
 
-    private fun model(): DividendViewModel {
+    private fun model(refreshOnStart: Boolean = false): DividendViewModel {
         seedReviewPortfolio(app)
         val repository = CloudflareMarketRepository("https://example.com", connectionFactory = { url ->
             object : HttpURLConnection(url) {
@@ -74,7 +74,7 @@ class AssetDataRefreshTest {
         })
         lateinit var vm: DividendViewModel
         compose.runOnIdle {
-            vm = DividendViewModel(app, false, repository, notificationScheduler = { _, _ -> })
+            vm = DividendViewModel(app, refreshOnStart, repository, notificationScheduler = { _, _ -> })
             models.put("vm", vm)
         }
         runBlocking { vm.awaitRestoration() }
@@ -112,16 +112,49 @@ class AssetDataRefreshTest {
         assertEquals(3, vm.holdings.value.size)
     }
 
-    @Test fun openingAssetsFillsMissingDataUsingDetailSources() {
+    @Test fun openingAssetsUsesCacheWithoutStartingRequests() {
         val vm = model()
         compose.setContent { KuroganeDividendTheme { AssetManagementScreen(vm) } }
-        awaitFilled(vm)
+        compose.waitForIdle()
+        assertTrue(requests.isEmpty())
         fill(vm)
+        awaitFilled(vm)
         assertEquals(3000.0, vm.holdings.value.first { it.code == "7203" }.price, 0.0)
         assertTrue(requests.contains("/api/v1/financial-data/AAPL"))
         val count = requests.size
         fill(vm)
         assertEquals(count, requests.size)
+    }
+
+    @Test fun startupSkipsTheSameDayEvenAfterTwelveHours() {
+        val now = System.currentTimeMillis()
+        prefs.edit().putLong("startup_fetch_attempt_at", now - 13 * 3_600_000L)
+            .putString("startup_fetch_attempt_jst", PriceRefreshPolicy.japanDate(now)).commit()
+        model(refreshOnStart = true)
+        compose.waitForIdle()
+        assertTrue(requests.isEmpty())
+    }
+
+    @Test fun startupSkipsRecentFetchEvenAcrossDateBoundary() {
+        val now = System.currentTimeMillis()
+        prefs.edit().putLong("startup_fetch_attempt_at", now - 3_600_000L)
+            .putString("startup_fetch_attempt_jst", PriceRefreshPolicy.japanDate(now - 86_400_000L)).commit()
+        model(refreshOnStart = true)
+        compose.waitForIdle()
+        assertTrue(requests.isEmpty())
+    }
+
+    @Test fun dueStartupFetchesHoldingsWithoutCatalogOrSpeculativeHistory() {
+        val now = System.currentTimeMillis()
+        prefs.edit().putLong("startup_fetch_attempt_at", now - 86_400_000L)
+            .putString("startup_fetch_attempt_jst", PriceRefreshPolicy.japanDate(now - 86_400_000L))
+            .putLong("fx_fetch_attempt_at", now)
+            .putString("fx_fetch_attempt_jst_date", PriceRefreshPolicy.japanDate(now)).commit()
+        val vm = model(refreshOnStart = true)
+        awaitFilled(vm)
+        fill(vm)
+        assertTrue(prefs.getLong("startup_fetch_attempt_at", 0L) >= now)
+        assertTrue(requests.none { "catalog" in it || "monthly-prices" in it || "share-splits" in it })
     }
 
     @Test fun failedDataRetriesSameDayAfterCooldownAndSuccessStopsFurtherRequests() {

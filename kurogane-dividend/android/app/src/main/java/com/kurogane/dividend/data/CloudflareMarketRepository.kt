@@ -255,7 +255,7 @@ class CloudflareMarketRepository(
         }
     }
 
-    suspend fun fetchSearchQuotes(codes: Collection<String>): Map<String, CloudflareSearchQuote> = withContext(ioDispatcher) {
+    suspend fun fetchSearchQuotes(codes: Collection<String>, allowCatalogFallback: Boolean = true): Map<String, CloudflareSearchQuote> = withContext(ioDispatcher) {
         val requestedCodes = codes.map { it.trim().uppercase(java.util.Locale.ROOT) }
             .filter(::isSecurityCode)
             .distinct()
@@ -272,7 +272,7 @@ class CloudflareMarketRepository(
             val quote = liveQuotes[code]
             quote?.price == null || quote.yieldRate == null
         }
-        if (!needsCatalogFallback) return@withContext liveQuotes
+        if (!needsCatalogFallback || !allowCatalogFallback) return@withContext liveQuotes
 
         val catalogQuotes = searchCatalogQuotes()
         buildMap {
@@ -366,7 +366,7 @@ class CloudflareMarketRepository(
         const val NANOS_PER_MILLISECOND = 1_000_000L
     }
 
-    suspend fun getSecurity(code: String): CloudflareSecurity? = withContext(ioDispatcher) {
+    suspend fun getSecurity(code: String, allowCatalogFallback: Boolean = true): CloudflareSecurity? = withContext(ioDispatcher) {
         val normalized = PortfolioMath.normalizeCode(code)
         require(isSecurityCode(normalized)) { "銘柄コードが正しくありません" }
         val safeCode = URLEncoder.encode(normalized, Charsets.UTF_8.name())
@@ -378,7 +378,7 @@ class CloudflareMarketRepository(
         val irbankDividend = dividend?.takeIf {
             it.has("yield_basis") || it.has("trailing_12_month_per_share") || it.optJSONObject("field_status") != null
         }
-        val catalogQuote = runCatching { searchCatalogQuotes()[normalized] }.getOrNull()
+        val catalogQuote = if (allowCatalogFallback) runCatching { searchCatalogQuotes()[normalized] }.getOrNull() else null
         val marketQuote = root.optJSONObject("market_price")
         val detailPrice = marketQuote?.numberOrNull("close")
             ?: root.numberOrNull("market_price")

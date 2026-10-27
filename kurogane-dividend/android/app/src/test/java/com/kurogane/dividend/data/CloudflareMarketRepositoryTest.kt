@@ -12,6 +12,17 @@ import java.net.SocketTimeoutException
 import java.net.URL
 
 class CloudflareMarketRepositoryTest {
+    @Test fun targetedRefreshNeverDownloadsTheCatalogForMissingFields() = runBlocking {
+        val urls = mutableListOf<String>()
+        val repo = repository(mutableListOf(
+            Connection(200, """{"items":[{"code":"7203","price":2600}]}"""),
+            Connection(200, """{"code":"7203","name":"Toyota","market_price":2600}""")), urls)
+        assertEquals(2600.0, repo.fetchSearchQuotes(listOf("7203"), allowCatalogFallback = false)["7203"]!!.price!!, 0.0)
+        assertEquals(2600.0, repo.getSecurity("7203", allowCatalogFallback = false)!!.marketPrice!!, 0.0)
+        assertEquals(2, urls.size)
+        assertFalse(urls.any { "catalog" in it })
+    }
+
     @Test fun productCategoriesUseTheFullUniverseApiAndPreserveUnknownAndFiveDigitCodes() = runBlocking {
         val urls = mutableListOf<String>()
         val repo = repository(mutableListOf(Connection(200, """{"categories":{"1306":"014","8951":"013","25935":"011","285A":null,"9999":"014"}}""")), urls)
