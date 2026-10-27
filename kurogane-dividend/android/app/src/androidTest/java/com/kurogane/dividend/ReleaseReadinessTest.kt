@@ -94,6 +94,27 @@ class ReleaseReadinessTest {
         assertEquals(2, attempts.get())
     }
 
+    @Test fun searchUsesTheSelectedDividendAndPriceAndKeepsMissingDataUnknown() {
+        compose.setContent { KuroganeDividendTheme {
+            SearchSheet(true, {}, {}, { query ->
+                if (query == "8984") listOf(CloudflareSearchHit("8984", "REIT検証"))
+                else listOf(CloudflareSearchHit("4502", "株式検証", cachedPrice = 6452.0,
+                    annualDividendPerShare = 204.0, marketYieldRate = 3.19))
+            }, { codes ->
+                if (codes.contains("4502")) mapOf("4502" to com.kurogane.dividend.data.CloudflareSearchQuote(
+                    price = 6452.0, yieldRate = 3.19, annualDividendPerShare = 204.0, hasDividendStatus = true))
+                else mapOf("8984" to com.kurogane.dividend.data.CloudflareSearchQuote(
+                    price = 110200.0, yieldRate = null, hasDividendStatus = true))
+            })
+        } }
+        compose.onNode(hasSetTextAction()).performTextInput("8984")
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("REIT検証").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("利回り 未取得").assertIsDisplayed()
+        compose.onNode(hasSetTextAction()).performTextReplacement("4502")
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("株式検証").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("利回り 3.16%").assertIsDisplayed()
+    }
+
     @Test fun successfulEmptySearchExplainsHowToChangeConditions() {
         compose.setContent { KuroganeDividendTheme { SearchSheet(true, {}, {}, { emptyList() }) } }
         compose.onNode(hasSetTextAction()).performTextInput("9999")

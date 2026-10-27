@@ -21,6 +21,68 @@ test('empty issuer records remain unknown across security, quotes, and search; e
   }
 });
 
+test('search and live quote use the same recent forward DPS and current price', async () => {
+  const f = marketReadFixture('4502');
+  const row = f.documents.get('market/yfinance/v2/catalog/current.json').items[0];
+  row.security_type = 'equity';
+  const current = f.documents.get(`${f.base}/current.json`);
+  current.price.close = 6452;
+  current.statistics.dividendRate = 204;
+  current.statistics_last_fetched_at = new Date().toISOString();
+  current.field_status.statistics_dividendRate = 'available';
+  for (const path of ['/api/v1/security-search?q=4502', '/api/v1/live-quotes?codes=4502']) {
+    const body = await (await worker.fetch(new Request(`https://example.com${path}`), f.env)).json();
+    assert.equal(body.items[0].annual_dividend_per_share, 204, path);
+    assert.equal(body.items[0].yield_rate, 3.1618, path);
+    assert.equal(body.items[0].dividend_source, 'Yahoo Finance via yfinance', path);
+    assert.equal(body.items[0].dividend_period, 'forward_12_month_estimate', path);
+  }
+  current.statistics_last_fetched_at = new Date(Date.now() - 46 * 86400000).toISOString();
+  const stale = await (await worker.fetch(new Request('https://example.com/api/v1/security-search?q=4502'), f.env)).json();
+  assert.equal(stale.items[0].annual_dividend_per_share, 100);
+  assert.equal(stale.items[0].dividend_period, 'issuer_reported_fiscal_year');
+});
+
+test('a zero Yahoo estimate does not turn missing issuer data into confirmed no dividend', async () => {
+  const f = marketReadFixture('4502', 'unknown');
+  f.documents.get('market/yfinance/v2/catalog/current.json').items[0].security_type = 'equity';
+  const current = f.documents.get(`${f.base}/current.json`);
+  current.statistics.dividendRate = 0;
+  current.statistics_last_fetched_at = new Date().toISOString();
+  const body = await (await worker.fetch(new Request('https://example.com/api/v1/security-search?q=4502'), f.env)).json();
+  assert.equal(body.items[0].dividend_status, 'unknown');
+  assert.equal(body.items[0].annual_dividend_per_share, null);
+  assert.equal(body.items[0].yield_rate, null);
+});
+
+test('REIT search and quotes use disclosed two-period forecasts, not Yahoo estimates', async () => {
+  const f = marketReadFixture('8984', 'unknown');
+  const row = f.documents.get('market/yfinance/v2/catalog/current.json').items[0];
+  row.security_type = 'reit';
+  row.price = 110200;
+  const current = f.documents.get(`${f.base}/current.json`);
+  current.price.close = 110200;
+  current.statistics.dividendRate = 6040;
+  current.statistics_last_fetched_at = new Date().toISOString();
+  const index = f.documents.get('market/yfinance/v2/issuer_dividends/current.json');
+  index.items['8984'].forecast = { status: 'available', annual_dps_current_share_basis: 7110,
+    period_end: '2099-08-31', first_period_end: '2099-02-28', fiscal_year: 2099,
+    amount_basis: 'reit_two_period_forecast_including_excess_distributions' };
+  index.items['8984'].forecast_status = 'available';
+  for (const path of ['/api/v1/security-search?q=8984', '/api/v1/live-quotes?codes=8984']) {
+    const body = await (await worker.fetch(new Request(`https://example.com${path}`), f.env)).json();
+    assert.equal(body.items[0].annual_dividend_per_share, 7110, path);
+    assert.equal(body.items[0].yield_rate, 6.4519, path);
+    assert.equal(body.items[0].dividend_period, 'forward_two_fiscal_periods_forecast', path);
+  }
+  const security = await (await worker.fetch(new Request('https://example.com/api/v1/securities/8984'), f.env)).json();
+  assert.equal(security.dividend.dividend_period, 'forward_two_fiscal_periods_forecast');
+  index.items['8984'].forecast.first_period_end = '2000-02-28';
+  const body = await (await worker.fetch(new Request('https://example.com/api/v1/security-search?q=8984'), f.env)).json();
+  assert.equal(body.items[0].annual_dividend_per_share, null);
+  assert.equal(body.items[0].yield_rate, null);
+});
+
 for (const code of ['7203', '25935', '285A']) {
   test(`analysis reads each market object once and sees updates on the next request: ${code}`, async () => {
     const f = marketReadFixture(code);

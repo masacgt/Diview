@@ -41,7 +41,12 @@ data class FinancialData(
     val dividendShareBasisStatus: String = "unknown",
     val issuerDividendShareBasisStatus: String = "unknown",
     val yahooForwardAnnualDividendRate: Double? = null,
-    val analysisContext: StockAnalysisContext = StockAnalysisContext()
+    val analysisContext: StockAnalysisContext = StockAnalysisContext(),
+    val issuerIsInvestmentFund: Boolean = false,
+    val issuerIsKnownEquity: Boolean = false,
+    val forecastFirstPeriodEnd: LocalDate? = null,
+    val forecastPeriodEnd: LocalDate? = null,
+    val yahooDividendFetchedDate: LocalDate? = null
 ) {
     companion object {
         fun parse(root: JSONObject, expectedCode: String): FinancialData {
@@ -211,7 +216,12 @@ data class FinancialData(
                     ?: dividend?.number("consecutive_dividend_increase_years"))
             ), historyBasis, issuerDividends, issuerDividendHistoryStatus,
                 forecastAnnualDividend, forecastEps, forecastFiscalYear, forecastPayoutRatio,
-                dividendShareBasisStatus, issuerDividendShareBasisStatus, yahooForwardAnnualDividendRate, FinancialHistoryParser.parse(root))
+                dividendShareBasisStatus, issuerDividendShareBasisStatus, yahooForwardAnnualDividendRate, FinancialHistoryParser.parse(root),
+                issuerIsInvestmentFund = issuerDividendPayload?.optString("edinet_code")?.startsWith("G") == true,
+                issuerIsKnownEquity = issuerDividendPayload?.optString("edinet_code")?.matches(Regex("E\\d{5}")) == true,
+                forecastFirstPeriodEnd = forecastSource?.optString("first_period_end")?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+                forecastPeriodEnd = forecastSource?.optString("period_end")?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+                yahooDividendFetchedDate = marketPayload?.optString("statistics_last_fetched_at")?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() })
         }
     }
 }

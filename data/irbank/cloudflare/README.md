@@ -6,9 +6,9 @@
 
 新規問い合わせの管理者メール通知と再試行については [問い合わせメール通知](docs/feedback-email.md) を参照してください。Worker公開前に追加の `0006_feedback_email.sql` を適用します。
 
-`GET /api/v1/financial-data/7203` は、v2のプロフィール・現在値・年次財務・配当履歴を返します。`dividends.records` はyfinanceの日足履歴から取得した修復済み配当イベントを暦年単位で集計し、完了した年だけを `calendar_year` と `calendar_year_distribution_per_share` で返します。金額基準は `dividends.amount_basis=yfinance_split_adjusted_assumption` で、IRBANKの決算期DPSとは別の履歴です。一方、現在の年間DPSは `market/yfinance/v2/issuer_dividends/current.json` のIRBANKデータから選び、予想がなければ最新の分割調整済み実績を返します。予想利回りはIRBANKスクリーニングの `dividendYield` と基準日を優先し、IRBANK値がない場合だけ選択した終値とIRBANKのDPSから計算します。`issuer_dividends.records` はIRBANK v1の銘柄別年間実績を返し、最新年度は配当インデックスの更新値で上書きします。会社予想、最新実績、出典も分けて返します。IRBANKの配当額が未取得の場合はyfinanceの配当額に戻さず、状態を `unknown` として返します。暦年の実配当イベント履歴は引き続きyfinance由来です。v2配当履歴が空でも404にせず項目状態を併記します。銘柄情報の8期編集値は端末内に暗号化保存し、R2の共有データを変更しません。
+`GET /api/v1/financial-data/7203` は、v2のプロフィール・現在値・年次財務・配当履歴を返します。`dividends.records` はyfinanceの日足履歴から取得した修復済み配当イベントを暦年単位で集計し、完了した年だけを `calendar_year` と `calendar_year_distribution_per_share` で返します。金額基準は `dividends.amount_basis=yfinance_split_adjusted_assumption` で、IRBANKの決算期DPSとは別の履歴です。一方、現在の年間DPSは `market/yfinance/v2/issuer_dividends/current.json` のIRBANKデータから選び、予想がなければ最新の分割調整済み実績を返します。検索と銘柄指定ライブ価格は、選択した配当と株価から利回りを計算します。`issuer_dividends.records` はIRBANK v1の銘柄別年間実績を返し、最新年度は配当インデックスの更新値で上書きします。会社予想、最新実績、出典も分けて返します。IRBANKの配当額が未取得の場合はyfinanceの配当額に戻さず、状態を `unknown` として返します。暦年の実配当イベント履歴は引き続きyfinance由来です。v2配当履歴が空でも404にせず項目状態を併記します。銘柄情報の8期編集値は端末内に暗号化保存し、R2の共有データを変更しません。
 
-IRBANKの配当取得が成功し `actual_status=empty`（配当実績レコード0件）の場合、銘柄検索・ライブ価格・銘柄情報APIは年間DPS 0円、利回り0%、`dividend_status=no_dividend` を返します。予想データが有効な場合は会社予想を優先し、未取得・失敗状態は無配に変換しません。
+IRBANKの配当実績レコードが空の場合は `dividend_status=unknown` とし、明示的なゼロの実績または予想のみ無配と扱います。一般株式の取得日時を確認できる予想で補完できる場合を除き、未取得をゼロに変換しません。
 
 `GET /api/v1/securities/7203` は `data_retrieval` にyfinance ticker、取得元、通貨、最終取得試行日時、同期状態、失敗理由を含めます。`company_info` には会社情報・統計の最終取得日、直近の試行状態、再試行予定、失敗分類・理由を返します。個別の取得日時が保存されていない既存レコードでは、最終成功同期日を参考値として返し、`fetch_date_basis=last_successful_sync_fallback` と状態 `stale` で区別します。この場合、個別取得時刻を誤認させないよう `last_fetched_at` はnullです。新しい個別取得日時には `fetch_date_basis=company_info_fetch` を付けます。`valuation` のPER/PBRは日次終値をyfinanceの保存済みEPS/BPSで割ってWorkerでも再計算し、Yahooの報告倍率をそのまま返しません。`dividend_history` は履歴取得状態、取得元、直近取得範囲、保存済み配当イベントの最古日・最新日を返します。保存期間はR2の通常・アーカイブ年次パーティション内のイベント日から求め、取得範囲とは区別します。Androidの銘柄情報画面はこの内容を「データ取得情報」として表示します。
 
@@ -121,7 +121,7 @@ R2キーは `market/irbank/v1/` 配下です。Worker APIは `/api/v1/irbank/cat
 
 `.github/workflows/yfinance-r2.yml` は、平日の日本時間21時に起動し、XTKS営業日を確認してからJ-Quants v2の銘柄一覧を取得します。株式、ETF、REITを含むコードに `.T` を付けてyfinanceデータを取得し、プロフィールと完了済み終値を保存できた銘柄だけを `market/yfinance/v2/catalog/current.json` に掲載します。J-Quants一覧にあっても、初回取得に成功していない銘柄は検索・登録できません。
 
-`GET /api/v1/security-search?q=...` はv2カタログのコード・表示名を検索し、価格、価格日、直近12か月の配当合計、利回りを返します。利回りはyfinanceの `dividendRate`（Yahoo Financeが示す今後12か月の年間配当見積もり）を終値で割り、この値がない場合は取得日までに記録された今期の配当イベント合計を使います。`dividendRate` は会社が確定した次会計年度DPSとは区別します。検索時にyfinanceへ問い合わせることはありません。空の検索欄に表示する既存候補の価格も、`GET /api/v1/live-quotes?codes=7203,8306` でR2カタログから読みます。
+`GET /api/v1/security-search?q=...` と銘柄指定 `GET /api/v1/live-quotes` は、IRBANKの有効な予想を優先し、一般株式では直近45日以内の取得日時が確認できるyfinance年間予想を補完できます。利回りは選択した配当額と株価から計算します。REITのyfinance年間推定値は発行体の2期分配金の代わりにしません。IRBANK予想がない場合は最新実績または未取得の状態を返し、欠損をゼロに変換しません。
 
 候補を選んで銘柄詳細・登録情報を開くと、`GET /api/v1/securities/{code}` がv2の `profile.json` と `current.json` を読みます。J-Quantsの有効ユニバースとv2カタログにない銘柄は返しません。業種表示はAndroid同梱の業種マスターを使います。
 

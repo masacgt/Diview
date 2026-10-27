@@ -6,6 +6,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FinancialDataTest {
+    @Test fun reitForecastAndProviderFetchDateSurviveTheApiContract() {
+        val data = FinancialData.parse(JSONObject("""{
+          "security":{"code":"8984"},
+          "issuer_dividends":{"edinet_code":"G04516","forecast":{"fiscal_year":2027,
+            "period_end":"2027-08-31","first_period_end":"2027-02-28",
+            "annual_dps_current_share_basis":7110,"field_units":{"annual_dps_current_share_basis":"jpy_per_share"}}},
+          "market":{"statistics_last_fetched_at":"2026-10-25T11:53:03Z",
+            "summary":{"dividendRate":6040},"summary_field_units":{"dividendRate":"jpy_per_share"}}
+        }"""), "8984")
+        assertTrue(data.issuerIsInvestmentFund)
+        assertEquals(7110.0, data.forecastAnnualDividend!!, 0.0)
+        assertEquals(java.time.LocalDate.of(2027, 2, 28), data.forecastFirstPeriodEnd)
+        assertEquals(java.time.LocalDate.of(2026, 10, 25), data.yahooDividendFetchedDate)
+        assertEquals(7110.0, AnnualDividendResolver.forecast(Category.JAPAN, data, emptyList(), null,
+            java.time.LocalDate.of(2026, 10, 28))!!, 0.0)
+    }
+
     private fun parseFixture(root: JSONObject, expectedCode: String) = FinancialData.parse(
         root.apply {
             fun JSONObject.tagUnits(definitions: Map<String, String>) {

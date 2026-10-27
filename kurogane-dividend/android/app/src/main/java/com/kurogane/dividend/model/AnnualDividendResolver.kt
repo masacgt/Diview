@@ -9,6 +9,13 @@ import java.time.ZoneId
 
 /** The forecast used by both the Stock Detail top card and portfolio calculations. */
 object AnnualDividendResolver {
+    fun issuerForecast(financial: FinancialData?, today: LocalDate): Double? =
+        financial?.forecastAnnualDividend?.takeIf {
+            it.isFinite() && it >= 0.0 && financial.forecastFiscalYear?.let { year -> year >= today.year } == true &&
+                (financial.forecastPeriodEnd == null || financial.forecastPeriodEnd.isAfter(today)) &&
+                (!financial.issuerIsInvestmentFund || financial.forecastFirstPeriodEnd?.isAfter(today) == true)
+        }
+
     fun eventForecast(
         events: List<CloudflareDividendEvent>, upcoming: CloudflareUpcomingDividendEvent?,
         today: LocalDate = LocalDate.now(ZoneId.of("Asia/Tokyo"))
@@ -31,12 +38,15 @@ object AnnualDividendResolver {
         today: LocalDate = LocalDate.now(ZoneId.of("Asia/Tokyo"))
     ): Double? {
         if (category == Category.FUND) return null
-        val issuerForecast = financial?.forecastAnnualDividend?.takeIf {
-            financial.forecastFiscalYear?.let { year -> year >= today.year } == true
-        }
-        return issuerForecast?.takeIf { it.isFinite() && it >= 0.0 }
-            ?: eventForecast(events, upcoming, today)?.takeIf { it.isFinite() && it >= 0.0 }
-            ?: financial?.yahooForwardAnnualDividendRate?.takeIf { it.isFinite() && it >= 0.0 }
+        val knownEquity = category == Category.US || financial?.issuerIsKnownEquity == true
+        return issuerForecast(financial, today)
+            ?: eventForecast(events, upcoming, today)?.takeIf { knownEquity && it.isFinite() && it >= 0.0 }
+            ?: financial?.yahooForwardAnnualDividendRate?.takeIf {
+                knownEquity && it.isFinite() && it > 0.0 &&
+                    financial.yahooDividendFetchedDate?.let { fetched ->
+                        !fetched.isAfter(today) && !fetched.isBefore(today.minusDays(45))
+                    } == true
+            }
     }
 
     fun applyForecast(holding: Holding, forecast: Double?): Holding {

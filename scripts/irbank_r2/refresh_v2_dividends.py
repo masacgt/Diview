@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
+import calendar
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import hashlib
 import json
@@ -33,7 +34,7 @@ DIVIDEND_SHARD_PREFIX_LENGTH = 2
 DEFAULT_OUTPUT = Path(tempfile.gettempdir()) / "diview-irbank-v2-dividends-current.json"
 EDINET_CODE_RE = re.compile(r"^[EG]\d{5}$")
 SECURITY_CODE_RE = re.compile(r"^[A-Z0-9]{4}$")
-FORECAST_TITLE_RE = re.compile(r"配当|決算|業績|dividend|earnings|results|forecast", re.IGNORECASE)
+FORECAST_TITLE_RE = re.compile(r"配当|分配|決算|業績|運用状況|dividend|distribution|earnings|results|forecast", re.IGNORECASE)
 # IRBANK currently allows 60 requests/minute per account. Keep a small margin
 # for requests made outside this process while reducing idle time between calls.
 API_REQUEST_INTERVAL_SECONDS = 1.02
@@ -164,12 +165,74 @@ def _forecast_dps_facts(document: dict[str, Any]) -> list[dict[str, Any]]:
     return result
 
 
-def parse_forecast(document: dict[str, Any], latest_actual_row: dict[str, Any] | None) -> dict[str, Any] | None:
+def _reit_forecast(facts: list[dict[str, Any]], meta: dict[str, Any], as_of: date) -> dict[str, Any] | None:
+    """Combine two explicitly reported six-month REIT distributions on a 12-month basis."""
+    def fact_date(name: str) -> date | None:
+        for row in facts:
+            if row.get("element_name") == name:
+                try:
+                    return date.fromisoformat(str(row.get("value"))[:10])
+                except ValueError:
+                    return None
+        return None
+
+    start = fact_date("CurrentFiscalYearStartDateDEI")
+    end = fact_date("CurrentFiscalYearEndDateDEI")
+    if start is None or end is None or (end.year - start.year) * 12 + end.month - start.month != 5:
+        return None
+    if start.day != 1 or end.day != calendar.monthrange(end.year, end.month)[1]:
+        return None
+
+    def advance_six_months(value: date) -> date:
+        month_index = value.year * 12 + value.month - 1 + 6
+        year, month_zero = divmod(month_index, 12)
+        return date(year, month_zero + 1, calendar.monthrange(year, month_zero + 1)[1])
+
+    first_end = advance_six_months(end)
+    second_end = advance_six_months(first_end)
+    # Never keep including a completed distribution in a forward 12-month estimate.
+    if first_end <= as_of:
+        return None
+    components = []
+    for context_prefix, period_end in (("NextYearDuration", first_end), ("Next2YearDuration", second_end)):
+        matches = []
+        for row in facts:
+            context = str(row.get("context") or "")
+            if (row.get("element_name") != "DistributionsPerUnitIncludingDistributionsInExcessOfProfitREIT"
+                    or not context.startswith(context_prefix + "_") or "ForecastMember" not in context
+                    or "PreviousMember" in context or row.get("unit") != "JPYPerUnits"):
+                continue
+            value = decimal_value(row.get("value"))
+            if value is not None and value >= 0:
+                matches.append(value)
+        if not matches or len(set(matches)) != 1:
+            return None
+        components.append({"period_end": period_end.isoformat(), "reported_dps": json_number(matches[0]),
+                           "current_share_basis_dps": json_number(matches[0])})
+    doc_id = str(meta.get("doc_id") or "")
+    return {
+        "status": "available", "fiscal_year": second_end.year, "period_end": second_end.isoformat(),
+        "first_period_end": first_end.isoformat(),
+        "annual_dps_current_share_basis": json_number(sum(Decimal(str(c["reported_dps"])) for c in components)),
+        "amount_basis": "reit_two_period_forecast_including_excess_distributions",
+        "disclosed_at": meta.get("disclosed_at"),
+        "source_refs": ([{"doc_id": doc_id, "source": meta.get("source") or "tdnet"}] if doc_id else []),
+        "components": components,
+        "normalization": {"method": "sum_two_reported_six_month_distributions"},
+    }
+
+
+def parse_forecast(document: dict[str, Any], latest_actual_row: dict[str, Any] | None,
+                   *, as_of: date | None = None) -> dict[str, Any] | None:
     """Normalize explicit current-year DividendPerShare XBRL facts to one annual DPS."""
     facts = document.get("xbrl_facts")
     if not isinstance(facts, list):
         return None
     facts = [row for row in facts if isinstance(row, dict)]
+    reit_forecast = _reit_forecast(facts, document.get("meta") or {},
+                                   as_of or datetime.now(timezone(timedelta(hours=9))).date())
+    if reit_forecast is not None:
+        return reit_forecast
     dps_facts = _forecast_dps_facts({"xbrl_facts": facts})
     if not dps_facts:
         return None
@@ -239,7 +302,7 @@ def parse_forecast(document: dict[str, Any], latest_actual_row: dict[str, Any] |
 def fetch_latest_forecast(code: str, actual: dict[str, Any] | None, token: str,
                           *, as_of: date | None = None,
                           budget: RequestBudget | None = None) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    as_of = as_of or date.today()
+    as_of = as_of or datetime.now(timezone(timedelta(hours=9))).date()
     from_date = (as_of - timedelta(days=1095)).isoformat()
     url = f"{API_BASE}/securities/{code}/disclosures?{urlencode({'from': from_date, 'limit': 100})}"
     listing = request_json(url, token, budget=budget)
@@ -261,9 +324,20 @@ def fetch_latest_forecast(code: str, actual: dict[str, Any] | None, token: str,
             if error.status == 404:
                 continue
             raise
-        forecast = parse_forecast(document, actual)
+        forecast = parse_forecast(document, actual, as_of=as_of)
         if forecast:
             return forecast, document.get("attribution")
+        # A newer REIT forecast can supersede an older two-period forecast.
+        # If it cannot be normalized safely, do not fall back to the older value.
+        facts = document.get("xbrl_facts")
+        if isinstance(facts, list) and any(
+            isinstance(fact, dict)
+            and str(fact.get("element_name") or "").startswith("DistributionsPerUnit")
+            and "ForecastMember" in str(fact.get("context") or "")
+            and "PreviousMember" not in str(fact.get("context") or "")
+            for fact in facts
+        ):
+            return None, document.get("attribution") or listing.get("attribution")
     return None, listing.get("attribution")
 
 

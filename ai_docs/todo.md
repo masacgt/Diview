@@ -1,5 +1,7 @@
 # Todo
 
+- [ ] Verify the forecast acquisition and yield-source repair in production: targeted 8984 forecast publication, Worker preview/production read-back, scheduled IRBANK batch, and release/device checks remain to be confirmed. Local issuer-disclosure parsing returns 7,110 JPY with two dated components; simulated R2 update preserves other values and the batch cursor.
+
 - [ ] Complete release-audit fixes and production acceptance for missing dividend/price data, forecast history and Watchlist ordering. Worker production version e6196109 treats empty issuer feeds as unknown; Android distinguishes missing valuation/dividend data. Isolated emulator and production API checks pass for representative cases; physical-device validation and full release acceptance remain open.
 
 - [x] Integrate the verified fetch-efficiency branch into current main while preserving dirty worktrees and CSV history. Evidence: the three commits through `c65468da` fast-forward without conflict; JDK 17 build/220 unit tests, 67 Worker tests, 24 emulator cases and 25 physical cases succeed; both installed APKs match and all 66 PNGs match baseline. The concurrent Worker v70 publication was preserved while restoring this task's bounded optimizations as v71; 30 production response checks pass. See `fetch-efficiency-main-integration-20261027.md`.

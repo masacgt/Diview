@@ -358,12 +358,16 @@ function selectedIrbankDividend(item) {
   const forecast = item?.forecast;
   const forecastDps = finiteNumber(forecast?.annual_dps_current_share_basis);
   const forecastPeriodEnd = String(forecast?.period_end || '');
+  const firstPeriodEnd = String(forecast?.first_period_end || '');
+  const reitTwoPeriodForecast = forecast?.amount_basis === 'reit_two_period_forecast_including_excess_distributions';
   if (forecast?.status === 'available' && forecastDps !== null && forecastDps >= 0
-    && /^\d{4}-\d{2}-\d{2}$/.test(forecastPeriodEnd) && forecastPeriodEnd > tokyoDate(Date.now() / 1000)) {
+    && /^\d{4}-\d{2}-\d{2}$/.test(forecastPeriodEnd) && forecastPeriodEnd > tokyoDate(Date.now() / 1000)
+    && (!reitTwoPeriodForecast || (/^\d{4}-\d{2}-\d{2}$/.test(firstPeriodEnd)
+      && firstPeriodEnd > tokyoDate(Date.now() / 1000) && firstPeriodEnd < forecastPeriodEnd))) {
     return {
       annual_dps: forecastDps,
-      dividend_period: 'next_fiscal_year_forecast',
-      yield_basis: 'next_fiscal_year_forecast',
+      dividend_period: reitTwoPeriodForecast ? 'forward_two_fiscal_periods_forecast' : 'next_fiscal_year_forecast',
+      yield_basis: reitTwoPeriodForecast ? 'forward_two_fiscal_periods_forecast' : 'next_fiscal_year_forecast',
       dividend_amount_basis: forecast.amount_basis || 'irbank_forecast_current_share_basis',
       dividend_status: forecastDps > 0 ? 'has_dividend' : 'no_dividend',
       fiscal_year: finiteNumber(forecast.fiscal_year),
@@ -465,6 +469,30 @@ function yieldSourceFromDividend(yieldRate, irbankYield, irbankSource, yfinanceY
     return irbankSource || 'IRBANK screening dividendYield';
   }
   return yieldRate !== null ? 'calculated_from_irbank_dividend_and_quote' : null;
+}
+
+// Search and quote screens must compare the same forecast and price, rather
+// than mixing a screening yield from a different date with an annual DPS.
+function searchDividend(row, issuer, current) {
+  if (issuer.forecast != null) return issuer;
+  const fetchedAt = Date.parse(String(current?.statistics_last_fetched_at || ''));
+  const age = Date.now() - fetchedAt;
+  const forward = finiteNumber(current?.statistics?.dividendRate);
+  if (row.security_type === 'equity' && Number.isFinite(fetchedAt) && age >= 0 && age <= 45 * 86400000
+      && forward !== null && forward > 0 && current?.field_status?.statistics_dividendRate !== 'failed') {
+    return { ...issuer, annual_dps: forward, dividend_period: 'forward_12_month_estimate', fiscal_year: null,
+      dividend_amount_basis: 'yfinance_forward_dividend_rate', dividend_status: forward > 0 ? 'has_dividend' : 'no_dividend',
+      yield_basis: 'forward_12_month_estimate', yield_as_of: String(current.statistics_last_fetched_at).slice(0, 10),
+      yield_source: 'calculated_from_yfinance_dividend_and_quote', forecast: null };
+  }
+  return issuer;
+}
+
+function searchYield(price, dividend) {
+  const close = finiteNumber(price);
+  const dps = finiteNumber(dividend.annual_dps);
+  return close !== null && close > 0 && dps !== null && dps >= 0
+    ? Math.round(dps / close * 1000000) / 10000 : null;
 }
 
 async function readV2Json(env, key) {
@@ -1097,6 +1125,7 @@ async function readV2FinancialPayload(env, code) {
     },
     issuer_dividends: {
       records: issuerDividendRecords,
+      edinet_code: irbankDividendItem?.edinet_code || null,
       latest_actual: latestIssuerActual || issuerDividendRecords.at(-1) || null,
       forecast: issuerForecast,
       history_basis: 'issuer_reported_fiscal_year',
@@ -1113,6 +1142,8 @@ async function readV2FinancialPayload(env, code) {
       price: current.price || null,
       summary: current.statistics || {},
       summary_field_units: yfinanceStatisticsFieldUnits(current),
+      statistics_last_fetched_at: current.statistics_last_fetched_at || null,
+      statistics_dividend_rate_status: current.field_status?.statistics_dividendRate || null,
     } : null,
     sources: { market: 'Yahoo Finance via yfinance' },
   };
@@ -2618,53 +2649,24 @@ export default {
           const current = symbol
             ? await readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`)
             : null;
-          const dividend = current?.dividend;
-          if (!dividend) {
-            const reportedYield = current?.statistics?.dividendYield;
-            const yieldRate = yieldFromDividend(
-              current?.price?.close ?? item.price, irbankDividend.annual_dps,
-              irbankDividend.yield_rate, reportedYield, catalogYield,
-            );
-            return {
-              ...item,
-              price: finiteNumber(current?.price?.close) ?? item.price,
-              quote_date: current?.price?.date ?? item.quote_date,
-              yield_rate: yieldFromDividend(
-                current?.price?.close ?? item.price, irbankDividend.annual_dps, irbankDividend.yield_rate,
-                current?.statistics?.dividendYield, catalogYield,
-              ),
-              yield_source: yieldSourceFromDividend(
-                yieldFromDividend(
-                  current?.price?.close ?? item.price, irbankDividend.annual_dps, irbankDividend.yield_rate,
-                  current?.statistics?.dividendYield, catalogYield,
-                ),
-                irbankDividend.yield_rate, irbankDividend.yield_source,
-                current?.statistics?.dividendYield, catalogYield,
-              ),
-            };
-          }
-          const close = finiteNumber(current.price?.close) ?? finiteNumber(row.price);
-          const reportedYield = current?.statistics?.dividendYield;
-          const yieldRate = yieldFromDividend(
-            close, irbankDividend.annual_dps, irbankDividend.yield_rate, reportedYield, catalogYield,
-          );
+          const selected = searchDividend(row, irbankDividend, current);
+          const close = finiteNumber(current?.price?.close) ?? finiteNumber(row.price);
+          const selectedYield = searchYield(close, selected);
           return {
             ...item,
             price: close ?? item.price,
-            quote_date: current.price?.date ?? item.quote_date,
-            trailing_12_month_distribution_per_share: finiteNumber(dividend.trailing_12_month_per_share),
-            yield_rate: yieldFromDividend(
-              close, irbankDividend.annual_dps, irbankDividend.yield_rate,
-              current?.statistics?.dividendYield, catalogYield,
-            ),
-            yield_source: yieldSourceFromDividend(
-              yieldFromDividend(
-                close, irbankDividend.annual_dps, irbankDividend.yield_rate,
-                current?.statistics?.dividendYield, catalogYield,
-              ),
-              irbankDividend.yield_rate, irbankDividend.yield_source,
-              current?.statistics?.dividendYield, catalogYield,
-            ),
+            quote_date: current?.price?.date ?? item.quote_date,
+            annual_dividend_per_share: selected.annual_dps,
+            dividend_period: selected.dividend_period,
+            dividend_amount_basis: selected.dividend_amount_basis,
+            dividend_status: selected.dividend_status,
+            dividend_fiscal_year: selected.fiscal_year,
+            dividend_source: selected.dividend_amount_basis === 'yfinance_forward_dividend_rate' ? 'Yahoo Finance via yfinance' : 'IRBANK',
+            yield_basis: selected.yield_basis,
+            yield_as_of: selected.yield_as_of,
+            yield_rate: selectedYield,
+            yield_source: selectedYield === null ? null : 'calculated_from_selected_dividend_and_quote',
+            trailing_12_month_distribution_per_share: finiteNumber(current?.dividend?.trailing_12_month_per_share) ?? item.trailing_12_month_distribution_per_share,
           };
         }));
         const nextOffset = offset + items.length;
@@ -2791,42 +2793,34 @@ export default {
           const rank = value => value === needle ? 0 : value.startsWith(needle) ? 1 : 2;
           return rank(aCode) - rank(bCode) || String(a.name || '').localeCompare(String(b.name || ''), 'ja');
         })
-        .slice(0, 30)
-        .map(row => {
-          const dividend = irbankDividendForCode(irbankDividendIndex, row.code);
-          const catalogYield = row.yield_source === 'yfinance_reported_dividendYield' ? row.yield_rate : null;
-          const yieldRate = yieldFromDividend(
-            row.price, dividend.annual_dps, dividend.yield_rate, null, catalogYield,
-          );
+        .slice(0, 30);
+      const resultItems = await Promise.all(items.map(async row => {
+          const issuer = irbankDividendForCode(irbankDividendIndex, row.code);
+          const symbol = yfinanceV2Symbol(row.code);
+          const current = issuer.forecast == null && row.security_type === 'equity' && symbol
+            ? await readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`) : null;
+          const dividend = searchDividend(row, issuer, current);
+          const price = finiteNumber(current?.price?.close) ?? finiteNumber(row.price);
+          const yieldRate = searchYield(price, dividend);
           return {
             code: row.code,
             name: row.name,
-            price: row.price,
+            price,
             annual_dividend_per_share: dividend.annual_dps,
             trailing_12_month_distribution_per_share: row.trailing_12_month_distribution_per_share,
             dividend_period: dividend.dividend_period,
             dividend_amount_basis: dividend.dividend_amount_basis,
-            yield_rate: yieldFromDividend(
-              row.price, dividend.annual_dps, dividend.yield_rate, null,
-              row.yield_source === 'yfinance_reported_dividendYield' ? row.yield_rate : null,
-            ),
-            yield_source: yieldSourceFromDividend(
-              yieldFromDividend(
-                row.price, dividend.annual_dps, dividend.yield_rate, null,
-                row.yield_source === 'yfinance_reported_dividendYield' ? row.yield_rate : null,
-              ),
-              dividend.yield_rate, dividend.yield_source, null,
-              row.yield_source === 'yfinance_reported_dividendYield' ? row.yield_rate : null,
-            ),
+            yield_rate: yieldRate,
+            yield_source: yieldRate === null ? null : 'calculated_from_selected_dividend_and_quote',
             yield_as_of: dividend.yield_as_of,
             yield_attribution: dividend.yield_attribution,
             yield_basis: dividend.yield_basis,
             security_type: row.security_type,
             dividend_status: dividend.dividend_status,
-            dividend_source: 'IRBANK',
+            dividend_source: dividend.dividend_amount_basis === 'yfinance_forward_dividend_rate' ? 'Yahoo Finance via yfinance' : 'IRBANK',
           };
-        });
-      return json({ items, generation: v2Catalog.generation || null });
+        }));
+      return json({ items: resultItems, generation: v2Catalog.generation || null });
     }
 
     const securityMatch = url.pathname.match(/^\/api\/v1\/securities\/([A-Z0-9]{4,5})$/);
@@ -2893,7 +2887,7 @@ export default {
           field_status: {
             ...(current.field_status || {}),
             annual_dps: selectedDps !== null ? 'available' : 'empty',
-            forecast_dividend: selectedDividend.yield_basis === 'next_fiscal_year_forecast' ? 'available' : 'empty',
+            forecast_dividend: selectedDividend.forecast != null ? 'available' : 'empty',
           },
         },
         market_price: current.price || null,

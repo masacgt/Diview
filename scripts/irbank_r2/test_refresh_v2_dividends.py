@@ -1,8 +1,12 @@
 import hashlib
 import json
 import unittest
-from datetime import date
+import os
+import sys
+import tempfile
+from datetime import date, datetime, timezone
 from io import BytesIO
+from pathlib import Path
 from unittest.mock import patch
 
 from refresh_v2_dividends import (
@@ -16,7 +20,7 @@ from refresh_v2_dividends import (
     parse_forecast,
     prepare_dividend_index_shards,
 )
-from refresh_v2_dividend_batch import publish_index
+from refresh_v2_dividend_batch import is_due, publish_index, update_forecast, main as batch_main
 
 
 class MissingR2Key(Exception):
@@ -39,6 +43,87 @@ class FakeR2Client:
 
 
 class IrbankForecastParsingTests(unittest.TestCase):
+    def test_unusable_new_forecast_keeps_old_observation_without_serving_it_as_current(self):
+        old = {"status": "available", "annual_dps_current_share_basis": 7110}
+        item = {"forecast_status": "available", "forecast": old}
+        update_forecast(item, None, None, "2027-03-01T00:00:00Z")
+        self.assertEqual(item["forecast_status"], "empty")
+        self.assertIsNone(item["forecast"])
+        self.assertEqual(item["previous_forecast"], old)
+
+    def test_scheduled_sparse_checkout_contains_required_revision_module(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / ".github/workflows/irbank-v2-dividend-batch.yml").read_text(encoding="utf-8")
+        module = "scripts/yfinance_r2/financial_revision.py"
+        self.assertIn(module, workflow)
+        self.assertTrue((root / module).is_file())
+
+    def test_incomplete_newer_reit_forecast_never_falls_back_to_older_disclosure(self):
+        listing = {"disclosures": [
+            {"doc_id": "new", "title": "分配金予想の修正", "disclosed_at": "2026-10-20T00:00:00Z"},
+            {"doc_id": "old", "title": "決算短信", "disclosed_at": "2026-10-19T00:00:00Z"}]}
+        document = {"meta": {"doc_id": "new"}, "xbrl_facts": [{
+            "element_name": "DistributionsPerUnitExcludingDistributionsInExcessOfProfitREIT",
+            "context": "CurrentYearDuration_NonConsolidatedMember_CurrentMember_ForecastMember",
+            "value": "3020", "unit": "JPYPerUnits"}]}
+        with patch("refresh_v2_dividends.request_json", side_effect=[listing, document]) as request:
+            result, _ = fetch_latest_forecast("8984", None, "test", as_of=date(2026, 10, 28))
+        self.assertIsNone(result)
+        self.assertEqual(request.call_count, 2)
+
+    def test_targeted_forecast_refresh_preserves_other_data_and_round_robin_cursor(self):
+        catalog = [{"code": "1000", "edinet_code": "E00001"}, {"code": "8984", "edinet_code": "G04516"}]
+        original = {"items": {"1000": {"forecast_status": "not_requested"},
+                              "8984": {"forecast_status": "not_requested", "actual_status": "empty"}},
+                    "batch_sync": {"next_code": "1000", "cycle": 3}}
+        forecast = {"status": "available", "annual_dps_current_share_basis": 7110,
+                    "first_period_end": "2027-02-28", "period_end": "2027-08-31"}
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "input.json"
+            output = Path(directory) / "output.json"
+            source.write_text(json.dumps(original), encoding="utf-8")
+            with patch.dict(os.environ, {"IRBANK_API_KEY": "test"}), \
+                 patch.object(sys, "argv", ["batch", "--input", str(source), "--output", str(output), "--forecast-codes", "8984"]), \
+                 patch("refresh_v2_dividend_batch.refresh.load_catalog", return_value=catalog), \
+                 patch("refresh_v2_dividend_batch.refresh.request_json", return_value={"remaining": 100}), \
+                 patch("refresh_v2_dividend_batch.refresh.fetch_latest_forecast", return_value=(forecast, None)) as fetch:
+                batch_main()
+            result = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(fetch.call_count, 1)
+        self.assertEqual(fetch.call_args.args[0], "8984")
+        self.assertEqual(result["items"]["8984"]["forecast"]["annual_dps_current_share_basis"], 7110)
+        self.assertEqual(result["items"]["1000"]["forecast_status"], "not_requested")
+        self.assertEqual(result["batch_sync"]["next_code"], "1000")
+        self.assertEqual(result["batch_sync"]["cycle"], 3)
+
+    def test_reit_forecast_is_due_after_first_forecast_period_and_empty_is_rechecked(self):
+        item = {"edinet_code": "G04516", "forecast_status": "available",
+                "forecast_checked_at": "2027-02-27T00:00:00Z", "forecast": {"first_period_end": "2027-02-28"}}
+        self.assertFalse(is_due(item, "forecast", None, datetime(2027, 2, 27, 12, tzinfo=timezone.utc), 60))
+        self.assertTrue(is_due(item, "forecast", None, datetime(2027, 2, 27, 16, tzinfo=timezone.utc), 60))
+        item.update(forecast_status="empty", forecast=None, forecast_checked_at="2027-02-01T00:00:00Z")
+        self.assertTrue(is_due(item, "forecast", None, datetime(2027, 2, 8, tzinfo=timezone.utc), 60))
+
+    def test_reit_forecast_combines_two_reported_periods_including_excess_distributions(self):
+        document = {
+            "meta": {"doc_id": "20261019552797", "source": "tdnet", "disclosed_at": "2026-10-19T07:00:00Z"},
+            "xbrl_facts": [
+                {"element_name": "CurrentFiscalYearStartDateDEI", "value": "2026-03-01"},
+                {"element_name": "CurrentFiscalYearEndDateDEI", "value": "2026-08-31"},
+                {"element_name": "DistributionsPerUnitExcludingDistributionsInExcessOfProfitREIT", "context": "NextYearDuration_NonConsolidatedMember_ForecastMember", "value": "3020", "unit": "JPYPerUnits"},
+                {"element_name": "DistributionsPerUnitIncludingDistributionsInExcessOfProfitREIT", "context": "NextYearDuration_NonConsolidatedMember_ForecastMember", "value": "3460", "unit": "JPYPerUnits"},
+                {"element_name": "DistributionsPerUnitIncludingDistributionsInExcessOfProfitREIT", "context": "Next2YearDuration_NonConsolidatedMember_ForecastMember", "value": "3650", "unit": "JPYPerUnits"},
+            ],
+        }
+        result = parse_forecast(document, None, as_of=date(2026, 10, 28))
+        self.assertEqual(result["annual_dps_current_share_basis"], 7110)
+        self.assertEqual(result["first_period_end"], "2027-02-28")
+        self.assertEqual(result["period_end"], "2027-08-31")
+        self.assertEqual(result["source_refs"][0]["doc_id"], "20261019552797")
+        self.assertIsNone(parse_forecast(document, None, as_of=date(2027, 2, 28)))
+        document["xbrl_facts"].pop()
+        self.assertIsNone(parse_forecast(document, None, as_of=date(2026, 10, 28)))
+
     def test_reads_disclosures_from_irbank_security_disclosure_response(self):
         listing = {
             "disclosures": [{

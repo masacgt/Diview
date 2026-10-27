@@ -5,6 +5,11 @@ on:
     # 02:17 JST daily. The job reads IRBANK's remaining quota before fetching.
     - cron: "17 17 * * *"
   workflow_dispatch:
+    inputs:
+      forecast_codes:
+        description: 'Optional comma-separated codes to refresh immediately without moving the regular batch cursor'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -24,6 +29,7 @@ jobs:
             scripts/irbank_r2/refresh_v2_dividend_batch.py
             scripts/irbank_r2/refresh_v2_dividends.py
             scripts/irbank_r2/requirements.txt
+            scripts/yfinance_r2/financial_revision.py
           sparse-checkout-cone-mode: false
       - uses: actions/setup-python@v5
         with:
@@ -33,10 +39,11 @@ jobs:
       - name: Install R2 client
         run: python -m pip install -r scripts/irbank_r2/requirements.txt
       - name: Refresh actual and forecast dividends within the daily quota
-        run: set -o pipefail; python scripts/irbank_r2/refresh_v2_dividend_batch.py --publish --max-api-requests 200 --refresh-days 60 --target-days 60 2>&1 | tee irbank-v2-dividend-batch.log
+        run: set -o pipefail; python scripts/irbank_r2/refresh_v2_dividend_batch.py --publish --max-api-requests 200 --refresh-days 60 --target-days 60 --forecast-codes "$FORECAST_CODES" 2>&1 | tee irbank-v2-dividend-batch.log
         shell: bash
         env:
           IRBANK_API_KEY: ${{ secrets.IRBANK_API_KEY }}
+          FORECAST_CODES: ${{ inputs.forecast_codes }}
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

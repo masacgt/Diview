@@ -337,8 +337,13 @@ fun StockDetailScreen(
     }
     val defaultDividendPeriods = dividendHistoryYears.map { year ->
         val forecast = if (year == chartForecastYear) {
-            financial?.takeIf { it.forecastFiscalYear == year }?.forecastAnnualDividend
-                ?: currentYearForecastDps
+            val sameCalendarYear = financial?.issuerIsInvestmentFund != true ||
+                financial?.forecastFirstPeriodEnd?.year == financial?.forecastPeriodEnd?.year
+            financial?.takeIf { it.forecastFiscalYear == year && sameCalendarYear }
+                ?.let { com.kurogane.dividend.model.AnnualDividendResolver.issuerForecast(it, currentCalendarDate) }
+                ?: currentYearForecastDps.takeIf {
+                    (currentHolding.category == com.kurogane.dividend.model.Category.US || financial?.issuerIsKnownEquity == true) && year == currentCalendarYear
+                }
         } else null
         val isForecast = forecast != null
         val observedCurrentYear = chartDividendEvents.filter {

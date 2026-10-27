@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
 import math
@@ -72,6 +72,16 @@ def is_due(item: dict[str, Any], kind: str, generated_at: Any, now: datetime,
     checked = initialize_checked_at(item, kind, generated_at, now)
     if checked is None:
         return True
+    if kind == "forecast" and isinstance(item.get("forecast"), dict):
+        first_period_end = item["forecast"].get("first_period_end")
+        if first_period_end:
+            try:
+                if date.fromisoformat(str(first_period_end)) <= now.astimezone(timezone(timedelta(hours=9))).date():
+                    return True
+            except ValueError:
+                return True
+    if kind == "forecast" and str(item.get("edinet_code") or "").startswith("G") and item.get("forecast_status") == "empty":
+        return now - checked >= timedelta(days=min(refresh_days, 7))
     return now - checked >= timedelta(days=refresh_days)
 
 
@@ -98,6 +108,10 @@ def update_actual(item: dict[str, Any], fetched: dict[str, Any], checked_at: str
 
 def update_forecast(item: dict[str, Any], forecast: dict[str, Any] | None,
                     attribution: dict[str, Any] | None, checked_at: str) -> None:
+    if forecast is None and isinstance(item.get("forecast"), dict):
+        # Keep the previous observation for audit, but do not expose it as a
+        # current forecast when the latest disclosure cannot be normalized.
+        item["previous_forecast"] = item["forecast"]
     item["forecast"] = forecast
     item["forecast_status"] = "available" if forecast else "empty"
     item["forecast_checked_at"] = checked_at
@@ -158,6 +172,7 @@ def main() -> int:
     parser.add_argument("--max-api-requests", type=int, default=MAX_DAILY_REQUESTS)
     parser.add_argument("--refresh-days", type=int, default=60)
     parser.add_argument("--target-days", type=int, default=60)
+    parser.add_argument("--forecast-codes", default="", help="Refresh only these issuer forecasts without moving the batch cursor")
     parser.add_argument("--input", type=Path, help="Local dividend index for a non-publishing run")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--publish", action="store_true")
@@ -238,6 +253,12 @@ def main() -> int:
     ]
     retry_set = set(retry_codes)
     ordered = retry_codes + [code for code in rotating if code not in retry_set]
+    target_codes = list(dict.fromkeys(code.strip().upper() for code in args.forecast_codes.split(",") if code.strip()))
+    if target_codes:
+        unknown = set(target_codes) - set(codes)
+        if unknown:
+            raise ValueError(f"Forecast codes missing from IRBANK catalog: {', '.join(sorted(unknown))}")
+        ordered = target_codes
 
     now = datetime.now(timezone.utc)
     now_iso = now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -253,8 +274,8 @@ def main() -> int:
     for index, code in enumerate(ordered):
         security = security_by_code[code]
         item = items[code]
-        actual_due = is_due(item, "actual", generated_at, now, args.refresh_days)
-        forecast_due = is_due(item, "forecast", generated_at, now, args.refresh_days)
+        actual_due = not target_codes and is_due(item, "actual", generated_at, now, args.refresh_days)
+        forecast_due = bool(target_codes) or is_due(item, "forecast", generated_at, now, args.refresh_days)
         after_code = ordered[(index + 1) % len(ordered)]
         if not actual_due and not forecast_due:
             next_code = after_code
@@ -282,7 +303,7 @@ def main() -> int:
                 stopped_for_budget = True
                 break
             except refresh.ApiFailure as error:
-                if error.status == 404:
+                if error.status == 404 and not isinstance(item.get("actual"), dict):
                     update_actual(item, {
                         "code": code,
                         "name": str(security.get("name") or code),
@@ -301,7 +322,7 @@ def main() -> int:
         # Forecast extraction may use a disclosure-list call plus as many as
         # eight document calls. Start it only when the whole current policy's
         # worst-case allowance remains; request retries are still hard-capped.
-        forecast_due = is_due(item, "forecast", generated_at, now, args.refresh_days)
+        forecast_due = bool(target_codes) or is_due(item, "forecast", generated_at, now, args.refresh_days)
         if forecast_due:
             if budget.remaining < MAX_FORECAST_REQUESTS:
                 next_code = code
@@ -318,12 +339,10 @@ def main() -> int:
                 stopped_for_budget = True
                 break
             except refresh.ApiFailure as error:
-                if error.status == 404:
-                    update_forecast(item, None, None, attempted_at)
-                    forecast_updates += 1
-                else:
-                    failures += 1
-                    record_failure(item, "forecast", error, attempted_at)
+                # A missing disclosure endpoint is not a successful empty forecast.
+                # Preserve any previously fetched forecast for review and retry.
+                failures += 1
+                record_failure(item, "forecast", error, attempted_at)
             except Exception as error:
                 failures += 1
                 record_failure(item, "forecast", error, attempted_at)
@@ -335,6 +354,8 @@ def main() -> int:
 
     if not stopped_for_budget:
         next_code = ordered[0]
+    if target_codes:
+        next_code = rotating[0]
 
     # Pending counts are a lower bound: a forecast can require multiple
     # disclosure-document calls, while every pending item needs at least one.
@@ -365,7 +386,7 @@ def main() -> int:
     )
 
     old_cycle = int(sync.get("cycle") or 0)
-    if not stopped_for_budget:
+    if not stopped_for_budget and not target_codes:
         old_cycle += 1
     sync.update({
         "policy": "round_robin_irbank_dividend_and_forecast",

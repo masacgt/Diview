@@ -53,7 +53,7 @@ private fun formatCandidatePrice(price: Double?, code: String): String? = price
     }
 
 private fun formatCandidateYield(yieldRate: Double?, isNoDividendConfirmed: Boolean = false): String =
-    com.kurogane.dividend.model.formatDividendYieldDisplay(
+    if (yieldRate == null && !isNoDividendConfirmed) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(
         yieldRate?.takeIf { it.isFinite() && it in 0.0..100.0 } ?: 0.0,
         isNoDividendConfirmed,
         java.util.Locale.JAPAN
@@ -194,7 +194,7 @@ fun SearchSheet(
                 } else {
                     hit.isNoDividendConfirmed
                 }
-                val yieldValue = quote?.yieldRate ?: hit.marketYieldRate ?: annualDividend?.let { dps ->
+                val yieldValue = annualDividend?.let { dps ->
                     priceValue?.takeIf { it > 0.0 }?.let { price -> dps / price * 100.0 }
                 }?.takeIf { it.isFinite() && it in 0.0..100.0 }
                 val yieldRate = formatCandidateYield(yieldValue ?: if (noDividendConfirmed) 0.0 else null, noDividendConfirmed)
@@ -227,7 +227,9 @@ fun SearchSheet(
                 val quote = recentQuotes[candidate.code.uppercase(java.util.Locale.ROOT)]
                 val shouldRefreshQuote = recentCandidates.isNotEmpty() || candidate.cat == "jp"
                 if (!shouldRefreshQuote) candidate else {
-                    val yieldValue = quote?.yieldRate
+                    val yieldValue = quote?.annualDividendPerShare?.let { dps ->
+                        quote?.price?.takeIf { it > 0.0 }?.let { dps / it * 100.0 }
+                    }?.takeIf { it.isFinite() && it in 0.0..100.0 }
                     candidate.copy(
                         price = formatCandidatePrice(quote?.price, candidate.code) ?: "株価未取得",
                         yieldRate = formatCandidateYield(yieldValue ?: if (quote?.isNoDividendConfirmed == true) 0.0 else null,
