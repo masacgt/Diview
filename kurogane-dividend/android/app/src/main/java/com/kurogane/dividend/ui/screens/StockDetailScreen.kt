@@ -490,15 +490,33 @@ fun StockDetailScreen(
                 )
             }
     }
+    val liveYield = currentHolding.liveYield
+    val liveYoc = if (currentHolding.acqPrice > 0) (dps / currentHolding.acqPrice) * 100.0 else liveYield
+    val topCardForecastDps = com.kurogane.dividend.model.AnnualDividendResolver.forecast(
+        currentHolding.category, financial, chartDividendEvents, chartUpcomingDividend, currentCalendarDate
+    )
+    val topCardDps = topCardForecastDps ?: dps
+    val topCardDpsUnavailable = currentDpsUnavailable && topCardForecastDps == null
+    val topCardNoDividendConfirmed = topCardForecastDps?.let { it == 0.0 }
+        ?: currentHolding.isNoDividendConfirmed
+    val topCardYield = topCardForecastDps?.let {
+        com.kurogane.dividend.model.PortfolioMath.yieldPercent(it, currentPrice)
+    } ?: liveYield
+    val topCardYoc = topCardForecastDps?.let { forecastDps ->
+        if (currentHolding.acqPrice > 0) {
+            com.kurogane.dividend.model.PortfolioMath.yieldPercent(forecastDps, currentHolding.acqPrice)
+        } else topCardYield
+    } ?: liveYoc
+
     val buySignalPositionItems = buildList {
         val hasYieldHistory = profile.yieldRangeMin.isFinite() &&
             profile.yieldRangeAvg.isFinite() && profile.yieldRangeMax.isFinite()
         val currentYieldText = com.kurogane.dividend.model.formatDividendYieldDisplay(
-            currentHolding.yieldRate, currentHolding.isNoDividendConfirmed
+            topCardYield, topCardNoDividendConfirmed
         )
         add(
             when {
-                currentDpsUnavailable -> StockAnalysisPositionItem(
+                topCardDpsUnavailable -> StockAnalysisPositionItem(
                     label = "配当利回り", formattedValue = "未取得", bandLabel = "比較不可",
                     positionLabel = "評価基準なし", score = null,
                     text = StockEvaluationPositionComment.unavailable("DPSが未取得で、現在利回りと評価基準内の位置は算出できません。")
@@ -507,11 +525,11 @@ fun StockDetailScreen(
                     label = "配当利回り", formattedValue = currentYieldText, bandLabel = "過去実績未取得",
                     positionLabel = "比較基準なし", score = null,
                     text = StockEvaluationPositionComment.yield(
-                        currentHolding.yieldRate, Double.NaN, Double.NaN, Double.NaN
+                        topCardYield, Double.NaN, Double.NaN, Double.NaN
                     )
                 )
                 else -> {
-                    val yield = currentHolding.yieldRate
+                    val yield = topCardYield
                     val band = when {
                         yield < profile.yieldRangeMin -> "過去最低未満"
                         yield > profile.yieldRangeMax -> "過去最高超"
@@ -625,24 +643,6 @@ fun StockDetailScreen(
             )
         }
     }
-    val liveYield = currentHolding.liveYield
-    val liveYoc = if (currentHolding.acqPrice > 0) (dps / currentHolding.acqPrice) * 100.0 else liveYield
-    val topCardForecastDps = com.kurogane.dividend.model.AnnualDividendResolver.forecast(
-        currentHolding.category, financial, chartDividendEvents, chartUpcomingDividend, currentCalendarDate
-    )
-    val topCardDps = topCardForecastDps ?: dps
-    val topCardDpsUnavailable = currentDpsUnavailable && topCardForecastDps == null
-    val topCardNoDividendConfirmed = topCardForecastDps?.let { it == 0.0 }
-        ?: currentHolding.isNoDividendConfirmed
-    val topCardYield = topCardForecastDps?.let {
-        com.kurogane.dividend.model.PortfolioMath.yieldPercent(it, currentPrice)
-    } ?: liveYield
-    val topCardYoc = topCardForecastDps?.let { forecastDps ->
-        if (currentHolding.acqPrice > 0) {
-            com.kurogane.dividend.model.PortfolioMath.yieldPercent(forecastDps, currentHolding.acqPrice)
-        } else topCardYield
-    } ?: liveYoc
-
     val totalSimShares = baseShares.toLong() + simAddedShares
     val simPurchaseAmount = simAddedShares * currentHolding.price / currentHolding.priceUnit
     val newTotalAnnualDiv = currentHolding.getEffectiveDividendForShares(totalSimShares, taxRateMode).toLong()
@@ -1402,15 +1402,15 @@ fun StockDetailScreen(
                                     Text(
                                         stringResource(
                                             R.string.stock_detail_text_26,
-                                            com.kurogane.dividend.model.formatDividendYieldDisplay(liveYield, currentHolding.isNoDividendConfirmed)
+                                            com.kurogane.dividend.model.formatDividendYieldDisplay(topCardYield, topCardNoDividendConfirmed)
                                         ),
                                         color = PrimaryEmerald,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = AppTextSize.body
                                     )
                                     Text(
-                                        if (currentDpsUnavailable) "配当データ未取得のため判定できません" else profile.getValuationStatus(currentHolding.price, currentHolding.dps).split(resources.getString(R.string.stock_detail_label_20)).first(),
-                                        color = if (currentDpsUnavailable) OnSurfaceVariant else PrimaryEmerald,
+                                        if (topCardDpsUnavailable) "配当データ未取得のため判定できません" else profile.getValuationStatus(currentPrice, topCardDps).split(resources.getString(R.string.stock_detail_label_20)).first(),
+                                        color = if (topCardDpsUnavailable) OnSurfaceVariant else PrimaryEmerald,
                                         fontSize = AppTextSize.dense
                                     )
                                 }
@@ -1867,8 +1867,8 @@ fun StockDetailScreen(
                                                     }
                                                     Text(
                                                         com.kurogane.dividend.model.formatDividendYieldDisplay(
-                                                            currentHolding.yieldRate,
-                                                            currentHolding.isNoDividendConfirmed
+                                                            topCardYield,
+                                                            topCardNoDividendConfirmed
                                                         ),
                                                         color = PrimaryEmerald,
                                                         fontWeight = FontWeight.ExtraBold,
@@ -1878,10 +1878,10 @@ fun StockDetailScreen(
                                                 }
 
                                                 Spacer(modifier = Modifier.height(8.dp))
-                                                if (currentDpsUnavailable) {
+                                                if (topCardDpsUnavailable) {
                                                     Text("配当情報未取得のため、過去の利回り範囲と比較できません", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                 } else {
-                                                    val yld = currentHolding.yieldRate
+                                                    val yld = topCardYield
                                                     val rangeProgress = ((yld - profile.yieldRangeMin) / (profile.yieldRangeMax - profile.yieldRangeMin)).takeIf { it.isFinite() }?.coerceIn(0.0, 1.0)?.toFloat() ?: 0f
                                                     Box(
                                                         modifier = Modifier

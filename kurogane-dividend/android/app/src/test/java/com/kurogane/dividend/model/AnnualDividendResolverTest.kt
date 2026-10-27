@@ -29,6 +29,19 @@ class AnnualDividendResolverTest {
         }
     }
 
+    @Test fun reitForecastOverridesStaleNoDividendYieldForBuySignal() {
+        val forecast = AnnualDividendResolver.forecast(
+            Category.JAPAN, financial(dps = 6018.0, year = 2026), events, upcoming, today
+        )
+        val result = AnnualDividendResolver.applyForecast(
+            holding().copy(code = "8953", price = 106900.0, dps = 0.0,
+                yieldRate = 0.0, isNoDividendConfirmed = true), forecast
+        )
+        assertEquals(5.62956, result.liveYield, 0.00001)
+        assertFalse(result.isNoDividendConfirmed)
+        assertEquals("5.63%", formatDividendYieldDisplay(result.liveYield, result.isNoDividendConfirmed))
+    }
+
     @Test fun staleOrInvalidIssuerForecastUsesEventsBeforeYahoo() {
         for (data in listOf(financial(year = 2025), financial(Double.NaN), financial(-1.0))) {
             assertEquals(60.0, AnnualDividendResolver.forecast(Category.JAPAN, data, events, upcoming, today)!!, 0.0)

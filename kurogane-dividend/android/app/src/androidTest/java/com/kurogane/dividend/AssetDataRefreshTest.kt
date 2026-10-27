@@ -219,6 +219,10 @@ class AssetDataRefreshTest {
         compose.runOnIdle { detail.value = true }
         compose.waitUntil(10_000) { compose.onAllNodesWithText("¥80").fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithText("¥80").onFirst().assertIsDisplayed()
+        // Stock Detail resolves the zero quote again; its buy signal must keep the issuer forecast.
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("配当利回り 2.67%"))
+        compose.onNodeWithText("配当利回り 2.67%").assertIsDisplayed()
+        compose.onAllNodesWithText("配当利回り 0.00%（無配）").assertCountEquals(0)
 
     }
 
