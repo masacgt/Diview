@@ -29,11 +29,20 @@ The latest main had already removed speculative startup catalog/analysis/year-en
 
 ## Production publication boundary
 
-Actual deployed Worker: version 67, `4d0c0767-e004-4b90-831a-f9236b1afa37`, message `Financial statement unit contract v6`. Current main contains unrelated Worker changes, including the unpublished category endpoint; deploying main wholesale would exceed this change's display-preservation scope.
+Production baseline: version 67, `4d0c0767-e004-4b90-831a-f9236b1afa37`, message `Financial statement unit contract v6`. Current main contains unrelated Worker changes, including the unpublished category endpoint; deploying main wholesale would exceed this change's display-preservation scope.
 
 The existing production module was downloaded read-only. A guarded local transformation applies only request-local R2 sharing and history-bounds opt-out, using the same `market-read-cache.mjs` as source. The old module remains available for rollback. All 108 mock comparisons and Wrangler version-upload dry-run passed. All 27 baseline production API reads (9 securities x security/financial/analysis) returned HTTP 200.
 
-Publication is pending: automatic approval review rejected creating a new version in the production account because explicit approval of this specific code upload was missing. Approval for both upload and traffic switch was requested; neither occurred. Keep production verification open until approved publication and the post-publication read-back have succeeded.
+Publication completed after the user explicitly approved both upload and traffic switch. The initial automatic-review rejection was resolved by that approval. The deployed version was rechecked before upload and immediately before switching; it was still the expected version 67. Uploaded version 68's bindings and compatibility date matched version 67; its preview security/financial/analysis responses matched the production baseline in three comparisons.
+
+- Serving version: **68**, `1a0c7851-3301-4b10-ab98-4d6933489b38`, 100% traffic.
+- Deployment: `5b8a7e1d-b967-4dcf-98e4-a71143454aa1`, 2026-10-27 21:23:19 JST. Deployment-list read-back confirms the version and percentage.
+- All 27 pre/post-production responses (7203, 8316, 8984, 1326, 6721, 25935, 285A, 8058, 8953; security, financial, analysis) returned HTTP 200 and matched, excluding only `observed_at` and continuously changing `market_age_days`.
+- Three further production comparisons (7203, 8984, 25935) confirm the history opt-out returns `not_requested/null/null` for the three hidden bounds fields, with all other response content identical to the full endpoint.
+- Prepared production entry module SHA-256: `84905413ecb46ec920f813d7143a09ccf696e4779e7309bdf6aa03eaa1f2d9bf`. The original entry module is retained locally with SHA-256 `d17167253c576c4be0db870ebcf70b9d0b2269e7f289c746549059b1800fa2b3`.
+- Rollback target remains version 67; no database/R2 data migration, trigger change, or unrelated main Worker feature was published. Publication logs and exact comparison results are in `worker-upload.log`, `worker-deploy.log`, `worker-deployments-after-publish.json`, `publication-preview-comparison.json`, and `publication-after-comparison.json` under the ignored evidence directory.
+
+The code commit is `e70874e5` on `codex/fetch-efficiency-20261027`. GitHub push/main integration was not included in the user's specific Worker-publication approval and has not been performed.
 
 ## Remaining architectural opportunities
 
