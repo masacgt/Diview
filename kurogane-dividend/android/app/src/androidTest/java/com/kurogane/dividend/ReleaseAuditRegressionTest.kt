@@ -98,6 +98,39 @@ class ReleaseAuditRegressionTest {
         assertEquals(2, attempts.get())
     }
 
+    @Test fun newRevisionRefreshesSameDayForecastAndThenReusesCache() {
+        val attempts = AtomicInteger()
+        var revision = "aaaaaaaaaaaaaaaa"
+        val response: (URL) -> String = {
+            attempts.incrementAndGet()
+            if (revision.startsWith("a")) {
+                """{"security":{"code":"8984"},"issuer_dividends":{"edinet_code":"G04516","forecast":null}}"""
+            } else {
+                """{"security":{"code":"8984"},"issuer_dividends":{"edinet_code":"G04516","forecast":{"annual_dps_current_share_basis":7110,"field_units":{"annual_dps_current_share_basis":"jpy_per_share"}}}}"""
+            }
+        }
+        val before = model(revisionResponse = { """{"revision":"$revision"}""" }, response = response)
+        assertNull(runBlocking { before.fetchFinancialData("8984") }!!.forecastAnnualDividend)
+        revision = "bbbbbbbbbbbbbbbb"
+        // A new ViewModel simulates restarting the app while retaining the same-day cache.
+        val after = model(revisionResponse = { """{"revision":"$revision"}""" }, response = response)
+        assertEquals(7110.0, runBlocking { after.fetchFinancialData("8984") }!!.forecastAnnualDividend!!, 0.0)
+        assertEquals(7110.0, runBlocking { after.fetchFinancialData("8984") }!!.forecastAnnualDividend!!, 0.0)
+        assertEquals(2, attempts.get())
+    }
+
+    @Test fun unavailableRevisionKeepsSameDayCacheWithoutRepeatedPayloadRequests() {
+        val attempts = AtomicInteger()
+        val before = model { attempts.incrementAndGet(); """{"security":{"code":"8984"}}""" }
+        assertNotNull(runBlocking { before.fetchFinancialData("8984") })
+        val after = model(revisionResponse = { throw IOException() }) {
+            attempts.incrementAndGet()
+            """{"security":{"code":"8984"}}"""
+        }
+        repeat(2) { assertNotNull(runBlocking { after.fetchFinancialData("8984") }) }
+        assertEquals(1, attempts.get())
+    }
+
     @Test fun cancelledFinancialFetchCanBeExplicitlyRetried() {
         val attempts = AtomicInteger()
         val vm = model {

@@ -641,22 +641,8 @@ class DividendViewModel @JvmOverloads constructor(
         val attemptKey = "financial_fetch_attempt_at_$normalized"
         val attemptDateKey = "financial_fetch_attempt_jst_$normalized"
         val failureKey = "financial_fetch_failure_$normalized"
-        val earlyNow = System.currentTimeMillis()
-        if (!force && !shouldFetchMarketData(earlyNow, attemptKey, attemptDateKey,
-                marketPreferences.getString("financial_date_$normalized", null))) {
-            val cached = _financialData.value[normalized] ?: withContext(Dispatchers.IO) {
-                runCatching { marketPreferences.getString("financial_$normalized", null)
-                    ?.let { FinancialData.parse(JSONObject(it), normalized) } }.getOrNull()
-            }
-            if (cached != null && generation == dataGeneration.get()) {
-                _financialData.update { it + (normalized to cached) }
-            }
-            if (cached == null) {
-                com.kurogane.dividend.data.CachedFetchFailure.decode(marketPreferences.getString(failureKey, null))
-                    ?.let { throw it }
-            }
-            return cached
-        }
+        // A same-day cache can still be stale after an upstream publication.
+        // Check the shared revision before applying the per-security throttle.
         val serverRevision = currentFinancialRevision()
         val serverRevisionKey = "financial_server_revision_$normalized"
         val serverRevisionAttemptKey = "financial_server_revision_attempt_$normalized"

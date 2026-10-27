@@ -1,6 +1,6 @@
 # Todo
 
-- [ ] Verify the forecast acquisition and yield-source repair in production: targeted 8984 forecast publication, Worker preview/production read-back, scheduled IRBANK batch, and release/device checks remain to be confirmed. Local issuer-disclosure parsing returns 7,110 JPY with two dated components; simulated R2 update preserves other values and the batch cursor.
+- [ ] Verify remaining forecast acquisition and release coverage: targeted run 40600703726 published 8984 as 7,110 JPY with two dated components and preserved other values and the batch cursor; production Worker `93800f39-4dc0-443f-baf3-13a583b92946` returns consistent 8984 and 4502 search values. A scheduled batch, broader issuer forecast coverage, and final release acceptance remain unverified.
 
 - [ ] Complete release-audit fixes and production acceptance for missing dividend/price data, forecast history and Watchlist ordering. Worker production version e6196109 treats empty issuer feeds as unknown; Android distinguishes missing valuation/dividend data. Isolated emulator and production API checks pass for representative cases; physical-device validation and full release acceptance remain open.
 
