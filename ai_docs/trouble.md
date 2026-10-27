@@ -71,3 +71,5 @@
 - Symptom: the intended copy appeared immediately after installation, then disappeared during navigation on both emulator and physical device. Installed APK SHA-256 had changed to another worktree's build, although the current worktree APK was unchanged.
 - Cause: another active task installed the same package from its own worktree. The differing installed hash exactly matched that other build. UI automation failures were therefore not evidence of a regression in the current copy change.
 - Resolution: confirm the competing task has finished, serialize package installs, reinstall the intended exact APK, and compare built/installed hashes both before and after navigation. Keep the worktrees and unrelated changes separate; do not merge unreviewed source changes merely to resolve a device-install race. The four-panel checks then passed on both devices with stable hashes.
+
+- 2026-10-25の配当グラフ検証中、共有エミュレータのAPKが別作業ツリーのインストールで置き換わった。端末操作を作業間で直列化し、画面確認後にも `base.apk` のSHA-256をビルド元と照合する。
