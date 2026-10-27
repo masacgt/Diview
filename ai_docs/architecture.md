@@ -2,6 +2,8 @@
 
 ## Runtime and storage
 
+- データ取得の重複、一覧/詳細/通知の参照元差、財務・分析のR2再読み取りと改善案は [data-fetch-efficiency-audit-20261027.md](data-fetch-efficiency-audit-20261027.md) を参照。2026-10-27の現行チェックアウト調査と模擬R2実行の記録であり、本番通信の測定結果ではない。
+
 - ローカルの `scripts/jquants_v3/` はJ-QuantsのみのSQLiteスナップショットを作る。日足・月次価格に加えて、J-Quants APIの銘柄マスター、評価指標、財務サマリー、営業日を保存する。2026-10-25時点のキーでは日足等は2026-08-02までの遅延データ、配当明細と財務明細はPremium限定で取得不可。現行v3の実収録範囲と未取得項目は `scripts/jquants_v3/README.md` とDB内 `dataset_coverage` を参照。ローカルデータは `local_artifacts/` に置き、Cloudflareへは配信していない。
 
 - 日本株の資産管理データは、既存銘柄を含むCSV/DVM取込後と資産管理画面表示時にも不足を補完する。市場データ取得失敗は成功時の日次制限と分離し、前回試行から30秒後の次の取得契機で再試行する。米国株・為替の更新経路は追加していない。詳細は [asset-data-refresh-fix.md](asset-data-refresh-fix.md)。

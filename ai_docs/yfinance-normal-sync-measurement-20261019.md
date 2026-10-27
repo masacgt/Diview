@@ -170,10 +170,19 @@ run #166はrun #159と同じ対象セッションを再処理した手動実行�
 | [#233](https://github.com/masacgt/Diview/actions/runs/40186701833) | 手動 `sync`、`main` / `5d787342` | 4,396成功、48失敗、カタログ4,362件を公開後に失敗終了 | workflow 69分26秒、同期job 68分58秒 | `--reprocess-successful` を含む手動再処理で、最適化ブランチSHA `2bfdcf54` と異なるため効果比較には不採用。Actions使用時間には含む |
 | [#239](https://github.com/masacgt/Diview/actions/runs/40191902472) | `workflow_dispatch`, `run_mode=test`、最適化ブランチ / `001de56` | 112件中8件失敗 | workflow 約38秒、テストjob 約31秒 | 同期・ベンチマークの標本外。テスト成功まで次のベンチマークを保留 |
 | [#240](https://github.com/masacgt/Diview/actions/runs/40193506451) | push、最適化ブランチ / `bb7e6cfd` | `yfinance-sync-tests` 全112件成功。全体同期はスキップ | workflow / テストjob 約34秒 | 同期・ベンチマークの標本外。回帰テスト修正の検証 |
+| [#241](https://github.com/masacgt/Diview/actions/runs/40193680466) | `workflow_dispatch`, `run_mode=test`、最適化ブランチ / `bb7e6cfd` | 全112件成功 | workflow / test job 35秒 | ベンチマーク開始前の指定テスト実行 |
+| [#247](https://github.com/masacgt/Diview/actions/runs/40195864476) | `workflow_dispatch`, `run_mode=benchmark`, 24 workers、500銘柄、最適化ブランチ / `4a69fef1` | sample取得362.742秒、benchmark全体517.039秒。core 489/500、profile 498/500、HTTP 429は0、R2アクセス・書込みなし | benchmark job 9分16秒、workflow 9分20秒 | 32-worker比較と同一SHAの組。通常同期・月間計測には含めない |
+| [#249](https://github.com/masacgt/Diview/actions/runs/40196784554) | `workflow_dispatch`, `run_mode=benchmark`, 32 workers、500銘柄、最適化ブランチ / `4a69fef1` | sample取得361.244秒、benchmark全体505.892秒。core 489/500、profile 498/500、HTTP 429は0、R2アクセス・書込みなし | benchmark job 9分03秒、workflow 9分07秒 | #247と同一SHAの比較。通常同期・月間計測には含めない |
 
 Run #239の失敗は、同一出所の比率状態補完1件、DPS不明時の利回り再利用1件、IRBANK seedの`field_units`期待値4件、使用中統計値のアーカイブ期待値1件、`CURRENT_FIELDS`期待値1件。コミット`bb7e6cfd`で利回りの再利用を修正し、現行の状態・単位メタデータに合うテスト期待値へ更新した。Run #240で112件すべて成功した。
 
 Run #233の48失敗はすべて異なる銘柄のYahoo HTTP 404で、同期ログ上は同一セッション内の`no_data`再試行として抑止された。生成世代は公開済みであり、コードごとの理由を確定するまでは再試行・削除方針を変更しない。
+
+Run #247と#249はどちらもSHA `4a69fef1fc43dcfbea51754bdb6987d2013b135c` を使い、500銘柄・同じbenchmark条件で順番に実行した。32 workersは24 workersよりsample取得が1.498秒（約0.4%）、benchmark全体が11.147秒（約2.2%）短かった。workflow時間は9分20秒から9分07秒へ13秒短縮したが、core/profileの成功数、失敗数、HTTP要求数2,882、429件数0は同じだった。単発比較であり、この差だけでは本番worker数の変更根拠にしない。両runともR2へアクセス・書込みを行っていない。
+
+## 2026-10-25 最適化のmain統合と通常実行待ち
+
+GitHubの`main`にはコミット[`a19c0c3a`](https://github.com/masacgt/Diview/commit/a19c0c3ac520c792a79c2bc09ad8cffb53cd55be)が入り、会社情報取得の20営業日ローテーションと同日成功カタログ再利用が統合済み。最新のyfinance同期scheduleは[run #197](https://github.com/masacgt/Diview/actions/runs/39992301342)で、SHA `835cb42f`を使った統合前の実行。2026-10-25時点で統合後のyfinance scheduleはまだなく、月間判定用の独立した通常営業日サンプルは0回。別日付の通常schedule実行を3回以上記録してから、実行時間・失敗/再試行・他workflowの使用分を合わせて2,000分以内か判定する。
 
 ## J-Quantsユニバース差分と今後のスナップショット記録
 
