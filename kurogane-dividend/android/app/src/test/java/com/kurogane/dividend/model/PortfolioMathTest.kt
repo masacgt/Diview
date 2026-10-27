@@ -5,6 +5,27 @@ import org.junit.Test
 import java.util.Locale
 
 class PortfolioMathTest {
+    @Test fun excludedSecuritiesAreRemovedFromBothSidesOfAverageYield() {
+        val dividend = holding()
+        val zero = holding().copy(id = "zero", code = "abcd", dps = 0.0)
+        val nonzero = holding().copy(id = "excluded", code = "ABCD", dps = 50.0)
+        val positions = listOf(dividend, zero, nonzero)
+        assertEquals(2.5, PortfolioMath.portfolioYieldForHoldings(positions, emptySet(), "gross", "eval"), 0.0001)
+        assertEquals(5.0, PortfolioMath.portfolioYieldForHoldings(positions, setOf("ABCD"), "gross", "eval"), 0.0001)
+        assertEquals(10.0, PortfolioMath.portfolioYieldForHoldings(positions, setOf("ABCD"), "gross", "cost"), 0.0001)
+        assertEquals(3.98425, PortfolioMath.portfolioYieldForHoldings(positions, setOf("ABCD"), "net", "eval"), 0.0001)
+        assertEquals(0.0, PortfolioMath.portfolioYieldForHoldings(positions, setOf("7203", "ABCD"), "gross", "eval"), 0.0)
+    }
+
+    @Test fun averageYieldExclusionRespectsCurrencyAndFundPriceBasis() {
+        val japan = holding().copy(code = "7203", price = 1000.0, acqPrice = 1000.0, dps = 40.0)
+        val fund = holding().copy(code = "FUND", category = Category.FUND, shares = 10000, price = 100000.0, acqPrice = 100000.0, dps = 0.0)
+        val usMissingFx = holding().copy(code = "US", category = Category.US, currency = "$", usdJpyRate = null)
+        val positions = listOf(japan, fund, usMissingFx)
+        assertEquals(2.0, PortfolioMath.portfolioYieldForHoldings(positions, emptySet(), "gross", "eval"), 0.0001)
+        assertEquals(4.0, PortfolioMath.portfolioYieldForHoldings(positions, setOf("FUND"), "gross", "eval"), 0.0001)
+    }
+
     @Test fun fundPricesAreQuotedPerTenThousandUnits() {
         val fund = holding().copy(category = Category.FUND, shares = 50_000, price = 24_460.0, acqPrice = 20_000.0, dps = 100.0)
         assertEquals(122_300.0, fund.totalValuation, 0.0)

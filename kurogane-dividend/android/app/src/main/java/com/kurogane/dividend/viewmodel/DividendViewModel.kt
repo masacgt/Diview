@@ -256,6 +256,9 @@ class DividendViewModel @JvmOverloads constructor(
     private val _shareholderBenefits = MutableStateFlow<Map<String, List<ShareholderBenefit>>>(emptyMap())
     val shareholderBenefits: StateFlow<Map<String, List<ShareholderBenefit>>> = _shareholderBenefits.asStateFlow()
     private var shareholderBenefitsSaveJob: Job? = null
+    private val _yieldExcludedCodes = MutableStateFlow<Set<String>>(emptySet())
+    val yieldExcludedCodes: StateFlow<Set<String>> = _yieldExcludedCodes.asStateFlow()
+    private var yieldExcludedSaveJob: Job? = null
     private val _stockClimateOverrides = MutableStateFlow<Map<String, StockClimate>>(emptyMap())
     val stockClimateOverrides: StateFlow<Map<String, StockClimate>> = _stockClimateOverrides.asStateFlow()
     private var stockClimateSaveJob: Job? = null
@@ -1216,8 +1219,8 @@ class DividendViewModel @JvmOverloads constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     val assetManagementSummary: StateFlow<AssetManagementSummary> = combine(
-        _holdings, _taxRateMode, _calculationBasis
-    ) { current, taxMode, basis ->
+        _holdings, _taxRateMode, _calculationBasis, _yieldExcludedCodes
+    ) { current, taxMode, basis, excludedCodes ->
         val totalAssetsJpy = PortfolioMath.sumJpyAmounts(current.mapNotNull { it.valuationJpy })
         val totalCostJpy = PortfolioMath.sumJpyAmounts(current.mapNotNull { it.costJpy })
         val annualDividendJpy = PortfolioMath.sumJpyAmounts(current.mapNotNull { it.getEffectiveAnnualDividendJpy(taxMode) })
@@ -1236,9 +1239,7 @@ class DividendViewModel @JvmOverloads constructor(
             annualDividend = annualDividend,
             netAnnualDividend = netAnnualDividend,
             roadmapDividend = roadmapDividend,
-            averageYield = PortfolioMath.portfolioYield(
-                annualDividendJpy, totalAssetsJpy, totalCostJpy, basis
-            )
+            averageYield = PortfolioMath.portfolioYieldForHoldings(current, excludedCodes, taxMode, basis)
         )
     }
         .distinctUntilChanged()
@@ -1425,6 +1426,21 @@ class DividendViewModel @JvmOverloads constructor(
         }
     }
 
+    fun setYieldExcluded(code: String, excluded: Boolean) {
+        val normalized = PortfolioMath.normalizeCode(code)
+        if (!PortfolioMath.validCode(normalized)) return
+        _yieldExcludedCodes.value = if (excluded) _yieldExcludedCodes.value + normalized else _yieldExcludedCodes.value - normalized
+        yieldExcludedSaveJob?.cancel()
+        yieldExcludedSaveJob = viewModelScope.launch {
+            restoration.await()
+            runCatchingCancellable {
+                saveMutex.withLock {
+                    withContext(Dispatchers.IO) { localImportStore.saveYieldExcludedCodes(_yieldExcludedCodes.value) }
+                }
+            }.onFailure { _saveError.value = it.message ?: getApplication<Application>().getString(R.string.setting_save_failed) }
+        }
+    }
+
     fun setStockClimateOverride(code: String, climate: StockClimate?) {
         val next = _stockClimateOverrides.value.toMutableMap().apply {
             if (climate == null) remove(code) else put(code, climate)
@@ -1493,6 +1509,7 @@ class DividendViewModel @JvmOverloads constructor(
             }
         }
         val nextBenefits = _shareholderBenefits.value.toMutableMap().apply { extras.forEach { putAll(it.shareholderBenefits) } }
+        val nextExcludedCodes = _yieldExcludedCodes.value + extras.flatMap { it.yieldExcludedCodes }
         val nextClimates = _stockClimateOverrides.value.toMutableMap().apply { extras.forEach { putAll(it.stockClimateOverrides) } }
         val nextDividendHistory = _dividendHistoryOverrides.value.toMutableMap().apply { extras.forEach { putAll(it.dividendHistoryOverrides) } }
         withContext(Dispatchers.IO) {
@@ -1500,10 +1517,12 @@ class DividendViewModel @JvmOverloads constructor(
             backups.forEach { preview -> localImportStore.saveBackup(preview.kind, preview.payload) }
             localImportStore.saveShareholderBenefits(nextBenefits)
             localImportStore.saveStockClimateOverrides(nextClimates)
+            localImportStore.saveYieldExcludedCodes(nextExcludedCodes)
             localImportStore.saveDividendHistoryOverrides(nextDividendHistory)
         }
         _shareholderBenefits.value = nextBenefits
         _stockClimateOverrides.value = nextClimates
+        _yieldExcludedCodes.value = nextExcludedCodes
         _dividendHistoryOverrides.value = nextDividendHistory
         if (watchlistBackup != null) {
             watchlistLoadFailed = false
@@ -3183,6 +3202,7 @@ class DividendViewModel @JvmOverloads constructor(
 
     suspend fun resetLocalData() {
         restoration.await()
+        yieldExcludedSaveJob?.cancel()
         synchronized(financialGenerationLock) { dataGeneration.incrementAndGet() }
         notificationMutex.withLock {
         saveMutex.withLock {
@@ -3214,6 +3234,7 @@ class DividendViewModel @JvmOverloads constructor(
             _shareholderBenefits.value = emptyMap()
             stockClimateSaveJob?.cancel()
             _stockClimateOverrides.value = emptyMap()
+            _yieldExcludedCodes.value = emptySet()
             _dividendHistoryOverrides.value = emptyMap()
             hasRestoredLocalHoldings = true
             holdingsLoadFailed = false
@@ -3250,6 +3271,7 @@ class DividendViewModel @JvmOverloads constructor(
                 hasRestoredLocalHoldings = localImportStore.hasHoldings()
                 _shareholderBenefits.value = runCatching { localImportStore.loadShareholderBenefits() }.getOrDefault(emptyMap())
                 _stockClimateOverrides.value = runCatching { localImportStore.loadStockClimateOverrides() }.getOrDefault(emptyMap())
+                _yieldExcludedCodes.value = runCatching { localImportStore.loadYieldExcludedCodes() }.getOrDefault(emptySet())
                 _dividendHistoryOverrides.value = runCatching { localImportStore.loadDividendHistoryOverrides() }.getOrDefault(emptyMap())
                 _cloudflareSecurityData.value = loadCachedCloudflareSecurityData()
                 runCatching { localImportStore.loadHoldings() } to runCatching { localImportStore.loadWatchlist() }

@@ -71,6 +71,7 @@ fun SettingsScreen(
     val oledBlackAvailable = themeMode == "dark" || (themeMode == "system" && systemDarkTheme)
     val isOledBlack by viewModel.isOledBlack.collectAsStateWithLifecycle()
     val selectedAccent by viewModel.selectedAccent.collectAsStateWithLifecycle()
+    val yieldExcludedCodes by viewModel.yieldExcludedCodes.collectAsStateWithLifecycle()
     val shareholderBenefits by viewModel.shareholderBenefits.collectAsStateWithLifecycle()
     val stockClimateOverrides by viewModel.stockClimateOverrides.collectAsStateWithLifecycle()
     val dividendHistoryOverrides by viewModel.dividendHistoryOverrides.collectAsStateWithLifecycle()
@@ -159,7 +160,8 @@ fun SettingsScreen(
                                 shareholderBenefits = shareholderBenefits,
                                 stockClimateOverrides = stockClimateOverrides,
                                 dividendHistoryOverrides = dividendHistoryOverrides,
-                                watchlist = watchlist
+                                watchlist = watchlist,
+                                yieldExcludedCodes = yieldExcludedCodes
                             )
                         }
                     }

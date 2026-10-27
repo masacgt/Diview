@@ -43,7 +43,8 @@ data class DvmPortableExtras(
     val shareholderBenefits: Map<String, List<ShareholderBenefit>> = emptyMap(),
     val stockClimateOverrides: Map<String, StockClimate> = emptyMap(),
     val dividendHistoryOverrides: Map<String, List<DividendHistoryOverride>> = emptyMap(),
-    val watchlist: List<WatchlistStock>? = null
+    val watchlist: List<WatchlistStock>? = null,
+    val yieldExcludedCodes: Set<String> = emptySet()
 )
 data class DvmBackupPreview(
     val kind: DvmBackupKind,
@@ -84,7 +85,7 @@ object DvmBackupImporter {
             val root = JSONObject(text)
             val extras = parseExtras(root)
             val itemCount = extras.shareholderBenefits.size + extras.stockClimateOverrides.size +
-                extras.dividendHistoryOverrides.size + extras.watchlist.orEmpty().size
+                extras.dividendHistoryOverrides.size + extras.watchlist.orEmpty().size + extras.yieldExcludedCodes.size
             return DvmBackupPreview(kind, itemCount, emptyList(), plain, extras)
         }
         val items = when {
@@ -150,7 +151,7 @@ object DvmBackupImporter {
     private fun inferKind(text: String): DvmBackupKind {
         val root = runCatching { JSONObject(text) }.getOrNull()
         if (root != null && (root.has("shareholderBenefits") || root.has("stockClimateOverrides") ||
-                root.has("dividendHistoryOverrides") || root.has("watchlist"))) {
+                root.has("dividendHistoryOverrides") || root.has("watchlist") || root.has("yieldExcludedCodes"))) {
             return DvmBackupKind.DIVIEW_EXTRAS
         }
         val items = runCatching {
@@ -217,7 +218,12 @@ object DvmBackupImporter {
         val watchlist = if (!root.has("watchlist")) null else parseWatchlist(
             root.optJSONArray("watchlist") ?: throw IllegalArgumentException("バックアップの監視銘柄データが正しくありません")
         )
-        return DvmPortableExtras(benefits, climates, histories, watchlist)
+        val excludedJson = root.optJSONArray("yieldExcludedCodes") ?: JSONArray()
+        val excludedCodes = (0 until excludedJson.length()).mapNotNull { index ->
+            val code = PortfolioMath.normalizeCode(excludedJson.optString(index))
+            code.takeIf(PortfolioMath::validCode)
+        }.toSet()
+        return DvmPortableExtras(benefits, climates, histories, watchlist, excludedCodes)
     }
 
     private fun parseWatchlist(items: JSONArray): List<WatchlistStock> = (0 until items.length()).map { index ->

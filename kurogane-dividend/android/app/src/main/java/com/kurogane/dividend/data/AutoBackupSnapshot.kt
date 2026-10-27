@@ -22,7 +22,7 @@ internal class AutoBackupSnapshot(file: File) {
     fun readWatchlist(): JSONArray? = readField("watchlist") { it.readJsonArray() }
     fun readOverrides(): JSONObject? = readField("overrides") {
         val json = it.readJsonValue() as? JSONObject ?: throw IOException("自動バックアップの形式が正しくありません")
-        for (key in listOf("shareholder_benefits", "stock_climate_overrides", "dividend_history_overrides")) {
+        for (key in listOf("shareholder_benefits", "stock_climate_overrides", "dividend_history_overrides", "yield_excluded_codes")) {
             check(!json.has(key) || json.optJSONObject(key) != null)
         }
         json
