@@ -5,7 +5,7 @@ const contextKey = Symbol('marketReadContext');
 export function withMarketReadCache(env) {
   return env[contextKey] ? env : {
     ...env,
-    [contextKey]: { json: new Map(), documents: new Map() },
+    [contextKey]: { json: new Map() },
   };
 }
 
@@ -27,9 +27,17 @@ async function sharedRead(cache, key, load) {
 }
 
 export function sharedMarketJson(env, key, load) {
+  // Only profile/current are repeatedly read by the analysis path. Catalogs,
+  // issuer indexes and history partitions can be large and are normally read
+  // once; retaining and cloning those would add CPU without saving R2 I/O.
+  if (!/^market\/yfinance\/v2\/securities\/[A-Z0-9]{4,5}\.T\/(?:profile|current)\.json$/.test(key)) {
+    return load();
+  }
   return sharedRead(env[contextKey]?.json, key, load);
 }
 
 export function sharedMarketDocuments(env, prefix, load) {
-  return sharedRead(env[contextKey]?.documents, prefix, load);
+  // Keep independently loaded list arrays, preserving the existing sort and
+  // enrichment behavior without cloning a complete financial/history series.
+  return load();
 }

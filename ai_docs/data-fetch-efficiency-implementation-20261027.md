@@ -8,7 +8,7 @@ The user's additional acceptance condition is unchanged display content. Therefo
 
 ## Changes and checks by stage
 
-1. Worker reads share promises within one HTTP request or one scheduled-security analysis. JSON documents and list results are cloned for each consumer, so in-place sorting/enrichment cannot affect another consumer. Missing-object lookups are shared only in that context; failed reads are evicted and remain retryable. A later HTTP request always gets a new context.
+1. Worker profile/current reads share promises within one HTTP request or one scheduled-security analysis. These small documents are cloned for each consumer, so mutations cannot affect another consumer. Missing-object lookups are shared only in that context; failed reads are evicted and remain retryable. A later HTTP request always gets a new context. The version-69 device follow-up excludes large single-use issuer indexes and history lists from retention/cloning after observing an intermittent CPU-limit failure on version 68.
 2. Android's default Repository instances share overlapping HTTP reads using the complete URL and HTTP-cache-bypass mode. Each caller parses its own JSONObject from the shared immutable body. Completed requests and failures are removed immediately: morning/evening refreshes and explicit retries are not suppressed by another new TTL. Injected transports remain isolated.
 3. An explicit full-catalog fetch also populates the existing five-minute search/detail fallback cache. The two existing parsing projections remain distinct, including their current TTM/unknown filtering. Explicit full-catalog refreshes still perform HTTP. Empty responses clear the old fallback snapshot.
 4. `securities/{code}?include_history_bounds=false` omits only the unrendered stored-dividend-history bounds scan. Default requests retain their old response. Company-information metadata remains available, so the existing cache/migration gate is preserved. Current ViewModel security requests opt out; dividend events, amounts, prices, dates, forecasts, and all other metadata are unchanged. Older Workers may ignore the parameter safely.
@@ -35,14 +35,14 @@ The existing production module was downloaded read-only. A guarded local transfo
 
 Publication completed after the user explicitly approved both upload and traffic switch. The initial automatic-review rejection was resolved by that approval. The deployed version was rechecked before upload and immediately before switching; it was still the expected version 67. Uploaded version 68's bindings and compatibility date matched version 67; its preview security/financial/analysis responses matched the production baseline in three comparisons.
 
-- Serving version: **68**, `1a0c7851-3301-4b10-ab98-4d6933489b38`, 100% traffic.
-- Deployment: `5b8a7e1d-b967-4dcf-98e4-a71143454aa1`, 2026-10-27 21:23:19 JST. Deployment-list read-back confirms the version and percentage.
+- Initially published version: **68**, `1a0c7851-3301-4b10-ab98-4d6933489b38`, deployment `5b8a7e1d-b967-4dcf-98e4-a71143454aa1`, 2026-10-27 21:23:19 JST.
+- Current serving version: **69**, `d9ab22b6-6165-4a7a-ba4a-7b69c9895cd9`, deployment `aa1d6b7e-760d-4660-b00c-fa31d85ba3a1`, 2026-10-27 21:44:47 JST, 100% traffic. The device follow-up narrows the JSON-copy scope while preserving content; see [data-fetch-efficiency-device-check-20261027.md](data-fetch-efficiency-device-check-20261027.md). Deployment read-back, 67 Worker tests and the repeated 30 production comparisons all pass.
 - All 27 pre/post-production responses (7203, 8316, 8984, 1326, 6721, 25935, 285A, 8058, 8953; security, financial, analysis) returned HTTP 200 and matched, excluding only `observed_at` and continuously changing `market_age_days`.
 - Three further production comparisons (7203, 8984, 25935) confirm the history opt-out returns `not_requested/null/null` for the three hidden bounds fields, with all other response content identical to the full endpoint.
 - Prepared production entry module SHA-256: `84905413ecb46ec920f813d7143a09ccf696e4779e7309bdf6aa03eaa1f2d9bf`. The original entry module is retained locally with SHA-256 `d17167253c576c4be0db870ebcf70b9d0b2269e7f289c746549059b1800fa2b3`.
 - Rollback target remains version 67; no database/R2 data migration, trigger change, or unrelated main Worker feature was published. Publication logs and exact comparison results are in `worker-upload.log`, `worker-deploy.log`, `worker-deployments-after-publish.json`, `publication-preview-comparison.json`, and `publication-after-comparison.json` under the ignored evidence directory.
 
-The code commit is `e70874e5` on `codex/fetch-efficiency-20261027`. GitHub push/main integration was not included in the user's specific Worker-publication approval and has not been performed.
+The initial code commit is `e70874e5` on `codex/fetch-efficiency-20261027`. The user subsequently requested and received a GitHub push through `6f928962`; main integration has not been performed. The device follow-up adds the CPU-copy fix and opt-in live test on this same branch.
 
 ## Remaining architectural opportunities
 
