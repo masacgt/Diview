@@ -10,10 +10,9 @@
 
 ## Work location and directories
 
-- Work only within the working folder supplied for the task. Do not create or write task files elsewhere unless the user authorizes the destination.
-- Do not create folders under `C:\` without authorization. Reuse suitable folders in the supplied working folder.
-- When explicitly authorized, create task-specific isolated scratch folders under `C:\Codex`, outside the repository root, and keep repository copies out of cloud-synced locations.
-- If no suitable authorized location exists, ask for a destination before writing files.
+- Work within the supplied working folder by default. Task-specific isolated scratch folders may be created under `C:\Codex`, including outside the repository root, when needed.
+- Do not create new folders elsewhere under `C:\`. Reuse suitable existing folders under `C:\Codex` when practical.
+- Keep repository copies out of cloud-synced locations.
 
 ## Git and generated files
 
@@ -47,3 +46,9 @@
 - After a code change, provide the relevant build and device-install commands when applicable. For Android, include JDK 17 selection and the correct project paths; tailor the device command to the available device and build variant. Clearly label commands that require the user to choose a device, credentials, or deployment target.
 - Do not treat documentation-only changes as requiring an Android build or device install. For documentation changes, report the diff and provide publication steps only when requested or authorized.
 - Group related, ready-to-run commands in one code block when practical. Never present a commit or push command that could accidentally include unrelated modifications.
+
+## GitHub Actions browser URL verification
+
+- Before starting a GitHub Actions workflow in a browser, inspect the browser integration's tab list and verify the target tab's `url` value. Do not identify the page from its title, screenshot, or OCR alone.
+- Confirm the parsed URL uses `https://github.com` and its path matches the intended owner, repository, and workflow file before opening or submitting the workflow form.
+- Before submitting, verify the selected branch and workflow input (such as `run_mode`) match the requested operation. After submission, verify the run's event, branch, and commit SHA.
