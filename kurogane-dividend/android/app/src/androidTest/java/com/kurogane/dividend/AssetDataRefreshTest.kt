@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.*
 import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.kurogane.dividend.ui.screens.StockDetailScreen
 import androidx.lifecycle.ViewModelStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -130,8 +131,14 @@ class AssetDataRefreshTest {
         val count = requests.count { it == "/api/v1/securities/7203" }
         assertTrue(count > 0)
         missingPrice = false
-        compose.setContent { KuroganeDividendTheme { AssetManagementScreen(vm) } }
-        compose.waitUntil(45_000) { vm.holdings.value.first { it.code == "7203" }.price == 3000.0 }
+        var owner: androidx.lifecycle.LifecycleOwner? = null
+        compose.setContent { KuroganeDividendTheme { owner = LocalLifecycleOwner.current; AssetManagementScreen(vm) } }
+        try {
+            compose.waitUntil(45_000) { vm.holdings.value.first { it.code == "7203" }.price == 3000.0 }
+        } catch (error: Throwable) {
+            val key = "cloudflare_security_fetch_attempt_at_7203"
+            throw AssertionError("lifecycle=${owner?.lifecycle?.currentState}, attempts=${requests.count { it == "/api/v1/securities/7203" }}, failed=${prefs.getBoolean("${key}_failed", false)}, elapsed=${System.currentTimeMillis() - prefs.getLong(key, 0L)}, missing=${vm.hasMissingJapaneseHoldingPrices()}", error)
+        }
         assertTrue(requests.count { it == "/api/v1/securities/7203" } > count)
     }
 

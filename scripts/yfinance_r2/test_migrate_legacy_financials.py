@@ -143,6 +143,92 @@ class MigrationShardTests(unittest.TestCase):
         self.assertEqual(annual["equity_ratio_computed"], 38.0)
         self.assertEqual(annual["field_status"]["equity_ratio_computed"], "available")
 
+    def test_yfinance_native_ratio_is_preserved_with_compatible_inputs(self):
+        for currencies in ({}, {"stockholders_equity": "jpy", "total_assets": "JPY"}):
+            with self.subTest(currencies=currencies):
+                annual = {
+                    "equity_ratio_computed": 20.0,
+                    "field_status": {"equity_ratio_computed": "available"},
+                    "source_values": {
+                        "yfinance": {"values": {"stockholders_equity": 400000, "total_assets": 2000000},
+                                     "field_units": {"stockholders_equity": "yfinance_native", "total_assets": "yfinance_native"},
+                                     "field_reported_currencies": currencies},
+                        "seed": {"source": "IRBANK", "values": {"equity_ratio_computed": 35.0},
+                                 "field_units": {"equity_ratio_computed": "percent"}},
+                        "calculated": {"values": {"equity_ratio_computed": {
+                            "value": 20.0, "unit": "percent",
+                            "input_sources": {"equity": "yfinance", "total_assets": "yfinance"},
+                            "input_units": {"equity": "yfinance_native", "total_assets": "yfinance_native"}}}},
+                    },
+                }
+                self.assertFalse(repair_mixed_source_equity_ratio(annual))
+                self.assertEqual(annual["equity_ratio_computed"], 20.0)
+                self.assertIn("equity_ratio_computed", annual["source_values"]["calculated"]["values"])
+
+    def test_yfinance_native_ratio_with_conflicting_currencies_is_not_preserved(self):
+        annual = {
+            "equity_ratio_computed": 20.0,
+            "source_values": {
+                "yfinance": {"values": {"stockholders_equity": 40, "total_assets": 200},
+                             "field_units": {"stockholders_equity": "yfinance_native", "total_assets": "yfinance_native"},
+                             "field_reported_currencies": {"stockholders_equity": "USD", "total_assets": "JPY"}},
+                "calculated": {"values": {"equity_ratio_computed": {
+                    "value": 20.0, "unit": "percent",
+                    "input_sources": {"equity": "yfinance", "total_assets": "yfinance"},
+                    "input_units": {"equity": "yfinance_native", "total_assets": "yfinance_native"}}}},
+            },
+        }
+        self.assertTrue(repair_mixed_source_equity_ratio(annual))
+        self.assertNotIn("equity_ratio_computed", annual)
+        self.assertEqual(annual["field_status"]["equity_ratio_computed"], "empty")
+
+    def test_yfinance_native_ratio_without_inputs_is_not_preserved(self):
+        annual = {"equity_ratio_computed": 20.0, "source_values": {"calculated": {"values": {
+            "equity_ratio_computed": {"value": 20.0, "unit": "percent",
+                "input_sources": {"equity": "yfinance", "total_assets": "yfinance"},
+                "input_units": {"equity": "yfinance_native", "total_assets": "yfinance_native"}}
+        }}}}
+        self.assertTrue(repair_mixed_source_equity_ratio(annual))
+        self.assertNotIn("equity_ratio_computed", annual)
+
+    def test_conflicting_native_currencies_fall_back_to_valid_seed_ratio(self):
+        annual = {"equity_ratio_computed": 20.0, "source_values": {
+            "yfinance": {"values": {"stockholders_equity": 40, "total_assets": 200},
+                "field_units": {"stockholders_equity": "yfinance_native", "total_assets": "yfinance_native"},
+                "field_reported_currencies": {"stockholders_equity": "USD", "total_assets": "JPY"}},
+            "seed": {"source": "IRBANK", "values": {"equity_ratio_computed": 35.0},
+                     "field_units": {"equity_ratio_computed": "percent"}},
+            "calculated": {"values": {"equity_ratio_computed": {"value": 20.0, "unit": "percent",
+                "input_sources": {"equity": "yfinance", "total_assets": "yfinance"},
+                "input_units": {"equity": "yfinance_native", "total_assets": "yfinance_native"}}}}}}
+        self.assertTrue(repair_mixed_source_equity_ratio(annual))
+        self.assertEqual(annual["equity_ratio_computed"], 35.0)
+        self.assertEqual(annual["field_status"]["equity_ratio_computed"], "legacy_migrated")
+        self.assertNotIn("equity_ratio_computed", annual["source_values"]["calculated"]["values"])
+
+    def test_excessively_large_ratio_is_rejected_without_overflow(self):
+        annual = {"equity_ratio_computed": 10**400, "source_values": {"calculated": {"values": {
+            "equity_ratio_computed": {"value": 10**400, "unit": "percent",
+                "input_sources": {"equity": "yfinance", "total_assets": "yfinance"},
+                "input_units": {"equity": "jpy", "total_assets": "jpy"}}
+        }}}}
+        self.assertTrue(repair_mixed_source_equity_ratio(annual))
+        self.assertNotIn("equity_ratio_computed", annual)
+
+    def test_yfinance_native_zero_equity_is_distinct_from_missing_or_zero_assets(self):
+        annual = {"equity_ratio_computed": 0.0, "field_status": {"equity_ratio_computed": "available"},
+                  "source_values": {
+                      "yfinance": {"values": {"stockholders_equity": 0, "total_assets": 200},
+                          "field_units": {"stockholders_equity": "yfinance_native", "total_assets": "yfinance_native"}},
+                      "calculated": {"values": {"equity_ratio_computed": {"value": 0.0, "unit": "percent",
+                          "input_sources": {"equity": "yfinance", "total_assets": "yfinance"},
+                          "input_units": {"equity": "yfinance_native", "total_assets": "yfinance_native"}}}}}}
+        self.assertFalse(repair_mixed_source_equity_ratio(annual))
+        self.assertEqual(annual["equity_ratio_computed"], 0.0)
+        annual["source_values"]["yfinance"]["values"]["total_assets"] = 0
+        self.assertTrue(repair_mixed_source_equity_ratio(annual))
+        self.assertNotIn("equity_ratio_computed", annual)
+
     def test_unknown_source_equity_ratio_calculation_is_removed(self):
         annual = {
             "equity_ratio_computed": 999.0,
@@ -199,6 +285,29 @@ class MigrationShardTests(unittest.TestCase):
         self.assertEqual(saved["annual"]["equity_ratio_computed"], 37.8)
         self.assertEqual(saved["annual"]["field_status"]["equity_ratio_computed"], "legacy_migrated")
         self.assertNotIn("equity_ratio_computed", saved["annual"]["source_values"]["calculated"]["values"])
+
+    def test_migrate_one_keeps_native_yfinance_ratio_when_adding_seed_fields(self):
+        source_key = "market/irbank/v1/securities/7203/overview.json"
+        target_key = "market/yfinance/v2/securities/7203.T/financials/2025-03-31.json"
+        source = {"financials": {"annual": [{"fiscal_year": "2025/03", "sales": 100}]}}
+        existing = {"schema_version": 1, "symbol": "7203.T", "annual": {
+            "fiscal_year": "2025/03", "period_end": "2025-03-31", "equity_ratio_computed": 20.0,
+            "field_status": {"equity_ratio_computed": "available"},
+            "source_values": {
+                "yfinance": {"values": {"stockholders_equity": 40, "total_assets": 200},
+                             "field_units": {"stockholders_equity": "yfinance_native", "total_assets": "yfinance_native"}},
+                "calculated": {"values": {"equity_ratio_computed": {
+                    "value": 20.0, "unit": "percent", "input_sources": {"equity": "yfinance", "total_assets": "yfinance"},
+                    "input_units": {"equity": "yfinance_native", "total_assets": "yfinance_native"}}}},
+            },
+        }}
+        client = FakeS3Client({source_key: source, target_key: existing})
+        result = migrate_one(client, "test-bucket", {"code": "7203", "symbol": "7203.T"}, dry_run=False)
+        saved = json.loads(client.objects[target_key])["annual"]
+        self.assertEqual(result["status"], "migrated")
+        self.assertEqual(saved["equity_ratio_computed"], 20.0)
+        self.assertEqual(saved["field_status"]["equity_ratio_computed"], "available")
+        self.assertEqual(saved["source_values"]["calculated"]["values"]["equity_ratio_computed"]["value"], 20.0)
 
     def test_migrate_one_fails_when_r2_readback_keeps_old_derived_ratio(self):
         source_key = "market/irbank/v1/securities/7203/overview.json"

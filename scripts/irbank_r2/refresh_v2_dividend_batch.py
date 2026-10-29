@@ -140,12 +140,14 @@ def count_pending(items: dict[str, dict[str, Any]], codes: list[str], generated_
 def publish_index(client: Any, bucket: str, key: str, document: dict[str, Any]) -> tuple[str, str]:
     payload = refresh.json_bytes(document)
     digest = hashlib.sha256(payload).hexdigest()
-    wrote_index = False
+    index_write_attempted = False
     try:
         shard_manifest = (
             refresh.prepare_dividend_index_shards(client, bucket, document)
             if key == DEFAULT_R2_KEY else None
         )
+        # A timed-out PUT may have succeeded remotely even without a response.
+        index_write_attempted = True
         response = client.put_object(
             Bucket=bucket,
             Key=key,
@@ -158,10 +160,9 @@ def publish_index(client: Any, bucket: str, key: str, document: dict[str, Any]) 
             raise RuntimeError(f"IRBANK v2 dividend read-back mismatch: {key}")
         if shard_manifest is not None:
             refresh.activate_dividend_index_shards(client, bucket, shard_manifest)
-        wrote_index = True
         return digest, str(response.get("ETag") or "").strip('"')
     finally:
-        if wrote_index and key == DEFAULT_R2_KEY:
+        if index_write_attempted and key == DEFAULT_R2_KEY:
             refresh.bump_financial_revision(client, bucket)
 
 

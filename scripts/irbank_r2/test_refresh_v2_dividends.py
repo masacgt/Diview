@@ -21,6 +21,8 @@ from refresh_v2_dividends import (
     prepare_dividend_index_shards,
 )
 from refresh_v2_dividend_batch import is_due, publish_index, update_forecast, main as batch_main
+from refresh_v2_dividends import main as full_refresh_main
+from refresh_v2_dividend_yields import main as yield_refresh_main
 
 
 class MissingR2Key(Exception):
@@ -283,6 +285,88 @@ class IrbankDividendIndexShardTests(unittest.TestCase):
         self.assertEqual(json.loads(client.objects[DIVIDEND_SHARD_MANIFEST_KEY])["slot"], "a")
         self.assertEqual(json.loads(client.objects[f"{DIVIDEND_SHARD_ROOT}/a/72.json"])["items"], document["items"])
         bump_revision.assert_called_once_with(client, "bucket")
+
+    def test_batch_updates_revision_if_manifest_readback_fails_after_write(self):
+        class ReadbackFailure(FakeR2Client):
+            def get_object(self, *, Bucket, Key):
+                if Key == DIVIDEND_SHARD_MANIFEST_KEY and Key in self.objects:
+                    raise OSError("manifest readback failed")
+                return super().get_object(Bucket=Bucket, Key=Key)
+
+        client = ReadbackFailure()
+        document = {"items": {"7203": {"actual_status": "available", "actual": {"annual_dps": 100}}}}
+        with patch("refresh_v2_dividend_batch.refresh.bump_financial_revision") as bump:
+            with self.assertRaisesRegex(OSError, "manifest readback failed"):
+                publish_index(client, "bucket", DEFAULT_R2_KEY, document)
+        self.assertIn(DIVIDEND_SHARD_MANIFEST_KEY, client.objects)
+        bump.assert_called_once_with(client, "bucket")
+
+    def test_batch_does_not_update_revision_if_preparation_fails(self):
+        client = FakeR2Client()
+        with patch("refresh_v2_dividend_batch.refresh.prepare_dividend_index_shards", side_effect=OSError("prepare failed")), \
+             patch("refresh_v2_dividend_batch.refresh.bump_financial_revision") as bump:
+            with self.assertRaisesRegex(OSError, "prepare failed"):
+                publish_index(client, "bucket", DEFAULT_R2_KEY, {"items": {}})
+        self.assertNotIn(DEFAULT_R2_KEY, client.objects)
+        bump.assert_not_called()
+
+    def test_batch_updates_revision_if_index_put_times_out_after_write(self):
+        class PutTimeout(FakeR2Client):
+            def put_object(self, *, Bucket, Key, Body, **kwargs):
+                result = super().put_object(Bucket=Bucket, Key=Key, Body=Body, **kwargs)
+                if Key == DEFAULT_R2_KEY:
+                    raise TimeoutError("index PUT response lost")
+                return result
+
+        client = PutTimeout()
+        with patch("refresh_v2_dividend_batch.refresh.bump_financial_revision") as bump:
+            with self.assertRaisesRegex(TimeoutError, "response lost"):
+                publish_index(client, "bucket", DEFAULT_R2_KEY, {"items": {"7203": {"code": "7203"}}})
+        self.assertIn(DEFAULT_R2_KEY, client.objects)
+        bump.assert_called_once_with(client, "bucket")
+
+    def test_full_refresh_updates_revision_if_index_readback_fails_after_write(self):
+        class ReadbackFailure(FakeR2Client):
+            def get_object(self, *, Bucket, Key):
+                if Key == DEFAULT_R2_KEY and Key in self.objects:
+                    raise OSError("index readback failed")
+                return super().get_object(Bucket=Bucket, Key=Key)
+
+        client = ReadbackFailure()
+        catalog = [{"code": "7203", "edinet_code": "E00001"}]
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.dict(os.environ, {"IRBANK_API_KEY": "test"}), \
+             patch.object(sys, "argv", ["refresh", "--publish", "--bucket", "bucket", "--output", str(Path(directory) / "test.json")]), \
+             patch("refresh_v2_dividends.load_catalog", return_value=catalog), \
+             patch("refresh_v2_dividends.request_json", return_value={"remaining": 100}), \
+             patch("refresh_v2_dividends.fetch_dividend_record", return_value=("7203", {"actual_status": "empty"})), \
+             patch("refresh_v2_dividends.make_r2_client", return_value=client), \
+             patch("refresh_v2_dividends.bump_financial_revision") as bump:
+            with self.assertRaisesRegex(OSError, "index readback failed"):
+                full_refresh_main()
+        self.assertIn(DEFAULT_R2_KEY, client.objects)
+        bump.assert_called_once_with(client, "bucket")
+
+    def test_yield_refresh_updates_revision_if_manifest_readback_fails_after_write(self):
+        class ReadbackFailure(FakeR2Client):
+            def get_object(self, *, Bucket, Key):
+                if Key == DIVIDEND_SHARD_MANIFEST_KEY and Key in self.objects:
+                    raise OSError("manifest readback failed")
+                return super().get_object(Bucket=Bucket, Key=Key)
+
+        client = ReadbackFailure({DEFAULT_R2_KEY: {"items": {"7203": {"code": "7203"}}}})
+        meta = {"attribution": {}, "total_count": 0, "duplicate_rows": 0,
+                "page_count": 1, "api_remaining_before_fetch": 100}
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.dict(os.environ, {"IRBANK_API_KEY": "test"}), \
+             patch.object(sys, "argv", ["yields", "--publish", "--bucket", "bucket", "--output", str(Path(directory) / "test.json")]), \
+             patch("refresh_v2_dividend_yields.make_r2_client", return_value=client), \
+             patch("refresh_v2_dividend_yields.fetch_screening_yields", return_value=({}, meta)), \
+             patch("refresh_v2_dividend_yields.bump_financial_revision") as bump:
+            with self.assertRaisesRegex(OSError, "manifest readback failed"):
+                yield_refresh_main()
+        self.assertIn(DIVIDEND_SHARD_MANIFEST_KEY, client.objects)
+        bump.assert_called_once_with(client, "bucket")
 
 
 if __name__ == "__main__":

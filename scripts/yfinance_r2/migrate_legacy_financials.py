@@ -226,17 +226,48 @@ def repair_mixed_source_equity_ratio(annual: Any) -> bool:
                 seed_field_units[field] = unit
     seed_ratio = seed_values.get("equity_ratio_computed") if isinstance(seed_values, dict) else None
     ratio_value = ratio_entry.get("value") if isinstance(ratio_entry, dict) else None
-    valid_ratio = lambda value: (
-        isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(float(value))
-        and abs(float(value)) <= 1000
+    def valid_ratio(value: Any) -> bool:
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            return False
+        try:
+            return math.isfinite(value) and abs(value) <= 1000
+        except OverflowError:
+            return False
+    yfinance_record = source_values.get("yfinance")
+    yfinance_values = yfinance_record.get("values") if isinstance(yfinance_record, dict) else None
+    yfinance_units = yfinance_record.get("field_units") if isinstance(yfinance_record, dict) else None
+    yfinance_currencies = yfinance_record.get("field_reported_currencies") if isinstance(yfinance_record, dict) else None
+    yfinance_values = yfinance_values if isinstance(yfinance_values, dict) else {}
+    yfinance_units = yfinance_units if isinstance(yfinance_units, dict) else {}
+    yfinance_currencies = yfinance_currencies if isinstance(yfinance_currencies, dict) else {}
+    # Monetary values can be much larger than a ratio, so check finiteness separately.
+    def finite_amount(value: Any) -> bool:
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            return False
+        try:
+            return math.isfinite(value)
+        except OverflowError:
+            return False
+    equity_field = ("stockholders_equity" if finite_amount(yfinance_values.get("stockholders_equity"))
+                    else "total_equity_gross_minority_interest")
+    equity_currency = str(yfinance_currencies.get(equity_field) or "").strip().upper()
+    assets_currency = str(yfinance_currencies.get("total_assets") or "").strip().upper()
+    native_inputs_compatible = (
+        equity_source == "yfinance"
+        and ratio_entry.get("unit") == "percent"
+        and yfinance_units.get(equity_field) == "yfinance_native"
+        and yfinance_units.get("total_assets") == "yfinance_native"
+        and finite_amount(yfinance_values.get(equity_field))
+        and finite_amount(yfinance_values.get("total_assets"))
+        and yfinance_values["total_assets"] > 0
+        and (not equity_currency or not assets_currency or equity_currency == assets_currency)
     )
     units_equal = (
         isinstance(input_units, dict)
         and isinstance(input_units.get("equity"), str)
         and input_units.get("equity") == input_units.get("total_assets")
-        and input_units.get("equity") in {"jpy", "million_jpy"}
+        and (input_units.get("equity") in {"jpy", "million_jpy"}
+             or (input_units.get("equity") == "yfinance_native" and native_inputs_compatible))
     )
     same_source_calculation = (
         isinstance(equity_source, str)

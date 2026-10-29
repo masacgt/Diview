@@ -604,12 +604,14 @@ def main() -> int:
                       "sha256": digest, "bytes": len(payload), "api_remaining_before_fetch": remaining}, ensure_ascii=False))
 
     if args.publish:
-        wrote_index = False
+        index_write_attempted = False
         try:
             shard_manifest = (
                 prepare_dividend_index_shards(r2_client, args.bucket, document)
                 if args.key == DEFAULT_R2_KEY else None
             )
+            # A timed-out PUT may have succeeded remotely even without a response.
+            index_write_attempted = True
             response = r2_client.put_object(Bucket=args.bucket, Key=args.key, Body=payload,
                                             ContentType="application/json; charset=utf-8",
                                             CacheControl="public, max-age=300")
@@ -618,7 +620,6 @@ def main() -> int:
                 raise RuntimeError(f"IRBANK v2 dividend read-back mismatch: {args.key}")
             if shard_manifest is not None:
                 activate_dividend_index_shards(r2_client, args.bucket, shard_manifest)
-            wrote_index = True
             print(json.dumps({"published_key": args.key, "etag": str(response.get("ETag") or "").strip('"'),
                               "read_back_sha256": digest,
                               "shard_count": shard_manifest.get("shard_count") if shard_manifest else None,
@@ -626,7 +627,7 @@ def main() -> int:
                                   hashlib.sha256(json_bytes(shard_manifest)).hexdigest() if shard_manifest else None
                               )}, ensure_ascii=False))
         finally:
-            if wrote_index and args.key == DEFAULT_R2_KEY:
+            if index_write_attempted and args.key == DEFAULT_R2_KEY:
                 bump_financial_revision(r2_client, args.bucket)
     return 0
 

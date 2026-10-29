@@ -1,5 +1,7 @@
 # Trouble
 
+- On 2026-10-30 the isolated API 35 test `visibleAssetScreenAutomaticallyRetriesMissingJapanesePrice` failed three consecutive attempts with a 45-second timeout. Diagnostics showed `RESUMED`, one request, failed marker true, approximately 46 seconds elapsed and the price still missing. Manual retry after the cooldown passed; root cause and real-device behavior remain unverified. Pause focused investigation under the repository three-attempt rule.
+
 - Financial revision changes were ignored for a same-day cached security because an early throttle return preceded the revision check. SCG01's isolated test package retained 8984 without a forecast under revision `b948aeeb73e3446eb0bec4a5df85c160` after the targeted IRBANK publication advanced production to `c32947da8a2042deb8ad9aa03d5396d7`. Check the shared revision before applying the per-security cache and retry gates; the one-minute revision cache and failed-request throttle still apply. After installing the fix, SCG01 displayed 7,110 JPY and 6.45% and saved the new revision and forecast; emulator revision-change and offline-cache tests passed.
 
 - IRBANK dividend batch runs 40226969676, 40406067787 and 40586020021 failed at startup with `ModuleNotFoundError: financial_revision`: the workflow sparse checkout omitted `scripts/yfinance_r2/financial_revision.py`. The corrected checkout and isolated startup test address this cause; production schedule recovery must be confirmed by a successful run and R2 read-back. REIT disclosure `20261019552797` has explicit 3,460 and 3,650 JPY per-unit forecasts including excess distributions; the old parser accepted only `DividendPerShare` and could not extract them.
@@ -77,3 +79,13 @@
 - Resolution: confirm the competing task has finished, serialize package installs, reinstall the intended exact APK, and compare built/installed hashes both before and after navigation. Keep the worktrees and unrelated changes separate; do not merge unreviewed source changes merely to resolve a device-install race. The four-panel checks then passed on both devices with stable hashes.
 
 - 2026-10-25の配当グラフ検証中、共有エミュレータのAPKが別作業ツリーのインストールで置き換わった。端末操作を作業間で直列化し、画面確認後にも `base.apk` のSHA-256をビルド元と照合する。
+
+## Dividend index read-back failure after a successful write (2026-10-30)
+
+The full, batch, and yield IRBANK dividend index publishers marked the index as written only after read-back and shard activation. A mock R2 reproduction showed the active shard manifest could be written, its read-back fail, and the financial revision remain unchanged. Mark the index PUT attempt before the call, since a lost response may conceal a successful write, so the existing `finally` block attempts to advance the shared revision. Tests cover lost PUT responses, manifest and index read-back failures, successful publication, and failure before the index write; live R2 recovery is unverified. A failed PUT can cause an unnecessary cache invalidation.
+
+Legacy issuer-dividend migration had the same failure pattern: a successful PUT followed by a failed read-back produced a failed security result without `inserted_count`, suppressing the revision bump. A per-run thread-safe marker records the PUT attempt independently of the final result; mock tests cover failed read-back, lost PUT responses and dry-run.
+
+## Native-unit equity ratio removed by legacy migration (2026-10-30)
+
+Legacy financial migration accepted only `jpy` and `million_jpy` calculation inputs, so it removed a valid same-source `yfinance_native` equity ratio and could replace it with a seed ratio. The repair now also accepts native inputs when both source amounts and units are present, the calculation is in percent, and any declared currencies agree; conflicting or missing inputs remain unavailable. Mock migration tests and the yfinance suite pass; no production migration was run.

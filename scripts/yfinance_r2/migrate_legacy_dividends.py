@@ -119,7 +119,8 @@ def records_by_period(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]
     return selected
 
 
-def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
+def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: bool,
+                write_event: threading.Event | None = None) -> dict[str, Any]:
     code = security_code(security.get("code"))
     symbol = str(security.get("symbol") or "").strip().upper()
     if code is None or not re.fullmatch(r"[A-Z0-9]{4,5}\.T", symbol):
@@ -160,6 +161,9 @@ def migrate_one(client: Any, bucket: str, security: dict[str, Any], *, dry_run: 
             "updated_at": iso_now(),
         }
         if not dry_run:
+            # A timed-out PUT may still have updated the remote object.
+            if write_event is not None:
+                write_event.set()
             client.put_object(
                 Bucket=bucket,
                 Key=key,
@@ -210,8 +214,9 @@ def main() -> int:
 
     print(f"IRBANK dividend seed: securities={len(securities)}, workers={args.workers}, dry_run={args.dry_run}", flush=True)
     results: list[dict[str, Any]] = []
+    write_event = threading.Event()
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(migrate_one, client, bucket, row, dry_run=args.dry_run): row for row in securities}
+        futures = {pool.submit(migrate_one, client, bucket, row, dry_run=args.dry_run, write_event=write_event): row for row in securities}
         for completed, future in enumerate(as_completed(futures), start=1):
             security = futures[future]
             try:
@@ -227,7 +232,7 @@ def main() -> int:
                 with _PROGRESS_LOCK:
                     print(f"Processed {completed}/{len(securities)} securities", flush=True)
 
-    if not args.dry_run and any(int(row.get("inserted_count") or 0) > 0 for row in results):
+    if not args.dry_run and write_event.is_set():
         bump_financial_revision(client, bucket)
 
     counts: dict[str, int] = {}
