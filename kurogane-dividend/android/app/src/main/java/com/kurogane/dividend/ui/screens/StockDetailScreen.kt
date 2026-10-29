@@ -318,11 +318,9 @@ fun StockDetailScreen(
     )
     val normalizedDividendCode = currentHolding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T")
     val savedDividendOverrides = dividendHistoryOverrides[normalizedDividendCode].orEmpty().associateBy { it.year }
-    val issuerFiscalDividendsByYear = financial?.issuerDividends.orEmpty().groupBy { it.fiscalYear }.mapNotNull { (year, periods) ->
-        // A yearly chart cannot choose or sum multiple issuer periods safely.
-        periods.singleOrNull()?.displayDps?.let { year to it }
-    }.toMap()
-    val sourceDividendsByYear = if (financial?.issuerDividends.orEmpty().isNotEmpty()) issuerFiscalDividendsByYear
+    val useFiscalChart = currentHolding.category == com.kurogane.dividend.model.Category.JAPAN
+    val issuerFiscalDividendsByYear = com.kurogane.dividend.model.AnnualDividendResolver.issuerFiscalHistory(financial)
+    val sourceDividendsByYear = if (useFiscalChart || financial?.issuerDividends.orEmpty().isNotEmpty()) issuerFiscalDividendsByYear
         else financial?.dividends.orEmpty().associate { it.year to it.dps }
     var yearEndPrices by remember(currentHolding.code) { mutableStateOf<Map<Int, Double>>(emptyMap()) }
     LaunchedEffect(currentHolding.code, dividendHistoryYears) {
@@ -339,16 +337,18 @@ fun StockDetailScreen(
         val forecast = if (year == chartForecastYear) {
             val sameCalendarYear = financial?.issuerIsInvestmentFund != true ||
                 financial?.forecastFirstPeriodEnd?.year == financial?.forecastPeriodEnd?.year
-            financial?.takeIf { it.forecastFiscalYear == year && sameCalendarYear }
-                ?.let { com.kurogane.dividend.model.AnnualDividendResolver.issuerForecast(it, currentCalendarDate) }
-                ?: currentYearForecastDps.takeIf {
+            val issuerForecast = if (sameCalendarYear)
+                com.kurogane.dividend.model.AnnualDividendResolver.issuerFiscalForecast(financial, year, currentCalendarDate)
+                else null
+            issuerForecast ?: currentYearForecastDps.takeIf {
+                    !useFiscalChart &&
                     (currentHolding.category == com.kurogane.dividend.model.Category.US || financial?.issuerIsKnownEquity == true) && year == currentCalendarYear
                 }
         } else null
         val isForecast = forecast != null
         val observedCurrentYear = chartDividendEvents.filter {
             it.date.year == year && !it.date.isAfter(currentCalendarDate)
-        }.takeIf { year == currentCalendarYear && financial?.issuerDividends.orEmpty().isEmpty() && it.isNotEmpty() }
+        }.takeIf { !useFiscalChart && year == currentCalendarYear && financial?.issuerDividends.orEmpty().isEmpty() && it.isNotEmpty() }
             ?.sumOf { it.amountPerShare }
         val annualDividend = forecast ?: sourceDividendsByYear[year] ?: observedCurrentYear
         StockDetailDividendPeriod(
@@ -1207,7 +1207,7 @@ fun StockDetailScreen(
                                     val dpsText = point.annualDividend
                                         ?.let { com.kurogane.dividend.model.formatFinancialAmountDisplay(it) }
                                         ?: "未取得"
-                                    val fiscalPeriodLabel = if (financial?.issuerDividends.orEmpty().isNotEmpty()) "${point.year}期" else "${point.year}年"
+                                    val fiscalPeriodLabel = if (useFiscalChart || financial?.issuerDividends.orEmpty().isNotEmpty()) "${point.year}期" else "${point.year}年"
                                     Triple(
                                         fiscalPeriodLabel,
                                         stringResource(R.string.add_holding_1_s_2_s_2, prefix, dpsText),
@@ -1229,7 +1229,7 @@ fun StockDetailScreen(
                                         modifier = Modifier
                                             .weight(1f)
                                             .fillMaxHeight()
-                                            .clickable(onClickLabel = "${term}の配当内訳を表示") {
+                                            .clickable(onClickLabel = if (useFiscalChart) "${history[index].year}年の配当イベントを表示" else "${term}の配当内訳を表示") {
                                                 selectedDividendYear = history[index].year
                                             }
                                     ) {

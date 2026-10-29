@@ -662,6 +662,28 @@ test('financial API does not replace the calculated ratio with a retained seed r
   assert.equal(body.financials.seed_annual[0].values.equity_ratio_computed, 24);
 });
 
+test('equity ratio does not mix conflicting reported currencies', async () => {
+  const annual = { period_end: '2026-03-31', source_values: {
+    seed: { source: 'IRBANK', values: { equity_ratio_computed: 24 }, field_units: { equity_ratio_computed: 'percent' } },
+    yfinance: { values: { stockholders_equity: 60, total_assets: 100 },
+      field_units: { stockholders_equity: 'yfinance_native', total_assets: 'yfinance_native' },
+      field_reported_currencies: { stockholders_equity: 'USD', total_assets: 'JPY' } },
+    calculated: { values: { equity_ratio_computed: {
+      value: 60, unit: 'percent', input_sources: { equity: 'yfinance', total_assets: 'yfinance' },
+      input_units: { equity: 'yfinance_native', total_assets: 'yfinance_native' },
+    } } },
+  } };
+  const env = dividendEnvironment(new Map([['market/yfinance/v2/securities/4502.T/financials/2026.json', { annual }]]));
+  const read = async () => (await (await worker.fetch(new Request('https://example.com/api/v1/financial-data/4502'), env)).json()).financials.annual[0];
+  const conflicting = await read();
+  assert.equal(conflicting.equity_ratio_computed, 24);
+  assert.equal(Object.hasOwn(conflicting.source_values.calculated.values, 'equity_ratio_computed'), false);
+  delete annual.source_values.seed.values.equity_ratio_computed;
+  assert.equal(Object.hasOwn(await read(), 'equity_ratio_computed'), false);
+  annual.source_values.yfinance.field_reported_currencies.stockholders_equity = 'JPY';
+  assert.equal((await read()).equity_ratio_computed, 60);
+});
+
 test('financial API uses IRBANK canonical fiscal DPS instead of yfinance issuer rows', async () => {
   const records = ['2026/03', '2026/12'].map((period, index) => ({ fiscal_year: 2026, period, annual_dps: 10 + index }));
   const documents = new Map([
@@ -1135,14 +1157,62 @@ test('legacy trailing-distribution catalog rows are not exposed as annual DPS or
   assert.equal(catalogItem.yield_rate, null);
   assert.equal(catalogItem.trailing_12_month_distribution_per_share, 630);
   const noDividendItem = catalogPayload.items.find(item => item.code === '6721');
-  assert.equal(noDividendItem.annual_dividend_per_share, null);
-  assert.equal(noDividendItem.dividend_period, 'unknown');
-  assert.equal(noDividendItem.yield_rate, null);
+  assert.equal(noDividendItem.annual_dividend_per_share, 0);
+  assert.equal(noDividendItem.dividend_period, 'yfinance_reported_no_dividend');
+  assert.equal(noDividendItem.yield_rate, 0);
 
   const quotesResponse = await worker.fetch(new Request('https://example.com/api/v1/live-quotes?limit=1'), env);
   const quoteItem = (await quotesResponse.json()).items[0];
   assert.equal(quoteItem.annual_dividend_per_share, null);
   assert.equal(quoteItem.yield_rate, null);
+});
+
+test('current dividend states override old issuer actuals across search, quotes and detail', async () => {
+  const code = '8783';
+  const generation = '2026-10-28';
+  const catalog = { generation, market_data_date: generation, items: [{
+    code, name: 'Example', security_type: 'equity', price: 37,
+    quote_date: generation, dividend_status: 'no_dividend',
+  }] };
+  const current = { price: { close: 37, date: generation },
+    dividend: { dividend_status: 'no_dividend' }, statistics: { dividendYield: 0 } };
+  const documents = new Map([
+    ['market/yfinance/v2/catalog/current.json', catalog],
+    ['market/yfinance/v2/issuer_dividends/current.json', { items: { [code]: {
+      actual_status: 'available', actual: { fiscal_year: 2010, annual_dps_adjusted: 16.6667 },
+    } } }],
+    [`market/yfinance/v2/securities/${code}.T/profile.json`, { display_name: 'Example' }],
+    [`market/yfinance/v2/securities/${code}.T/current.json`, current],
+  ]);
+  const env = dividendEnvironment(documents);
+  const read = async path => (await (await worker.fetch(new Request(`https://example.com${path}`), env)).json());
+  for (const status of ['no_dividend', 'unknown']) {
+    current.dividend.dividend_status = status;
+    catalog.items[0].dividend_status = status;
+    const expected = status === 'no_dividend' ? 0 : null;
+    const detail = await read(`/api/v1/securities/${code}`);
+    const search = (await read(`/api/v1/security-search?q=${code}`)).items[0];
+    const quote = (await read(`/api/v1/live-quotes?codes=${code}`)).items[0];
+    const catalogRow = (await read('/api/v1/search-catalog')).items[0];
+    assert.equal(detail.dividend_status, status);
+    assert.equal(detail.dividend.annual_dps, expected);
+    assert.equal(detail.market_yield_rate, expected);
+    for (const row of [search, quote, catalogRow]) {
+      assert.equal(row.dividend_status, status);
+      assert.equal(row.annual_dividend_per_share, expected);
+      assert.equal(row.yield_rate, expected);
+    }
+  }
+  const issuer = documents.get('market/yfinance/v2/issuer_dividends/current.json').items[code];
+  const nextYear = Number(japanToday().slice(0, 4)) + 1;
+  issuer.forecast = { status: 'available', fiscal_year: nextYear,
+    period_end: `${nextYear}-12-31`, annual_dps_current_share_basis: 40 };
+  current.dividend.dividend_status = 'no_dividend';
+  const forecastDetail = await read(`/api/v1/securities/${code}`);
+  const forecastQuote = (await read(`/api/v1/live-quotes?codes=${code}`)).items[0];
+  assert.equal(forecastDetail.dividend_status, 'has_dividend');
+  assert.equal(forecastDetail.dividend.annual_dps, 40);
+  assert.equal(forecastQuote.annual_dividend_per_share, 40);
 });
 
 test('live-quotes keeps UUID generations pinned across same-day catalog publication', async () => {

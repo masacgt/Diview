@@ -15,6 +15,21 @@ class AnnualDividendResolverTest {
             forecastAnnualDividend = dps, forecastFiscalYear = year, yahooForwardAnnualDividendRate = yahoo,
             yahooDividendFetchedDate = today.minusDays(1), issuerIsKnownEquity = true)
 
+    @Test fun fiscalChartUsesOnlyIssuerPeriodsAndKeepsZeroDistinctFromMissing() {
+        val data = financial().copy(issuerDividends = listOf(
+            IssuerFiscalYearDividend(2025, 95.0, 95.0, "2025-03"),
+            IssuerFiscalYearDividend(2026, 0.0, 0.0, "2026-03"),
+            IssuerFiscalYearDividend(2027, 20.0, 20.0, "2027-03"),
+            IssuerFiscalYearDividend(2027, 30.0, 30.0, "2027-12")
+        ))
+        assertEquals(mapOf(2025 to 95.0, 2026 to 0.0), AnnualDividendResolver.issuerFiscalHistory(data))
+        assertTrue(AnnualDividendResolver.issuerFiscalHistory(data.copy(issuerDividends = emptyList())).isEmpty())
+        assertEquals(80.0, AnnualDividendResolver.issuerFiscalForecast(data, 2027, today)!!, 0.0)
+        assertNull(AnnualDividendResolver.issuerFiscalForecast(data, 2026, today))
+        assertNull(AnnualDividendResolver.issuerFiscalForecast(data.copy(forecastAnnualDividend = null), 2027, today))
+        assertEquals(0.0, AnnualDividendResolver.issuerFiscalForecast(data.copy(forecastAnnualDividend = 0.0), 2027, today)!!, 0.0)
+    }
+
     @Test fun reitUsesTwoIssuerPeriodsAndNeverFallsBackToYahooEstimate() {
         val reit = financial(7110.0).copy(issuerIsInvestmentFund = true, issuerIsKnownEquity = false,
             forecastFirstPeriodEnd = LocalDate.of(2027, 2, 28), forecastPeriodEnd = LocalDate.of(2027, 8, 31),

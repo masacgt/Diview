@@ -33,8 +33,10 @@ class AssetDataRefreshTest {
     @Volatile private var monthlyFixture = false
     @Volatile private var offline = false
     @Volatile private var emptyFinancial = false
+    @Volatile private var missingPrice = false
     @Volatile private var forecastDps: Double? = null
     @Volatile private var quoteNoDividend = false
+    @Volatile private var quoteUnknown = false
     @Volatile private var eventForecast = false
     private val prefs get() = app.getSharedPreferences("cloudflare_market_cache", Context.MODE_PRIVATE)
 
@@ -54,11 +56,13 @@ class AssetDataRefreshTest {
                         url.path.contains("financial-data") && forecastDps != null ->
                             """{"security":{"code":"$code"},"issuer_dividends":{"forecast":{"annual_dps_current_share_basis":$forecastDps,"fiscal_year":2027,"field_units":{"annual_dps_current_share_basis":"jpy_per_share"}}}}"""
                         url.path.contains("financial-data") -> if (emptyFinancial) """{"security":{"code":"$code"}}""" else
-                            """{"security":{"code":"$code"},"dividends":{"records":[{"calendar_year":2024,"calendar_year_distribution_per_share":60},{"calendar_year":2025,"calendar_year_distribution_per_share":75}]}}"""
+                            """{"security":{"code":"$code"},"issuer_dividends":{"edinet_code":"E00001"},"dividends":{"records":[{"calendar_year":2024,"calendar_year_distribution_per_share":60},{"calendar_year":2025,"calendar_year_distribution_per_share":75}]}}"""
+                        url.path.contains("/securities/") && quoteUnknown ->
+                            """{"code":"$code","name":"検証銘柄","market_price":3000,"dividend_status":"unknown","dividend":{"yield_basis":null,"annual_dps":null}}"""
                         url.path.contains("/securities/") && quoteNoDividend ->
                             """{"code":"$code","name":"検証銘柄","market_price":3000,"dividend_status":"no_dividend","dividend":{"yield_basis":"annual","annual_dps":0}}"""
                         url.path.contains("/securities/") ->
-                            """{"code":"$code","name":"検証銘柄","market_price":3000,"dividend_status":"available","dividend":{"yield_basis":"annual","annual_dps":75}}"""
+                            """{"code":"$code","name":"検証銘柄","market_price":${if (missingPrice) "null" else "3000"},"dividend_status":"available","dividend":{"yield_basis":"annual","annual_dps":75}}"""
                         url.path.endsWith("dividend-months") && eventForecast -> {
                             val date = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"))
                             val symbol = if (url.query.contains("2914")) "2914.T" else if (url.query.contains("AAPL")) "AAPL" else "7203.T"
@@ -93,6 +97,42 @@ class AssetDataRefreshTest {
             vm.financialDataSnapshot("7203") != null &&
                 vm.holdings.value.first { it.code == "7203" }.dividendMonths == listOf(6, 12)
         }
+    }
+
+    @Test fun missingJapanesePriceRetriesAfterCooldownAndPersists() {
+        val vm = model()
+        missingPrice = true
+        runBlocking { vm.importCsvRows(listOf(CsvHoldingRow("7203", "トヨタ", 100.0, 2000.0, 0.0, "特定口座", false)),
+            setOf("shares", "averageCost", "currentPrice", "account")) }
+        runBlocking { vm.retryMissingJapaneseHoldingPrices().join() }
+        val key = "cloudflare_security_fetch_attempt_at_7203"
+        assertEquals(0.0, vm.holdings.value.first { it.code == "7203" }.price, 0.0)
+        assertTrue(prefs.getBoolean("${key}_failed", false))
+        val count = requests.count { it == "/api/v1/securities/7203" }
+        assertTrue(count > 0)
+        runBlocking { vm.retryMissingJapaneseHoldingPrices().join() }
+        assertEquals(count, requests.count { it == "/api/v1/securities/7203" })
+        prefs.edit().putLong(key, System.currentTimeMillis() - 31_000).commit()
+        missingPrice = false
+        runBlocking { vm.retryMissingJapaneseHoldingPrices().join() }
+        assertTrue(requests.count { it == "/api/v1/securities/7203" } > count)
+        assertEquals(3000.0, vm.holdings.value.first { it.code == "7203" }.price, 0.0)
+        compose.waitUntil(10_000) { LocalImportStore(app).loadHoldings()?.firstOrNull { it.code == "7203" }?.price == 3000.0 }
+    }
+
+    @Test fun visibleAssetScreenAutomaticallyRetriesMissingJapanesePrice() {
+        val vm = model()
+        missingPrice = true
+        runBlocking { vm.importCsvRows(listOf(CsvHoldingRow("7203", "トヨタ", 100.0, 2000.0, 0.0, "特定口座", false)),
+            setOf("shares", "averageCost", "currentPrice", "account")) }
+        runBlocking { vm.retryMissingJapaneseHoldingPrices().join() }
+        assertEquals(0.0, vm.holdings.value.first { it.code == "7203" }.price, 0.0)
+        val count = requests.count { it == "/api/v1/securities/7203" }
+        assertTrue(count > 0)
+        missingPrice = false
+        compose.setContent { KuroganeDividendTheme { AssetManagementScreen(vm) } }
+        compose.waitUntil(45_000) { vm.holdings.value.first { it.code == "7203" }.price == 3000.0 }
+        assertTrue(requests.count { it == "/api/v1/securities/7203" } > count)
     }
 
     @After fun cleanup() {
@@ -231,6 +271,29 @@ class AssetDataRefreshTest {
 
     }
 
+    @Test fun noDividendQuoteIsShownAsNoDividendOnAssetAndDetailScreens() {
+        quoteNoDividend = true
+        val vm = model()
+        fill(vm)
+        val holding = vm.holdings.value.first { it.code == "7203" }
+        assertTrue(holding.isNoDividendConfirmed)
+        assertEquals(0.0, holding.dps, 0.0)
+        compose.setContent { KuroganeDividendTheme { StockDetailScreen("7203", vm) } }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("0.00%（無配）").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithText("0.00%（無配）").onFirst().assertIsDisplayed()
+    }
+
+    @Test fun unknownQuoteDoesNotBecomeNoDividendOnAssetAndDetailScreens() {
+        quoteUnknown = true
+        val vm = model()
+        fill(vm)
+        assertFalse(vm.holdings.value.first { it.code == "7203" }.isNoDividendConfirmed)
+        assertFalse(vm.holdings.value.first { it.code == "7203" }.hasKnownAnnualDividend)
+        compose.setContent { KuroganeDividendTheme { StockDetailScreen("7203", vm) } }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("未取得").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithText("0.00%（無配）").assertCountEquals(0)
+    }
+
     @Test fun eventForecastRefreshesEvenWhenHoldingAlreadyHasDividendMonths() {
         quoteNoDividend = true
         val vm = model()
@@ -248,6 +311,21 @@ class AssetDataRefreshTest {
             assertEquals(60.0, held.dps, 0.0)
             assertFalse(held.isNoDividendConfirmed)
         }
+    }
+
+    @Test fun japaneseFiscalChartDoesNotTreatCalendarEventsAsIssuerForecast() {
+        quoteNoDividend = true
+        eventForecast = true
+        val vm = model()
+        fill(vm)
+        assertEquals(60.0, vm.holdings.value.first { it.code == "7203" }.dps, 0.0)
+        compose.setContent { KuroganeDividendTheme { StockDetailScreen("7203", vm) } }
+        val year = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).year
+        val label = "${year}期"
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(label))
+        val bar = compose.onNode(hasClickAction() and hasAnyDescendant(hasText(label)), useUnmergedTree = true)
+        bar.assert(hasAnyDescendant(hasText("¥未取得")))
+        bar.assert(!hasAnyDescendant(hasText("予想")))
     }
 
     @Test fun monthlyAndSplitFailuresCanRetrySameDay() {

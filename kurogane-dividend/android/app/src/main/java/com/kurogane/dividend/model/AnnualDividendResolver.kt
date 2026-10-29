@@ -9,6 +9,15 @@ import java.time.ZoneId
 
 /** The forecast used by both the Stock Detail top card and portfolio calculations. */
 object AnnualDividendResolver {
+    /** Annual fiscal-period chart values must not incorporate calendar-year events. */
+    fun issuerFiscalHistory(financial: FinancialData?): Map<Int, Double> =
+        financial?.issuerDividends.orEmpty().groupBy { it.fiscalYear }.mapNotNull { (year, periods) ->
+            periods.singleOrNull()?.displayDps?.let { year to it }
+        }.toMap()
+
+    fun issuerFiscalForecast(financial: FinancialData?, fiscalYear: Int, today: LocalDate): Double? =
+        financial?.takeIf { it.forecastFiscalYear == fiscalYear }?.let { issuerForecast(it, today) }
+
     fun issuerForecast(financial: FinancialData?, today: LocalDate): Double? =
         financial?.forecastAnnualDividend?.takeIf {
             it.isFinite() && it >= 0.0 && financial.forecastFiscalYear?.let { year -> year >= today.year } == true &&

@@ -19,6 +19,7 @@ import androidx.lifecycle.ViewModelStore
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 import com.kurogane.dividend.data.CloudflareSearchHit
+import com.kurogane.dividend.data.CloudflareSearchQuote
 import com.kurogane.dividend.data.LocalImportStore
 import com.kurogane.dividend.ui.screens.ContactFeedbackScreen
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +65,20 @@ class PortfolioScreenTest {
         compose.runOnIdle { oldResponse.complete(listOf(CloudflareSearchHit("7203", "古い結果"))) }
         compose.onNodeWithText("新しい結果").assertIsDisplayed()
         compose.onAllNodesWithText("古い結果").assertCountEquals(0)
+    }
+
+    @Test fun unknownLiveQuoteDoesNotReuseOldSearchDividend() {
+        compose.setContent { KuroganeDividendTheme {
+            SearchSheet(true, {}, {},
+                onSearch = { listOf(CloudflareSearchHit("8783", "検証銘柄", cachedPrice = 37.0,
+                    annualDividendPerShare = 16.6667)) },
+                onLoadQuotes = { mapOf("8783" to CloudflareSearchQuote(37.0, null,
+                    annualDividendPerShare = null, hasDividendStatus = true)) })
+        } }
+        compose.onNode(hasSetTextAction()).performTextInput("8783")
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("検証銘柄").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("利回り 未取得").assertIsDisplayed()
+        compose.onAllNodesWithText("利回り 45.05%").assertCountEquals(0)
     }
 
     @Test fun downwardSwipeClosesSearchWithKeyboardAndAllowsReopening() {

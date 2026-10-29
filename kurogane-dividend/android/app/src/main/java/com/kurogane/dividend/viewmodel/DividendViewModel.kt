@@ -187,6 +187,24 @@ class DividendViewModel @JvmOverloads constructor(
         MarketFetchPolicy.shouldFetch(now, marketPreferences.getLong(key, 0L),
             marketPreferences.getString(dateKey, null) ?: fallbackDate, fetchFailed(key))
 
+    fun hasMissingJapaneseHoldingPrices(): Boolean = _holdings.value.any {
+        it.category == Category.JAPAN && it.shares > 0 && (!it.price.isFinite() || it.price <= 0.0)
+    }
+
+    /** Retry only missing Japanese quotes; do not restart financial or foreign-stock requests. */
+    fun retryMissingJapaneseHoldingPrices(): Job = viewModelScope.launch {
+        restoration.await()
+        assetDataRefreshMutex.withLock {
+            applyCachedPrices()
+            val codes = _holdings.value.filter {
+                it.category == Category.JAPAN && it.shares > 0 && (!it.price.isFinite() || it.price <= 0.0)
+            }.map { normalizeJapaneseSecurityCode(it.code) }.distinct()
+            for (batch in codes.chunked(8)) coroutineScope {
+                batch.map { code -> async { runCatchingCancellable { fetchCloudflareSecurityIfDue(code) } } }.awaitAll()
+            }
+        }
+    }
+
     fun refreshAssetManagementSecurityCategories(): Job = viewModelScope.launch {
         restoration.await()
         refreshHoldingSecurityCategories()
@@ -2501,7 +2519,13 @@ class DividendViewModel @JvmOverloads constructor(
                 ?: marketPreferences.getString(cacheKey, null)?.let(::parseCloudflareSecuritySnapshot)
             val now = System.currentTimeMillis()
             val today = PriceRefreshPolicy.japanDate(now)
-            val shouldRefresh = shouldFetchMarketData(now, attemptKey, attemptDateKey,
+            val missingHoldingPrice = _holdings.value.any {
+                it.category == Category.JAPAN && it.shares > 0 && normalizeJapaneseSecurityCode(it.code) == normalized &&
+                    (!it.price.isFinite() || it.price <= 0.0)
+            } && readCachedPrices()[normalized] == null
+            val shouldRefresh = if (missingHoldingPrice) MarketFetchPolicy.shouldFetch(now,
+                marketPreferences.getLong(attemptKey, 0L), marketPreferences.getString(attemptDateKey, null), true)
+            else shouldFetchMarketData(now, attemptKey, attemptDateKey,
                 marketPreferences.getString("cloudflare_security_fetched_jst_$normalized", null))
             if (!shouldRefresh || !cloudflareSecurityLoading.add(normalized)) {
                 false
@@ -2522,7 +2546,13 @@ class DividendViewModel @JvmOverloads constructor(
             }.onFailure {
                 recordFetchOutcome(attemptKey, true)
                 android.util.Log.w("CloudflareMarket", "銘柄情報の取得に失敗しました: $normalized", it)
-            }.onSuccess { recordFetchOutcome(attemptKey, false) }.getOrNull() ?: return cached
+            }.onSuccess { security ->
+                val missingPrice = security?.marketPrice?.let { it.isFinite() && it > 0.0 } != true &&
+                    _holdings.value.any { it.category == Category.JAPAN && it.shares > 0 &&
+                        normalizeJapaneseSecurityCode(it.code) == normalized && (!it.price.isFinite() || it.price <= 0.0) } &&
+                    readCachedPrices()[normalized] == null
+                recordFetchOutcome(attemptKey, missingPrice)
+            }.getOrNull() ?: return cached
             val enriched = withContext(Dispatchers.IO) {
                 fetched.copy(
                     name = japaneseDisplayName(fetched.code, fetched.name),

@@ -188,7 +188,8 @@ fun SearchSheet(
                 val quote = searchQuotes[hit.code.uppercase(java.util.Locale.ROOT)]
                 val priceValue = quote?.price ?: hit.cachedPrice
                 val price = formatCandidatePrice(priceValue, hit.code)
-                val annualDividend = quote?.annualDividendPerShare ?: hit.annualDividendPerShare
+                val annualDividend = if (quote?.hasDividendStatus == true) quote.annualDividendPerShare
+                    else quote?.annualDividendPerShare ?: hit.annualDividendPerShare
                 val noDividendConfirmed = if (quote?.hasDividendStatus == true) {
                     quote.isNoDividendConfirmed
                 } else {

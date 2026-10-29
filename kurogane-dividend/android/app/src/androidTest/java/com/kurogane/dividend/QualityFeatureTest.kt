@@ -78,14 +78,14 @@ class QualityFeatureTest {
         assertFalse(restoredUsd.usWithholdingEnabled)
         assertEquals(restoredUsd.annualDividend * .79685, restoredUsd.getEffectiveAnnualDividend("net"), .001)
     }
-    @Test fun actualFinancialDataReplacesReferenceDpsAndCanBeRestoredOffline() = runBlocking {
+    @Test fun calendarDividendHistoryIsRestoredOfflineWithoutBecomingCurrentDps() = runBlocking {
         val vm = model()
         val data = vm.fetchFinancialData("7203", true)!!
         assertEquals("2026/03", data.period)
         assertEquals(95.0, data.dividends.single().dps, 0.0)
-        assertEquals(95.0, vm.holdings.value.first { it.code == "7203" }.dps, 0.0)
+        assertFalse(vm.holdings.value.first { it.code == "7203" }.hasKnownAnnualDividend)
         val restored = model()
-        assertEquals(95.0, restored.holdings.value.first { it.code == "7203" }.dps, 0.0)
+        assertFalse(restored.holdings.value.first { it.code == "7203" }.hasKnownAnnualDividend)
         assertEquals(95.0, restored.financialData.value.getValue("7203").dividends.single().dps, 0.0)
         assertEquals(45.0, restored.financialData.value.getValue("7203").profile.equityRatio, 0.0)
     }

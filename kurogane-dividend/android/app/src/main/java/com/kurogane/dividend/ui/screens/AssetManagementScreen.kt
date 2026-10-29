@@ -7,6 +7,10 @@ import com.kurogane.dividend.ui.components.showDiviewSnackbar
 import androidx.compose.ui.res.stringResource
 import com.kurogane.dividend.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import com.kurogane.dividend.data.MarketFetchPolicy
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -63,6 +67,9 @@ import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.currentCoroutineContext
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -218,6 +225,15 @@ fun AssetManagementScreen(
     }
     LaunchedEffect(viewModel, holdingsRestored) {
         if (holdingsRestored) viewModel.refreshAssetManagementSecurityCategories()
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(viewModel, lifecycleOwner, holdingsRestored) {
+        if (holdingsRestored) lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (currentCoroutineContext().isActive) {
+                if (viewModel.hasMissingJapaneseHoldingPrices()) viewModel.retryMissingJapaneseHoldingPrices().join()
+                delay(MarketFetchPolicy.FAILURE_RETRY_MILLIS)
+            }
+        }
     }
     LaunchedEffect(holdingsRestored) {
         if (holdingsRestored) {
