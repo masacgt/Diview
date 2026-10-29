@@ -2877,7 +2877,9 @@ export default {
       const selectedDps = selectedDividend.annual_dps;
       const valuation = calculateDailyValuation(current);
       const reportedYield = current.statistics?.dividendYield;
-      const marketYieldRate = selectedDividend.dividend_status === 'unknown' ? null : selectedDividend.dividend_status === 'no_dividend' ? 0 : yieldFromDividend(
+      const marketYieldRate = selectedDividend.dividend_amount_basis === 'yfinance_forward_dividend_rate'
+        ? searchYield(current.price?.close, selectedDividend)
+        : selectedDividend.dividend_status === 'unknown' ? null : selectedDividend.dividend_status === 'no_dividend' ? 0 : yieldFromDividend(
         current.price?.close, selectedDps, selectedDividend.yield_rate, reportedYield,
       );
       const infoFailure = sync?.info_refresh_failure || {};
@@ -2912,7 +2914,8 @@ export default {
         },
         market_price: current.price || null,
         market_yield_rate: marketYieldRate,
-        market_yield_source: marketYieldRate === null ? null : yieldSourceFromDividend(
+        market_yield_source: marketYieldRate === null ? null : selectedDividend.dividend_amount_basis === 'yfinance_forward_dividend_rate'
+          ? 'calculated_from_yfinance_dividend_and_quote' : yieldSourceFromDividend(
           marketYieldRate, selectedDividend.yield_rate, selectedDividend.yield_source, reportedYield,
         ),
         market_yield_as_of: selectedDividend.yield_as_of,

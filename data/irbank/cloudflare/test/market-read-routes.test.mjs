@@ -28,6 +28,7 @@ test('search and live quote use the same recent forward DPS and current price', 
   const current = f.documents.get(`${f.base}/current.json`);
   current.price.close = 6452;
   current.statistics.dividendRate = 204;
+  current.statistics.dividendYield = 0.025;
   current.statistics_last_fetched_at = new Date().toISOString();
   current.field_status.statistics_dividendRate = 'available';
   for (const path of ['/api/v1/security-search?q=4502', '/api/v1/live-quotes?codes=4502']) {
@@ -37,6 +38,10 @@ test('search and live quote use the same recent forward DPS and current price', 
     assert.equal(body.items[0].dividend_source, 'Yahoo Finance via yfinance', path);
     assert.equal(body.items[0].dividend_period, 'forward_12_month_estimate', path);
   }
+  const detail = await (await worker.fetch(new Request('https://example.com/api/v1/securities/4502'), f.env)).json();
+  assert.equal(detail.dividend.annual_dps, 204);
+  assert.equal(detail.market_yield_rate, 3.1618);
+  assert.equal(detail.market_yield_source, 'calculated_from_yfinance_dividend_and_quote');
   current.statistics_last_fetched_at = new Date(Date.now() - 46 * 86400000).toISOString();
   const stale = await (await worker.fetch(new Request('https://example.com/api/v1/security-search?q=4502'), f.env)).json();
   assert.equal(stale.items[0].annual_dividend_per_share, 100);
