@@ -1,0 +1,24 @@
+name: JPX anonymous CSV audit
+on:
+  push:
+    branches: [codex/jpx-anonymous-csv-audit-20261031]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install playwright openpyxl
+      - run: python -m playwright install --with-deps chromium
+      - run: python scripts/jpx_anonymous_csv_audit.py
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jpx-anonymous-csv-audit
+          path: jpx-audit-output/
+          if-no-files-found: warn
