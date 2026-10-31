@@ -2,7 +2,17 @@ import unittest
 import io
 import json
 
-from migrate_legacy_financials import migrate_one, repair_mixed_source_equity_ratio, select_shard
+from migrate_legacy_financials import merge_row, migrate_one, repair_mixed_source_equity_ratio, select_shard
+
+
+class SeedProvenanceTests(unittest.TestCase):
+    def test_irbank_migration_refuses_to_overwrite_jquants_seed(self):
+        current = {"fiscal_year": "2026/03", "source_values": {"seed": {
+            "source_key": "jquants:/v2/fins/summary", "values": {"sales": 334612000000}}}}
+        with self.assertRaisesRegex(ValueError, "another source"):
+            merge_row(current, "2026/03", "2026-03-31", {"sales": 8283},
+                      source_key="market/irbank/v1/securities/1301/overview.json")
+        self.assertEqual(current["source_values"]["seed"]["values"]["sales"], 334612000000)
 
 
 class FakePaginator:

@@ -467,6 +467,101 @@ test('financial API exposes retained seed values separately from newer yfinance 
   assert.equal(data.financials.seed_annual[0].source, 'IRBANK');
 });
 
+test('financial API quarantines confirmed cross-issuer annual seeds while retaining independent values', async () => {
+  const makeRow = (code, period, sales, assets, yahoo = null) => ({
+    fiscal_year: period.slice(0, 7).replace('-', '/'), period_end: period,
+    sales: sales * 1_000_000, total_assets: assets * 1_000_000, equity_ratio_computed: 31.2,
+    field_status: { sales: 'legacy_migrated', total_assets: 'legacy_migrated', equity_ratio_computed: 'legacy_migrated' },
+    source_values: {
+      seed: { source: 'IRBANK', source_key: `market/irbank/v1/securities/${code}/overview.json`,
+        values: { sales, total_assets: assets, equity_ratio_computed: 31.2 },
+        field_units: { sales: 'million_jpy', total_assets: 'million_jpy', equity_ratio_computed: 'percent' } },
+      ...(yahoo ? { yfinance: { values: yahoo,
+        field_units: { sales: 'yfinance_native', stockholders_equity: 'yfinance_native', total_assets: 'yfinance_native' },
+        field_reported_currencies: { sales: 'JPY', stockholders_equity: 'JPY', total_assets: 'JPY' } } } : {}),
+    },
+  });
+  const rows = [
+    ['1301', '2017-03-31', makeRow('1301', '2017-03-31', 6639, 5594)],
+    ['1301', '2026-03-31', makeRow('1301', '2026-03-31', 8283, 6973,
+      { sales: 334612000000, stockholders_equity: 77335000000, total_assets: 214119000000 })],
+    ['2708', '2025-10-31', makeRow('2708', '2025-10-31', 245109, 156015)],
+    ['2708', '2014-03-31', makeRow('2708', '2014-03-31', 62268, 27566)],
+    ['1380', '2026-03-31', makeRow('1380', '2026-03-31', 8283, 6973)],
+    ['1301', '2025-03-31', makeRow('1301', '2025-03-31', 302681, 182125)],
+  ];
+  const docs = new Map(rows.map(([code, period, annual]) =>
+    [`market/yfinance/v2/securities/${code}.T/financials/${period}.json`, { annual }]));
+  const env = dividendEnvironment(docs);
+  const read = async code => (await (await worker.fetch(
+    new Request(`https://example.com/api/v1/financial-data/${code}`), env)).json()).financials;
+  const kyokuyo = await read('1301');
+  assert.equal(kyokuyo.annual[0].period_end, '2017-03-31');
+  assert.equal(Object.hasOwn(kyokuyo.annual[0], 'sales'), false);
+  assert.equal(Object.hasOwn(kyokuyo.annual[0], 'equity_ratio_computed'), false);
+  assert.deepEqual(kyokuyo.annual[0].field_status_reason.sales, ['cross_issuer_seed_quarantined']);
+  const current = kyokuyo.annual.find(row => row.period_end === '2026-03-31');
+  assert.equal(current.sales, 334612000000);
+  assert.equal(current.total_assets, 214119000000);
+  assert.ok(Math.abs(current.equity_ratio_computed - 77335000000 / 214119000000 * 100) < 1e-10);
+  assert.equal(kyokuyo.seed_annual.some(row => row.period_end === '2017-03-31' || row.period_end === '2026-03-31'), false);
+  assert.equal(kyokuyo.seed_annual.some(row => row.period_end === '2025-03-31'), true);
+  const kuze = await read('2708');
+  assert.equal(kuze.annual.length, 2);
+  assert.ok(kuze.annual.every(row => !Object.hasOwn(row, 'sales')));
+  assert.equal(kuze.seed_annual.length, 0);
+  const akigawa = await read('1380');
+  assert.equal(akigawa.annual[0].sales, 8283000000);
+  assert.equal(akigawa.seed_annual.length, 1);
+});
+
+test('raw IRBANK overview quarantines only confirmed foreign annual rows', async () => {
+  const overview = { financials: { annual: [
+    { fiscal_year: '2026/03', sales: 8283, total_assets: 6973, eps: 5.23 },
+    { fiscal_year: '2025/03', sales: 302681, total_assets: 182125 },
+  ], quarterly: [{ sales: 123 }] }, valuation: { history: [{ eps: 575.97 }] } };
+  const env = dividendEnvironment(new Map([['market/irbank/v1/securities/1301/overview.json', overview]]));
+  const result = await worker.fetch(new Request('https://example.com/api/v1/irbank/securities/1301'), env);
+  assert.equal(result.status, 200);
+  const body = await result.json();
+  assert.deepEqual(body.financials.annual[0], { fiscal_year: '2026/03', validation_status: 'unsupported', reason: 'cross_issuer_seed_quarantined' });
+  assert.equal(body.financials.annual[1].sales, 302681);
+  assert.equal(body.financials.quarterly[0].sales, 123);
+  assert.equal(body.valuation.history[0].eps, 575.97);
+  assert.equal(overview.financials.annual[0].sales, 8283);
+});
+
+test('raw IRBANK overview quarantines known mixed 2014 row but accepts corrected data', async () => {
+  const key = 'market/irbank/v1/securities/2708/overview.json';
+  const docs = new Map([[key, {financials: {annual: [
+    {fiscal_year:'2014/03', sales:62268, total_assets:27566, operating_cf:5179},
+  ]}}]]);
+  const env = dividendEnvironment(docs);
+  const read = async () => (await (await worker.fetch(new Request('https://example.com/api/v1/irbank/securities/2708'), env)).json()).financials.annual[0];
+  assert.equal((await read()).reason, 'cross_issuer_seed_quarantined');
+  docs.set(key, {financials: {annual: [{fiscal_year:'2014/03', sales:62268445000, total_assets:19002585000, operating_cf:-1082741000}]}});
+  assert.equal((await read()).total_assets, 19002585000);
+});
+
+test('financial API retains J-Quants repair provenance and independent Yahoo values', async () => {
+  const annual = { fiscal_year: '2026/03', period_end: '2026-03-31',
+    field_status: { sales: 'available', total_assets: 'available', equity_ratio_computed: 'available' },
+    source_values: {
+      seed: { source: 'J-Quants API /fins/summary', source_key: 'jquants:/v2/fins/summary',
+        values: { sales: 334612000000, total_assets: 214128000000, equity_ratio_computed: 36.1 },
+        field_units: { sales: 'jpy', total_assets: 'jpy', equity_ratio_computed: 'percent' } },
+      yfinance: { values: { sales: 334612000000, total_assets: 214119000000, stockholders_equity: 77335000000 },
+        field_units: { sales: 'yfinance_native', total_assets: 'yfinance_native', stockholders_equity: 'yfinance_native' },
+        field_reported_currencies: { sales: 'JPY', total_assets: 'JPY', stockholders_equity: 'JPY' } },
+    } };
+  const env = dividendEnvironment(new Map([['market/yfinance/v2/securities/1301.T/financials/2026.json', { annual }]]));
+  const body = await (await worker.fetch(new Request('https://example.com/api/v1/financial-data/1301'), env)).json();
+  assert.equal(body.financials.annual[0].total_assets, 214119000000);
+  assert.equal(body.financials.seed_annual[0].source, 'J-Quants API /fins/summary');
+  assert.equal(body.financials.seed_annual[0].values.total_assets, 214128000000);
+  assert.equal(body.financials.seed_annual[0].field_units.total_assets, 'jpy');
+});
+
 test('financial API keeps same-source ratios and marks Yahoo statement amounts as native units', async () => {
   const code = '9984';
   const base = `market/yfinance/v2/securities/${code}.T`;

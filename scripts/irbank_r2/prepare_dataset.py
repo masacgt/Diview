@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from audit_cross_issuer_financials import find_candidates, find_known_partial_contamination
+
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE = ROOT / "irbankMCP" / "irbank"
@@ -120,6 +122,7 @@ def load_by_edinet(folder: Path) -> dict[str, Any]:
 def financial_periods(source: Path) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     by_edinet: dict[str, dict[str, Any]] = defaultdict(dict)
     source_attribution: dict[str, Any] = {}
+    annual_results: list[dict[str, Any]] = []
     for period_type in FINANCIAL_PERIODS:
         folder = source / "financials" / period_type
         for path in folder.glob("batch_*.json"):
@@ -127,10 +130,42 @@ def financial_periods(source: Path) -> tuple[dict[str, dict[str, Any]], dict[str
             if attribution(doc):
                 source_attribution[period_type] = attribution(doc)
             for result in doc.get("results", []):
+                if period_type == "annual":
+                    annual_results.append(result)
                 edinet = str(result.get("edinet_code") or "")
                 if edinet:
                     by_edinet[edinet][period_type] = attach_field_units(result.get("periods", []), doc)
+    suspicious = find_candidates(annual_results)
+    partial = find_known_partial_contamination(annual_results)
+    if partial:
+        raise ValueError(f"Known mixed-issuer annual data requires independent review: {', '.join(partial)}")
+    if suspicious:
+        pairs = ", ".join("/".join(item["edinet_codes"]) for item in suspicious)
+        raise ValueError(f"Cross-issuer annual financial data requires independent review: {pairs}")
     return by_edinet, source_attribution
+
+
+def validate_annual_overrides(financial_data: dict[str, dict[str, Any]], app_required_docs: dict[str, dict[str, Any]], master: list[dict[str, Any]]) -> None:
+    """Check supplemental annual overrides against the same issuer universe before writing."""
+    by_code = {code: str(row.get('edinet_code') or '') for row in master
+               for code in (str(row.get('security_code') or ''), security_display_code(row)) if code}
+    rows = [{'edinet_code': edinet, 'periods': values.get('annual', [])}
+            for edinet, values in financial_data.items()]
+    for key, values in app_required_docs.items():
+        annual = values.get('financials_annual')
+        if not annual:
+            continue
+        edinet = key if key.startswith(('E', 'G')) else by_code.get(key, '')
+        if not edinet:
+            raise ValueError(f'Annual override issuer cannot be resolved: {key}')
+        rows.append({'edinet_code': edinet, 'periods': annual})
+    suspicious = find_candidates(rows)
+    partial = find_known_partial_contamination(rows)
+    if partial:
+        raise ValueError(f"Known mixed-issuer annual override requires independent review: {', '.join(partial)}")
+    if suspicious:
+        pairs = ', '.join('/'.join(item['edinet_codes']) for item in suspicious)
+        raise ValueError(f'Cross-issuer annual financial override requires independent review: {pairs}')
 
 
 def main() -> int:
@@ -224,6 +259,8 @@ def main() -> int:
                 app_required_docs.setdefault(str(result["edinet_code"]), {})[f"financials_{path.stem.rsplit('_', 1)[-1]}"] = attach_field_units(
                     result.get("periods", []), document,
                 )
+
+    validate_annual_overrides(financial_data, app_required_docs, master)
 
     catalog: list[dict[str, Any]] = []
     index: list[dict[str, Any]] = []

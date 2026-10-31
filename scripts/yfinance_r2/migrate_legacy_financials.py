@@ -171,6 +171,9 @@ def merge_row(
     statuses = dict(row.get("field_status") or {})
     source_values = dict(row.get("source_values") or {})
     seed_record = dict(source_values.get("seed") or {})
+    existing_source = str(seed_record.get("source_key") or "")
+    if existing_source and existing_source != source_key:
+        raise ValueError(f"cannot merge IRBANK into seed owned by another source: {existing_source}")
     seed_values = dict(seed_record.get("values") or {})
     added = 0
     for field, value in values.items():

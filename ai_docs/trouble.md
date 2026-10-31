@@ -89,3 +89,7 @@ Legacy issuer-dividend migration had the same failure pattern: a successful PUT 
 ## Native-unit equity ratio removed by legacy migration (2026-10-30)
 
 Legacy financial migration accepted only `jpy` and `million_jpy` calculation inputs, so it removed a valid same-source `yfinance_native` equity ratio and could replace it with a seed ratio. The repair now also accepts native inputs when both source amounts and units are present, the calculation is in percent, and any declared currencies agree; conflicting or missing inputs remain unavailable. Mock migration tests and the yfinance suite pass; no production migration was run.
+
+## Cross-issuer annual financial records (2026-10-31)
+
+- Retained annual IRBANK seed data for 1301 matches 1380, and 2708 includes 2695's October-year financials. Saved raw batches already show the mismatch; whether the provider response or an earlier acquisition step caused it is unconfirmed. Do not repair by relying on EDINET identifier alone or overwrite original records without backups and provenance review. The user confirmed that the current J-Quants API key is covered by a contract permitting distribution; the contract itself was not independently reviewed.

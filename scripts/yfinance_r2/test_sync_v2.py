@@ -1336,6 +1336,27 @@ class OfflineFinancialSyncTests(TestCase):
             "operating_cf": "million_jpy", "investing_cf": "million_jpy",
         })
 
+    def test_repaired_seeds_keep_values_and_provenance_during_refresh_and_failure(self):
+        for source, source_key in (("J-Quants API /fins/summary", "jquants:/v2/fins/summary"),
+                                   ("IRBANK Connect", "market/irbank/v1/securities/7203/overview.json")):
+            for failed in (False, True):
+                with self.subTest(source=source, failed=failed):
+                    seed = {"source": source, "source_key": source_key,
+                            "values": {"sales": 2000, "total_assets": 1600, "equity_ratio_computed": 40},
+                            "field_units": {"sales": "jpy", "total_assets": "jpy", "equity_ratio_computed": "percent"},
+                            "attribution": {"source_label": "issuer disclosures"}}
+                    key = sync.object_key("securities", "7203.T", "financials", "2026-03-31.json")
+                    store = self.Store({key: {"annual": {"period_end": "2026-03-31", "source_values": {"seed": seed}}}})
+                    ticker = self.ticker()
+                    if failed:
+                        ticker.get_income_stmt.side_effect = RuntimeError("offline")
+                    with patch.object(sync, "read_json", side_effect=store.read):
+                        rows, _, status, _ = sync.collect_financials(ticker, {}, store, "b", "7203.T", financial_currency="JPY")
+                    self.assertEqual(rows[0]["source_values"]["seed"], seed)
+                    self.assertEqual(rows[0]["source_values"]["yfinance"]["values"]["total_assets"], 800)
+                    if failed:
+                        self.assertEqual(status["income_statement"], "failed")
+
     def test_margin_guard_nulls_seed_in_both_failure_directions_and_survives_reread(self):
         for failed, guarded in (
             ("cash_flow", ("operating_cf", "investing_cf")),

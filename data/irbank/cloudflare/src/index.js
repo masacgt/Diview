@@ -727,6 +727,69 @@ function seedFieldUnits(section, seedValues, seedRecord, row) {
   return units;
 }
 
+// Confirmed cross-issuer legacy records. Match both amounts and source so a
+// later independently repaired record is not suppressed merely by its code.
+const CONTAMINATED_ANNUAL_SEEDS = {
+  '1301': { '2017/03': [6639, 5594], '2023/03': [7070, 6073],
+    '2024/03': [7392, 7050], '2025/03': [7957, 7126], '2026/03': [8283, 6973] },
+  '2708': { '2014/03': [62268, 27566], '2011/10': [74430, 30631], '2012/10': [78971, 33345],
+    '2013/10': [88145, 36479], '2014/10': [96938, 38140], '2015/10': [105307, 42058],
+    '2016/10': [113626, 46527], '2017/10': [122766, 52745], '2018/10': [132499, 59070],
+    '2019/10': [136134, 68216], '2020/10': [135835, 85102], '2021/10': [147592, 98989],
+    '2022/10': [183053, 109621], '2023/10': [211405, 130119], '2024/10': [234950, 139446],
+    '2025/10': [245109, 156015] },
+};
+
+function quarantineContaminatedAnnualSeed(code, input) {
+  const explicit = input?.source_values;
+  const seed = explicit?.seed;
+  const values = seed?.values;
+  const period = String(input?.period_end || input?.fiscal_year || '').replace('-', '/').slice(0, 7);
+  const expected = CONTAMINATED_ANNUAL_SEEDS[yfinanceV2Code(code)]?.[period];
+  const sourceKey = seed?.source_key || input?.migration_source;
+  if (!expected || sourceKey !== `market/irbank/v1/securities/${yfinanceV2Code(code)}/overview.json`
+    || finiteNumber(values?.sales) !== expected[0] || finiteNumber(values?.total_assets) !== expected[1]) return input;
+  const row = { ...input, field_status: { ...input.field_status },
+    field_status_reason: { ...input.field_status_reason }, field_units: { ...input.field_units } };
+  const yahoo = explicit?.yfinance?.values || {};
+  for (const field of Object.keys(values)) {
+    delete row[field];
+    delete row.field_units[field];
+    if (!Object.hasOwn(yahoo, field)) {
+      row.field_status[field] = 'unsupported';
+      row.field_status_reason[field] = ['cross_issuer_seed_quarantined'];
+    }
+  }
+  const calculations = explicit?.calculated?.values || {};
+  for (const [field, calculation] of Object.entries(calculations)) {
+    if (!Object.values(calculation?.input_sources || {}).includes('seed')) continue;
+    delete row[field];
+    delete row.field_units[field];
+    if (!Object.hasOwn(yahoo, field)) {
+      row.field_status[field] = 'unsupported';
+      row.field_status_reason[field] = ['cross_issuer_seed_quarantined'];
+    }
+  }
+  const safeCalculations = Object.fromEntries(Object.entries(calculations).filter(([, value]) =>
+    !Object.values(value?.input_sources || {}).includes('seed')));
+  row.source_values = { ...explicit, seed: { ...seed, values: {}, field_units: {},
+    validation_status: 'unsupported', reason: 'cross_issuer_seed_quarantined' },
+    ...(explicit.calculated ? { calculated: { ...explicit.calculated, values: safeCalculations } } : {}) };
+  return row;
+}
+
+function quarantineIrbankOverview(code, overview) {
+  if (!Array.isArray(overview?.financials?.annual)) return overview;
+  const annual = overview.financials.annual.map(row => {
+    const period = String(row?.fiscal_year || '').replace('-', '/').slice(0, 7);
+    const expected = CONTAMINATED_ANNUAL_SEEDS[code]?.[period];
+    if (!expected || finiteNumber(row.sales) !== expected[0] || finiteNumber(row.total_assets) !== expected[1]) return row;
+    return { fiscal_year: row.fiscal_year, validation_status: 'unsupported',
+      reason: 'cross_issuer_seed_quarantined' };
+  });
+  return { ...overview, financials: { ...overview.financials, annual } };
+}
+
 async function readV2FinancialPayload(env, code) {
   const symbol = yfinanceV2Symbol(code);
   if (!symbol || !env.MARKET_DATA) return null;
@@ -755,8 +818,9 @@ async function readV2FinancialPayload(env, code) {
   );
   financialDocuments.sort((a, b) => documentPeriodKey(a).localeCompare(documentPeriodKey(b)));
   const sourceRows = (section) => financialDocuments.map(document => {
-    const row = document[section];
+    let row = document[section];
     if (!row || typeof row !== 'object') return null;
+    if (section === 'annual') row = quarantineContaminatedAnnualSeed(code, row);
     const explicit = row.source_values && typeof row.source_values === 'object' ? row.source_values : null;
     const seedRecord = explicit?.seed && typeof explicit.seed === 'object' ? explicit.seed : {};
     const seedValues = { ...(seedRecord.values && typeof seedRecord.values === 'object' ? seedRecord.values : {}) };
@@ -3014,6 +3078,12 @@ export default {
           : irbankMatch[2] === 'jsf-margin'
             ? 'jsf_margin.json'
           : 'overview.json';
+      if (familyFile === 'overview.json' && CONTAMINATED_ANNUAL_SEEDS[code]) {
+        if (!env.MARKET_DATA) return json({ error: 'r2_unavailable' }, 503);
+        const object = await env.MARKET_DATA.get(`market/irbank/v1/securities/${code}/${familyFile}`);
+        if (!object) return json({ error: 'not_found' }, 404);
+        return json(quarantineIrbankOverview(code, await object.json()));
+      }
       return irbankR2Object(env, `market/irbank/v1/securities/${code}/${familyFile}`);
     }
 

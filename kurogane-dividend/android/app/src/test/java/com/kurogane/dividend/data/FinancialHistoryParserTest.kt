@@ -16,6 +16,20 @@ class FinancialHistoryParserTest {
         .put("security", JSONObject().put("code", "8058"))
         .put("financials", JSONObject().put("annual", JSONArray(rows.toList())))
 
+    @Test fun quarantinedCrossIssuerRatioIsExcludedFromHistory() {
+        val invalid = JSONObject().put("period_end", "2025-10-31")
+            .put("equity_ratio_computed", 39.95)
+            .put("field_status", JSONObject().put("equity_ratio_computed", "unsupported"))
+            .put("field_units", JSONObject().put("equity_ratio_computed", "percent"))
+        val valid = JSONObject().put("period_end", "2026-03-31")
+            .put("equity_ratio_computed", 39.08)
+            .put("field_status", JSONObject().put("equity_ratio_computed", "available"))
+            .put("field_units", JSONObject().put("equity_ratio_computed", "percent"))
+        val history = FinancialHistoryParser.parse(document(invalid, valid), asOf).series("equity_ratio")
+        assertEquals(listOf(2026), history.map { it.periodEnd.year })
+        assertEquals(39.08, history.single().value, 0.0)
+    }
+
     @Test fun currentMetricsAndFiveCompletedPeriodsComeFromTheSameDocument() {
         val root = document(*(2018..2026).reversed().map { annual(it) }.toTypedArray())
         root.getJSONObject("financials").getJSONArray("annual").put(annual(2027))

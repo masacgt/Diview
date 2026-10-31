@@ -1,5 +1,7 @@
 # Todo
 
+- [ ] Complete cross-issuer annual-data protection and repair: R2 repairs used J-Quants for 2025/03–2026/03 and IRBANK Connect for missing 2008/03–2024/03; guarded writes and read-back passed for 19 plus 36 objects. Production API comparisons pass for 34 IRBANK periods, and an isolated Android 8.0 AVD displays current ratios and caches the repaired 2708 history. The local Worker and ingestion safeguards are not deployed. Full affected-universe coverage, individual historical filings, subsequent refresh behavior, broader Android checks and physical-device acceptance remain unverified. See `cross-issuer-financial-repair-20261031.md`.
+
 - [ ] Verify remaining forecast acquisition and release coverage: targeted run 40600703726 published 8984 as 7,110 JPY with two dated components and preserved other values and the batch cursor; production Worker `93800f39-4dc0-443f-baf3-13a583b92946` returns consistent 8984 and 4502 search values. A scheduled batch, broader issuer forecast coverage, and final release acceptance remain unverified.
 
 - [ ] Complete release-audit fixes and production acceptance for missing dividend/price data, forecast history and Watchlist ordering. Worker production version e6196109 treats empty issuer feeds as unknown; Android distinguishes missing valuation/dividend data. Isolated emulator and production API checks pass for representative cases; physical-device validation and full release acceptance remain open.
