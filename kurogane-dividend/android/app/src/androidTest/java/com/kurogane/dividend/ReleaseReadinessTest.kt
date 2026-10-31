@@ -137,8 +137,8 @@ class ReleaseReadinessTest {
             .commit()
         val vm = model()
         vm.watchlist.value.toList().forEach { vm.removeWatchlistStock(it.code) }
-        val lowerYield = watchlistStock("3000", "Lower yield").copy(dps = 1.0, targetYield = 5.0)
-        val higherYield = watchlistStock("1000", "Higher yield").copy(dps = 10.0, targetYield = 5.0)
+        val lowerYield = watchlistStock("1000", "Lower yield").copy(dps = 1.0, targetYield = 5.0)
+        val higherYield = watchlistStock("3000", "Higher yield").copy(dps = 10.0, targetYield = 5.0)
         assertTrue(vm.restoreWatchlistStock(lowerYield))
         assertTrue(vm.restoreWatchlistStock(higherYield))
         vm.watchlistScrollIndex = 0
@@ -184,7 +184,12 @@ class ReleaseReadinessTest {
         )
         compose.onNodeWithText(codeAscendingLabel).assertIsDisplayed()
         revealFirstWatchlistCard()
-        compose.waitUntil(30_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
+        try {
+            compose.waitUntil(30_000) { firstVisibleWatchlistCardCode(compose) == "1000" }
+        } catch (failure: Throwable) {
+            compose.onAllNodes(watchlistCardMatcher(), useUnmergedTree = true).printToLog("WatchlistSortAudit")
+            throw failure
+        }
 
         compose.onNodeWithText("タブ切替").performClick()
         compose.onNodeWithText("タブ切替").performClick()
@@ -261,6 +266,8 @@ class ReleaseReadinessTest {
         compose.onNodeWithText(app.getString(R.string.settings_label_42)).performScrollTo().performClick()
         switch.performScrollTo().assertIsEnabled().assertIsOff().performClick().assertIsOn()
         assertTrue(vm.isOledBlack.value)
+        compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
+            .performScrollToNode(hasText("構成比の小さい項目を「その他」に集約"))
         val slider = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo))
         slider.performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { assertTrue(it(8f)) }
         slider.assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(8f, 1f..10f, 8))

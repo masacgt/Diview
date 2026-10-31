@@ -49,6 +49,15 @@ class PortfolioMathTest {
         assertEquals(0.0, PortfolioMath.yieldPercent(Double.NaN, 100.0), 0.0)
     }
 
+    @Test fun japaneseYieldUsesTheDisplayedDividendAndPriceBeforeExternalRates() {
+        val h = holding().copy(category = Category.JAPAN, price = 3102.0, dps = 95.0,
+            irbankYieldRate = 3.220611916, irbankYieldDps = 95.0, yfinanceYieldRate = 3.22)
+        assertEquals(95.0 / 3102.0 * 100, h.liveYield, 0.000001)
+        assertEquals(0.0, h.copy(isNoDividendConfirmed = true).liveYield, 0.0)
+        assertEquals(3.22, h.copy(dps = 0.0).liveYield, 0.000001)
+        assertEquals(0.0, PortfolioMath.japaneseYield(0.0, 3102.0, false, Double.NaN), 0.0)
+    }
+
     @Test fun rejectsFractionalNegativeAndOverflowingShareCounts() {
         listOf(null, -1.0, 0.1, Double.NaN, Double.POSITIVE_INFINITY, Int.MAX_VALUE.toDouble() + 1).forEach {
             assertNull(PortfolioMath.wholeShares(it))

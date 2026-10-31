@@ -632,10 +632,24 @@ async function readV2FinancialPayload(env, code) {
     const ratioCalculation = calculatedValues.equity_ratio_computed;
     const ratioSources = ratioCalculation?.input_sources;
     const ratioSource = ratioSources?.equity;
+    const yfinanceUnits = explicit?.yfinance?.field_units || {};
+    const yfinanceCurrencies = explicit?.yfinance?.field_reported_currencies || {};
+    const equityField = finiteNumber(yfinanceValues.stockholders_equity) !== null
+      ? 'stockholders_equity' : 'total_equity_gross_minority_interest';
+    const sameYfinanceUnits = yfinanceUnits[equityField] === 'yfinance_native'
+      && yfinanceUnits.total_assets === 'yfinance_native';
+    const equityCurrency = yfinanceCurrencies[equityField]?.toUpperCase?.();
+    const assetsCurrency = yfinanceCurrencies.total_assets?.toUpperCase?.();
+    const compatibleCurrencies = !equityCurrency || !assetsCurrency || equityCurrency === assetsCurrency;
+    const comparableYfinanceInputs = sameYfinanceUnits && compatibleCurrencies;
     const sameSourceCalculation = Boolean(
       typeof ratioSource === 'string' && ratioSource.trim()
       && ratioSource === ratioSources?.total_assets
       && !['unknown', 'mixed', 'unavailable'].includes(String(ratioSource).toLowerCase())
+      && ratioSource === 'yfinance' && comparableYfinanceInputs
+      && ratioCalculation?.input_units?.equity === 'yfinance_native'
+      && ratioCalculation?.input_units?.total_assets === 'yfinance_native'
+      && finiteNumber(yfinanceValues[equityField]) !== null && finiteNumber(yfinanceValues.total_assets) !== null
       && isReasonableEquityRatio(ratioCalculation?.value),
     );
     const compatibleCalculatedValues = Object.fromEntries(Object.entries(calculatedValues).filter(([field]) => {
@@ -682,21 +696,25 @@ async function readV2FinancialPayload(env, code) {
       const yfinanceEquity = finiteNumber(yfinanceValues.stockholders_equity)
         ?? finiteNumber(yfinanceValues.total_equity_gross_minority_interest);
       const yfinanceAssets = finiteNumber(yfinanceValues.total_assets);
-      const recalculatedYfinanceRatio = yfinanceEquity !== null && yfinanceAssets !== null && yfinanceAssets > 0
+      const recalculatedYfinanceRatio = comparableYfinanceInputs && yfinanceEquity !== null && yfinanceAssets !== null && yfinanceAssets > 0
         ? yfinanceEquity / yfinanceAssets * 100
         : null;
       const safeRatio = sameSourceCalculation
         ? finiteNumber(ratioCalculation.value)
-        : isReasonableEquityRatio(seedRatio)
-          ? finiteNumber(seedRatio)
-          : isReasonableEquityRatio(recalculatedYfinanceRatio)
-            ? recalculatedYfinanceRatio
+        : isReasonableEquityRatio(recalculatedYfinanceRatio)
+          ? recalculatedYfinanceRatio
+          : isReasonableEquityRatio(seedRatio)
+            ? finiteNumber(seedRatio)
             : null;
       delete mergedRow.equity_ratio;
       delete mergedRow.equity_ratio_computed;
       if (safeRatio !== null) {
         mergedRow.equity_ratio_computed = safeRatio;
         effectiveFieldUnits.equity_ratio_computed = 'percent';
+        if (sameSourceCalculation || isReasonableEquityRatio(recalculatedYfinanceRatio)) {
+          mergedRow.field_status = { ...(mergedRow.field_status || {}),
+            equity_ratio_computed: mergedRow.field_status?.equity_ratio_computed === 'stale' ? 'stale' : 'available' };
+        }
       } else {
         mergedRow.field_status = { ...(row.field_status || {}), equity_ratio_computed: 'empty' };
       }

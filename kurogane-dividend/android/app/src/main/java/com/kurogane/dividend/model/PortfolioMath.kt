@@ -50,6 +50,12 @@ object PortfolioMath {
             (dividend / price * 100.0).takeIf(Double::isFinite) ?: 0.0
         } else 0.0
 
+    fun japaneseYield(dividend: Double, price: Double, noDividend: Boolean, fallback: Double?): Double = when {
+        noDividend -> 0.0
+        validMoney(dividend) && dividend > 0.0 && validMoney(price) && price > 0.0 -> yieldPercent(dividend, price)
+        else -> fallback?.takeIf { it.isFinite() && it in 0.0..100.0 } ?: 0.0
+    }
+
     fun adjustedTarget(current: Double, delta: Double): Double {
         require(current.isFinite() && delta.isFinite()) { "利回りは有限の数値を指定してください" }
         if (delta == 0.0) return current.coerceIn(0.1, 100.0)

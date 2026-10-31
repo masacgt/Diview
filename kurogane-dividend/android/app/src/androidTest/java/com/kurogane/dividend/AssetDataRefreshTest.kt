@@ -28,6 +28,7 @@ class AssetDataRefreshTest {
     private val requests = CopyOnWriteArrayList<String>()
     @Volatile private var offline = false
     @Volatile private var emptyFinancial = false
+    @Volatile private var missingPrice = false
     private val prefs get() = app.getSharedPreferences("cloudflare_market_cache", Context.MODE_PRIVATE)
 
     private fun model(): DividendViewModel {
@@ -45,7 +46,7 @@ class AssetDataRefreshTest {
                         url.path.contains("financial-data") -> if (emptyFinancial) """{"security":{"code":"$code"}}""" else
                             """{"security":{"code":"$code"},"dividends":{"records":[{"calendar_year":2024,"calendar_year_distribution_per_share":60},{"calendar_year":2025,"calendar_year_distribution_per_share":75}]}}"""
                         url.path.contains("/securities/") ->
-                            """{"code":"$code","name":"検証銘柄","market_price":3000,"dividend_status":"available","dividend":{"yield_basis":"annual","annual_dps":75}}"""
+                            """{"code":"$code","name":"検証銘柄","market_price":${if (missingPrice) "null" else "3000"},"dividend_status":"available","dividend":{"yield_basis":"annual","annual_dps":75}}"""
                         url.path.endsWith("dividend-months") ->
                             """{"as_of":"2026-10-25","items":[{"symbol":"7203.T","months":[6,12],"events":[]},{"symbol":"2914.T","months":[3,9],"events":[]}]}"""
                         else -> """{"items":[]}"""
@@ -73,6 +74,42 @@ class AssetDataRefreshTest {
             vm.financialDataSnapshot("7203") != null &&
                 vm.holdings.value.first { it.code == "7203" }.dividendMonths == listOf(6, 12)
         }
+    }
+
+    @Test fun missingJapanesePriceRetriesAfterCooldownAndUpdatesHolding() {
+        val vm = model()
+        missingPrice = true
+        runBlocking { vm.importCsvRows(listOf(CsvHoldingRow("7203", "トヨタ", 100.0, 2000.0, 0.0, "特定口座", false)),
+            setOf("shares", "averageCost", "currentPrice", "account")) }
+        fill(vm)
+        val key = "cloudflare_security_fetch_attempt_at_7203"
+        assertEquals(0.0, vm.holdings.value.first { it.code == "7203" }.price, 0.0)
+        assertTrue(prefs.getBoolean("${key}_failed", false))
+        val firstRequests = requests.count { it == "/api/v1/securities/7203" }
+        assertTrue(firstRequests > 0)
+        fill(vm)
+        assertEquals(firstRequests, requests.count { it == "/api/v1/securities/7203" })
+        prefs.edit().putLong(key, System.currentTimeMillis() - 31_000).commit()
+        missingPrice = false
+        fill(vm)
+        assertTrue(requests.count { it == "/api/v1/securities/7203" } > firstRequests)
+        assertEquals(3000.0, vm.holdings.value.first { it.code == "7203" }.price, 0.0)
+        compose.waitUntil(10_000) { LocalImportStore(app).loadHoldings()?.firstOrNull { it.code == "7203" }?.price == 3000.0 }
+    }
+
+    @Test fun visibleAssetScreenAutomaticallyRetriesMissingPrice() {
+        val vm = model()
+        missingPrice = true
+        runBlocking { vm.importCsvRows(listOf(CsvHoldingRow("7203", "トヨタ", 100.0, 2000.0, 0.0, "特定口座", false)),
+            setOf("shares", "averageCost", "currentPrice", "account")) }
+        fill(vm)
+        assertEquals(0.0, vm.holdings.value.first { it.code == "7203" }.price, 0.0)
+        val initial = requests.count { it == "/api/v1/securities/7203" }
+        assertTrue(initial > 0)
+        missingPrice = false
+        compose.setContent { KuroganeDividendTheme { AssetManagementScreen(vm) } }
+        compose.waitUntil(45_000) { vm.holdings.value.first { it.code == "7203" }.price == 3000.0 }
+        assertTrue(requests.count { it == "/api/v1/securities/7203" } > initial)
     }
 
     @After fun cleanup() {

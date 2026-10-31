@@ -7,6 +7,10 @@ import com.kurogane.dividend.ui.components.showDiviewSnackbar
 import androidx.compose.ui.res.stringResource
 import com.kurogane.dividend.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import com.kurogane.dividend.data.MarketFetchPolicy
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -63,6 +67,9 @@ import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.currentCoroutineContext
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -261,6 +268,15 @@ fun AssetManagementScreen(
     val heldCodes = remember(listItems) { listItems.filter { it.category == Category.JAPAN }.map { it.code }.sorted() }
     LaunchedEffect(viewModel, holdingsRestored, heldCodes) {
         if (holdingsRestored) viewModel.refreshAssetManagementData()
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(viewModel, lifecycleOwner, holdingsRestored) {
+        if (holdingsRestored) lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (currentCoroutineContext().isActive) {
+                delay(MarketFetchPolicy.FAILURE_RETRY_MILLIS)
+                if (viewModel.hasMissingJapaneseHoldingPrices()) viewModel.refreshAssetManagementData().join()
+            }
+        }
     }
     val categoryCounts = remember(listItems) { listItems.groupingBy { it.category }.eachCount() }
     val hasMissingExchangeRate = remember(listItems) { listItems.any { it.missingExchangeRate } }

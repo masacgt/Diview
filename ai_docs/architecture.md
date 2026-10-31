@@ -2,6 +2,8 @@
 
 ## Runtime and storage
 
+- 取得元から画面・通知までの経路、起動時の更新条件、取得効率化後の状態と未解決事項の2026-10-27時点の仕様は [data-acquisition-current-spec-20261027.md](data-acquisition-current-spec-20261027.md) を参照。この作業ツリーのHEADとは別に、同文書に記載した確認対象の版に基づく。
+
 - データ取得の重複、一覧/詳細/通知の参照元差、財務・分析のR2再読み取りと改善案は [data-fetch-efficiency-audit-20261027.md](data-fetch-efficiency-audit-20261027.md) を参照。2026-10-27の現行チェックアウト調査と模擬R2実行の記録であり、本番通信の測定結果ではない。
 
 - ローカルの `scripts/jquants_v3/` はJ-QuantsのみのSQLiteスナップショットを作る。日足・月次価格に加えて、J-Quants APIの銘柄マスター、評価指標、財務サマリー、営業日を保存する。2026-10-25時点のキーでは日足等は2026-08-02までの遅延データ、配当明細と財務明細はPremium限定で取得不可。現行v3の実収録範囲と未取得項目は `scripts/jquants_v3/README.md` とDB内 `dataset_coverage` を参照。ローカルデータは `local_artifacts/` に置き、Cloudflareへは配信していない。

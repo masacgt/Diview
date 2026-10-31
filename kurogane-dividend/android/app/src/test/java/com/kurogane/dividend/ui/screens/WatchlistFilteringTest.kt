@@ -6,6 +6,14 @@ import org.junit.Test
 
 class WatchlistFilteringTest {
     @Test
+    fun japaneseWatchlistYieldMatchesDisplayedDividendAndPrice() {
+        val japanese = stock("7203", "Toyota", "jp", dps = 95.0, price = 3102.0)
+            .copy(yfinanceYieldRate = 3.22, irbankYieldRate = 3.22, irbankYieldDps = 95.0)
+        assertEquals(95.0 / 3102.0 * 100, japanese.liveYield, 0.000001)
+        assertEquals(0.0, japanese.copy(isNoDividendConfirmed = true).liveYield, 0.0)
+    }
+
+    @Test
     fun emptyQueryPreservesAllStocksAndTheirOrder() {
         val stocks = listOf(stock("7203", "Toyota", "jp"), stock("AAPL", "Apple", "us"))
 

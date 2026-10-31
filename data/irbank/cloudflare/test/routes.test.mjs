@@ -102,9 +102,9 @@ test('security API exposes yfinance retrieval metadata and stored dividend histo
   const data = await response.json();
   assert.equal(data.code, '7203');
   assert.deepEqual(data.valuation, {
-    per: 15,
-    pbr: 3,
-    source: 'daily_close_divided_by_latest_yfinance_eps_bps',
+    per: 4,
+    pbr: 0.5,
+    source: 'yfinance_reported_with_daily_calculation_fallback',
     price_date: null,
     statistics_last_fetched_session_date: '2026-10-15',
     formulas: {
@@ -257,7 +257,9 @@ test('financial API returns calculated DOE and net D/E from the stored annual ro
   const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
   assert.equal(response.status, 200);
   const data = await response.json();
-  assert.deepEqual(data.financials.annual, [annual]);
+  assert.deepEqual(data.financials.annual, [{ ...annual,
+    field_status: { ...annual.field_status, equity_ratio_computed: 'empty' },
+  }]);
 });
 
 test('financial API exposes retained seed values separately from newer yfinance values', async () => {
@@ -285,7 +287,8 @@ test('financial API exposes retained seed values separately from newer yfinance 
   assert.equal(response.status, 200);
   const data = await response.json();
   assert.equal(data.financials.annual[0].sales, 120);
-  assert.equal(data.financials.annual[0].equity_ratio_computed, 24);
+  assert.equal(Object.hasOwn(data.financials.annual[0], 'equity_ratio_computed'), false);
+  assert.equal(data.financials.annual[0].field_status.equity_ratio_computed, 'empty');
   assert.deepEqual(data.financials.annual[0].source_values.calculated.values, {});
   assert.equal(data.financials.seed_annual[0].values.sales, 100);
   assert.equal(Object.hasOwn(data.financials.seed_annual[0].values, 'equity_ratio_computed'), false);
@@ -301,12 +304,15 @@ test('financial API retains equity ratios calculated from one source', async () 
     equity_ratio_computed: 20,
     field_status: { equity_ratio_computed: 'available' },
     source_values: {
+      yfinance: { values: { stockholders_equity: 20, total_assets: 100 },
+        field_units: { stockholders_equity: 'yfinance_native', total_assets: 'yfinance_native' } },
       calculated: {
         values: {
           equity_ratio_computed: {
             value: 20,
             formula: 'equity / total_assets * 100',
             input_sources: { equity: 'yfinance', total_assets: 'yfinance' },
+            input_units: { equity: 'yfinance_native', total_assets: 'yfinance_native' },
           },
         },
       },
@@ -329,7 +335,8 @@ test('financial API does not replace the calculated ratio with a retained seed r
     field_status: { equity_ratio_computed: 'available' },
     source_values: {
       seed: { values: { equity_ratio_computed: 24 } },
-      yfinance: { values: { stockholders_equity: 60, total_assets: 100 } },
+      yfinance: { values: { stockholders_equity: 60, total_assets: 100 },
+        field_units: { stockholders_equity: 'yfinance_native', total_assets: 'yfinance_native' } },
       calculated: { values: { equity_ratio_computed: { value: 60 } } },
     } };
   const env = dividendEnvironment(new Map([['market/yfinance/v2/securities/4502.T/financials/2026.json', { annual }]]));
@@ -337,6 +344,27 @@ test('financial API does not replace the calculated ratio with a retained seed r
   const body = await response.json();
   assert.equal(body.financials.annual[0].equity_ratio_computed, 60);
   assert.equal(body.financials.seed_annual[0].values.equity_ratio_computed, 24);
+});
+
+test('equity ratio rejects incompatible or unverified input units and currencies', async () => {
+  const annual = { period_end: '2026-03-31', source_values: {
+    seed: { source: 'IRBANK', values: { equity_ratio_computed: 24 } },
+    yfinance: { values: { stockholders_equity: 60, total_assets: 100 },
+      field_units: { stockholders_equity: 'yfinance_native', total_assets: 'million_jpy' } },
+  } };
+  const env = dividendEnvironment(new Map([['market/yfinance/v2/securities/4502.T/financials/2026.json', { annual }]]));
+  const read = async () => (await (await worker.fetch(new Request('https://example.com/api/v1/financial-data/4502'), env)).json()).financials.annual[0];
+  assert.equal((await read()).equity_ratio_computed, 24);
+  annual.source_values.yfinance.field_units.total_assets = 'yfinance_native';
+  annual.field_status = { equity_ratio_computed: 'empty' };
+  assert.equal((await read()).equity_ratio_computed, 60);
+  assert.equal((await read()).field_status.equity_ratio_computed, 'available');
+  annual.field_status.equity_ratio_computed = 'stale';
+  assert.equal((await read()).field_status.equity_ratio_computed, 'stale');
+  annual.source_values.yfinance.field_reported_currencies = { stockholders_equity: 'USD', total_assets: 'JPY' };
+  assert.equal((await read()).equity_ratio_computed, 24);
+  delete annual.source_values.seed.values.equity_ratio_computed;
+  assert.equal(Object.hasOwn(await read(), 'equity_ratio_computed'), false);
 });
 
 test('financial API uses IRBANK canonical fiscal DPS instead of yfinance issuer rows', async () => {
@@ -404,7 +432,11 @@ test('financial API preserves mixed-unit null guards and raw provenance without 
   for (const [field, value] of Object.entries(annual.source_values.seed.values)) {
     assert.equal(data.financials.seed_annual[0].values[field], value);
   }
-  assert.deepEqual(row.source_values, annual.source_values);
+  assert.deepEqual(row.source_values, { ...annual.source_values, seed: {
+    ...annual.source_values.seed,
+    field_units: { sales: 'million_jpy', operating_profit: 'million_jpy',
+      operating_cf: 'million_jpy', investing_cf: 'million_jpy', total_assets: 'million_jpy' },
+  } });
   assert.equal(row.total_assets, 500000000);
   // With one fresh cash-flow input, the seed-only other side must stay null.
   annual.operating_cf = 30000000;
@@ -414,7 +446,8 @@ test('financial API preserves mixed-unit null guards and raw provenance without 
   const mixed = (await fetchData()).financials.annual[0];
   assert.equal(mixed.operating_cf, 30000000);
   assert.equal(mixed.investing_cf, null);
-  assert.equal(mixed.sales, 100);
+  assert.equal(mixed.sales, null);
+  assert.equal(mixed.field_status.sales, 'unsupported');
 });
 
 test('financial API keeps observed event history separate from legacy fiscal-year DPS', async () => {

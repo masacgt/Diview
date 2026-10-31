@@ -133,7 +133,7 @@ class ReleaseAuditRegressionTest {
             compose.onAllNodesWithText("分割・併合情報を取得できません。").fetchSemanticsNodes().isNotEmpty()
         }
         assertEquals("Reopening a failed request must not fetch automatically", 1, attempts.get())
-        compose.onNodeWithText("再試行").performClick()
+        compose.onNode(hasText("再試行") and hasAnyAncestor(isDialog())).performClick()
         compose.waitUntil(10_000) {
             attempts.get() == 2 &&
                 compose.onAllNodesWithText("分割・併合情報を取得できません。").fetchSemanticsNodes().isEmpty() &&

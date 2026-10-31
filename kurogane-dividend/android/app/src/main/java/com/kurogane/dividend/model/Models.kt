@@ -39,7 +39,9 @@ data class Holding(
     val gainLoss: Double get() = totalValuation - totalCost
     val gainLossPercent: Double get() = if (totalCost > 0) (gainLoss / totalCost) * 100 else 0.0
     val annualDividend: Double get() = shares * dps / priceUnit * currencyFactor
-    val liveYield: Double get() = yfinanceYieldRate
+    val liveYield: Double get() = if (category == Category.JAPAN) PortfolioMath.japaneseYield(dps, price, isNoDividendConfirmed,
+        yfinanceYieldRate?.takeIf { it.isFinite() && it in 0.0..100.0 }
+            ?: irbankYieldRate?.takeIf { it.isFinite() && it in 0.0..100.0 && irbankYieldDps == dps }) else yfinanceYieldRate
         ?.takeIf { it.isFinite() && it in 0.0..100.0 }
         ?: irbankYieldRate
         ?.takeIf { it.isFinite() && it in 0.0..100.0 && irbankYieldDps == dps }
@@ -154,7 +156,9 @@ data class WatchlistStock(
     val irbankYieldDps: Double? = null
 ) {
     val currencyFactor: Double get() = if (currency == "$") usdJpyRate?.takeIf { it.isFinite() && it > 0 } ?: 0.0 else 1.0
-    val liveYield: Double get() = yfinanceYieldRate
+    val liveYield: Double get() = if (category.equals("jp", ignoreCase = true)) PortfolioMath.japaneseYield(dps, price, isNoDividendConfirmed,
+        yfinanceYieldRate?.takeIf { it.isFinite() && it in 0.0..100.0 }
+            ?: irbankYieldRate?.takeIf { it.isFinite() && it in 0.0..100.0 && irbankYieldDps == dps }) else yfinanceYieldRate
         ?.takeIf { it.isFinite() && it in 0.0..100.0 }
         ?: irbankYieldRate?.takeIf { it.isFinite() && it in 0.0..100.0 && irbankYieldDps == dps }
         ?: PortfolioMath.yieldPercent(dps, price)

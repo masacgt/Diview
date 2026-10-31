@@ -189,7 +189,9 @@ fun StockDetailScreen(
         val irbankYieldRate = resolvedSecurity?.marketYieldRate?.takeIf {
             resolvedSecurity?.marketYieldSource != "yfinance_reported_dividendYield" && dps == irbankYieldDps
         }
-        val displayYield = yfinanceYieldRate ?: irbankYieldRate ?: calculatedYield
+        val displayYield = if (holding.category == com.kurogane.dividend.model.Category.JAPAN)
+            com.kurogane.dividend.model.PortfolioMath.japaneseYield(dps, price, noDividendConfirmed, yfinanceYieldRate ?: irbankYieldRate)
+        else yfinanceYieldRate ?: irbankYieldRate ?: calculatedYield
         val marketDailyChange = formatMarketDailyChange(resolvedSecurity)
         val marketChangePositive = resolvedSecurity?.marketPriceChange
             ?.takeIf { marketDailyChange != null }?.let { it >= 0.0 }

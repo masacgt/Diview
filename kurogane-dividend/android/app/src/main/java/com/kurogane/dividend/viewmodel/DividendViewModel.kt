@@ -169,7 +169,11 @@ class DividendViewModel @JvmOverloads constructor(
         MarketFetchPolicy.shouldFetch(now, marketPreferences.getLong(key, 0L),
             marketPreferences.getString(dateKey, null) ?: fallbackDate, fetchFailed(key))
 
-    /** Recheck existing holdings as well as new imports; successful empty responses stay daily-cached. */
+    fun hasMissingJapaneseHoldingPrices(): Boolean = _holdings.value.any {
+        it.category == Category.JAPAN && it.shares > 0 && (!it.price.isFinite() || it.price <= 0.0)
+    }
+
+    /** Recheck existing holdings and imports, including prices missing from otherwise successful responses. */
     fun refreshAssetManagementData(): Job {
         return viewModelScope.launch {
             restoration.await()
@@ -467,7 +471,8 @@ class DividendViewModel @JvmOverloads constructor(
         usWithholdingEnabled = _usTaxDeduction.value,
         financialProfile = _financialData.value[holding.code]?.profile,
         dps = dps,
-        yieldRate = yfinanceYieldRate ?: irbankYieldRate ?: PortfolioMath.yieldPercent(dps, price),
+        yieldRate = if (holding.category == Category.JAPAN) PortfolioMath.japaneseYield(dps, price, noDividendConfirmed, yfinanceYieldRate ?: irbankYieldRate)
+            else yfinanceYieldRate ?: irbankYieldRate ?: PortfolioMath.yieldPercent(dps, price),
         irbankYieldRate = irbankYieldRate,
         irbankYieldDps = quoteDps?.takeIf { irbankYieldRate != null },
         yfinanceYieldRate = yfinanceYieldRate,
@@ -518,7 +523,8 @@ class DividendViewModel @JvmOverloads constructor(
                 price = price,
                 usdJpyRate = _exchangeRate.value?.usdJpy,
                 dps = dps,
-                currentYield = yfinanceYieldRate ?: marketYieldRate ?: PortfolioMath.yieldPercent(dps, price),
+                currentYield = if (stock.category.equals("jp", ignoreCase = true)) PortfolioMath.japaneseYield(dps, price, noDividendConfirmed, yfinanceYieldRate ?: marketYieldRate)
+                    else yfinanceYieldRate ?: marketYieldRate ?: PortfolioMath.yieldPercent(dps, price),
                 yfinanceYieldRate = yfinanceYieldRate,
                 irbankYieldRate = marketYieldRate,
                 irbankYieldDps = quoteDps?.takeIf { marketYieldRate != null },
@@ -2425,8 +2431,14 @@ class DividendViewModel @JvmOverloads constructor(
             val today = PriceRefreshPolicy.japanDate(now)
             val needsIrbankDividendMigration = marketPreferences.getInt(dividendContractVersionKey, 0) < IRBANK_DIVIDEND_CACHE_VERSION
             val needsQuoteChangeMigration = marketPreferences.getInt(quoteChangeContractVersionKey, 0) < QUOTE_CHANGE_CONTRACT_VERSION
+            val missingHoldingPrice = _holdings.value.any {
+                it.category == Category.JAPAN && it.shares > 0 && normalizeJapaneseSecurityCode(it.code) == normalized &&
+                    (!it.price.isFinite() || it.price <= 0.0)
+            } && readCachedPrices()[normalized] == null
             val shouldRefresh = when {
                 fetchFailed(attemptKey) -> shouldFetchMarketData(now, attemptKey, attemptDateKey)
+                missingHoldingPrice -> MarketFetchPolicy.shouldFetch(now, marketPreferences.getLong(attemptKey, 0L),
+                    marketPreferences.getString(attemptDateKey, null), true)
                 needsIrbankDividendMigration -> marketPreferences.getString(contractRefreshDateKey, null) != today
                 needsQuoteChangeMigration -> marketPreferences.getString(quoteChangeContractRefreshDateKey, null) != today
                 else -> shouldFetchMarketData(now, attemptKey, attemptDateKey,
@@ -2449,7 +2461,13 @@ class DividendViewModel @JvmOverloads constructor(
             }.onFailure {
                 recordFetchOutcome(attemptKey, true)
                 android.util.Log.w("CloudflareMarket", "銘柄情報の取得に失敗しました: $normalized", it)
-            }.onSuccess { recordFetchOutcome(attemptKey, false) }.getOrNull() ?: return cached
+            }.onSuccess { security ->
+                val missingPrice = security?.marketPrice?.let { it.isFinite() && it > 0.0 } != true &&
+                    _holdings.value.any { it.category == Category.JAPAN && it.shares > 0 &&
+                        normalizeJapaneseSecurityCode(it.code) == normalized && (!it.price.isFinite() || it.price <= 0.0) } &&
+                    readCachedPrices()[normalized] == null
+                recordFetchOutcome(attemptKey, missingPrice)
+            }.getOrNull() ?: return cached
             val enriched = withContext(Dispatchers.IO) {
                 fetched.copy(
                     name = japaneseDisplayName(fetched.code, fetched.name),
@@ -2958,7 +2976,8 @@ class DividendViewModel @JvmOverloads constructor(
             }
             val yfinanceYieldRate = yfinanceYieldRates[code]?.takeIf { it.isFinite() && it in 0.0..100.0 }
             val irbankYieldRate = yieldRates[code]?.takeIf { quoteDps != null && dps == quoteDps }
-            val yieldRate = yfinanceYieldRate ?: irbankYieldRate ?: PortfolioMath.yieldPercent(dps, price)
+            val yieldRate = if (holding.category == Category.JAPAN) PortfolioMath.japaneseYield(dps, price, noDividendConfirmed, yfinanceYieldRate ?: irbankYieldRate)
+                else yfinanceYieldRate ?: irbankYieldRate ?: PortfolioMath.yieldPercent(dps, price)
             if (price == holding.price && dps == holding.dps && yieldRate == holding.yieldRate
                 && irbankYieldRate == holding.irbankYieldRate
                 && yfinanceYieldRate == holding.yfinanceYieldRate
@@ -2982,7 +3001,8 @@ class DividendViewModel @JvmOverloads constructor(
             }
             val yfinanceYieldRate = yfinanceYieldRates[code]?.takeIf { it.isFinite() && it in 0.0..100.0 }
             val marketYieldRate = yieldRates[code]?.takeIf { quoteDps != null && dps == quoteDps }
-            val currentYield = yfinanceYieldRate ?: marketYieldRate ?: PortfolioMath.yieldPercent(dps, price)
+            val currentYield = if (stock.category.equals("jp", ignoreCase = true)) PortfolioMath.japaneseYield(dps, price, noDividendConfirmed, yfinanceYieldRate ?: marketYieldRate)
+                else yfinanceYieldRate ?: marketYieldRate ?: PortfolioMath.yieldPercent(dps, price)
             if (price == stock.price && dps == stock.dps && currentYield == stock.currentYield
                 && yfinanceYieldRate == stock.yfinanceYieldRate
                 && marketYieldRate == stock.irbankYieldRate
