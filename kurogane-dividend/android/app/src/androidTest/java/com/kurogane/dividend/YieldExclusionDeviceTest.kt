@@ -87,7 +87,7 @@ class YieldExclusionDeviceTest {
         compose.onNodeWithText("平均配当利回り").assertIsDisplayed()
         compose.onNodeWithText("2.00").assertIsDisplayed()
         compose.runOnIdle { showDetail.value = true }
-        compose.onAllNodes(hasScrollToIndexAction())[0].performScrollToIndex(6)
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasContentDescription("平均配当利回りから除外"))
         val toggle = compose.onNodeWithContentDescription("平均配当利回りから除外")
         toggle.assertIsDisplayed().assertIsOff().performClick().assertIsOn()
         compose.waitUntil(10_000) { kotlin.math.abs(vm.assetManagementSummary.value.averageYield - 4.0) < 0.0001 }
@@ -98,7 +98,7 @@ class YieldExclusionDeviceTest {
         assertEquals(setOf("1306"), restored.yieldExcludedCodes.value)
         compose.waitUntil(10_000) { kotlin.math.abs(restored.assetManagementSummary.value.averageYield - 4.0) < 0.0001 }
         compose.runOnIdle { showDetail.value = true }
-        compose.onAllNodes(hasScrollToIndexAction())[0].performScrollToIndex(6)
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasContentDescription("平均配当利回りから除外"))
         compose.onNodeWithContentDescription("平均配当利回りから除外").assertIsOn().performClick().assertIsOff()
         compose.waitUntil(10_000) { kotlin.math.abs(vm.assetManagementSummary.value.averageYield - 2.0) < 0.0001 }
         compose.waitUntil(10_000) { store.loadYieldExcludedCodes().isEmpty() }
