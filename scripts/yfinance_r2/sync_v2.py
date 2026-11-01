@@ -1272,6 +1272,60 @@ def has_duplicate_event_dates(rows: list[dict[str, Any]], key: str = "date") -> 
     return False
 
 
+
+def merge_legacy_event_overlap(
+    stored: list[dict[str, Any]], legacy: list[dict[str, Any]], value_field: str,
+) -> tuple[list[dict[str, Any]], bool]:
+    """Preserve v2 precedence, retain legacy-only dates, flag conflicting values."""
+    by_date = {str(row.get("date") or "")[:10]: row for row in stored if row.get("date")}
+    legacy_only = []
+    conflict = False
+    for row in legacy:
+        day = str(row.get("date") or "")[:10]
+        previous = by_date.get(day)
+        if previous is None:
+            legacy_only.append(row)
+        elif (finite_number(previous.get(value_field)) is None
+              or finite_number(row.get(value_field)) is None
+              or finite_number(previous.get(value_field)) != finite_number(row.get(value_field))):
+            conflict = True
+    return stored + legacy_only, conflict
+
+
+
+def legacy_event_conflicts(stored: list[dict[str, Any]], legacy: list[dict[str, Any]],
+                           family: str, value_field: str) -> list[dict[str, Any]]:
+    by_date = {canonical_event_date(row.get("date")): row for row in stored if canonical_event_date(row.get("date"))}
+    result = []
+    for row in legacy:
+        day = canonical_event_date(row.get("date"))
+        previous = by_date.get(day)
+        if previous is None:
+            continue
+        current = finite_number(previous.get(value_field))
+        old = finite_number(row.get(value_field))
+        if current is None or old is None or current != old:
+            result.append({"family": family, "date": day, "v2": current, "legacy": old})
+    return sorted(result, key=lambda item: (item["family"], item["date"]))
+
+
+def legacy_conflict_fingerprint(conflicts: list[dict[str, Any]]) -> str | None:
+    if not conflicts:
+        return None
+    return hashlib.sha256(json.dumps(conflicts, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+
+
+def confirmed_legacy_resolution(conflicts: list[dict[str, Any]],
+                                fresh_dividends: list[dict[str, Any]], fresh_splits: list[dict[str, Any]],
+                                start: date, end: date) -> bool:
+    fresh = {
+        "dividends": {canonical_event_date(row.get("date")): finite_number(row.get("amount")) for row in fresh_dividends},
+        "splits": {canonical_event_date(row.get("date")): finite_number(row.get("ratio")) for row in fresh_splits},
+    }
+    return all(start.isoformat() <= item["date"] <= end.isoformat()
+               and fresh[item["family"]].get(item["date"]) is not None for item in conflicts)
+
+
 def monthly_history_rows(ticker: Any, *, initial: bool, as_of: date) -> list[dict[str, Any]]:
     first_year, latest_year = year_end_price_years(as_of)
     if initial:
@@ -2540,24 +2594,34 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     else:
         prior_dividends = load_recent_year_records(client, bucket, symbol, "dividends", as_of)
         prior_splits = load_recent_year_records(client, bucket, symbol, "splits", as_of)
-    prior_dividends.extend(legacy_dividends)
-    prior_splits.extend(legacy_splits)
-    stored_duplicate_events = (
-        has_duplicate_event_dates(prior_dividends)
-        or has_duplicate_event_dates(prior_splits)
-    )
+    prior_legacy_resolution = prior_action_history.get("legacy_event_resolution")
+    prior_legacy_resolution = prior_legacy_resolution if isinstance(prior_legacy_resolution, dict) else {}
+    legacy_conflicts = (legacy_event_conflicts(prior_dividends, legacy_dividends, "dividends", "amount")
+                        + legacy_event_conflicts(prior_splits, legacy_splits, "splits", "ratio"))
+    legacy_conflicts.sort(key=lambda item: (item["family"], item["date"]))
+    conflict_fingerprint = legacy_conflict_fingerprint(legacy_conflicts)
+    conflict_verified = bool(conflict_fingerprint and prior_legacy_resolution.get("fingerprint") == conflict_fingerprint
+                             and prior_legacy_resolution.get("status") == "confirmed")
+    stored_duplicate_events = (has_duplicate_event_dates(prior_dividends) or has_duplicate_event_dates(prior_splits)
+                               or bool(legacy_conflicts and not conflict_verified))
+    prior_dividends, _ = merge_legacy_event_overlap(prior_dividends, legacy_dividends, "amount")
+    prior_splits, _ = merge_legacy_event_overlap(prior_splits, legacy_splits, "ratio")
     if stored_duplicate_events and not full_action_history_required:
         # Load every hot/archive partition before a full Yahoo rebuild so rows
         # outside the recent three-year window are retained or repaired too.
         full_action_history_required = True
         prior_dividends = load_all_year_records(client, bucket, symbol, "dividends", include_archive=True)
         prior_splits = load_all_year_records(client, bucket, symbol, "splits", include_archive=True)
-        prior_dividends.extend(legacy_dividends)
-        prior_splits.extend(legacy_splits)
-        stored_duplicate_events = (
-            has_duplicate_event_dates(prior_dividends)
-            or has_duplicate_event_dates(prior_splits)
-        )
+        legacy_conflicts = (legacy_event_conflicts(prior_dividends, legacy_dividends, "dividends", "amount")
+                            + legacy_event_conflicts(prior_splits, legacy_splits, "splits", "ratio"))
+        legacy_conflicts.sort(key=lambda item: (item["family"], item["date"]))
+        conflict_fingerprint = legacy_conflict_fingerprint(legacy_conflicts)
+        conflict_verified = bool(conflict_fingerprint and prior_legacy_resolution.get("fingerprint") == conflict_fingerprint
+                                 and prior_legacy_resolution.get("status") == "confirmed")
+        stored_duplicate_events = (has_duplicate_event_dates(prior_dividends) or has_duplicate_event_dates(prior_splits)
+                                   or bool(legacy_conflicts and not conflict_verified))
+        prior_dividends, _ = merge_legacy_event_overlap(prior_dividends, legacy_dividends, "amount")
+        prior_splits, _ = merge_legacy_event_overlap(prior_splits, legacy_splits, "ratio")
     if stored_duplicate_events:
         # Corrupt stored partitions must bypass same-session reuse and refresh
         # the complete Yahoo history before their derived totals are published.
@@ -2589,8 +2653,10 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     actions_changed = False
     fresh_dividends: list[dict[str, Any]] | None = None
     fresh_splits: list[dict[str, Any]] | None = None
+    if conflict_verified:
+        action_retrieval["legacy_event_resolution"] = dict(prior_legacy_resolution)
     if stored_duplicate_events:
-        action_retrieval["repair_reason"] = "duplicate_stored_event_dates"
+        action_retrieval["repair_reason"] = "duplicate_or_conflicting_stored_events"
     if skip_action_retry:
         dividends = prior_dividends
         splits = prior_splits
@@ -2664,8 +2730,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                         prior_splits = load_all_year_records(
                             client, bucket, symbol, "splits", include_archive=True,
                         )
-                        prior_dividends.extend(legacy_dividends)
-                        prior_splits.extend(legacy_splits)
+                        prior_dividends, _ = merge_legacy_event_overlap(prior_dividends, legacy_dividends, "amount")
+                        prior_splits, _ = merge_legacy_event_overlap(prior_splits, legacy_splits, "ratio")
                         full_action_history_required = True
                     full_history_attempted = True
                     count_action_history_repair_trigger("new_split_detected")
@@ -2697,6 +2763,10 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                         "stored_repaired_events_reused": True,
                     })
             if fresh_dividends is not None and fresh_splits is not None:
+                if legacy_conflicts and not conflict_verified and (not full_history_refreshed or not confirmed_legacy_resolution(
+                    legacy_conflicts, fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end,
+                )):
+                    raise RuntimeError("Yahoo repaired history did not confirm every conflicting legacy event")
                 action_retrieval["repair_attempt_period"] = "max" if full_history_refreshed else "1y"
                 if not forced_repair:
                     action_retrieval["candidate_fingerprint"] = candidate_fingerprint
@@ -2715,6 +2785,21 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                     ),
                     legacy_splits, "date",
                 )
+                resolved_conflicts = (legacy_event_conflicts(dividends, legacy_dividends, "dividends", "amount")
+                                      + legacy_event_conflicts(splits, legacy_splits, "splits", "ratio"))
+                resolved_conflicts.sort(key=lambda item: (item["family"], item["date"]))
+                if legacy_conflicts and resolved_conflicts and full_history_refreshed and confirmed_legacy_resolution(
+                    legacy_conflicts, fresh_dividends, fresh_splits, action_coverage_start, action_coverage_end,
+                ):
+                    action_retrieval["legacy_event_resolution"] = {
+                        "status": "confirmed", "fingerprint": legacy_conflict_fingerprint(resolved_conflicts),
+                        "verified_at": iso_now(), "verified_session_date": as_of.isoformat(),
+                        "source": "Yahoo Finance via yfinance history repair=True", "conflict_count": len(resolved_conflicts),
+                    }
+                elif conflict_verified and legacy_conflict_fingerprint(resolved_conflicts) == conflict_fingerprint:
+                    action_retrieval["legacy_event_resolution"] = dict(prior_legacy_resolution)
+                else:
+                    action_retrieval.pop("legacy_event_resolution", None)
                 action_status["dividends"] = "available" if fresh_dividends else "empty"
                 action_status["splits"] = "available" if fresh_splits else "empty"
                 action_retrieval.update({
@@ -2733,6 +2818,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                     "stored_repaired_events_reused": False,
                 })
         except Exception as exc:
+            full_history_refreshed = False
             dividends = prior_dividends
             splits = prior_splits
             action_status["dividends"] = "failed"
@@ -2868,6 +2954,15 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
     forecast_dps = next_fiscal_year_forecast_dps(code, info.get("dividendRate"), as_of)
     has_forecast_dps = forecast_dps is not None and forecast_dps > 0
     current_fy_dps = fiscal_year_events(dividends, info, as_of)
+    if action_status["dividends"] == "failed":
+        previous_dividend_values = prior_current.get("dividend")
+        previous_dividend_values = previous_dividend_values if isinstance(previous_dividend_values, dict) else {}
+        prior_trailing = finite_number(previous_dividend_values.get("trailing_12_month_per_share"))
+        prior_fiscal = finite_number(previous_dividend_values.get("current_fiscal_year_per_share"))
+        if prior_trailing is not None:
+            trailing_dividends = prior_trailing
+        if prior_fiscal is not None:
+            current_fy_dps = prior_fiscal
     reported_yield = finite_number(info.get("dividendYield"))
     reported_yield_percent = (
         round(reported_yield * 100, 4)
@@ -3087,7 +3182,7 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                 continue
             target = by_year if event_date >= cutoff10 else archive_by_year
             target.setdefault(event_date[:4], []).append(row)
-        persist_action_partitions = action_partitions_need_persist(
+        persist_action_partitions = action_retrieval.get("status") != "failed" and action_partitions_need_persist(
             fresh_dividends, fresh_splits, legacy_dividends, legacy_splits,
         )
         years = (action_years[family] | set(by_year) | set(archive_by_year)) if persist_action_partitions else set()
@@ -3207,7 +3302,8 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "source": "Yahoo Finance via yfinance",
     }
     put_json_if_changed(client, bucket, object_key("securities", safe, "sync.json"), sync)
-    if (old and sync["full_history_initialized"] and sync["financials_initialized"]
+    if (old and action_retrieval.get("status") != "failed"
+            and sync["full_history_initialized"] and sync["financials_initialized"]
             and sync["monthly_history_schema_version"] == 2):
         stored_statements, _, _, _ = prior_financial_maps(client, bucket, symbol)
         verification_statements = [

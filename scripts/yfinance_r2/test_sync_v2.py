@@ -668,6 +668,35 @@ class R2MetricsTests(TestCase):
         self.assertEqual(result, [{"date": "2025-04-01", "ratio": 2}])
         self.assertEqual(client.keys, [sync.object_key("securities", "7203.T", "splits", "2025.json")])
 
+    def test_legacy_event_overlap_preserves_v2_and_detects_conflict(self):
+        stored = [{"date": "2025-03-01", "amount": 10, "source": "v2"}]
+        legacy = [{"date": "2025-03-01", "amount": 10}, {"date": "2024-03-01", "amount": 8}]
+        merged, conflict = sync.merge_legacy_event_overlap(stored, legacy, "amount")
+        self.assertFalse(conflict)
+        self.assertEqual(merged, [stored[0], legacy[1]])
+        _, conflict = sync.merge_legacy_event_overlap(stored, [{"date": "2025-03-01", "amount": 11}], "amount")
+        self.assertTrue(conflict)
+        _, conflict = sync.merge_legacy_event_overlap(stored, [{"date": "2025-03-01"}], "amount")
+        self.assertTrue(conflict)
+        _, conflict = sync.merge_legacy_event_overlap([{"date": "2025-03-01", "ratio": 2}], [{"date": "2025-03-01", "ratio": 3}], "ratio")
+        self.assertTrue(conflict)
+
+    def test_legacy_conflict_confirmation_fingerprint_and_coverage(self):
+        legacy = [{"date": "2025-03-01", "amount": 9}]
+        stored = [{"date": "2025-03-01", "amount": 10}]
+        conflicts = sync.legacy_event_conflicts(stored, legacy, "dividends", "amount")
+        fingerprint = sync.legacy_conflict_fingerprint(conflicts)
+        self.assertIsNotNone(fingerprint)
+        self.assertNotEqual(fingerprint, sync.legacy_conflict_fingerprint(
+            sync.legacy_event_conflicts(stored, [{"date": "2025-03-01", "amount": 8}], "dividends", "amount")))
+        self.assertNotEqual(fingerprint, sync.legacy_conflict_fingerprint(
+            sync.legacy_event_conflicts([{"date": "2025-03-01", "amount": 11}], legacy, "dividends", "amount")))
+        start, end = date(2025, 1, 1), date(2025, 12, 31)
+        self.assertTrue(sync.confirmed_legacy_resolution(conflicts, stored, [], start, end))
+        self.assertFalse(sync.confirmed_legacy_resolution(conflicts, [], [], start, end))
+        self.assertFalse(sync.confirmed_legacy_resolution(conflicts, stored, [], date(2025, 4, 1), end))
+        self.assertFalse(sync.confirmed_legacy_resolution(conflicts, [{"date": "2025-03-01", "amount": None}], [], start, end))
+
     def test_security_cache_reuses_reads_and_tracks_successful_writes(self):
         class MissingObject(Exception):
             response = {"Error": {"Code": "NoSuchKey"}}
@@ -1467,6 +1496,85 @@ class OfflineFinancialSyncTests(TestCase):
             "sales": "million_jpy", "operating_profit": "million_jpy",
         }}
         self.assertEqual(rows[0]["source_values"]["seed"], expected_seed)
+
+    def test_confirmed_conflict_is_reused_until_values_change(self):
+        prefix = sync.object_key("securities", "7203.T")
+        event_key = prefix + "/dividends/2025.json"
+        store = self.Store({
+            prefix + "/profile.json": {"display_name": "Toyota"},
+            prefix + "/current.json": {
+                "price": {"date": "2026-10-19", "close": 2000, "currency": "JPY"},
+                "statistics": {},
+                "field_status": {"price": "available", "dividend_history": "available", "split_history": "available"},
+                "dividend": {"trailing_12_month_per_share": 10,
+                             "calendar_year_metrics": {"status": "available", "annual_records": []}},
+                "action_history": {"candidate_fingerprint": sync.action_event_fingerprint([], [])},
+            },
+            event_key: {"records": [{"date": "2025-03-01", "amount": 10}]},
+        })
+        prior = {"monthly_history_schema_version": 2, "financials_initialized": True,
+                 "financials_last_checked_session_date": "2026-10-19", "full_history_initialized": True,
+                 "last_success_session_date": "2026-10-18"}
+        legacy = {"actions": {"dividends": [{"date": "2025-03-01", "amount": 9}]}}
+        ticker = self.ticker()
+        ticker.calendar = {}
+        with patch.object(sync.yf, "Ticker", return_value=ticker), \
+             patch.object(sync, "read_json", side_effect=store.read), \
+             patch.object(sync, "put_json_if_changed", side_effect=store.write), \
+             patch.object(sync, "delete_object_if_present", return_value=False), \
+             patch.object(sync, "archived_legacy_document"), \
+             patch.object(sync, "legacy_document", return_value=legacy), \
+             patch.object(sync, "fetch_daily_history_with_actions", return_value=([{"date": "2026-10-19", "close": 2000}], pd.DataFrame())), \
+             patch.object(sync, "action_candidate_from_history", return_value=([], [], date(2025, 10, 19), date(2026, 10, 19))), \
+             patch.object(sync, "fetch_repaired_action_history", return_value=([{"date": "2025-03-01", "amount": 10}], [], date(2025, 1, 1), date(2026, 10, 19))) as repair:
+            sync.collect_symbol(store, "b", "7203", "7203.T", date(2026, 10, 19), prior_sync_document=prior)
+            state = store.documents[prefix + "/current.json"]["action_history"]["legacy_event_resolution"]
+            self.assertEqual(state["status"], "confirmed")
+            self.assertEqual(repair.call_count, 1)
+            sync.collect_symbol(store, "b", "7203", "7203.T", date(2026, 10, 19), prior_sync_document=store.documents[prefix + "/sync.json"])
+            self.assertEqual(repair.call_count, 1)
+            self.assertEqual(store.documents[prefix + "/current.json"]["action_history"]["legacy_event_resolution"], state)
+            legacy["actions"]["dividends"][0]["amount"] = 8
+            sync.collect_symbol(store, "b", "7203", "7203.T", date(2026, 10, 19), prior_sync_document=store.documents[prefix + "/sync.json"])
+            self.assertEqual(repair.call_count, 2)
+
+    def test_failed_conflict_refresh_retains_prior_history_and_dividend_values(self):
+        prefix = sync.object_key("securities", "7203.T")
+        event_key = prefix + "/dividends/2025.json"
+        store = self.Store({
+            prefix + "/profile.json": {"display_name": "Toyota"},
+            prefix + "/current.json": {
+                "price": {"date": "2026-10-19", "close": 2000, "currency": "JPY"},
+                "statistics": {},
+                "field_status": {"price": "available", "dividend_history": "available", "split_history": "available"},
+                "dividend": {"trailing_12_month_per_share": 42, "current_fiscal_year_per_share": 35,
+                             "calendar_year_metrics": {"status": "available", "annual_records": []}},
+                "action_history": {"candidate_fingerprint": "prior"},
+            },
+            event_key: {"records": [{"date": "2025-03-01", "amount": 10}]},
+        })
+        prior_sync = {"monthly_history_schema_version": 2, "financials_initialized": True,
+                      "financials_last_checked_session_date": "2026-10-19", "full_history_initialized": True,
+                      "last_success_session_date": "2026-10-18"}
+        legacy = {"actions": {"dividends": [{"date": "2025-03-01", "amount": 9}]}}
+        ticker = self.ticker()
+        ticker.calendar = {}
+        with patch.object(sync.yf, "Ticker", return_value=ticker), \
+             patch.object(sync, "read_json", side_effect=store.read), \
+             patch.object(sync, "put_json_if_changed", side_effect=store.write), \
+             patch.object(sync, "legacy_document", return_value=legacy), \
+             patch.object(sync, "fetch_daily_history_with_actions", return_value=([{"date": "2026-10-19", "close": 2000}], pd.DataFrame())), \
+             patch.object(sync, "fetch_repaired_action_history", side_effect=RuntimeError("offline")):
+            result = sync.collect_symbol(store, "b", "7203", "7203.T", date(2026, 10, 19),
+                                         prior_sync_document=prior_sync)
+        current = store.documents[prefix + "/current.json"]
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(current["field_status"]["dividend_history"], "failed")
+        self.assertEqual(current["dividend"]["trailing_12_month_per_share"], 42)
+        self.assertEqual(current["dividend"]["current_fiscal_year_per_share"], 35)
+        self.assertNotIn("legacy_event_resolution", current["action_history"])
+        self.assertNotIn(event_key, store.writes)
+        self.assertEqual(store.documents[event_key]["records"], [{"date": "2025-03-01", "amount": 10}])
 
     def test_collect_symbol_persists_annual_valuation_and_daily_multiples(self):
         prefix = sync.object_key("securities", "7203.T")
