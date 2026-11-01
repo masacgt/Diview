@@ -625,6 +625,49 @@ class R2MetricsTests(TestCase):
         self.assertEqual(snapshot["calls"]["list_objects_v2"], 1)
         self.assertGreaterEqual(snapshot["seconds"]["list_objects_v2"], 0.0)
 
+    def test_r2_object_categories_and_repeated_reads_reset_on_write(self):
+        metrics = sync.R2Metrics()
+        key = "market/yfinance/v2/securities/7203.T/current.json"
+        metrics.record_object("get_object", "bucket", key, True)
+        metrics.record_object("get_object", "bucket", key, True)
+        metrics.record_object("put_object", "bucket", key, False)
+        metrics.record_object("get_object", "bucket", key, True)
+        metrics.record_object("put_object", "bucket", key, True)
+        metrics.record_object("get_object", "bucket", key, True)
+        self.assertEqual(metrics.snapshot()["by_object_type"]["securities/current.json"], {
+            "get_object": 4, "put_object": 2, "repeat_get_without_observed_write": 2,
+        })
+        self.assertEqual(sync.r2_object_category("market/yfinance/securities/7203.T.json"), "legacy/securities")
+        self.assertEqual(sync.r2_object_category("market/yfinance/v2/securities/7203.T/prices/monthly/2025.json"), "securities/prices/monthly")
+        self.assertEqual(sync.r2_object_category("market/yfinance/v2/archive/dividends/7203.T/2020.json"), "archive/dividends")
+
+    def test_recent_split_listing_reads_only_existing_years_across_pages(self):
+        class Body:
+            def read(self):
+                return b'{"records":[{"date":"2025-04-01","ratio":2}]}'
+
+        class Paginator:
+            def paginate(self, **kwargs):
+                prefix = kwargs["Prefix"]
+                yield {"Contents": [{"Key": prefix + "2023.json"}]}
+                yield {"Contents": [{"Key": prefix + "2025.json"}, {"Key": prefix + "notes.json"}]}
+
+        class Client:
+            def __init__(self):
+                self.keys = []
+
+            def get_paginator(self, operation):
+                return Paginator()
+
+            def get_object(self, **kwargs):
+                self.keys.append(kwargs["Key"])
+                return {"Body": Body()}
+
+        client = Client()
+        result = sync.load_recent_year_records(client, "bucket", "7203.T", "splits", date(2026, 10, 30))
+        self.assertEqual(result, [{"date": "2025-04-01", "ratio": 2}])
+        self.assertEqual(client.keys, [sync.object_key("securities", "7203.T", "splits", "2025.json")])
+
     def test_security_cache_reuses_reads_and_tracks_successful_writes(self):
         class MissingObject(Exception):
             response = {"Error": {"Code": "NoSuchKey"}}

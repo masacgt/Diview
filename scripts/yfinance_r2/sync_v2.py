@@ -149,6 +149,27 @@ class ActivityTimeline:
         }
 
 
+def r2_object_category(key: str) -> str:
+    """Group object paths without retaining or publishing individual symbols."""
+    parts = key.strip("/").split("/")
+    if parts[:3] == ["market", "yfinance", "securities"]:
+        return "legacy/securities"
+    if "securities" in parts:
+        index = parts.index("securities")
+        tail = parts[index + 2:]
+        if not tail:
+            return "securities/other"
+        if tail[0] in {"profile.json", "current.json", "sync.json"}:
+            return "securities/" + tail[0]
+        return "securities/" + "/".join(tail[:2] if tail[0] == "prices" else tail[:1])
+    if "archive" in parts:
+        index = parts.index("archive")
+        return "archive/" + (parts[index + 1] if len(parts) > index + 1 else "other")
+    if len(parts) >= 4 and parts[:3] == ["market", "yfinance", "v2"]:
+        return parts[3]
+    return "other"
+
+
 class R2Metrics:
     """Thread-safe timings for R2 operations performed by the sync run."""
 
@@ -157,6 +178,23 @@ class R2Metrics:
         self.calls: dict[str, int] = {}
         self.seconds: dict[str, float] = {}
         self.activity = ActivityTimeline()
+        self.categories: dict[str, Counter[str]] = {}
+        self.read_versions: set[tuple[str, str]] = set()
+
+    def record_object(self, operation: str, bucket: str, key: str, success: bool) -> None:
+        if not key:
+            return
+        category = r2_object_category(key)
+        with self.lock:
+            counts = self.categories.setdefault(category, Counter())
+            counts[operation] += 1
+            identity = (bucket, key)
+            if operation == "get_object" and success:
+                if identity in self.read_versions:
+                    counts["repeat_get_without_observed_write"] += 1
+                self.read_versions.add(identity)
+            elif operation in {"put_object", "delete_object"} and success:
+                self.read_versions.discard(identity)
 
     def record(self, operation: str, elapsed: float, *, started: float | None = None,
                ended: float | None = None) -> None:
@@ -170,6 +208,7 @@ class R2Metrics:
         with self.lock:
             return {
                 "calls": dict(sorted(self.calls.items())),
+                "by_object_type": {key: dict(sorted(value.items())) for key, value in sorted(self.categories.items())},
                 "seconds": {key: round(value, 3) for key, value in sorted(self.seconds.items())},
             }
 
@@ -207,9 +246,11 @@ class _MeasuredPaginator:
             except Exception:
                 ended = time.perf_counter()
                 self.metrics.record("list_objects_v2", ended - started, started=started, ended=ended)
+                self.metrics.record_object("list_objects_v2", str(kwargs.get("Bucket", "")), str(kwargs.get("Prefix", "")), False)
                 raise
             ended = time.perf_counter()
             self.metrics.record("list_objects_v2", ended - started, started=started, ended=ended)
+            self.metrics.record_object("list_objects_v2", str(kwargs.get("Bucket", "")), str(kwargs.get("Prefix", "")), True)
             yield page
 
     def __getattr__(self, name: str) -> Any:
@@ -235,11 +276,14 @@ class MeasuredR2Client:
 
         def measured(*args: Any, **kwargs: Any) -> Any:
             started = time.perf_counter()
+            success = False
             try:
                 response = method(*args, **kwargs)
+                success = True
             finally:
                 ended = time.perf_counter()
                 self.metrics.record(name, ended - started, started=started, ended=ended)
+                self.metrics.record_object(name, str(kwargs.get("Bucket", "")), str(kwargs.get("Key", "")), success)
             if name == "get_object" and isinstance(response, dict) and response.get("Body") is not None:
                 response = dict(response)
                 response["Body"] = _MeasuredBody(response["Body"], self.metrics)
@@ -1003,7 +1047,21 @@ def load_recent_year_records(client: Any, bucket: str, symbol: str, family: str,
     # These years are newer than the 10-year archive cutoff, so archive keys
     # cannot contain valid rows and should not be requested on every daily run.
     years = set(range(as_of.year - 2, as_of.year + 1))
-    return load_year_records(client, bucket, symbol, family, years, include_archive=False)
+    if family != "splits":
+        return load_year_records(client, bucket, symbol, family, years, include_archive=False)
+    # Split events are sparse. List once and fetch only existing recent annual
+    # partitions instead of requesting three mostly absent objects per symbol.
+    prefix = object_key("securities", safe_symbol(symbol), family) + "/"
+    expected = {prefix + f"{year}.json" for year in years}
+    present: set[str] = set()
+    for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
+        present.update(item["Key"] for item in page.get("Contents", []) if item.get("Key") in expected)
+    records: list[dict[str, Any]] = []
+    for key in sorted(present):
+        document = read_json(client, bucket, key)
+        if document:
+            records.extend(row for row in document.get("records", []) if isinstance(row, dict))
+    return records
 
 
 def preserve_profile_timestamp_if_unchanged(
