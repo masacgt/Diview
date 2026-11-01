@@ -6,6 +6,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FinancialDataTest {
+    @Test fun confirmedNoDividendWithEmptySuccessfulHistoriesUsesOnlyKnownCompletedPeriods() {
+        fun fixture(status: String = "empty", current: String = "no_dividend", issuerStatus: String = "empty") = JSONObject("""{
+          "security":{"code":"6721"},
+          "issuer_dividends":{"edinet_code":"E02083","status":"$issuerStatus","records":[]},
+          "dividends":{"records":[],"current":{"dividend_status":"$current"},"field_status":{"dividend_history":"$status"}},
+          "financials":{"annual":[{"period_end":"2023-12-31"},{"period_end":"2024-12-31"},
+            {"period_end":"2020-07-31"},{"period_end":"2020-12-31"},{"period_end":"2099-12-31"}]}
+        }""")
+        val result = FinancialData.parse(fixture(), "6721")
+        assertEquals(setOf(2020, 2023, 2024), result.noDividendFiscalYears)
+        assertEquals(mapOf(2020 to 0.0, 2023 to 0.0, 2024 to 0.0), AnnualDividendResolver.issuerFiscalHistory(result))
+        assertTrue(FinancialData.parse(fixture(status = "failed"), "6721").noDividendFiscalYears.isEmpty())
+        assertTrue(FinancialData.parse(fixture(current = "unknown"), "6721").noDividendFiscalYears.isEmpty())
+        assertTrue(FinancialData.parse(fixture(issuerStatus = "failed"), "6721").noDividendFiscalYears.isEmpty())
+    }
+
     @Test fun reitForecastAndProviderFetchDateSurviveTheApiContract() {
         val data = FinancialData.parse(JSONObject("""{
           "security":{"code":"8984"},

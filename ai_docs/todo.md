@@ -1,5 +1,10 @@
 # Todo
 
+- [x] Integrate and validate J-REIT descriptions, Yahoo fallback, zero-dividend chart and event-date forecast transitions. Evidence: JDK 17 build, 240 unit tests, 79 Worker tests, 20 IRBANK tests and 10 emulator UI cases pass; 8953, 2914 and 6721 were checked on emulator, 8214 on SCG01, and both installed APKs match SHA-256 `ff6353e8db71cb7255c698fc53c7b0305f57545c6c85434a435bb35ec9798ba7`. See `jreit-8953-investigation-20261031.md` for source and production evidence.
+- [ ] Verify a real dividend-event date rollover after the scheduled provider update; date boundaries are covered by injected unit-test dates and device clocks were not changed.
+- [ ] Investigate J-REIT indicator period and freshness: 8953's financial snapshot predates its latest company disclosure and Yahoo payout-ratio period is unconfirmed; the user requested no additional source/date display.
+- [ ] Refresh bundled JPX fund-market lists when listings change and expand live J-REIT verification.
+
 - [ ] Publish the IRBANK forecast parser fix to the scheduled workflow and verify a subsequent scheduled refresh. Local tests and direct IRBANK Connect validation pass; the 8214-only R2 refresh was verified through the active shard, production API, emulator and SCG01, which show 2027期 forecast 90 JPY. The scheduled workflow still uses the prior parser until code publication.
 
 - [ ] Complete cross-issuer annual-data protection and repair: R2 repairs used J-Quants for 2025/03–2026/03 and IRBANK Connect for missing 2008/03–2024/03; guarded writes and read-back passed for 19 plus 36 objects. Production API comparisons pass for 34 IRBANK periods; Worker v79 and main commit `9ea3c59f` contain the safeguards. An isolated Android 8.0 AVD and Android 13 physical device show the two current ratios and matching financial revisions. Full affected-universe coverage, individual historical filings, subsequent scheduled refresh and broader Android checks remain unverified. See `cross-issuer-financial-repair-20261031.md`.

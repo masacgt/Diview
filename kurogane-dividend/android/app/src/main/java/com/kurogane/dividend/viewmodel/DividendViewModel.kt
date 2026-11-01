@@ -160,6 +160,10 @@ class DividendViewModel @JvmOverloads constructor(
     private val _securityCategoryCache = MutableStateFlow(
         SecurityCategoryCache.decode(marketPreferences.getString("security_categories_v1", null))
     )
+    val securityCategories = _securityCategoryCache.map { cache ->
+        cache.entries.mapValues { it.value.category }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly,
+        _securityCategoryCache.value.entries.mapValues { it.value.category })
     private val marketQuoteCacheLock = Any()
     private val parsedPrices = com.kurogane.dividend.data.ParsedPreferenceCache<Map<String, Double>>()
     private val parsedDividends = com.kurogane.dividend.data.ParsedPreferenceCache<Map<String, Double>>()
@@ -249,13 +253,19 @@ class DividendViewModel @JvmOverloads constructor(
             }
         }
     }
-    private suspend fun refreshHoldingSecurityCategories() = withContext(Dispatchers.IO) {
+    private suspend fun refreshHoldingSecurityCategories() = refreshSecurityCategories {
+        _holdings.value.filter {
+            it.category == Category.JAPAN && it.sector == "東証33業種未分類"
+        }.map { it.code }
+    }
+
+    suspend fun refreshDetailSecurityCategory(code: String) = refreshSecurityCategories { listOf(code) }
+
+    private suspend fun refreshSecurityCategories(rawCodes: () -> Collection<String>) = withContext(Dispatchers.IO) {
         securityCategoryMutex.withLock {
             val generation = dataGeneration.get()
             val now = System.currentTimeMillis()
-            val codes = _holdings.value.filter {
-                it.category == Category.JAPAN && it.sector == "東証33業種未分類"
-            }.map { normalizeJapaneseSecurityCode(it.code) }.filter { it.matches(Regex("[A-Z0-9]{4,5}")) }
+            val codes = rawCodes().map(::normalizeJapaneseSecurityCode).filter { it.matches(Regex("[A-Z0-9]{4,5}")) }
             val due = _securityCategoryCache.value.dueCodes(codes, now).filter { code ->
                 securityCategoryAttempts[code]?.let { now - it in 0 until 30_000L } != true
             }
@@ -546,7 +556,10 @@ class DividendViewModel @JvmOverloads constructor(
         return com.kurogane.dividend.model.AnnualDividendResolver.applyForecast(
             holding,
             com.kurogane.dividend.model.AnnualDividendResolver.forecast(
-                holding.category, _financialData.value[code], dividendEventsFor(code), upcomingDividendEventFor(code)
+                holding.category, _financialData.value[code], dividendEventsFor(code), upcomingDividendEventFor(code),
+                isJreit = !holding.isNoDividendConfirmed && com.kurogane.dividend.model.isJreitProduct(holding.category,
+                    _securityCategoryCache.value.entries[normalizeJapaneseSecurityCode(code)]?.category,
+                    com.kurogane.dividend.data.JpxFundMarketMaster.market(getApplication(), code))
             )
         )
     }

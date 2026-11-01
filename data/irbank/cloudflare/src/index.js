@@ -1,6 +1,7 @@
 import { readFeedback, saveFeedback } from './feedback.mjs';
 import { safelyDeliverFeedbackEmail, retryFeedbackEmails } from './feedback-email.mjs';
 import financialUnitContract from './financial_unit_contract.json' with { type: 'json' };
+import jpxReitMarketMaster from './jpx_reit_market_master.json' with { type: 'json' };
 import { withMarketReadCache, sharedMarketJson, sharedMarketDocuments } from './market-read-cache.mjs';
 
 const ANALYSIS_CONCURRENCY = 8;
@@ -473,12 +474,48 @@ function yieldSourceFromDividend(yieldRate, irbankYield, irbankSource, yfinanceY
 
 // Search and quote screens must compare the same forecast and price, rather
 // than mixing a screening yield from a different date with an annual DPS.
+function japanDate() {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date()).map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function yahooForwardEligible(row) {
+  if (row.security_type === 'equity') return true;
+  if (row.security_type !== 'reit') return false;
+  const listed = jpxReitMarketMaster[yfinanceV2Code(row.code)];
+  return typeof listed === 'string' && listed <= japanDate();
+}
+
+// A per-security statistics read must not replace a newer published catalog price.
+function reitForwardQuote(row, current) {
+  const catalogCandidate = finiteNumber(row?.price);
+  const currentCandidate = finiteNumber(current?.price?.close);
+  const catalogPrice = catalogCandidate > 0 ? catalogCandidate : null;
+  const currentPrice = currentCandidate > 0 ? currentCandidate : null;
+  const catalogDate = /^\d{4}-\d{2}-\d{2}$/.test(String(row?.quote_date || '')) ? row.quote_date : null;
+  const currentDate = /^\d{4}-\d{2}-\d{2}$/.test(String(current?.price?.date || '')) ? current.price.date : null;
+  if (catalogPrice !== null && catalogDate && (!currentDate || catalogDate > currentDate)) {
+    return { price: catalogPrice, date: catalogDate };
+  }
+  return { price: currentPrice ?? catalogPrice, date: currentPrice !== null ? currentDate : catalogDate };
+}
+
 function searchDividend(row, issuer, current) {
   if (issuer.forecast != null) return issuer;
   const fetchedAt = Date.parse(String(current?.statistics_last_fetched_at || ''));
   const age = Date.now() - fetchedAt;
+  // Android's J-REIT fallback uses whole Japan calendar dates, including day 45.
+  let recent = Number.isFinite(fetchedAt) && age >= 0 && age <= 45 * 86400000;
+  if (row.security_type === 'reit' && Number.isFinite(fetchedAt)) {
+    const fetchedDate = String(current?.statistics_last_fetched_at || '').slice(0, 10);
+    const calendarAge = (Date.parse(`${japanDate()}T00:00:00Z`) - Date.parse(`${fetchedDate}T00:00:00Z`)) / 86400000;
+    recent = Number.isInteger(calendarAge) && calendarAge >= 0 && calendarAge <= 45;
+  }
   const forward = finiteNumber(current?.statistics?.dividendRate);
-  if (row.security_type === 'equity' && Number.isFinite(fetchedAt) && age >= 0 && age <= 45 * 86400000
+  const reitNoDividend = row.security_type === 'reit' && (current?.dividend?.dividend_status ?? row?.dividend_status) === 'no_dividend';
+  if (yahooForwardEligible(row) && !reitNoDividend && recent
       && forward !== null && forward > 0 && current?.field_status?.statistics_dividendRate !== 'failed') {
     return { ...issuer, annual_dps: forward, dividend_period: 'forward_12_month_estimate', fiscal_year: null,
       dividend_amount_basis: 'yfinance_forward_dividend_rate', dividend_status: forward > 0 ? 'has_dividend' : 'no_dividend',
@@ -2740,12 +2777,14 @@ export default {
             ? await readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`)
             : null;
           const selected = searchDividend(row, issuerDividend, current);
-          const close = finiteNumber(current?.price?.close) ?? finiteNumber(row.price);
+          const quote = row.security_type === 'reit' && selected.dividend_amount_basis === 'yfinance_forward_dividend_rate'
+            ? reitForwardQuote(row, current) : null;
+          const close = quote ? quote.price : finiteNumber(current?.price?.close) ?? finiteNumber(row.price);
           const selectedYield = searchYield(close, selected);
           return {
             ...item,
             price: close ?? item.price,
-            quote_date: current?.price?.date ?? item.quote_date,
+            quote_date: quote ? quote.date : current?.price?.date ?? item.quote_date,
             annual_dividend_per_share: selected.annual_dps,
             dividend_period: selected.dividend_period,
             dividend_amount_basis: selected.dividend_amount_basis,
@@ -2881,10 +2920,12 @@ export default {
       const resultItems = await Promise.all(items.map(async row => {
           const issuer = irbankDividendForCode(irbankDividendIndex, row.code);
           const symbol = yfinanceV2Symbol(row.code);
-          const current = issuer.forecast == null && row.security_type === 'equity' && symbol
+          const current = issuer.forecast == null && yahooForwardEligible(row) && symbol
             ? await readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`) : null;
           const dividend = searchDividend(row, issuer, current);
-          const price = finiteNumber(current?.price?.close) ?? finiteNumber(row.price);
+          const quote = row.security_type === 'reit' && dividend.dividend_amount_basis === 'yfinance_forward_dividend_rate'
+            ? reitForwardQuote(row, current) : null;
+          const price = quote ? quote.price : finiteNumber(current?.price?.close) ?? finiteNumber(row.price);
           const yieldRate = searchYield(price, dividend);
           return {
             code: row.code,

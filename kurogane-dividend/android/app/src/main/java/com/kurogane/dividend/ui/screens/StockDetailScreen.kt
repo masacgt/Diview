@@ -61,6 +61,10 @@ import com.kurogane.dividend.ui.theme.*
 import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.StockAnalysisNarrative
 import com.kurogane.dividend.model.StockAnalysisNarrativeGenerator
+import com.kurogane.dividend.model.JreitDetailAnalysis
+import com.kurogane.dividend.model.isJreitProduct
+import com.kurogane.dividend.data.normalizeJapaneseSecurityCode
+import com.kurogane.dividend.data.JpxFundMarketMaster
 import com.kurogane.dividend.model.StockEvaluationPositionComment
 import com.kurogane.dividend.viewmodel.DividendViewModel
 import com.kurogane.dividend.model.ShareholderBenefit
@@ -118,7 +122,8 @@ fun StockDetailScreen(
     onHoldingRemoved: (Holding) -> Unit = { onBack() },
     sharedSnackbarHostState: SnackbarHostState? = null
 ) {
-    val resources = LocalContext.current.resources
+    val context = LocalContext.current
+    val resources = context.resources
     val holdings by viewModel.holdings.collectAsStateWithLifecycle()
     val watchlist by viewModel.watchlist.collectAsStateWithLifecycle()
     val yieldExcludedCodes by viewModel.yieldExcludedCodes.collectAsStateWithLifecycle()
@@ -129,6 +134,7 @@ fun StockDetailScreen(
     val financialData by viewModel.financialData.collectAsStateWithLifecycle()
     val dividendEventRevision by viewModel.dividendEventRevision.collectAsStateWithLifecycle()
     val stockAnalysisData by viewModel.stockAnalysisData.collectAsStateWithLifecycle()
+    val securityCategories by viewModel.securityCategories.collectAsStateWithLifecycle()
     val cloudflareSecurityData by viewModel.cloudflareSecurityData.collectAsStateWithLifecycle()
     val exchangeRate by viewModel.exchangeRate.collectAsStateWithLifecycle()
     val usTaxDeduction by viewModel.usTaxDeduction.collectAsStateWithLifecycle()
@@ -207,10 +213,13 @@ fun StockDetailScreen(
             yfinanceYieldRate = yfinanceYieldRate,
             yoc = com.kurogane.dividend.model.PortfolioMath.yieldPercent(dps, holding.acqPrice),
             usdJpyRate = exchangeRate?.usdJpy, usWithholdingEnabled = usTaxDeduction)
-        val forecast = remember(holding.code, dividendEventRevision, financialData[holding.code]) {
+        val holdingProduct = normalizeJapaneseSecurityCode(holding.code)
+        val holdingIsJreit = isJreitProduct(holding.category, securityCategories[holdingProduct],
+            JpxFundMarketMaster.market(context, holdingProduct))
+        val forecast = remember(holding.code, holdingIsJreit, noDividendConfirmed, dividendEventRevision, financialData[holding.code]) {
             com.kurogane.dividend.model.AnnualDividendResolver.forecast(
                 holding.category, financialData[holding.code], viewModel.dividendEventsFor(holding.code),
-                viewModel.upcomingDividendEventFor(holding.code)
+                viewModel.upcomingDividendEventFor(holding.code), isJreit = holdingIsJreit && !noDividendConfirmed
             )
         }
         com.kurogane.dividend.model.AnnualDividendResolver.applyForecast(resolved, forecast)
@@ -230,6 +239,19 @@ fun StockDetailScreen(
     }
 
     val currentDpsUnavailable = !currentHolding.isNoDividendConfirmed && currentHolding.dps <= 0.0
+    val productCode = normalizeJapaneseSecurityCode(currentHolding.code)
+    LaunchedEffect(currentHolding.category, productCode) {
+        if (currentHolding.category == com.kurogane.dividend.model.Category.JAPAN) {
+            viewModel.refreshDetailSecurityCategory(productCode)
+        }
+    }
+    val productCategory = securityCategories[productCode]
+    val fundMarket = remember(context, productCode) { JpxFundMarketMaster.market(context, productCode) }
+    val isJreit = isJreitProduct(currentHolding.category, productCategory, fundMarket)
+    val productCategoryUnknown = currentHolding.category == com.kurogane.dividend.model.Category.JAPAN &&
+        !isJreit && fundMarket != "infrastructure" &&
+        ((Tse33IndustryMaster.defaultClimate(currentHolding.sector) == null && productCategory == null) ||
+            (productCategory == "013" && fundMarket == null))
     val uriHandler = LocalUriHandler.current
     val researchSecurityCode = currentHolding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T")
     val yahooFinanceCode = if (currentHolding.code.trim().endsWith(".T", ignoreCase = true)) {
@@ -271,20 +293,22 @@ fun StockDetailScreen(
     val dps = currentHolding.dps
     val financial = financialData[currentHolding.code]
     val fiscalMonth = financial?.period?.substringAfterLast('/')?.toIntOrNull()?.takeIf { it in 1..12 }
-    val currentCalendarYear = java.time.Year.now(ZoneId.of("Asia/Tokyo")).value
-    val currentCalendarDate = java.time.LocalDate.now(ZoneId.of("Asia/Tokyo"))
+    var currentCalendarDate by remember { mutableStateOf(java.time.LocalDate.now(ZoneId.of("Asia/Tokyo"))) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000)
+            currentCalendarDate = java.time.LocalDate.now(ZoneId.of("Asia/Tokyo"))
+        }
+    }
+    val currentCalendarYear = currentCalendarDate.year
     val dividendEventYears = (currentCalendarYear - 7..currentCalendarYear).toList()
-    val chartForecastYear = financial?.takeIf {
-        it.forecastAnnualDividend != null &&
-            it.forecastFiscalYear?.let { year -> year >= currentCalendarYear } == true
-    }?.forecastFiscalYear ?: currentCalendarYear
-    val dividendHistoryYears = (chartForecastYear - 7..chartForecastYear).toList()
+    val useJreitCalendarHistory = com.kurogane.dividend.model.AnnualDividendResolver.useJreitCalendarHistory(isJreit, financial)
     val chartDividendEvents = remember(currentHolding.code, dividendEventRevision) {
         viewModel.dividendEventsFor(currentHolding.code)
     }
     var dividendEventsLoading by remember(currentHolding.code) { mutableStateOf(true) }
     var dividendEventsLoadFailed by remember(currentHolding.code) { mutableStateOf(false) }
-    LaunchedEffect(currentHolding.category, currentHolding.code, dividendEventYears) {
+    LaunchedEffect(currentHolding.category, currentHolding.code, dividendEventYears, currentCalendarDate) {
         dividendEventsLoading = true
         dividendEventsLoadFailed = false
         val loaded = com.kurogane.dividend.data.runCatchingCancellable {
@@ -313,12 +337,17 @@ fun StockDetailScreen(
     val chartUpcomingDividend = remember(currentHolding.code, dividendEventRevision) {
         viewModel.upcomingDividendEventFor(currentHolding.code)
     }
+    val useFiscalChart = currentHolding.category == com.kurogane.dividend.model.Category.JAPAN && !useJreitCalendarHistory
+    val futureEventYear = com.kurogane.dividend.model.AnnualDividendResolver.futureEventChartYear(
+        chartUpcomingDividend, currentCalendarDate, fiscalMonth, useFiscalChart
+    )
+    val chartForecastYear = futureEventYear ?: currentCalendarYear
+    val dividendHistoryYears = (chartForecastYear - 7..chartForecastYear).toList()
     val currentYearForecastDps = com.kurogane.dividend.model.AnnualDividendResolver.eventForecast(
         chartDividendEvents, chartUpcomingDividend, currentCalendarDate
     )
     val normalizedDividendCode = currentHolding.code.trim().uppercase(Locale.ROOT).removeSuffix(".T")
     val savedDividendOverrides = dividendHistoryOverrides[normalizedDividendCode].orEmpty().associateBy { it.year }
-    val useFiscalChart = currentHolding.category == com.kurogane.dividend.model.Category.JAPAN
     val issuerFiscalDividendsByYear = com.kurogane.dividend.model.AnnualDividendResolver.issuerFiscalHistory(financial)
     val sourceDividendsByYear = if (useFiscalChart || financial?.issuerDividends.orEmpty().isNotEmpty()) issuerFiscalDividendsByYear
         else financial?.dividends.orEmpty().associate { it.year to it.dps }
@@ -334,23 +363,35 @@ fun StockDetailScreen(
         }.getOrDefault(emptyMap())
     }
     val defaultDividendPeriods = dividendHistoryYears.map { year ->
-        val forecast = if (year == chartForecastYear) {
+        val forecast = if (year == futureEventYear && !sourceDividendsByYear.containsKey(year)) {
             val sameCalendarYear = financial?.issuerIsInvestmentFund != true ||
                 financial?.forecastFirstPeriodEnd?.year == financial?.forecastPeriodEnd?.year
-            val issuerForecast = if (sameCalendarYear)
+            val issuerForecast = if (sameCalendarYear && !useJreitCalendarHistory)
                 com.kurogane.dividend.model.AnnualDividendResolver.issuerFiscalForecast(financial, year, currentCalendarDate)
                 else null
-            issuerForecast ?: currentYearForecastDps.takeIf {
+            issuerForecast ?: (if (isJreit && !currentHolding.isNoDividendConfirmed)
+                com.kurogane.dividend.model.AnnualDividendResolver.jreitAnnualChartReference(financial, currentCalendarDate)
+                else null) ?: (if (useFiscalChart && !isJreit && !currentHolding.isNoDividendConfirmed)
+                com.kurogane.dividend.model.AnnualDividendResolver.equityAnnualChartReference(financial, year, chartUpcomingDividend, currentCalendarDate)
+                else null) ?: currentYearForecastDps.takeIf {
                     !useFiscalChart &&
                     (currentHolding.category == com.kurogane.dividend.model.Category.US || financial?.issuerIsKnownEquity == true) && year == currentCalendarYear
                 }
         } else null
         val isForecast = forecast != null
+        val confirmedNoDividend = 0.0.takeIf {
+            year == chartForecastYear && useFiscalChart && financial?.issuerIsKnownEquity == true &&
+                financial.yahooDividendCurrentStatus == "no_dividend" && currentHolding.isNoDividendConfirmed &&
+                financial.forecastFiscalYear == year && financial.forecastAnnualDividend == null
+        }
+        val completedJreitEvents = if (useJreitCalendarHistory)
+            com.kurogane.dividend.model.AnnualDividendResolver.jreitCompletedCalendarEvents(year, chartDividendEvents, chartUpcomingDividend, currentCalendarDate)
+            else null
         val observedCurrentYear = chartDividendEvents.filter {
             it.date.year == year && !it.date.isAfter(currentCalendarDate)
-        }.takeIf { !useFiscalChart && year == currentCalendarYear && financial?.issuerDividends.orEmpty().isEmpty() && it.isNotEmpty() }
+        }.takeIf { !useFiscalChart && !useJreitCalendarHistory && year == currentCalendarYear && financial?.issuerDividends.orEmpty().isEmpty() && it.isNotEmpty() }
             ?.sumOf { it.amountPerShare }
-        val annualDividend = forecast ?: sourceDividendsByYear[year] ?: observedCurrentYear
+        val annualDividend = forecast ?: sourceDividendsByYear[year] ?: completedJreitEvents ?: observedCurrentYear ?: confirmedNoDividend
         StockDetailDividendPeriod(
             year,
             if (isForecast) null else yearEndPrices[year],
@@ -453,6 +494,7 @@ fun StockDetailScreen(
     val healthCardPayoutRatio = forecastHealthPayoutRatio ?: actualHealthPayoutRatio
     val healthCardPayoutIsForecast = forecastHealthPayoutRatio != null
     val healthCardPayoutIsActual = !healthCardPayoutIsForecast && actualHealthPayoutRatio != null
+    val jreitExplanations = remember(detailAnalysisValues) { JreitDetailAnalysis.explanations(detailAnalysisValues) }
     val analysisContext = financial?.analysisContext ?: com.kurogane.dividend.model.StockAnalysisContext()
     val analysisNarrative = remember(detailAnalysisValues, analysisContext) {
         StockAnalysisNarrativeGenerator.generateDetailed(detailAnalysisValues, analysisContext)
@@ -512,7 +554,8 @@ fun StockDetailScreen(
     val liveYield = currentHolding.liveYield
     val liveYoc = if (currentHolding.acqPrice > 0) (dps / currentHolding.acqPrice) * 100.0 else liveYield
     val topCardForecastDps = com.kurogane.dividend.model.AnnualDividendResolver.forecast(
-        currentHolding.category, financial, chartDividendEvents, chartUpcomingDividend, currentCalendarDate
+        currentHolding.category, financial, chartDividendEvents, chartUpcomingDividend, currentCalendarDate,
+        isJreit = isJreit && !currentHolding.isNoDividendConfirmed
     )
     val topCardDps = topCardForecastDps ?: dps
     val topCardDpsUnavailable = currentDpsUnavailable && topCardForecastDps == null
@@ -521,6 +564,8 @@ fun StockDetailScreen(
     val topCardYield = topCardForecastDps?.let {
         com.kurogane.dividend.model.PortfolioMath.yieldPercent(it, currentPrice)
     } ?: liveYield
+    val topCardYieldUnavailable = (topCardDpsUnavailable && resolvedSecurity?.marketYieldRate == null) ||
+        (topCardForecastDps != null && currentPrice <= 0.0)
     val topCardYoc = topCardForecastDps?.let { forecastDps ->
         if (currentHolding.acqPrice > 0) {
             com.kurogane.dividend.model.PortfolioMath.yieldPercent(forecastDps, currentHolding.acqPrice)
@@ -535,7 +580,7 @@ fun StockDetailScreen(
         )
         add(
             when {
-                topCardDpsUnavailable -> StockAnalysisPositionItem(
+                topCardYieldUnavailable -> StockAnalysisPositionItem(
                     label = "配当利回り", formattedValue = "未取得", bandLabel = "比較不可",
                     positionLabel = "評価基準なし", score = null,
                     text = StockEvaluationPositionComment.unavailable("DPSが未取得で、現在利回りと評価基準内の位置は算出できません。")
@@ -1037,7 +1082,7 @@ fun StockDetailScreen(
                                         fontSize = AppTextSize.dense
                                     )
                                     Text(
-                                        if ((topCardDpsUnavailable && resolvedSecurity?.marketYieldRate == null) || (topCardForecastDps != null && currentPrice <= 0.0)) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(topCardYield, topCardNoDividendConfirmed),
+                                        if (topCardYieldUnavailable) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(topCardYield, topCardNoDividendConfirmed),
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryEmerald,
                                         fontSize = AppTextSize.caption,
@@ -1060,7 +1105,7 @@ fun StockDetailScreen(
                                         fontSize = AppTextSize.dense
                                     )
                                     Text(
-                                        if (topCardDpsUnavailable || currentHolding.acqPrice <= 0.0) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(topCardYoc, topCardNoDividendConfirmed),
+                                        if (currentHolding.acqPrice <= 0.0) "保有情報なし" else if (topCardDpsUnavailable) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(topCardYoc, topCardNoDividendConfirmed),
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryEmerald,
                                         fontSize = AppTextSize.caption,
@@ -1207,7 +1252,7 @@ fun StockDetailScreen(
                                     val dpsText = point.annualDividend
                                         ?.let { com.kurogane.dividend.model.formatFinancialAmountDisplay(it) }
                                         ?: "未取得"
-                                    val fiscalPeriodLabel = if (useFiscalChart || financial?.issuerDividends.orEmpty().isNotEmpty()) "${point.year}期" else "${point.year}年"
+                                    val fiscalPeriodLabel = if (isJreit || useFiscalChart || financial?.issuerDividends.orEmpty().isNotEmpty()) "${point.year}期" else "${point.year}年"
                                     Triple(
                                         fiscalPeriodLabel,
                                         stringResource(R.string.add_holding_1_s_2_s_2, prefix, dpsText),
@@ -1298,7 +1343,13 @@ fun StockDetailScreen(
                                 .joinToString("　") { (month, amount) ->
                                     "${month}月${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(amount)}/株"
                                 }
+                            val interimAndYearEnd = if (useFiscalChart && !isJreit)
+                                com.kurogane.dividend.model.AnnualDividendResolver.equityInterimAndYearEndReference(
+                                    financial, year, selectedForecastDps, chartDividendEvents, chartUpcomingDividend, currentCalendarDate
+                                ) else null
                             val selectedYearAmount = when {
+                                interimAndYearEnd != null -> "中間配当 ${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(interimAndYearEnd.first)}　期末配当予想 ${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(interimAndYearEnd.second)}"
+                                useJreitCalendarHistory && monthlyAmounts.isNotBlank() -> monthlyAmounts
                                 selectedForecastDps != null ->
                                     "予想${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(selectedForecastDps)}/株"
                                 monthlyAmounts.isNotBlank() -> monthlyAmounts
@@ -1326,8 +1377,8 @@ fun StockDetailScreen(
                                     fontWeight = FontWeight.SemiBold,
                                     modifier = Modifier.weight(1.35f),
                                     textAlign = TextAlign.End,
-                                    maxLines = 1,
-                                    softWrap = false,
+                                    maxLines = if (interimAndYearEnd != null) 2 else 1,
+                                    softWrap = interimAndYearEnd != null,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
@@ -1389,18 +1440,18 @@ fun StockDetailScreen(
                                         Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(14.dp))
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    val healthBadgeColor = when (profile.healthGrade) {
+                                    val healthBadgeColor = when (if (isJreit || productCategoryUnknown) "未判定" else profile.healthGrade) {
                                         "S", "A", "B" -> PrimaryEmerald
                                         "C", "D" -> AccentAmber
                                         else -> OnSurfaceVariant
                                     }
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                        Text(stringResource(R.string.stock_detail_health_grade, profile.healthGrade), modifier = Modifier.weight(1f), color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                        Text(if (isJreit) "参考情報" else if (productCategoryUnknown) "分類未確認" else stringResource(R.string.stock_detail_health_grade, profile.healthGrade), modifier = Modifier.weight(1f), color = if (isJreit || productCategoryUnknown) OnSurfaceVariant else PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.body, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                         Surface(shape = RoundedCornerShape(50), color = healthBadgeColor.copy(alpha = 0.14f), border = BorderStroke(1.dp, healthBadgeColor.copy(alpha = 0.35f))) {
-                                            Text(profile.healthEvaluation, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp), color = healthBadgeColor, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                            Text(if (isJreit) "点数なし" else if (productCategoryUnknown) "評価保留" else profile.healthEvaluation, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp), color = healthBadgeColor, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                         }
                                     }
-                                    Text("${if (healthCardPayoutIsActual) "配当性向 (実績)" else "予想配当性向"} ${healthCardPayoutRatio?.financialText(1, "%") ?: "未取得"}", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                                    Text(if (productCategoryUnknown) "銘柄の種類を確認できません" else "${if (isJreit) { if (healthCardPayoutIsActual) "分配性向 (実績)" else "予想分配性向" } else if (healthCardPayoutIsActual) "配当性向 (実績)" else "予想配当性向"} ${healthCardPayoutRatio?.financialText(1, "%") ?: "未取得"}", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                 }
                             }
 
@@ -1425,7 +1476,7 @@ fun StockDetailScreen(
                                     Text(
                                         stringResource(
                                             R.string.stock_detail_text_26,
-                                            com.kurogane.dividend.model.formatDividendYieldDisplay(topCardYield, topCardNoDividendConfirmed)
+                                            if (topCardYieldUnavailable) "未取得" else com.kurogane.dividend.model.formatDividendYieldDisplay(topCardYield, topCardNoDividendConfirmed)
                                         ),
                                         color = PrimaryEmerald,
                                         fontWeight = FontWeight.Bold,
@@ -2076,6 +2127,13 @@ fun StockDetailScreen(
                                     }
                                 }
                             }
+                        } else if (selectedStatusTab == "health" && (isJreit || productCategoryUnknown)) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            JreitAnalysisCard(
+                                title = stringResource(R.string.stock_detail_text_50),
+                                items = jreitExplanations.filter { it.key !in setOf("per", "pbr") },
+                                categoryUnknown = productCategoryUnknown
+                            )
                         } else if (selectedStatusTab == "health") {
                             Spacer(modifier = Modifier.height(10.dp))
                             Column(
@@ -2571,7 +2629,11 @@ fun StockDetailScreen(
 
 
             item {
-                StockAnalysisNarrativeCard(analysisNarrative)
+                if (isJreit || productCategoryUnknown) {
+                    JreitAnalysisCard(stringResource(R.string.stock_detail_text_79), jreitExplanations, productCategoryUnknown)
+                } else {
+                    StockAnalysisNarrativeCard(analysisNarrative)
+                }
             }
 
             // 5. 配当月・通知設定
@@ -3954,6 +4016,38 @@ private fun StockAnalysisPositionRow(item: StockAnalysisPositionItem) {
             fontSize = AppTextSize.dense,
             lineHeight = 15.sp
         )
+    }
+}
+
+@Composable
+private fun JreitAnalysisCard(
+    title: String,
+    items: List<com.kurogane.dividend.model.JreitMetricExplanation>,
+    categoryUnknown: Boolean
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = BackgroundDark,
+        border = BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, color = OnSurface, fontSize = AppTextSize.body, fontWeight = FontWeight.Bold)
+            if (categoryUnknown) {
+                Text("銘柄の種類を取得できないため、評価と解説を保留しています。通信状況を確認して、もう一度銘柄情報を開いてください。", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+            } else {
+                Text("J-REITの指標を参考表示します。総合点や評価帯は付けていません。分配性向は取得元の数値で、対象期間や分配金の内訳を確認してください。", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+                HorizontalDivider(color = BorderColor)
+                items.forEach { item ->
+                    StockAnalysisPositionRow(StockAnalysisPositionItem(
+                        label = item.label, formattedValue = item.value,
+                        bandLabel = if (item.value == "未取得") "データなし" else "参考情報",
+                        positionLabel = "点数対象外", score = null, text = item.text
+                    ))
+                }
+                Text("LTV、稼働率、借入条件や分配金の内訳は最新の開示資料でも確認してください。", color = OnSurfaceVariant, fontSize = AppTextSize.dense)
+            }
+        }
     }
 }
 

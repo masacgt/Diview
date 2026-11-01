@@ -46,7 +46,10 @@ data class FinancialData(
     val issuerIsKnownEquity: Boolean = false,
     val forecastFirstPeriodEnd: LocalDate? = null,
     val forecastPeriodEnd: LocalDate? = null,
-    val yahooDividendFetchedDate: LocalDate? = null
+    val yahooDividendFetchedDate: LocalDate? = null,
+    val yahooDividendRateStatus: String? = null,
+    val yahooDividendCurrentStatus: String? = null,
+    val noDividendFiscalYears: Set<Int> = emptySet()
 ) {
     companion object {
         fun parse(root: JSONObject, expectedCode: String): FinancialData {
@@ -106,6 +109,18 @@ data class FinancialData(
                 ?.takeIf { it.isNotBlank() } ?: if (issuerDividends.isNotEmpty()) "available" else "empty"
             val annual = root.optJSONObject("financials")?.optJSONArray("annual")
             val annualRows = (0 until (annual?.length() ?: 0)).mapNotNull { annual?.optJSONObject(it) }
+            // An explicitly empty successful issuer and Yahoo history for a confirmed
+            // no-dividend equity can represent zero only for known completed periods.
+            val noDividendFiscalYears = if (
+                issuerDividendPayload?.optString("edinet_code")?.matches(Regex("E\\d{5}")) == true &&
+                issuerDividendHistoryStatus == "empty" && issuerDividendRecords?.length() == 0 &&
+                dividendPayload?.optJSONObject("current")?.optString("dividend_status") == "no_dividend" &&
+                dividendPayload.optJSONObject("field_status")?.optString("dividend_history") == "empty" && history?.length() == 0
+            ) {
+                val today = LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"))
+                annualRows.mapNotNull { row -> row.periodEnd() }
+                    .groupBy { it.year }.filterValues { periods -> periods.all { it.isBefore(today) } }.keys
+            } else emptySet()
             val financial = annualRows.filter { it.periodOrder() != null }
                 .maxWithOrNull(compareBy<JSONObject> { it.periodOrder()!! }
                     .thenBy { it.periodEnd() != null })
@@ -221,7 +236,10 @@ data class FinancialData(
                 issuerIsKnownEquity = issuerDividendPayload?.optString("edinet_code")?.matches(Regex("E\\d{5}")) == true,
                 forecastFirstPeriodEnd = forecastSource?.optString("first_period_end")?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
                 forecastPeriodEnd = forecastSource?.optString("period_end")?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
-                yahooDividendFetchedDate = marketPayload?.optString("statistics_last_fetched_at")?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() })
+                yahooDividendFetchedDate = marketPayload?.optString("statistics_last_fetched_at")?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+                yahooDividendRateStatus = marketPayload?.optString("statistics_dividend_rate_status")?.takeIf { it.isNotBlank() && it != "null" },
+                yahooDividendCurrentStatus = dividendPayload?.optJSONObject("current")?.optString("dividend_status")?.takeIf { it.isNotBlank() && it != "null" },
+                noDividendFiscalYears = noDividendFiscalYears)
         }
     }
 }
