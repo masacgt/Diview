@@ -1,5 +1,7 @@
 # Todo
 
+- [ ] Publish the IRBANK forecast parser fix to the scheduled workflow and verify a subsequent scheduled refresh. Local tests and direct IRBANK Connect validation pass; the 8214-only R2 refresh was verified through the active shard, production API, emulator and SCG01, which show 2027期 forecast 90 JPY. The scheduled workflow still uses the prior parser until code publication.
+
 - [ ] Complete cross-issuer annual-data protection and repair: R2 repairs used J-Quants for 2025/03–2026/03 and IRBANK Connect for missing 2008/03–2024/03; guarded writes and read-back passed for 19 plus 36 objects. Production API comparisons pass for 34 IRBANK periods; Worker v79 and main commit `9ea3c59f` contain the safeguards. An isolated Android 8.0 AVD and Android 13 physical device show the two current ratios and matching financial revisions. Full affected-universe coverage, individual historical filings, subsequent scheduled refresh and broader Android checks remain unverified. See `cross-issuer-financial-repair-20261031.md`.
 
 - [ ] Investigate stale Japanese quotes after scheduled sync #290: production 1301 retained the 2026-10-26 close and 2708 retained the 2026-10-28 close after price-fetch failures, while the same fetch function returned valid 2026-10-30 closes for both in a later local read-only check. Identify the runner-time failure cause, repair safely, and verify current price, quote dates, yields and portfolio values across screens before release. See `cross-issuer-financial-repair-20261031.md`.

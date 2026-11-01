@@ -155,9 +155,17 @@ def _forecast_dps_facts(document: dict[str, Any]) -> list[dict[str, Any]]:
         if not isinstance(row, dict) or row.get("element_name") != "DividendPerShare":
             continue
         context = str(row.get("context") or "")
-        if "CurrentYearDuration" not in context or "CurrentMember" not in context or "ForecastMember" not in context:
-            continue
-        if "PreviousMember" in context or row.get("unit") not in {None, "JPYPerShares"}:
+        # Both forms are emitted by IRBANK: ordinary earnings reports omit
+        # CurrentMember, while forecast revisions may include it explicitly.
+        # Match complete tokens so previous, next-year or unrelated dimensions
+        # cannot be mistaken for the current annual forecast.
+        tokens = context.split("_")
+        allowed = {"CurrentYearDuration", "AnnualMember", "SecondQuarterMember", "YearEndMember",
+                   "NonConsolidatedMember", "CurrentMember", "ForecastMember"}
+        if (not tokens or tokens[0] != "CurrentYearDuration" or set(tokens) - allowed
+                or "NonConsolidatedMember" not in tokens or "ForecastMember" not in tokens
+                or sum(token in {"AnnualMember", "SecondQuarterMember", "YearEndMember"} for token in tokens) != 1
+                or len(tokens) != len(set(tokens)) or row.get("unit") not in {None, "JPYPerShares"}):
             continue
         value = decimal_value(row.get("value"))
         if value is not None and value >= 0:
@@ -237,9 +245,20 @@ def parse_forecast(document: dict[str, Any], latest_actual_row: dict[str, Any] |
     if not dps_facts:
         return None
 
+    # Do not select an arbitrary value when equivalent reported contexts differ.
+    for member in ("AnnualMember", "SecondQuarterMember", "YearEndMember"):
+        if len({row["value"] for row in dps_facts if member in row["context"].split("_")}) > 1:
+            return None
+
     fiscal_end_raw = next((str(row.get("value")) for row in facts
                            if row.get("element_name") == "FiscalYearEnd" and row.get("value")), "")
     period_end = fiscal_end_raw[:10] if re.fullmatch(r"\d{4}-\d{2}-\d{2}.*", fiscal_end_raw) else None
+    try:
+        end_date = date.fromisoformat(period_end) if period_end else None
+    except ValueError:
+        return None
+    if end_date is None or (as_of is not None and end_date <= as_of):
+        return None
     fiscal_year = int(period_end[:4]) if period_end else None
 
     annual = next((row for row in dps_facts if "AnnualMember" in row["context"]), None)

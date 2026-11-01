@@ -1,5 +1,9 @@
 # Trouble
 
+## IRBANK 8214 forecast context (2026-11-01)
+
+- IRBANK disclosure `20260806513247` uses `CurrentYearDuration_AnnualMember_NonConsolidatedMember_ForecastMember` without `CurrentMember`; the old parser rejected its 2027/03 forecast of 90 JPY. The updated parser accepts this current-year form and rejects conflicting or expired data. Targeted production read-back returned the forecast; scheduled parser publication and subsequent refresh remain open.
+
 - On 2026-10-30 the isolated API 35 test `visibleAssetScreenAutomaticallyRetriesMissingJapanesePrice` failed three consecutive attempts with a 45-second timeout. Diagnostics showed `RESUMED`, one request, failed marker true, approximately 46 seconds elapsed and the price still missing. Manual retry after the cooldown passed; root cause and real-device behavior remain unverified. Pause focused investigation under the repository three-attempt rule.
 
 - Financial revision changes were ignored for a same-day cached security because an early throttle return preceded the revision check. SCG01's isolated test package retained 8984 without a forecast under revision `b948aeeb73e3446eb0bec4a5df85c160` after the targeted IRBANK publication advanced production to `c32947da8a2042deb8ad9aa03d5396d7`. Check the shared revision before applying the per-security cache and retry gates; the one-minute revision cache and failed-request throttle still apply. After installing the fix, SCG01 displayed 7,110 JPY and 6.45% and saved the new revision and forecast; emulator revision-change and offline-cache tests passed.

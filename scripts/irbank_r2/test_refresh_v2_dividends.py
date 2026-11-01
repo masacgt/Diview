@@ -45,6 +45,22 @@ class FakeR2Client:
 
 
 class IrbankForecastParsingTests(unittest.TestCase):
+    def test_irbank_current_forecast_without_current_member_and_reject_ambiguous_values(self):
+        doc = {"meta": {"doc_id": "20260806513247", "source": "tdnet"}, "xbrl_facts": [
+            {"element_name": "FiscalYearEnd", "context": "CurrentYearInstant", "value": "2027-03-31"},
+            {"element_name": "DividendPerShare", "context": "CurrentYearDuration_AnnualMember_NonConsolidatedMember_ForecastMember", "value": 90, "unit": "JPYPerShares"},
+            {"element_name": "DividendPerShare", "context": "CurrentYearDuration_SecondQuarterMember_NonConsolidatedMember_ForecastMember", "value": 30, "unit": "JPYPerShares"},
+            {"element_name": "DividendPerShare", "context": "CurrentYearDuration_YearEndMember_NonConsolidatedMember_ForecastMember", "value": 60, "unit": "JPYPerShares"},
+            {"element_name": "DividendPerShare", "context": "CurrentYearDuration_AnnualMember_NonConsolidatedMember_PreviousMember_ForecastMember", "value": 80, "unit": "JPYPerShares"},
+            {"element_name": "DividendPerShare", "context": "NextYearDuration_AnnualMember_NonConsolidatedMember_ForecastMember", "value": 120, "unit": "JPYPerShares"},
+        ]}
+        result = parse_forecast(doc, None, as_of=date(2026, 11, 1))
+        self.assertEqual((result["fiscal_year"], result["annual_dps_current_share_basis"]), (2027, 90))
+        self.assertEqual(result["source_refs"][0]["doc_id"], "20260806513247")
+        self.assertIsNone(parse_forecast(doc, None, as_of=date(2027, 3, 31)))
+        doc["xbrl_facts"].append({"element_name": "DividendPerShare", "context": "CurrentYearDuration_AnnualMember_NonConsolidatedMember_CurrentMember_ForecastMember", "value": 95, "unit": "JPYPerShares"})
+        self.assertIsNone(parse_forecast(doc, None, as_of=date(2026, 11, 1)))
+
     def test_unusable_new_forecast_keeps_old_observation_without_serving_it_as_current(self):
         old = {"status": "available", "annual_dps_current_share_basis": 7110}
         item = {"forecast_status": "available", "forecast": old}
