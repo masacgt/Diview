@@ -334,3 +334,13 @@ run #174後の本番Worker読み戻しでは、2060.Tは `last_attempt_at=2026-1
 `5138.T`、`6034.T`、`7578.T` の `field_status.dividend_history=empty` は、全期間のイベントが存在しないという意味ではない。本番 `/api/v1/securities/{code}` では3銘柄とも `last_attempt_status=success`、`period=1y`、`last_coverage_event_count=0`、`stored_history_status=available` と保存済み履歴の開始・終了日が返った。同期処理は通常直近1年を取得範囲として状態を設定し、その範囲外の古いイベントを保持する。監査で見つかった過去行は、本番 `/api/v1/dividend-months` の `event_year` 指定でそれぞれ 5138.T: 2025-03-28 ¥35、6034.T: 2022-12-29 ¥30、7578.T: 2021-03-30 ¥6 と読み戻せた。既定の同APIは現在年・前年を読み、さらに直近365日へ絞るため、3銘柄とも既定の `events` は空だった。これは直近1年の取得状態と長期保存履歴の期間差であり、R2イベント欠落ではない。状態名は取得範囲が分からないと全履歴の有無と誤読されるため、API状態の意味を期間付きで扱う。
 
 監査runは25分45秒で終了したが、手動・読み取り専用の単発監査のため、通常同期の月間runner分数には含めない。
+
+### 2026-11-01 手動本番全銘柄同期run #296：R2公開と時間比較
+
+[Actions run #296](https://github.com/masacgt/Diview/actions/runs/41304477501) は `workflow_dispatch` の `sync` を `main` / commit `9ed7c8c444f63ad9e83a37cf712ae67cd08ca509` で実行した。市場セッション外の手動実行なので、最新完了セッション `2026-10-30` のデータを扱った。J-Quantsユニバースは4,445コード。同期は成功4,398・失敗47・partial 569、カタログ4,364件を generation `2026-10-30-dd035617a06641eb9b93ffde9c7483a0` として公開した。同期jobは失敗終了（exit code 1）したが、失敗銘柄を含む公開処理はその前に完了している。HTTP 429は0件。失敗ログにはYahoo HTTP 404と価格データなしの応答があるが、47件すべての原因を同一と断定しない。
+
+本番R2の `publications/current.json`、`catalog/current.json`、`universe/current.json` を読み戻し、すべて同世代に対応することを確認した。publicationは市場日 `2026-10-30`、対象4,445、成功4,398、失敗47、カタログ4,364、yfinance高水準呼出し2,462回、低水準request 4,993回を記録する。2060.Tの `current.json` は2026-10-30終値¥1,389を保持。`Ticker.calendar` は配当落ち日 `2027-03-30`、状態 `available`、取得元 `Yahoo Finance via yfinance Ticker.calendar`、取得時刻 `2026-10-17T05:31:41Z` のままで、この同期ではcalendarを再取得していない（当runの集計に `ticker_calendar` 呼出しなし）。これは `Ticker.get_info` の代替値ではなく、保存済みcalendarフィールドの鮮度を示す。
+
+同期jobは46分22秒で、直近の通常scheduled run #290（市場日も `2026-10-30`）の81分17秒より34分55秒、約43.0%短かった。スクリプト経過時間は2,776.6秒対4,833.756秒で2,057.156秒短縮。銘柄収集中のR2 active wallは2,678.927秒対4,695.074秒で2,016.147秒短縮した。高水準yfinance呼出しは7,299回から2,462回（約66.3%減）。R2操作数は `get_object` 66,428→55,067、`get_body` 53,867→50,068、`list_objects_v2` 8,851→9,965、`put_object` 44,283→38,919、`delete_object` 216→2。累積R2 operation timeは並列要求の合計なので、runnerの実時間として扱わない。
+
+この時間比較は異なる通常営業日の比較ではない。日曜の手動runは同一市場日を再処理し、同日すでに成功した項目を再利用したため、時間・呼出し数の短縮を恒常的な日次改善だけに帰属できない。同期jobのみを23営業日に単純換算すれば約1,066 runner分（同期jobと約19秒のcalendar jobを合わせて約1,067分、workflow表示の約47分を使えば約1,081分）だが、これは参考値にすぎず、月2,000分の定常運用確認には使わない。過去の通常run #290単独も同期job81分17秒×23で約1,870分となるが、一標本のため判定根拠には不足する。複数の異なるセッション日の通常schedule実測で確認するまで、月間予算の判定を保留し、workflow timeout 360分を維持する。
