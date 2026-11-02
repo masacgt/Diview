@@ -19,6 +19,12 @@ class RightsDateCalculationTests(TestCase):
             "XNYS": xcals.get_calendar("XNYS"),
         }
 
+    def test_event_partition_window_includes_estimation_boundary_and_output_years(self):
+        self.assertEqual(
+            list(rights_dates.event_partition_years(2026)),
+            [2021, 2022, 2023, 2024, 2025, 2026],
+        )
+
     def test_japanese_next_ex_date_uses_recurring_historical_month(self):
         rows = [
             {"symbol": "7203.T", "date": "2023-03-29", "amount": 35},
@@ -138,6 +144,12 @@ class RightsDateCalculationTests(TestCase):
 
     def test_coverage_only_reads_r2_and_never_publishes(self):
         prefix = rights_dates.PREFIX
+        old_partition_year = (
+            rights_dates.datetime.now(rights_dates.UTC).year
+            - rights_dates.ESTIMATE_LOOKBACK_YEARS
+            - 1
+        )
+        old_partition_key = f"{prefix}/securities/7203.T/dividends/{old_partition_year}.json"
         objects = {
             f"{prefix}/universe/current.json": {
                 "securities": [{"code": "7203", "symbol": "7203.T", "status": "active"}],
@@ -154,6 +166,7 @@ class RightsDateCalculationTests(TestCase):
             f"{prefix}/securities/7203.T/dividends/2025.json": {
                 "records": [{"date": "2025-03-28", "amount": 45}],
             },
+            old_partition_key: {"records": [{"date": f"{old_partition_year}-03-28", "amount": 30}]},
         }
         client = Mock()
         client.get_object.side_effect = lambda *, Bucket, Key: {
@@ -168,6 +181,10 @@ class RightsDateCalculationTests(TestCase):
         self.assertEqual(source_count, 1)
         self.assertEqual(len(input_rows), 2)
         self.assertEqual(coverage_inputs["history_status_by_symbol"], {"7203.T": "available"})
+        self.assertNotIn(
+            old_partition_key,
+            [call.kwargs["Key"] for call in client.get_object.call_args_list],
+        )
 
         with TemporaryDirectory() as temp_dir:
             report_path = f"{temp_dir}/coverage.json"

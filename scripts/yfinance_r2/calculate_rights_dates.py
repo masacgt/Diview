@@ -23,9 +23,17 @@ import exchange_calendars as xcals
 UTC = timezone.utc
 PREFIX = os.environ.get("R2_PREFIX", "market/yfinance/v2").strip("/")
 OUTPUT_KEY = f"{PREFIX}/derived/rights_dates/current.json"
-HISTORY_LOOKBACK_YEARS = 10
 ESTIMATE_LOOKBACK_YEARS = 5
 MIN_RECURRING_YEARS = 2
+
+
+def event_partition_years(as_of_year: int) -> range:
+    """Return event years needed for estimates and the two-year output window."""
+    # The estimate boundary is inclusive (as_of_year - 5), while output keeps
+    # observed events from the current and previous calendar years. Both fit in
+    # this range; older partitions remain archived in R2 but are not read here.
+    earliest_required_year = min(as_of_year - ESTIMATE_LOOKBACK_YEARS, as_of_year - 1)
+    return range(earliest_required_year, as_of_year + 1)
 
 
 def previous_session(calendar: Any, ex_date: date) -> date:
@@ -262,7 +270,7 @@ def rows_from_r2(
     paginator = client.get_paginator("list_objects_v2")
     keys: list[str] = []
     current_year = datetime.now(UTC).year
-    recent_years = set(range(current_year - HISTORY_LOOKBACK_YEARS + 1, current_year + 1))
+    recent_years = set(event_partition_years(current_year))
     for page in paginator.paginate(Bucket=bucket, Prefix=f"{PREFIX}/securities/"):
         for item in page.get("Contents", []):
             key = str(item.get("Key") or "")
