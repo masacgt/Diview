@@ -372,6 +372,8 @@ PR [#45](https://github.com/masacgt/Diview/pull/45) は squash merge され、ma
 
 2060.Tの本番API応答に含まれる`data_retrieval.ex_dividend_calendar`は日付`2027-03-30`、状態`available`、取得元`Yahoo Finance via yfinance Ticker.calendar`、取得日時`2026-10-17T14:31:41.140315+09:00`だった。これは`Ticker.get_info`のフォールバック値ではなく、current.jsonに保存されたTicker.calendar由来情報である。ただし今回の取得集計では`Ticker.calendar`呼出しが58件あり、2060.Tの値自体は10月17日取得の保存済み値であって、このrunで更新されたことは確認できない。
 
+追加の本番Worker読み戻しでは、同じgenerationの651AがETF/category 014・終値¥983（2026-11-02）、8951がREIT/category 013・終値¥119,500（同日）で返った。651Aは権利落ち日と支払開始日の取得失敗により`partial`だった。650Aと659AはWorker詳細APIで404となり、run #314の監査ログでは両方とも2026-11-02の終値なしと記録されていたため、この世代の検索カタログ・詳細データには含まれていなかった。次の営業日以降に再確認する。
+
 run #314ログで2026-11-02の終値取得に失敗した7863・8139・9012・9214・9222を本番Worker APIから読み戻した。各銘柄は`processing_status=partial`、`failure_reason=Field fetch failed: price`で、market_priceはすべて前回の2026-10-30終値（それぞれ¥941・¥2,298・¥2,073・¥1,284・¥50）を保持していた。いずれも2026-11-02へ誤って日付を進めていないため、価格項目の取得失敗時に旧値を維持する動作を本番で確認した。R2計測でも`securities/current.json`のPUTは4,420件で、全4,576件を無条件に上書きしていない。別の失敗例9555は`/api/v1/securities/9555`が404で、API上に保持対象レコードがなく、旧値維持の実例には数えない。失敗156件すべての分類は未完了。
 
 日次同期コードは`sync_v2.py`からR2の`market/yfinance/v2/universe/irbank_source.json`を読み、snapshotのコード・SHA-256・取得日時を同期結果へ記録する。同期コードからJ-Quantsマスタ取得関数は呼ばれず、J-Quantsに関する残りの参照は既存の商品区分メタデータの保持だけである。
