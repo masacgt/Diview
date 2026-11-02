@@ -363,3 +363,21 @@ run #174後の本番Worker読み戻しでは、2060.Tは `last_attempt_at=2026-1
 同期jobは46分22秒で、直近の通常scheduled run #290（市場日も `2026-10-30`）の81分17秒より34分55秒、約43.0%短かった。スクリプト経過時間は2,776.6秒対4,833.756秒で2,057.156秒短縮。銘柄収集中のR2 active wallは2,678.927秒対4,695.074秒で2,016.147秒短縮した。高水準yfinance呼出しは7,299回から2,462回（約66.3%減）。R2操作数は `get_object` 66,428→55,067、`get_body` 53,867→50,068、`list_objects_v2` 8,851→9,965、`put_object` 44,283→38,919、`delete_object` 216→2。累積R2 operation timeは並列要求の合計なので、runnerの実時間として扱わない。
 
 この時間比較は異なる通常営業日の比較ではない。日曜の手動runは同一市場日を再処理し、同日すでに成功した項目を再利用したため、時間・呼出し数の短縮を恒常的な日次改善だけに帰属できない。同期jobのみを23営業日に単純換算すれば約1,066 runner分（同期jobと約19秒のcalendar jobを合わせて約1,067分、workflow表示の約47分を使えば約1,081分）だが、これは参考値にすぎず、月2,000分の定常運用確認には使わない。過去の通常run #290単独も同期job81分17秒×23で約1,870分となるが、一標本のため判定根拠には不足する。複数の異なるセッション日の通常schedule実測で確認するまで、月間予算の判定を保留し、workflow timeout 360分を維持する。
+
+### 2026-11-03 IRBANK+JPX切替後の本番同期
+
+PR [#45](https://github.com/masacgt/Diview/pull/45) は squash merge され、main commit `ced28fc53a7b83f41b8d3154ecb9a78e2abbc69c` で公開された。PR headの157件の同期テスト、main反映後のCI、PR統合を確認した。IRBANK更新workflow [run #13](https://github.com/masacgt/Diview/actions/runs/41480740674) は2026-11-03 JSTに成功し、「Refresh the IRBANK universe snapshot when seven days old」は13秒、後続のIRBANK配当処理を含むrunner使用は2分28秒だった。更新後のスナップショットは、監査済みIRBANK 4,573コードにJPX掲載中ETFのうち不足3コード（650A、651A、659A）を加えた4,576銘柄を、続くyfinance同期が読み込んだ。未来上場の671Aは対象外。
+
+同日のyfinance [run #314](https://github.com/masacgt/Diview/actions/runs/41481174822) は `workflow_dispatch` / `main` / commit `ced28fc` の手動 `sync` であり、通常スケジュール実行ではない。カレンダージョブは手動実行時の営業日外許可を使って成功し、最新完了市場日 `2026-11-02` を選択した。したがって、このrunは通常のXTKSカレンダーゲート通過を証明しない。全4,576銘柄を走査し、成功4,420、失敗156、カタログ4,358件の世代 `2026-11-02-4779703fc1a94b7ba193c8e262256687` を公開した。銘柄処理は52分14秒、同期jobは52分48秒、workflow全体のrunner使用時間は53分14秒。失敗があったためrun全体はexit code 1で終了したが、公開後に本番APIを読み戻すと`/api/v1/search-catalog`のgeneration・market_data_date・カタログ件数はそれぞれ上記generation・`2026-11-02`・4,358で一致した。`/api/v1/securities/2060` も2060.Tの終値¥1,364、価格日`2026-11-02`を返し、検索カタログには日本語名「フィード・ワン」が含まれた。
+
+2060.Tの本番API応答に含まれる`data_retrieval.ex_dividend_calendar`は日付`2027-03-30`、状態`available`、取得元`Yahoo Finance via yfinance Ticker.calendar`、取得日時`2026-10-17T14:31:41.140315+09:00`だった。これは`Ticker.get_info`のフォールバック値ではなく、current.jsonに保存されたTicker.calendar由来情報である。ただし今回の取得集計では`Ticker.calendar`呼出しが58件あり、2060.Tの値自体は10月17日取得の保存済み値であって、このrunで更新されたことは確認できない。
+
+同期ログの高水準yfinance呼出しは800回（`history_daily_5d_with_actions` 221、`ticker_get_info` 170、初回8年12月価格84、損益・貸借対照表・キャッシュフロー各58、`ticker_calendar` 58、`history_daily_1y_with_actions` 57、`history_actions_max` 31、`history_actions_1y` 5）。処理時間は全体3,127.905秒、銘柄収集2,816.286秒、カタログ生成293.127秒、カタログ公開12.795秒。計測上のR2 active wallは2,816.275秒で、yfinanceと重ならないR2-onlyは2,666.607秒、yfinanceとの重複は149.668秒だった。これはこの手動初回切替時の値で、通常日次更新の所要時間にそのまま適用しない。
+
+展開したGitHub job logから全R2操作数を取得した。object別GET / LIST / PUT / 重複GETは、`archive/events` 12,467 / 3,242 / 10,948 / 0、`archive/prices` 26 / 84 / 26 / 0、`catalog` 3 / 0 / 2 / 1、`derived` 1 / 0 / 1 / 0、`financial_revision.json` 1 / 0 / 1 / 0、`legacy/securities` 4,532 / 0 / 0 / 0、`manifest.json` 1 / 0 / 1 / 0、`publications` 1 / 0 / 1 / 0、`schedules` 2 / 0 / 1 / 1、`securities/current.json` 4,750 / 0 / 4,420 / 0、`securities/dividends` 20,540 / 1,621 / 10,582 / 0、`securities/financials` 52 / 58 / 50 / 0、`securities/prices/monthly` 3 / 84 / 3 / 0、`securities/profile.json` 4,750 / 0 / 58 / 9、`securities/splits` 1,226 / 4,420 / 688 / 0、`securities/sync.json` 4,794 / 0 / 9,064 / 44、`universe` 4 / 0 / 1 / 2。
+
+呼出し総数はGET object 53,153、GET body 46,941、LIST 9,509、PUT 35,847。累積呼出し時間はGET object 29,422.397秒、GET body 155.382秒、LIST 2,905.978秒、PUT 34,230.802秒で、並列呼出し時間の合計であるためrunnerの実時間として扱わない。GitHub画面ではログ行が途中で見切れることがあるため、測定時は同期jobのログ末尾まで展開して採取した。後続runでは比較・集計を確実にするため、これらの計測値をJSON artifactへ保存する。
+
+run #314の156失敗にはYahoo HTTP 404と対象市場日の終値なしの例が記録されたが、156銘柄全ての理由・銘柄別原因は未分類。これは銘柄処理の部分失敗であり、R2 generation自体は公開されAPI読戻しできた。失敗個別照合は別の未完了作業とする。
+
+月間runner時間はまだ判定しない。run #314は手動実行なので独立した通常営業日の標本に数えない。比較の目安として、yfinance run全体53分14秒とIRBANK workflow 2分28秒を毎日23回と仮定すると約1,281.1分だが、他のscheduled workflowを含まず、通常スケジュール実測でもない。複数の異なる営業日で通常scheduled runを採取し、全関連workflowの使用時間を合算するまで月2,000分以内と結論しない。Actions timeout 360分はその間維持する。
