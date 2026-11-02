@@ -67,6 +67,8 @@ The Worker exposes `/api/v1/irbank/catalog`, `/api/v1/irbank/manifest`, `/api/v1
 
 ## v2 current dividend index
 
+予想取得の規範仕様は [`ai_docs/irbank-dividend-forecast-acquisition-spec.md`](../../ai_docs/irbank-dividend-forecast-acquisition-spec.md) を参照。
+
 `refresh_v2_dividends.py` fetches the latest annual actual DPS from `GET /v1/dividends` and can parse current-year `DividendPerShare` forecast facts from IRBANK disclosure documents. The output is `market/yfinance/v2/issuer_dividends/current.json`; the Worker uses this index for current annual DPS and yield. A forecast that cannot be normalized to a single current-share basis stays unavailable. The script checks `/v1/usage` before calling the API, writes to a temporary local JSON file by default, and verifies a read-back when `--publish` is used. A partial publication merges into an existing index and is rejected if no full index exists yet.
 
 Per-security API routes use `market/yfinance/v2/issuer_dividends/shards/current.json` and read only the active shard for the security's first two code characters. Publishers write and verify the inactive A/B shard slot, publish the full index, then switch the manifest. Run `python scripts/irbank_r2/sync_v2_dividend_index_shards.py` once to initialize the shard set from the existing R2 index before deploying a Worker version that reads shards; the manual `sync-irbank-v2-dividend-shards.yml` workflow runs this migration without using IRBANK API quota. The daily batch, full dividend refresh, and yield refresh keep both representations current.
