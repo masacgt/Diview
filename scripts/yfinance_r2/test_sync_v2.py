@@ -17,7 +17,7 @@ import migrate_legacy_financials as financial_migration
 import repair_monthly_price_dates as monthly_date_repair
 import monthly_price_calendar as monthly_calendar
 import audit_split_transition_dividends as split_audit
-from irbank_universe import build_snapshot, validate_snapshot as validate_irbank_snapshot
+from irbank_universe import build_snapshot, merge_jpx_etfs, normalize_securities, validate_snapshot as validate_irbank_snapshot
 
 
 class SplitTransitionAuditTests(TestCase):
@@ -1622,9 +1622,11 @@ class OfflineFinancialSyncTests(TestCase):
             "generation": "2026-10-19", "market_data_date": "2026-10-19",
             "items": [old_item],
         }
+        test_etfs = [{"security_code_display": "7203", "listing_date": "2026-01-05"}]
         irbank_snapshot = build_snapshot(
-            [{"security_code_display": "7203", "irbank_source_code": "7203"}],
+            merge_jpx_etfs(normalize_securities([{"code": "72030"}], minimum_security_count=1), test_etfs),
             "2026-10-19T12:00:00Z",
+            jpx_etf_count=len(test_etfs),
         )
         store = self.Store({
             sync.IRBANK_UNIVERSE_R2_KEY: irbank_snapshot,
@@ -1654,7 +1656,9 @@ class OfflineFinancialSyncTests(TestCase):
             stack.enter_context(patch.object(sync.collector, "required_env", return_value="b"))
             stack.enter_context(patch.object(
                 sync, "validate_snapshot",
-                side_effect=lambda snapshot: validate_irbank_snapshot(snapshot, minimum_security_count=1),
+                side_effect=lambda snapshot: validate_irbank_snapshot(
+                    snapshot, minimum_security_count=1, minimum_jpx_etf_count=1,
+                ),
             ))
             stack.enter_context(patch.object(sync, "latest_completed_xtks_session", return_value=date(2026, 10, 19)))
             stack.enter_context(patch.object(sync, "is_last_market_session", return_value=False))

@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import sys
+from zoneinfo import ZoneInfo
 from urllib.parse import urlencode
 
 
@@ -20,9 +21,11 @@ import refresh_v2_dividends as irbank_api  # noqa: E402
 from irbank_universe import (  # noqa: E402
     IRBANK_UNIVERSE_R2_KEY,
     build_snapshot,
+    merge_jpx_etfs,
     normalize_securities,
     validate_snapshot,
 )
+from jpx_etf_universe import fetch_jpx_etfs  # noqa: E402
 
 
 API_BASE = "https://api.irbank.net/v1"
@@ -118,14 +121,15 @@ def main() -> int:
         existing = irbank_api.read_r2_document(client, args.bucket, IRBANK_UNIVERSE_R2_KEY)
         if existing is not None:
             try:
-                validate_snapshot(existing)
+                validate_snapshot(existing, allow_legacy=True)
             except ValueError as error:
                 print(f"Existing IRBANK universe snapshot is invalid and will be replaced only after a complete refresh: {error}", flush=True)
                 existing = None
             else:
                 fetched_at = parse_timestamp(existing.get("fetched_at"))
                 now = datetime.now(timezone.utc)
-                if fetched_at is not None and timedelta(0) <= now - fetched_at < timedelta(days=args.refresh_days):
+                has_current_sources = existing.get("schema_version") == 2 and bool(existing.get("supplemental_sources"))
+                if has_current_sources and fetched_at is not None and timedelta(0) <= now - fetched_at < timedelta(days=args.refresh_days):
                     if args.output:
                         write_json(args.output, existing)
                     print(
@@ -155,14 +159,16 @@ def main() -> int:
             return 0
 
         fetched_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-        snapshot = build_snapshot(snapshot_securities, fetched_at)
+        jpx_etfs = fetch_jpx_etfs(as_of=datetime.now(ZoneInfo("Asia/Tokyo")).date())
+        combined_securities = merge_jpx_etfs(snapshot_securities, jpx_etfs)
+        snapshot = build_snapshot(combined_securities, fetched_at, jpx_etf_count=len(jpx_etfs))
         validate_snapshot(snapshot)
         previous_codes = {
             str(row["security_code_display"])
             for row in (existing or {}).get("securities", [])
             if isinstance(row, dict) and row.get("security_code_display")
         }
-        current_codes = {row["security_code_display"] for row in snapshot_securities}
+        current_codes = {row["security_code_display"] for row in combined_securities}
         body = irbank_api.json_bytes(snapshot)
         client.put_object(
             Bucket=args.bucket,
@@ -182,6 +188,9 @@ def main() -> int:
             "source": snapshot["source"],
             "fetched_at": snapshot["fetched_at"],
             "security_count": snapshot["security_count"],
+            "irbank_security_count": len(snapshot_securities),
+            "jpx_listed_etf_count": len(jpx_etfs),
+            "jpx_etfs_added_to_irbank": len(set(row["security_code_display"] for row in jpx_etfs) - set(row["security_code_display"] for row in snapshot_securities)),
             "security_code_sha256": snapshot["security_code_sha256"],
             "added_codes": len(current_codes - previous_codes),
             "removed_codes": len(previous_codes - current_codes),

@@ -31,6 +31,7 @@ jobs:
             scripts/irbank_r2/refresh_yfinance_universe.py
             scripts/irbank_r2/requirements.txt
             scripts/yfinance_r2/irbank_universe.py
+            scripts/yfinance_r2/jpx_etf_universe.py
             scripts/yfinance_r2/financial_revision.py
           sparse-checkout-cone-mode: false
       - uses: actions/setup-python@v5
