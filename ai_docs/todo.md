@@ -2,6 +2,7 @@
 
 ## In Progress
 
+- [ ] 配当利回り・PER・PBRの鮮度修正を実際の同期とAPIで確認する。`sync_v2.py`は株価と会社情報の取得日が異なる場合、配当・EPS・BPSから当日の価格で再計算し、入力欠損時は古い倍率を表示用に残さない。カタログの利回りも同じ条件に合わせ、同日取得・古いキャッシュ・取得失敗をローカルテストで検証。本番同期・R2/APIの読み戻しは未実施。
 - [ ] Verify Japanese holdings with missing prices recover in real API/device conditions. The resumed asset screen retries after the cooldown; eight isolated emulator cases cover empty price, cooldown, automatic retry and persistence, and a 7203 test holding fetched and retained its real quote. Provider-unavailable securities and a physical device remain unverified.
 - [ ] Complete release financial API and Android display verification for representative Japanese stocks. Fifty Worker tests cover source-aware equity-ratio priority and mixed-unit/currency guards; deployment and production verification of the local change remain outside this task.
 - [ ] Investigate Watchlist code-ascending order after applying a new sort. On isolated API 35, the label changed to code ascending but the test still observed card 3000 above 1000; determine whether the list order or placement animation/test clock is responsible before changing product behavior.
