@@ -97,6 +97,23 @@ class JpxEtfUniverseTests(unittest.TestCase):
         self.assertEqual(by_code["650A"]["jpx_listing_date"], "2026-10-15")
         self.assertEqual(by_code["650A"]["jpx_source_url"], JPX_ETF_SOURCE_URL)
 
+    def test_daily_universe_preserves_existing_etf_and_reit_product_categories(self):
+        previous = {"securities": [
+            {"code": "1343", "security_type": "etf", "jquants_product_category": "014"},
+            {"code": "8951", "security_type": "reit", "jquants_product_category": "013"},
+        ]}
+        irbank = normalize_securities(
+            [{"code": "13430"}, {"code": "89510"}], minimum_security_count=1
+        )
+        with patch.object(sync, "read_json", return_value=previous):
+            daily = sync.active_universe(Mock(), "bucket", irbank, date(2026, 11, 3))
+
+        by_code = {row["code"]: row for row in daily}
+        self.assertEqual(by_code["1343"]["security_type"], "etf")
+        self.assertEqual(by_code["1343"]["jquants_product_category"], "014")
+        self.assertEqual(by_code["8951"]["security_type"], "reit")
+        self.assertEqual(by_code["8951"]["jquants_product_category"], "013")
+
 
 if __name__ == "__main__":
     unittest.main()
