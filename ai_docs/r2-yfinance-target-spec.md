@@ -2,7 +2,17 @@
 
 更新日: 2026-11-03
 
-状態: 合意済み仕様。日次ユニバースはIRBANK Connect一覧を基礎とし、JPX公式ETF一覧の補完を必須とする。PR #45 の本番実装は `ced28fc5` でmainに統合済み、R2スナップショット公開と手動同期後のWorker読み戻しを確認済み。2026-11-03のIRBANK/J-Quants差分監査は、初回レポートと同日再取得レポート `ai_docs/audits/irbank-jquants-live-universe-diff-20261103.json` の両方を保存した。同期テスト158件と差分チェックが成功。実装結果を記録したPR #47 は `766315ba` でmainに統合済み。通常スケジュールの営業日ゲートと月間Runner分数の実測は未完了。
+状態: 合意済み仕様。日次ユニバースはIRBANK Connect一覧を基礎とし、JPX公式ETF一覧の補完を必須とする。PR #45 の本番実装は `ced28fc5`、ライブ差分監査のPR #61は `18fed178` でmainに統合済み。現行yfinance同期テスト160件が成功し、R2スナップショット公開・本番同期後のR2/Worker読み戻しを確認済み。通常スケジュールでの切替後同期と月間Runner分数の実測は未完了。
+
+## IRBANK切替後の本番読み戻し（2026-11-03）
+
+IRBANK更新run [#13](https://github.com/masacgt/Diview/actions/runs/41480740674) は2026-11-02にスナップショットを更新した。IRBANK 4,573コードと、IRBANKにないJPX上場ETF 3コードを統合し、将来上場予定ETFを除外した4,576コードを11 API要求で保存した。コードSHA-256は `c6337a4b4ef8f57f8f44997bb4ff825ec0fa48f4ce31d4395f37794de72b650d`、R2読み戻しオブジェクトのSHA-256は `f303042906f4a30f78a95aca3207c0ee78d84696a1ef9fd83e36a80318e74e77`。Actions artifactのスナップショットとR2 `irbank_source.json` はJSON内容が一致した。別工程の配当バッチは1要求、実績・予想配当の更新0件、失敗3,963件、`coverage_complete=false`であり、workflow全体の成功はユニバース更新の成功だけを示す。
+
+手動yfinance同期run [#314](https://github.com/masacgt/Diview/actions/runs/41481174822) は2026-11-02の市場日で4,576コードを処理し、世代 `2026-11-02-4779703fc1a94b7ba193c8e262256687` を公開した。R2読み戻しでIRBANKソース、活動中ユニバース、publication manifestのコードハッシュが一致し、`publications/current.json`と`catalog/current.json`の世代も一致した。`universe/current.json`には前回の非活動行46件を保持するため配列上4,622行あるが、活動中件数とハッシュ対象はIRBANK+JPXの4,576コードで、IRBANKソースにない活動中コードは0件だった。カタログは4,358件。同期の成功4,420件には項目部分失敗732件を含み、銘柄単位の失敗は156件、yfinance呼出し800回、HTTP 429は0件。同期jobは52分48秒、カレンダーjobは29秒で、合計runner使用は53分17秒。個別失敗のためworkflowは失敗終了したが、世代公開後の読み戻しは成功した。この手動実行は通常XTKSゲートの証明や月次時間の代表値には使わない。
+
+2060.TのR2 `current.json` と本番Worker応答は、終値¥1,364・価格日2026-11-02で一致した。保存された `Ticker.calendar` は権利落ち日2027-03-30、状態`available`、取得元`Yahoo Finance via yfinance Ticker.calendar`、最終取得2026-10-17である。`statistics_last_fetched_session_date`は2026-10-23。2026-11-02のcurrent更新日時を、これら個別データの更新日時として扱わない。
+
+切替後の通常schedule runはまだ確認できていない。次のXTKS営業日同期でカレンダーゲート通過、4,576コードの対象ハッシュ、成功・部分失敗・完全失敗数、公開世代の一致を確認する。複数の異なる通常営業日実績と、毎日実行のIRBANK処理・週次権利日処理を合わせたrunner分数が得られるまで、月2,000分以内とは判定せず、Actions timeoutは360分のまま維持する。
 
 ## 取得元差分の確認状況（2026-11-03）
 
