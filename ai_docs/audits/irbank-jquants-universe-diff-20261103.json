@@ -870,7 +870,13 @@
       "irbank_industry": "ガラス・土石製品",
       "raw_irbank_code": "5386",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_before_both_snapshot_dates_but_still_in_irbank_snapshot",
+      "official_delisting_evidence": {
+        "date": "2026-03-17",
+        "name": "（株）鶴弥",
+        "market": "スタンダード",
+        "delisting_reason": "申請による上場廃止"
+      }
     },
     {
       "code": "5530",
@@ -1518,7 +1524,13 @@
       "irbank_industry": "サービス業",
       "raw_irbank_code": "6565",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_before_both_snapshot_dates_but_still_in_irbank_snapshot",
+      "official_delisting_evidence": {
+        "date": "2026-05-01",
+        "name": "ＡＢホテル（株）",
+        "market": "スタンダード",
+        "delisting_reason": "申請による上場廃止"
+      }
     },
     {
       "code": "656A",
@@ -2154,7 +2166,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "19090",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-09-14",
+        "name": "日本ドライケミカル（株）",
+        "market": "スタンダード",
+        "delisting_reason": "他社による買収（公開買付け、株式併合）"
+      }
     },
     {
       "code": "1948",
@@ -2164,7 +2182,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "19480",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-09-25",
+        "name": "（株）弘電社",
+        "market": "スタンダード",
+        "delisting_reason": "他社による買収（公開買付け、株式併合）"
+      }
     },
     {
       "code": "2162",
@@ -2174,7 +2198,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "21620",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-08-28",
+        "name": "ｎｍｓ　ホールディングス（株）",
+        "market": "スタンダード",
+        "delisting_reason": "支配株主等による買収（公開買付け、株式等売渡請求による取得）"
+      }
     },
     {
       "code": "2180",
@@ -2184,7 +2214,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "21800",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-09-16",
+        "name": "（株）サニーサイドアップグループ",
+        "market": "スタンダード",
+        "delisting_reason": "他社による買収（公開買付け、株式併合）"
+      }
     },
     {
       "code": "25935",
@@ -2214,7 +2250,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "30790",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-08-28",
+        "name": "ディーブイエックス（株）",
+        "market": "スタンダード",
+        "delisting_reason": "オルバディーブイエックスヘルスケアの完全子会社化（株式交換）"
+      }
     },
     {
       "code": "3450",
@@ -2234,7 +2276,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "34800",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-09-02",
+        "name": "（株）ジェイ・エス・ビー",
+        "market": "プライム",
+        "delisting_reason": "他社による買収（公開買付け、株式等売渡請求による取得）"
+      }
     },
     {
       "code": "3787",
@@ -2244,7 +2292,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "37870",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-10-01",
+        "name": "（株）テクノマセマティカル",
+        "market": "スタンダード",
+        "delisting_reason": "上場維持基準への不適合"
+      }
     },
     {
       "code": "3856",
@@ -2254,7 +2308,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "38560",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-09-26",
+        "name": "Ａｂａｌａｎｃｅ（株）",
+        "market": "スタンダード",
+        "delisting_reason": "内部管理体制確認書の提出前で、内部管理体制等が適切に整備される又は適切に運用される見込みがなくなったと当取引所が認める場合"
+      }
     },
     {
       "code": "4171",
@@ -2264,7 +2324,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "41710",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-08-13",
+        "name": "（株）グローバルインフォメーション",
+        "market": "スタンダード",
+        "delisting_reason": "他社による買収（公開買付け、株式等売渡請求による取得）"
+      }
     },
     {
       "code": "4316",
@@ -2274,7 +2340,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "43160",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-10-01",
+        "name": "（株）ビーマップ",
+        "market": "グロース",
+        "delisting_reason": "上場維持基準への不適合"
+      }
     },
     {
       "code": "4800",
@@ -2284,7 +2356,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "48000",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-09-28",
+        "name": "オリコン（株）",
+        "market": "スタンダード",
+        "delisting_reason": "ＭＢＯ（公開買付け、株式併合）"
+      }
     },
     {
       "code": "50765",
@@ -2304,7 +2382,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "51030",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-08-25",
+        "name": "昭和ホールディングス（株）",
+        "market": "スタンダード",
+        "delisting_reason": "内部管理体制等が適切に整備される又は適切に運用される見込みがないと当取引所が認める場合"
+      }
     },
     {
       "code": "5202",
@@ -2314,7 +2398,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "52020",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-09-28",
+        "name": "日本板硝子（株）",
+        "market": "プライム",
+        "delisting_reason": "他社による買収（株式併合）"
+      }
     },
     {
       "code": "5484",
@@ -2324,7 +2414,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "54840",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-10-19",
+        "name": "東北特殊鋼（株）",
+        "market": "スタンダード",
+        "delisting_reason": "支配株主等による買収（公開買付け、株式併合）"
+      }
     },
     {
       "code": "5617",
@@ -2344,7 +2440,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "56600",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-08-28",
+        "name": "神鋼鋼線工業（株）",
+        "market": "スタンダード",
+        "delisting_reason": "神戸製鋼所の完全子会社化（株式交換）"
+      }
     },
     {
       "code": "6147",
@@ -2354,7 +2456,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "61470",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-10-01",
+        "name": "（株）ヤマザキ",
+        "market": "スタンダード",
+        "delisting_reason": "上場維持基準への不適合"
+      }
     },
     {
       "code": "6486",
@@ -2364,7 +2472,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "64860",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-09-29",
+        "name": "イーグル工業（株）",
+        "market": "プライム",
+        "delisting_reason": "NOK Groupの完全子会社化（株式移転）"
+      }
     },
     {
       "code": "7082",
@@ -2374,7 +2488,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "70820",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-09-29",
+        "name": "（株）ジモティー",
+        "market": "グロース",
+        "delisting_reason": "他社による買収（公開買付け、株式併合）"
+      }
     },
     {
       "code": "7183",
@@ -2384,7 +2504,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "71830",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-10-09",
+        "name": "あんしん保証（株）",
+        "market": "スタンダード",
+        "delisting_reason": "支配株主等による買収（公開買付け、株式併合）"
+      }
     },
     {
       "code": "7240",
@@ -2394,7 +2520,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "72400",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-09-29",
+        "name": "ＮＯＫ（株）",
+        "market": "プライム",
+        "delisting_reason": "NOK Groupの完全子会社化（株式移転）"
+      }
     },
     {
       "code": "7255",
@@ -2404,7 +2536,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "72550",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-10-01",
+        "name": "（株）桜井製作所",
+        "market": "スタンダード",
+        "delisting_reason": "上場維持基準への不適合"
+      }
     },
     {
       "code": "7426",
@@ -2414,7 +2552,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "74260",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-09-28",
+        "name": "（株）山大",
+        "market": "スタンダード",
+        "delisting_reason": "他社による買収（公開買付け、株式併合）"
+      }
     },
     {
       "code": "7490",
@@ -2424,7 +2568,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "74900",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-10-09",
+        "name": "日新商事（株）",
+        "market": "スタンダード",
+        "delisting_reason": "ＭＢＯ（公開買付け、株式併合）"
+      }
     },
     {
       "code": "75505",
@@ -2444,7 +2594,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "77090",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-10-01",
+        "name": "クボテック（株）",
+        "market": "スタンダード",
+        "delisting_reason": "上場維持基準への不適合"
+      }
     },
     {
       "code": "8141",
@@ -2454,7 +2610,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "81410",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-10-29",
+        "name": "新光商事（株）",
+        "market": "プライム",
+        "delisting_reason": "他社による買収（公開買付け、株式併合）"
+      }
     },
     {
       "code": "92015",
@@ -2484,7 +2646,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "92230",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-09-29",
+        "name": "（株）ＡＳＮＯＶＡ",
+        "market": "グロース",
+        "delisting_reason": "ASNOVA Companiesの完全子会社化（株式移転）"
+      }
     },
     {
       "code": "94345",
@@ -2514,7 +2682,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "95080",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-09-29",
+        "name": "九州電力（株）",
+        "market": "プライム",
+        "delisting_reason": "キューデンホールディングスの完全子会社化（株式移転）"
+      }
     },
     {
       "code": "9691",
@@ -2524,7 +2698,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "96910",
-      "reason": "unclassified_membership_difference"
+      "reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval",
+      "official_delisting_evidence": {
+        "date": "2026-10-09",
+        "name": "（株）両毛システムズ",
+        "market": "スタンダード",
+        "delisting_reason": "支配株主等による買収（公開買付け、株式併合）"
+      }
     }
   ],
   "shared_etf_reit_codes": [
@@ -4953,5 +5133,291 @@
   "normalization_example_count": 4437,
   "difference_reason_counts": {
     "unclassified_membership_difference": 205
+  },
+  "official_delisting_crosscheck": {
+    "source": "Japan Exchange Group (JPX), delisted stocks list",
+    "source_url": "https://www.jpx.co.jp/listing/stocks/delisted/",
+    "checked_at": "2026-11-02T18:31:10Z",
+    "jquants_effective_date": "2026-08-10",
+    "irbank_snapshot_retrieved_at": "2026-11-02T17:32:30.590246Z",
+    "irbank_membership_date_cutoff": "2026-11-02",
+    "membership_differences_checked": 205,
+    "confirmed_dated_matches": 30,
+    "jquants_only_delisted_after_jquants_effective_date_by_irbank_retrieval": 28,
+    "irbank_only_codes_already_delisted_by_jquants_effective_date": 2,
+    "remaining_unclassified_differences": 175,
+    "classification_limit": "JPX delisting dates explain the temporal relationship for these matched codes. The 28 J-Quants-only removals are consistent with source-date drift. The 2 IRBANK-only codes show that the IRBANK response can retain securities already delisted; this does not establish why the endpoint retained them. No inference is made for the remaining 175 differences.",
+    "matched_rows": [
+      {
+        "code": "5386",
+        "present_in": "IRBANK-only",
+        "date": "2026-03-17",
+        "name": "（株）鶴弥",
+        "market": "スタンダード",
+        "delisting_reason": "申請による上場廃止",
+        "difference_reason": "jpx_delisted_before_both_snapshot_dates_but_still_in_irbank_snapshot"
+      },
+      {
+        "code": "6565",
+        "present_in": "IRBANK-only",
+        "date": "2026-05-01",
+        "name": "ＡＢホテル（株）",
+        "market": "スタンダード",
+        "delisting_reason": "申請による上場廃止",
+        "difference_reason": "jpx_delisted_before_both_snapshot_dates_but_still_in_irbank_snapshot"
+      },
+      {
+        "code": "1909",
+        "present_in": "J-Quants-only",
+        "date": "2026-09-14",
+        "name": "日本ドライケミカル（株）",
+        "market": "スタンダード",
+        "delisting_reason": "他社による買収（公開買付け、株式併合）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "1948",
+        "present_in": "J-Quants-only",
+        "date": "2026-09-25",
+        "name": "（株）弘電社",
+        "market": "スタンダード",
+        "delisting_reason": "他社による買収（公開買付け、株式併合）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "2162",
+        "present_in": "J-Quants-only",
+        "date": "2026-08-28",
+        "name": "ｎｍｓ　ホールディングス（株）",
+        "market": "スタンダード",
+        "delisting_reason": "支配株主等による買収（公開買付け、株式等売渡請求による取得）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "2180",
+        "present_in": "J-Quants-only",
+        "date": "2026-09-16",
+        "name": "（株）サニーサイドアップグループ",
+        "market": "スタンダード",
+        "delisting_reason": "他社による買収（公開買付け、株式併合）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "3079",
+        "present_in": "J-Quants-only",
+        "date": "2026-08-28",
+        "name": "ディーブイエックス（株）",
+        "market": "スタンダード",
+        "delisting_reason": "オルバディーブイエックスヘルスケアの完全子会社化（株式交換）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "3480",
+        "present_in": "J-Quants-only",
+        "date": "2026-09-02",
+        "name": "（株）ジェイ・エス・ビー",
+        "market": "プライム",
+        "delisting_reason": "他社による買収（公開買付け、株式等売渡請求による取得）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "3787",
+        "present_in": "J-Quants-only",
+        "date": "2026-10-01",
+        "name": "（株）テクノマセマティカル",
+        "market": "スタンダード",
+        "delisting_reason": "上場維持基準への不適合",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "3856",
+        "present_in": "J-Quants-only",
+        "date": "2026-09-26",
+        "name": "Ａｂａｌａｎｃｅ（株）",
+        "market": "スタンダード",
+        "delisting_reason": "内部管理体制確認書の提出前で、内部管理体制等が適切に整備される又は適切に運用される見込みがなくなったと当取引所が認める場合",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "4171",
+        "present_in": "J-Quants-only",
+        "date": "2026-08-13",
+        "name": "（株）グローバルインフォメーション",
+        "market": "スタンダード",
+        "delisting_reason": "他社による買収（公開買付け、株式等売渡請求による取得）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "4316",
+        "present_in": "J-Quants-only",
+        "date": "2026-10-01",
+        "name": "（株）ビーマップ",
+        "market": "グロース",
+        "delisting_reason": "上場維持基準への不適合",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "4800",
+        "present_in": "J-Quants-only",
+        "date": "2026-09-28",
+        "name": "オリコン（株）",
+        "market": "スタンダード",
+        "delisting_reason": "ＭＢＯ（公開買付け、株式併合）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "5103",
+        "present_in": "J-Quants-only",
+        "date": "2026-08-25",
+        "name": "昭和ホールディングス（株）",
+        "market": "スタンダード",
+        "delisting_reason": "内部管理体制等が適切に整備される又は適切に運用される見込みがないと当取引所が認める場合",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "5202",
+        "present_in": "J-Quants-only",
+        "date": "2026-09-28",
+        "name": "日本板硝子（株）",
+        "market": "プライム",
+        "delisting_reason": "他社による買収（株式併合）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "5484",
+        "present_in": "J-Quants-only",
+        "date": "2026-10-19",
+        "name": "東北特殊鋼（株）",
+        "market": "スタンダード",
+        "delisting_reason": "支配株主等による買収（公開買付け、株式併合）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "5660",
+        "present_in": "J-Quants-only",
+        "date": "2026-08-28",
+        "name": "神鋼鋼線工業（株）",
+        "market": "スタンダード",
+        "delisting_reason": "神戸製鋼所の完全子会社化（株式交換）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "6147",
+        "present_in": "J-Quants-only",
+        "date": "2026-10-01",
+        "name": "（株）ヤマザキ",
+        "market": "スタンダード",
+        "delisting_reason": "上場維持基準への不適合",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "6486",
+        "present_in": "J-Quants-only",
+        "date": "2026-09-29",
+        "name": "イーグル工業（株）",
+        "market": "プライム",
+        "delisting_reason": "NOK Groupの完全子会社化（株式移転）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "7082",
+        "present_in": "J-Quants-only",
+        "date": "2026-09-29",
+        "name": "（株）ジモティー",
+        "market": "グロース",
+        "delisting_reason": "他社による買収（公開買付け、株式併合）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "7183",
+        "present_in": "J-Quants-only",
+        "date": "2026-10-09",
+        "name": "あんしん保証（株）",
+        "market": "スタンダード",
+        "delisting_reason": "支配株主等による買収（公開買付け、株式併合）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "7240",
+        "present_in": "J-Quants-only",
+        "date": "2026-09-29",
+        "name": "ＮＯＫ（株）",
+        "market": "プライム",
+        "delisting_reason": "NOK Groupの完全子会社化（株式移転）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "7255",
+        "present_in": "J-Quants-only",
+        "date": "2026-10-01",
+        "name": "（株）桜井製作所",
+        "market": "スタンダード",
+        "delisting_reason": "上場維持基準への不適合",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "7426",
+        "present_in": "J-Quants-only",
+        "date": "2026-09-28",
+        "name": "（株）山大",
+        "market": "スタンダード",
+        "delisting_reason": "他社による買収（公開買付け、株式併合）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "7490",
+        "present_in": "J-Quants-only",
+        "date": "2026-10-09",
+        "name": "日新商事（株）",
+        "market": "スタンダード",
+        "delisting_reason": "ＭＢＯ（公開買付け、株式併合）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "7709",
+        "present_in": "J-Quants-only",
+        "date": "2026-10-01",
+        "name": "クボテック（株）",
+        "market": "スタンダード",
+        "delisting_reason": "上場維持基準への不適合",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "8141",
+        "present_in": "J-Quants-only",
+        "date": "2026-10-29",
+        "name": "新光商事（株）",
+        "market": "プライム",
+        "delisting_reason": "他社による買収（公開買付け、株式併合）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "9223",
+        "present_in": "J-Quants-only",
+        "date": "2026-09-29",
+        "name": "（株）ＡＳＮＯＶＡ",
+        "market": "グロース",
+        "delisting_reason": "ASNOVA Companiesの完全子会社化（株式移転）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "9508",
+        "present_in": "J-Quants-only",
+        "date": "2026-09-29",
+        "name": "九州電力（株）",
+        "market": "プライム",
+        "delisting_reason": "キューデンホールディングスの完全子会社化（株式移転）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      },
+      {
+        "code": "9691",
+        "present_in": "J-Quants-only",
+        "date": "2026-10-09",
+        "name": "（株）両毛システムズ",
+        "market": "スタンダード",
+        "delisting_reason": "支配株主等による買収（公開買付け、株式併合）",
+        "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      }
+    ]
   }
 }
