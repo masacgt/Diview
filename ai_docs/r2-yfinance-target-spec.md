@@ -8,7 +8,7 @@
 
 読み取り専用監査 `scripts/yfinance_r2/audit_universe_sources.py` で取得元スナップショットを正規化して比較した。IRBANK Connect `/v1/securities` は2026-11-02取得で4,573コード、J-Quants `/v2/equities/master` は4,444コードを返したが、応答内のJ-Quantsデータ日付は2026-08-10だった。正規化後の共通コードは4,406、IRBANKのみ167、J-Quantsのみ38、両一覧の重複は0。J-Quantsの`ProdCat`は011: 3,897、012: 2、013: 63、014: 421、021: 5、023: 56で、共通部分のETF/REITは483コードだった。監査JSONと生スナップショットはローカルの`C:\Codex\irbank-jquants-audit-20261103`にあり、個人用取得データはGitへ含めない。
 
-J-Quants公式仕様では無料プランの上場銘柄マスタは12週間遅延し、上場日・上場廃止日は返されない。IRBANKのローカル`screen_securities`スナップショット（2026-09-26、3,960コード）は別エンドポイントで、Connect API一覧との同時点比較には使えない。このため上記差分を新規上場・上場廃止・商品範囲に全件分類できておらず、取得元切替の完全な差分説明は未完了。日付不一致を示す`comparison_is_temporally_comparable=false`を監査JSONに保存し、根拠のない分類は未分類のままにする。J-Quants API仕様: https://jpx-jquants.com/en/spec/eq-master 、プラン別遅延: https://jpx-jquants.com/en/spec/data-spec 。
+J-Quants公式仕様では無料プランの上場銘柄マスタは12週間遅延し、上場日・上場廃止日は返されない。IRBANKのローカル`screen_securities`スナップショット（2026-09-26、3,960コード）は別エンドポイントで、Connect API一覧との同時点比較には使えない。差分の内訳では、IRBANKのみの167コード中145件がIRBANK応答の市場欄なし、22件がPrime/Standard/Growthだった。J-Quantsのみの38件は`ProdCat=011`が37件、`014`（ETF）が1件（2643）で、5桁コードは7件だった。市場欄なしを商品範囲差・上場廃止などの根拠とみなすことはできず、コード単位の上場状態も未確認である。このため差分を新規上場・上場廃止・商品範囲に全件分類できておらず、取得元切替の完全な差分説明は未完了。日付不一致を示す`comparison_is_temporally_comparable=false`を監査JSONに保存し、根拠のない分類は未分類のままにする。J-Quants API仕様: https://jpx-jquants.com/en/spec/eq-master 、プラン別遅延: https://jpx-jquants.com/en/spec/data-spec 。
 
 ## 目的と範囲
 
