@@ -602,6 +602,13 @@ def calculate_daily_valuation(
     }
 
 
+def reported_quote_matches_price(info_session: Any, price_date: Any) -> bool:
+    """Trust price-derived info only for the same explicitly recorded session."""
+    fetched = date_value(info_session)
+    priced = date_value(price_date)
+    return fetched is not None and priced is not None and fetched == priced
+
+
 def daily_price_change(frame: Any, price_date: date | None, close: Any) -> dict[str, float | None]:
     """Calculate the close-to-close change from the same daily chart used for the quote."""
     price = finite_number(close)
@@ -2968,6 +2975,13 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         round(reported_yield * 100, 4)
         if reported_yield is not None and 0 <= reported_yield <= 1 else None
     )
+    # Older sync documents may use last_success_session_date as a fallback for
+    # profile retention. That does not prove when the price-derived info was
+    # fetched, so only an explicit info fetch date can make it fresh.
+    reported_info_session = (info_last_fetched_session_date if info_fetched else
+                             prior_sync.get("info_last_fetched_session_date"))
+    reported_price_fresh = reported_quote_matches_price(reported_info_session, price_date)
+    fresh_reported_yield = reported_yield_percent if reported_price_fresh else None
     no_dividend = (
         not has_forecast_dps
         and current_fy_dps is None
@@ -2980,9 +2994,9 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         "current_fiscal_year" if current_fy_dps is not None else "yfinance_reported_no_dividend" if no_dividend else None
     )
     calculated_yield = round(yield_dps / close * 100, 4) if yield_dps is not None and close and close > 0 else None
-    dividend_yield = reported_yield_percent if reported_yield_percent is not None else calculated_yield
+    dividend_yield = fresh_reported_yield if fresh_reported_yield is not None else calculated_yield
     dividend_yield_source = (
-        "yfinance_reported_dividendYield" if reported_yield_percent is not None
+        "yfinance_reported_dividendYield" if fresh_reported_yield is not None
         else "calculated_from_yfinance_dividend_and_quote" if calculated_yield is not None
         else None
     )
@@ -2994,9 +3008,11 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         else "available" if current_fy_dps is not None else "empty"
     )
     dividend_yield_status = (
-        "available" if reported_yield_percent is not None
+        "available" if fresh_reported_yield is not None
         else "failed" if dividend_history_failed and yield_basis is None
         else "stale" if dividend_history_failed and yield_basis == "current_fiscal_year"
+        else "stale" if calculated_yield is not None and (price_status != "available"
+             or (yield_basis == "next_fiscal_year_forecast" and not info_fetched))
         else "empty" if dividend_yield is None else "available"
     )
     dividend_status_state = (
@@ -3117,15 +3133,16 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
                 continue
             current["statistics"][field] = value
             current["field_status"][f"statistics_{field}"] = "stale"
+    if not reported_price_fresh:
+        for field in DERIVED_STATISTIC_FIELDS:
+            current["statistics"].pop(field, None)
+            current["field_status"][f"statistics_{field}"] = "empty"
     daily_valuation = calculate_daily_valuation(
         close,
         current["statistics"].get("trailingEps"),
         current["statistics"].get("bookValue"),
         current["statistics"].get("trailingPE"),
         current["statistics"].get("priceToBook"),
-    )
-    valuation_status = (
-        "available" if price_status == "available" else "stale"
     )
     valuation_sources: dict[str, str] = {}
     for field, value in daily_valuation.items():
@@ -3138,7 +3155,12 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
             else "unavailable"
         )
         if reported_value is None:
-            current["field_status"][f"statistics_{field}"] = valuation_status if value is not None else "empty"
+            input_field = "trailingEps" if field == "trailingPE" else "bookValue"
+            inputs_fresh = (price_status == "available"
+                            and current["field_status"].get(f"statistics_{input_field}") == "available")
+            current["field_status"][f"statistics_{field}"] = (
+                "available" if inputs_fresh else "stale"
+            ) if value is not None else "empty"
     current["valuation_calculation"] = {
         "source": "yfinance_reported_with_daily_calculation_fallback",
         "price_date": price_date.isoformat() if price_date else None,
@@ -3628,12 +3650,11 @@ def catalog_item_from_documents(code: str, security: dict[str, Any], profile: di
         round(reported_yield * 100, 4)
         if reported_yield is not None and 0 <= reported_yield <= 1 else None
     )
-    stored_yield = (
-        finite_number(dividend.get("yield_rate"))
-        if yield_basis in {"current_fiscal_year", "next_fiscal_year_forecast"} and annual_dps is not None
-        else None
-    )
-    if reported_yield_percent is not None:
+    field_status = current.get("field_status") if isinstance(current.get("field_status"), dict) else {}
+    reported_price_fresh = reported_quote_matches_price(
+        current.get("statistics_last_fetched_session_date"), price.get("date")
+    ) and field_status.get("statistics_dividendYield") != "stale"
+    if reported_yield_percent is not None and reported_price_fresh:
         annual_yield = reported_yield_percent
         yield_source = "yfinance_reported_dividendYield"
     elif annual_dps is None:
@@ -3641,9 +3662,6 @@ def catalog_item_from_documents(code: str, security: dict[str, Any], profile: di
         yield_source = None
     elif annual_dps == 0:
         annual_yield = 0.0
-        yield_source = dividend.get("yield_source") or "calculated_from_yfinance_dividend_and_quote"
-    elif stored_yield is not None:
-        annual_yield = stored_yield
         yield_source = dividend.get("yield_source") or "calculated_from_yfinance_dividend_and_quote"
     elif close is not None and close > 0:
         annual_yield = round(annual_dps / close * 100, 4)
