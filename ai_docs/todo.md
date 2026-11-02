@@ -372,7 +372,7 @@
 
 ## 2026-11-03 IRBANK週次snapshotから本番R2公開までの手順
 
-- [x] main統合後にIRBANK snapshotを更新し、日次yfinance手動同期から本番R2/Worker読み戻しまで一巡確認。PR #63/#64を含むmain `80b631c9`、手動IRBANK refresh run #14（4,573 IRBANK + 3 ETF = 4,576）、手動sync run #367（全4,576走査、generation `2026-11-02-15aa0f2576d649b2aa0da838f9c68544`、カタログ4,368）の証跡を仕様書とREADMEに追記した。R2直接GETでpublication/catalog/universe/immutable catalogのgeneration一致、source code hash一致、4,576 active＋46 inactive、2060.T価格日とcalendar source/fetched_atを確認。同期は公開後156銘柄失敗でfailure。main相当worktreeの同期テスト166/166成功、`git diff --check`成功。いずれも手動runで、通常scheduleの証明ではない。
+- [x] main統合後にIRBANK snapshotを更新し、日次yfinance手動同期から本番R2/Worker読み戻しまで一巡確認。PR #63/#64を含むmain `80b631c9`、手動IRBANK refresh run #14（4,573 IRBANK + 3 ETF = 4,576）、手動sync run #367（全4,576走査、generation `2026-11-02-15aa0f2576d649b2aa0da838f9c68544`、カタログ4,368）の証跡を仕様書とREADMEに追記した。R2直接GETでpublication/catalog/universe/immutable catalogのgeneration一致、source code hash一致、4,576 active＋46 inactive、2060.T価格日とcalendar source/fetched_atを確認。新規IRBANK銘柄634Aもyfinance由来価格¥2,168（11/2）と英語名fallbackをR2/Workerで確認。同期は公開後156銘柄失敗でfailure。main相当worktreeの同期テスト166/166成功、`git diff --check`成功。いずれも手動runで、通常scheduleの証明ではない。
 - [ ] 次の通常XTKS scheduleでカレンダーゲート、IRBANK snapshot hash/件数、全active銘柄走査、公開generation、Worker read-backを確認する。run #367は同一市場日の手動再処理なので通常運用の成功・速度標本から除外する。
 - [ ] 156件のrun #367失敗を銘柄ごとに分類し、Yahoo 404・当日終値なし・一時障害を区別する。ログにある一部例だけで全件原因を推定しない。
 - [ ] 複数の異なる通常schedule日と同月のIRBANK・権利日scheduled jobのactive job実時間を合算し、23営業日換算で月2,000 runner分以内か判定する。run #367の45m43s×23は参考算術に限り、手動同日再処理なので達成根拠にしない。timeout 360分は通常実測が揃うまで維持する。
