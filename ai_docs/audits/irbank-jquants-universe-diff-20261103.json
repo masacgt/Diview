@@ -1,0 +1,4957 @@
+{
+  "read_only": true,
+  "snapshot_dates": {
+    "irbank": "2026-11-02T17:32:30.590246Z",
+    "jquants": [
+      "2026-08-10"
+    ]
+  },
+  "retrieval_timestamps": {
+    "irbank": "2026-11-02T17:32:30.590246Z",
+    "jquants": "2026-11-02T17:32:46.586306Z"
+  },
+  "retrieved_same_day": true,
+  "date_alignment": "mismatch_or_unknown",
+  "comparison_is_temporally_comparable": false,
+  "date_alignment_warning": "The source snapshots have different or unverifiable effective dates; membership differences cannot be classified as listing/delisting from this comparison alone.",
+  "counts": {
+    "irbank_rows": 4573,
+    "irbank_unique": 4573,
+    "irbank_duplicates": 0,
+    "jquants_rows": 4444,
+    "jquants_unique": 4444,
+    "jquants_duplicates": 0,
+    "intersection": 4406,
+    "irbank_only": 167,
+    "jquants_only": 38
+  },
+  "normalized_code_sha256": {
+    "irbank": "9e45c0f82c118a6db00250613251f1363bc993f806946b97a154505247d23735",
+    "jquants": "6a6cf7970351befecc13aac67d3440d706e2db1f6cdedbea83cfddaa9521dc9c"
+  },
+  "jquants_product_categories": {
+    "011": 3897,
+    "012": 2,
+    "013": 63,
+    "014": 421,
+    "021": 5,
+    "023": 56
+  },
+  "normalization_examples": [
+    {
+      "source": "J-Quants",
+      "raw": "13010",
+      "display": "1301"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "130A0",
+      "display": "130A"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13050",
+      "display": "1305"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13060",
+      "display": "1306"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13080",
+      "display": "1308"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13090",
+      "display": "1309"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13110",
+      "display": "1311"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13190",
+      "display": "1319"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "131A0",
+      "display": "131A"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13200",
+      "display": "1320"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13210",
+      "display": "1321"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13220",
+      "display": "1322"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13250",
+      "display": "1325"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13260",
+      "display": "1326"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13280",
+      "display": "1328"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13290",
+      "display": "1329"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "132A0",
+      "display": "132A"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13300",
+      "display": "1330"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13320",
+      "display": "1332"
+    },
+    {
+      "source": "J-Quants",
+      "raw": "13330",
+      "display": "1333"
+    }
+  ],
+  "irbank_only": [
+    {
+      "code": "1449",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "建設業",
+      "raw_irbank_code": "1449",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "1553",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "etf",
+      "product_scope_source": "irbank_industry",
+      "irbank_market": "unknown",
+      "irbank_industry": "ETF",
+      "raw_irbank_code": "1553",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "1738",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "建設業",
+      "raw_irbank_code": "1738",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "1771",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "建設業",
+      "raw_irbank_code": "1771",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "1777",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "建設業",
+      "raw_irbank_code": "1777",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "1832",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "建設業",
+      "raw_irbank_code": "1832",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "1869",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "建設業",
+      "raw_irbank_code": "1869",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "1892",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "建設業",
+      "raw_irbank_code": "1892",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "1999",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "建設業",
+      "raw_irbank_code": "1999",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "2058",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "食料品",
+      "raw_irbank_code": "2058",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "2137",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "2137",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "2172",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "2172",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "2218",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "食料品",
+      "raw_irbank_code": "2218",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "231A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "建設業",
+      "raw_irbank_code": "231A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "240A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "240A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "242A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "242A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "2467",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "2467",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "2551",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "食料品",
+      "raw_irbank_code": "2551",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "259A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "小売業",
+      "raw_irbank_code": "259A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "272A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "卸売業",
+      "raw_irbank_code": "272A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "275A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "建設業",
+      "raw_irbank_code": "275A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "2902",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "食料品",
+      "raw_irbank_code": "2902",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "2919",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "食料品",
+      "raw_irbank_code": "2919",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "2928",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "小売業",
+      "raw_irbank_code": "2928",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "2974",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "不動産業",
+      "raw_irbank_code": "2974",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "2976",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "不動産業",
+      "raw_irbank_code": "2976",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3032",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "小売業",
+      "raw_irbank_code": "3032",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3047",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "卸売業",
+      "raw_irbank_code": "3047",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3055",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "卸売業",
+      "raw_irbank_code": "3055",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3066",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "小売業",
+      "raw_irbank_code": "3066",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "327A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "327A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3346",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "小売業",
+      "raw_irbank_code": "3346",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3384",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "卸売業",
+      "raw_irbank_code": "3384",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3419",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "卸売業",
+      "raw_irbank_code": "3419",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "342A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "342A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3442",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "金属製品",
+      "raw_irbank_code": "3442",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3504",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "繊維製品",
+      "raw_irbank_code": "3504",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "353A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "353A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3739",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "3739",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3775",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "3775",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "377A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "保険業",
+      "raw_irbank_code": "377A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3808",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "3808",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3824",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "3824",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3849",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "3849",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "391A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "不動産業",
+      "raw_irbank_code": "391A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3977",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "3977",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3982",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "3982",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "4018",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "4018",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "418A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "418A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "4195",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "4195",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "4250",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "化学",
+      "raw_irbank_code": "4250",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "4827",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "不動産業",
+      "raw_irbank_code": "4827",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "482A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "482A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "4995",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "化学",
+      "raw_irbank_code": "4995",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5039",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "5039",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5075",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "建設業",
+      "raw_irbank_code": "5075",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5220",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "ガラス・土石製品",
+      "raw_irbank_code": "5220",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5241",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "5241",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5342",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "ガラス・土石製品",
+      "raw_irbank_code": "5342",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5343",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "ガラス・土石製品",
+      "raw_irbank_code": "5343",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5386",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "ガラス・土石製品",
+      "raw_irbank_code": "5386",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5530",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "不動産業",
+      "raw_irbank_code": "5530",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5579",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "5579",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5593",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "5593",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5607",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "鉄鋼",
+      "raw_irbank_code": "5607",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "588A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "588A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5953",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "金属製品",
+      "raw_irbank_code": "5953",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5979",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "金属製品",
+      "raw_irbank_code": "5979",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6025",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "6025",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6056",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "6056",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6057",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "6057",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6076",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "6076",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6111",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "機械",
+      "raw_irbank_code": "6111",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6142",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "機械",
+      "raw_irbank_code": "6142",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "614A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "不動産業",
+      "raw_irbank_code": "614A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "615A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "615A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "616A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "616A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6170",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "6170",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "617A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "不動産業",
+      "raw_irbank_code": "617A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "618A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Growth",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "618A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "619A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Standard",
+      "irbank_industry": "その他製品",
+      "raw_irbank_code": "619A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "620A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "620A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "621A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Growth",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "621A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6225",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "機械",
+      "raw_irbank_code": "6225",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "622A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Standard",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "622A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6234",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "機械",
+      "raw_irbank_code": "6234",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "623A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Standard",
+      "irbank_industry": "不動産業",
+      "raw_irbank_code": "623A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "624A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "624A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "625A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Growth",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "625A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "626A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "626A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "627A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Standard",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "627A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "628A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "電気機器",
+      "raw_irbank_code": "628A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "630A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "630A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "632A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "632A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "633A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "633A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "634A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Standard",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "634A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "635A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "635A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "636A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "636A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "637A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "637A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "638A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "不動産業",
+      "raw_irbank_code": "638A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "639A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "639A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "640A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Growth",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "640A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "641A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Prime",
+      "irbank_industry": "輸送用機器",
+      "raw_irbank_code": "641A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "642A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Prime",
+      "irbank_industry": "電気・ガス業",
+      "raw_irbank_code": "642A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6439",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "機械",
+      "raw_irbank_code": "6439",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "643A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "643A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "644A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "644A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "645A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "645A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "646A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Standard",
+      "irbank_industry": "化学",
+      "raw_irbank_code": "646A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "647A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "不動産業",
+      "raw_irbank_code": "647A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "648A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Growth",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "648A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "652A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Growth",
+      "irbank_industry": "不動産業",
+      "raw_irbank_code": "652A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "653A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Growth",
+      "irbank_industry": "医薬品",
+      "raw_irbank_code": "653A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6559",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "6559",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6565",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Standard",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "6565",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "656A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Growth",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "656A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "657A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Growth",
+      "irbank_industry": "証券、商品先物取引業",
+      "raw_irbank_code": "657A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "658A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Growth",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "658A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6598",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "電気機器",
+      "raw_irbank_code": "6598",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6600",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "電気機器",
+      "raw_irbank_code": "6600",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "660A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Growth",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "660A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6623",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "電気機器",
+      "raw_irbank_code": "6623",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "663A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "663A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6655",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "電気機器",
+      "raw_irbank_code": "6655",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "667A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Standard",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "667A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "669A",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "Growth",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "669A",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6846",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "電気機器",
+      "raw_irbank_code": "6846",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7032",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "7032",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7076",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "7076",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7118",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "小売業",
+      "raw_irbank_code": "7118",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7156",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "7156",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7227",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "輸送用機器",
+      "raw_irbank_code": "7227",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7316",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "輸送用機器",
+      "raw_irbank_code": "7316",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7441",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "卸売業",
+      "raw_irbank_code": "7441",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7485",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "卸売業",
+      "raw_irbank_code": "7485",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7488",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "卸売業",
+      "raw_irbank_code": "7488",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7675",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "卸売業",
+      "raw_irbank_code": "7675",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7696",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "7696",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7790",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他製品",
+      "raw_irbank_code": "7790",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7870",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他製品",
+      "raw_irbank_code": "7870",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7894",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "化学",
+      "raw_irbank_code": "7894",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7950",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "化学",
+      "raw_irbank_code": "7950",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "8071",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "卸売業",
+      "raw_irbank_code": "8071",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "8145",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "卸売業",
+      "raw_irbank_code": "8145",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "8190",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "小売業",
+      "raw_irbank_code": "8190",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "8228",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "卸売業",
+      "raw_irbank_code": "8228",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "8398",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "銀行業",
+      "raw_irbank_code": "8398",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "8554",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "銀行業",
+      "raw_irbank_code": "8554",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "8559",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "銀行業",
+      "raw_irbank_code": "8559",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "8560",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "銀行業",
+      "raw_irbank_code": "8560",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "8594",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他金融業",
+      "raw_irbank_code": "8594",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9027",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "陸運業",
+      "raw_irbank_code": "9027",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9035",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "陸運業",
+      "raw_irbank_code": "9035",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9040",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "陸運業",
+      "raw_irbank_code": "9040",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9085",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "陸運業",
+      "raw_irbank_code": "9085",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9170",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "9170",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9357",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "倉庫・運輸関連業",
+      "raw_irbank_code": "9357",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9359",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "倉庫・運輸関連業",
+      "raw_irbank_code": "9359",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9388",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "9388",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9402",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "9402",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9407",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "9407",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9415",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "9415",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9471",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "情報・通信業",
+      "raw_irbank_code": "9471",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9555",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "その他",
+      "raw_irbank_code": "9555",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9643",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "9643",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9664",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "サービス業",
+      "raw_irbank_code": "9664",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9942",
+      "present_in": "IRBANK",
+      "jquants_prodcat": "unknown",
+      "likely_product_scope": "unknown",
+      "product_scope_source": "unavailable",
+      "irbank_market": "unknown",
+      "irbank_industry": "小売業",
+      "raw_irbank_code": "9942",
+      "raw_jquants_code": "",
+      "reason": "unclassified_membership_difference"
+    }
+  ],
+  "jquants_only": [
+    {
+      "code": "1909",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "19090",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "1948",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "19480",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "2162",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "21620",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "2180",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "21800",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "25935",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "25935",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "2643",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "014",
+      "likely_product_scope": "etf",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "26430",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3079",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "30790",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3450",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "34500",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3480",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "34800",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3787",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "37870",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "3856",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "38560",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "4171",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "41710",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "4316",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "43160",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "4800",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "48000",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "50765",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "50765",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5103",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "51030",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5202",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "52020",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5484",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "54840",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5617",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "56170",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "5660",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "56600",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6147",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "61470",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "6486",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "64860",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7082",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "70820",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7183",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "71830",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7240",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "72400",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7255",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "72550",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7426",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "74260",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7490",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "74900",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "75505",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "75505",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "7709",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "77090",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "8141",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "81410",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "92015",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "92015",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "92025",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "92025",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9223",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "92230",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "94345",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "94345",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "94346",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "94346",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9508",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "95080",
+      "reason": "unclassified_membership_difference"
+    },
+    {
+      "code": "9691",
+      "present_in": "J-Quants",
+      "jquants_prodcat": "011",
+      "likely_product_scope": "equity",
+      "product_scope_source": "jquants_product_category",
+      "raw_irbank_code": "",
+      "raw_jquants_code": "96910",
+      "reason": "unclassified_membership_difference"
+    }
+  ],
+  "shared_etf_reit_codes": [
+    {
+      "code": "1305",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1306",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1308",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1309",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1311",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1319",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1320",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1321",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1322",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1325",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1328",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1329",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1330",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "133A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1343",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1345",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1346",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1348",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1356",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1357",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1358",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1360",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1364",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1365",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1366",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1367",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1368",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1369",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1397",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1398",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1399",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "140A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1456",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1457",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1458",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1459",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1466",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1469",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1472",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1473",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1474",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1475",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1476",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1477",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1478",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1479",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1480",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1481",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1482",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1483",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1484",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1485",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1486",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1487",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1488",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1489",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1490",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1493",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1494",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1495",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1496",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1497",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1498",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1499",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1540",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1541",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1542",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1543",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1545",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1546",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1547",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1550",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1551",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1554",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1555",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1559",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1560",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1563",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1566",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1568",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1569",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1570",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1571",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1572",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1573",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1577",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1578",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1579",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1580",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1585",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1586",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1591",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1592",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1593",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1595",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1596",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1597",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1599",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "159A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1615",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1617",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1618",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1619",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1620",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1621",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1622",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1623",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1624",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1625",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1626",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1627",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1628",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1629",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1630",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1631",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1632",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1633",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1651",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1652",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1653",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1654",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1655",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1656",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1657",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1658",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1659",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1660",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1671",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1677",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1678",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1679",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1680",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1681",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1698",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "1699",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "170A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "178A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "179A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "180A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "181A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "182A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "183A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "188A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "200A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2011",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2012",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2013",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2014",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2015",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2016",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2017",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2018",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2019",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "201A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2080",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2081",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2082",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2083",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2084",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2085",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2086",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2087",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2088",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2089",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2090",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2091",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2092",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2093",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2094",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2095",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2096",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2097",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2098",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "210A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "213A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "221A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2235",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2236",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2237",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2238",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2239",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "223A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2240",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2241",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2242",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2243",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2244",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2245",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2247",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2248",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2249",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "224A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2250",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2251",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2252",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2253",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2254",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2255",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2256",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2257",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2258",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2259",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "233A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "234A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "235A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "236A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "237A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "238A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2510",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2511",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2512",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2513",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2514",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2515",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2516",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2517",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2518",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2519",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2520",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2521",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2522",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2523",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2524",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2525",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2526",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2527",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2528",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2529",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2530",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2552",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2553",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2554",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2555",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2556",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2557",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2558",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2559",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2560",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2561",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2562",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2563",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2564",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2565",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2566",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2567",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2568",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2569",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "257A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "258A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2620",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2621",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2622",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2623",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2624",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2625",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2626",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2627",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2628",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2629",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2630",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2631",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2632",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2633",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2634",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2636",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2637",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2638",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2639",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2640",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2641",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2642",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2644",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2645",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2646",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2647",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2648",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2649",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "273A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "282A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2836",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2837",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2838",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2839",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "283A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2840",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2841",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2842",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2843",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2844",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2845",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2846",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2847",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2848",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2849",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2851",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2852",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2853",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2854",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2855",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2856",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2857",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2858",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2859",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2860",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2861",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2862",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2864",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2865",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2866",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2867",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2868",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2869",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2870",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "294A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "295A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "2971",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "2972",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "2979",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "2989",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "313A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "314A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "315A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "316A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "318A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "3226",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3234",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3249",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3269",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3279",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3281",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3282",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3283",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3287",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "328A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "3290",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3292",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3295",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3296",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3309",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3451",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3455",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3459",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3462",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3463",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3466",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3468",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "346A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "3470",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3471",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3472",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3476",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3481",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3487",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "3488",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "348A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "3492",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "349A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "354A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "356A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "360A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "363A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "364A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "376A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "379A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "380A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "381A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "382A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "383A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "392A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "394A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "395A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "396A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "399A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "401A",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "404A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "408A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "412A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "413A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "424A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "425A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "426A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "435A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "443A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "447A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "448A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "449A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "450A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "451A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "452A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "453A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "459A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "461A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "465A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "466A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "467A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "468A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "473A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "486A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "487A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "488A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "489A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "491A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "492A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "493A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "494A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "495A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "496A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "502A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "509A",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "512A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "513A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "515A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "516A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "517A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "518A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "521A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "526A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "530A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "531A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "532A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "533A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "534A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "535A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "536A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "537A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "538A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "539A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "540A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "541A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "552A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "563A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "564A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "566A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "568A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "569A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "570A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "571A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "572A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "573A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "576A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "577A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "578A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "579A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "580A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "585A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "586A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "600A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "605A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "606A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "608A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "609A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "610A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "611A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "612A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "613A",
+      "prodcat": "014",
+      "type": "etf"
+    },
+    {
+      "code": "8951",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8952",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8953",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8954",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8955",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8956",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8957",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8958",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8960",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8961",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8963",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8964",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8966",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8967",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8968",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8972",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8975",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8976",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8977",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8979",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8984",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8985",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8986",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "8987",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "9282",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "9284",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "9285",
+      "prodcat": "013",
+      "type": "reit"
+    },
+    {
+      "code": "9286",
+      "prodcat": "013",
+      "type": "reit"
+    }
+  ],
+  "classification_note": "Membership differences are not inferred to be listings, delistings, or product-scope differences without dated exchange/listing evidence. Supply row-level J-Quants input to verify ETF/REIT categories.",
+  "report_date_jst": "2026-11-03",
+  "sources": {
+    "irbank": "IRBANK Connect API v1 /securities",
+    "jquants": "J-Quants API v2 /equities/master"
+  },
+  "normalization_example_count": 4437,
+  "difference_reason_counts": {
+    "unclassified_membership_difference": 205
+  }
+}

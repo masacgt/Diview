@@ -1,18 +1,18 @@
 # R2市場データ構造とアプリ取得仕様
 
-更新日: 2026-11-02
+更新日: 2026-11-03
 
-状態: 合意済み仕様。日次ユニバースはIRBANK Connect一覧を基礎とし、JPX公式ETF一覧の補完を必須とする。隔離ブランチで差分監査とJPX ETF補完を実装し、2026-11-03にIRBANK/J-Quants読み取り専用比較とJPX公式一覧のライブ照合を再実施した。`main` 先行コミットを取り込み後の同期テストは157件成功、差分チェックも成功。最新headのCI、PR統合、本番R2公開は未確認。
+状態: 合意済み仕様。日次ユニバースはIRBANK Connect一覧を基礎とし、JPX公式ETF一覧の補完を必須とする。PR #45 の本番実装は `ced28fc5` でmainに統合済み、R2スナップショット公開と手動同期後のWorker読み戻しを確認済み。2026-11-03に同日取得のIRBANK/J-Quants差分監査を行い、レポートを `ai_docs/audits/irbank-jquants-universe-diff-20261103.json` に保存した。監査処理のカテゴリ読取り不具合を修正し、同期テスト158件と差分チェックが成功。実装結果を記録したPR #47 は `766315ba` でmainに統合済み。通常スケジュールの営業日ゲートと月間Runner分数の実測は未完了。
 
 ## 取得元差分の確認状況（2026-11-03）
 
-読み取り専用監査 `scripts/yfinance_r2/audit_universe_sources.py` で取得元スナップショットを正規化して比較した。IRBANK Connect `/v1/securities` は2026-11-02取得で4,573コード、J-Quants `/v2/equities/master` は4,444コードを返したが、応答内のJ-Quantsデータ日付は2026-08-10だった。正規化後の共通コードは4,406、IRBANKのみ167、J-Quantsのみ38、両一覧の重複は0。J-Quantsの`ProdCat`は011: 3,897、012: 2、013: 63、014: 421、021: 5、023: 56で、共通部分のETF/REITは483コードだった。監査JSONと生スナップショットはローカルの`C:\Codex\irbank-jquants-audit-20261103`にあり、個人用取得データはGitへ含めない。
+読み取り専用監査 `scripts/yfinance_r2/audit_universe_sources.py` でAPI応答を正規化して比較した。IRBANK Connect `/v1/securities` は2026-11-02 17:32:30Z、J-Quants `/v2/equities/master` は同日17:32:46Zに取得した（16秒差）。J-Quantsの応答内データ日付は2026-08-10であり、同時刻に取得しても有効日は揃っていない。IRBANKは4,573 unique、J-Quantsは4,444 unique、共通4,406、IRBANKのみ167、J-Quantsのみ38、重複は双方0。コード一覧SHA-256はIRBANK `9e45c0f82c118a6db00250613251f1363bc993f806946b97a154505247d23735`、J-Quants `6a6cf7970351befecc13aac67d3440d706e2db1f6cdedbea83cfddaa9521dc9c`。J-Quantsの`ProdCat`は011: 3,897、012: 2、013: 63、014: 421、021: 5、023: 56。差分のうちIRBANKの業種情報がETFを示すコードは1553の1件、J-Quants区分では通常株37件・ETF 2643の1件を識別した。残るIRBANKのみ166件を含む205件は上場・廃止・範囲差の根拠がなく未分類とした。全205差分行、コード一覧ハッシュ、正規化例（`13010 → 1301`、`130A0 → 130A`を含む）を [`audits/irbank-jquants-universe-diff-20261103.json`](audits/irbank-jquants-universe-diff-20261103.json) に保存し、生のAPIスナップショットはローカルに保持する。
 
 J-Quants公式仕様では無料プランの上場銘柄マスタは12週間遅延し、上場日・上場廃止日は返されない。IRBANKのローカル`screen_securities`スナップショット（2026-09-26、3,960コード）は別エンドポイントで、Connect API一覧との同時点比較には使えない。差分の内訳では、IRBANKのみの167コード中145件がIRBANK応答の市場欄なし、22件がPrime/Standard/Growthだった。J-Quantsのみの38件は`ProdCat=011`が37件、`014`（ETF）が1件（2643）で、5桁コードは7件だった。市場欄なしを上場状態の根拠とはみなさない。
 
 別途JPXの公式商品一覧を照合した。2026-11-03のライブ一覧で上場済みETFは417件で、そのうち650A、651A、659AがIRBANK Connect一覧に存在しなかった。JPX公式REIT一覧58件は全てIRBANK一覧に含まれた。JPX ETFページには将来上場予定行も載るため、週次更新は日本時間の実行日以前に上場したETFだけを取り込む。`jpx_etf_universe.py` が公式表の日付・コード列を解析し、表欠落・重複・不正日付・350件未満を失敗として扱う。R2スキーマv2はIRBANK基礎一覧とJPX補完ETFの出典、JPX上場日、商品区分を保持し、統合コード数とSHA-256を検証する。ライブ照合ではJPX 417件、IRBANKになかったコードは650A、651A、659A、将来上場予定の671Aは除外された。JPX一覧: https://www.jpx.co.jp/english/equities/products/etfs/issues/01.html 。
 
-J-Quantsのみの通常株37件とIRBANKのみの市場欄なし145件の理由は、無料APIの基準日差があるため全件未分類である。取得元切替の完全な差分説明は未完了。日付不一致を示す`comparison_is_temporally_comparable=false`を監査JSONに保存し、根拠のない分類は未分類のままにする。J-Quants API仕様: https://jpx-jquants.com/en/spec/eq-master 、プラン別遅延: https://jpx-jquants.com/en/spec/data-spec 。
+取得時刻が同じ日でもJ-Quants有効日が12週間遅れているため、差分205件の新規上場・上場廃止・商品範囲理由は未確定である。J-Quantsのみの普通株37件、ETF 2643の1件、IRBANKのみで業種欄からETFと分かる1553以外の166件を個別行としてレポートに残した。日付不一致は`comparison_is_temporally_comparable=false`で記録し、根拠のない上場状態は推定しない。J-Quants API仕様: https://jpx-jquants.com/en/spec/eq-master 、プラン別遅延: https://jpx-jquants.com/en/spec/data-spec 。
 
 ## 目的と範囲
 
