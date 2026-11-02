@@ -6032,5 +6032,75 @@
         "security_type_hint": "other_tse_issue"
       }
     ]
+  },
+  "yfinance_class_share_sample_probe": {
+    "source": "Yahoo Finance via yfinance",
+    "retrieved_at": "2026-11-02T18:41:21Z",
+    "yfinance_version": "1.7.0",
+    "request": "one yf.download batch for seven exact five-digit .T symbols; period=5d, interval=1d, auto_adjust=false, actions=true",
+    "r2_write_performed": false,
+    "symbol_count": 7,
+    "history_available_count": 7,
+    "latest_close_on_2026_11_02_count": 2,
+    "latest_close_older_than_2026_11_02_count": 5,
+    "records": [
+      {
+        "code": "25935",
+        "ticker": "25935.T",
+        "history_status": "available",
+        "nonempty_close_rows": 4,
+        "latest_close_date": "2026-10-30",
+        "latest_close": 1857.0
+      },
+      {
+        "code": "50765",
+        "ticker": "50765.T",
+        "history_status": "available",
+        "nonempty_close_rows": 4,
+        "latest_close_date": "2026-10-30",
+        "latest_close": 4621.0
+      },
+      {
+        "code": "75505",
+        "ticker": "75505.T",
+        "history_status": "available",
+        "nonempty_close_rows": 4,
+        "latest_close_date": "2026-11-02",
+        "latest_close": 4885.0
+      },
+      {
+        "code": "92015",
+        "ticker": "92015.T",
+        "history_status": "available",
+        "nonempty_close_rows": 4,
+        "latest_close_date": "2026-10-30",
+        "latest_close": 10080.0
+      },
+      {
+        "code": "92025",
+        "ticker": "92025.T",
+        "history_status": "available",
+        "nonempty_close_rows": 5,
+        "latest_close_date": "2026-11-02",
+        "latest_close": 4730.0
+      },
+      {
+        "code": "94345",
+        "ticker": "94345.T",
+        "history_status": "available",
+        "nonempty_close_rows": 4,
+        "latest_close_date": "2026-10-30",
+        "latest_close": 3792.0
+      },
+      {
+        "code": "94346",
+        "ticker": "94346.T",
+        "history_status": "available",
+        "nonempty_close_rows": 4,
+        "latest_close_date": "2026-10-30",
+        "latest_close": 7510.0
+      }
+    ],
+    "interpretation_limit": "This proves only that yfinance returned some 5-day price history for these exact symbols in one batch. Five securities did not have a 2026-11-02 close in the response, so their returned older closes would not satisfy the collector exact-session-close requirement for that session. Company-profile availability, catalog eligibility, dividend quality, and repeatable daily freshness were not tested."
   }
 }
