@@ -1,0 +1,2435 @@
+{
+  "schema_version": 1,
+  "source": {
+    "workflow_run": 314,
+    "run_id": 41481174822,
+    "job_id": 125399982752,
+    "job": "v2-daily-sync",
+    "event": "workflow_dispatch",
+    "branch": "main",
+    "commit": "ced28fc53a7b83f41b8d3154ecb9a78e2abbc69c",
+    "market_data_date": "2026-11-02"
+  },
+  "summary": {
+    "universe_count": 4576,
+    "successful_security_results": 4420,
+    "top_level_failed_securities": 156,
+    "catalog_count": 4358,
+    "generation": "2026-11-02-4779703fc1a94b7ba193c8e262256687",
+    "top_level_failure_breakdown": {
+      "http_404_exceptions": 112,
+      "same_session_retry_suppressed_http_404": 44
+    },
+    "daily_close_unavailable_field_records": 270,
+    "daily_close_error_breakdown": {
+      "no_close_for_market_session": 237,
+      "yfinance_no_price_data": 33
+    },
+    "top_level_failure_and_daily_close_code_overlap": 0
+  },
+  "interpretation": "Top-level failed securities are exactly the 156 unique codes below; all log reasons are Yahoo HTTP 404. The 270 missing-close records are field-level price failures emitted separately and have no code overlap with those 156 top-level failures. A 404 alone does not establish whether a code is delisted, not covered by Yahoo, or otherwise unavailable.",
+  "top_level_failures": [
+    {
+      "code": "231A",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "242A",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "259A",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "272A",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "275A",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "342A",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "353A",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "377A",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "391A",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "418A",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "482A",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "588A",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "624A",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "1432",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "1445",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "1449",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "1452",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "1553",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "1738",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "1771",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "1777",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "1832",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "1869",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "1892",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "1999",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2058",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2137",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2172",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2218",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2452",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2467",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2551",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2902",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2919",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2928",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2974",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2976",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2985",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2992",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2994",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "2995",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3032",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3047",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3055",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3066",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3346",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3384",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3419",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3442",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3448",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3483",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3504",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3739",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3775",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3808",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3824",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3849",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "3977",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "4827",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "4995",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5037",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5039",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5072",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5077",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5130",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5135",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5220",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5241",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5251",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5342",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5343",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5386",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5525",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5528",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5530",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5531",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5536",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5573",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5579",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5584",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5594",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5607",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5886",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5887",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5953",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "5979",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6025",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6056",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6057",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6076",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6111",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6142",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6168",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6170",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6174",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6225",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6439",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6527",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6559",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6565",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6576",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6623",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6655",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6695",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "6846",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7076",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7098",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7118",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7132",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7156",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7227",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7316",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7355",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7364",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7441",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7485",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7488",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7675",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7690",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7693",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7790",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7870",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7894",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "7950",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "8071",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "8145",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "8190",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "8228",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "8398",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "8554",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "8559",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "8560",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "8594",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "8921",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9027",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9035",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9040",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9085",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9146",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9149",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9156",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9169",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9170",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9226",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9239",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9334",
+      "category": "same_session_retry_suppressed",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9357",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9359",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9388",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9402",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9407",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9415",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9471",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9643",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9664",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    },
+    {
+      "code": "9942",
+      "category": "http_404_exception",
+      "message": "HTTPError: HTTP Error 404:"
+    }
+  ],
+  "daily_close_unavailable": [
+    {
+      "code": "131A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "132A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "134A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "139A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "144A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "152A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "154A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "158A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "161A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "164A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "168A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "171A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "172A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "185A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "199A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "203A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "204A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "207A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "209A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "216A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "217A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "222A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "226A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "227A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "229A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "239A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "240A",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $240A.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "243A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "249A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "251A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "252A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "263A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "266A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "267A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "271A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "279A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "284A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "292A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "293A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "301A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "302A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "305A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "307A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "308A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "309A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "310A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "312A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "317A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "320A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "321A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "322A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "326A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "327A",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $327A.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "329A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "333A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "347A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "351A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "355A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "357A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "358A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "359A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "361A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "362A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "370A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "371A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "374A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "375A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "376A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "385A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "389A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "393A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "398A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "403A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "405A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "406A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "411A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "419A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "422A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "430A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "432A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "433A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "434A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "437A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "439A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "444A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "445A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "455A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "457A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "458A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "470A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "481A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "484A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "490A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "492A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "493A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "494A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "495A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "501A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "503A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "506A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "507A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "510A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "511A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "514A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "516A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "522A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "524A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "525A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "527A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "528A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "551A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "555A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "557A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "560A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "561A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "562A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "565A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "567A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "574A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "583A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "591A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "594A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "595A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "597A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "599A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "601A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "602A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "612A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "614A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "615A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "616A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "617A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "618A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "619A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "620A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "621A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "622A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "623A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "625A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "626A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "627A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "628A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "632A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "633A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "634A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "635A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "636A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "637A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "638A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "639A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "640A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "641A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "642A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "645A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "646A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "647A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "648A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "650A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "652A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "656A",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $656A.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "657A",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $657A.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "658A",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $658A.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "659A",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "660A",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $660A.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "663A",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $663A.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "667A",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $667A.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "669A",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $669A.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "1319",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "1349",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "1438",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "1479",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "1480",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "1490",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "1551",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "1585",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "1652",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "1653",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "1679",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2043",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2047",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2048",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2066",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $2066.T: possibly delisted; no price data found  (period=5d)"
+    },
+    {
+      "code": "2067",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2068",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $2068.T: possibly delisted; no price data found  (period=5d)"
+    },
+    {
+      "code": "2069",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $2069.T: possibly delisted; no price data found  (period=5d)"
+    },
+    {
+      "code": "2070",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2071",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2072",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2073",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2152",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2245",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2523",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2649",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2795",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2838",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2853",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2903",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2916",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "2990",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "3437",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "3600",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "3670",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $3670.T: possibly delisted; no price data found  (period=5d)"
+    },
+    {
+      "code": "3982",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $3982.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "4018",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $4018.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "4195",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $4195.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "4250",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $4250.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "4356",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "4426",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "5075",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $5075.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "5078",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "5249",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "5283",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "5534",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $5534.T: possibly delisted; no price data found  (period=5d)"
+    },
+    {
+      "code": "5571",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "5581",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "5593",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $5593.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "5598",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "5620",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $5620.T: possibly delisted; no price data found  (period=1y)"
+    },
+    {
+      "code": "5622",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $5622.T: possibly delisted; no price data found  (period=5d)"
+    },
+    {
+      "code": "5695",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "5840",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "5866",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "5890",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $5890.T: possibly delisted; no price data found  (period=5d)"
+    },
+    {
+      "code": "5893",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "5958",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "5969",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "5971",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "5987",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "6042",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "6234",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $6234.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "6497",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "6546",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "6596",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "6598",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $6598.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "6600",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $6600.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "7031",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7032",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $7032.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "7043",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7057",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7062",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7137",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7139",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7170",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7176",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7345",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7446",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7509",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7531",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7565",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7677",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7680",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7691",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7696",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $7696.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "7808",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7849",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7851",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $7851.T: possibly delisted; no price data found  (period=5d)"
+    },
+    {
+      "code": "7857",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7863",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "7946",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $7946.T: possibly delisted; no price data found  (period=5d)"
+    },
+    {
+      "code": "7985",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $7985.T: possibly delisted; no price data found  (period=5d)"
+    },
+    {
+      "code": "8139",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "9012",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "9087",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "9214",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "9222",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "9243",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "9335",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "9408",
+      "field": "price",
+      "category": "no_close_for_market_session",
+      "message": "RuntimeError: yfinance returned no closing price for Japan session 2026-11-02"
+    },
+    {
+      "code": "9555",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $9555.T: No data found, symbol may be delisted"
+    },
+    {
+      "code": "9914",
+      "field": "price",
+      "category": "yfinance_no_price_data",
+      "message": "YFPricesMissingError: $9914.T: possibly delisted; no price data found  (period=5d)"
+    }
+  ]
+}
