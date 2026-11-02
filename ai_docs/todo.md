@@ -361,3 +361,10 @@
 
 - [x] 権利日推定・表示に必要な配当イベント年だけを読むよう変更。`calculate_rights_dates.py` は当年から5年前までの6暦年（推定境界年を含む）を対象にし、R2に保持する10年分の履歴は変更しない。`test_calculate_rights_dates.py` の8テスト、`py_compile`、`git diff --check` が成功。production R2 read counts and scheduled runtime are not yet measured.
 - [ ] 権利日workflowへR2操作別カウンターを追加し、変更後の週次Actionsで出力件数・内容、R2 GET回数、job時間を前回実績と比較する。現状のログにはR2操作回数がない。実測前にrunner分の削減量や月2,000分達成を確定しない。
+
+## 2026-11-03 IRBANK / J-Quants source audit
+
+- [x] IRBANKとJ-Quantsの全一覧を同日連続取得し、正規化・件数・重複・差分・ProdCat・raw/display code変換を読み取り専用で記録。2回目のAPI取得は11要求、IRBANK 10秒、J-Quants 2秒。レポート: `ai_docs/audits/irbank-jquants-live-universe-diff-20261103.json`。
+- [ ] J-Quantsの有効日付が2026-08-10、IRBANKは2026-11-02取得時点であり、同じ有効日の比較ではない。公式照合で30件の廃止日一致、42件の9月末東証掲載、7件の種類株式候補を確認したが、残る175差分は未分類。日付のそろうJ-Quantsデータまたは個別公式資料で理由を確定し、銘柄ユニバース方針を再確認する。
+- [x] 既存のJ-Quants ETF/REITカテゴリ保持と、新規ETFのJPX補完を回帰テストで確認する。変更後のyfinance同期テスト全160件が成功。新規IRBANKコードで既存J-Quants分類もJPX ETF補完もない場合の分類ソースは未対応として仕様書に記録。
+- [ ] 新規REIT等のProdCat補完ソース・方針を決め、全新規コードのカテゴリ保持を確認する。
