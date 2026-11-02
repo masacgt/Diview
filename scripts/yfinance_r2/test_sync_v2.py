@@ -445,6 +445,23 @@ class SyncPriceTests(TestCase):
 
 
 class CatalogTests(TestCase):
+    def test_catalog_recalculates_yield_when_reported_info_is_from_older_session(self):
+        current = {"price":{"close":2000,"date":"2026-10-19"},
+                   "statistics_last_fetched_session_date":"2026-10-16",
+                   "statistics":{"dividendYield":0.1},
+                   "dividend":{"yield_basis":"next_fiscal_year_forecast",
+                               "next_fiscal_year_forecast_per_share":100,
+                               "yield_rate":10,"yield_source":"yfinance_reported_dividendYield"}}
+        item = sync.catalog_item_from_documents('7203', {}, {'display_name':'Toyota'}, current, {})
+        self.assertEqual((item['yield_rate'],item['yield_source']), (5.0,'calculated_from_yfinance_dividend_and_quote'))
+        current['statistics_last_fetched_session_date'] = '2026-10-19'
+        item = sync.catalog_item_from_documents('7203', {}, {'display_name':'Toyota'}, current, {})
+        self.assertEqual((item['yield_rate'],item['yield_source']), (10.0,'yfinance_reported_dividendYield'))
+        current['statistics_last_fetched_session_date'] = '2026-10-16'
+        current['dividend']['next_fiscal_year_forecast_per_share'] = None
+        item = sync.catalog_item_from_documents('7203', {}, {'display_name':'Toyota'}, current, {})
+        self.assertIsNone(item['yield_rate'])
+
     def test_catalog_keeps_annual_forecast_separate_from_trailing_distributions(self):
         item = sync.catalog_item_from_documents(
             "7203",
@@ -1613,6 +1630,108 @@ class OfflineFinancialSyncTests(TestCase):
         self.assertEqual(current["statistics"]["priceToBook"], 2)
         self.assertFalse(store.documents[prefix + "/sync.json"]["financial_retry_pending"])
         self.assertEqual(result["status"], "ok")
+
+    def test_cached_reported_metrics_are_recalculated_for_new_price(self):
+        prefix = sync.object_key('securities', '7203.T')
+        store = self.Store({prefix + '/profile.json': {'display_name':'Toyota'},
+            prefix + '/current.json': {
+                'price':{'date':'2026-10-19','close':2000,'currency':'JPY'},
+                'statistics':{'trailingEps':100,'bookValue':1000,'dividendRate':100,
+                              'dividendYield':0.1,'trailingPE':10,'priceToBook':1},
+                'valuation_calculation':{'sources':{'trailingPE':'yfinance_reported','priceToBook':'yfinance_reported'}},
+                'field_status':{'price':'available'}}})
+        ticker = self.ticker()
+        ticker.calendar = {}
+        prior_sync = {'status':'partial', 'retry_session_date':'2026-10-19',
+                      'last_success_session_date':'2026-10-19',
+                      'info_last_fetched_session_date':'2026-10-16',
+                      'monthly_history_schema_version':2}
+        with patch.object(sync.yf, 'Ticker', return_value=ticker), \
+             patch.object(sync, 'read_json', side_effect=store.read), \
+             patch.object(sync, 'put_json_if_changed', side_effect=store.write), \
+             patch.object(sync, 'legacy_document', return_value={}):
+            sync.collect_symbol(store, 'b', '7203', '7203.T', date(2026,10,19),
+                                prior_sync_document=prior_sync)
+        current = store.documents[prefix + '/current.json']
+        self.assertEqual(current['dividend']['yield_rate'], 5.0)
+        self.assertEqual(current['dividend']['yield_source'], 'calculated_from_yfinance_dividend_and_quote')
+        self.assertEqual(current['field_status']['dividend_yield'], 'stale')
+        self.assertEqual(current['statistics']['trailingPE'],20)
+        self.assertEqual(current['statistics']['priceToBook'],2)
+        self.assertEqual(current['valuation_calculation']['sources']['trailingPE'],'calculated_fallback')
+        self.assertEqual(current['field_status']['statistics_trailingPE'],'stale')
+
+    def test_stale_reported_metrics_without_recalculation_inputs_are_unavailable(self):
+        prefix = sync.object_key('securities', '7203.T')
+        store = self.Store({prefix + '/profile.json': {'display_name':'Toyota'},
+            prefix + '/current.json': {'price':{'date':'2026-10-19','close':2000,'currency':'JPY'},
+                'statistics':{'dividendYield':0.1,'trailingPE':10,'priceToBook':1},
+                'valuation_calculation':{'sources':{'trailingPE':'yfinance_reported','priceToBook':'yfinance_reported'}},
+                'field_status':{'price':'available'}}})
+        ticker = self.ticker()
+        ticker.calendar = {}
+        prior_sync = {'status':'partial', 'retry_session_date':'2026-10-19',
+                      'last_success_session_date':'2026-10-19', 'info_last_fetched_session_date':'2026-10-16',
+                      'monthly_history_schema_version':2}
+        with patch.object(sync.yf, 'Ticker', return_value=ticker), \
+             patch.object(sync, 'read_json', side_effect=store.read), \
+             patch.object(sync, 'put_json_if_changed', side_effect=store.write), \
+             patch.object(sync, 'legacy_document', return_value={}):
+            sync.collect_symbol(store, 'b', '7203', '7203.T', date(2026,10,19), prior_sync_document=prior_sync)
+        current = store.documents[prefix + '/current.json']
+        self.assertIsNone(current['dividend']['yield_rate'])
+        self.assertNotIn('trailingPE',current['statistics'])
+        self.assertNotIn('priceToBook',current['statistics'])
+        self.assertEqual(current['field_status']['statistics_trailingPE'],'empty')
+
+    def test_fresh_reported_metrics_for_the_price_session_remain_preferred(self):
+        prefix = sync.object_key('securities', '7203.T')
+        store = self.Store({prefix + '/profile.json': {'display_name':'Toyota'},
+            prefix + '/current.json': {'price':{'date':'2026-10-19','close':2000,'currency':'JPY'},
+                                       'statistics':{'trailingEps':100,'bookValue':1000},
+                                       'field_status':{'price':'available'}}})
+        ticker = self.ticker()
+        ticker.calendar = {}
+        ticker.get_info.return_value = {'shortName':'Toyota','currency':'JPY', 'dividendRate':100,
+            'dividendYield':0.04,'trailingEps':100,'bookValue':1000,'trailingPE':18,'priceToBook':1.8}
+        prior_sync = {'status':'partial','retry_session_date':'2026-10-19',
+                      'last_success_session_date':'2026-10-19','monthly_history_schema_version':2}
+        with patch.object(sync.yf, 'Ticker', return_value=ticker), \
+             patch.object(sync, 'read_json', side_effect=store.read), \
+             patch.object(sync, 'put_json_if_changed', side_effect=store.write), \
+             patch.object(sync, 'legacy_document', return_value={}):
+            sync.collect_symbol(store, 'b', '7203', '7203.T', date(2026,10,19),
+                                prior_sync_document=prior_sync, force_refresh_info=True)
+        current = store.documents[prefix + '/current.json']
+        self.assertEqual(current['dividend']['yield_rate'],4.0)
+        self.assertEqual(current['dividend']['yield_source'],'yfinance_reported_dividendYield')
+        self.assertEqual(current['statistics']['trailingPE'],18)
+        self.assertEqual(current['statistics']['priceToBook'],1.8)
+        self.assertEqual(current['valuation_calculation']['sources']['trailingPE'],'yfinance_reported')
+
+    def test_failed_company_info_refresh_recalculates_from_cached_inputs(self):
+        prefix = sync.object_key('securities', '7203.T')
+        store = self.Store({prefix + '/profile.json': {'display_name':'Toyota'},
+            prefix + '/current.json': {'price':{'date':'2026-10-19','close':2000,'currency':'JPY'},
+                'statistics':{'trailingEps':100,'bookValue':1000,'dividendRate':100,
+                              'dividendYield':0.1,'trailingPE':10,'priceToBook':1},
+                'field_status':{'price':'available'}}})
+        ticker = self.ticker()
+        ticker.calendar = {}
+        ticker.get_info.side_effect = RuntimeError('offline')
+        prior_sync = {'status':'partial','retry_session_date':'2026-10-19','last_success_session_date':'2026-10-19',
+                      'info_last_fetched_session_date':'2026-10-16','monthly_history_schema_version':2}
+        with patch.object(sync.yf, 'Ticker', return_value=ticker), \
+             patch.object(sync, 'read_json', side_effect=store.read), \
+             patch.object(sync, 'put_json_if_changed', side_effect=store.write), \
+             patch.object(sync, 'legacy_document', return_value={}):
+            sync.collect_symbol(store, 'b', '7203', '7203.T', date(2026,10,19),
+                                prior_sync_document=prior_sync, force_refresh_info=True)
+        current = store.documents[prefix + '/current.json']
+        self.assertEqual((current['dividend']['yield_rate'],current['statistics']['trailingPE'],
+                          current['statistics']['priceToBook']), (5.0,20.0,2.0))
+        self.assertEqual(current['field_status']['statistics_refresh'],'failed')
+        self.assertEqual(store.documents[prefix + '/sync.json']['info_refresh_status'],'failed_using_cache')
 
     def test_repeated_publication_keeps_immutable_generations_and_consistent_references(self):
         legacy_key = sync.object_key("catalog", "generations", "2026-10-19.json")
