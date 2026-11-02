@@ -2431,5 +2431,29 @@
       "category": "yfinance_no_price_data",
       "message": "YFPricesMissingError: $9914.T: possibly delisted; no price data found  (period=5d)"
     }
-  ]
+  ],
+  "official_listing_status_check": {
+    "source": "Japan Exchange Group (JPX), delisted stocks list",
+    "source_url": "https://www.jpx.co.jp/listing/stocks/delisted/",
+    "checked_at": "2026-11-02T18:25:57Z",
+    "method": "Exact normalized-code match against the rows in the public JPX delisted-stocks table; only delisting dates on or before the sync market date 2026-11-02 count as confirmed delisted by that date.",
+    "sync_market_date": "2026-11-02",
+    "failed_codes_checked": 156,
+    "confirmed_delisted_by_market_date": [
+      {
+        "code": "6565",
+        "name": "ABホテル",
+        "delisted_on": "2026-05-01",
+        "reason": "申請による上場廃止"
+      },
+      {
+        "code": "5386",
+        "name": "鶴弥",
+        "delisted_on": "2026-03-17",
+        "reason": "申請による上場廃止"
+      }
+    ],
+    "not_found_in_this_delisted_table": 154,
+    "not_found_interpretation": "Unknown. Absence from the delisted table does not prove active listing or Yahoo coverage; use dated listing snapshots and Yahoo symbol-level responses for the remaining codes."
+  }
 }
