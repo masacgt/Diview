@@ -360,4 +360,4 @@
 ## 2026-11-03 権利日計算のR2履歴読取削減
 
 - [x] 権利日推定・表示に必要な配当イベント年だけを読むよう変更。`calculate_rights_dates.py` は当年から5年前までの6暦年（推定境界年を含む）を対象にし、R2に保持する10年分の履歴は変更しない。`test_calculate_rights_dates.py` の8テスト、`py_compile`、`git diff --check` が成功。production R2 read counts and scheduled runtime are not yet measured.
-- [ ] 変更後の週次権利日Actionsで出力件数・内容、R2 GET回数、job時間を前回実績と比較する。実測前にrunner分の削減量や月2,000分達成を確定しない。
+- [ ] 権利日workflowへR2操作別カウンターを追加し、変更後の週次Actionsで出力件数・内容、R2 GET回数、job時間を前回実績と比較する。現状のログにはR2操作回数がない。実測前にrunner分の削減量や月2,000分達成を確定しない。
