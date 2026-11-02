@@ -1044,7 +1044,13 @@
       "irbank_industry": "不動産業",
       "raw_irbank_code": "614A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "山八商事",
+        "market_segment": "PRO Market",
+        "as_of": "20260930",
+        "security_type_hint": "pro_market"
+      }
     },
     {
       "code": "615A",
@@ -1056,7 +1062,13 @@
       "irbank_industry": "情報・通信業",
       "raw_irbank_code": "615A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "インターパーク",
+        "market_segment": "PRO Market",
+        "as_of": "20260930",
+        "security_type_hint": "pro_market"
+      }
     },
     {
       "code": "616A",
@@ -1068,7 +1080,13 @@
       "irbank_industry": "情報・通信業",
       "raw_irbank_code": "616A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "数理技研",
+        "market_segment": "PRO Market",
+        "as_of": "20260930",
+        "security_type_hint": "pro_market"
+      }
     },
     {
       "code": "6170",
@@ -1092,7 +1110,13 @@
       "irbank_industry": "不動産業",
       "raw_irbank_code": "617A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "レイシャス",
+        "market_segment": "PRO Market",
+        "as_of": "20260930",
+        "security_type_hint": "pro_market"
+      }
     },
     {
       "code": "618A",
@@ -1104,7 +1128,13 @@
       "irbank_industry": "サービス業",
       "raw_irbank_code": "618A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "ＫＯＭＰＥＩＴＯ",
+        "market_segment": "グロース（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      }
     },
     {
       "code": "619A",
@@ -1116,7 +1146,13 @@
       "irbank_industry": "その他製品",
       "raw_irbank_code": "619A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "オリバー",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      }
     },
     {
       "code": "620A",
@@ -1128,7 +1164,13 @@
       "irbank_industry": "情報・通信業",
       "raw_irbank_code": "620A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "応研",
+        "market_segment": "PRO Market",
+        "as_of": "20260930",
+        "security_type_hint": "pro_market"
+      }
     },
     {
       "code": "621A",
@@ -1140,7 +1182,13 @@
       "irbank_industry": "サービス業",
       "raw_irbank_code": "621A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "オーディオストック",
+        "market_segment": "グロース（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      }
     },
     {
       "code": "6225",
@@ -1164,7 +1212,13 @@
       "irbank_industry": "情報・通信業",
       "raw_irbank_code": "622A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "テクノクラフト",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      }
     },
     {
       "code": "6234",
@@ -1188,7 +1242,13 @@
       "irbank_industry": "不動産業",
       "raw_irbank_code": "623A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "ベルテックス",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      }
     },
     {
       "code": "624A",
@@ -1212,7 +1272,13 @@
       "irbank_industry": "サービス業",
       "raw_irbank_code": "625A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "Ｓｋｙｆａｌｌ",
+        "market_segment": "グロース（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      }
     },
     {
       "code": "626A",
@@ -1224,7 +1290,13 @@
       "irbank_industry": "その他",
       "raw_irbank_code": "626A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "ｉＦｒｅｅＥＴＦ　ゴールドプラスインカム",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      }
     },
     {
       "code": "627A",
@@ -1236,7 +1308,13 @@
       "irbank_industry": "情報・通信業",
       "raw_irbank_code": "627A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "ａｋｉｐｐａ",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      }
     },
     {
       "code": "628A",
@@ -1248,7 +1326,13 @@
       "irbank_industry": "電気機器",
       "raw_irbank_code": "628A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "カドー",
+        "market_segment": "PRO Market",
+        "as_of": "20260930",
+        "security_type_hint": "pro_market"
+      }
     },
     {
       "code": "630A",
@@ -1260,7 +1344,13 @@
       "irbank_industry": "その他",
       "raw_irbank_code": "630A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "ニッセイＥＴＦ　ＴＯＰＩＸ（年４回決算型）",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      }
     },
     {
       "code": "632A",
@@ -1272,7 +1362,13 @@
       "irbank_industry": "その他",
       "raw_irbank_code": "632A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "グローバルＸ　日経２２５　ＥＴＦ",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      }
     },
     {
       "code": "633A",
@@ -1284,7 +1380,13 @@
       "irbank_industry": "その他",
       "raw_irbank_code": "633A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "グローバルＸ　韓国半導体・トップ１０　ＥＴＦ",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      }
     },
     {
       "code": "634A",
@@ -1296,7 +1398,13 @@
       "irbank_industry": "情報・通信業",
       "raw_irbank_code": "634A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "レイヤード",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      }
     },
     {
       "code": "635A",
@@ -1308,7 +1416,13 @@
       "irbank_industry": "その他",
       "raw_irbank_code": "635A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "ＳＭＢＣ　Ｐｒｉｍｅ　日本短期債券ＥＴＦ（毎月決算型）",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      }
     },
     {
       "code": "636A",
@@ -1320,7 +1434,13 @@
       "irbank_industry": "その他",
       "raw_irbank_code": "636A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "ＳＭＢＣ　Ｐｒｉｍｅ　日本短期債券ＥＴＦ（年１回決算型）",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      }
     },
     {
       "code": "637A",
@@ -1332,7 +1452,13 @@
       "irbank_industry": "サービス業",
       "raw_irbank_code": "637A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "オーリーズ",
+        "market_segment": "PRO Market",
+        "as_of": "20260930",
+        "security_type_hint": "pro_market"
+      }
     },
     {
       "code": "638A",
@@ -1356,7 +1482,13 @@
       "irbank_industry": "その他",
       "raw_irbank_code": "639A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "ＮＥＸＴ　ＦＵＮＤＳ　Ｓｏｌａｃｔｉｖｅグローバル・メモリ指数連動型上場投信",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      }
     },
     {
       "code": "640A",
@@ -1416,7 +1548,13 @@
       "irbank_industry": "その他",
       "raw_irbank_code": "643A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "データセンターインフラ　日本株（ネットリターン）ＥＴＮ",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      }
     },
     {
       "code": "644A",
@@ -1428,7 +1566,13 @@
       "irbank_industry": "その他",
       "raw_irbank_code": "644A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "防衛フォーカス　日本株（ネットリターン）ＥＴＮ",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      }
     },
     {
       "code": "645A",
@@ -1452,7 +1596,13 @@
       "irbank_industry": "化学",
       "raw_irbank_code": "646A",
       "raw_jquants_code": "",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "クラサスケミカル",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      }
     },
     {
       "code": "647A",
@@ -2230,7 +2380,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "25935",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "伊藤園第１種優先株式",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "class_share"
+      }
     },
     {
       "code": "2643",
@@ -2298,6 +2454,12 @@
         "name": "（株）テクノマセマティカル",
         "market": "スタンダード",
         "delisting_reason": "上場維持基準への不適合"
+      },
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "テクノマセマティカル",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
       }
     },
     {
@@ -2346,6 +2508,12 @@
         "name": "（株）ビーマップ",
         "market": "グロース",
         "delisting_reason": "上場維持基準への不適合"
+      },
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "ビーマップ",
+        "market_segment": "グロース（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
       }
     },
     {
@@ -2372,7 +2540,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "50765",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "インフロニア・ホールディングス第１回社債型種類株式",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "class_share"
+      }
     },
     {
       "code": "5103",
@@ -2420,6 +2594,12 @@
         "name": "東北特殊鋼（株）",
         "market": "スタンダード",
         "delisting_reason": "支配株主等による買収（公開買付け、株式併合）"
+      },
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "東北特殊鋼",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
       }
     },
     {
@@ -2462,6 +2642,12 @@
         "name": "（株）ヤマザキ",
         "market": "スタンダード",
         "delisting_reason": "上場維持基準への不適合"
+      },
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "ヤマザキ",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
       }
     },
     {
@@ -2510,6 +2696,12 @@
         "name": "あんしん保証（株）",
         "market": "スタンダード",
         "delisting_reason": "支配株主等による買収（公開買付け、株式併合）"
+      },
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "あんしん保証",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
       }
     },
     {
@@ -2542,6 +2734,12 @@
         "name": "（株）桜井製作所",
         "market": "スタンダード",
         "delisting_reason": "上場維持基準への不適合"
+      },
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "桜井製作所",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
       }
     },
     {
@@ -2574,6 +2772,12 @@
         "name": "日新商事（株）",
         "market": "スタンダード",
         "delisting_reason": "ＭＢＯ（公開買付け、株式併合）"
+      },
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "日新商事",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
       }
     },
     {
@@ -2584,7 +2788,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "75505",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "ゼンショーホールディングス第１回社債型種類株式",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "class_share"
+      }
     },
     {
       "code": "7709",
@@ -2600,6 +2810,12 @@
         "name": "クボテック（株）",
         "market": "スタンダード",
         "delisting_reason": "上場維持基準への不適合"
+      },
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "クボテック",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
       }
     },
     {
@@ -2616,6 +2832,12 @@
         "name": "新光商事（株）",
         "market": "プライム",
         "delisting_reason": "他社による買収（公開買付け、株式併合）"
+      },
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "新光商事",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
       }
     },
     {
@@ -2626,7 +2848,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "92015",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "日本航空株式会社第１回社債型種類株式",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "class_share"
+      }
     },
     {
       "code": "92025",
@@ -2636,7 +2864,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "92025",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "ＡＮＡホールディングス第１回社債型種類株式",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "class_share"
+      }
     },
     {
       "code": "9223",
@@ -2662,7 +2896,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "94345",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "ソフトバンク第１回社債型種類株式",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "class_share"
+      }
     },
     {
       "code": "94346",
@@ -2672,7 +2912,13 @@
       "product_scope_source": "jquants_product_category",
       "raw_irbank_code": "",
       "raw_jquants_code": "94346",
-      "reason": "unclassified_membership_difference"
+      "reason": "unclassified_membership_difference",
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "ソフトバンク第２回社債型種類株式",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "class_share"
+      }
     },
     {
       "code": "9508",
@@ -2704,6 +2950,12 @@
         "name": "（株）両毛システムズ",
         "market": "スタンダード",
         "delisting_reason": "支配株主等による買収（公開買付け、株式併合）"
+      },
+      "jpx_tse_snapshot_as_of_2026_09_30": {
+        "issue_name": "両毛システムズ",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
       }
     }
   ],
@@ -5417,6 +5669,367 @@
         "market": "スタンダード",
         "delisting_reason": "支配株主等による買収（公開買付け、株式併合）",
         "difference_reason": "jpx_delisted_between_jquants_effective_date_and_irbank_retrieval"
+      }
+    ]
+  },
+  "jpx_tse_snapshot_check": {
+    "source": "Japan Exchange Group, List of TSE-listed issues, September 2026 month-end workbook",
+    "source_page_url": "https://www.jpx.co.jp/markets/statistics-equities/misc/01.html",
+    "workbook_url": "https://www.jpx.co.jp/markets/statistics-equities/misc/tvdivq0000001vg2-att/data_j.xlsx",
+    "workbook_sha256": "a26fdf4420cb6a152a1811ce0c6e293e642c8a99f1cc2ad9c47a5d55f2722c82",
+    "snapshot_date": "2026-09-30",
+    "retrieved_at": "2026-11-02T18:36:14Z",
+    "membership_differences_checked": 205,
+    "present_in_tse_snapshot": 42,
+    "irbank_only_present": 25,
+    "jquants_only_present": 17,
+    "not_present_in_this_tse_snapshot": 163,
+    "five_digit_class_share_codes_identified_by_issue_name": [
+      "25935",
+      "50765",
+      "75505",
+      "92015",
+      "92025",
+      "94345",
+      "94346"
+    ],
+    "interpretation_limit": "Presence establishes inclusion in this TSE snapshot on 2026-09-30 only; it does not establish the exact listing date, the reason for absence from the other source, or status outside the snapshot date. Absence from this TSE-only list does not prove delisting or non-listing on another Japanese exchange. The seven five-digit class-share codes indicate a product-scope gap in the IRBANK snapshot, but require a deliberate universe policy before supplementation.",
+    "matched_rows": [
+      {
+        "code": "614A",
+        "present_in": "IRBANK-only",
+        "issue_name": "山八商事",
+        "market_segment": "PRO Market",
+        "as_of": "20260930",
+        "security_type_hint": "pro_market"
+      },
+      {
+        "code": "615A",
+        "present_in": "IRBANK-only",
+        "issue_name": "インターパーク",
+        "market_segment": "PRO Market",
+        "as_of": "20260930",
+        "security_type_hint": "pro_market"
+      },
+      {
+        "code": "616A",
+        "present_in": "IRBANK-only",
+        "issue_name": "数理技研",
+        "market_segment": "PRO Market",
+        "as_of": "20260930",
+        "security_type_hint": "pro_market"
+      },
+      {
+        "code": "617A",
+        "present_in": "IRBANK-only",
+        "issue_name": "レイシャス",
+        "market_segment": "PRO Market",
+        "as_of": "20260930",
+        "security_type_hint": "pro_market"
+      },
+      {
+        "code": "618A",
+        "present_in": "IRBANK-only",
+        "issue_name": "ＫＯＭＰＥＩＴＯ",
+        "market_segment": "グロース（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "619A",
+        "present_in": "IRBANK-only",
+        "issue_name": "オリバー",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "620A",
+        "present_in": "IRBANK-only",
+        "issue_name": "応研",
+        "market_segment": "PRO Market",
+        "as_of": "20260930",
+        "security_type_hint": "pro_market"
+      },
+      {
+        "code": "621A",
+        "present_in": "IRBANK-only",
+        "issue_name": "オーディオストック",
+        "market_segment": "グロース（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "622A",
+        "present_in": "IRBANK-only",
+        "issue_name": "テクノクラフト",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "623A",
+        "present_in": "IRBANK-only",
+        "issue_name": "ベルテックス",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "625A",
+        "present_in": "IRBANK-only",
+        "issue_name": "Ｓｋｙｆａｌｌ",
+        "market_segment": "グロース（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "626A",
+        "present_in": "IRBANK-only",
+        "issue_name": "ｉＦｒｅｅＥＴＦ　ゴールドプラスインカム",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      },
+      {
+        "code": "627A",
+        "present_in": "IRBANK-only",
+        "issue_name": "ａｋｉｐｐａ",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "628A",
+        "present_in": "IRBANK-only",
+        "issue_name": "カドー",
+        "market_segment": "PRO Market",
+        "as_of": "20260930",
+        "security_type_hint": "pro_market"
+      },
+      {
+        "code": "630A",
+        "present_in": "IRBANK-only",
+        "issue_name": "ニッセイＥＴＦ　ＴＯＰＩＸ（年４回決算型）",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      },
+      {
+        "code": "632A",
+        "present_in": "IRBANK-only",
+        "issue_name": "グローバルＸ　日経２２５　ＥＴＦ",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      },
+      {
+        "code": "633A",
+        "present_in": "IRBANK-only",
+        "issue_name": "グローバルＸ　韓国半導体・トップ１０　ＥＴＦ",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      },
+      {
+        "code": "634A",
+        "present_in": "IRBANK-only",
+        "issue_name": "レイヤード",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "635A",
+        "present_in": "IRBANK-only",
+        "issue_name": "ＳＭＢＣ　Ｐｒｉｍｅ　日本短期債券ＥＴＦ（毎月決算型）",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      },
+      {
+        "code": "636A",
+        "present_in": "IRBANK-only",
+        "issue_name": "ＳＭＢＣ　Ｐｒｉｍｅ　日本短期債券ＥＴＦ（年１回決算型）",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      },
+      {
+        "code": "637A",
+        "present_in": "IRBANK-only",
+        "issue_name": "オーリーズ",
+        "market_segment": "PRO Market",
+        "as_of": "20260930",
+        "security_type_hint": "pro_market"
+      },
+      {
+        "code": "639A",
+        "present_in": "IRBANK-only",
+        "issue_name": "ＮＥＸＴ　ＦＵＮＤＳ　Ｓｏｌａｃｔｉｖｅグローバル・メモリ指数連動型上場投信",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      },
+      {
+        "code": "643A",
+        "present_in": "IRBANK-only",
+        "issue_name": "データセンターインフラ　日本株（ネットリターン）ＥＴＮ",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      },
+      {
+        "code": "644A",
+        "present_in": "IRBANK-only",
+        "issue_name": "防衛フォーカス　日本株（ネットリターン）ＥＴＮ",
+        "market_segment": "ETF・ETN",
+        "as_of": "20260930",
+        "security_type_hint": "etf_etn"
+      },
+      {
+        "code": "646A",
+        "present_in": "IRBANK-only",
+        "issue_name": "クラサスケミカル",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "25935",
+        "present_in": "J-Quants-only",
+        "issue_name": "伊藤園第１種優先株式",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "class_share"
+      },
+      {
+        "code": "3787",
+        "present_in": "J-Quants-only",
+        "issue_name": "テクノマセマティカル",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "4316",
+        "present_in": "J-Quants-only",
+        "issue_name": "ビーマップ",
+        "market_segment": "グロース（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "50765",
+        "present_in": "J-Quants-only",
+        "issue_name": "インフロニア・ホールディングス第１回社債型種類株式",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "class_share"
+      },
+      {
+        "code": "5484",
+        "present_in": "J-Quants-only",
+        "issue_name": "東北特殊鋼",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "6147",
+        "present_in": "J-Quants-only",
+        "issue_name": "ヤマザキ",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "7183",
+        "present_in": "J-Quants-only",
+        "issue_name": "あんしん保証",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "7255",
+        "present_in": "J-Quants-only",
+        "issue_name": "桜井製作所",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "7490",
+        "present_in": "J-Quants-only",
+        "issue_name": "日新商事",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "75505",
+        "present_in": "J-Quants-only",
+        "issue_name": "ゼンショーホールディングス第１回社債型種類株式",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "class_share"
+      },
+      {
+        "code": "7709",
+        "present_in": "J-Quants-only",
+        "issue_name": "クボテック",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "8141",
+        "present_in": "J-Quants-only",
+        "issue_name": "新光商事",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
+      },
+      {
+        "code": "92015",
+        "present_in": "J-Quants-only",
+        "issue_name": "日本航空株式会社第１回社債型種類株式",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "class_share"
+      },
+      {
+        "code": "92025",
+        "present_in": "J-Quants-only",
+        "issue_name": "ＡＮＡホールディングス第１回社債型種類株式",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "class_share"
+      },
+      {
+        "code": "94345",
+        "present_in": "J-Quants-only",
+        "issue_name": "ソフトバンク第１回社債型種類株式",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "class_share"
+      },
+      {
+        "code": "94346",
+        "present_in": "J-Quants-only",
+        "issue_name": "ソフトバンク第２回社債型種類株式",
+        "market_segment": "プライム（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "class_share"
+      },
+      {
+        "code": "9691",
+        "present_in": "J-Quants-only",
+        "issue_name": "両毛システムズ",
+        "market_segment": "スタンダード（内国株式）",
+        "as_of": "20260930",
+        "security_type_hint": "other_tse_issue"
       }
     ]
   }
