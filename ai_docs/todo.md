@@ -368,4 +368,11 @@
 - [x] 公式日付・商品範囲と差分を個別照合し、59件を分類した。内訳はJ-Quants有効日後の上場廃止28、IRBANKに残る廃止済み2、J-Quants有効日後の新規上場15、IRBANK取得時点で未上場6、種類株式7、名証ETF1。残る146件は未分類と明記し、差分の不在のみから上場状態を推定しない。根拠とコード一覧: `ai_docs/audits/irbank-jquants-universe-diff-20261103.json`。
 - [ ] 残る146差分について、同じ有効日の公式一覧または個別の公式上場資料が得られた場合に理由を更新する。現行監査では出典時点のずれと公式情報の不在により確定できない。
 - [x] 既存のJ-Quants ETF/REITカテゴリ保持と、新規ETFのJPX補完を回帰テストで確認する。変更後のyfinance同期テスト全160件が成功。新規IRBANKコードで既存J-Quants分類もJPX ETF補完もない場合の分類ソースは未対応として仕様書に記録。
-- [ ] JPX公式REIT一覧を週次補完元に加え、013分類と公式上場日・出典を保存する。実装・回帰テスト（全166件成功）をmainへ統合した後、手動R2更新と通常同期で新規・既存REITの読み戻しを確認する。ライブのJPX表は58件、401Aを含み、将来上場の666Aは基準日より後のため除外されることを確認済み。
+- [ ] JPX公式REIT一覧補完の通常schedule運用を確認する。実装はPR #64（全166件の同期テスト成功）でmainへ統合済み。手動run #367後のWorker読み戻しで401A・8951・8952のREIT/category 013を確認したが、通常scheduleでの補完更新と読み戻しは未確認。ライブJPX表は58件で、将来上場の666Aは基準日より後のため対象外。
+
+## 2026-11-03 IRBANK週次snapshotから本番R2公開までの手順
+
+- [x] main統合後にIRBANK snapshotを更新し、日次yfinance手動同期から本番R2/Worker読み戻しまで一巡確認。PR #63/#64を含むmain `80b631c9`、手動IRBANK refresh run #14（4,573 IRBANK + 3 ETF = 4,576）、手動sync run #367（全4,576走査、generation `2026-11-02-15aa0f2576d649b2aa0da838f9c68544`、カタログ4,368）の証跡を仕様書とREADMEに追記した。R2直接GETでpublication/catalog/universe/immutable catalogのgeneration一致、source code hash一致、4,576 active＋46 inactive、2060.T価格日とcalendar source/fetched_atを確認。同期は公開後156銘柄失敗でfailure。main相当worktreeの同期テスト166/166成功、`git diff --check`成功。いずれも手動runで、通常scheduleの証明ではない。
+- [ ] 次の通常XTKS scheduleでカレンダーゲート、IRBANK snapshot hash/件数、全active銘柄走査、公開generation、Worker read-backを確認する。run #367は同一市場日の手動再処理なので通常運用の成功・速度標本から除外する。
+- [ ] 156件のrun #367失敗を銘柄ごとに分類し、Yahoo 404・当日終値なし・一時障害を区別する。ログにある一部例だけで全件原因を推定しない。
+- [ ] 複数の異なる通常schedule日と同月のIRBANK・権利日scheduled jobのactive job実時間を合算し、23営業日換算で月2,000 runner分以内か判定する。run #367の45m43s×23は参考算術に限り、手動同日再処理なので達成根拠にしない。timeout 360分は通常実測が揃うまで維持する。
