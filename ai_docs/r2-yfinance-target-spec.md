@@ -372,6 +372,10 @@ PR [#45](https://github.com/masacgt/Diview/pull/45) は squash merge され、ma
 
 2060.Tの本番API応答に含まれる`data_retrieval.ex_dividend_calendar`は日付`2027-03-30`、状態`available`、取得元`Yahoo Finance via yfinance Ticker.calendar`、取得日時`2026-10-17T14:31:41.140315+09:00`だった。これは`Ticker.get_info`のフォールバック値ではなく、current.jsonに保存されたTicker.calendar由来情報である。ただし今回の取得集計では`Ticker.calendar`呼出しが58件あり、2060.Tの値自体は10月17日取得の保存済み値であって、このrunで更新されたことは確認できない。
 
+run #314ログで2026-11-02の終値取得に失敗した7863・8139・9012・9214・9222を本番Worker APIから読み戻した。各銘柄は`processing_status=partial`、`failure_reason=Field fetch failed: price`で、market_priceはすべて前回の2026-10-30終値（それぞれ¥941・¥2,298・¥2,073・¥1,284・¥50）を保持していた。いずれも2026-11-02へ誤って日付を進めていないため、価格項目の取得失敗時に旧値を維持する動作を本番で確認した。R2計測でも`securities/current.json`のPUTは4,420件で、全4,576件を無条件に上書きしていない。別の失敗例9555は`/api/v1/securities/9555`が404で、API上に保持対象レコードがなく、旧値維持の実例には数えない。失敗156件すべての分類は未完了。
+
+日次同期コードは`sync_v2.py`からR2の`market/yfinance/v2/universe/irbank_source.json`を読み、snapshotのコード・SHA-256・取得日時を同期結果へ記録する。同期コードからJ-Quantsマスタ取得関数は呼ばれず、J-Quantsに関する残りの参照は既存の商品区分メタデータの保持だけである。
+
 同期ログの高水準yfinance呼出しは800回（`history_daily_5d_with_actions` 221、`ticker_get_info` 170、初回8年12月価格84、損益・貸借対照表・キャッシュフロー各58、`ticker_calendar` 58、`history_daily_1y_with_actions` 57、`history_actions_max` 31、`history_actions_1y` 5）。処理時間は全体3,127.905秒、銘柄収集2,816.286秒、カタログ生成293.127秒、カタログ公開12.795秒。計測上のR2 active wallは2,816.275秒で、yfinanceと重ならないR2-onlyは2,666.607秒、yfinanceとの重複は149.668秒だった。これはこの手動初回切替時の値で、通常日次更新の所要時間にそのまま適用しない。
 
 展開したGitHub job logから全R2操作数を取得した。object別GET / LIST / PUT / 重複GETは、`archive/events` 12,467 / 3,242 / 10,948 / 0、`archive/prices` 26 / 84 / 26 / 0、`catalog` 3 / 0 / 2 / 1、`derived` 1 / 0 / 1 / 0、`financial_revision.json` 1 / 0 / 1 / 0、`legacy/securities` 4,532 / 0 / 0 / 0、`manifest.json` 1 / 0 / 1 / 0、`publications` 1 / 0 / 1 / 0、`schedules` 2 / 0 / 1 / 1、`securities/current.json` 4,750 / 0 / 4,420 / 0、`securities/dividends` 20,540 / 1,621 / 10,582 / 0、`securities/financials` 52 / 58 / 50 / 0、`securities/prices/monthly` 3 / 84 / 3 / 0、`securities/profile.json` 4,750 / 0 / 58 / 9、`securities/splits` 1,226 / 4,420 / 688 / 0、`securities/sync.json` 4,794 / 0 / 9,064 / 44、`universe` 4 / 0 / 1 / 2。
