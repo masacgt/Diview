@@ -356,3 +356,8 @@
 
 - [x] 2026-11-01に本番全銘柄手動同期を実行し、R2公開後のgeneration・catalog・universeの読み戻しを照合。Actions run #296 は4,445コードを走査して4,398成功・47失敗、カタログ4,364件、HTTP 429なしで世代 `2026-10-30-dd035617a06641eb9b93ffde9c7483a0` を公開した。同期jobは46分22秒で、直近通常run #290の81分17秒より34分55秒短い。ただし同一セッション日の再実行で成功済み項目を再利用しているため、日次短縮の因果・月間2,000分達成の証拠にはしない。詳細と次の確認事項は `r2-yfinance-target-spec.md` と `scripts/yfinance_r2/README.md`。
 - [ ] 複数の異なるXTKS営業日の通常schedule runで、全件処理・R2読み書き・yfinance呼出し・失敗・HTTP 429・runner時間を比較し、月23営業日換算で2,000分以内か判定する。手動run #296は同日再利用を含むため標本から除外し、Actions timeout 360分は通常実測が揃うまで維持する。
+
+## 2026-11-03 権利日計算のR2履歴読取削減
+
+- [x] 権利日推定・表示に必要な配当イベント年だけを読むよう変更。`calculate_rights_dates.py` は当年から5年前までの6暦年（推定境界年を含む）を対象にし、R2に保持する10年分の履歴は変更しない。`test_calculate_rights_dates.py` の8テスト、`py_compile`、`git diff --check` が成功。production R2 read counts and scheduled runtime are not yet measured.
+- [ ] 変更後の週次権利日Actionsで出力件数・内容、R2 GET回数、job時間を前回実績と比較する。実測前にrunner分の削減量や月2,000分達成を確定しない。
