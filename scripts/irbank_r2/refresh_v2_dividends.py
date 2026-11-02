@@ -33,8 +33,9 @@ DIVIDEND_SHARD_ROOT = "market/yfinance/v2/issuer_dividends/shards"
 DIVIDEND_SHARD_PREFIX_LENGTH = 2
 DEFAULT_OUTPUT = Path(tempfile.gettempdir()) / "diview-irbank-v2-dividends-current.json"
 EDINET_CODE_RE = re.compile(r"^[EG]\d{5}$")
-SECURITY_CODE_RE = re.compile(r"^[A-Z0-9]{4}$")
+SECURITY_CODE_RE = re.compile(r"^[A-Z0-9]{4,5}$")
 FORECAST_TITLE_RE = re.compile(r"配当|分配|決算|業績|運用状況|dividend|distribution|earnings|results|forecast", re.IGNORECASE)
+FORECAST_CORRECTION_TITLE_RE = re.compile(r"訂正|修正|変更|correction|revision|amend", re.IGNORECASE)
 # IRBANK currently allows 60 requests/minute per account. Keep a small margin
 # for requests made outside this process while reducing idle time between calls.
 API_REQUEST_INTERVAL_SECONDS = 1.02
@@ -171,6 +172,32 @@ def _forecast_dps_facts(document: dict[str, Any]) -> list[dict[str, Any]]:
         if value is not None and value >= 0:
             result.append({"context": context, "value": value})
     return result
+
+
+def _has_forecast_distribution_fact(document: dict[str, Any]) -> bool:
+    facts = document.get("xbrl_facts")
+    if not isinstance(facts, list):
+        return False
+    for row in facts:
+        if not isinstance(row, dict):
+            continue
+        element = str(row.get("element_name") or "")
+        context = str(row.get("context") or "")
+        if (element == "DividendPerShare" or element.startswith("DistributionsPerUnit")) and (
+            "ForecastMember" in context and "PreviousMember" not in context
+        ):
+            return True
+    return False
+
+
+def _has_distribution_element(document: dict[str, Any]) -> bool:
+    facts = document.get("xbrl_facts")
+    return isinstance(facts, list) and any(
+        isinstance(row, dict)
+        and (row.get("element_name") == "DividendPerShare"
+             or str(row.get("element_name") or "").startswith("DistributionsPerUnit"))
+        for row in facts
+    )
 
 
 def _reit_forecast(facts: list[dict[str, Any]], meta: dict[str, Any], as_of: date) -> dict[str, Any] | None:
@@ -320,44 +347,166 @@ def parse_forecast(document: dict[str, Any], latest_actual_row: dict[str, Any] |
 
 def fetch_latest_forecast(code: str, actual: dict[str, Any] | None, token: str,
                           *, as_of: date | None = None,
-                          budget: RequestBudget | None = None) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+                          budget: RequestBudget | None = None,
+                          audit: dict[str, Any] | None = None,
+                          cached_forecast: dict[str, Any] | None = None) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     as_of = as_of or datetime.now(timezone(timedelta(hours=9))).date()
-    from_date = (as_of - timedelta(days=1095)).isoformat()
-    url = f"{API_BASE}/securities/{code}/disclosures?{urlencode({'from': from_date, 'limit': 100})}"
-    listing = request_json(url, token, budget=budget)
-    disclosures = listing.get("disclosures")
-    if not isinstance(disclosures, list):
-        raise ValueError("IRBANK disclosure list does not contain disclosures[]")
-    candidates = [row for row in disclosures if isinstance(row, dict)
-                  and FORECAST_TITLE_RE.search(str(row.get("title") or ""))]
-    candidates.sort(key=lambda row: str(row.get("disclosed_at") or ""), reverse=True)
-    for row in candidates[:8]:
-        doc_id = str(row.get("doc_id") or "")
-        if not doc_id:
-            continue
+    cached_doc_id = None
+    cached_period_end = None
+    cached_value = decimal_value(
+        cached_forecast.get("annual_dps_current_share_basis")
+        if isinstance(cached_forecast, dict) else None
+    )
+    if isinstance(cached_forecast, dict) and cached_forecast.get("status") == "available":
+        period_raw = str(cached_forecast.get("period_end") or "")
         try:
-            document = request_json(
-                f"{API_BASE}/disclosures/{doc_id}?include=meta,xbrl_facts", token, budget=budget
+            cached_period_end = date.fromisoformat(period_raw[:10])
+        except ValueError:
+            cached_period_end = None
+        refs = cached_forecast.get("source_refs")
+        if isinstance(refs, list):
+            cached_doc_id = next((str(ref.get("doc_id") or "") for ref in refs
+                                  if isinstance(ref, dict) and ref.get("doc_id")), None)
+        normalization = cached_forecast.get("normalization")
+        normalization_method = (normalization.get("method")
+                                if isinstance(normalization, dict) else None)
+        if (not cached_doc_id or cached_value is None or cached_value < 0
+                or cached_period_end is None or cached_period_end <= as_of
+                or normalization_method not in (None, "reported_current_forecast")):
+            cached_doc_id = None
+    from_date = (as_of - timedelta(days=1095)).isoformat()
+    cursor: str | None = None
+    seen_cursors: set[str] = set()
+    pages_read = 0
+    candidate_count = 0
+    inspected_doc_ids: list[str] = []
+    xbrl_docs = 0
+    distribution_element_docs = 0
+    forecast_fact_docs = 0
+    missing_xbrl_docs = 0
+    listing_attribution: dict[str, Any] | None = None
+
+    def finish(forecast: dict[str, Any] | None, attribution: dict[str, Any] | None,
+               resolution: str, reason: str | None = None,
+               *, cached_document_reused: bool = False) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        if audit is not None:
+            evidence: dict[str, Any] = {
+                "disclosure_pages_read": pages_read,
+                "candidate_disclosure_count": candidate_count,
+                "documents_inspected": len(inspected_doc_ids),
+                "inspected_doc_ids": inspected_doc_ids,
+                "xbrl_documents": xbrl_docs,
+                "missing_xbrl_documents": missing_xbrl_docs,
+                "documents_with_distribution_elements": distribution_element_docs,
+                "documents_with_forecast_facts": forecast_fact_docs,
+            }
+            if reason:
+                evidence["reason"] = reason
+            if cached_document_reused:
+                evidence["cached_document_reused"] = True
+            if forecast:
+                refs = forecast.get("source_refs")
+                if isinstance(refs, list) and refs:
+                    evidence["selected_doc_id"] = refs[0].get("doc_id")
+            audit.update({"resolution": resolution, "evidence": evidence})
+        return forecast, attribution or listing_attribution
+
+    while pages_read < MAX_DISCLOSURE_LIST_PAGES:
+        params = {"from": from_date, "limit": 100}
+        if cursor:
+            params["cursor"] = cursor
+        try:
+            listing = request_json(
+                f"{API_BASE}/securities/{code}/disclosures?{urlencode(params)}", token, budget=budget
             )
         except ApiFailure as error:
-            if error.status == 404:
-                continue
+            if error.status == 404 and pages_read == 0:
+                return finish(None, None, "not_supported_by_disclosure_api", "disclosure_list_404")
             raise
-        forecast = parse_forecast(document, actual, as_of=as_of)
-        if forecast:
-            return forecast, document.get("attribution")
-        # A newer REIT forecast can supersede an older two-period forecast.
-        # If it cannot be normalized safely, do not fall back to the older value.
-        facts = document.get("xbrl_facts")
-        if isinstance(facts, list) and any(
-            isinstance(fact, dict)
-            and str(fact.get("element_name") or "").startswith("DistributionsPerUnit")
-            and "ForecastMember" in str(fact.get("context") or "")
-            and "PreviousMember" not in str(fact.get("context") or "")
-            for fact in facts
-        ):
-            return None, document.get("attribution") or listing.get("attribution")
-    return None, listing.get("attribution")
+        pages_read += 1
+        disclosures = listing.get("disclosures")
+        if not isinstance(disclosures, list):
+            raise ValueError("IRBANK disclosure list does not contain disclosures[]")
+        listing_attribution = listing.get("attribution") or listing_attribution
+        candidates = [row for row in disclosures if isinstance(row, dict)
+                      and FORECAST_TITLE_RE.search(str(row.get("title") or ""))]
+        candidates.sort(key=lambda row: str(row.get("disclosed_at") or ""), reverse=True)
+        candidate_count += len(candidates)
+
+        for row in candidates:
+            doc_id = str(row.get("doc_id") or "")
+            if not doc_id:
+                continue
+            if cached_doc_id and doc_id == cached_doc_id:
+                # Newer candidates in the ordered listing have already been
+                # inspected. Reuse the old XBRL result only if its period is
+                # still current and it did not depend on a split adjustment.
+                value = decimal_value(cached_forecast.get("annual_dps_current_share_basis"))
+                resolution = "explicit_zero_forecast" if value == 0 else "forecast_available"
+                return finish(dict(cached_forecast), listing_attribution, resolution,
+                              cached_document_reused=True)
+            if len(inspected_doc_ids) >= MAX_FORECAST_DOCUMENTS:
+                return finish(None, None, "review_required", "candidate_document_limit")
+            inspected_doc_ids.append(doc_id)
+            try:
+                document = request_json(
+                    f"{API_BASE}/disclosures/{doc_id}?include=meta,xbrl_facts", token, budget=budget
+                )
+            except ApiFailure as error:
+                if error.status == 404:
+                    if cached_doc_id:
+                        return finish(None, None, "review_required",
+                                      "newer_candidate_document_missing_before_cached_forecast")
+                    continue
+                raise
+
+            facts = document.get("xbrl_facts")
+            if isinstance(facts, list):
+                xbrl_docs += 1
+            else:
+                missing_xbrl_docs += 1
+                if cached_doc_id:
+                    return finish(None, document.get("attribution"), "review_required",
+                                  "newer_candidate_xbrl_missing_before_cached_forecast")
+            has_distribution_element = _has_distribution_element(document)
+            has_forecast_fact = _has_forecast_distribution_fact(document)
+            distribution_element_docs += int(has_distribution_element)
+            forecast_fact_docs += int(has_forecast_fact)
+
+            forecast = parse_forecast(document, actual, as_of=as_of)
+            if forecast:
+                value = decimal_value(forecast.get("annual_dps_current_share_basis"))
+                resolution = "explicit_zero_forecast" if value == 0 else "forecast_available"
+                return finish(forecast, document.get("attribution"), resolution)
+
+            title = str(row.get("title") or "")
+            is_dividend_correction = (
+                FORECAST_CORRECTION_TITLE_RE.search(title) is not None
+                and re.search(r"配当|分配|dividend|distribution", title, re.IGNORECASE) is not None
+            )
+            is_dividend_document = re.search(r"配当|分配|dividend|distribution", title, re.IGNORECASE) is not None
+            if has_forecast_fact or is_dividend_correction or (has_distribution_element and is_dividend_document):
+                return finish(None, document.get("attribution"), "review_required",
+                              "unparseable_forecast_or_correction_document")
+
+        next_cursor = listing.get("next_cursor")
+        if not next_cursor:
+            if candidate_count == 0:
+                return finish(None, None, "no_matching_disclosure")
+            if missing_xbrl_docs and not xbrl_docs:
+                return finish(None, None, "xbrl_missing")
+            if distribution_element_docs:
+                return finish(None, None, "review_required", "distribution_element_without_current_forecast")
+            if xbrl_docs:
+                return finish(None, None, "xbrl_item_missing")
+            return finish(None, None, "review_required", "candidate_documents_unavailable")
+        next_cursor = str(next_cursor)
+        if next_cursor in seen_cursors:
+            return finish(None, None, "review_required", "repeated_disclosure_cursor")
+        seen_cursors.add(next_cursor)
+        cursor = next_cursor
+
+    return finish(None, None, "review_required", "disclosure_page_limit")
 
 
 def load_catalog(url: str) -> list[dict[str, Any]]:

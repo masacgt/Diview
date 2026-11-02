@@ -17,7 +17,10 @@ import refresh_v2_dividends as refresh
 DEFAULT_R2_KEY = "market/yfinance/v2/issuer_dividends/current.json"
 DEFAULT_OUTPUT = Path.home() / ".cache" / "diview-irbank-v2-dividend-batch.json"
 MAX_DAILY_REQUESTS = 200
-MAX_FORECAST_REQUESTS = 9  # one disclosure list and up to eight candidate documents
+FORECAST_AUDIT_VERSION = 1
+MAX_DISCLOSURE_LIST_PAGES = 10
+MAX_FORECAST_DOCUMENTS = 8
+MAX_FORECAST_REQUESTS = MAX_DISCLOSURE_LIST_PAGES + MAX_FORECAST_DOCUMENTS
 
 
 def parse_time(value: Any) -> datetime | None:
@@ -69,6 +72,8 @@ def initialize_checked_at(item: dict[str, Any], kind: str, generated_at: Any,
 
 def is_due(item: dict[str, Any], kind: str, generated_at: Any, now: datetime,
            refresh_days: int) -> bool:
+    if kind == "forecast" and item.get("forecast_audit_version") != FORECAST_AUDIT_VERSION:
+        return True
     checked = initialize_checked_at(item, kind, generated_at, now)
     if checked is None:
         return True
@@ -107,7 +112,8 @@ def update_actual(item: dict[str, Any], fetched: dict[str, Any], checked_at: str
 
 
 def update_forecast(item: dict[str, Any], forecast: dict[str, Any] | None,
-                    attribution: dict[str, Any] | None, checked_at: str) -> None:
+                    attribution: dict[str, Any] | None, checked_at: str,
+                    audit: dict[str, Any] | None = None) -> None:
     if forecast is None and isinstance(item.get("forecast"), dict):
         # Keep the previous observation for audit, but do not expose it as a
         # current forecast when the latest disclosure cannot be normalized.
@@ -117,6 +123,11 @@ def update_forecast(item: dict[str, Any], forecast: dict[str, Any] | None,
     item["forecast_checked_at"] = checked_at
     if attribution:
         item["forecast_attribution"] = attribution
+    if audit is not None:
+        item["forecast_resolution"] = str(audit.get("resolution") or "review_required")
+        item["forecast_audit_version"] = FORECAST_AUDIT_VERSION
+        item["forecast_audit_checked_at"] = checked_at
+        item["forecast_audit_evidence"] = audit.get("evidence") or {}
     item.pop("forecast_last_error", None)
     item.pop("forecast_last_attempt_at", None)
 
@@ -169,6 +180,12 @@ def publish_index(client: Any, bucket: str, key: str, document: dict[str, Any]) 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog-url", default=refresh.DEFAULT_CATALOG_URL)
+    parser.add_argument("--universe-json", type=Path,
+                        help="Local snapshot from fetch_irbank_security_catalog.py")
+    parser.add_argument("--allow-partial-universe", action="store_true",
+                        help="Process only securities in an incomplete snapshot; coverage remains incomplete")
+    parser.add_argument("--forecasts-only", action="store_true",
+                        help="Process the supplied IRBANK universe without refreshing annual actuals")
     parser.add_argument("--from-fiscal-year", type=int, default=2024)
     parser.add_argument("--max-api-requests", type=int, default=MAX_DAILY_REQUESTS)
     parser.add_argument("--refresh-days", type=int, default=60)
@@ -190,8 +207,22 @@ def main() -> int:
         parser.error("--input is required unless --publish is set")
 
     token = refresh.required_env("IRBANK_API_KEY")
-    catalog = refresh.load_catalog(args.catalog_url)
-    securities = sorted(catalog, key=lambda row: str(row["code"]).upper())
+    universe_complete = True
+    universe_next_cursor_present = False
+    if args.universe_json:
+        universe = json.loads(args.universe_json.read_text(encoding="utf-8"))
+        if not isinstance(universe, dict) or not isinstance(universe.get("securities"), list):
+            raise ValueError("Universe JSON does not contain securities[]")
+        universe_complete = bool(universe.get("complete")) and not bool(universe.get("next_cursor"))
+        universe_next_cursor_present = bool(universe.get("next_cursor"))
+        if not universe_complete and not args.allow_partial_universe:
+            raise ValueError("IRBANK security universe is incomplete; finish cursor pagination first")
+        securities = [row for row in universe["securities"]
+                      if isinstance(row, dict) and refresh.SECURITY_CODE_RE.fullmatch(
+                          str(row.get("code") or "").upper())]
+    else:
+        securities = refresh.load_catalog(args.catalog_url)
+    securities = sorted(securities, key=lambda row: str(row["code"]).upper())
     codes = [str(row["code"]).upper() for row in securities]
     if not securities:
         raise ValueError("IRBANK catalog is empty; refusing to publish")
@@ -230,6 +261,10 @@ def main() -> int:
         item.setdefault("code", code)
         item.setdefault("name", str(security.get("name") or code))
         item.setdefault("edinet_code", security.get("edinet_code"))
+        if "market" in security:
+            item["market"] = security.get("market")
+        if "industry" in security:
+            item["industry"] = security.get("industry")
         if "actual_status" not in item:
             item["actual_status"] = "available" if isinstance(item.get("actual"), dict) else "not_fetched"
         item.setdefault("actual", None)
@@ -267,6 +302,7 @@ def main() -> int:
     failures = 0
     actual_updates = 0
     forecast_updates = 0
+    forecast_cache_reuses = 0
     codes_touched = 0
     next_code = ordered[0]
     stopped_for_budget = False
@@ -275,7 +311,8 @@ def main() -> int:
     for index, code in enumerate(ordered):
         security = security_by_code[code]
         item = items[code]
-        actual_due = not target_codes and is_due(item, "actual", generated_at, now, args.refresh_days)
+        actual_due = (not target_codes and not args.forecasts_only
+                      and is_due(item, "actual", generated_at, now, args.refresh_days))
         forecast_due = bool(target_codes) or is_due(item, "forecast", generated_at, now, args.refresh_days)
         after_code = ordered[(index + 1) % len(ordered)]
         if not actual_due and not forecast_due:
@@ -330,10 +367,15 @@ def main() -> int:
                 stopped_for_budget = True
                 break
             try:
+                forecast_audit: dict[str, Any] = {}
                 forecast, attribution = refresh.fetch_latest_forecast(
-                    code, item.get("actual"), token, budget=budget
+                    code, item.get("actual"), token, budget=budget, audit=forecast_audit,
+                    cached_forecast=item.get("forecast"),
                 )
-                update_forecast(item, forecast, attribution, attempted_at)
+                forecast_cache_reuses += int(bool(
+                    (forecast_audit.get("evidence") or {}).get("cached_document_reused")
+                ))
+                update_forecast(item, forecast, attribution, attempted_at, forecast_audit)
                 forecast_updates += 1
             except refresh.RequestBudgetExceeded:
                 next_code = code
@@ -361,6 +403,8 @@ def main() -> int:
     # Pending counts are a lower bound: a forecast can require multiple
     # disclosure-document calls, while every pending item needs at least one.
     pending_actual, pending_forecast = count_pending(items, codes, generated_at, now, args.refresh_days)
+    if args.forecasts_only:
+        pending_actual = 0
     completed_actual = sum(complete_actual(items.get(code, {})) for code in codes)
     completed_forecast = sum(complete_forecast(items.get(code, {})) for code in codes)
     minimum_requests_remaining = pending_actual + pending_forecast
@@ -373,7 +417,8 @@ def main() -> int:
     elapsed_days = max(0, (now.date() - backfill_started.date()).days)
     days_remaining_in_target = max(0, args.target_days - elapsed_days)
     target_date = (backfill_started + timedelta(days=args.target_days)).date().isoformat()
-    coverage_complete = pending_actual == 0 and pending_forecast == 0
+    coverage_complete = (universe_complete and pending_forecast == 0
+                         and (args.forecasts_only or pending_actual == 0))
     initial_completion_at = parse_time(sync.get("initial_backfill_complete_at"))
     if coverage_complete and initial_completion_at is None:
         initial_completion_at = now
@@ -381,9 +426,11 @@ def main() -> int:
         initial_completion_at.date().isoformat() <= target_date if initial_completion_at else None
     )
     minimum_estimate_within_target = (
-        initial_completion_within_target
-        if initial_completion_at is not None
-        else minimum_days_remaining is not None and minimum_days_remaining <= days_remaining_in_target
+        None if not universe_complete else (
+            initial_completion_within_target
+            if initial_completion_at is not None
+            else minimum_days_remaining is not None and minimum_days_remaining <= days_remaining_in_target
+        )
     )
 
     old_cycle = int(sync.get("cycle") or 0)
@@ -391,6 +438,7 @@ def main() -> int:
         old_cycle += 1
     sync.update({
         "policy": "round_robin_irbank_dividend_and_forecast",
+        "actual_processing_enabled": not args.forecasts_only,
         "daily_request_limit": args.max_api_requests,
         "refresh_interval_days": args.refresh_days,
         "target_days": args.target_days,
@@ -404,12 +452,16 @@ def main() -> int:
         ),
         "initial_backfill_completed_within_target": initial_completion_within_target,
         "catalog_count": len(codes),
+        "universe_complete": universe_complete,
+        "universe_next_cursor_present": universe_next_cursor_present,
         "next_code": next_code,
         "cycle": old_cycle,
         "last_run_at": attempted_at,
         "last_run_request_count_including_usage": budget.used,
         "last_run_actual_updates": actual_updates,
         "last_run_forecast_updates": forecast_updates,
+        "last_run_forecast_cache_reuses": forecast_cache_reuses,
+        "last_run_forecast_detail_calls_saved": forecast_cache_reuses,
         "last_run_codes_touched": codes_touched,
         "last_run_failures": failures,
         "quota_remaining_at_start": quota_remaining,
@@ -419,6 +471,10 @@ def main() -> int:
         "minimum_days_remaining_at_200_per_day": minimum_days_remaining,
         "minimum_estimate_within_target": minimum_estimate_within_target,
         "coverage_complete": coverage_complete,
+        "universe_source": (
+            "irbank_securities_api_snapshot" if universe_complete
+            else "irbank_securities_api_partial_snapshot"
+        ) if args.universe_json else "irbank_worker_catalog",
         "last_run_stopped_for_budget": stopped_for_budget,
     })
 
@@ -438,6 +494,8 @@ def main() -> int:
 
     report = {
         "catalog_count": len(codes),
+        "universe_complete": universe_complete,
+        "universe_next_cursor_present": universe_next_cursor_present,
         "actual_complete": completed_actual,
         "forecast_complete": completed_forecast,
         "actual_pending": pending_actual,
@@ -450,6 +508,8 @@ def main() -> int:
         "quota_remaining_at_start": quota_remaining,
         "actual_updates": actual_updates,
         "forecast_updates": forecast_updates,
+        "forecast_cache_reuses": forecast_cache_reuses,
+        "forecast_detail_calls_saved": forecast_cache_reuses,
         "codes_touched": codes_touched,
         "failures": failures,
         "next_code": next_code,

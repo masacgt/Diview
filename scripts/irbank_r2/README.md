@@ -73,7 +73,20 @@ Per-security API routes use `market/yfinance/v2/issuer_dividends/shards/current.
 
 `refresh_v2_dividend_yields.py` pages through `GET /v1/screening?filters=dividendYield:gte:0`, validates the complete result and its attribution, and merges each IRBANK percentage and `as_of` date into the same index without replacing DPS or forecast records. A full refresh is about 38 requests at the current listing size. Dry runs require `--input <local-index.json>`; `--publish` reads the existing R2 object and verifies the uploaded object by SHA-256.
 
-`refresh_v2_dividend_batch.py` is the resumable daily backfill and refresh path for current actual DPS and company forecasts. The scheduled workflow runs once daily, reads `/v1/usage`, and caps all authenticated IRBANK requests—including retries and the usage lookup—at 200. It walks the full IRBANK catalog in a persisted round-robin order, fills missing actual/forecast entries, and refreshes completed entries after 60 days. Existing yield fields and unrelated index fields are retained. Forecast extraction can require one disclosure-list request and up to eight disclosure-document requests; the R2 `batch_sync` summary reports remaining entries and a minimum-days estimate against the two-month target, so completion depends on how many documents each company requires. Each completed run publishes the merged index and verifies its SHA-256 read-back. The workflow requires the `IRBANK_API_KEY`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` GitHub Actions secrets.
+For the complete IRBANK listed-security universe (including market and industry), use the authenticated `/v1/securities` cursor API rather than the older Worker overview catalog. The checkpoint script resumes from the last saved cursor and caps each invocation at 200 requests:
+
+```powershell
+python scripts/irbank_r2/fetch_irbank_security_catalog.py --output "$env:USERPROFILE\.cache\irbank-security-catalog.json" --max-api-requests 200
+```
+
+The current task intentionally uses the saved 4,000-code snapshot without fetching the remaining cursor pages. Process only those saved codes for forecasts while preserving existing actual DPS and yield data:
+
+```powershell
+python scripts/irbank_r2/run_irbank_forecast_daily.py --universe-json "$env:USERPROFILE\.cache\irbank-security-catalog-20261102.json" --max-batches 20 --requests-per-batch 200
+python scripts/irbank_r2/audit_irbank_forecast_coverage.py --universe-json "$env:USERPROFILE\.cache\irbank-security-catalog-20261102.json"
+```
+
+`run_irbank_forecast_daily.py` consumes only the saved snapshot, does not fetch additional securities pages, and stops before any R2 write when the daily quota is exhausted. Each run allows at most twenty batches of 200 requests. Partial-snapshot metadata stays attached to `batch_sync`; `coverage_complete` remains false because the snapshot has a next cursor. The auditor labels its counts `partial_snapshot_only`. The batch processor preserves existing actual DPS, yield, and unrelated index items. Forecast extraction follows `next_cursor` for up to ten disclosure-list pages and inspects up to eight candidate XBRL documents (18-request worst-case reservation). When a cached forecast's source document is still in the ordered disclosure list, newer candidates are inspected first; only then may the cached value be reused, and only for a future period without split-basis normalization. The batch report counts cache reuses and detail calls avoided. It records a separate `forecast_resolution` for an explicit value/zero, no title-matched disclosure, missing XBRL, missing dividend/distribution element, securities unsupported by the disclosure endpoint, or a case requiring review; the legacy `forecast_status` remains compatible with the Worker. Records without the new audit version are reprocessed so older `empty` results can be classified. Each published batch verifies its SHA-256 read-back. The workflow requires the `IRBANK_API_KEY`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY` credentials.
 
 ```powershell
 $env:IRBANK_API_KEY = '<IRBANK Connect API key>'
