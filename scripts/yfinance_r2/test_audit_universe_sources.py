@@ -26,6 +26,8 @@ class UniverseSourceAuditTests(TestCase):
 
         self.assertEqual(report["counts"]["irbank_duplicates"], 1)
         self.assertEqual(report["counts"]["intersection"], 2)
+        self.assertEqual(report["intersection_codes"], ["1301", "130A"])
+        self.assertEqual(report["normalized_code_union_count"], 5)
         self.assertEqual(len(report["normalized_code_sha256"]["irbank"]), 64)
         self.assertEqual(len(report["normalized_code_sha256"]["jquants"]), 64)
         self.assertEqual([row["code"] for row in report["irbank_only"]], ["1553", "92025"])

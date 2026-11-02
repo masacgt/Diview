@@ -138,6 +138,8 @@ def build_report(irbank_path: Path, jquants_path: Path) -> dict[str, Any]:
             "jquants_rows": len(jq_codes) + jq_duplicates, "jquants_unique": len(jq), "jquants_duplicates": jq_duplicates,
             "intersection": len(both), "irbank_only": len(ir_only), "jquants_only": len(jq_only),
         },
+        "normalized_code_union_count": len(ir | jq),
+        "intersection_codes": both,
         "normalized_code_sha256": {
             "irbank": hashlib.sha256("\n".join(sorted(ir)).encode("utf-8")).hexdigest(),
             "jquants": hashlib.sha256("\n".join(sorted(jq)).encode("utf-8")).hexdigest(),
