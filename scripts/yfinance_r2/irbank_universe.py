@@ -1,10 +1,12 @@
-"""Shared R2 contract for the weekly IRBANK + JPX ETF universe."""
+"""Shared R2 contract for the weekly IRBANK + JPX ETF/REIT universe."""
 
 from __future__ import annotations
 
 import hashlib
 import re
 from typing import Any
+
+from jpx_reit_universe import JPX_REIT_SOURCE, JPX_REIT_SOURCE_URL, MIN_JPX_REIT_COUNT
 
 
 IRBANK_UNIVERSE_R2_KEY = "market/yfinance/v2/universe/irbank_source.json"
@@ -78,14 +80,34 @@ def merge_jpx_etfs(
     return [merged[code] for code in sorted(merged)]
 
 
+def merge_jpx_reits(
+    securities: list[dict[str, Any]],
+    jpx_reits: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Attach official REIT classification and add current JPX-listed REITs."""
+    merged = {row["security_code_display"]: dict(row) for row in securities}
+    for reit in jpx_reits:
+        code = display_code(reit.get("security_code_display"))
+        if code is None or code != reit.get("security_code_display"):
+            raise ValueError(f"JPX REIT list contains an invalid display code: {reit.get('security_code_display')!r}")
+        row = merged.setdefault(code, {"security_code_display": code})
+        row["security_type"] = "reit"
+        row["jquants_product_category"] = "013"
+        row["sources"] = sorted(set(row.get("sources", [])) | {JPX_REIT_SOURCE})
+        row["jpx_reit_listing_date"] = str(reit.get("listing_date") or "")
+        row["jpx_reit_source_url"] = JPX_REIT_SOURCE_URL
+    return [merged[code] for code in sorted(merged)]
+
+
 def build_snapshot(
     securities: list[dict[str, Any]],
     fetched_at: str,
     *,
     jpx_etf_count: int = 0,
+    jpx_reit_count: int | None = None,
 ) -> dict[str, Any]:
     codes = [row["security_code_display"] for row in securities]
-    return {
+    snapshot = {
         "schema_version": 2,
         "source": IRBANK_UNIVERSE_SOURCE,
         "complete": True,
@@ -100,6 +122,14 @@ def build_snapshot(
         "security_code_sha256": code_sha256(codes),
         "securities": securities,
     }
+    if jpx_reit_count is not None:
+        snapshot["supplemental_sources"].append({
+            "source": JPX_REIT_SOURCE,
+            "url": JPX_REIT_SOURCE_URL,
+            "fetched_at": fetched_at,
+            "listed_reit_count": jpx_reit_count,
+        })
+    return snapshot
 
 
 def validate_snapshot(
@@ -107,6 +137,7 @@ def validate_snapshot(
     *,
     minimum_security_count: int = MIN_SECURITY_COUNT,
     minimum_jpx_etf_count: int = 350,
+    minimum_jpx_reit_count: int = MIN_JPX_REIT_COUNT,
     allow_legacy: bool = False,
 ) -> list[dict[str, Any]]:
     if not isinstance(snapshot, dict):
@@ -125,6 +156,14 @@ def validate_snapshot(
             for source in supplemental
         ):
             raise ValueError("Universe snapshot is missing a complete JPX ETF source record")
+        reit_source = next((source for source in supplemental if isinstance(source, dict)
+                            and source.get("source") == JPX_REIT_SOURCE), None)
+        if reit_source is not None and not (
+            reit_source.get("url") == JPX_REIT_SOURCE_URL
+            and isinstance(reit_source.get("listed_reit_count"), int)
+            and reit_source["listed_reit_count"] >= minimum_jpx_reit_count
+        ):
+            raise ValueError("Universe snapshot has an invalid JPX REIT source record")
     if snapshot.get("complete") is not True:
         raise ValueError("IRBANK universe snapshot is incomplete")
     securities = snapshot.get("securities")
@@ -170,8 +209,20 @@ def validate_snapshot(
             if source_url != JPX_ETF_SOURCE_URL:
                 raise ValueError(f"Universe snapshot contains an unknown JPX source URL: {code}")
             normalized["jpx_source_url"] = source_url
+        reit_listing_date = row.get("jpx_reit_listing_date")
+        if reit_listing_date is not None:
+            if not isinstance(reit_listing_date, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", reit_listing_date):
+                raise ValueError(f"Universe snapshot contains invalid JPX REIT listing date: {code}")
+            normalized["jpx_reit_listing_date"] = reit_listing_date
+        reit_source_url = row.get("jpx_reit_source_url")
+        if reit_source_url is not None:
+            if reit_source_url != JPX_REIT_SOURCE_URL:
+                raise ValueError(f"Universe snapshot contains an unknown JPX REIT source URL: {code}")
+            normalized["jpx_reit_source_url"] = reit_source_url
         if product_category == "014" and security_type != "etf":
             raise ValueError(f"ETF category is missing ETF security type: {code}")
+        if product_category == "013" and security_type != "reit":
+            raise ValueError(f"REIT category is missing REIT security type: {code}")
         normalized_rows.append(normalized)
     if len(codes) < minimum_security_count or len(codes) != len(set(codes)):
         raise ValueError("IRBANK universe snapshot is too small or contains duplicate codes")
@@ -194,6 +245,19 @@ def validate_snapshot(
             for row in tagged_etfs
         ):
             raise ValueError("JPX ETF source metadata is incomplete")
+        tagged_reits = [row for row in normalized_rows if JPX_REIT_SOURCE in row.get("sources", [])]
+        jpx_reit_source = next((source for source in snapshot["supplemental_sources"] if source.get("source") == JPX_REIT_SOURCE), None)
+        if jpx_reit_source is not None:
+            if len(tagged_reits) != jpx_reit_source["listed_reit_count"]:
+                raise ValueError("JPX REIT count does not match the source-tagged securities")
+            if any(
+                row.get("security_type") != "reit"
+                or row.get("jquants_product_category") != "013"
+                or not row.get("jpx_reit_listing_date")
+                or row.get("jpx_reit_source_url") != JPX_REIT_SOURCE_URL
+                for row in tagged_reits
+            ):
+                raise ValueError("JPX REIT source metadata is incomplete")
     fetched_at = str(snapshot.get("fetched_at") or "").strip()
     if not fetched_at:
         raise ValueError("IRBANK universe snapshot has no fetched_at timestamp")

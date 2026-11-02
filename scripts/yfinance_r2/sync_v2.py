@@ -3807,6 +3807,8 @@ def active_universe(client: Any, bucket: str, fetched: list[dict[str, str]], ses
             "sources": entry.get("sources") or previous.get("sources", []),
             "jpx_listing_date": entry.get("jpx_listing_date") or previous.get("jpx_listing_date"),
             "jpx_source_url": entry.get("jpx_source_url") or previous.get("jpx_source_url"),
+            "jpx_reit_listing_date": entry.get("jpx_reit_listing_date") or previous.get("jpx_reit_listing_date"),
+            "jpx_reit_source_url": entry.get("jpx_reit_source_url") or previous.get("jpx_reit_source_url"),
             "status": "active",
             "first_seen": previous.get("first_seen") or session_date.isoformat(),
             "last_seen": session_date.isoformat(),

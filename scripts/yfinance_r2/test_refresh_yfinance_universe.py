@@ -7,7 +7,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from irbank_universe import IRBANK_UNIVERSE_R2_KEY, JPX_ETF_SOURCE, validate_snapshot
+from irbank_universe import IRBANK_UNIVERSE_R2_KEY, JPX_ETF_SOURCE, JPX_REIT_SOURCE, validate_snapshot
+from jpx_reit_universe import MIN_JPX_REIT_COUNT
 
 IRBANK_SCRIPT_DIR = Path(__file__).resolve().parents[1] / "irbank_r2"
 sys.path.insert(0, str(IRBANK_SCRIPT_DIR))
@@ -28,6 +29,22 @@ class _R2Client:
 
 
 class RefreshYfinanceUniverseTests(unittest.TestCase):
+    def test_old_v2_snapshot_without_jpx_reit_source_is_due_for_refresh(self):
+        self.assertFalse(refresh.has_current_sources({
+            "schema_version": 2,
+            "supplemental_sources": [{
+                "source": "JPX Listed Issues - ETFs",
+                "url": "https://www.jpx.co.jp/english/equities/products/etfs/issues/01.html",
+            }],
+        }))
+        self.assertTrue(refresh.has_current_sources({
+            "schema_version": 2,
+            "supplemental_sources": [
+                {"source": "JPX Listed Issues - ETFs", "url": "https://www.jpx.co.jp/english/equities/products/etfs/issues/01.html"},
+                {"source": JPX_REIT_SOURCE, "url": "https://www.jpx.co.jp/english/equities/products/reits/issues/"},
+            ],
+        }))
+
     def test_refresh_publishes_integrated_snapshot_and_verifies_readback(self):
         client = _R2Client()
         irbank_rows = [
@@ -38,6 +55,10 @@ class RefreshYfinanceUniverseTests(unittest.TestCase):
             {"security_code_display": f"{code:04d}", "listing_date": "2020-01-02"}
             for code in range(5000, 5350)
         ]
+        jpx_reit_rows = [
+            {"security_code_display": f"{code:04d}", "listing_date": "2020-01-02"}
+            for code in range(1000, 1000 + MIN_JPX_REIT_COUNT)
+        ]
         budget = SimpleNamespace(used=12)
         with tempfile.TemporaryDirectory() as directory:
             artifact = Path(directory) / "snapshot.json"
@@ -46,6 +67,7 @@ class RefreshYfinanceUniverseTests(unittest.TestCase):
                  patch.object(refresh.irbank_api, "required_env", return_value="test-key"), \
                  patch.object(refresh, "fetch_complete_universe", return_value=(irbank_rows, budget, "updated")), \
                  patch.object(refresh, "fetch_jpx_etfs", return_value=jpx_rows), \
+                 patch.object(refresh, "fetch_jpx_reits", return_value=jpx_reit_rows), \
                  patch.object(refresh, "write_github_outputs"), \
                  patch.object(sys, "argv", ["refresh_yfinance_universe.py", "--output", str(artifact)]):
                 self.assertEqual(refresh.main(), 0)
@@ -56,6 +78,8 @@ class RefreshYfinanceUniverseTests(unittest.TestCase):
             self.assertEqual(len(validated), 3850)
             self.assertEqual(snapshot["supplemental_sources"][0]["source"], JPX_ETF_SOURCE)
             self.assertEqual(snapshot["supplemental_sources"][0]["listed_etf_count"], 350)
+            self.assertEqual(snapshot["supplemental_sources"][1]["source"], JPX_REIT_SOURCE)
+            self.assertEqual(snapshot["supplemental_sources"][1]["listed_reit_count"], MIN_JPX_REIT_COUNT)
             self.assertEqual(json.loads(artifact.read_text(encoding="utf-8"))["security_code_sha256"], snapshot["security_code_sha256"])
 
 

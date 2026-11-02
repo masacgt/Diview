@@ -20,12 +20,16 @@ sys.path.insert(0, str(YFINANCE_DIR))
 import refresh_v2_dividends as irbank_api  # noqa: E402
 from irbank_universe import (  # noqa: E402
     IRBANK_UNIVERSE_R2_KEY,
+    JPX_ETF_SOURCE,
+    JPX_ETF_SOURCE_URL,
     build_snapshot,
     merge_jpx_etfs,
+    merge_jpx_reits,
     normalize_securities,
     validate_snapshot,
 )
 from jpx_etf_universe import fetch_jpx_etfs  # noqa: E402
+from jpx_reit_universe import JPX_REIT_SOURCE, JPX_REIT_SOURCE_URL, fetch_jpx_reits  # noqa: E402
 
 
 API_BASE = "https://api.irbank.net/v1"
@@ -43,6 +47,27 @@ def parse_timestamp(value: object) -> datetime | None:
     except ValueError:
         return None
     return parsed.astimezone(timezone.utc) if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def has_current_sources(snapshot: object) -> bool:
+    if not isinstance(snapshot, dict) or snapshot.get("schema_version") != 2:
+        return False
+    supplemental = snapshot.get("supplemental_sources")
+    if not isinstance(supplemental, list):
+        return False
+    required_sources = (
+        (JPX_ETF_SOURCE, JPX_ETF_SOURCE_URL),
+        (JPX_REIT_SOURCE, JPX_REIT_SOURCE_URL),
+    )
+    return all(
+        any(
+            isinstance(source, dict)
+            and source.get("source") == expected
+            and source.get("url") == url
+            for source in supplemental
+        )
+        for expected, url in required_sources
+    )
 
 
 def write_json(path: Path, document: dict[str, object]) -> None:
@@ -128,8 +153,7 @@ def main() -> int:
             else:
                 fetched_at = parse_timestamp(existing.get("fetched_at"))
                 now = datetime.now(timezone.utc)
-                has_current_sources = existing.get("schema_version") == 2 and bool(existing.get("supplemental_sources"))
-                if has_current_sources and fetched_at is not None and timedelta(0) <= now - fetched_at < timedelta(days=args.refresh_days):
+                if has_current_sources(existing) and fetched_at is not None and timedelta(0) <= now - fetched_at < timedelta(days=args.refresh_days):
                     if args.output:
                         write_json(args.output, existing)
                     print(
@@ -159,9 +183,13 @@ def main() -> int:
             return 0
 
         fetched_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-        jpx_etfs = fetch_jpx_etfs(as_of=datetime.now(ZoneInfo("Asia/Tokyo")).date())
-        combined_securities = merge_jpx_etfs(snapshot_securities, jpx_etfs)
-        snapshot = build_snapshot(combined_securities, fetched_at, jpx_etf_count=len(jpx_etfs))
+        as_of = datetime.now(ZoneInfo("Asia/Tokyo")).date()
+        jpx_etfs = fetch_jpx_etfs(as_of=as_of)
+        jpx_reits = fetch_jpx_reits(as_of=as_of)
+        combined_securities = merge_jpx_reits(merge_jpx_etfs(snapshot_securities, jpx_etfs), jpx_reits)
+        snapshot = build_snapshot(
+            combined_securities, fetched_at, jpx_etf_count=len(jpx_etfs), jpx_reit_count=len(jpx_reits)
+        )
         validate_snapshot(snapshot)
         previous_codes = {
             str(row["security_code_display"])
@@ -190,7 +218,9 @@ def main() -> int:
             "security_count": snapshot["security_count"],
             "irbank_security_count": len(snapshot_securities),
             "jpx_listed_etf_count": len(jpx_etfs),
+            "jpx_listed_reit_count": len(jpx_reits),
             "jpx_etfs_added_to_irbank": len(set(row["security_code_display"] for row in jpx_etfs) - set(row["security_code_display"] for row in snapshot_securities)),
+            "jpx_reits_added_to_irbank": len(set(row["security_code_display"] for row in jpx_reits) - set(row["security_code_display"] for row in snapshot_securities)),
             "security_code_sha256": snapshot["security_code_sha256"],
             "added_codes": len(current_codes - previous_codes),
             "removed_codes": len(previous_codes - current_codes),
