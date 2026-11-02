@@ -28,8 +28,8 @@ import yfinance as yf
 yf.config.debug.hide_exceptions = False
 
 import fetch_and_upload as collector
-from fetch_jquants_universe import fetch_securities
 from financial_revision import bump_financial_revision
+from irbank_universe import IRBANK_UNIVERSE_R2_KEY, validate_snapshot
 from monthly_price_calendar import last_xtks_session_in_december, normalize_december_price_point as normalize_monthly_price_point
 
 
@@ -337,9 +337,10 @@ class GlobalHttpRateLimiter:
     def __exit__(self, exc_type, exc_value, traceback):
         if self.original_request is not None:
             self.session_class.request = self.original_request
-# J-Quants is the source for the supported Japanese-market universe and product
-# category. Keep quote currency separate from Yahoo's reported statement currency;
-# the latter is provenance and does not establish the units of statement values.
+# IRBANK's weekly listed-security snapshot is the active universe. Existing
+# product-category metadata is retained per code when available. Keep quote
+# currency separate from Yahoo's reported statement currency; the latter is
+# provenance and does not establish the units of statement values.
 PROFILE_FIELDS: tuple[str, ...] = ()
 CURRENT_FIELDS = (
     "trailingEps", "forwardEps", "bookValue", "dividendRate", "dividendYield",
@@ -504,7 +505,7 @@ def safe_symbol(symbol: str) -> str:
 def market_symbol(code: str) -> str:
     normalized = str(code).strip().upper()
     if not re.fullmatch(r"[A-Z0-9]{4,5}", normalized):
-        raise ValueError(f"Invalid J-Quants security code: {code!r}")
+        raise ValueError(f"Invalid IRBANK security code: {code!r}")
     return f"{normalized}.T"
 
 
@@ -3783,12 +3784,13 @@ def active_universe(client: Any, bucket: str, fetched: list[dict[str, str]], ses
         rows.append({
             "code": code,
             "symbol": market_symbol(code),
-            "security_type": entry.get("security_type", "listed_security"),
-            "jquants_product_category": entry.get("jquants_product_category") or None,
+            "security_type": entry.get("security_type") or previous.get("security_type", "listed_security"),
+            "jquants_product_category": entry.get("jquants_product_category") or previous.get("jquants_product_category"),
             "status": "active",
             "first_seen": previous.get("first_seen") or session_date.isoformat(),
             "last_seen": session_date.isoformat(),
             "industry_source": "android_asset_master",
+            "irbank_source_code": entry.get("irbank_source_code") or code,
         })
     current_codes = {row["code"] for row in rows}
     for code, previous in old_by_code.items():
@@ -3816,17 +3818,29 @@ def run(
     configure = getattr(collector, "configure_yfinance", None)
     if configure:
         configure()
-    api_key = os.environ.get("JQUANTS_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError("JQUANTS_API_KEY is required")
     phase_seconds: dict[str, float] = {}
+    r2_metrics = R2Metrics()
+    client = MeasuredR2Client(collector.get_client(), r2_metrics) if (publish or dry_run) else None
+    bucket = collector.required_env("R2_BUCKET") if (publish or dry_run) else ""
     phase_started = time.perf_counter()
     universe_snapshot_path = os.environ.get("YFINANCE_UNIVERSE_SNAPSHOT_PATH", "").strip()
-    fetched = fetch_securities(
-        api_key,
-        snapshot_path=Path(universe_snapshot_path) if universe_snapshot_path else None,
-    )
-    phase_seconds["jquants_universe_fetch"] = round(time.perf_counter() - phase_started, 3)
+    universe_snapshot = read_json(client, bucket, IRBANK_UNIVERSE_R2_KEY)
+    if universe_snapshot is None:
+        raise RuntimeError(
+            f"IRBANK universe snapshot is missing from R2: {IRBANK_UNIVERSE_R2_KEY}; "
+            "run the IRBANK universe refresh workflow before daily sync"
+        )
+    fetched = validate_snapshot(universe_snapshot)
+    universe_source = str(universe_snapshot["source"])
+    universe_fetched_at = str(universe_snapshot["fetched_at"])
+    universe_code_sha256 = str(universe_snapshot["security_code_sha256"])
+    phase_seconds["irbank_universe_read"] = round(time.perf_counter() - phase_started, 3)
+    if universe_snapshot_path:
+        snapshot_path = Path(universe_snapshot_path)
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+        snapshot_path.write_text(
+            json.dumps(universe_snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
+        )
     latest_session = latest_completed_xtks_session()
     session_date = target_session or latest_session
     if target_session is not None:
@@ -3839,17 +3853,22 @@ def run(
             raise RuntimeError(
                 f"Requested sync date {target_session} is later than the latest completed XTKS session {latest_session}"
             )
-    r2_metrics = R2Metrics()
-    client = MeasuredR2Client(collector.get_client(), r2_metrics) if publish else None
-    bucket = collector.required_env("R2_BUCKET") if publish else ""
     if dry_run:
-        print(f"J-Quants universe: {len(fetched)} listed issues; session date={session_date}")
-        print("Dry-run validates the universe only; no yfinance calls or R2 writes were made.")
+        print(
+            f"IRBANK universe: {len(fetched)} listed issues; "
+            f"snapshot fetched_at={universe_fetched_at}; session date={session_date}"
+        )
+        print("Dry-run validates the R2 snapshot only; no yfinance calls or R2 writes were made.")
         return 0
 
     phase_started = time.perf_counter()
     old_universe = read_json(client, bucket, object_key("universe", "current.json")) or {}
     old_status = {str(row.get("code")): row for row in old_universe.get("securities", []) if isinstance(row, dict)}
+    for security in fetched:
+        previous = old_status.get(security["security_code_display"], {})
+        for field in ("security_type", "jquants_product_category"):
+            if security.get(field) is None and previous.get(field) is not None:
+                security[field] = previous[field]
     previous_catalog = read_json(client, bucket, object_key("catalog", "current.json"))
     previous_catalog_items = {
         str(row.get("code")): row
@@ -4068,7 +4087,10 @@ def run(
     phase_seconds["catalog_build"] = round(time.perf_counter() - phase_started, 3)
     phase_started = time.perf_counter()
     put_json_if_changed(client, bucket, object_key("universe", "current.json"), {
-        "schema_version": 1, "updated_at": iso_now(), "source": "J-Quants API v2",
+        "schema_version": 1, "updated_at": iso_now(), "source": universe_source,
+        "source_snapshot_key": IRBANK_UNIVERSE_R2_KEY,
+        "source_fetched_at": universe_fetched_at,
+        "security_code_sha256": universe_code_sha256,
         "session_date": session_date.isoformat(), "security_count": len(fetched), "securities": universe_rows,
     })
     put_json_if_changed(client, bucket, object_key("catalog", "generations", f"{generation}.json"), catalog)
@@ -4086,6 +4108,9 @@ def run(
         "yfinance_version": yf.__version__,
         "generation": generation,
         "market_data_date": session_date.isoformat(),
+        "universe_source": universe_source,
+        "universe_fetched_at": universe_fetched_at,
+        "universe_code_sha256": universe_code_sha256,
         "last_completed_at": iso_now(),
         "security_count": len(fetched),
         "success_count": len(results),
@@ -4123,7 +4148,10 @@ def run(
         "schema_version": 1, "active_generation": generation,
         "generated_at": iso_now(), "source": "Yahoo Finance via yfinance",
         "yfinance_version": yf.__version__,
-        "universe_source": "J-Quants API v2", "security_count": len(fetched),
+        "universe_source": universe_source,
+        "universe_fetched_at": universe_fetched_at,
+        "universe_code_sha256": universe_code_sha256,
+        "security_count": len(fetched),
         "catalog_count": len(catalog["items"]),
     })
     put_json_if_changed(client, bucket, schedule_key, {
@@ -4157,7 +4185,7 @@ def run(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--publish", action="store_true", help="Write the v2 generation to R2")
-    parser.add_argument("--dry-run", action="store_true", help="Fetch the J-Quants universe only; do not access R2 or yfinance")
+    parser.add_argument("--dry-run", action="store_true", help="Validate the weekly IRBANK R2 universe only; do not call yfinance or write R2")
     parser.add_argument("--workers", type=int, default=int(os.environ.get("YFINANCE_V2_WORKERS", "8")))
     parser.add_argument(
         "--session-date", type=date.fromisoformat,

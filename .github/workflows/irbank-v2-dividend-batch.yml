@@ -1,4 +1,4 @@
-name: Refresh IRBANK v2 dividends
+name: Refresh IRBANK universe and dividends
 
 on:
   schedule:
@@ -28,7 +28,9 @@ jobs:
           sparse-checkout: |
             scripts/irbank_r2/refresh_v2_dividend_batch.py
             scripts/irbank_r2/refresh_v2_dividends.py
+            scripts/irbank_r2/refresh_yfinance_universe.py
             scripts/irbank_r2/requirements.txt
+            scripts/yfinance_r2/irbank_universe.py
             scripts/yfinance_r2/financial_revision.py
           sparse-checkout-cone-mode: false
       - uses: actions/setup-python@v5
@@ -38,21 +40,56 @@ jobs:
           cache-dependency-path: scripts/irbank_r2/requirements.txt
       - name: Install R2 client
         run: python -m pip install -r scripts/irbank_r2/requirements.txt
-      - name: Refresh actual and forecast dividends within the daily quota
-        run: set -o pipefail; python scripts/irbank_r2/refresh_v2_dividend_batch.py --publish --max-api-requests 200 --refresh-days 60 --target-days 60 --forecast-codes "$FORECAST_CODES" 2>&1 | tee irbank-v2-dividend-batch.log
+      - name: Refresh the IRBANK universe snapshot when seven days old
+        id: refresh-yfinance-universe
+        continue-on-error: true
+        run: set -o pipefail; python scripts/irbank_r2/refresh_yfinance_universe.py --max-api-requests 200 --refresh-days 7 --output irbank-yfinance-universe.json 2>&1 | tee irbank-yfinance-universe-refresh.log
         shell: bash
         env:
           IRBANK_API_KEY: ${{ secrets.IRBANK_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: diview-market-data
+      - name: Refresh actual and forecast dividends within the daily quota
+        run: |
+          universe_requests="${IRBANK_UNIVERSE_REQUESTS:-0}"
+          remaining_requests=$((200 - universe_requests))
+          if (( remaining_requests < 1 )); then
+            echo "IRBANK daily request cap was used by the universe refresh; skipping the dividend batch this run."
+            exit 0
+          fi
+          set -o pipefail
+          python scripts/irbank_r2/refresh_v2_dividend_batch.py --publish --max-api-requests "$remaining_requests" --refresh-days 60 --target-days 60 --forecast-codes "$FORECAST_CODES" 2>&1 | tee irbank-v2-dividend-batch.log
+        shell: bash
+        env:
+          IRBANK_API_KEY: ${{ secrets.IRBANK_API_KEY }}
+          IRBANK_UNIVERSE_REQUESTS: ${{ steps.refresh-yfinance-universe.outputs.requests_used || '200' }}
           FORECAST_CODES: ${{ inputs.forecast_codes }}
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: diview-market-data
+      - name: Fail the workflow when the universe refresh is overdue or failed
+        if: always() && steps.refresh-yfinance-universe.outputs.status != 'fresh' && steps.refresh-yfinance-universe.outputs.status != 'updated'
+        run: |
+          echo "IRBANK universe refresh status: ${{ steps.refresh-yfinance-universe.outputs.status || 'failed' }}"
+          exit 1
       - name: Save batch report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: irbank-v2-dividend-batch-${{ github.run_id }}
           path: irbank-v2-dividend-batch.log
+          if-no-files-found: ignore
+          retention-days: 60
+      - name: Save IRBANK universe snapshot report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: irbank-yfinance-universe-${{ github.run_id }}
+          path: |
+            irbank-yfinance-universe.json
+            irbank-yfinance-universe-refresh.log
           if-no-files-found: ignore
           retention-days: 60

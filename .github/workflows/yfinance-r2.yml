@@ -4,11 +4,15 @@ on:
   push:
     paths:
       - "scripts/yfinance_r2/**"
+      - "scripts/irbank_r2/refresh_yfinance_universe.py"
       - ".github/workflows/yfinance-r2.yml"
+      - ".github/workflows/irbank-v2-dividend-batch.yml"
   pull_request:
     paths:
       - "scripts/yfinance_r2/**"
+      - "scripts/irbank_r2/refresh_yfinance_universe.py"
       - ".github/workflows/yfinance-r2.yml"
+      - ".github/workflows/irbank-v2-dividend-batch.yml"
   schedule:
     # 12:17 UTC is 21:17 JST, after the Tokyo market close and away from the hourly boundary.
     - cron: "17 12 * * 1-5"
@@ -100,7 +104,7 @@ jobs:
           cache-dependency-path: scripts/yfinance_r2/requirements.txt
       - name: Install collection dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
-      - name: Fetch J-Quants universe and publish the yfinance v2 generation
+      - name: Load the weekly IRBANK universe and publish the yfinance v2 generation
         run: |
           args=(--publish --workers 24 --session-date "$YFINANCE_SESSION_DATE")
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
@@ -113,23 +117,22 @@ jobs:
         shell: bash
         env:
           YFINANCE_SESSION_DATE: ${{ needs.market-calendar.outputs.session_date }}
-          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
           YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
           YFINANCE_LIBRARY_RETRIES: "1"
           YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND: "8"
           YFINANCE_V2_WORKERS: "24"
-          YFINANCE_UNIVERSE_SNAPSHOT_PATH: jquants-universe-snapshot.json
+          YFINANCE_UNIVERSE_SNAPSHOT_PATH: irbank-universe-snapshot.json
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: diview-market-data
 
-      - name: Save the exact J-Quants universe snapshot
+      - name: Save the exact IRBANK universe snapshot used by the sync
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: jquants-universe-${{ github.run_id }}
-          path: jquants-universe-snapshot.json
+          name: irbank-yfinance-universe-${{ github.run_id }}
+          path: irbank-universe-snapshot.json
           if-no-files-found: ignore
           retention-days: 30
 
@@ -409,16 +412,15 @@ jobs:
           cache-dependency-path: scripts/yfinance_r2/requirements.txt
       - name: Install collection dependencies
         run: python -m pip install -r scripts/yfinance_r2/requirements.txt
-      - name: Fetch the full J-Quants universe and publish yfinance v2 to R2
+      - name: Load the full IRBANK universe and publish yfinance v2 to R2
         run: set -o pipefail; python scripts/yfinance_r2/sync_v2.py --publish --workers 24 --reprocess-successful 2>&1 | tee sync-output.txt
         shell: bash
         env:
-          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
           YFINANCE_HTTP_TIMEOUT_SECONDS: "30"
           YFINANCE_LIBRARY_RETRIES: "1"
           YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND: "8"
           YFINANCE_V2_WORKERS: "24"
-          YFINANCE_UNIVERSE_SNAPSHOT_PATH: jquants-universe-snapshot.json
+          YFINANCE_UNIVERSE_SNAPSHOT_PATH: irbank-universe-snapshot.json
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -430,7 +432,7 @@ jobs:
           name: yfinance-full-universe-study-${{ github.run_id }}
           path: |
             sync-output.txt
-            jquants-universe-snapshot.json
+            irbank-universe-snapshot.json
           if-no-files-found: ignore
           retention-days: 30
 

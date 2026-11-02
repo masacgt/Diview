@@ -17,6 +17,7 @@ import migrate_legacy_financials as financial_migration
 import repair_monthly_price_dates as monthly_date_repair
 import monthly_price_calendar as monthly_calendar
 import audit_split_transition_dividends as split_audit
+from irbank_universe import build_snapshot, validate_snapshot as validate_irbank_snapshot
 
 
 class SplitTransitionAuditTests(TestCase):
@@ -1621,7 +1622,12 @@ class OfflineFinancialSyncTests(TestCase):
             "generation": "2026-10-19", "market_data_date": "2026-10-19",
             "items": [old_item],
         }
+        irbank_snapshot = build_snapshot(
+            [{"security_code_display": "7203", "irbank_source_code": "7203"}],
+            "2026-10-19T12:00:00Z",
+        )
         store = self.Store({
+            sync.IRBANK_UNIVERSE_R2_KEY: irbank_snapshot,
             legacy_key: legacy,
             sync.object_key("catalog", "current.json"): legacy,
             sync.object_key("securities", "7203.T", "profile.json"): {"display_name": "Toyota"},
@@ -1643,11 +1649,13 @@ class OfflineFinancialSyncTests(TestCase):
         limiter.__enter__ = Mock(return_value=limiter)
         limiter.__exit__ = Mock(return_value=False)
         with ExitStack() as stack:
-            stack.enter_context(patch.dict(sync.os.environ, {"JQUANTS_API_KEY": "offline"}))
             stack.enter_context(patch.object(sync.collector, "configure_yfinance", create=True))
             stack.enter_context(patch.object(sync.collector, "get_client", return_value=store))
             stack.enter_context(patch.object(sync.collector, "required_env", return_value="b"))
-            stack.enter_context(patch.object(sync, "fetch_securities", return_value=[{"security_code_display": "7203"}]))
+            stack.enter_context(patch.object(
+                sync, "validate_snapshot",
+                side_effect=lambda snapshot: validate_irbank_snapshot(snapshot, minimum_security_count=1),
+            ))
             stack.enter_context(patch.object(sync, "latest_completed_xtks_session", return_value=date(2026, 10, 19)))
             stack.enter_context(patch.object(sync, "is_last_market_session", return_value=False))
             stack.enter_context(patch.object(sync, "GlobalHttpRateLimiter", return_value=limiter))
