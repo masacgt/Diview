@@ -7,6 +7,7 @@ input snapshots contain evidence that supports a specific explanation.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from collections import Counter
@@ -35,17 +36,20 @@ def load_codes(path: Path, source: str) -> tuple[list[str], dict[str, str], dict
         } for row in rows}
     else:
         raw_codes = doc.get("security_codes") if isinstance(doc, dict) else None
+        rows = (doc.get("data") or doc.get("securities")) if isinstance(doc, dict) else None
         if not isinstance(raw_codes, list):
-            rows = doc.get("data") or doc.get("securities") if isinstance(doc, dict) else None
             if not isinstance(rows, list):
                 raise ValueError("J-Quants input must contain security_codes[] or data[]/securities[]")
             raw_codes = [row.get("Code") or row.get("code") or row.get("security_code_display") for row in rows]
-            categories = {
-                display_code(row.get("Code") or row.get("code") or row.get("security_code_display")): str(row.get("ProdCat") or row.get("jquants_product_category") or "")
-                for row in rows
-            }
-        else:
-            categories = {}
+        if not isinstance(raw_codes, list):
+            raise ValueError("J-Quants input must contain a security code list")
+        if not isinstance(rows, list):
+            rows = []
+        categories = {
+            display_code(row.get("Code") or row.get("code") or row.get("security_code_display")): str(row.get("ProdCat") or row.get("jquants_product_category") or "")
+            for row in rows if isinstance(row, dict)
+            if row.get("Code") or row.get("code") or row.get("security_code_display")
+        }
         row_details = {
             display_code(row.get("Code") or row.get("code") or row.get("security_code_display")): {
                 "jquants_prodcat": str(row.get("ProdCat") or row.get("jquants_product_category") or "unknown")
@@ -61,6 +65,13 @@ def load_codes(path: Path, source: str) -> tuple[list[str], dict[str, str], dict
             continue
         normalized.append(code)
         raw_by_display[code] = str(raw).strip().upper()
+    if source != "irbank":
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            raw = row.get("Code") or row.get("code") or row.get("security_code_display")
+            if raw:
+                raw_by_display[display_code(raw)] = str(raw).strip().upper()
     return normalized, raw_by_display, categories, row_details, duplicates
 
 
@@ -75,11 +86,28 @@ def build_report(irbank_path: Path, jquants_path: Path) -> dict[str, Any]:
 
     def difference(code: str, owner: str, raw: dict[str, str]) -> dict[str, str]:
         prod = categories.get(code, "")
+        ir_industry = ir_details.get(code, {}).get("irbank_industry", "")
+        if prod in ("013", "014"):
+            likely_scope = {"013": "reit", "014": "etf"}[prod]
+            scope_source = "jquants_product_category"
+        elif ir_industry.strip().casefold() == "etf":
+            likely_scope = "etf"
+            scope_source = "irbank_industry"
+        elif ir_industry.strip().casefold() in ("reit", "j-reit"):
+            likely_scope = "reit"
+            scope_source = "irbank_industry"
+        elif prod in ("011", "012"):
+            likely_scope = "equity"
+            scope_source = "jquants_product_category"
+        else:
+            likely_scope = "unknown"
+            scope_source = "unavailable"
         return {
             "code": code,
             "present_in": owner,
             "jquants_prodcat": prod or "unknown",
-            "likely_product_scope": {"013": "reit", "014": "etf", "011": "equity", "012": "equity"}.get(prod, "unknown"),
+            "likely_product_scope": likely_scope,
+            "product_scope_source": scope_source,
             **ir_details.get(code, {}),
             **jq_details.get(code, {}),
             "raw_irbank_code": ir_raw.get(code, ""),
@@ -92,10 +120,16 @@ def build_report(irbank_path: Path, jquants_path: Path) -> dict[str, Any]:
     jq_date_set = set(jq_dates) if isinstance(jq_dates, list) else ({str(jq_dates)} if jq_dates else set())
     ir_day = str(ir_date or "")[:10]
     aligned = bool(ir_day and jq_date_set == {ir_day})
+    ir_retrieved_at = ir_doc.get("retrieved_at") or ir_doc.get("generated_at") or ir_doc.get("fetched_at")
+    jq_retrieved_at = jq_doc.get("retrieved_at") or jq_doc.get("generated_at")
+    ir_retrieved_day = str(ir_retrieved_at or "")[:10]
+    jq_retrieved_day = str(jq_retrieved_at or "")[:10]
     return {
         "read_only": True,
         "inputs": {"irbank": str(irbank_path), "jquants": str(jquants_path)},
         "snapshot_dates": {"irbank": ir_date, "jquants": jq_dates},
+        "retrieval_timestamps": {"irbank": ir_retrieved_at, "jquants": jq_retrieved_at},
+        "retrieved_same_day": bool(ir_retrieved_day and jq_retrieved_day and ir_retrieved_day == jq_retrieved_day),
         "date_alignment": "aligned" if aligned else "mismatch_or_unknown",
         "comparison_is_temporally_comparable": aligned,
         "date_alignment_warning": None if aligned else "The source snapshots have different or unverifiable effective dates; membership differences cannot be classified as listing/delisting from this comparison alone.",
@@ -103,6 +137,10 @@ def build_report(irbank_path: Path, jquants_path: Path) -> dict[str, Any]:
             "irbank_rows": len(ir_codes) + ir_duplicates, "irbank_unique": len(ir), "irbank_duplicates": ir_duplicates,
             "jquants_rows": len(jq_codes) + jq_duplicates, "jquants_unique": len(jq), "jquants_duplicates": jq_duplicates,
             "intersection": len(both), "irbank_only": len(ir_only), "jquants_only": len(jq_only),
+        },
+        "normalized_code_sha256": {
+            "irbank": hashlib.sha256("\n".join(sorted(ir)).encode("utf-8")).hexdigest(),
+            "jquants": hashlib.sha256("\n".join(sorted(jq)).encode("utf-8")).hexdigest(),
         },
         "jquants_product_categories": dict(sorted(category_counts.items())),
         "normalization_examples": [
