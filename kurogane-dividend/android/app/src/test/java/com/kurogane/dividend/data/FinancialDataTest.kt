@@ -274,6 +274,20 @@ class FinancialDataTest {
         assertEquals("unverified_incomplete_corporate_action_history", data.issuerDividendShareBasisStatus)
         assertEquals(40000000.0, data.issuerDividends.single().displayDps!!, 0.0)
     }
+    @Test fun prefersVerifiedCurrentShareBasisDpsAndKeepsReportedIssuerValues() {
+        val root = JSONObject("""{
+          "security":{"code":"8303"},
+          "issuer_dividends":{"status":"available","share_basis_status":"verified_from_issuer_actions","records":[{
+            "fiscal_year":2025,"annual_dps":40000000,"annual_dps_adjusted":40000000,
+            "annual_dps_current_share_basis":2.857142857142857,
+            "field_units":{"annual_dps":"jpy_per_share","annual_dps_adjusted":"jpy_per_share","annual_dps_current_share_basis":"jpy_per_share"}
+          }]}
+        }""")
+        val record = parseFixture(root, "8303").issuerDividends.single()
+        assertEquals(40000000.0, record.reportedDps!!, 0.0)
+        assertEquals(40000000.0, record.adjustedDps!!, 0.0)
+        assertEquals(2.857142857142857, record.displayDps!!, 1e-12)
+    }
     @Test fun calendarYearCagrUsesOnlyTheLatestFiveConsecutiveYears() {
         val root = JSONObject("""{"security":{"code":"1306"},"dividends":{"history_basis":"calendar_year_observed_distributions","records":[{"calendar_year":2020,"calendar_year_distribution_per_share":1},{"calendar_year":2021,"calendar_year_distribution_per_share":10},{"calendar_year":2022,"calendar_year_distribution_per_share":20},{"calendar_year":2023,"calendar_year_distribution_per_share":40},{"calendar_year":2024,"calendar_year_distribution_per_share":80},{"calendar_year":2025,"calendar_year_distribution_per_share":160}]}}""")
         assertEquals(100.0, parseFixture(root, "1306").profile.growthRate, 0.000001)

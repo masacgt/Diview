@@ -67,6 +67,19 @@ The Worker exposes `/api/v1/irbank/catalog`, `/api/v1/irbank/manifest`, `/api/v1
 
 ## v2 current dividend index
 
+### Issuer-confirmed share actions and normalized dividend events
+
+`refresh_corporate_actions.py` reads the issuer's annual-report disclosure list and section text from IRBANK Connect, extracts dated split/consolidation ratios, and normalizes Yahoo `repair=False` cash-dividend events to the latest verified share basis. It is generic by security code; it contains no per-issuer ratio or dividend overrides. The derived action catalog is stored at `market/irbank/v1/events/share-splits/{code}.json`, and normalized events at `market/yfinance/v2/securities/{symbol}/dividend_basis/current.json`. Each event keeps the Yahoo raw amount, applied factor, and issuer filing references. Conflicts and incomplete disclosure retrieval stop publication; R2 writes are read back and SHA-256 checked, then one shared financial revision token is bumped to refresh app-side caches.
+
+Dry-run first; publishing is explicit and capped at 200 IRBANK API requests per invocation:
+
+```powershell
+python scripts/irbank_r2/refresh_corporate_actions.py --codes 8303 --from 2017-01-01 --to 2026-11-03 --max-api-requests 100 --output-dir "$env:TEMP\diview-corporate-actions-preview"
+python scripts/irbank_r2/refresh_corporate_actions.py --codes 8303 --from 2017-01-01 --to 2026-11-03 --max-api-requests 100 --publish
+```
+
+The Worker merges issuer effective dates with nearby same-ratio Yahoo history, prefers the issuer date, serves normalized dividend basis when fresh, and exposes per-period issuer DPS on the current share basis only when action coverage is complete. It preserves source DPS and reports review status without publishing ambiguous same-date values.
+
 予想取得の規範仕様は [`ai_docs/irbank-dividend-forecast-acquisition-spec.md`](../../ai_docs/irbank-dividend-forecast-acquisition-spec.md) を参照。
 
 `refresh_v2_dividends.py` fetches the latest annual actual DPS from `GET /v1/dividends` and can parse current-year `DividendPerShare` forecast facts from IRBANK disclosure documents. The output is `market/yfinance/v2/issuer_dividends/current.json`; the Worker uses this index for current annual DPS and yield. A forecast that cannot be normalized to a single current-share basis stays unavailable. The script checks `/v1/usage` before calling the API, writes to a temporary local JSON file by default, and verifies a read-back when `--publish` is used. A partial publication merges into an existing index and is rejected if no full index exists yet.
