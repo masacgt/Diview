@@ -186,6 +186,11 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 }
 
                 var showSearchSheet by remember { mutableStateOf(false) }
+                LaunchedEffect(navBackStackEntry) {
+                    if (navBackStackEntry?.savedStateHandle?.remove<Boolean>("restore_stock_search") == true) {
+                        showSearchSheet = true
+                    }
+                }
                 var showNotificationsDialog by remember { mutableStateOf(false) }
                 val appContext = LocalContext.current
                 var unreadNotificationCount by remember(appContext) {
@@ -608,8 +613,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             visible = showSearchSheet,
                             onDismiss = { showSearchSheet = false },
                             onSearch = { query -> viewModel.searchCloudflareSecurities(query) },
+                            onCachedSearch = viewModel::cachedCloudflareSearchMatches,
                             onLoadQuotes = viewModel::loadCloudflareSearchQuotes,
                             onSelectStock = { code ->
+                                navBackStackEntry?.savedStateHandle?.set("restore_stock_search", true)
                                 showSearchSheet = false
                                 navController.navigate("detail/${android.net.Uri.encode(code)}") { launchSingleTop = true }
                             }

@@ -12,6 +12,64 @@ import java.net.SocketTimeoutException
 import java.net.URL
 
 class CloudflareMarketRepositoryTest {
+    @Test fun searchResultCacheExpiresAndEvictsLeastRecentlyUsedEntries() {
+        var now = 0L
+        val cache = SearchResultCache(nowMillis = { now }, maxEntries = 2)
+        val hit = CloudflareSearchHit("7203", "Toyota")
+        cache.put("7203", listOf(hit))
+        cache.put("empty", emptyList())
+        assertEquals(listOf(hit), cache.get("7203"))
+        cache.put("other", listOf(hit))
+        assertNull(cache.get("empty"))
+        now = 86_399_999
+        assertEquals(listOf(hit), cache.get("7203"))
+        now = 86_400_000
+        assertNull(cache.get("7203"))
+    }
+
+    @Test fun cachedSearchDoesNotKeepMarketValuesForTwentyFourHours() {
+        val cache = SearchResultCache()
+        cache.put("7203", listOf(CloudflareSearchHit("7203", "Toyota", cachedPrice = 3000.0,
+            annualDividendPerShare = 100.0, marketYieldRate = 3.3, isNoDividendConfirmed = true,
+            yieldSource = "test")))
+        val hit = cache.get("7203")!!.single()
+        assertNull(hit.cachedPrice)
+        assertNull(hit.annualDividendPerShare)
+        assertNull(hit.marketYieldRate)
+        assertFalse(hit.isNoDividendConfirmed)
+        assertNull(hit.yieldSource)
+    }
+
+    @Test fun partialMatchesUseOnlyUnexpiredCachedResultsAndRemoveDuplicates() {
+        var now = 0L
+        val cache = SearchResultCache(nowMillis = { now })
+        val toyota = CloudflareSearchHit("7203", "トヨタ自動車")
+        cache.put("72", listOf(toyota, CloudflareSearchHit("7205", "日野自動車")))
+        cache.put("7203", listOf(toyota))
+        assertEquals(listOf("7203", "7205"), cache.matching("７２").map { it.code })
+        assertEquals(listOf("7203"), cache.matching("トヨタ").map { it.code })
+        assertTrue(cache.matching("銀行").isEmpty())
+        now = 86_400_000
+        assertTrue(cache.matching("72").isEmpty())
+    }
+
+    @Test fun repeatedSearchReusesSuccessAndEmptyResultsButNotFailures() = runBlocking {
+        val urls = mutableListOf<String>()
+        val repo = repository(mutableListOf(
+            Connection(200, """{"items":[{"code":"7203","name":"Toyota"}]}"""),
+            Connection(200, """{"items":[]}"""),
+            Connection(503, ""),
+            Connection(200, """{"items":[{"code":"8306","name":"Bank"}]}""")
+        ), urls)
+        assertEquals("7203", repo.searchSecurities("7203").single().code)
+        assertEquals("7203", repo.searchSecurities(" 7203 ").single().code)
+        assertTrue(repo.searchSecurities("nothing").isEmpty())
+        assertTrue(repo.searchSecurities("nothing").isEmpty())
+        try { repo.searchSecurities("8306"); fail("HTTP failure should propagate") } catch (_: MarketHttpException) { }
+        assertEquals("8306", repo.searchSecurities("8306").single().code)
+        assertEquals(4, urls.size)
+    }
+
     @Test fun catalogRefreshSeedsFallbackWithoutChangingEitherProjectionOrRefreshFreshness() = runBlocking {
         val urls = mutableListOf<String>()
         val catalog = """{"market_data_date":"2026-10-26","items":[

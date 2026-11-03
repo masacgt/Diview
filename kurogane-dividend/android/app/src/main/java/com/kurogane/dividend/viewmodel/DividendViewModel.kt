@@ -2272,6 +2272,11 @@ class DividendViewModel @JvmOverloads constructor(
 
     fun watchlistProjectionFor(stocks: List<WatchlistStock>) = watchlistProjectionCache.get(stocks)
 
+    fun cachedCloudflareSearchMatches(query: String): List<CloudflareSearchHit> =
+        marketRepository.cachedSearchMatches(query).map { hit ->
+            hit.copy(name = japaneseDisplayName(hit.code, hit.name))
+        }
+
     suspend fun searchCloudflareSecurities(query: String): List<CloudflareSearchHit> {
         val hits = marketRepository.searchSecurities(query)
         val industries = withContext(Dispatchers.IO) { runCatching { Tse33IndustryMaster.industries(getApplication()) }.getOrDefault(emptyMap()) }

@@ -111,9 +111,17 @@ fun SearchSheet(
     onDismiss: () -> Unit,
     onSelectStock: (String) -> Unit,
     onSearch: suspend (String) -> List<CloudflareSearchHit> = { emptyList() },
-    onLoadQuotes: suspend (List<String>) -> Map<String, CloudflareSearchQuote> = { emptyMap() }
+    onLoadQuotes: suspend (List<String>) -> Map<String, CloudflareSearchQuote> = { emptyMap() },
+    onCachedSearch: (String) -> List<CloudflareSearchHit> = { emptyList() }
 ) {
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var selectedCategory by rememberSaveable { mutableStateOf("all") }
     if (!visible) return
+    val dismissSearch = {
+        searchQuery = ""
+        selectedCategory = "all"
+        onDismiss()
+    }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
 
@@ -129,8 +137,6 @@ fun SearchSheet(
         )
     }
 
-    var searchQuery by rememberSaveable { mutableStateOf("") }
-    var selectedCategory by rememberSaveable { mutableStateOf("all") } // "all", "jp", "us", "fund", "high-div"
     var remoteCandidates by remember { mutableStateOf<List<CandidateStock>?>(null) }
     var isSearching by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
@@ -144,8 +150,6 @@ fun SearchSheet(
 
     LaunchedEffect(visible) {
         if (visible) {
-            searchQuery = ""
-            selectedCategory = "all"
             recentCandidates = loadRecentSearches(context)
             recentQuotes = emptyMap()
         }
@@ -161,29 +165,7 @@ fun SearchSheet(
         }
     }
 
-    LaunchedEffect(searchQuery, visible, retryCount) {
-        remoteCandidates = null
-        isSearching = false
-        searchError = null
-        val query = normalizeStockSearchText(searchQuery.trim())
-        if (!visible || query.isEmpty()) {
-            remoteCandidates = null
-            isSearching = false
-        } else {
-            delay(350)
-            isSearching = true
-            val result = runCatchingCancellable { search(query) }
-            searchError = result.exceptionOrNull()?.let { networkErrorMessage(resources, it) }
-            val hits = result.getOrNull()
-            val quotesNeeded = hits.orEmpty()
-                .map { it.code }
-                .distinct()
-            val searchQuotes = if (quotesNeeded.isEmpty()) {
-                emptyMap()
-            } else {
-                runCatchingCancellable { loadQuotes(quotesNeeded) }.getOrDefault(emptyMap())
-            }
-            remoteCandidates = hits?.map { hit ->
+    fun candidatesFor(hits: List<CloudflareSearchHit>?, searchQuotes: Map<String, CloudflareSearchQuote>) = hits?.map { hit ->
                 val local = candidates.firstOrNull { it.code.equals(hit.code, ignoreCase = true) }
                 val quote = searchQuotes[hit.code.uppercase(java.util.Locale.ROOT)]
                 val priceValue = quote?.price ?: hit.cachedPrice
@@ -217,7 +199,31 @@ fun SearchSheet(
                     isNoDividendConfirmed = noDividendConfirmed
                 )
             }
+
+    LaunchedEffect(searchQuery, visible, retryCount) {
+        remoteCandidates = null
+        isSearching = false
+        searchError = null
+        val query = normalizeStockSearchText(searchQuery.trim())
+        if (!visible || query.isEmpty()) {
+            remoteCandidates = null
             isSearching = false
+        } else {
+            isSearching = true
+            remoteCandidates = candidatesFor(onCachedSearch(query), emptyMap())?.takeIf { it.isNotEmpty() }
+            delay(350)
+            val result = runCatchingCancellable { search(query) }
+            searchError = result.exceptionOrNull()?.let { networkErrorMessage(resources, it) }
+            val hits = result.getOrNull()
+            val quotesNeeded = hits.orEmpty()
+                .map { it.code }
+                .distinct()
+            if (hits != null) remoteCandidates = candidatesFor(hits, emptyMap())
+            isSearching = false
+            if (quotesNeeded.isNotEmpty()) {
+                val searchQuotes = runCatchingCancellable { loadQuotes(quotesNeeded) }.getOrDefault(emptyMap())
+                remoteCandidates = candidatesFor(hits, searchQuotes)
+            }
         }
     }
 
@@ -257,7 +263,7 @@ fun SearchSheet(
     }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = dismissSearch,
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         containerColor = SurfaceContainerLow,
@@ -335,7 +341,7 @@ fun SearchSheet(
 
                     // Close Button
                     IconButton(
-                        onClick = onDismiss,
+                        onClick = dismissSearch,
                         modifier = Modifier
                             .minimumInteractiveComponentSize().size(32.dp)
                             .clip(CircleShape)

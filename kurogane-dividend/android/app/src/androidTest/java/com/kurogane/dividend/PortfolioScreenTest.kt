@@ -67,6 +67,43 @@ class PortfolioScreenTest {
         compose.onAllNodesWithText("古い結果").assertCountEquals(0)
     }
 
+    @Test fun searchSelectionKeepsQueryWhenSheetReturnsAndExplicitDismissalResetsIt() {
+        val visible = mutableStateOf(true)
+        compose.setContent { KuroganeDividendTheme {
+            SearchSheet(visible.value, { visible.value = false }, { visible.value = false },
+                onSearch = { listOf(CloudflareSearchHit("7203", "検索対象銘柄")) })
+        } }
+        compose.onNode(hasSetTextAction()).performTextInput("7203")
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("検索対象銘柄").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("検索対象銘柄").performClick()
+        compose.onNodeWithText("銘柄検索・絞り込み").assertDoesNotExist()
+        compose.runOnIdle { visible.value = true }
+        compose.onNode(hasSetTextAction()).assertTextEquals("7203")
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("検索対象銘柄").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("閉じる").performClick()
+        compose.runOnIdle { visible.value = true }
+        compose.onNode(hasSetTextAction()).assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.EditableText,
+            androidx.compose.ui.text.AnnotatedString("")
+        ))
+    }
+
+    @Test fun cachedCandidatesAppearWhileSearchIsPendingThenUpdate() {
+        val response = CompletableDeferred<List<CloudflareSearchHit>>()
+        val attempts = AtomicInteger()
+        compose.setContent { KuroganeDividendTheme {
+            SearchSheet(true, {}, {},
+                onSearch = { attempts.incrementAndGet(); response.await() },
+                onCachedSearch = { listOf(CloudflareSearchHit("7203", "先行表示銘柄")) })
+        } }
+        compose.onNode(hasSetTextAction()).performTextInput("7203")
+        compose.waitUntil(10_000) { attempts.get() == 1 && compose.onAllNodesWithText("先行表示銘柄").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("先行表示銘柄").assertIsDisplayed()
+        compose.runOnIdle { response.complete(listOf(CloudflareSearchHit("7203", "検索完了銘柄"))) }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("検索完了銘柄").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithText("先行表示銘柄").assertCountEquals(0)
+    }
+
     @Test fun unknownLiveQuoteDoesNotReuseOldSearchDividend() {
         compose.setContent { KuroganeDividendTheme {
             SearchSheet(true, {}, {},

@@ -98,30 +98,56 @@ private fun DividendChartSkeleton() {
         label = "Dividend chart shimmer"
     )
     val placeholder = BorderColor.copy(alpha = shimmer)
-    val heights = listOf(0.28f, 0.34f, 0.46f, 0.53f, 0.59f, 0.66f, 0.73f, 0.80f)
+    val heights = listOf(0.28f, 0.30f, 0.44f, 0.55f, 0.62f, 0.70f, 0.80f, 0.88f)
     Row(
         modifier = Modifier.fillMaxSize().padding(12.dp)
             .semantics { contentDescription = "配当グラフを読み込み中" },
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.Bottom
     ) {
-        heights.forEach { height ->
+        heights.forEachIndexed { index, height ->
             Column(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Bottom
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(Modifier.width(24.dp).height(6.dp).clip(CircleShape).background(placeholder))
-                Spacer(Modifier.height(5.dp))
-                Box(
-                    Modifier.fillMaxHeight(height * 0.52f).width(26.dp)
-                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                        .background(placeholder)
-                )
-                Spacer(Modifier.height(6.dp))
-                Box(Modifier.width(28.dp).height(6.dp).clip(CircleShape).background(placeholder))
+                BoxWithConstraints(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    val barHeight = maxHeight * height * 0.52f
+                    if (index == heights.lastIndex) {
+                        Box(
+                            Modifier.align(Alignment.BottomCenter).offset(y = -(barHeight + 30.dp))
+                                .fillMaxWidth(0.5f).height(6.dp).clip(CircleShape).background(placeholder)
+                        )
+                    }
+                    Box(
+                        Modifier.align(Alignment.BottomCenter).offset(y = -(barHeight + 15.dp))
+                            .fillMaxWidth(0.65f).height(6.dp).clip(CircleShape).background(placeholder)
+                    )
+                    Box(
+                        Modifier.width(26.dp).fillMaxWidth(0.8f).height(barHeight)
+                            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                            .background(placeholder)
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Box(Modifier.fillMaxWidth(0.75f).height(8.dp).clip(CircleShape).background(placeholder))
+                Spacer(Modifier.height(4.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun DividendChartSkeletonFooter() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.fillMaxWidth(0.32f).height(7.dp).clip(CircleShape).background(BorderColor.copy(alpha = 0.55f)))
+        Box(Modifier.fillMaxWidth(0.62f).height(7.dp).clip(CircleShape).background(BorderColor.copy(alpha = 0.55f)))
     }
 }
 
@@ -1258,7 +1284,9 @@ fun StockDetailScreen(
                                     )
                                 }
                             }
-                            Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.15f)) {
+                            if (dividendChartLoading) {
+                                Box(Modifier.width(60.dp).height(20.dp).clip(CircleShape).background(BorderColor.copy(alpha = 0.55f)))
+                            } else Surface(shape = CircleShape, color = PrimaryEmerald.copy(alpha = 0.15f)) {
                                 Text(if (profile.consecutiveYears > 0) stringResource(R.string.stock_detail_label_3) else stringResource(R.string.stock_detail_label_4), modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), color = PrimaryEmerald, fontSize = AppTextSize.dense, fontWeight = FontWeight.Bold)
                             }
                         }
@@ -1380,6 +1408,7 @@ fun StockDetailScreen(
                             }
                         }
 
+                        if (dividendChartLoading) DividendChartSkeletonFooter()
                         if (!dividendChartLoading) selectedDividendYear?.let { year ->
                             val selectedForecastDps = dividendPeriods
                                 .firstOrNull { it.year == year && it.isForecast }

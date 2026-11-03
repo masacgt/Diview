@@ -1,5 +1,11 @@
 # Todo
 
+- [ ] 銘柄検索結果から詳細を開いた後、戻ると検索内容を保ってモーダルが再表示される動作を実機で確認する。エミュレータでは7203を検索・詳細表示・戻る操作で検索語と候補が復元され、Composeテストで明示的な閉じ操作も確認。
+
+- [ ] 銘柄検索中のキャッシュ候補の先行表示を実機で確認する。エミュレータのComposeテストで、通信待機中の候補表示と完了後の入れ替え、失敗・検索語変更の回帰を確認。初回通信はAPIの一括応答を待つ。
+
+- [ ] 銘柄検索結果の24時間キャッシュについて、実機での表示と価格更新を確認する。JDK 17の単体テストで成功・空結果の再利用、失敗後の再試行、期限・上限を確認。エミュレータでは7203の検索とモーダル再表示後の結果・価格を確認。
+
 - [ ] Verify searched-stock dividend months after retrieval and cache reload on a physical device; an emulator displayed 7203 as 3月・9月 from the prior task checkout.
 - [ ] Verify dividend chart loading skeleton and failure state on a physical device; an emulator test in the prior task checkout confirmed the loading-to-data transition.
 

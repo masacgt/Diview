@@ -39,6 +39,55 @@ data class CloudflareSearchQuote(
     val yieldSource: String? = null
 )
 
+internal class SearchResultCache(
+    private val nowMillis: () -> Long = { System.nanoTime() / 1_000_000L },
+    private val ttlMillis: Long = 24 * 60 * 60 * 1_000L,
+    private val maxEntries: Int = 100
+) {
+    private data class Entry(val loadedAt: Long, val hits: List<CloudflareSearchHit>)
+    private val entries = LinkedHashMap<String, Entry>(16, 0.75f, true)
+
+    @Synchronized fun get(query: String): List<CloudflareSearchHit>? {
+        val entry = entries[query] ?: return null
+        if (nowMillis() - entry.loadedAt !in 0 until ttlMillis) {
+            entries.remove(query)
+            return null
+        }
+        return entry.hits
+    }
+
+    @Synchronized fun matching(query: String): List<CloudflareSearchHit> {
+        val needle = java.text.Normalizer.normalize(query.trim(), java.text.Normalizer.Form.NFKC)
+            .lowercase(java.util.Locale.ROOT)
+        if (needle.isEmpty()) return emptyList()
+        val now = nowMillis()
+        val iterator = entries.entries.iterator()
+        val matches = linkedMapOf<String, CloudflareSearchHit>()
+        while (iterator.hasNext()) {
+            val entry = iterator.next().value
+            if (now - entry.loadedAt !in 0 until ttlMillis) {
+                iterator.remove()
+                continue
+            }
+            entry.hits.forEach { hit ->
+                val code = java.text.Normalizer.normalize(hit.code, java.text.Normalizer.Form.NFKC).lowercase(java.util.Locale.ROOT)
+                val name = java.text.Normalizer.normalize(hit.name, java.text.Normalizer.Form.NFKC).lowercase(java.util.Locale.ROOT)
+                if (code.contains(needle) || name.contains(needle)) matches.putIfAbsent(hit.code, hit)
+            }
+        }
+        return matches.values.take(30)
+    }
+
+    @Synchronized fun put(query: String, hits: List<CloudflareSearchHit>) {
+        // Search identity can be retained longer than market values. Quotes are refreshed separately.
+        entries[query] = Entry(nowMillis(), hits.map { hit ->
+            hit.copy(cachedPrice = null, annualDividendPerShare = null, marketYieldRate = null,
+                isNoDividendConfirmed = false, yieldSource = null)
+        })
+        while (entries.size > maxEntries) entries.remove(entries.keys.first())
+    }
+}
+
 private data class CachedSearchCatalogQuotes(
     val loadedAtElapsedMillis: Long,
     val quotesByCode: Map<String, CloudflareSearchQuote>
@@ -211,15 +260,19 @@ class CloudflareMarketRepository(
     @Volatile
     private var cachedSearchCatalogQuotes: CachedSearchCatalogQuotes? = null
     private val searchCatalogQuotesLock = Any()
+    private val searchResults = SearchResultCache()
+
+    fun cachedSearchMatches(query: String): List<CloudflareSearchHit> = searchResults.matching(query)
 
     suspend fun searchSecurities(query: String): List<CloudflareSearchHit> = withContext(ioDispatcher) {
         if (query.isBlank()) return@withContext emptyList()
         require(query.length <= 256) { "検索文字列が長すぎます" }
-        val encoded = URLEncoder.encode(query.trim(), Charsets.UTF_8.name())
+        val key = query.trim()
+        searchResults.get(key)?.let { return@withContext it }
+        val encoded = URLEncoder.encode(key, Charsets.UTF_8.name())
         val root = getJson("/api/v1/security-search?q=$encoded")
         val rows = root.optJSONArray("items") ?: return@withContext emptyList()
-        if (rows.length() == 0) return@withContext emptyList()
-        (0 until rows.length()).mapNotNull { index ->
+        val hits = (0 until rows.length()).mapNotNull { index ->
             val row = rows.optJSONObject(index) ?: return@mapNotNull null
             val code = row.optString("code").trim().uppercase(java.util.Locale.ROOT)
             val name = row.optString("name").trim()
@@ -237,6 +290,8 @@ class CloudflareMarketRepository(
                 )
             }
         }
+        searchResults.put(key, hits)
+        hits
     }
 
     suspend fun fetchSecurityCategories(codes: Collection<String>): Map<String, String?> = withContext(ioDispatcher) {
