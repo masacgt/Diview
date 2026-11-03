@@ -308,17 +308,7 @@ const IRBANK_V2_DIVIDENDS_KEY = `${YFINANCE_V2_ROOT}/issuer_dividends/current.js
 const IRBANK_V2_DIVIDEND_SHARDS_ROOT = `${YFINANCE_V2_ROOT}/issuer_dividends/shards`;
 const IRBANK_V2_DIVIDEND_SHARD_MANIFEST_KEY = `${IRBANK_V2_DIVIDEND_SHARDS_ROOT}/current.json`;
 const DIVIDEND_SHARD_PREFIX_LENGTH = 2;
-
-// SBI Shinsei's FY2026 securities report documents historical share actions
-// that are not all represented in its stored yfinance split history.
-const UNVERIFIED_DIVIDEND_SHARE_BASIS_CODES = new Set(['8303']);
-
-function dividendShareBasisStatus(code) {
-  const normalized = String(code || '').trim().toUpperCase().replace(/\.T$/, '');
-  return UNVERIFIED_DIVIDEND_SHARE_BASIS_CODES.has(normalized)
-    ? 'unverified_incomplete_corporate_action_history'
-    : null;
-}
+const IRBANK_SHARE_SPLITS_ROOT = 'market/irbank/v1/events/share-splits';
 
 function calculateDailyValuation(current) {
   const price = finiteNumber(current?.price?.close);
@@ -625,7 +615,7 @@ async function readV2Catalog(env, generation = '') {
   };
 }
 
-function yfinanceCalendarYearDividends(events) {
+function yfinanceCalendarYearDividends(events, amountBasis = 'yfinance_split_adjusted_assumption') {
   if (!Array.isArray(events)) return { records: [], status: 'not_fetched' };
   const currentYear = Number(new Intl.DateTimeFormat('en', {
     timeZone: 'Asia/Tokyo', year: 'numeric'
@@ -648,12 +638,100 @@ function yfinanceCalendarYearDividends(events) {
     .map(([calendar_year, amount]) => ({
       calendar_year,
       calendar_year_distribution_per_share: amount,
-      amount_basis: 'yfinance_split_adjusted_assumption',
+      amount_basis: amountBasis,
     }));
   return {
     records,
     status: records.length ? 'available' : 'empty',
-    amount_basis: 'yfinance_split_adjusted_assumption',
+    amount_basis: amountBasis,
+  };
+}
+
+function calendarYearDividendTrend(records) {
+  const observed = (Array.isArray(records) ? records : [])
+    .map(row => ({
+      year: finiteNumber(row?.calendar_year),
+      amount: finiteNumber(row?.calendar_year_distribution_per_share),
+    }))
+    .filter(row => Number.isInteger(row.year) && row.amount !== null && row.amount >= 0)
+    .sort((a, b) => a.year - b.year);
+  const latest = observed.at(-1);
+  const prior = observed.at(-2);
+  if (!latest || !prior || prior.year !== latest.year - 1) {
+    return { latest_completed_year: latest?.year ?? null, consecutive_increase_years: null, no_cut_years: null,
+      status: 'insufficient_history' };
+  }
+  let increases = 0;
+  let noCuts = 0;
+  for (let index = observed.length - 1; index > 0; index -= 1) {
+    const current = observed[index];
+    const previous = observed[index - 1];
+    if (previous.year !== current.year - 1 || current.amount <= previous.amount) break;
+    increases += 1;
+  }
+  for (let index = observed.length - 1; index > 0; index -= 1) {
+    const current = observed[index];
+    const previous = observed[index - 1];
+    if (previous.year !== current.year - 1 || current.amount < previous.amount) break;
+    noCuts += 1;
+  }
+  return { latest_completed_year: latest.year, consecutive_increase_years: increases, no_cut_years: noCuts,
+    status: 'available' };
+}
+
+async function readIssuerShareActions(env, code) {
+  const normalized = yfinanceV2Code(code);
+  return normalized
+    ? readV2Json(env, `${IRBANK_SHARE_SPLITS_ROOT}/${normalized}.json`)
+    : null;
+}
+
+async function readNormalizedDividendBasis(env, symbol) {
+  const normalized = yfinanceV2Symbol(symbol);
+  return normalized
+    ? readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${normalized}/dividend_basis/current.json`)
+    : null;
+}
+
+function isFreshDividendBasis(basis, current) {
+  if (!basis || !Array.isArray(basis.records)) return false;
+  const basisTime = Date.parse(String(basis.generated_at || ''));
+  const currentTime = Date.parse(String(current?.updated_at || ''));
+  return Number.isFinite(basisTime) && (!Number.isFinite(currentTime) || basisTime >= currentTime);
+}
+
+function isCurrentDividendBasis(basis, current) {
+  return basis?.status === 'available' && isFreshDividendBasis(basis, current);
+}
+
+function currentShareBasisDps(record, issuerFinancialPeriods, actionDocument, asOfDate) {
+  const sourceDps = finiteNumber(record?.annual_dps);
+  if (sourceDps === null || actionDocument?.status !== 'available'
+    || (actionDocument?.errors || []).length > 0
+    || (actionDocument?.coverage?.conflicting_dates || []).length > 0) return null;
+  const fiscalYear = String(record?.fiscal_year ?? '').slice(0, 4);
+  const periods = (Array.isArray(issuerFinancialPeriods) ? issuerFinancialPeriods : []).filter(row =>
+    String(row?.fiscal_year || '').slice(0, 4) === fiscalYear
+      && /^\d{4}-\d{2}-\d{2}$/.test(String(row?.period_end || '')));
+  if (periods.length !== 1) return null;
+  const periodEnd = String(periods[0].period_end);
+  const coverageFrom = String(actionDocument?.coverage?.disclosures_from || '');
+  const coverageTo = String(actionDocument?.coverage?.disclosures_to || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(coverageFrom) || coverageFrom > periodEnd
+    || !/^\d{4}-\d{2}-\d{2}$/.test(coverageTo) || coverageTo < asOfDate) return null;
+  let factor = 1;
+  for (const action of actionDocument.events || []) {
+    const actionDate = String(action?.effective_date || '');
+    const ratio = finiteNumber(action?.ratio);
+    if (actionDate > periodEnd && actionDate <= asOfDate && ratio !== null && ratio > 0) factor *= ratio;
+  }
+  if (!Number.isFinite(factor) || factor <= 0) return null;
+  return {
+    value: sourceDps / factor,
+    source_dps: sourceDps,
+    share_adjustment_factor: factor,
+    period_end: periodEnd,
+    as_of: asOfDate,
   };
 }
 
@@ -1141,8 +1219,22 @@ async function readV2FinancialPayload(env, code) {
   const dividendHistory = yfinanceCalendarYearDividends(
     dividendDocuments.flatMap(document => Array.isArray(document.records) ? document.records : []),
   );
+  const shareActions = await readIssuerShareActions(env, code);
+  const normalizedBasis = await readNormalizedDividendBasis(env, `${code}.T`);
+  const normalizedBasisFresh = isFreshDividendBasis(normalizedBasis, current);
+  const normalizedBasisCurrent = isCurrentDividendBasis(normalizedBasis, current);
+  const effectiveDividendHistory = normalizedBasisCurrent
+    ? yfinanceCalendarYearDividends(normalizedBasis.records, normalizedBasis.amount_basis)
+    : normalizedBasisFresh
+      ? { records: [], status: normalizedBasis.status || 'review_required', amount_basis: 'unverified' }
+      : dividendHistory;
   const calendarYearMetrics = current?.dividend?.calendar_year_metrics || null;
-  const dividendRows = Array.isArray(calendarYearMetrics?.annual_records)
+  const effectiveDividendMetrics = normalizedBasisFresh
+    ? calendarYearDividendTrend(effectiveDividendHistory.records)
+    : calendarYearMetrics;
+  const dividendRows = normalizedBasisFresh
+    ? effectiveDividendHistory.records
+    : Array.isArray(calendarYearMetrics?.annual_records)
     ? calendarYearMetrics.annual_records
     : dividendHistory.records;
   const dividends = dividendRows.map(record => ({
@@ -1192,17 +1284,30 @@ async function readV2FinancialPayload(env, code) {
       source: 'IRBANK',
     });
   }
+  const issuerFinancialPeriods = irbankOverview?.financials?.annual || [];
+  const asOfDate = new Date().toISOString().slice(0, 10);
   const issuerDividendRecords = [...issuerDividendRecordsByPeriod.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, record]) => ({
+    .map(([, record]) => {
+      const adjusted = currentShareBasisDps(record, issuerFinancialPeriods, shareActions, asOfDate);
+      return ({
       ...record,
+      ...(adjusted ? {
+        annual_dps_current_share_basis: adjusted.value,
+        share_adjustment_factor: adjusted.share_adjustment_factor,
+        share_basis_period_end: adjusted.period_end,
+        share_basis_as_of: adjusted.as_of,
+        share_basis_status: 'verified_from_issuer_actions',
+      } : {}),
       field_units: {
         ...(record.field_units && typeof record.field_units === 'object' ? record.field_units : {}),
         ...(finiteNumber(record.annual_dps) !== null ? { annual_dps: financialUnitContract.api_units.per_share } : {}),
         ...(finiteNumber(record.annual_dps_adjusted) !== null ? { annual_dps_adjusted: financialUnitContract.api_units.per_share } : {}),
+        ...(adjusted ? { annual_dps_current_share_basis: financialUnitContract.api_units.per_share } : {}),
         ...(finiteNumber(record.payout_ratio) !== null ? { payout_ratio: financialUnitContract.api_units.ratio } : {}),
       },
-    }));
+      });
+    });
   const issuerForecast = irbankDividendItem?.forecast && typeof irbankDividendItem.forecast === 'object'
     ? {
       ...irbankDividendItem.forecast,
@@ -1214,13 +1319,18 @@ async function readV2FinancialPayload(env, code) {
       },
     }
     : null;
-  const shareBasisStatus = dividendShareBasisStatus(code);
+  const shareBasisStatus = shareActions?.status === 'available' && (shareActions.events || []).length > 0
+    && !(shareActions.errors || []).length
+    ? 'verified_from_issuer_actions'
+    : shareActions?.status === 'review_required' || (shareActions?.errors || []).length
+      ? 'unverified_incomplete_corporate_action_history'
+      : null;
   const dividendHistoryStatus = current?.field_status?.dividend_history;
   const rawPayoutRatio = finiteNumber(current?.statistics?.payoutRatio);
   const rawPayoutUnit = yfinanceStatisticsFieldUnit(current, 'payoutRatio');
   const payoutRatio = ratioAsPercent(rawPayoutRatio, rawPayoutUnit);
   return {
-    financial_contract_version: 6,
+    financial_contract_version: 7,
     security: {
       code: yfinanceV2Code(code),
       canonical_code: String(code || '').length === 4 ? `${code}0` : String(code || ''),
@@ -1231,11 +1341,11 @@ async function readV2FinancialPayload(env, code) {
     dividends: {
       records: dividends,
       history_basis: 'calendar_year_observed_distributions',
-      amount_basis: dividendHistory.amount_basis,
-      consecutive_dividend_increase_years: finiteNumber(calendarYearMetrics?.consecutive_increase_years),
-      no_cut_years: finiteNumber(calendarYearMetrics?.no_cut_years),
-      metrics_status: calendarYearMetrics?.status || 'not_fetched',
-      metrics_as_of_year: finiteNumber(calendarYearMetrics?.latest_completed_year),
+      amount_basis: effectiveDividendHistory.amount_basis,
+      consecutive_dividend_increase_years: finiteNumber(effectiveDividendMetrics?.consecutive_increase_years),
+      no_cut_years: finiteNumber(effectiveDividendMetrics?.no_cut_years),
+      metrics_status: effectiveDividendMetrics?.status || 'not_fetched',
+      metrics_as_of_year: finiteNumber(effectiveDividendMetrics?.latest_completed_year),
       source: 'Yahoo Finance via yfinance',
       current: current?.dividend || null,
       ...(shareBasisStatus ? { share_basis_status: shareBasisStatus } : {}),
@@ -1243,9 +1353,9 @@ async function readV2FinancialPayload(env, code) {
       field_units: { payout_ratio: financialUnitContract.api_units.ratio },
       field_status: {
         ...(current?.field_status || {}),
-        dividend_history: dividendHistoryStatus || dividendHistory.status,
-        consecutive_dividend_increase_years: calendarYearMetrics?.status || 'not_fetched',
-        no_cut_years: calendarYearMetrics?.status || 'not_fetched',
+        dividend_history: normalizedBasisFresh ? effectiveDividendHistory.status : dividendHistoryStatus || dividendHistory.status,
+        consecutive_dividend_increase_years: effectiveDividendMetrics?.status || 'not_fetched',
+        no_cut_years: effectiveDividendMetrics?.status || 'not_fetched',
         payout_ratio: payoutRatio != null ? 'available' : 'empty',
       },
     },
@@ -1255,7 +1365,7 @@ async function readV2FinancialPayload(env, code) {
       latest_actual: latestIssuerActual || issuerDividendRecords.at(-1) || null,
       forecast: issuerForecast,
       history_basis: 'issuer_reported_fiscal_year',
-      amount_basis: 'irbank_adjusted_fiscal_dps',
+      amount_basis: 'irbank_reported_and_current_share_basis_when_verified',
       source: irbankDividendIndex?.source || 'IRBANK Connect',
       attribution: irbankDividendIndex?.attribution
         || irbankOverview?.sources?.dividends || null,
@@ -2440,15 +2550,23 @@ export default {
             ? requestedYears
             : [Number(asOf.slice(0, 4)), Number(asOf.slice(0, 4)) - 1];
           const v2Symbol = yfinanceV2Symbol(symbol);
-          const [v2Events, current] = await Promise.all([
+          const [v2Events, current, dividendBasis] = await Promise.all([
             readV2DividendEvents(env, symbol, years),
             v2Symbol ? readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${v2Symbol}/current.json`) : Promise.resolve(null),
+            readNormalizedDividendBasis(env, symbol),
           ]);
+          const basisFresh = isFreshDividendBasis(dividendBasis, current);
+          const basisCurrent = isCurrentDividendBasis(dividendBasis, current);
+          const sourceEvents = basisFresh
+            ? dividendBasis.records.filter(event => years.includes(Number(String(event?.date || '').slice(0, 4))))
+            : v2Events;
           const storedHistoryStatus = current?.field_status?.dividend_history
-            || (v2Events ? (v2Events.length > 0 ? 'available' : 'empty') : 'not_fetched');
+            || (sourceEvents ? (sourceEvents.length > 0 ? 'available' : 'empty') : 'not_fetched');
           const estimatedHistoryEvent = estimatedEventsBySymbol.get(symbol);
-          const historyStatus = estimatedHistoryEvent && ['empty', 'not_fetched'].includes(storedHistoryStatus)
-            ? 'available' : storedHistoryStatus;
+          const historyStatus = basisFresh && dividendBasis.status !== 'available'
+            ? dividendBasis.status || 'review_required'
+            : estimatedHistoryEvent && ['empty', 'not_fetched'].includes(storedHistoryStatus)
+              ? 'available' : storedHistoryStatus;
           const calendarExDate = String(current?.calendar?.ex_dividend_date || '');
           const rawUpcoming = finiteNumber(current?.statistics?.exDividendDate);
           const statisticsExDate = rawUpcoming ? new Date(rawUpcoming * 1000).toISOString().slice(0, 10) : null;
@@ -2485,8 +2603,18 @@ export default {
               ? current?.calendar?.source || 'Yahoo Finance via yfinance Ticker.calendar'
               : 'Yahoo Finance via yfinance Ticker.get_info',
           } : null;
-          if (v2Events) {
-            const events = v2Events.filter(event => {
+          if (sourceEvents) {
+            const selectedByDate = new Map();
+            let conflictingDates = false;
+            for (const event of sourceEvents) {
+              const eventDate = String(event?.date || '');
+              const amount = finiteNumber(event?.amount);
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || amount === null || amount <= 0) continue;
+              const previous = selectedByDate.get(eventDate);
+              if (previous && previous.amount !== amount) conflictingDates = true;
+              else selectedByDate.set(eventDate, event);
+            }
+            const events = [...selectedByDate.values()].filter(event => {
               const date = String(event?.date || '');
               const amount = finiteNumber(event?.amount);
               return /^\d{4}-\d{2}-\d{2}$/.test(date) &&
@@ -2498,22 +2626,30 @@ export default {
               const rightsDates = rightsDatesByEvent.get(symbol + '|' + eventDate) || {};
               const paymentStartDate = String(event.payment_start_date || rightsDates.paymentStartDate || '');
               return { date: eventDate, amount: finiteNumber(event.amount),
-                amount_basis: current?.dividend?.event_amount_basis || 'yfinance_split_adjusted_assumption',
+                amount_basis: basisCurrent ? dividendBasis.amount_basis
+                  : current?.dividend?.event_amount_basis || 'yfinance_split_adjusted_assumption',
+                ...(basisCurrent ? {
+                  source: 'Yahoo raw dividends normalized with issuer-filed share actions',
+                  raw_amount: finiteNumber(event.raw_amount),
+                  share_adjustment_factor: finiteNumber(event.share_adjustment_factor),
+                } : {}),
                 row_repaired_by_yfinance: event.row_repaired_by_yfinance === true,
                 final_rights_date: rightsDates.finalRightsDate || null, record_date: rightsDates.recordDate || null,
                 ...(/^\d{4}-\d{2}-\d{2}$/.test(paymentStartDate)
                   ? { payment_start_date: paymentStartDate }
                   : {}) };
             }).sort((a, b) => a.date.localeCompare(b.date));
+            const resolvedEvents = conflictingDates ? [] : events;
             return {
               symbol,
-              history_status: historyStatus,
+              history_status: conflictingDates ? 'review_required_conflicting_same_date_values' : historyStatus,
               ...(rawEventYears == null ? {} : { requested_event_years: requestedYears }),
-              amount_basis: current?.dividend?.event_amount_basis || 'yfinance_split_adjusted_assumption',
-              months: [...new Set(events
+              amount_basis: basisCurrent ? dividendBasis.amount_basis
+                : current?.dividend?.event_amount_basis || 'yfinance_split_adjusted_assumption',
+              months: [...new Set(resolvedEvents
                 .filter(event => rawEventYears == null || event.date >= cutoff)
                 .map(event => Number(event.date.slice(5, 7))))].sort((a, b) => a - b),
-              events,
+              events: resolvedEvents,
               upcoming_event: upcomingEvent,
             };
           }
@@ -2643,24 +2779,62 @@ export default {
         (_, index) => Number(from.slice(0, 4)) + index,
       );
       try {
-        const [events, current] = await Promise.all([
+        const [events, current, issuerActions] = await Promise.all([
           readV2SplitEvents(env, code, years),
           symbol ? readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`) : Promise.resolve(null),
+          readIssuerShareActions(env, code),
         ]);
         const records = (events || []).map(event => {
           const date = String(event?.date || '');
           const ratio = finiteNumber(event?.ratio);
           return /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= from && date <= to
             && ratio != null && ratio > 0 && Math.abs(ratio - 1) > 1e-9
-            ? { date, ratio }
+            ? { date, ratio, _source: 'Yahoo Finance' }
             : null;
         }).filter(Boolean);
-        const uniqueRecords = [...new Map(records.map(event => [
-          `${event.date}:${event.ratio}`,
-          event,
-        ])).values()].sort((a, b) => a.date.localeCompare(b.date));
+        for (const action of issuerActions?.events || []) {
+          const date = String(action?.effective_date || '');
+          const ratio = finiteNumber(action?.ratio);
+          if (/^\d{4}-\d{2}-\d{2}$/.test(date) && date >= from && date <= to
+            && ratio != null && ratio > 0 && Math.abs(ratio - 1) > 1e-9) {
+            records.push({ date, ratio, _source: 'IRBANK issuer disclosure', action_type: action.action_type,
+              source_documents: action.sources || [] });
+          }
+        }
+        const issuerEvents = records.filter(event => event._source === 'IRBANK issuer disclosure');
+        const yahooEvents = records.filter(event => event._source !== 'IRBANK issuer disclosure');
+        const matchedYahooEvents = new Set();
+        for (const issuerEvent of issuerEvents) {
+          for (const yahooEvent of yahooEvents) {
+            const dayDistance = Math.abs(Date.parse(`${issuerEvent.date}T00:00:00Z`)
+              - Date.parse(`${yahooEvent.date}T00:00:00Z`)) / 86400000;
+            if (dayDistance <= 5 && Math.abs(issuerEvent.ratio - yahooEvent.ratio)
+              <= Math.max(1e-12, Math.abs(issuerEvent.ratio) * 1e-8)) {
+              matchedYahooEvents.add(yahooEvent);
+            }
+          }
+        }
+        const mergedByDate = new Map();
+        let actionConflicts = false;
+        for (const event of [...issuerEvents, ...yahooEvents.filter(row => !matchedYahooEvents.has(row))]
+          .sort((a, b) => a.date.localeCompare(b.date))) {
+          const existing = mergedByDate.get(event.date);
+          if (existing && Math.abs(existing.ratio - event.ratio) > Math.max(1e-12, Math.abs(existing.ratio) * 1e-8)) {
+            actionConflicts = true;
+            continue;
+          }
+          if (!existing || event._source === 'IRBANK issuer disclosure') mergedByDate.set(event.date, event);
+        }
+        const uniqueRecords = (actionConflicts ? [] : [...mergedByDate.values()])
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .map(({ _source, ...event }) => _source === 'IRBANK issuer disclosure'
+            ? { ...event, source: _source, source_documents: event.source_documents }
+            : { date: event.date, ratio: event.ratio });
         const storedHistoryStatus = current?.field_status?.split_history;
-        const historyStatus = uniqueRecords.length > 0
+        const historyStatus = actionConflicts ? 'review_required_conflicting_ratios'
+          : issuerActions?.status === 'review_required' || (issuerActions?.errors || []).length
+            ? 'review_required_incomplete_issuer_coverage'
+          : uniqueRecords.length > 0
           ? 'available'
           : storedHistoryStatus || (events ? 'empty' : 'not_fetched');
         const response = json({ code, history_status: historyStatus, events: uniqueRecords });

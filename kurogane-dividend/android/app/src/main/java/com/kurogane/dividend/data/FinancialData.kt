@@ -12,9 +12,9 @@ data class CalendarYearDividend(val year: Int, val dps: Double)
 
 data class IssuerFiscalYearDividend(
     val fiscalYear: Int, val reportedDps: Double?, val adjustedDps: Double?,
-    val fiscalPeriod: String = fiscalYear.toString()
+    val fiscalPeriod: String = fiscalYear.toString(), val currentShareBasisDps: Double? = null
 ) {
-    val displayDps: Double? get() = adjustedDps ?: reportedDps
+    val displayDps: Double? get() = currentShareBasisDps ?: adjustedDps ?: reportedDps
 }
 
 data class DividendHistoryOverride(
@@ -98,11 +98,13 @@ data class FinancialData(
                     if (fiscalYear !in 1900..2100) return@mapNotNull null
                     val reportedDps = row.numberWithUnit("annual_dps", "jpy_per_share")?.takeIf { it >= 0 }
                     val adjustedDps = row.numberWithUnit("annual_dps_adjusted", "jpy_per_share")?.takeIf { it >= 0 }
-                    if (reportedDps == null && adjustedDps == null) return@mapNotNull null
+                    val currentShareBasisDps = row.numberWithUnit("annual_dps_current_share_basis", "jpy_per_share")
+                        ?.takeIf { it >= 0 }
+                    if (reportedDps == null && adjustedDps == null && currentShareBasisDps == null) return@mapNotNull null
                     val periodKey = listOf("period_end", "fiscal_period", "period", "fiscal_year")
                         .firstNotNullOfOrNull { key -> row.optString(key).takeIf { it.isNotBlank() && it != "null" } }
                         ?.replace('/', '-') ?: fiscalYear.toString()
-                    IssuerFiscalYearDividend(fiscalYear, reportedDps, adjustedDps, periodKey)
+                    IssuerFiscalYearDividend(fiscalYear, reportedDps, adjustedDps, periodKey, currentShareBasisDps)
                 }
                 .associateBy { it.fiscalPeriod }.values.sortedBy { it.fiscalPeriod }
             val issuerDividendHistoryStatus = issuerDividendPayload?.optString("status")

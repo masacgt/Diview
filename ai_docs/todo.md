@@ -379,3 +379,7 @@
 - [ ] 次の通常XTKS scheduleでカレンダーゲート、IRBANK snapshot hash/件数、全active銘柄走査、公開generation、Worker read-backを確認する。run #367は同一市場日の手動再処理なので通常運用の成功・速度標本から除外する。
 - [x] run #367の失敗を全ログから分類し、失敗データの保持をR2で照合する。最上位失敗156件は全て一意な `SKIP same-session no-data retry` のHTTP 404で、run #314の156コード全件と一致する。既存 `ai_docs/audits/yfinance-run314-failure-classification-20261102.json` のJPX照合では2件が同期市場日までの上場廃止、154件はJPX廃止一覧に未掲載（現役・Yahoo対応の証明ではない）。別枠の当日終値欠損234件（no-close 197、YFPricesMissingError 37）は最上位失敗と重複なし。R2は例として1438.T・7509.Tの価格日と前回終値（2026-10-30）を保持し、当日欠損を11-02価格に偽装していない。
 - [ ] 複数の異なる通常schedule日と同月のIRBANK・権利日scheduled jobのactive job実時間を合算し、23営業日換算で月2,000 runner分以内か判定する。run #367の45m43s×23は参考算術に限り、手動同日再処理なので達成根拠にしない。timeout 360分は通常実測が揃うまで維持する。
+
+## 2026-11-03 issuer share-action basis correction
+
+- [ ] IRBANK disclosure-section extraction, Yahoo raw dividend normalization, Worker API integration, and 8303 production read-back. The 8303 output must be generated through the generic security-code path; no issuer-specific ratio or dividend constants are allowed. Record the exact tests, R2 object hashes, deployment version, and endpoint values after publication.

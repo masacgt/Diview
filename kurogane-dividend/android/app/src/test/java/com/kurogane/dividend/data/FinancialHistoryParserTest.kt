@@ -67,6 +67,21 @@ class FinancialHistoryParserTest {
         assertFalse(parsed.history.containsKey("pbr"))
     }
 
+    @Test fun issuerDividendHistoryUsesVerifiedCurrentShareBasisDps() {
+        val issuer = JSONObject().put("fiscal_year", 2025).put("period_end", "2025-03-31")
+            .put("annual_dps", 40000000).put("annual_dps_adjusted", 40000000)
+            .put("annual_dps_current_share_basis", 2.857142857142857)
+            .put("field_units", JSONObject().put("annual_dps", "jpy_per_share")
+                .put("annual_dps_adjusted", "jpy_per_share")
+                .put("annual_dps_current_share_basis", "jpy_per_share"))
+        val root = document().put("issuer_dividends", JSONObject()
+            .put("share_basis_status", "verified_from_issuer_actions")
+            .put("records", JSONArray().put(issuer)))
+        val history = FinancialHistoryParser.parse(root, asOf).series("issuer_dps")
+        assertEquals(1, history.size)
+        assertEquals(2.857142857142857, history.single().value, 1e-12)
+    }
+
     @Test fun monetaryRatiosRequireMatchingUnitsAndSources() {
         fun raw(year: Int) = JSONObject().put("period_end", "$year-03-31")
             .put("sales", 100).put("operating_profit", 10)

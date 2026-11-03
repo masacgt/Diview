@@ -80,7 +80,8 @@ internal object FinancialHistoryParser {
             add("payout_ratio", row, issuer + annual, "payout_ratio", ratio(row, "payout_ratio"),
                 defaultSource = "IRBANK", allowIssuerYear = uniqueYear)
             if (shareBasisSafe) {
-                val field = if (row.number("annual_dps_adjusted") != null) "annual_dps_adjusted" else "annual_dps"
+                val field = listOf("annual_dps_current_share_basis", "annual_dps_adjusted", "annual_dps")
+                    .firstOrNull { row.number(it) != null } ?: continue
                 val value = if (row.optJSONObject("field_units")?.optString(field) == "jpy_per_share") row.number(field) else null
                 add("issuer_dps", row, issuer + annual, field, value?.takeIf { it >= 0 },
                     defaultSource = "IRBANK", allowIssuerYear = uniqueYear)

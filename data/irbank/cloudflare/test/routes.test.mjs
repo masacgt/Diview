@@ -373,7 +373,7 @@ test('financial API normalizes payout ratio only from an explicit ratio or perce
   assert.equal(data.dividends.payout_ratio, null);
 });
 
-test('financial API marks 8303 share basis unverified without changing stored dividend amounts', async () => {
+test('financial API reports share basis from corporate-action coverage, not a ticker override', async () => {
   const base = 'market/yfinance/v2/securities/8303.T';
   const env = dividendEnvironment(new Map([
     [`${base}/profile.json`, { display_name: 'ＳＢＩ新生銀行' }],
@@ -384,13 +384,17 @@ test('financial API marks 8303 share basis unverified without changing stored di
       dividends: { records: [{ fiscal_year: 2025, annual_dps: 40000000, annual_dps_adjusted: 40000000 }] },
       sources: { dividends: { source_label: '金融庁 EDINET / TDnet' } },
     }],
+    ['market/irbank/v1/events/share-splits/8303.json', {
+      status: 'available', coverage: { disclosures_from: '2017-01-01' },
+      events: [{ effective_date: '2020-10-01', ratio: 2 }], errors: [],
+    }],
   ]));
 
   const response = await worker.fetch(new Request('https://example.com/api/v1/financial-data/8303'), env);
   assert.equal(response.status, 200);
   const data = await response.json();
-  assert.equal(data.dividends.share_basis_status, 'unverified_incomplete_corporate_action_history');
-  assert.equal(data.issuer_dividends.share_basis_status, 'unverified_incomplete_corporate_action_history');
+  assert.equal(data.dividends.share_basis_status, 'verified_from_issuer_actions');
+  assert.equal(data.issuer_dividends.share_basis_status, 'verified_from_issuer_actions');
   assert.equal(data.issuer_dividends.records[0].annual_dps, 40000000);
   assert.equal(data.issuer_dividends.records[0].annual_dps_adjusted, 40000000);
 
@@ -400,6 +404,55 @@ test('financial API marks 8303 share basis unverified without changing stored di
   const ordinaryData = await ordinaryResponse.json();
   assert.equal(Object.hasOwn(ordinaryData.dividends, 'share_basis_status'), false);
   assert.equal(Object.hasOwn(ordinaryData.issuer_dividends, 'share_basis_status'), false);
+});
+
+test('financial API derives current-share-basis DPS from disclosed actions for any code', async () => {
+  const code = '1301';
+  const base = `market/yfinance/v2/securities/${code}.T`;
+  const env = dividendEnvironment(new Map([
+    [`${base}/profile.json`, { display_name: 'Example' }],
+    [`${base}/financials/2023-03-31.json`, { annual: { fiscal_year: '2023/03', period_end: '2023-03-31' } }],
+    [`market/irbank/v1/securities/${code}/overview.json`, {
+      dividends: { records: [{ fiscal_year: '2023/03', annual_dps: 12 }] },
+      financials: { annual: [{ fiscal_year: '2023/03', period_end: '2023-03-31' }] },
+    }],
+    [`market/irbank/v1/events/share-splits/${code}.json`, {
+      status: 'available', errors: [], coverage: { disclosures_from: '2017-01-01', disclosures_to: '2099-12-31' },
+      events: [{ effective_date: '2024-03-15', ratio: 6 }, { effective_date: '2025-07-27', ratio: 14000000 }],
+    }],
+  ]));
+  const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  const record = data.issuer_dividends.records[0];
+  assert.equal(record.annual_dps, 12);
+  assert.ok(Math.abs(record.annual_dps_current_share_basis - 12 / 84_000_000) < 1e-15);
+  assert.equal(record.share_basis_status, 'verified_from_issuer_actions');
+});
+
+test('financial API recalculates dividend streaks from fresh normalized history', async () => {
+  const code = '8303';
+  const base = `market/yfinance/v2/securities/${code}.T`;
+  const env = dividendEnvironment(new Map([
+    [`${base}/profile.json`, { display_name: 'Example' }],
+    [`${base}/current.json`, { updated_at: '2026-11-02T00:00:00Z', dividend: {
+      calendar_year_metrics: { status: 'available', latest_completed_year: 2025,
+        consecutive_increase_years: 99, no_cut_years: 99, annual_records: [] },
+    } }],
+    [`${base}/dividend_basis/current.json`, {
+      status: 'available', generated_at: '2026-11-03T00:00:00Z',
+      amount_basis: 'current_share_basis_from_raw_yahoo_and_issuer_actions',
+      records: [
+        { date: '2022-03-30', amount: 2.8 },
+        { date: '2023-03-30', amount: 3.0 },
+      ],
+    }],
+  ]));
+  const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
+  const data = await response.json();
+  assert.equal(data.dividends.metrics_as_of_year, 2023);
+  assert.equal(data.dividends.consecutive_dividend_increase_years, 1);
+  assert.equal(data.dividends.no_cut_years, 1);
 });
 
 test('financial API returns calculated DOE and net D/E from the stored annual row', async () => {
@@ -617,7 +670,7 @@ test('financial API keeps same-source ratios and marks Yahoo statement amounts a
   const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
   assert.equal(response.status, 200);
   const data = await response.json();
-  assert.equal(data.financial_contract_version, 6);
+  assert.equal(data.financial_contract_version, 7);
   const row = data.financials.annual[0];
   assert.equal(row.source_values.calculated.values.equity_ratio_computed.value, 20);
   assert.equal(row.field_units.stockholders_equity, 'yfinance_native');
@@ -1564,6 +1617,72 @@ test('share-split-history reports stored events as available and removes duplica
     history_status: 'available',
     events: [split],
   });
+});
+
+test('share-split-history prefers issuer effective dates and collapses nearby Yahoo event dates', async () => {
+  const base = 'market/yfinance/v2/securities/8303.T';
+  const docs = new Map([
+    [`${base}/current.json`, { field_status: { split_history: 'available' } }],
+    [`${base}/splits/2023.json`, { records: [{ date: '2023-09-28', ratio: 0.00000005 }] }],
+    ['market/irbank/v1/events/share-splits/8303.json', {
+      status: 'available', errors: [], events: [{ effective_date: '2023-10-02', ratio: 0.00000005,
+        action_type: 'reverse_split', sources: [{ doc_id: 'S100YDBB' }] }],
+    }],
+  ]);
+  const response = await worker.fetch(new Request(
+    'https://example.com/api/v1/share-split-history?code=8303&from=2023-01-01&to=2023-12-31',
+  ), dividendEnvironment(docs));
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.events.length, 1);
+  assert.equal(data.events[0].date, '2023-10-02');
+  assert.equal(data.events[0].source, 'IRBANK issuer disclosure');
+});
+
+test('dividend-months uses normalized issuer-action basis and removes identical same-date rows', async () => {
+  const code = '8303.T';
+  const base = `market/yfinance/v2/securities/${code}`;
+  const env = dividendEnvironment(new Map([
+    [`${base}/current.json`, { field_status: { dividend_history: 'available' } }],
+    [`${base}/dividends/2022.json`, { records: [
+      { date: '2022-03-30', amount: 240000000 },
+      { date: '2022-03-30', amount: 48000000000000 },
+    ] }],
+    [`${base}/dividend_basis/current.json`, {
+      status: 'available', generated_at: '2026-11-03T00:00:00Z',
+      amount_basis: 'current_share_basis_from_raw_yahoo_and_issuer_actions',
+      records: [
+        { date: '2022-03-30', amount: 2.85714286, raw_amount: 12, share_adjustment_factor: 4.2 },
+        { date: '2022-03-30', amount: 2.85714286, raw_amount: 12, share_adjustment_factor: 4.2 },
+      ],
+    }],
+  ]));
+  const response = await worker.fetch(new Request(
+    'https://example.com/api/v1/dividend-months?symbols=8303.T&event_year=2022',
+  ), env);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.items[0].events.length, 1);
+  assert.equal(data.items[0].events[0].amount, 2.85714286);
+  assert.equal(data.items[0].events[0].raw_amount, 12);
+  assert.equal(data.items[0].amount_basis, 'current_share_basis_from_raw_yahoo_and_issuer_actions');
+});
+
+test('dividend-months suppresses raw history when a fresh normalized basis requires review', async () => {
+  const base = 'market/yfinance/v2/securities/8303.T';
+  const env = dividendEnvironment(new Map([
+    [`${base}/current.json`, { field_status: { dividend_history: 'available' } }],
+    [`${base}/dividends/2022.json`, { records: [{ date: '2022-03-30', amount: 240000000 }] }],
+    [`${base}/dividend_basis/current.json`, {
+      status: 'review_required', generated_at: '2026-11-03T00:00:00Z', records: [],
+    }],
+  ]));
+  const response = await worker.fetch(new Request(
+    'https://example.com/api/v1/dividend-months?symbols=8303.T&event_year=2022',
+  ), env);
+  const data = await response.json();
+  assert.equal(data.items[0].history_status, 'review_required');
+  assert.deepEqual(data.items[0].events, []);
 });
 
 test('share-split-history preserves empty and failed states when no events are stored', async () => {
