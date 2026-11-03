@@ -833,10 +833,10 @@ Stripe、Firebase Authentication、Google Maps、Adjust、Firebase Cloud Messagi
 | GET | `/api/v1/dividend-months`、`/api/v1/monthly-price-history`、`/api/v1/share-split-history` | 配当月・月次価格・分割履歴 |
 | GET | `/api/v1/popular-holdings`、`/api/v1/irbank/*` | 公開銘柄・IRBANK関連データ |
 | POST | `/api/v1/feedback` | 問い合わせ受付 |
-| POST/GET | `/api/v1/clients/register`、push device／watchlist target／notification events | Worker ソース内のクライアント連携経路。現行 Android UI との接続は確認できない |
+| POST/GET/PUT/DELETE | `/api/v1/clients/register`、push device／watchlist target／notification events | 端末管理へ切替済み。旧APIは410 `device_managed` を返し、D1の旧テーブル・データは保持 |
 | 管理用 | `/api/v1/admin/*` 等 | `X-Admin-Secret` 認証を要求する運用 API |
 
-- Worker は CORS の `*` を返し、OPTIONS は204。未知ルート404、メソッド不一致405、入力不正400、管理認証失敗401を返す実装がある。
+- Worker は CORS の `*` を返し、OPTIONS は204。旧クライアント通知APIは410 `device_managed`、未知ルート404、メソッド不一致405、入力不正400、管理認証失敗401を返す実装がある。
 - 公開・認証済み・管理用のレート制限をルート別に適用する。具体的な閾値は Worker 定義・運用設定に依存する。
 - Android アプリに Worker 管理 secret を含めない。アプリの市場データ取得は一般ユーザーログインを要求しない。
 - 2026-10-17本番確認では `search-catalog`、`security-search`、`live-quotes`、`securities`、`financial-data`、`dividend-months`、`share-split-history`、`monthly-price-history`、`analysis` が応答した。`dividend-months?symbols=7203.T` は3月・9月、`share-split-history` は7203の2021-09-29 5:1イベントを返した。銘柄情報画面を開くと、表示対象コードの配当月・イベントAPIを日本日付ごとに取得する。2026-10-17の2060.TではR2応答の `2027-03-30` を画面に表示し、1326.Tは今後イベントなしとして「権利落ち日未取得」を表示した。2026-10-15に記録した旧 `share-split-history` 404と `legacy_unpublished` 応答は、初回v2公開前の履歴である。
@@ -845,6 +845,7 @@ Stripe、Firebase Authentication、Google Maps、Adjust、Firebase Cloud Messagi
 ### 5.3 通知・バックグラウンド処理
 
 - FCM を使ったサーバープッシュ実装は Android にない。端末内 WorkManager が定期処理を実行し、Android 通知を表示する。
+- Worker の旧クライアント登録・Push端末・ウォッチリスト・通知イベントAPIは410を返す。定期処理からの個人別ウォッチリスト参照とFCM送信も停止済み。関連D1テーブルと既存データは保持している。
 - 通知種類は株価（PRICE）、配当（DIVIDEND）、増配減配（DIVIDEND_CHANGE）。設定の初期状態はオフ。
 - 配達ワーカーは日本時間08:30・17:30を基準にした24時間周期の WorkManager ジョブを使う。WorkManager は実行時刻を保証しないため、実通知は遅延し得る。配信窓は08:30〜09:30および17:30〜18:30。
 - 配当権利日・配当履歴の更新ジョブは接続状態を要求し、起動完了時に receiver がスケジュールを再登録し、一回実行の更新も投入する。

@@ -48,9 +48,10 @@ D1 は銘柄マスター、互換用の初期財務・配当データ、ユー�
 | dividend_events | 銘柄、年度、配当イベント種別、年間 DPS、分割調整済み DPS、権利日関連欄、原本 JSON | dividend_events.csv のインポート。現行の CSV では基準日・権利付最終日が不明な行を推定値で埋めない。 |
 | issuer_dividend_periods | 決算期単位の配当種別と原本 JSON。年だけのキーに潰さず、期末日の精度を保持する。 | dividend_events の同じインポート処理で生成。dividend_events は旧来の年度単位投影として残す。 |
 | app_definition_documents、diagnosis_bands、valuation_scenarios、app_definition_audit | バックエンド設定、診断・評価・分析ルールと変更履歴 | Cloudflare migrations の既定値、管理用更新。市場提供 API の取得値ではない。 |
-| clients、push_devices、watchlist_targets | クライアント認証ハッシュ、端末のプッシュトークン、利用者ごとの銘柄・目標利回り・通知設定 | Android からの登録・更新 API。 |
+| clients、push_devices、watchlist_targets | 旧クライアント認証ハッシュ、端末プッシュトークン、利用者ごとの銘柄・目標利回り・通知設定 | 旧Worker APIのための保存データ。APIは410を返し、Workerの読み書きを停止済み。テーブルと既存行は保持。 |
 | support_feedback、support_feedback_email | 問い合わせ本文・診断情報・受付番号と、管理者メール送信の再試行状態 | Android の POST /api/v1/feedback。メール送信キューは新規問い合わせから作る。 |
-| stock_analysis_state、stock_analysis_history、notification_events、notification_deliveries | Worker が算出した銘柄分析、履歴、通知イベント、端末別配信結果 | 保存済み R2 市場データ、D1 の銘柄・目標値、分析定義から Worker が生成する。 |
+| stock_analysis_state、stock_analysis_history | Worker が算出した銘柄分析の最新状態・履歴 | 保存済み R2 市場データ、D1 の銘柄、分析定義から Worker が生成する。R2移行は未実施。 |
+| notification_events、notification_deliveries | 旧サーバー通知イベントと端末別配信結果 | Workerは新規生成・配信・整理を停止済み。既存行は保持。 |
 | scheduled_run_log、backend_state、api_request_log、market_price_refresh_runs、market_price_refresh_batches | 定期処理結果、分析入力世代、レート制限カウンター、旧価格更新処理の実行状況 | Worker の API、Cron、分析・運用処理。市場提供元の一次データではない。 |
 
 D1 の securities、financial_periods、dividend_events は、API を呼ぶたびに上書きされるライブ市場テーブルではない。CSV 取込スクリプトが検証済み SQL を生成し、別途インポートする。現在の IRBANK 配当実績・予想・利回りの定期更新先は R2 の issuer_dividends インデックスである。
@@ -89,10 +90,9 @@ D1 の securities、financial_periods、dividend_events は、API を呼ぶた�
 
 ### Android から D1 に書き込む API
 
-- POST /api/v1/clients/register はクライアント ID と secret のハッシュを登録する。
-- PUT/DELETE /api/v1/push-devices は端末トークンと有効状態を保存する。
-- PUT/GET/DELETE /api/v1/watchlist-targets はクライアントごとの目標利回り・通知設定を保存・返却・削除する。
 - POST /api/v1/feedback は問い合わせ本文、カテゴリ、任意の氏名・メール・診断情報を受付番号とともに保存する。送信先メールの処理状態は D1 の outbox に記録する。
+
+ウォッチリストと通知設定・状態はAndroid端末内で管理する。旧 `/api/v1/clients/register`、`/api/v1/push-devices`、`/api/v1/watchlist-targets`、`/api/v1/notification-events` は410を返し、Androidから呼び出さない。対応するD1テーブルは削除せず、既存行を保持している。
 
 ## サーバー D1/R2 に入らないアプリ API
 

@@ -145,14 +145,14 @@ Androidは端末ごとに最終試行時刻、最終成功時刻、成功した�
 
 ## バックエンド運用（分析・通知）
 
-匿名クライアント登録は `POST /api/v1/clients/register` です。返却される `client_id` と `client_secret` は端末内に保存し、Watchlist条件・通知履歴・Push端末登録では `X-Client-Id` / `X-Client-Secret` ヘッダーを送ります。`GET /api/v1/watchlist-targets` はそのクライアントの監視条件だけを返します。保有数量、取得単価、保有金額などのポートフォリオ情報はバックエンドへ送信しません。
+ウォッチリスト、目標利回り、通知設定・状態はAndroid端末内で管理します。旧クライアント登録・Push端末・ウォッチリスト・通知履歴API（`/api/v1/clients/register`、`/api/v1/push-devices`、`/api/v1/watchlist-targets`、`/api/v1/notification-events`）は `410 device_managed` を返します。対応するD1テーブルと既存データは削除せず、Workerからの読み書きとFCM配信を停止しています。
 
 ポートフォリオ診断の閾値・重みは KV の `portfolio-analysis-definitions:v1` で配信します。`scripts/seed-kv.ps1` で他の定義とまとめて登録します。`wrangler.toml` には `APP_DEFINITIONS` KV binding を本番 namespace ID とともに設定してください。
 
-Cron は市場スナップショットまたは分析定義が変わった場合に全銘柄を再評価し、それ以外の時間は通知対象のWatchlist銘柄だけを確認します。市場データが3日超古い場合は買場通知を抑止します。分析履歴は30日までは詳細を保持し、30日超は日次1件、365日超は月次1件へ圧縮します。
+Cron は市場スナップショットまたは分析定義が変わった場合に全銘柄を再評価します。それ以外の時間は個人別Watchlistを参照せず、銘柄分析を実行しません。分析スナップショットと履歴は現在D1に保存し、30日までは詳細を保持、30日超は日次1件、365日超は月次1件へ圧縮します。市場データ・分析履歴のR2移行は別途進行中です。
 
-定期分析では市場スナップショット・銘柄別の分析入力・Watchlist条件を実行内で再利用し、銘柄処理を最大8件ずつ並列化します。実行ログの `metadata_json.durations_ms` に分析・履歴整理・通知処理の所要時間を記録し、実データの負荷を見ながら次の調整を行います。
+定期分析では市場スナップショットと銘柄別の分析入力を実行内で再利用し、銘柄処理を最大8件ずつ並列化します。実行ログの `metadata_json.durations_ms` に分析・履歴整理の所要時間を記録します。
 
-公開読み取りAPIはIP単位、クライアントAPIは匿名クライアント単位でKV設定の回数制限を適用します。制限応答には `Retry-After` が付きます。JSON APIは既定で `private, no-store` とし、ブラウザの事前要求（CORS OPTIONS）にも応答します。`GET /api/v1/health` ではR2市場データの有無と経過日数、分析定義版、直近Cron結果を確認できます。Cron実行結果は `scheduled_run_log` に記録されます。
+公開読み取りAPIはIP単位で設定済みの回数制限を適用します。制限応答には `Retry-After` が付きます。JSON APIは既定で `private, no-store` とし、ブラウザの事前要求（CORS OPTIONS）にも応答します。`GET /api/v1/health` ではR2市場データの有無と経過日数、分析定義版、直近Cron結果を確認できます。Cron実行結果は `scheduled_run_log` に記録されます。
 
-FCM送信は `FCM_PROJECT_ID` と `FCM_SERVICE_ACCOUNT_JSON` が設定された場合に動作します。WorkerはGoogle OAuthの短期アクセストークンをサービスアカウント鍵で取得します。端末ごとの送達・再試行状態をD1へ記録し、無効になったFCM端末トークンを停止します。未設定時は通知イベントを保持し、Android端末内のWorkManager通知を引き続き利用します。サービスアカウントJSONはソースや `wrangler.toml` に直書きせず、Cloudflareのsecretとして設定してください。
+サーバーFCM配信は停止しています。株価などの端末通知はAndroidのWorkManagerがローカル設定・状態を使って処理します。旧 `clients`、`push_devices`、`watchlist_targets`、`notification_events`、`notification_deliveries` テーブルは現時点ではスキーマ・既存データを保持し、Workerは利用しません。

@@ -11,7 +11,7 @@ function json(data, status = 200) {
       'cache-control': 'private, no-store',
       'access-control-allow-origin': '*',
       'access-control-allow-methods': 'GET, HEAD, POST, PUT, DELETE, OPTIONS',
-      'access-control-allow-headers': 'Content-Type, Range, X-Client-Id, X-Client-Secret, X-Admin-Secret',
+      'access-control-allow-headers': 'Content-Type, Range, X-Admin-Secret',
       'access-control-expose-headers': 'Accept-Ranges, Content-Length, Content-Range, ETag, Last-Modified',
       'access-control-max-age': '86400'
     }
@@ -24,14 +24,6 @@ function rateLimitedResponse(config) {
   return response;
 }
 
-async function readJson(request) {
-  try {
-    return await request.json();
-  } catch {
-    return null;
-  }
-}
-
 function normalizeCode(code) {
   if (/^\d{4}$/.test(code)) return `${code}0`;
   return code;
@@ -39,24 +31,6 @@ function normalizeCode(code) {
 
 function isoNow() {
   return new Date().toISOString();
-}
-
-function randomToken(bytes = 24) {
-  const data = new Uint8Array(bytes);
-  crypto.getRandomValues(data);
-  return [...data].map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function authenticateClient(request, env) {
-  const clientId = String(request.headers.get('X-Client-Id') || '').trim();
-  const secret = String(request.headers.get('X-Client-Secret') || '').trim();
-  if (!clientId || !secret) return null;
-  const row = await env.DB.prepare('SELECT client_secret_hash, disabled_at FROM clients WHERE client_id = ?').bind(clientId).first();
-  if (!row || row.disabled_at) return null;
-  const actual = await sha256Hex(secret);
-  if (actual !== row.client_secret_hash) return null;
-  await env.DB.prepare('UPDATE clients SET last_seen_at = ? WHERE client_id = ?').bind(isoNow(), clientId).run();
-  return clientId;
 }
 
 function daysOld(value) {
@@ -69,8 +43,6 @@ async function backendConfig(env) {
   const defaults = {
     market_stale_days: 3,
     rate_limit_window_seconds: 60,
-    rate_limit_register: 10,
-    rate_limit_authenticated: 120,
     rate_limit_public: 300,
   };
   const configured = await appDefinitionDocument(env, 'backend-config:v1') || {};
@@ -1367,7 +1339,7 @@ async function buildAnalysisSnapshot(env, security, targetYield = null, preloade
 
 async function persistSnapshot(env, security, snapshot) {
   const previous = await env.DB.prepare(
-    'SELECT overall_grade, buy_zone_status, analysis_json FROM stock_analysis_state WHERE security_code = ?'
+    'SELECT analysis_json FROM stock_analysis_state WHERE security_code = ?'
   ).bind(security.security_code).first();
   const payload = JSON.stringify(snapshot);
   let historyChanged = true;
@@ -1433,19 +1405,6 @@ async function persistSnapshot(env, security, snapshot) {
       payload,
   ));
   await env.DB.batch(statements);
-  const events = [];
-  if (previous?.overall_grade && previous.overall_grade !== snapshot.analysis.overall_grade) {
-    events.push({ type: 'GRADE_CHANGED', from: previous.overall_grade, to: snapshot.analysis.overall_grade });
-  }
-  if (previous?.buy_zone_status && previous.buy_zone_status !== snapshot.buy_zone?.status) {
-    events.push({ type: 'BUY_ZONE_CHANGED', from: previous.buy_zone_status, to: snapshot.buy_zone?.status ?? null });
-  }
-  for (const event of events) {
-    await env.DB.prepare(
-      `INSERT INTO notification_events(security_code, event_type, from_status, to_status, occurred_at, payload_json)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).bind(security.security_code, event.type, event.from, event.to, snapshot.observed_at, payload).run();
-  }
 }
 
 async function compactAnalysisHistory(env) {
@@ -1465,99 +1424,6 @@ async function compactAnalysisHistory(env) {
       )`).run();
   await env.DB.prepare(`DELETE FROM api_request_log WHERE window_started_at < datetime('now','-1 day')`).run();
   await env.DB.prepare(`DELETE FROM scheduled_run_log WHERE started_at < datetime('now','-365 days')`).run();
-  await env.DB.prepare(`DELETE FROM notification_events
-    WHERE occurred_at < datetime('now','-365 days')
-      AND (delivered_at IS NOT NULL OR json_extract(payload_json, '$.client_id') IS NULL)`).run();
-}
-
-function base64Url(bytes) {
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-}
-
-function utf8Base64Url(value) {
-  return base64Url(new TextEncoder().encode(value));
-}
-
-async function fcmAccessToken(env) {
-  if (!env.FCM_SERVICE_ACCOUNT_JSON) return null;
-  const serviceAccount = JSON.parse(env.FCM_SERVICE_ACCOUNT_JSON);
-  if (!serviceAccount.client_email || !serviceAccount.private_key) throw new Error('invalid_fcm_service_account');
-  const tokenUri = serviceAccount.token_uri || 'https://oauth2.googleapis.com/token';
-  const issuedAt = Math.floor(Date.now() / 1000);
-  const header = utf8Base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const claims = utf8Base64Url(JSON.stringify({
-    iss: serviceAccount.client_email,
-    scope: 'https://www.googleapis.com/auth/firebase.messaging',
-    aud: tokenUri,
-    iat: issuedAt,
-    exp: issuedAt + 3600,
-  }));
-  const unsigned = `${header}.${claims}`;
-  const pem = String(serviceAccount.private_key).replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, '');
-  const der = Uint8Array.from(atob(pem), character => character.charCodeAt(0));
-  const signingKey = await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
-  const signature = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', signingKey, new TextEncoder().encode(unsigned)));
-  const assertion = `${unsigned}.${base64Url(signature)}`;
-  const response = await fetch(tokenUri, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
-  });
-  if (!response.ok) throw new Error(`fcm_oauth_failed_${response.status}`);
-  const token = await response.json();
-  return token.access_token || null;
-}
-
-async function deliverPendingNotifications(env) {
-  if (!env.FCM_PROJECT_ID || !env.FCM_SERVICE_ACCOUNT_JSON) return { sent: 0, skipped: true, reason: 'fcm_not_configured' };
-  const accessToken = await fcmAccessToken(env);
-  if (!accessToken) return { sent: 0, skipped: true, reason: 'fcm_token_unavailable' };
-  const result = await env.DB.prepare(`SELECT id, payload_json FROM notification_events
-    WHERE delivered_at IS NULL AND json_extract(payload_json, '$.client_id') IS NOT NULL
-    ORDER BY occurred_at LIMIT 100`).all();
-  let sent = 0;
-  let failed = 0;
-  let noDevices = 0;
-  for (const row of result.results || []) {
-    const payload = JSON.parse(row.payload_json || '{}');
-    const clientId = payload.client_id;
-    const devices = await env.DB.prepare('SELECT device_token FROM push_devices WHERE client_id = ? AND enabled = 1').bind(clientId).all();
-    if (!(devices.results || []).length) { noDevices += 1; continue; }
-    for (const device of devices.results || []) {
-      const prior = await env.DB.prepare(`SELECT delivered_at, terminal_at FROM notification_deliveries WHERE event_id = ? AND device_token = ?`).bind(row.id, device.device_token).first();
-      if (prior?.delivered_at || prior?.terminal_at) continue;
-      const response = await fetch(`https://fcm.googleapis.com/v1/projects/${env.FCM_PROJECT_ID}/messages:send`, {
-        method: 'POST',
-        headers: { 'authorization': `Bearer ${accessToken}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ message: { token: device.device_token, notification: { title: 'Diview 買場通知', body: `${payload.name || payload.code || '銘柄'}の買場判定が更新されました。` }, data: { security_code: String(payload.code || ''), event_type: 'WATCHLIST_BUY_ZONE_CHANGED' } } })
-      });
-      const responseBody = await response.json().catch(() => ({}));
-      const errorDetails = responseBody?.error?.details || [];
-      const unregistered = errorDetails.some(detail => detail?.errorCode === 'UNREGISTERED');
-      const now = isoNow();
-      await env.DB.prepare(`INSERT INTO notification_deliveries(event_id, device_token, attempts, delivered_at, terminal_at, last_error, updated_at)
-        VALUES (?, ?, 1, ?, ?, ?, ?)
-        ON CONFLICT(event_id, device_token) DO UPDATE SET
-          attempts=notification_deliveries.attempts+1,
-          delivered_at=COALESCE(notification_deliveries.delivered_at, excluded.delivered_at),
-          terminal_at=COALESCE(notification_deliveries.terminal_at, excluded.terminal_at),
-          last_error=excluded.last_error,
-          updated_at=excluded.updated_at`)
-        .bind(row.id, device.device_token, response.ok ? now : null, unregistered ? now : null, response.ok ? null : String(responseBody?.error?.status || `http_${response.status}`).slice(0, 120), now).run();
-      if (response.ok) sent += 1;
-      else {
-        failed += 1;
-        if (unregistered) await env.DB.prepare('UPDATE push_devices SET enabled=0, updated_at=? WHERE client_id=? AND device_token=?').bind(now, clientId, device.device_token).run();
-      }
-    }
-    const unresolved = await env.DB.prepare(`SELECT COUNT(*) AS count FROM push_devices d
-      LEFT JOIN notification_deliveries nd ON nd.event_id = ? AND nd.device_token = d.device_token
-      WHERE d.client_id = ? AND d.enabled = 1 AND nd.delivered_at IS NULL AND nd.terminal_at IS NULL`).bind(row.id, clientId).first();
-    if (Number(unresolved?.count || 0) === 0) await env.DB.prepare('UPDATE notification_events SET delivered_at=? WHERE id=?').bind(isoNow(), row.id).run();
-  }
-  return { sent, failed, no_devices: noDevices, skipped: false };
 }
 
 async function runScheduledAnalysis(env) {
@@ -1573,22 +1439,6 @@ async function runScheduledAnalysis(env) {
     const watchDefs = await appDefinitionDocument(env, 'watchlist-analysis-definitions:v1') || {};
     const config = await backendConfig(env);
     await Promise.all([auditDefinition(env, 'stock-analysis-definitions:v1', stockDefs), auditDefinition(env, 'watchlist-analysis-definitions:v1', watchDefs)]);
-    const activeTargets = await env.DB.prepare(`SELECT s.security_code, s.security_code_display, s.name, s.metrics_json, w.client_id, w.target_yield
-      FROM securities s JOIN watchlist_targets w ON w.security_code = s.security_code
-      WHERE w.alert_enabled = 1 ORDER BY s.security_code, w.client_id`).all();
-    const targetsBySecurity = new Map();
-    const watchedBySecurity = new Map();
-    for (const row of activeTargets.results || []) {
-      watchedBySecurity.set(row.security_code, {
-        security_code: row.security_code,
-        security_code_display: row.security_code_display,
-        name: row.name,
-        metrics_json: row.metrics_json,
-      });
-      const targets = targetsBySecurity.get(row.security_code) || [];
-      targets.push({ client_id: row.client_id, target_yield: row.target_yield, alert_enabled: 1 });
-      targetsBySecurity.set(row.security_code, targets);
-    }
     const latestState = await env.DB.prepare(`SELECT value_json FROM backend_state WHERE state_key = 'analysis_source'`).first();
     const [catalogObject, financialRevisionObject] = await Promise.all([
       env.MARKET_DATA?.head(`${YFINANCE_V2_ROOT}/catalog/current.json`),
@@ -1604,26 +1454,17 @@ async function runScheduledAnalysis(env) {
     const sourceChanged = latestState?.value_json !== sourceTag;
     const securities = sourceChanged
       ? (await env.DB.prepare('SELECT security_code, security_code_display, name, metrics_json FROM securities ORDER BY security_code').all()).results || []
-      : [...watchedBySecurity.values()];
+      : [];
     const marketIndex = securities.length ? await loadMarketIndex(env) : new Map();
     const analysisStartedMs = Date.now();
     for (let offset = 0; offset < securities.length; offset += ANALYSIS_CONCURRENCY) {
       const group = securities.slice(offset, offset + ANALYSIS_CONCURRENCY);
       await Promise.all(group.map(async security => {
         try {
-          const targetRows = targetsBySecurity.get(security.security_code) || [];
           const input = await loadSecurityAnalysisInput(env, security, marketIndex);
           const preloaded = { stockDefs, watchDefs, config, input, skipDefinitionAudit: true };
           const base = await buildAnalysisSnapshot(env, security, null, preloaded);
           if (sourceChanged) await persistSnapshot(env, security, base);
-          if (!base.freshness.market_stale) {
-            for (const targetRow of targetRows) {
-              const targeted = await buildAnalysisSnapshot(env, security, Number(targetRow.target_yield), preloaded);
-              const previous = await env.DB.prepare(`SELECT to_status FROM notification_events WHERE security_code = ? AND event_type = ? AND json_extract(payload_json, '$.client_id') = ? ORDER BY occurred_at DESC LIMIT 1`).bind(security.security_code, 'WATCHLIST_BUY_ZONE_CHANGED', targetRow.client_id).first();
-              const currentStatus = targeted.buy_zone?.status ?? null;
-              if (currentStatus && previous?.to_status !== currentStatus) await env.DB.prepare(`INSERT INTO notification_events(security_code, event_type, from_status, to_status, occurred_at, payload_json) VALUES (?, ?, ?, ?, ?, ?)`).bind(security.security_code, 'WATCHLIST_BUY_ZONE_CHANGED', previous?.to_status ?? null, currentStatus, targeted.observed_at, JSON.stringify({ ...targeted, client_id: targetRow.client_id })).run();
-            }
-          }
           processed += 1;
         } catch (error) {
           failed += 1;
@@ -1642,17 +1483,13 @@ async function runScheduledAnalysis(env) {
     const cleanupStartedMs = Date.now();
     await compactAnalysisHistory(env);
     const cleanupDurationMs = Date.now() - cleanupStartedMs;
-    const notificationsStartedMs = Date.now();
-    const delivery = await deliverPendingNotifications(env);
-    const notificationsDurationMs = Date.now() - notificationsStartedMs;
     const durations = {
       analysis_ms: analysisDurationMs,
       cleanup_ms: cleanupDurationMs,
-      notifications_ms: notificationsDurationMs,
       total_ms: Date.now() - runStartedMs,
     };
-    if (runId) await env.DB.prepare(`UPDATE scheduled_run_log SET finished_at=?, status=?, processed=?, failed=?, metadata_json=? WHERE id=?`).bind(isoNow(), failed ? 'partial' : 'success', processed, failed, JSON.stringify({ source_changed: sourceChanged, source_tag_advanced: sourceTagAdvanced, failure_samples: failureSamples, delivery, durations_ms: durations }), runId).run();
-    return { processed, failed, source_changed: sourceChanged, source_tag_advanced: sourceTagAdvanced, failure_samples: failureSamples, delivery, durations_ms: durations, observed_at: isoNow() };
+    if (runId) await env.DB.prepare(`UPDATE scheduled_run_log SET finished_at=?, status=?, processed=?, failed=?, metadata_json=? WHERE id=?`).bind(isoNow(), failed ? 'partial' : 'success', processed, failed, JSON.stringify({ source_changed: sourceChanged, source_tag_advanced: sourceTagAdvanced, failure_samples: failureSamples, durations_ms: durations }), runId).run();
+    return { processed, failed, source_changed: sourceChanged, source_tag_advanced: sourceTagAdvanced, failure_samples: failureSamples, durations_ms: durations, observed_at: isoNow() };
   } catch (error) {
     if (runId) await env.DB.prepare(`UPDATE scheduled_run_log SET finished_at=?, status='failed', processed=?, failed=?, metadata_json=? WHERE id=?`).bind(isoNow(), processed, failed + 1, JSON.stringify({ error: String(error?.message || error), durations_ms: { total_ms: Date.now() - runStartedMs } }), runId).run();
     throw error;
@@ -1780,9 +1617,17 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    const config = await backendConfig(env);
-
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: json(null).headers });
+
+    const deviceManagedRoutes = new Set([
+      '/api/v1/clients/register',
+      '/api/v1/push-devices',
+      '/api/v1/watchlist-targets',
+      '/api/v1/notification-events',
+    ]);
+    if (deviceManagedRoutes.has(url.pathname)) return json({ error: 'device_managed' }, 410);
+
+    const config = await backendConfig(env);
 
     if (url.pathname === '/api/v1/feedback' && request.method === 'POST') {
       if (!await enforceRateLimit(request, env, 'support-feedback', 5, '', config)) return rateLimitedResponse(config);
@@ -1821,7 +1666,6 @@ export default {
       return json({ error: 'method_not_allowed' }, 405);
     }
 
-    const isClientScopedRead = url.pathname === '/api/v1/watchlist-targets' || url.pathname === '/api/v1/notification-events';
     const d1IndependentRead = request.method === 'GET' && (
       url.pathname === '/api/v1/health' ||
       url.pathname === '/api/v1/security-search' ||
@@ -1833,7 +1677,7 @@ export default {
       url.pathname.startsWith('/api/v1/irbank/securities/') ||
       url.pathname.startsWith('/api/v1/securities/')
     );
-    const rateLimitRoute = request.method === 'GET' && !isClientScopedRead && !d1IndependentRead
+    const rateLimitRoute = request.method === 'GET' && !d1IndependentRead
       ? publicRateLimitRoute(url.pathname)
       : null;
     if (rateLimitRoute && !await enforceRateLimit(request, env, `public:${rateLimitRoute}`, config.rate_limit_public, '', config)) {
@@ -1844,86 +1688,6 @@ export default {
       const provided = String(request.headers.get('X-Admin-Secret') || '');
       if (!env.ADMIN_SECRET || provided !== env.ADMIN_SECRET) return json({ error: 'unauthorized' }, 401);
       return json(await runScheduledAnalysis(env));
-    }
-
-    if (url.pathname === '/api/v1/clients/register' && request.method === 'POST') {
-      if (!await enforceRateLimit(request, env, 'clients-register', config.rate_limit_register, '', config)) return rateLimitedResponse(config);
-      const clientId = crypto.randomUUID();
-      const secret = randomToken(32);
-      await env.DB.prepare('INSERT INTO clients(client_id, client_secret_hash, created_at, last_seen_at) VALUES (?, ?, ?, ?)').bind(clientId, await sha256Hex(secret), isoNow(), isoNow()).run();
-      return json({ client_id: clientId, client_secret: secret }, 201);
-    }
-
-    if (url.pathname === '/api/v1/push-devices' && request.method === 'PUT') {
-      const clientId = await authenticateClient(request, env);
-      if (!clientId) return json({ error: 'unauthorized' }, 401);
-      if (!await enforceRateLimit(request, env, 'push-devices-put', config.rate_limit_authenticated, clientId, config)) return rateLimitedResponse(config);
-      const body = await readJson(request);
-      const token = String(body?.device_token || '').trim();
-      const platform = String(body?.platform || 'android').trim();
-      if (!token || token.length > 4096 || !['android','ios','web'].includes(platform)) return json({ error: 'invalid_request' }, 400);
-      await env.DB.prepare(`INSERT INTO push_devices(client_id, device_token, platform, enabled, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?) ON CONFLICT(client_id, device_token) DO UPDATE SET platform=excluded.platform, enabled=1, updated_at=excluded.updated_at`).bind(clientId, token, platform, isoNow(), isoNow()).run();
-      return json({ ok: true });
-    }
-
-    if (url.pathname === '/api/v1/push-devices' && request.method === 'DELETE') {
-      const clientId = await authenticateClient(request, env);
-      if (!clientId) return json({ error: 'unauthorized' }, 401);
-      if (!await enforceRateLimit(request, env, 'push-devices-delete', config.rate_limit_authenticated, clientId, config)) return rateLimitedResponse(config);
-      const body = await readJson(request);
-      const token = String(body?.device_token || '').trim();
-      if (!token) return json({ error: 'invalid_request' }, 400);
-      await env.DB.prepare('UPDATE push_devices SET enabled=0, updated_at=? WHERE client_id=? AND device_token=?').bind(isoNow(), clientId, token).run();
-      return json({ ok: true });
-    }
-
-    if (url.pathname === '/api/v1/watchlist-targets' && request.method === 'PUT') {
-      const clientId = await authenticateClient(request, env);
-      if (!clientId) return json({ error: 'unauthorized' }, 401);
-      if (!await enforceRateLimit(request, env, 'watchlist-put', config.rate_limit_authenticated, clientId, config)) return rateLimitedResponse(config);
-      const body = await readJson(request);
-      const code = normalizeCode(String(body?.code || '').trim());
-      const targetYield = finiteNumber(body?.target_yield);
-      const alertEnabled = body?.alert_enabled === false ? 0 : 1;
-      if (!clientId || !code || targetYield === null || targetYield <= 0) {
-        return json({ error: 'invalid_request' }, 400);
-      }
-      const security = await env.DB.prepare(
-        'SELECT security_code FROM securities WHERE security_code = ? OR security_code_display = ? LIMIT 1'
-      ).bind(code, String(body?.code || '').trim()).first();
-      if (!security) return json({ error: 'not_found' }, 404);
-      await env.DB.prepare(
-        `INSERT INTO watchlist_targets(client_id, security_code, target_yield, alert_enabled, updated_at)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(client_id, security_code) DO UPDATE SET
-           target_yield=excluded.target_yield,
-           alert_enabled=excluded.alert_enabled,
-           updated_at=excluded.updated_at`
-      ).bind(clientId, security.security_code, targetYield, alertEnabled, isoNow()).run();
-      return json({ ok: true });
-    }
-
-    if (url.pathname === '/api/v1/watchlist-targets' && request.method === 'GET') {
-      const clientId = await authenticateClient(request, env);
-      if (!clientId) return json({ error: 'unauthorized' }, 401);
-      if (!await enforceRateLimit(request, env, 'watchlist-get', config.rate_limit_authenticated, clientId, config)) return rateLimitedResponse(config);
-      const result = await env.DB.prepare(`SELECT s.security_code_display AS code, s.name, w.target_yield, w.alert_enabled, w.updated_at
-        FROM watchlist_targets w JOIN securities s ON s.security_code = w.security_code
-        WHERE w.client_id = ? ORDER BY s.security_code`).bind(clientId).all();
-      return json({ items: result.results || [] });
-    }
-
-    if (url.pathname === '/api/v1/watchlist-targets' && request.method === 'DELETE') {
-      const clientId = await authenticateClient(request, env);
-      if (!clientId) return json({ error: 'unauthorized' }, 401);
-      if (!await enforceRateLimit(request, env, 'watchlist-delete', config.rate_limit_authenticated, clientId, config)) return rateLimitedResponse(config);
-      const body = await readJson(request);
-      const code = normalizeCode(String(body?.code || '').trim());
-      if (!clientId || !code) return json({ error: 'invalid_request' }, 400);
-      await env.DB.prepare(
-        'DELETE FROM watchlist_targets WHERE client_id = ? AND security_code = ?'
-      ).bind(clientId, code).run();
-      return json({ ok: true });
     }
 
     if (url.pathname === '/api/v1/health' && request.method === 'GET') {
@@ -2677,22 +2441,6 @@ export default {
       return json({ items: (result.results || []).map(row => ({
         ...row,
         metadata: JSON.parse(row.metadata_json || '{}'),
-      })) });
-    }
-
-    if (url.pathname === '/api/v1/notification-events') {
-      const clientId = await authenticateClient(request, env);
-      if (!clientId) return json({ error: 'unauthorized' }, 401);
-      if (!await enforceRateLimit(request, env, 'notification-events', config.rate_limit_authenticated, clientId, config)) return rateLimitedResponse(config);
-      const result = await env.DB.prepare(
-          `SELECT id, security_code, event_type, from_status, to_status, occurred_at, payload_json, delivered_at
-           FROM notification_events
-           WHERE json_extract(payload_json, '$.client_id') = ?
-           ORDER BY occurred_at DESC LIMIT 100`
-        ).bind(clientId).all();
-      return json({ items: (result.results || []).map(row => ({
-        ...row,
-        payload: JSON.parse(row.payload_json || '{}'),
       })) });
     }
 
