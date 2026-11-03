@@ -2,7 +2,7 @@
 
 更新日: 2026-11-03
 
-状態: 合意済み仕様。日次ユニバースはIRBANK Connect一覧を基礎とし、JPX公式ETF一覧で補完する。PR #45 の本番実装は `ced28fc5`、ライブ差分監査のPR #61は `18fed178`、差分監査JSONのPR #63は `03763500` でmainに統合済み。既存の160件同期テストとPR CIは成功し、IRBANK一覧公開・手動同期後のR2読み戻しも確認済み。JPX公式REIT一覧で013を補完する実装は別ブランチで追加中で、全166件のローカル同期テストが成功した。GitHub CI、main統合、R2更新、通常スケジュール確認は未完了。月間Runner分数の実測も未完了。
+状態: 合意済み仕様。日次ユニバースはIRBANK Connect一覧を基礎とし、JPX公式ETF一覧で補完する。PR #45/#61/#63/#64の本番実装・監査はmainに統合済み。2026-11-02のIRBANK週次一覧更新、手動yfinance同期run #367、本番R2/Worker読み戻しまで確認済み。run #367でJPX公式REIT区分も本番カタログに反映された。structured sync metrics artifactのコードと170件のローカルテストは成功したが、artifactを実Actionsでアップロード・照合する確認と複数の通常schedule日による月間Runner分数判定は未完了。
 
 ## IRBANK切替後の本番読み戻し（2026-11-03）
 
@@ -12,7 +12,11 @@ IRBANK更新run [#13](https://github.com/masacgt/Diview/actions/runs/41480740674
 
 2060.TのR2 `current.json` と本番Worker応答は、終値¥1,364・価格日2026-11-02で一致した。保存された `Ticker.calendar` は権利落ち日2027-03-30、状態`available`、取得元`Yahoo Finance via yfinance Ticker.calendar`、最終取得2026-10-17である。`statistics_last_fetched_session_date`は2026-10-23。2026-11-02のcurrent更新日時を、これら個別データの更新日時として扱わない。
 
+後続の手動同期run [#367](https://github.com/masacgt/Diview/actions/runs/41519078900) は世代 `2026-11-02-15aa0f2576d649b2aa0da838f9c68544` を公開した。2026-11-03の本番Worker `/api/v1/search-catalog` は同世代・市場日2026-11-02・4,368件を返し、650A（¥847）と659A（¥2,027）を検索対象に含めた。両価格はyfinance取得の2026-11-02終値である。詳細APIでは両銘柄の `data_retrieval.ex_dividend_calendar` が `status=failed`、`date=null`、`fetched_at=null`、source=`Yahoo Finance via yfinance Ticker.calendar` と別々に返る。したがって、ETFの価格・検索レコードは公開済みだが権利日カレンダーは未取得であり、「カレンダーにイベントなし」とは扱わない。読戻し項目と制約は `ai_docs/audits/production-etf-and-metrics-followup-20261103.json` に記録した。run #367は手動実行であり、通常schedule実績には含めない。
+
 切替後の通常schedule runはまだ確認できていない。次のXTKS営業日同期でカレンダーゲート通過、4,576コードの対象ハッシュ、成功・部分失敗・完全失敗数、公開世代の一致を確認する。複数の異なる通常営業日実績と、毎日実行のIRBANK処理・週次権利日処理を合わせたrunner分数が得られるまで、月2,000分以内とは判定せず、Actions timeoutは360分のまま維持する。
+
+後続の通常schedule run [#377](https://github.com/masacgt/Diview/actions/runs/41530821222) は2026-11-03 JSTの祝日に実行され、`market-calendar` jobは成功、`v2-daily-sync` jobはskipとなった。これは休場日のゲート動作の確認であり、全ユニバースの日次同期や実行時間サンプルには数えない。
 
 ## 取得元差分の確認状況（2026-11-03）
 
@@ -20,9 +24,9 @@ IRBANK更新run [#13](https://github.com/masacgt/Diview/actions/runs/41480740674
 
 2026-11-02 19:28:40–19:28:52Zにも両APIを読み取り専用で再取得した。件数・差分・J-Quants ProdCat集計は初回と一致し、取得間隔はIRBANK 10秒（11要求）、続いてJ-Quants 2秒だった。一方、J-Quantsの有効日付は引き続き2026-08-10で、IRBANKの2026-11-03 JST取得時刻と揃わない。再取得レポート [`audits/irbank-jquants-live-universe-diff-20261103.json`](audits/irbank-jquants-live-universe-diff-20261103.json) でも `retrieved_same_day=true`、`comparison_is_temporally_comparable=false` と記録した。全205件のうち59件は行ごとの公式根拠で分類でき、146件は未分類として残る。差分数が一致することや公式スナップショットにないことを理由に上場状態を推定しない。
 
-商品区分について、現在の `active_universe()` は既存コードの `security_type` と `jquants_product_category` を前回universeから引き継ぎ、新規ETFはJPX補完で `etf` / `014` を付与する。回帰テストを追加し、既存ETF・REITの `014` / `013` 維持と新規ETFの付与を確認した。変更後の同期テスト全160件が成功した。IRBANKで新規に現れ、過去のJ-Quants区分もJPX ETF補完もない非ETFコードには、現在のrefresh処理がJ-Quants ProdCatを付与しない。新規REIT等の区分完全性は未証明であり、商品区分の空欄を許容できるか、別の公式区分ソースが必要かを残課題とする。
+商品区分について、現在の `active_universe()` は既存コードの `security_type` と `jquants_product_category` を前回universeから引き継ぎ、新規ETFはJPX補完で `etf` / `014` を付与する。回帰テストを追加し、既存ETF・REITの `014` / `013` 維持と新規ETFの付与を確認した。変更時点の同期テスト全160件が成功した。IRBANKで新規に現れ、過去のJ-Quants区分もJPX ETF補完もない非ETFコードには、現在のrefresh処理がJ-Quants ProdCatを付与しない。新規REIT等の区分完全性は未証明であり、商品区分の空欄を許容できるか、別の公式区分ソースが必要かを残課題とする。
 
-この不足を埋めるため、JPX公式のREIT上場一覧（https://www.jpx.co.jp/english/equities/products/reits/issues/）を追加補完元として実装中。2026-11-03 JSTの取得確認では、上場済み58件が返り、401Aを含み、将来上場予定の666A（2026-11-25）は除外された。各行へ`security_type=reit`、`jquants_product_category=013`、公式URL、上場日を付け、既存IRBANKコードの分類補完と、IRBANK欠落時のコード追加を行う。追加のIRBANK API要求は発生しない。旧schema v2 snapshotは日次同期互換のため受理し、IRBANK更新jobはREIT出典がないsnapshotを7日以内でも更新対象にして新しいsnapshotへ切り替える。新実装のテスト・CI・R2公開・通常スケジュール確認は未完了。
+JPX公式のREIT上場一覧（https://www.jpx.co.jp/english/equities/products/reits/issues/）を補完元として実装し、PR #64でmainへ統合した。2026-11-03 JSTの取得確認では、上場済み58件が返り、401Aを含み、将来上場予定の666A（2026-11-25）は除外された。各行へ`security_type=reit`、`jquants_product_category=013`、公式URL、上場日を付け、既存IRBANKコードの分類補完と、IRBANK欠落時のコード追加を行う。追加のIRBANK API要求は発生しない。旧schema v2 snapshotは日次同期互換のため受理し、IRBANK更新jobはREIT出典がないsnapshotを7日以内でも更新対象にして新しいsnapshotへ切り替える。手動run #367後のWorker読戻しで401A・8951・8952にcategory 013を確認した。通常スケジュールでの補完更新・読戻しは引き続き未確認。
 
 Yahoo Financeの5文字種類株式7銘柄（25935.T、50765.T、75505.T、92015.T、92025.T、94345.T、94346.T）を、yfinance 1.7.0の5日間・日足・調整なし・actions有効の一括要求で読み取り確認した。7件全てに一部の価格履歴が返ったが、2026-11-02の終値があったのは75505.T（¥4,885）と92025.T（¥4,730）の2件で、他5件は2026-10-30以前の終値だった。これは単回の価格履歴応答であり、プロフィール取得、毎営業日の正確な終値、配当品質、検索登録資格を保証しない。R2への書き込みは行っていない。商品範囲・区分方針は別途決める。
 
@@ -435,6 +439,18 @@ GitHub Actionsの直近7日（2026-10-26〜2026-11-02）の`schedule` run一覧�
 7. **新規IRBANK銘柄・商品分類の読み戻し** — IRBANK/J-Quants差分監査で新規上場と分類された634Aについて、R2 `current.json` は2026-11-02終値¥2,168、価格 `available`、R2 profile source `Yahoo Finance via yfinance` を返し、Worker `/api/v1/securities/634A` も同じ価格日・値を返した。Yahooの日本語shortName/longNameは空で、表示名は英語 `LAYERED INC` へfallbackした。商品区分は401AをREIT/category 013、8951/8952をREIT/category 013、650AをETF/category 014として確認。650Aは価格以外の複数項目が未取得で `partial`。これは代表例の読み戻しであり、4,576銘柄すべての分類・株価成功を証明しない。
 
 #367の市場日は先行手動処理と同じ `2026-11-02` であるため、同日成功済み項目の再利用を含み得る。45分43秒を新規セッションの代表値として23営業日に乗算しない。参考算術は約1,051.5 runner分/月（45分43秒×23）だが、手動同日runであり、IRBANK毎日job・週次権利日jobも含まないので月2,000分の判定値ではない。通常scheduleの複数異なる市場日、関連する定期jobの全runner分、R2/Yahoo計測が揃うまで判定を保留し、Actions timeout 360分を維持する。
+
+### 次回同期の計測artifact
+
+月間負荷を同じ形式で比較できるよう、`sync_v2.py` は `YFINANCE_SYNC_METRICS_PATH` が設定されたActions runでローカルJSONを原子的に書き出し、workflowが `yfinance-sync-metrics-{run_id}` として90日保持する。reportにはrun identity、選択市場日、IRBANK source timestamp/hashと対象件数、generation/catalog件数、成功・partial・最上位失敗数、失敗コードと理由、フィールド欠損、yfinance呼び出し内訳、HTTP要求/429、phase時間、collection activity、R2操作のobject category別件数と累積秒、最終R2 publication記録までのscript経過時間を含む。R2の `publications/current.json` には既存どおりpublication record前のR2 snapshotを保存し、再帰的なカウントを避ける。artifactの `r2_metrics_final` はpublication、manifest、schedule更新を含む。新規テストを含む同期テスト170件は成功し、`git diff --check`も成功した。GitHub Actions上のartifactアップロードと、run log・R2 generationとの実値照合は未実施で、次のsync後に確認する。
+
+### 取得元差分・Yahoo 404の追加調査
+
+2026-11-03にrun #314のHTTP 404上位失敗156銘柄すべてをyfinance 1.7.0で1か月の日足再照会した。0.5秒以上の間隔でR2を書かずに実施し、156件すべてが `YFPricesMissingError` / no history、HTTP 429は0件だった。これは再照会時点のYahoo no-dataを示すだけで、歴史上場状態や404原因の確定にはならない。コード別の応答は [`yfinance-run314-yahoo-reprobe-20261103.json`](audits/yfinance-run314-yahoo-reprobe-20261103.json) に保存した。JPX廃止一覧では2件が市場日までの上場廃止と確認済み、154件の歴史上の状態は未確定のままである。
+
+JPX追加ETF 650A・659Aは手動run #367がyfinanceから2026-11-02終値（それぞれ¥847、¥2,027）を取得し、世代 `2026-11-02-15aa0f2576d649b2aa0da838f9c68544` へ公開した。2026-11-03のWorker `/api/v1/search-catalog` で4,368件中に両コードがあり、詳細APIでも同じ価格日・値と `Yahoo Finance via yfinance` を読み戻した。両銘柄の `Ticker.calendar` は `failed`・日付null・fetch時刻nullであり、株価取得とは独立した未取得状態である。読み戻し内容とAPI経由確認の制約は [`production-etf-and-metrics-followup-20261103.json`](audits/production-etf-and-metrics-followup-20261103.json) に記録した。run #367は手動・同一市場日の再処理であり、通常schedule実績には含めない。
+
+IRBANK/J-Quants 205差分のうち146件は、公開資料からまだ理由を確定できない。JPXの[東証上場銘柄一覧ページ](https://www.jpx.co.jp/markets/statistics-equities/misc/01.html)は2026-11-03時点で2026年9月末版を掲載し、前月末版は第3営業日の午前9時以降に掲載するとしている。2026年11月の第3営業日は11月5日なので、10月末版はそれ以降に取得し、可能な範囲で再照合する。7件のJ-Quantsのみの種類株は、合意済みのIRBANK基準+JPX ETF追加という範囲に含まれないため日次検索ユニバースへ加えない。追加する場合はユニバース範囲を広げる明示的な方針変更が必要となる。既存読み取りprobeでは7件中2件だけ2026-11-02終値を返した。
 
 #### 次の確認手順
 

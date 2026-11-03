@@ -122,6 +122,7 @@ jobs:
           YFINANCE_HTTP_MAX_REQUESTS_PER_SECOND: "8"
           YFINANCE_V2_WORKERS: "24"
           YFINANCE_UNIVERSE_SNAPSHOT_PATH: irbank-universe-snapshot.json
+          YFINANCE_SYNC_METRICS_PATH: yfinance-sync-metrics.json
           CLOUDFLARE_ACCOUNT_ID: 8d8f4f1f3c53232aaf7c7d6dd7b33944
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -135,6 +136,15 @@ jobs:
           path: irbank-universe-snapshot.json
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Save structured sync metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yfinance-sync-metrics-${{ github.run_id }}
+          path: yfinance-sync-metrics.json
+          if-no-files-found: ignore
+          retention-days: 90
 
   legacy-financial-v2-migration:
     if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'migrate-financials'
