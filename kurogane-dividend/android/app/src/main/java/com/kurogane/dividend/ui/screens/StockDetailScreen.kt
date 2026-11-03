@@ -1421,6 +1421,8 @@ fun StockDetailScreen(
                                 com.kurogane.dividend.model.AnnualDividendResolver.equityInterimAndYearEndReference(
                                     financial, year, selectedForecastDps, chartDividendEvents, chartUpcomingDividend, currentCalendarDate
                                 ) else null
+                            val knownDividendMonths = viewModel.cachedDividendMonthsFor(currentHolding.category, currentHolding.code)
+                                ?: currentHolding.dividendMonths
                             val selectedYearAmount = when {
                                 interimAndYearEnd != null -> "中間配当 ${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(interimAndYearEnd.first)}　期末配当予想 ${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(interimAndYearEnd.second)}"
                                 useJreitCalendarHistory && monthlyAmounts.isNotBlank() -> monthlyAmounts
@@ -1428,6 +1430,8 @@ fun StockDetailScreen(
                                     "予想${currentHolding.currency}${com.kurogane.dividend.model.formatFinancialAmountDisplay(selectedForecastDps)}/株"
                                 monthlyAmounts.isNotBlank() -> monthlyAmounts
                                 dividendEventsLoading -> "配当イベント取得中"
+                                chartDividendEvents.isEmpty() && knownDividendMonths.isNotEmpty() ->
+                                    "配当月のみ取得（詳細未取得）"
                                 dividendEventsLoadFailed -> "配当イベントを取得できません"
                                 else -> "この年の配当イベントなし"
                             }

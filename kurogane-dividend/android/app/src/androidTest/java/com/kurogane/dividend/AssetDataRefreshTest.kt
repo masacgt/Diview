@@ -100,6 +100,24 @@ class AssetDataRefreshTest {
         }
     }
 
+    @Test fun emptyMonthCacheRecoversFromEventsForHoldingsAndDetail() {
+        prefs.edit().putString("dividend_months_7203.T", "[]")
+            .putString("dividend_events_7203.T", """[{"date":"2026-03-30","amount":51},{"date":"2026-09-29","amount":48}]""")
+            .commit()
+        val vm = model()
+        assertEquals(listOf(3, 9), vm.holdings.value.first { it.code == "7203" }.dividendMonths)
+        assertEquals(listOf(3, 9), vm.cachedDividendMonthsFor(com.kurogane.dividend.model.Category.JAPAN, "7203"))
+        assertEquals(2, vm.dividendEventsFor("7203").size)
+    }
+
+    @Test fun cachedMonthsRemainAvailableWhenEventHistoryIsMissing() {
+        prefs.edit().putString("dividend_months_7203.T", "[3,9]").commit()
+        val vm = model()
+        assertEquals(listOf(3, 9), vm.holdings.value.first { it.code == "7203" }.dividendMonths)
+        assertEquals(listOf(3, 9), vm.cachedDividendMonthsFor(com.kurogane.dividend.model.Category.JAPAN, "7203"))
+        assertTrue(vm.dividendEventsFor("7203").isEmpty())
+    }
+
     @Test fun missingJapanesePriceRetriesAfterCooldownAndPersists() {
         val vm = model()
         missingPrice = true

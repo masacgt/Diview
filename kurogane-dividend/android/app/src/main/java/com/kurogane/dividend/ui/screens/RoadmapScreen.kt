@@ -1116,13 +1116,13 @@ private fun RoadmapGrowthSimulatorSheet(
                     val principal = currentCost.coerceAtLeast(0.0) + monthlyContribution * 12.0 * years
                     Column(
                         Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(SurfaceContainerHigh)
-                            .border(1.dp, if (years == 30) PrimaryEmerald else BorderColor, RoundedCornerShape(12.dp)).padding(horizontal = 6.dp, vertical = 10.dp),
+                            .border(1.dp, BorderColor, RoundedCornerShape(12.dp)).padding(horizontal = 6.dp, vertical = 10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
                         Text(
                             "${years}年後 (${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) + years})",
-                            color = if (years == 30) PrimaryEmerald else OnSurfaceVariant,
+                            color = OnSurfaceVariant,
                             fontSize = AppTextSize.dense,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,

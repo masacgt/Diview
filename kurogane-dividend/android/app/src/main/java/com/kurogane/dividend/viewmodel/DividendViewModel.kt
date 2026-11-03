@@ -868,9 +868,15 @@ class DividendViewModel @JvmOverloads constructor(
 
     fun cachedDividendMonthsFor(category: Category, code: String): List<Int>? {
         val symbol = yahooSymbol(category, code) ?: return null
-        if (!marketPreferences.contains("dividend_months_$symbol")) return null
-        return cachedDividendMonths(symbol)
+        val hasMonths = marketPreferences.contains("dividend_months_$symbol")
+        val months = effectiveDividendMonths(symbol)
+        return months.takeIf { hasMonths || it.isNotEmpty() }
     }
+
+    private fun effectiveDividendMonths(symbol: String): List<Int> =
+        com.kurogane.dividend.model.DividendMonthResolver.resolve(
+            cachedDividendMonths(symbol), dividendEventsForSymbol(symbol), LocalDate.now(ZoneId.of("Asia/Tokyo"))
+        )
 
     private fun storeDividendMonths(symbol: String, months: List<Int>, fetchedOnJapanDate: String) {
         val rows = JSONArray()
@@ -885,9 +891,10 @@ class DividendViewModel @JvmOverloads constructor(
     private fun applyDividendMonths(symbol: String, months: List<Int>) {
         _holdings.update { list ->
             list.map { holding ->
-                if (yahooSymbol(holding.category, holding.code) == symbol)
-                    withDividendForecast(holding.copy(dividendMonths = months).refreshPayout())
-                else holding
+                if (yahooSymbol(holding.category, holding.code) == symbol) {
+                    val displayMonths = if (holding.isNoDividendConfirmed) cachedDividendMonths(symbol) else months
+                    withDividendForecast(holding.copy(dividendMonths = displayMonths).refreshPayout())
+                } else holding
             }
         }
         _watchlist.update { list ->
@@ -904,13 +911,13 @@ class DividendViewModel @JvmOverloads constructor(
     private fun applyCachedDividendMonths() {
         _holdings.update { list -> list.map { holding ->
             val months = yahooSymbol(holding.category, holding.code)?.let { symbol ->
-                cachedDividendMonths(symbol)
+                if (holding.isNoDividendConfirmed) cachedDividendMonths(symbol) else effectiveDividendMonths(symbol)
             } ?: emptyList()
             withDividendForecast(holding.copy(dividendMonths = months).refreshPayout())
         } }
         _watchlist.update { list -> list.map { stock ->
             val months = yahooSymbol(stock)?.let { symbol ->
-                cachedDividendMonths(symbol)
+                effectiveDividendMonths(symbol)
             } ?: emptyList()
             stock.copy(payoutMonths = months,
                 payoutTiming = months.joinToString(" / ") { "${it}月" }.ifBlank { "配当月未取得" })
@@ -960,6 +967,10 @@ class DividendViewModel @JvmOverloads constructor(
 
     fun dividendEventsFor(code: String): List<CloudflareDividendEvent> {
         val normalized = yahooSymbol(Category.JAPAN, code) ?: yahooSymbol(Category.US, code) ?: return emptyList()
+        return dividendEventsForSymbol(normalized)
+    }
+
+    private fun dividendEventsForSymbol(normalized: String): List<CloudflareDividendEvent> {
         synchronized(dividendEventCacheLock) { dividendEventCache[normalized] }?.let { return it }
 
         val parsed: List<CloudflareDividendEvent> = runCatching {
@@ -1031,7 +1042,7 @@ class DividendViewModel @JvmOverloads constructor(
         replaceYears: Set<Int>? = null
     ) {
         val normalized = symbol.uppercase(java.util.Locale.ROOT)
-        val existing = dividendEventsFor(normalized)
+        val existing = dividendEventsForSymbol(normalized)
         val recentCutoff = LocalDate.now(ZoneId.of("Asia/Tokyo")).minusDays(365)
         val retained = if (replaceYears == null) {
             existing.filter { it.date < recentCutoff }
@@ -1091,7 +1102,7 @@ class DividendViewModel @JvmOverloads constructor(
                 storeDividendEvents(symbol, eventsBySymbol[symbol].orEmpty())
                 storeUpcomingDividendEvent(symbol, result.getOrThrow().upcomingEventsBySymbol[symbol])
                 marketPreferences.edit().putString("dividend_events_fetched_jst_$symbol", today).apply()
-                applyDividendMonths(symbol, months)
+                applyDividendMonths(symbol, effectiveDividendMonths(symbol))
             }
         }
     }
@@ -1163,9 +1174,12 @@ class DividendViewModel @JvmOverloads constructor(
             if (months == null) {
                 return@withLock false
             }
-            // The month response is useful even if a separate historical-events request fails.
-            storeDividendMonths(normalized, months, today)
-            applyDividendMonths(normalized, months)
+            // A partial historical-year response does not describe the full recent month window.
+            val selectedMonths = com.kurogane.dividend.model.DividendMonthResolver.monthsFromResponse(
+                cachedDividendMonths(normalized), months, dueYears, LocalDate.now(ZoneId.of("Asia/Tokyo"))
+            )
+            storeDividendMonths(normalized, selectedMonths, today)
+            applyDividendMonths(normalized, effectiveDividendMonths(normalized))
 
             var fetchedEvents = history.eventsBySymbol[normalized].orEmpty()
             var fetchedYears = emptySet<Int>()
@@ -1218,6 +1232,8 @@ class DividendViewModel @JvmOverloads constructor(
             } else if (fetchedYears.isNotEmpty()) {
                 storeDividendEvents(normalized, fetchedEvents, fetchedYears)
             }
+            // Newly fetched history can fill an empty month list without inventing events.
+            applyDividendMonths(normalized, effectiveDividendMonths(normalized))
             storeUpcomingDividendEvent(normalized, history.upcomingEventsBySymbol[normalized])
             val successEditor = marketPreferences.edit()
                 .putString("dividend_events_fetched_jst_$normalized", today)
