@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS securities (
   metrics_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(metrics_json))
 );
 CREATE INDEX IF NOT EXISTS idx_securities_edinet_code ON securities(edinet_code);
+CREATE INDEX IF NOT EXISTS idx_securities_code_display ON securities(security_code_display);
 
 CREATE TABLE IF NOT EXISTS financial_periods (
   security_code TEXT NOT NULL REFERENCES securities(security_code),
