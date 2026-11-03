@@ -3028,7 +3028,7 @@ private fun HeatmapRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(
-            modifier = Modifier.width(80.dp).padding(start = 8.dp)
+            modifier = Modifier.width(68.dp).padding(start = 8.dp)
         ) {
             Surface(
                 shape = RoundedCornerShape(4.dp),
