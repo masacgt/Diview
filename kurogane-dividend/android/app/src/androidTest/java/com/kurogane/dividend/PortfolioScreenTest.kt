@@ -88,6 +88,19 @@ class PortfolioScreenTest {
         ))
     }
 
+    @Test fun cachedCandidateShowsPriceAndYieldWhileSearchIsPending() {
+        val response = CompletableDeferred<List<CloudflareSearchHit>>()
+        compose.setContent { KuroganeDividendTheme {
+            SearchSheet(true, {}, {}, onSearch = { response.await() },
+                onCachedSearch = { listOf(CloudflareSearchHit("7203", "保存済み銘柄")) },
+                onCachedQuotes = { mapOf("7203" to CloudflareSearchQuote(3000.0, 3.0, 90.0)) })
+        } }
+        compose.onNode(hasSetTextAction()).performTextInput("7203")
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("保存済み銘柄").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("¥3,000").assertIsDisplayed()
+        compose.onNodeWithText("利回り 3.00%").assertIsDisplayed()
+    }
+
     @Test fun cachedCandidatesAppearWhileSearchIsPendingThenUpdate() {
         val response = CompletableDeferred<List<CloudflareSearchHit>>()
         val attempts = AtomicInteger()

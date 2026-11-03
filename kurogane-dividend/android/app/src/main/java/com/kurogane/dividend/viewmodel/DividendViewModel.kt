@@ -2304,8 +2304,11 @@ class DividendViewModel @JvmOverloads constructor(
         }
     }
 
+    fun cachedCloudflareSearchQuotes(codes: List<String>): Map<String, CloudflareSearchQuote> =
+        marketRepository.cachedSearchQuotes(codes)
+
     suspend fun loadCloudflareSearchQuotes(codes: List<String>): Map<String, CloudflareSearchQuote> =
-        marketRepository.fetchSearchQuotes(codes)
+        marketRepository.fetchCachedSearchQuotes(codes)
 
     suspend fun registerCloudflareHolding(
         code: String,

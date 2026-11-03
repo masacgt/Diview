@@ -112,7 +112,8 @@ fun SearchSheet(
     onSelectStock: (String) -> Unit,
     onSearch: suspend (String) -> List<CloudflareSearchHit> = { emptyList() },
     onLoadQuotes: suspend (List<String>) -> Map<String, CloudflareSearchQuote> = { emptyMap() },
-    onCachedSearch: (String) -> List<CloudflareSearchHit> = { emptyList() }
+    onCachedSearch: (String) -> List<CloudflareSearchHit> = { emptyList() },
+    onCachedQuotes: (List<String>) -> Map<String, CloudflareSearchQuote> = { emptyMap() }
 ) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var selectedCategory by rememberSaveable { mutableStateOf("all") }
@@ -151,12 +152,13 @@ fun SearchSheet(
     LaunchedEffect(visible) {
         if (visible) {
             recentCandidates = loadRecentSearches(context)
-            recentQuotes = emptyMap()
+            recentQuotes = onCachedQuotes(quoteCandidates.map { it.code })
         }
     }
 
     LaunchedEffect(searchQuery, visible, quoteCandidates, retryCount) {
         if (visible && normalizeStockSearchText(searchQuery.trim()).isEmpty() && quoteCandidates.isNotEmpty()) {
+            recentQuotes = onCachedQuotes(quoteCandidates.map { it.code })
             recentQuotes = runCatchingCancellable {
                 loadQuotes(quoteCandidates.map { it.code })
             }.getOrDefault(emptyMap())
@@ -210,7 +212,8 @@ fun SearchSheet(
             isSearching = false
         } else {
             isSearching = true
-            remoteCandidates = candidatesFor(onCachedSearch(query), emptyMap())?.takeIf { it.isNotEmpty() }
+            val cachedHits = onCachedSearch(query)
+            remoteCandidates = candidatesFor(cachedHits, onCachedQuotes(cachedHits.map { it.code }))?.takeIf { it.isNotEmpty() }
             delay(350)
             val result = runCatchingCancellable { search(query) }
             searchError = result.exceptionOrNull()?.let { networkErrorMessage(resources, it) }
@@ -218,7 +221,7 @@ fun SearchSheet(
             val quotesNeeded = hits.orEmpty()
                 .map { it.code }
                 .distinct()
-            if (hits != null) remoteCandidates = candidatesFor(hits, emptyMap())
+            if (hits != null) remoteCandidates = candidatesFor(hits, onCachedQuotes(quotesNeeded))
             isSearching = false
             if (quotesNeeded.isNotEmpty()) {
                 val searchQuotes = runCatchingCancellable { loadQuotes(quotesNeeded) }.getOrDefault(emptyMap())

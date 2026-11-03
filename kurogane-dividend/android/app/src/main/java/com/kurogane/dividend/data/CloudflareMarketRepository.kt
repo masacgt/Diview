@@ -88,6 +88,36 @@ internal class SearchResultCache(
     }
 }
 
+internal class SearchQuoteCache(
+    private val nowMillis: () -> Long = { System.nanoTime() / 1_000_000L },
+    private val ttlMillis: Long = 24 * 60 * 60 * 1_000L,
+    private val maxEntries: Int = 1_000
+) {
+    private data class Entry(val loadedAt: Long, val quote: CloudflareSearchQuote)
+    private val entries = LinkedHashMap<String, Entry>(16, 0.75f, true)
+
+    @Synchronized fun get(codes: Collection<String>): Map<String, CloudflareSearchQuote> {
+        val now = nowMillis()
+        return buildMap {
+            codes.forEach { raw ->
+                val code = raw.trim().uppercase(java.util.Locale.ROOT)
+                val entry = this@SearchQuoteCache.entries[code] ?: return@forEach
+                if (now - entry.loadedAt !in 0 until ttlMillis) this@SearchQuoteCache.entries.remove(code)
+                else put(code, entry.quote)
+            }
+        }
+    }
+
+    @Synchronized fun put(quotes: Map<String, CloudflareSearchQuote>) {
+        val now = nowMillis()
+        quotes.forEach { (raw, quote) ->
+            val code = raw.trim().uppercase(java.util.Locale.ROOT)
+            if (code.isNotEmpty()) entries[code] = Entry(now, quote)
+        }
+        while (entries.size > maxEntries) entries.remove(entries.keys.first())
+    }
+}
+
 private data class CachedSearchCatalogQuotes(
     val loadedAtElapsedMillis: Long,
     val quotesByCode: Map<String, CloudflareSearchQuote>
@@ -261,6 +291,7 @@ class CloudflareMarketRepository(
     private var cachedSearchCatalogQuotes: CachedSearchCatalogQuotes? = null
     private val searchCatalogQuotesLock = Any()
     private val searchResults = SearchResultCache()
+    private val searchQuotes = SearchQuoteCache()
 
     fun cachedSearchMatches(query: String): List<CloudflareSearchHit> = searchResults.matching(query)
 
@@ -314,6 +345,25 @@ class CloudflareMarketRepository(
                 }
             }
         }
+    }
+
+    fun cachedSearchQuotes(codes: Collection<String>): Map<String, CloudflareSearchQuote> = searchQuotes.get(codes)
+
+    suspend fun fetchCachedSearchQuotes(codes: Collection<String>): Map<String, CloudflareSearchQuote> {
+        val requested = codes.map { it.trim().uppercase(java.util.Locale.ROOT) }.filter(::isSecurityCode).distinct()
+        val cached = searchQuotes.get(requested)
+        val missing = requested.filterNot { it in cached }
+        if (missing.isEmpty()) return cached
+        val fresh = try {
+            fetchSearchQuotes(missing)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            if (cached.isNotEmpty()) return cached
+            throw error
+        }
+        searchQuotes.put(fresh)
+        return cached + fresh
     }
 
     suspend fun fetchSearchQuotes(codes: Collection<String>, allowCatalogFallback: Boolean = true): Map<String, CloudflareSearchQuote> = withContext(ioDispatcher) {

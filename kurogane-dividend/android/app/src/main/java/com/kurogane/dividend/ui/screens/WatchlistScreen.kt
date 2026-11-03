@@ -406,6 +406,7 @@ fun WatchlistScreen(
         onDismiss = { if (!isAddingWatchlist) showAddWatchlist = false },
         onSelectStock = { addWatchlist(it) },
         onSearch = viewModel::searchCloudflareSecurities,
+        onCachedQuotes = viewModel::cachedCloudflareSearchQuotes,
         onLoadQuotes = viewModel::loadCloudflareSearchQuotes
     )
     val deleteActionWidth = 112.dp

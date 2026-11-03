@@ -614,6 +614,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             onDismiss = { showSearchSheet = false },
                             onSearch = { query -> viewModel.searchCloudflareSecurities(query) },
                             onCachedSearch = viewModel::cachedCloudflareSearchMatches,
+                            onCachedQuotes = viewModel::cachedCloudflareSearchQuotes,
                             onLoadQuotes = viewModel::loadCloudflareSearchQuotes,
                             onSelectStock = { code ->
                                 navBackStackEntry?.savedStateHandle?.set("restore_stock_search", true)

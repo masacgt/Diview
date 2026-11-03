@@ -12,6 +12,51 @@ import java.net.SocketTimeoutException
 import java.net.URL
 
 class CloudflareMarketRepositoryTest {
+    @Test fun searchQuoteCacheExpiresAndPreservesDividendStatus() {
+        var now = 0L
+        val cache = SearchQuoteCache(nowMillis = { now }, maxEntries = 2)
+        val quoted = CloudflareSearchQuote(3000.0, 3.0, 90.0, quoteDate = "2026-11-03")
+        val unknown = CloudflareSearchQuote(1200.0, null, null, false, true)
+        val noDividend = CloudflareSearchQuote(500.0, 0.0, 0.0, true, true)
+        cache.put(mapOf("7203" to quoted, "8306" to unknown))
+        assertEquals(quoted, cache.get(listOf(" 7203 "))["7203"])
+        cache.put(mapOf("9999" to noDividend))
+        assertTrue(cache.get(listOf("8306")).isEmpty())
+        assertEquals(noDividend, cache.get(listOf("9999"))["9999"])
+        now = 86_399_999
+        assertEquals(quoted, cache.get(listOf("7203"))["7203"])
+        now = 86_400_000
+        assertTrue(cache.get(listOf("7203", "9999")).isEmpty())
+    }
+
+    @Test fun cachedSearchQuotesOnlyRequestMissingSymbols() = runBlocking {
+        val urls = mutableListOf<String>()
+        val repo = repository(mutableListOf(
+            Connection(200, """{"items":[{"code":"7203","price":3000,"annual_dividend_per_share":90,"yield_rate":3}]}"""),
+            Connection(200, """{"items":[{"code":"8306","price":1200,"annual_dividend_per_share":60,"yield_rate":5}]}""")
+        ), urls)
+        assertEquals(3000.0, repo.fetchCachedSearchQuotes(listOf("7203"))["7203"]!!.price!!, 0.0)
+        val result = repo.fetchCachedSearchQuotes(listOf("7203", "8306"))
+        assertEquals(setOf("7203", "8306"), result.keys)
+        assertEquals(2, urls.size)
+        assertTrue(urls[1].contains("8306"))
+        assertFalse(urls[1].contains("7203"))
+        assertEquals(result, repo.cachedSearchQuotes(listOf("7203", "8306")))
+    }
+
+    @Test fun missingQuotesAreRetriedWithoutDiscardingCachedOnes() = runBlocking {
+        val urls = mutableListOf<String>()
+        val repo = repository(mutableListOf(
+            Connection(200, """{"items":[{"code":"7203","price":3000,"annual_dividend_per_share":90,"yield_rate":3}]}"""),
+            Connection(503, ""), Connection(503, ""),
+            Connection(200, """{"items":[{"code":"8306","price":1200,"annual_dividend_per_share":60,"yield_rate":5}]}""")
+        ), urls)
+        repo.fetchCachedSearchQuotes(listOf("7203"))
+        assertEquals(setOf("7203"), repo.fetchCachedSearchQuotes(listOf("7203", "8306")).keys)
+        assertEquals(setOf("7203", "8306"), repo.fetchCachedSearchQuotes(listOf("7203", "8306")).keys)
+        assertEquals(4, urls.size)
+    }
+
     @Test fun searchResultCacheExpiresAndEvictsLeastRecentlyUsedEntries() {
         var now = 0L
         val cache = SearchResultCache(nowMillis = { now }, maxEntries = 2)
