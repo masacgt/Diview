@@ -1284,7 +1284,7 @@ async function readV2FinancialPayload(env, code) {
       source: 'IRBANK',
     });
   }
-  const issuerFinancialPeriods = irbankOverview?.financials?.annual || [];
+  const issuerFinancialPeriods = annual.length ? annual : irbankOverview?.financials?.annual || [];
   const asOfDate = new Date().toISOString().slice(0, 10);
   const issuerDividendRecords = [...issuerDividendRecordsByPeriod.entries()]
     .sort(([a], [b]) => a.localeCompare(b))

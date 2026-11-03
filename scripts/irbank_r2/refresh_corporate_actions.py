@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "yfinance_r2"))
 sys.path.insert(0, str(ROOT / "scripts" / "irbank_r2"))
 
+from financial_revision import bump_financial_revision  # noqa: E402
 from refresh_v2_dividends import (  # noqa: E402
     API_BASE,
     RequestBudget,
@@ -323,7 +324,9 @@ def main(argv: list[str] | None = None) -> int:
                     raise RuntimeError(f"R2 read-back SHA-256 mismatch: {key}")
             summary.append({"code": code, "key": key, "sha256": digest,
                             "events": len(document.get("events", document.get("records", [])))})
+    revision = bump_financial_revision(r2, bucket) if args.publish else None
     print(json.dumps({"codes": codes, "api_requests": budget.used, "published": bool(args.publish),
+                      "financial_revision": revision,
                       "objects": summary}, ensure_ascii=False, separators=(",", ":")))
     return 0
 

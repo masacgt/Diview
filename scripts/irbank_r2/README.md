@@ -69,7 +69,7 @@ The Worker exposes `/api/v1/irbank/catalog`, `/api/v1/irbank/manifest`, `/api/v1
 
 ### Issuer-confirmed share actions and normalized dividend events
 
-`refresh_corporate_actions.py` reads the issuer's annual-report disclosure list and section text from IRBANK Connect, extracts dated split/consolidation ratios, and normalizes Yahoo `repair=False` cash-dividend events to the latest verified share basis. It is generic by security code; it contains no per-issuer ratio or dividend overrides. The derived action catalog is stored at `market/irbank/v1/events/share-splits/{code}.json`, and normalized events at `market/yfinance/v2/securities/{symbol}/dividend_basis/current.json`. Each event keeps the Yahoo raw amount, applied factor, and issuer filing references. Conflicts and incomplete disclosure retrieval stop publication; R2 writes are read back and SHA-256 checked.
+`refresh_corporate_actions.py` reads the issuer's annual-report disclosure list and section text from IRBANK Connect, extracts dated split/consolidation ratios, and normalizes Yahoo `repair=False` cash-dividend events to the latest verified share basis. It is generic by security code; it contains no per-issuer ratio or dividend overrides. The derived action catalog is stored at `market/irbank/v1/events/share-splits/{code}.json`, and normalized events at `market/yfinance/v2/securities/{symbol}/dividend_basis/current.json`. Each event keeps the Yahoo raw amount, applied factor, and issuer filing references. Conflicts and incomplete disclosure retrieval stop publication; R2 writes are read back and SHA-256 checked, then one shared financial revision token is bumped to refresh app-side caches.
 
 Dry-run first; publishing is explicit and capped at 200 IRBANK API requests per invocation:
 

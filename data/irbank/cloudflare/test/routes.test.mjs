@@ -414,7 +414,6 @@ test('financial API derives current-share-basis DPS from disclosed actions for a
     [`${base}/financials/2023-03-31.json`, { annual: { fiscal_year: '2023/03', period_end: '2023-03-31' } }],
     [`market/irbank/v1/securities/${code}/overview.json`, {
       dividends: { records: [{ fiscal_year: '2023/03', annual_dps: 12 }] },
-      financials: { annual: [{ fiscal_year: '2023/03', period_end: '2023-03-31' }] },
     }],
     [`market/irbank/v1/events/share-splits/${code}.json`, {
       status: 'available', errors: [], coverage: { disclosures_from: '2017-01-01', disclosures_to: '2099-12-31' },
