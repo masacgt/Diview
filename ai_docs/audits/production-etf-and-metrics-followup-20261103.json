@@ -1,0 +1,52 @@
+{
+  "verified_on": "2026-11-03",
+  "source": "production Cloudflare Worker /api/v1/search-catalog and /api/v1/securities/{code}",
+  "generation": "2026-11-02-15aa0f2576d649b2aa0da838f9c68544",
+  "market_data_date": "2026-11-02",
+  "catalog_generated_at": "2026-11-03T06:10:02.387711+09:00",
+  "catalog_count": 4368,
+  "securities": [
+    {
+      "code": "650A",
+      "name": "グローバルＸ　中国半導体・トップ１０　ＥＴＦ",
+      "security_type": "etf",
+      "quote": 847,
+      "quote_date": "2026-11-02",
+      "search_catalog_status": "partial",
+      "source": "Yahoo Finance via yfinance",
+      "last_attempt_at": "2026-11-03T05:50:35.485554+09:00",
+      "calendar": {
+        "date": null,
+        "status": "failed",
+        "last_attempt_status": "failed",
+        "fetched_at": null,
+        "source": "Yahoo Finance via yfinance Ticker.calendar"
+      },
+      "failed_fields": ["upcoming_ex_dividend_date", "upcoming_dividend_payment_start_date", "monthly_prices"]
+    },
+    {
+      "code": "659A",
+      "name": "DAIWA ASSET MANAGEMENT IFREEETF",
+      "security_type": "etf",
+      "quote": 2027,
+      "quote_date": "2026-11-02",
+      "search_catalog_status": "partial",
+      "source": "Yahoo Finance via yfinance",
+      "last_attempt_at": "2026-11-03T05:51:08.863037+09:00",
+      "calendar": {
+        "date": null,
+        "status": "failed",
+        "last_attempt_status": "failed",
+        "fetched_at": null,
+        "source": "Yahoo Finance via yfinance Ticker.calendar"
+      },
+      "failed_fields": ["upcoming_ex_dividend_date", "upcoming_dividend_payment_start_date"]
+    }
+  ],
+  "limitations": [
+    "The Worker read-back establishes that both securities are in the published search catalog and that their quote fields are available; it is not a direct R2 credential-level object read.",
+    "This quote is for the same 2026-11-02 market session as the earlier failed run #314; the later manual run #367 successfully populated/published the two securities.",
+    "A failed Ticker.calendar retrieval is distinct from an empty/no-event calendar and from successful price acquisition.",
+    "The 146 IRBANK/J-Quants membership differences and 154 historical Yahoo 404 cases remain unclassified where date-aligned official status evidence is unavailable."
+  ]
+}

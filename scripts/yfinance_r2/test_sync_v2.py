@@ -659,6 +659,20 @@ class R2MetricsTests(TestCase):
         self.assertEqual(sync.r2_object_category("market/yfinance/v2/securities/7203.T/prices/monthly/2025.json"), "securities/prices/monthly")
         self.assertEqual(sync.r2_object_category("market/yfinance/v2/archive/dividends/7203.T/2020.json"), "archive/dividends")
 
+    def test_sync_metrics_artifact_is_atomic_json(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "reports" / "sync-metrics.json"
+            sync.write_sync_metrics_artifact(path, {
+                "r2_metrics_final": {"calls": {"put_object": 2}},
+                "top_level_failures": [{"code": "7203", "reason": "HTTP 404"}],
+            })
+
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {
+                "r2_metrics_final": {"calls": {"put_object": 2}},
+                "top_level_failures": [{"code": "7203", "reason": "HTTP 404"}],
+            })
+            self.assertFalse(path.with_name(path.name + ".tmp").exists())
+
     def test_recent_split_listing_reads_only_existing_years_across_pages(self):
         class Body:
             def read(self):

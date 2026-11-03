@@ -3792,6 +3792,18 @@ def publish_catalog(client: Any, bucket: str, universe: list[dict[str, str]], se
     }
 
 
+def write_sync_metrics_artifact(path: str | Path, report: dict[str, Any]) -> None:
+    """Write a machine-readable local report for the Actions run artifact."""
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_name(output.name + ".tmp")
+    temporary.write_text(
+        json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(output)
+
+
 def active_universe(client: Any, bucket: str, fetched: list[dict[str, str]], session_date: date) -> list[dict[str, Any]]:
     old = read_json(client, bucket, object_key("universe", "current.json")) or {}
     old_by_code = {str(row.get("code")): row for row in old.get("securities", []) if isinstance(row, dict)}
@@ -4186,6 +4198,35 @@ def run(
         "next_financial_bucket": (financial_bucket + 1) % FINANCIAL_BUCKETS,
         "updated_at": iso_now(),
     })
+    metrics_path = os.environ.get("YFINANCE_SYNC_METRICS_PATH")
+    if metrics_path:
+        field_failures = [
+            {
+                "code": code,
+                "fields": sorted({str(field) for field in result.get("field_failures", [])}),
+            }
+            for code, result in sorted(results.items())
+            if result.get("field_failures")
+        ]
+        metrics_report = {
+            "artifact_schema_version": 1,
+            "run": {
+                "github_run_id": os.environ.get("GITHUB_RUN_ID"),
+                "github_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+                "event_name": os.environ.get("GITHUB_EVENT_NAME"),
+                "commit_sha": os.environ.get("GITHUB_SHA"),
+                "ref": os.environ.get("GITHUB_REF"),
+            },
+            "publication": publication,
+            "script_total_elapsed_seconds": round(time.perf_counter() - started_at, 3),
+            "r2_metrics_final": r2_metrics.snapshot(),
+            "top_level_failures": [
+                {"code": code, "reason": reason[:500]}
+                for code, reason in sorted(failures.items())
+            ],
+            "field_failures": field_failures,
+        }
+        write_sync_metrics_artifact(metrics_path, metrics_report)
     print(
         f"Published v2 generation {generation}: success={len(results)}, failed={len(failures)}, "
         f"catalog={len(catalog['items'])}, elapsed={elapsed_seconds}s, "
