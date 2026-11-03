@@ -1,7 +1,7 @@
 # Diview D1・R2・端末データ所有権と移行仕様
 
 調査日: 2026-11-03
-状態: 移行方針の仕様。ウォッチリストのWorker側切替はソース変更済み。本番反映と、その他のR2移行は未実施。
+状態: 移行方針の仕様。ウォッチリストのWorker切替は本番反映済み（2026-11-03、Version ID `4981c1e0-e337-4392-9f5b-909b52c5bc0c`）。その他のR2移行は未実施。
 
 ## 目的
 
@@ -87,7 +87,7 @@ Androidは `LocalImportStore` にウォッチリストを保存し、`Notificati
 
 ただし現行価格通知Workerは各実行時に `/api/v1/search-catalog` を取得し、WorkManagerには接続条件がある。目標仕様では、ネットワーク制約のある日次価格取得処理と、通信不要のローカル通知処理を分離する。日次取得が失敗した場合の保存価格の扱い、古さの上限、通知の見送り条件を実装前に定める。配当権利日・配当変更の更新Workerは別系統で通信を必要とするため、このオフライン価格通知の仕様と混同しない。
 
-Workerソースでは `/api/v1/clients/register`、`/api/v1/push-devices`、`/api/v1/watchlist-targets`、`/api/v1/notification-events` が `410 device_managed` を返す。定期処理からも `watchlist_targets` の読み取り、`notification_events` への書き込み、FCM配信を外した。Androidソース内にこれらのAPI呼び出しはない。D1の関連テーブルと既存行は変更・削除していない。外部クライアントの利用と本番トラフィックは未確認のため、Workerを本番反映すると該当APIを利用する外部連携は停止する。
+Workerソースでは `/api/v1/clients/register`、`/api/v1/push-devices`、`/api/v1/watchlist-targets`、`/api/v1/notification-events` が `410 device_managed` を返す。定期処理からも `watchlist_targets` の読み取り、`notification_events` への書き込み、FCM配信を外した。Androidソース内にこれらのAPI呼び出しはない。D1の関連テーブルと既存行は変更・削除していない。このWorker変更は本番反映済みだが、外部クライアントの利用と本番トラフィックは未確認であり、これらAPIを利用する外部連携があれば停止している。
 
 ### 問い合わせ・認証
 
@@ -96,7 +96,7 @@ Workerソースでは `/api/v1/clients/register`、`/api/v1/push-devices`、`/ap
 ## 移行手順
 
 1. 本番D1/R2のバックアップと読み取り可能な使用量基準を確保する。D1上限中は上限リセット後に読み戻し確認を行う。
-2. D1テーブルごとに、Worker・Android・GitHub Actions・運用スクリプトの全読み書き元を特定する。特にD1市場データへの投入元を確認する。サーバーFCM APIはソース上停止済みだが、本番反映前に外部利用と本番トラフィックの影響を確認する。
+2. D1テーブルごとに、Worker・Android・GitHub Actions・運用スクリプトの全読み書き元を特定する。特にD1市場データへの投入元を確認する。サーバーFCM APIはソースと本番で停止済み。外部利用と本番トラフィックの影響を引き続き確認する。
 3. R2のキー、JSONスキーマ、履歴ID、保持期間、処理中状態の保存先、再試行と競合処理を確定する。
 4. D1だけにある対象データを一度R2へ移す。オブジェクト件数、銘柄・期間の被覆、出典、ハッシュ、代表データを照合する。R2に既存データがある場合は重複して上書きしない。
 5. Workerの分析履歴、分析状態、完了ログ、定義・監査、銘柄一覧の読み書きを順にR2へ切り替える。移行後は対象データをD1へ二重書きしない。
@@ -120,7 +120,7 @@ Workerソースでは `/api/v1/clients/register`、`/api/v1/push-devices`、`/ap
 - 市場カタログ・財務・配当のR2網羅率と、D1にだけある期間・銘柄の扱い。
 - 価格更新キューの実行中状態をD1に残すかDurable Objectsへ移すか。
 - レート制限を現行どおり厳密にするか、Workers Rate Limitingの近似制限を許容するか。
-- Worker切替を本番反映する前の、サーバー側FCM APIの外部利用・本番トラフィック影響確認。
+- Worker切替を本番反映した後の、サーバー側FCM APIの外部利用・本番トラフィック影響確認。
 - 分析履歴R2キー形式と、同時実行時の最新状態更新方式。
 
 ## 調査時点の注意
