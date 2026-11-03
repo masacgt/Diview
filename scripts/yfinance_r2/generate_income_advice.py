@@ -78,6 +78,7 @@ def build_catalog(client: Any, bucket: str, catalog: dict[str, Any],
     counts = {
         "catalog_items": 0,
         "eligible_currency": 0,
+        "excluded_etf": 0,
         "candidate_items": 0,
         "read_failures": 0,
         "excluded": {},
@@ -90,6 +91,9 @@ def build_catalog(client: Any, bucket: str, catalog: dict[str, Any],
         if row.get("category") != "jp" or row.get("currency") != "JPY":
             continue
         counts["eligible_currency"] += 1
+        if row.get("security_type") == "etf":
+            counts["excluded_etf"] += 1
+            continue
         eligible_rows.append(row)
 
     print(json.dumps({

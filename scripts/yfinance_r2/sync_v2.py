@@ -3647,6 +3647,7 @@ def run(
             for row in catalog["items"]
             if row.get("code") not in failures
             and row.get("status") != "failed"
+            and row.get("security_type") != "etf"
             and isinstance(row.get("income_advice"), dict)
         ],
     }

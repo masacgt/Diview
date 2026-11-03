@@ -1864,7 +1864,8 @@ fun WatchlistScreen(
             val latestCalculatedRightsDate = latestRightsDateInfo.first
             val latestCalculatedRightsStockNames = latestRightsDateInfo.second
             val totalAmountTextMeasurer = rememberTextMeasurer()
-            val totalAmountCellWidthPx = with(LocalDensity.current) { 52.dp.roundToPx() }
+            val heatmapAmountCellWidth = 68.dp
+            val totalAmountCellWidthPx = with(LocalDensity.current) { heatmapAmountCellWidth.roundToPx() }
             val totalAmountTextStyle = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold)
             Column(
                 modifier = Modifier
@@ -2143,7 +2144,7 @@ fun WatchlistScreen(
                             (1..12).forEach { m ->
                                 Text(
                                     text = stringResource(R.string.ex_dividend_matrix_dialog_text_4, m),
-                                    modifier = Modifier.width(52.dp),
+                                    modifier = Modifier.width(heatmapAmountCellWidth),
                                     color = if (m == 3 || m == 9 || m == 6 || m == 12) PrimaryEmerald else OnSurfaceVariant,
                                     fontSize = AppTextSize.dense,
                                     fontWeight = FontWeight.Bold,
@@ -2182,7 +2183,7 @@ fun WatchlistScreen(
                                 }
                                 Text(
                                     text = sumText,
-                                    modifier = Modifier.width(52.dp),
+                                    modifier = Modifier.width(heatmapAmountCellWidth),
                                     color = if (sumText != "-") OnSurface else OnSurfaceVariant,
                                     style = totalAmountTextStyle.copy(fontSize = amountFontSize),
                                     textAlign = TextAlign.Center,
@@ -3049,7 +3050,7 @@ private fun HeatmapRow(
             val cellData = cells[m]
             Box(
                 modifier = Modifier
-                    .width(52.dp)
+                    .width(68.dp)
                     .heightIn(min = 48.dp)
                     .padding(2.dp)
                     .clip(RoundedCornerShape(6.dp))

@@ -567,7 +567,7 @@
     <string name="watchlist_projection_info_content_description">"配当ポテンシャルの説明"</string>
     <string name="watchlist_projection_info_title">"配当ポテンシャルの見方"</string>
     <string name="watchlist_text_10">"監視銘柄の一括シミュレーション"</string>
-    <string name="watchlist_text_11">"権利落ち月マトリクス"</string>
+    <string name="watchlist_text_11">"権利月一覧"</string>
     <string name="watchlist_text_12">"受取月別グラフ試算"</string>
     <string name="watchlist_bulk_ex_dividend_month_button">"権利落ち月"</string>
     <string name="watchlist_bulk_monthly_estimate_button">"受取月別試算"</string>
