@@ -9,6 +9,10 @@ import com.kurogane.dividend.data.financialYears
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -83,6 +87,43 @@ private data class StockDetailDividendPeriod(
     val annualDividend: Double?,
     val isForecast: Boolean = false
 )
+
+@Composable
+private fun DividendChartSkeleton() {
+    val transition = rememberInfiniteTransition(label = "Dividend chart loading")
+    val shimmer by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.8f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "Dividend chart shimmer"
+    )
+    val placeholder = BorderColor.copy(alpha = shimmer)
+    val heights = listOf(0.28f, 0.34f, 0.46f, 0.53f, 0.59f, 0.66f, 0.73f, 0.80f)
+    Row(
+        modifier = Modifier.fillMaxSize().padding(12.dp)
+            .semantics { contentDescription = "配当グラフを読み込み中" },
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.Bottom
+    ) {
+        heights.forEach { height ->
+            Column(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom
+            ) {
+                Box(Modifier.width(24.dp).height(6.dp).clip(CircleShape).background(placeholder))
+                Spacer(Modifier.height(5.dp))
+                Box(
+                    Modifier.fillMaxHeight(height * 0.52f).width(26.dp)
+                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                        .background(placeholder)
+                )
+                Spacer(Modifier.height(6.dp))
+                Box(Modifier.width(28.dp).height(6.dp).clip(CircleShape).background(placeholder))
+            }
+        }
+    }
+}
 
 private data class DividendHistoryEditValue(
     val year: Int,
@@ -443,7 +484,7 @@ fun StockDetailScreen(
         || financial?.issuerDividendShareBasisStatus == "unverified_incomplete_corporate_action_history"
     val baseProfile = financial?.profile ?: com.kurogane.dividend.model.StockFinancialProfile()
     var financialError by remember(currentHolding.code) { mutableStateOf(false) }
-    var financialLoading by remember(currentHolding.code) { mutableStateOf(false) }
+    var financialLoading by remember(currentHolding.code) { mutableStateOf(currentHolding.category == com.kurogane.dividend.model.Category.JAPAN) }
     var financialFailure by remember(currentHolding.code) { mutableStateOf<String?>(null) }
     var financialRetry by remember(currentHolding.code) { mutableIntStateOf(0) }
     LaunchedEffect(currentHolding.code, financialRetry) {
@@ -459,6 +500,7 @@ fun StockDetailScreen(
             financialFailure = result.exceptionOrNull()?.let { networkErrorMessage(resources, it) }
         } finally { financialLoading = false }
     }
+    val dividendChartLoading = financialLoading && financial == null && dividendPeriods.none { it.annualDividend != null }
     val backendAnalysisValues = stockAnalysisData[currentHolding.code.uppercase(Locale.ROOT).removeSuffix(".T")]?.values
     LaunchedEffect(currentHolding.code) { viewModel.fetchStockAnalysis(currentHolding.code) }
     val mergedAnalysisValues = remember(backendAnalysisValues, financial) {
@@ -1205,7 +1247,8 @@ fun StockDetailScreen(
                                         }
                                         showDividendHistoryEditor = true
                                     },
-                                    modifier = Modifier.size(32.dp)
+                                    modifier = Modifier.size(32.dp),
+                                    enabled = !dividendChartLoading
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Edit,
@@ -1239,7 +1282,9 @@ fun StockDetailScreen(
                             border = BorderStroke(1.dp, BorderColor),
                             modifier = Modifier.fillMaxWidth().height(chartHeight)
                         ) {
-                            Row(
+                            if (dividendChartLoading) {
+                                DividendChartSkeleton()
+                            } else Row(
                                 modifier = Modifier.fillMaxSize().padding(12.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.Bottom
@@ -1335,7 +1380,7 @@ fun StockDetailScreen(
                             }
                         }
 
-                        selectedDividendYear?.let { year ->
+                        if (!dividendChartLoading) selectedDividendYear?.let { year ->
                             val selectedForecastDps = dividendPeriods
                                 .firstOrNull { it.year == year && it.isForecast }
                                 ?.annualDividend
@@ -2280,16 +2325,20 @@ fun StockDetailScreen(
                                         }
 
                                         // 2. 2x2 Grid of Financial Metrics
-                                        AdaptiveRow(
-                                            modifier = Modifier.fillMaxWidth(),
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
+                                            Column(
+                                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
                                             // 自己資本比率
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
                                                 border = BorderStroke(1.dp, BorderColor),
-                                                modifier = Modifier.weight(1f)
+                                                modifier = Modifier.fillMaxWidth().weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     Text(stringResource(R.string.stock_detail_text_57), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
@@ -2299,40 +2348,12 @@ fun StockDetailScreen(
                                                     Text(profile.equityRatioSub, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
                                                 }
                                             }
-
-                                            // 株主還元方針
-                                            Surface(
-                                                shape = RoundedCornerShape(12.dp),
-                                                color = SurfaceContainer,
-                                                border = BorderStroke(1.dp, BorderColor),
-                                                modifier = Modifier.weight(1f)
-                                            ) {
-                                                Column(modifier = Modifier.padding(10.dp)) {
-                                                    StockDetailMetricTitleWithInfo(
-                                                        title = stringResource(R.string.stock_detail_text_58),
-                                                        contentDescription = stringResource(R.string.stock_detail_doe_info_content_description),
-                                                        description = stringResource(R.string.stock_detail_doe_info_description),
-                                                        expanded = showDoeInfo,
-                                                        onExpandedChange = { showDoeInfo = it }
-                                                    )
-                                                    Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(profile.calculatedDoe, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
-                                                    Spacer(modifier = Modifier.height(2.dp))
-                                                    Text(profile.calculatedDoeSub, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
-                                                }
-                                            }
-                                        }
-
-                                        AdaptiveRow(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
                                             // ネットD/Eレシオ
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
                                                 border = BorderStroke(1.dp, BorderColor),
-                                                modifier = Modifier.weight(1f)
+                                                modifier = Modifier.fillMaxWidth().weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     StockDetailMetricTitleWithInfo(
@@ -2348,13 +2369,38 @@ fun StockDetailScreen(
                                                     Text(stringResource(R.string.stock_detail_text_60), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                 }
                                             }
-
+                                            }
+                                            Column(
+                                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                            // 株主還元方針
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = SurfaceContainer,
+                                                border = BorderStroke(1.dp, BorderColor),
+                                                modifier = Modifier.fillMaxWidth().weight(1f)
+                                            ) {
+                                                Column(modifier = Modifier.padding(10.dp)) {
+                                                    StockDetailMetricTitleWithInfo(
+                                                        title = stringResource(R.string.stock_detail_text_58),
+                                                        contentDescription = stringResource(R.string.stock_detail_doe_info_content_description),
+                                                        description = stringResource(R.string.stock_detail_doe_info_description),
+                                                        expanded = showDoeInfo,
+                                                        onExpandedChange = { showDoeInfo = it }
+                                                    )
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(profile.calculatedDoe, color = OnSurface, fontWeight = FontWeight.Bold, fontSize = AppTextSize.metric, fontFamily = AppNumericFontFamily)
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(profile.calculatedDoeSub, color = PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = AppTextSize.dense)
+                                                }
+                                            }
                                             // 営業利益率
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = SurfaceContainer,
                                                 border = BorderStroke(1.dp, BorderColor),
-                                                modifier = Modifier.weight(1f)
+                                                modifier = Modifier.fillMaxWidth().weight(1f)
                                             ) {
                                                 Column(modifier = Modifier.padding(10.dp)) {
                                                     Text(stringResource(R.string.stock_detail_text_61), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
@@ -2363,6 +2409,7 @@ fun StockDetailScreen(
                                                     Spacer(modifier = Modifier.height(2.dp))
                                                     Text(stringResource(R.string.stock_detail_text_62), color = OnSurfaceVariant, fontSize = AppTextSize.dense)
                                                 }
+                                            }
                                             }
                                         }
 
@@ -2641,6 +2688,10 @@ fun StockDetailScreen(
                 val dividendEvents = remember(currentHolding.code, dividendEventRevision) {
                     viewModel.dividendEventsFor(currentHolding.code)
                 }
+                val displayedDividendMonths = remember(currentHolding.category, currentHolding.code, currentHolding.dividendMonths, dividendEventRevision) {
+                    viewModel.cachedDividendMonthsFor(currentHolding.category, currentHolding.code)
+                        ?: currentHolding.dividendMonths
+                }
                 val nextDividendEvent = dividendEvents.firstOrNull { !it.date.isBefore(java.time.LocalDate.now()) }
                 val upcomingDividendEvent = remember(currentHolding.code, dividendEventRevision) {
                     viewModel.upcomingDividendEventFor(currentHolding.code)
@@ -2727,7 +2778,7 @@ fun StockDetailScreen(
                                     }
                                 }
                                 Text(
-                                    "配当月：" + currentHolding.dividendMonths.filter { it in 1..12 }.distinct().sorted()
+                                    "配当月：" + displayedDividendMonths.filter { it in 1..12 }.distinct().sorted()
                                         .joinToString("・") { "${it}月" }.ifEmpty { resources.getString(R.string.not_available) },
                                     color = OnSurfaceVariant,
                                     fontSize = AppTextSize.dense

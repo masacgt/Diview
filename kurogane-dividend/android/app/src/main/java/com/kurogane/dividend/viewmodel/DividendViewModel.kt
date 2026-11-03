@@ -866,6 +866,12 @@ class DividendViewModel @JvmOverloads constructor(
         (0 until rows.length()).map { rows.optInt(it, -1) }.filter { it in 1..12 }.distinct().sorted()
     }.getOrDefault(emptyList())
 
+    fun cachedDividendMonthsFor(category: Category, code: String): List<Int>? {
+        val symbol = yahooSymbol(category, code) ?: return null
+        if (!marketPreferences.contains("dividend_months_$symbol")) return null
+        return cachedDividendMonths(symbol)
+    }
+
     private fun storeDividendMonths(symbol: String, months: List<Int>, fetchedOnJapanDate: String) {
         val rows = JSONArray()
         months.filter { it in 1..12 }.distinct().sorted().forEach(rows::put)
@@ -873,6 +879,7 @@ class DividendViewModel @JvmOverloads constructor(
             .putString("dividend_months_$symbol", rows.toString())
             .putString("dividend_months_fetched_jst_$symbol", fetchedOnJapanDate)
             .apply()
+        _dividendEventRevision.update { it + 1 }
     }
 
     private fun applyDividendMonths(symbol: String, months: List<Int>) {
@@ -1156,6 +1163,9 @@ class DividendViewModel @JvmOverloads constructor(
             if (months == null) {
                 return@withLock false
             }
+            // The month response is useful even if a separate historical-events request fails.
+            storeDividendMonths(normalized, months, today)
+            applyDividendMonths(normalized, months)
 
             var fetchedEvents = history.eventsBySymbol[normalized].orEmpty()
             var fetchedYears = emptySet<Int>()
@@ -1203,7 +1213,6 @@ class DividendViewModel @JvmOverloads constructor(
                 }
             }
 
-            storeDividendMonths(normalized, months, today)
             if (dueYears.isEmpty()) {
                 storeDividendEvents(normalized, fetchedEvents)
             } else if (fetchedYears.isNotEmpty()) {
@@ -1216,7 +1225,6 @@ class DividendViewModel @JvmOverloads constructor(
                 successEditor.putString("dividend_year_events_fetched_jst_${normalized}_$year", today)
             }
             successEditor.apply()
-            applyDividendMonths(normalized, months)
 
             !yearFetchFailed && years.all { year ->
                 marketPreferences.getString("dividend_year_events_fetched_jst_${normalized}_$year", null) == today
