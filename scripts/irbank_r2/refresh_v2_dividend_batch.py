@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import re
 import sys
 from typing import Any
 
@@ -135,6 +136,37 @@ def update_forecast(item: dict[str, Any], forecast: dict[str, Any] | None,
 def record_failure(item: dict[str, Any], kind: str, error: Exception, attempted_at: str) -> None:
     item[f"{kind}_last_attempt_at"] = attempted_at
     item[f"{kind}_last_error"] = f"http_{error.status}" if isinstance(error, refresh.ApiFailure) else type(error).__name__
+
+
+def classify_batch_failure(error: Exception) -> str:
+    if isinstance(error, refresh.ApiFailure):
+        return f"api_http_{error.status}"
+    if isinstance(error, (TimeoutError, refresh.URLError, OSError)):
+        return "transport"
+    if isinstance(error, (ValueError, TypeError, KeyError)):
+        return "response_or_data"
+    return "other"
+
+
+def record_batch_failure(failure_class_counts: dict[str, int], failure_samples: list[dict[str, Any]],
+                         *, code: str, kind: str, error: Exception) -> None:
+    category = classify_batch_failure(error)
+    exception_type = type(error).__name__
+    key = f"{kind}:{category}:{exception_type}"
+    failure_class_counts[key] = failure_class_counts.get(key, 0) + 1
+    if len(failure_samples) >= 20:
+        return
+    message = str(error)
+    message = re.sub(r"(?i)(https?://[^\s?]+)\?[^\s]+", r"\1?[redacted]", message)
+    message = re.sub(r"(?i)(bearer\s+)\S+", r"\1[redacted]", message)
+    failure_samples.append({
+        "code": code,
+        "kind": kind,
+        "category": category,
+        "http_status": error.status if isinstance(error, refresh.ApiFailure) else None,
+        "exception_type": exception_type,
+        "message": message[:240],
+    })
 
 
 def count_pending(items: dict[str, dict[str, Any]], codes: list[str], generated_at: Any,
@@ -300,6 +332,8 @@ def main() -> int:
     now_iso = now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
     attempted_at = now_iso
     failures = 0
+    failure_class_counts: dict[str, int] = {}
+    failure_samples: list[dict[str, Any]] = []
     actual_updates = 0
     forecast_updates = 0
     forecast_cache_reuses = 0
@@ -353,9 +387,13 @@ def main() -> int:
                 else:
                     failures += 1
                     record_failure(item, "actual", error, attempted_at)
+                    record_batch_failure(failure_class_counts, failure_samples,
+                                         code=code, kind="actual", error=error)
             except Exception as error:
                 failures += 1
                 record_failure(item, "actual", error, attempted_at)
+                record_batch_failure(failure_class_counts, failure_samples,
+                                     code=code, kind="actual", error=error)
 
         # Forecast extraction may use a disclosure-list call plus as many as
         # eight document calls. Start it only when the whole current policy's
@@ -386,9 +424,13 @@ def main() -> int:
                 # Preserve any previously fetched forecast for review and retry.
                 failures += 1
                 record_failure(item, "forecast", error, attempted_at)
+                record_batch_failure(failure_class_counts, failure_samples,
+                                     code=code, kind="forecast", error=error)
             except Exception as error:
                 failures += 1
                 record_failure(item, "forecast", error, attempted_at)
+                record_batch_failure(failure_class_counts, failure_samples,
+                                     code=code, kind="forecast", error=error)
 
         next_code = after_code
         if budget.remaining == 0:
@@ -464,6 +506,7 @@ def main() -> int:
         "last_run_forecast_detail_calls_saved": forecast_cache_reuses,
         "last_run_codes_touched": codes_touched,
         "last_run_failures": failures,
+        "last_run_failure_class_counts": failure_class_counts,
         "quota_remaining_at_start": quota_remaining,
         "pending_actual_count": pending_actual,
         "pending_forecast_count": pending_forecast,
@@ -512,6 +555,9 @@ def main() -> int:
         "forecast_detail_calls_saved": forecast_cache_reuses,
         "codes_touched": codes_touched,
         "failures": failures,
+        "failure_class_counts": failure_class_counts,
+        "failure_sample_count": len(failure_samples),
+        "failure_samples": failure_samples,
         "next_code": next_code,
         "coverage_complete": sync["coverage_complete"],
         "sha256": digest,
