@@ -429,7 +429,7 @@ test('financial API derives current-share-basis DPS from disclosed actions for a
   assert.equal(record.share_basis_status, 'verified_from_issuer_actions');
 });
 
-test('financial API recalculates dividend streaks from fresh normalized history', async () => {
+test('financial API does not report stale dividend streaks when normalized history has a year gap', async () => {
   const code = '8303';
   const base = `market/yfinance/v2/securities/${code}.T`;
   const env = dividendEnvironment(new Map([
@@ -450,8 +450,9 @@ test('financial API recalculates dividend streaks from fresh normalized history'
   const response = await worker.fetch(new Request(`https://example.com/api/v1/financial-data/${code}`), env);
   const data = await response.json();
   assert.equal(data.dividends.metrics_as_of_year, 2023);
-  assert.equal(data.dividends.consecutive_dividend_increase_years, 1);
-  assert.equal(data.dividends.no_cut_years, 1);
+  assert.equal(data.dividends.metrics_status, 'insufficient_history');
+  assert.equal(data.dividends.consecutive_dividend_increase_years, null);
+  assert.equal(data.dividends.no_cut_years, null);
 });
 
 test('financial API returns calculated DOE and net D/E from the stored annual row', async () => {

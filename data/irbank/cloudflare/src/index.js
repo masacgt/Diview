@@ -657,7 +657,10 @@ function calendarYearDividendTrend(records) {
     .sort((a, b) => a.year - b.year);
   const latest = observed.at(-1);
   const prior = observed.at(-2);
-  if (!latest || !prior || prior.year !== latest.year - 1) {
+  const currentYear = Number(new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Tokyo', year: 'numeric'
+  }).format(new Date()));
+  if (!latest || !prior || latest.year !== currentYear - 1 || prior.year !== latest.year - 1) {
     return { latest_completed_year: latest?.year ?? null, consecutive_increase_years: null, no_cut_years: null,
       status: 'insufficient_history' };
   }
