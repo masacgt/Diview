@@ -1322,9 +1322,7 @@ fun StockDetailScreen(
                                 val prefix = currentHolding.currency
                                 val bars = history.map { point ->
                                     val dps = point.annualDividend ?: 0.0
-                                    val dpsText = point.annualDividend
-                                        ?.let { com.kurogane.dividend.model.formatFinancialAmountDisplay(it) }
-                                        ?: "未取得"
+                                    val dpsText = com.kurogane.dividend.model.formatFinancialAmountDisplay(dps)
                                     val fiscalPeriodLabel = if (isJreit || useFiscalChart || financial?.issuerDividends.orEmpty().isNotEmpty()) "${point.year}期" else "${point.year}年"
                                     Triple(
                                         fiscalPeriodLabel,
