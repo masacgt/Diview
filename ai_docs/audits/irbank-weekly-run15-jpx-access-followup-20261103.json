@@ -1,0 +1,55 @@
+{
+  "verified_at_jst": "2026-11-03",
+  "irbank_scheduled_run": {
+    "run_number": 15,
+    "run_id": 41548736907,
+    "url": "https://github.com/masacgt/Diview/actions/runs/41548736907",
+    "event": "schedule",
+    "branch": "main",
+    "head_sha": "e83691d9bd563f27a6d458df435c5059f813a7bf",
+    "job_id": 125630674018,
+    "job_started_at_utc": "2026-11-02T23:52:49Z",
+    "job_completed_at_utc": "2026-11-02T23:55:13Z",
+    "job_duration_seconds": 144,
+    "job_conclusion": "success",
+    "universe_refresh": {
+      "status": "fresh",
+      "security_count": 4576,
+      "fetched_at": "2026-11-02T20:19:31Z",
+      "code_set_sha256": "c6337a4b4ef8f57f8f44997bb4ff825ec0fa48f4ce31d4395f37794de72b650d",
+      "api_requests": 0
+    },
+    "dividend_batch": {
+      "artifact_id": 13189004635,
+      "artifact_sha256": "db405e0992effb444b93b5e4a81270295aa83eb46b7947bf8ffd73bc1fe410ce",
+      "catalog_count": 3963,
+      "api_requests_including_usage": 1,
+      "quota_remaining_at_start": 3950,
+      "actual_updates": 0,
+      "forecast_updates": 0,
+      "failures": 3963,
+      "forecast_pending": 3963,
+      "next_code": "4498",
+      "coverage_complete": false,
+      "published_r2_key": "market/yfinance/v2/issuer_dividends/current.json",
+      "published_payload_sha256": "8f06b939b5f952ceb171697a084bc88efc22a42aa2faa1b43f0de6087330b93c",
+      "read_back_sha256": "8f06b939b5f952ceb171697a084bc88efc22a42aa2faa1b43f0de6087330b93c",
+      "failure_detail_limit": "The artifact reports only an aggregate failure count; it does not include failure classes or per-code errors. The cause is unknown."
+    }
+  },
+  "jpx_data_portal": {
+    "official_reference_page": "https://www.jpx.co.jp/markets/statistics-equities/misc/01.html",
+    "portal_url": "https://clientportal.jpx.co.jp/ClientPortal/s/Issue?language=ja",
+    "anonymous_page_access": "visible without signing in",
+    "visible_rows": "300/4613",
+    "full_csv_control_visible": true,
+    "csv_download_verified": false,
+    "observed_result": "Clicking the full CSV control produced no visible confirmation or verifiable downloaded file in the browser session. This is inconclusive about whether the file is anonymously downloadable.",
+    "official_page_claim": "The JPX page says the portal full-list CSV includes listing dates and delisted issues from the prior year."
+  },
+  "next_actions": [
+    "Add failure-class counts and a small sample of code/error-class pairs to the dividend-batch artifact, then inspect a later scheduled batch.",
+    "Recheck the JPX October 2026 month-end workbook after 2026-11-05 and compare it with the 146 unresolved membership differences.",
+    "Verify the next normal XTKS scheduled synchronization and confirm the metrics artifact is uploaded; do not count manual or holiday-skipped runs toward the monthly budget."
+  ]
+}
