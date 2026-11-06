@@ -84,15 +84,17 @@ object NotificationScheduler {
     private fun schedule(work: WorkManager, name: String, kind: NotificationKind, morning: Boolean, enabled: Boolean) {
         if (!enabled) { work.cancelUniqueWork(name); return }
         val delay = NotificationPolicy.nextDelay(ZonedDateTime.now(), if (morning) NotificationPolicy.morning else NotificationPolicy.evening)
-        val constraints = Constraints.Builder().apply {
-            if (kind == NotificationKind.PRICE) setRequiredNetworkType(NetworkType.CONNECTED)
-        }.build()
         val request = PeriodicWorkRequestBuilder<DividendNotificationWorker>(24, TimeUnit.HOURS)
             .setInitialDelay(delay.toMillis(), TimeUnit.MILLISECONDS)
-            .setConstraints(constraints)
+            .setConstraints(Constraints.Builder().build())
             .setInputData(workDataOf("kind" to kind.name, "morning" to morning))
             .addTag("diview.notifications")
             .build()
-        work.enqueueUniquePeriodicWork(name, ExistingPeriodicWorkPolicy.KEEP, request)
+        val existingWorkPolicy = if (kind == NotificationKind.PRICE) {
+            ExistingPeriodicWorkPolicy.UPDATE
+        } else {
+            ExistingPeriodicWorkPolicy.KEEP
+        }
+        work.enqueueUniquePeriodicWork(name, existingWorkPolicy, request)
     }
 }

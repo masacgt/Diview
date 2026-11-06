@@ -186,12 +186,14 @@ data class CloudflareMarketQuote(
     val hasDividendStatus: Boolean = false,
     val yieldRate: Double? = null,
     val yieldAsOf: String? = null,
-    val yieldSource: String? = null
+    val yieldSource: String? = null,
+    val quoteDate: String? = null
 )
 
 data class CloudflarePriceCatalogSnapshot(
     val quotes: Map<String, CloudflareMarketQuote>,
-    val marketDataDate: String?
+    val marketDataDate: String?,
+    val generation: String? = null
 )
 
 data class CloudflareIncomeAdviceCandidate(
@@ -376,7 +378,8 @@ class CloudflareMarketRepository(
             parseSearchQuotes(getJson("/api/v1/live-quotes?codes=$encodedCodes"), requestedCodes.toSet())
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            if (!allowCatalogFallback) throw error
             emptyMap()
         }
         val needsCatalogFallback = requestedCodes.any { code ->
@@ -623,13 +626,67 @@ class CloudflareMarketRepository(
                         row.hasDividendStatus(),
                         yieldRate,
                         yieldAsOf,
-                        row.stringOrNull("yield_source")
+                        row.stringOrNull("yield_source"),
+                        quoteDate?.takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
                     ))
                 }
             }
         }.toMutableMap()
-        CloudflarePriceCatalogSnapshot(quotes, catalogDate)
+        CloudflarePriceCatalogSnapshot(quotes, catalogDate,
+            root.optString("generation").takeIf(String::isNotBlank))
     }
+
+    /** Fetches only the requested Japanese quotes and pins every batch to one published catalog generation. */
+    suspend fun fetchTargetedPriceSnapshot(codes: Collection<String>): CloudflarePriceCatalogSnapshot = withContext(ioDispatcher) {
+        val requestedCodes = codes.map(::normalizeJapaneseSecurityCode)
+            .filter { it.matches(Regex("[A-Z0-9]{4,5}")) }
+            .distinct()
+        if (requestedCodes.isEmpty()) return@withContext CloudflarePriceCatalogSnapshot(emptyMap(), null)
+
+        var generation: String? = null
+        var marketDataDate: String? = null
+        val quotes = linkedMapOf<String, CloudflareMarketQuote>()
+        for (batch in requestedCodes.chunked(50)) {
+            val encodedCodes = URLEncoder.encode(batch.joinToString(","), Charsets.UTF_8.name())
+            val pin = if (generation == null || marketDataDate == null) "" else
+                "&run_id=${URLEncoder.encode(generation, Charsets.UTF_8.name())}" +
+                    "&market_data_date=${URLEncoder.encode(marketDataDate, Charsets.UTF_8.name())}"
+            val response = getJson("/api/v1/live-quotes?codes=$encodedCodes$pin", bypassHttpCache = true)
+            val responseGeneration = response.optString("run_id").trim()
+            val responseMarketDate = response.optString("market_data_date").trim()
+            val validGeneration = responseGeneration.matches(Regex("\\d{4}-\\d{2}-\\d{2}(?:-[0-9a-f]{32})?"))
+            val validMarketDate = isIsoDate(responseMarketDate)
+            if (!response.optBoolean("complete", false) || !validGeneration || !validMarketDate) {
+                throw IOException("Cloudflareの銘柄別価格応答に有効な世代情報がありません")
+            }
+            if (generation != null && (generation != responseGeneration || marketDataDate != responseMarketDate)) {
+                throw IOException("Cloudflareの銘柄別価格応答でカタログ世代が一致しません")
+            }
+            generation = responseGeneration
+            marketDataDate = responseMarketDate
+
+            parseSearchQuotes(response, batch.toSet()).forEach { (code, quote) ->
+                val price = quote.price ?: return@forEach
+                val quoteDate = quote.quoteDate?.takeIf(::isIsoDate) ?: return@forEach
+                if (quoteDate > responseMarketDate) return@forEach
+                quotes[code] = CloudflareMarketQuote(
+                    price = price,
+                    annualDividendPerShare = quote.annualDividendPerShare,
+                    isNoDividendConfirmed = quote.isNoDividendConfirmed,
+                    hasDividendStatus = quote.hasDividendStatus,
+                    yieldRate = quote.yieldRate,
+                    yieldAsOf = quote.yieldAsOf,
+                    yieldSource = quote.yieldSource,
+                    quoteDate = quoteDate
+                )
+            }
+        }
+        CloudflarePriceCatalogSnapshot(quotes, marketDataDate, generation)
+    }
+
+    private fun isIsoDate(value: String): Boolean = runCatching {
+        LocalDate.parse(value).toString() == value
+    }.getOrDefault(false)
 
     suspend fun fetchPriceQuotes(): Map<String, CloudflareMarketQuote> = fetchPriceCatalogSnapshot().quotes
 

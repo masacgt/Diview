@@ -33,3 +33,4 @@ CREATE TABLE IF NOT EXISTS dividend_events (
   PRIMARY KEY (security_code, fiscal_year, event_type)
 );
 CREATE INDEX IF NOT EXISTS idx_dividend_events_rights_date ON dividend_events(final_rights_date, security_code);
+CREATE INDEX IF NOT EXISTS idx_securities_code_display ON securities(security_code_display);

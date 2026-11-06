@@ -1,5 +1,11 @@
 # Trouble
 
+## Cloudflare D1 quota reset versus local timezone (2026-11-04)
+
+- The workstation is in JST, so local 2026-11-04 04:22 was still 2026-11-03 19:22 UTC, before the alert's 2026-11-04 00:00 UTC reset. A pre-reset `wrangler d1 info` briefly returned zero, then returned 6,916,954 rows read in 24 hours. One `LIMIT 10` SELECT succeeded with `meta.rows_read=10` despite the over-limit metadata. Treat these signals as inconsistent, not as proof that the quota reset or that bulk reads are available. Check UTC explicitly and verify usage after the stated reset before further row queries.
+- The YFinance scheduled run on 2026-11-05 (#389) returned failure after publishing a new R2 generation: 4,420 securities succeeded, 156 failed, and the R2 catalog/advice/publication/manifest all pointed to generation `2026-11-05-0523fcc6c66545b48331cf28ebdef4ba`. This matches the earlier #388 behavior. A failed Actions conclusion does not establish that R2 stayed unchanged; read back all current pointers, counts, and quote dates before diagnosing or retrying. [Run #389](https://github.com/masacgt/Diview/actions/runs/42098641865).
+- On 2026-11-03 20:22 UTC, production `/api/v1/income-advice-candidates` alternated between HTTP 200 and 500 while its R2 object existed with 3,203 unique candidates. `wrangler tail` captured the 500 in the deployed Worker version's D1-backed `enforceRateLimit`, which failed because the account had exceeded the D1 daily row-read limit. This error is not evidence that the R2 object is missing. The local Worker now routes the same public bucket through Durable Objects before reading R2; production remains unchanged until an approved deployment. Recheck response parity after D1 availability is confirmed.
+
 ## IRBANK 8214 forecast context (2026-11-01)
 
 - IRBANK disclosure `20260806513247` uses `CurrentYearDuration_AnnualMember_NonConsolidatedMember_ForecastMember` without `CurrentMember`; the old parser rejected its 2027/03 forecast of 90 JPY. The updated parser accepts this current-year form and rejects conflicting or expired data. Targeted production read-back returned the forecast. Parser fix `8693b466` reached main via `80fa14fe`; verification of a subsequent scheduled refresh remains open.
@@ -97,3 +103,99 @@ Legacy financial migration accepted only `jpy` and `million_jpy` calculation inp
 ## Cross-issuer annual financial records (2026-10-31)
 
 - Retained annual IRBANK seed data for 1301 matches 1380, and 2708 includes 2695's October-year financials. Saved raw batches already show the mismatch; whether the provider response or an earlier acquisition step caused it is unconfirmed. Do not repair by relying on EDINET identifier alone or overwrite original records without backups and provenance review. The user confirmed that the current J-Quants API key is covered by a contract permitting distribution; the contract itself was not independently reviewed.
+
+## GitHub Environment secrets checks in Actions
+
+The Environment secrets-list REST endpoint requires the Environments repository permission, which is not configurable for workflow `GITHUB_TOKEN`. Do not make migration preflight depend on that endpoint. Check Environment protection rules in preflight, then check required secret values for nonempty inside the protected job without printing them. Official references: [environment secrets API](https://docs.github.com/en/rest/actions/secrets#list-environment-secrets) and [workflow token permissions](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions).
+
+## Retention test crossing UTC midnight (2026-11-03)
+
+The R2 history-retention test used two sample observations one hour apart. When run near 23:00 UTC, the samples landed on different dates and correctly occupied separate daily retention periods, so the test's same-day deletion assertion failed. Anchor the test samples at UTC noon before applying hour offsets; production retention code was unchanged. The Worker suite passed 114/114 after this test-only fix.
+
+## Botocore Stubber and conditional S3 headers (2026-11-04)
+
+`botocore.stub.Stubber` registers a first-priority `before-parameter-build` handler and validates arguments before later custom handlers. A `custom_headers` argument can therefore fail Stubber validation even though the real S3 client event hook removes that argument and adds the conditional HTTP header. Verify the actual client by intercepting `before-send` with a synthetic response and replacing the HTTP transport with a function that fails if called. This proves the prepared request without contacting R2.
+
+## 2026-11-04 ローカルWorkerとremote R2の照合
+
+- Wrangler 4.136.1のworkerdはcompatibility date 2026-10-03を認識せず、2026-09-28が上限と報告した。Wrangler 4.157.0でローカルWorkerを起動できた。
+- R2だけをremote bindingにしたローカルAPI検証でD1 bindingも残すと、RateLimitCounter初回処理がローカルD1のapi_request_logをSELECTし、未初期化DBでは失敗した。読み取りAPIのみを検証する場合は、Cronを空にし、D1 bindingを外してDurable Objectをlocalにする。これにより本番D1/DOへのアクセスを避けられる。R2 remote bindingは書き込み可能なので、呼ぶ経路が読み取り専用であることを確認する。
+
+## 2026-11-04 D1 migration CLI usage preflight
+
+The workflow's account-wide D1 daily-usage step does not protect someone who invokes `scripts/migrate_d1_to_r2.py` directly. The CLI must independently query UTC-day `rowsRead` with an Account Analytics Read token before constructing its D1 client. Keep that token in `CLOUDFLARE_API_TOKEN`, separate from `CLOUDFLARE_MIGRATION_READ_TOKEN`, and fail closed when the analytics response or required `max_rows + read_reserve_rows` budget is unavailable. `rows_read_24h` is a rolling window and cannot substitute for the daily account-wide GraphQL total.
+
+## Wrangler CLI version for deployment
+
+The globally available Wrangler 4.136.1 uses an older workerd that rejected the current Worker compatibility date during local validation. Wrangler 4.157.0 was used for the R2-backed local Worker checks. Keep README D1 and deployment commands pinned to the tested version; update the pin only after checking compatibility and rerunning the local Worker/API validation.
+
+## D1 migration read-budget and delayed usage observation (2026-11-04)
+
+The migration CLI's `max_rows` protects actual Cloudflare `meta.rows_read`, not the number of rows returned. A filtered `scheduled_run_log` query returned zero rows but read 621 rows; `max_rows=100` therefore aborted before processing. The report had a known read count, so a second dry-run with `max_rows=1000` could safely verify the empty result after a new usage preflight. Both SELECTs consumed 621 rows each. Choose budgets using observed D1 read metadata and never assume a small `LIMIT` bounds billable reads.
+
+Between 14:34 and 14:41 UTC, Account Analytics continued to report 172,733 daily rows while the migration CLI's D1 responses reported 3,948 additional rows_read. The exact cause and current daily total were not verified. Treat the account-wide snapshot as stale or unreconciled; do not issue more D1 SQL until a current Dashboard or updated Analytics value accounts for the reads. Keep the configured reserve even when the displayed remaining balance is large.
+### Usage-observation resolution (2026-11-04 14:47 UTC)
+
+Account Analytics later advanced from 172,733 to 176,681 rows, a 3,948-row increase matching the migration CLI's intervening D1 `meta.rows_read` reports. The earlier unchanged readings were delayed aggregation, not evidence that the SQL reads were absent. Use the updated daily total and still recheck before each dispatch.
+### Follow-up usage lag (2026-11-04 14:52 UTC)
+
+A later 500-row analysis-history dispatch reported `meta.rows_read=500`; the next Account Analytics observation rose by only 203 from its preflight. Allow the aggregate to catch up and recheck before the next D1 SQL. A successful preflight establishes the starting budget, not the exact after-query balance.
+
+### Analysis-history dry-run R2 request volume (2026-11-04 UTC / 2026-11-05 JST)
+
+The first 500-row history dry-run took about 80 seconds because `put_immutable` issued one R2 `GetObject` per source row. The migration now lists the strongly consistent `analysis/v1/history/` prefix once per dispatch, skips per-key GETs for absent dry-run targets, and continues to GET/hash-check listed objects. Write mode retains atomic conditional creation, conflict readback, and successful-write verification. The local migration suite passed 58/58 after the change. The post-change production dry-run below confirms the listing path; actual R2 write throughput remains unmeasured.
+
+The optimized production dry-run then completed 34,472 remaining rows in 35 D1 queries in about 12 seconds, with 34,472 objects planned, no existing matches, no conflicts, and no writes. The prior 500-row chunk took about three seconds. This confirms the read-only inventory path is fast for the observed table; it does not measure actual R2 writes or their readback cost. Account Analytics later returned 212,164 daily rows read (4,787,836 remaining) at 15:05:06 UTC, after the chunk and usage aggregation. Recheck before another D1 query.
+
+## GitHub migration Environment inspection (2026-11-04)
+
+The GitHub connector can read repository metadata but rejects the Environment REST endpoint. For this public repository, an unauthenticated GET to `/repos/masacgt/Diview/environments` returns names and protection metadata without exposing secret values. The current list contains only `IRBANK_API_KEY`; it has no protection rules, and `d1-r2-migration` is absent. The public `branches/main` endpoint reports `protected=false`; repository rulesets are empty. Keep the migration workflow fail-closed until main protection and a dedicated reviewer-protected Environment exist. GitHub documents anonymous read access to the Environment listing for public repositories and that branch `protected` reflects branch protections or rulesets.
+
+## Durable Object rate-limit row retention (2026-11-04)
+
+The initial DO limiter retained its single SQLite counter row after a bucket window expired. Expiry checks on later requests preserved rate-limit behavior but did not bound stored counter rows. Deleting that row without another marker would make a restarted DO re-read the frozen D1 counter on each new window. The limiter now stores the one-time import decision in a separate `rate_limit_legacy_seed` row, schedules an alarm for the active window's end, and deletes only the expired counter row. The alarm preserves an active window and repairs the marker for a pre-marker actor before deletion; the request path also resets an expired row if the alarm is late. `test/rate-limit.test.mjs` covers the D1 import, actor restart, marker persistence, and counter cleanup. Production DO binding and alarm delivery remain unverified until cutover.
+
+## Android emulator instrumentation under system load (2026-11-05)
+
+The Android 15 `DiviewReleaseAudit35` emulator crashed the ReleaseFixtureInstrumentation runner before reporting test results while `system_server`, the sensor HAL, and Google services remained under sustained high CPU load. Treat that attempt as inconclusive, not an application test failure. Do not retry while system load remains high. The task-created user 10 was removed after switching to owner user 0; the owner user's installed APK matched the saved pretest SHA-256. Retry instrumentation in a stable emulator if it remains a release gate.
+
+## Fresh D1 migration dispatch checkpoint selection (2026-11-04 UTC / 2026-11-05 JST)
+
+A direct `analysis-history` dry-run using the CLI defaults failed with `Checkpoint phase/table does not match this dispatch` before issuing D1 SQL: the default `migration-checkpoint.json` belonged to a different phase. The failed attempt created no report/checkpoint and performed no D1 or R2 operation. For a new phase run, pass a unique, nonexistent phase-specific path to both `--checkpoint-in` and `--checkpoint-out`; for a resume, pass the matching saved checkpoint. Do not rely on the shared default checkpoint name.
+
+## Android API 35 instrumentation follow-up (2026-11-05)
+
+The task-created API 35 AVD initially needed a correction to its disposable `config.ini`: the installed SDK manager emitted `image.sysdir.1=sdk\system-images\...`, while this AVD needed `system-images\...`. Separately, Gradle `:app:connectedDebugAndroidTest --serial emulator-5580` stopped before package installation with `UnsupportedOperationException` in `DeviceProviderInstrumentTestTask.getFilteredDevices`. The same JDK 17-built app and androidTest APKs were then installed only on the isolated `DiviewR2Audit35` AVD and run with `adb shell am instrument`; `ReleaseFixtureInstrumentation` passed all 137 tests, and both installed APK hashes matched their build outputs. The shared `emulator-5554` was unchanged. The Gradle device-filtering exception remains a separate tooling issue; the successful direct runner result and hashes are recorded in `C:\Codex\android-avd-r2-d1-ownership-20261105\android-validation-summary.json`.
+
+
+## Startup price refresh can be hidden by the daily startup gate (2026-11-05)
+
+The general startup refresh marker and the price-attempt marker are separate. If startup work records today before a later price attempt is due, the next app start can be suppressed by the general marker even though a successful price attempt is now older than twelve hours. Previously that branch only rechecked failed price attempts. Re-evaluate the persisted price attempt on every startup; successful attempts still require a new JST date and twelve elapsed hours, failures retain the 30-second retry, and missing attempt metadata does not bypass the daily startup gate. Verified in candidate branch `codex/r2-d1-ownership-20261104-final`: JDK 17 JVM 276/276 and task-only `AssetDataRefreshTest` 21/21.
+
+## Migration preflight test crossed the UTC date boundary (2026-11-05)
+
+The migration CLI derives the account-usage query date from the current UTC clock. A unit test fixed its expected date to 2026-11-04, so it failed after UTC midnight. Freeze `migration.datetime.now()` within that test and derive the fixture and expectation from the same fixed UTC instant. The migration, workflow, and daily-usage suites then passed 84/84 under the locally installed Python 3.13. The workflow pins Python 3.12, which remains to be confirmed by CI.
+
+## Cloudflare API token one-time display in browser automation (2026-11-05)
+
+Cloudflare's token-creation success page displays the newly created API token once. Do not extract page accessibility text or screenshots from that page. If automation output captures the value, treat it as exposed: revoke it, issue a replacement, and store the replacement only in the intended local secret environment. Verify environment configuration using presence booleans; never write token values into chat, logs, or reports.
+
+## Worker deployment readback omits version bindings (2026-11-05)
+
+The Cloudflare Worker deployments list returns active deployment/version IDs and traffic percentages but does not include the version binding list. An empty binding array from that response is not evidence that a binding is absent. Read `GET /accounts/{account_id}/workers/scripts/{script_name}/versions/{version_id}` and inspect only sanitized `{name,type}` pairs. A preliminary readback that inferred no Durable Object binding from the deployment list was superseded by the version-detail readback; the corrected report confirms the production version has no Durable Object binding. Cloudflare documents the [List Worker Deployments](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/deployments/methods/list/) and [Get Worker Script Version](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/versions/methods/get/) endpoints separately.
+
+## Income-advice eligibility must not inherit offline price scope (2026-11-06)
+
+The app's offline price-cache market selection is a separate contract from the existing income-advice candidate catalog. Keep income-advice eligibility at its established JP/JPY criteria unless the user explicitly changes it; do not filter ETFs based only on the offline-notification target. Regression coverage should verify generator and catalog republish both retain existing candidates, including ETF rows already eligible under the established rules.
+
+
+## 2026-11-06 JST - Cron定期分析が約30秒で終了した記録
+
+本番Worker version 84で、Cron 17 * * * * がexceededCpu、wall 30,494 ms / CPU 2,050 msとなり、対応するD1 scheduled_run_logがfinished_atなし・runningで残った。配信sourceでは定期分析をctx.waitUntilへ渡してscheduled()から即時returnしていた。Cloudflareの資料ではCron handlerのreturn Promiseは最大15分待たれる一方、waitUntilはhandler終了後の延長が最大30秒である。観測とは整合するがtrace spansがなく、停止原因そのものは確定していない。
+
+候補・正本のscheduled handlerは定期分析Promiseを直接returnし、補助処理のみwaitUntilに残した。Worker全suiteは候補131/131、正本71/71成功。本番version 84へは未配信。大量カタログの実行時間はfixture試験しておらず、切替前に実行上限内の完了を確認する。未完了D1 runを完了履歴扱いで移行・削除しない。
+
+
+## Full-catalog R2 subrequest count is not a runtime proof (2026-11-06)
+
+A local in-memory R2 fixture matching 4,391 catalog rows and the observed financial, dividend, and migrated-history object counts made 173,460 instrumented R2 calls with no D1 statements. This supports the configured 250,000 subrequest cap, but mock calls have no Cloudflare network latency and do not establish the Cron wall time, CPU usage, or production completion. Keep runtime and resumability as cutover gates. The sanitized call-count report is outside Git at C:\Codex\r2-d1-ownership-audit-20261106\analysis-scale-probe-20261105T2315Z.sanitized.json (SHA-256 A24C35D6063F568FD97FE00D999EE0C9B7564FEDED59D13322A94554FDE224ED).

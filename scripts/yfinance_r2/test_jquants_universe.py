@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from fetch_jquants_universe import display_code, fetch_codes, fetch_securities
+from fetch_jquants_universe import SECURITY_TYPES, display_code, fetch_codes, fetch_securities
 
 
 class _Response(io.BytesIO):
@@ -17,6 +17,10 @@ class _Response(io.BytesIO):
 
 
 class JQuantsUniverseTests(unittest.TestCase):
+    def test_foreign_etf_product_category_has_an_etf_security_type(self):
+        self.assertEqual(SECURITY_TYPES["014"], "etf")
+        self.assertEqual(SECURITY_TYPES["023"], "etf")
+
     def test_code_conversion(self):
         self.assertEqual(display_code("130A0"), "130A")
         self.assertEqual(display_code("13010"), "1301")

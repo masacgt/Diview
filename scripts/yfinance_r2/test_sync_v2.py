@@ -1755,11 +1755,10 @@ class OfflineFinancialSyncTests(TestCase):
             "generation": "2026-10-19", "market_data_date": "2026-10-19",
             "items": [old_item],
         }
-        test_etfs = [{"security_code_display": "7203", "listing_date": "2026-01-05"}]
         irbank_snapshot = build_snapshot(
-            merge_jpx_etfs(normalize_securities([{"code": "72030"}], minimum_security_count=1), test_etfs),
+            normalize_securities([{"code": "72030"}], minimum_security_count=1),
             "2026-10-19T12:00:00Z",
-            jpx_etf_count=len(test_etfs),
+            jpx_etf_count=0,
         )
         store = self.Store({
             sync.IRBANK_UNIVERSE_R2_KEY: irbank_snapshot,
@@ -1790,7 +1789,7 @@ class OfflineFinancialSyncTests(TestCase):
             stack.enter_context(patch.object(
                 sync, "validate_snapshot",
                 side_effect=lambda snapshot: validate_irbank_snapshot(
-                    snapshot, minimum_security_count=1, minimum_jpx_etf_count=1,
+                    snapshot, minimum_security_count=1, minimum_jpx_etf_count=0,
                 ),
             ))
             stack.enter_context(patch.object(sync, "latest_completed_xtks_session", return_value=date(2026, 10, 19)))
@@ -1821,3 +1820,30 @@ class OfflineFinancialSyncTests(TestCase):
             key = sync.object_key("catalog", "generations", generation + ".json")
             self.assertEqual(store.writes.count(key), 1)
             self.assertEqual(store.documents[key]["generation"], generation)
+
+    def test_catalog_publication_preserves_existing_advice_for_foreign_etfs(self):
+        previous = {
+            "generation": "2026-10-19-old",
+            "items": [{
+                "code": "162A",
+                "name": "Foreign ETF",
+                "status": "ok",
+                "security_type": "listed_security",
+                "jquants_product_category": "023",
+                "income_advice": {"code": "162A", "source_catalog_generation": "2026-10-19-old"},
+            }],
+        }
+
+        catalog = sync.publish_catalog(
+            None,
+            "unused",
+            [{"security_code_display": "162A", "security_type": "listed_security",
+              "jquants_product_category": "023"}],
+            date(2026, 10, 20),
+            previous,
+        )
+
+        self.assertEqual(
+            catalog["items"][0]["income_advice"],
+            {"code": "162A", "source_catalog_generation": catalog["generation"]},
+        )

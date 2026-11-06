@@ -1,6 +1,7 @@
 package com.kurogane.dividend.notifications
 
 import android.content.Context
+import com.kurogane.dividend.data.normalizeJapaneseSecurityCode
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
@@ -51,18 +52,32 @@ class NotificationStore(context: Context) {
 
     fun priceStates(): Map<String, PriceAlertState> = synchronized(lock) {
         val root = JSONObject(delivery.getString("prices", "{}") ?: "{}")
-        buildMap { root.keys().forEach { code ->
-            val row = root.getJSONObject(code)
-            put(code, PriceAlertState(row.getString("signature"), row.getBoolean("ready"),
-                if (row.isNull("notifiedDate")) null else row.getString("notifiedDate")))
-        } }
+        buildMap {
+            root.keys().asSequence().toList()
+            .sortedBy { it == normalizeJapaneseSecurityCode(it) }
+            .forEach { rawCode ->
+                val code = normalizeJapaneseSecurityCode(rawCode)
+                if (code.isBlank()) return@forEach
+                val row = root.getJSONObject(rawCode)
+                put(code, PriceAlertState(row.getString("signature"), row.getBoolean("ready"),
+                    if (row.isNull("notifiedDate")) null else row.getString("notifiedDate")))
+            }
+        }
     }
 
     fun savePriceStates(states: Map<String, PriceAlertState>) = synchronized(lock) {
-        val root = JSONObject().apply { states.forEach { (code, state) -> put(code, JSONObject().apply {
-            put("signature", state.signature); put("ready", state.ready)
-            put("notifiedDate", state.notifiedDate ?: JSONObject.NULL)
-        }) } }
+        val root = JSONObject().apply {
+            states.entries.sortedBy { it.key == normalizeJapaneseSecurityCode(it.key) }
+                .forEach { (rawCode, state) ->
+                    val code = normalizeJapaneseSecurityCode(rawCode)
+                    if (code.isBlank()) return@forEach
+                    put(code, JSONObject().apply {
+                        put("signature", state.signature)
+                        put("ready", state.ready)
+                        put("notifiedDate", state.notifiedDate ?: JSONObject.NULL)
+                    })
+                }
+        }
         check(delivery.edit().putString("prices", root.toString()).commit()) { "通知履歴を保存できませんでした" }
     }
 
@@ -70,11 +85,16 @@ class NotificationStore(context: Context) {
         if (alerts.isEmpty()) return@synchronized
         val root = JSONObject(delivery.getString("price_pending", "{}") ?: "{}")
         alerts.forEach { alert ->
-            val code = com.kurogane.dividend.model.PortfolioMath.normalizeCode(alert.code)
+            val code = normalizeJapaneseSecurityCode(alert.code)
             if (code.isBlank()) return@forEach
-            val previous = root.optJSONObject(code)
-            val deliverAt = previous?.optLong("deliverAtMillis")?.takeIf { it > 0L }
-                ?.let { minOf(it, alert.deliverAtMillis) } ?: alert.deliverAtMillis
+            val matchingKeys = root.keys().asSequence()
+                .filter { normalizeJapaneseSecurityCode(it) == code }
+                .toList()
+            val previousDeliverAt = matchingKeys.mapNotNull { key ->
+                root.optJSONObject(key)?.optLong("deliverAtMillis")?.takeIf { it > 0L }
+            }.minOrNull()
+            val deliverAt = previousDeliverAt?.let { minOf(it, alert.deliverAtMillis) } ?: alert.deliverAtMillis
+            matchingKeys.forEach(root::remove)
             root.put(code, JSONObject()
                 .put("name", alert.name)
                 .put("currency", alert.currency)
@@ -89,9 +109,11 @@ class NotificationStore(context: Context) {
 
     fun pendingPriceAlerts(nowMillis: Long? = null): List<PendingPriceAlert> = synchronized(lock) {
         val root = JSONObject(delivery.getString("price_pending", "{}") ?: "{}")
-        buildList {
-            root.keys().forEach { code ->
-                val row = root.optJSONObject(code) ?: return@forEach
+        buildMap<String, PendingPriceAlert> {
+            root.keys().forEach { rawCode ->
+                val code = normalizeJapaneseSecurityCode(rawCode)
+                if (code.isBlank()) return@forEach
+                val row = root.optJSONObject(rawCode) ?: return@forEach
                 val event = PendingPriceAlert(
                     code = code,
                     name = row.optString("name"),
@@ -102,20 +124,28 @@ class NotificationStore(context: Context) {
                     held = row.optBoolean("held"),
                     deliverAtMillis = row.optLong("deliverAtMillis")
                 )
-                if (event.name.isNotBlank() && event.price.isFinite() && event.yield.isFinite() &&
-                    event.targetYield.isFinite() && (nowMillis == null || event.deliverAtMillis <= nowMillis)) add(event)
+                if (event.name.isBlank() || !event.price.isFinite() || !event.yield.isFinite() ||
+                    !event.targetYield.isFinite() || (nowMillis != null && event.deliverAtMillis > nowMillis)) return@forEach
+                val previous = get(code)
+                if (previous == null || event.deliverAtMillis < previous.deliverAtMillis) put(code, event)
             }
-        }
+        }.values.toList()
     }
 
     fun removePendingPriceAlerts(alerts: List<PendingPriceAlert>) = synchronized(lock) {
         if (alerts.isEmpty()) return@synchronized
         val root = JSONObject(delivery.getString("price_pending", "{}") ?: "{}")
         alerts.forEach { event ->
-            val row = root.optJSONObject(event.code) ?: return@forEach
-            if (row.optLong("deliverAtMillis") == event.deliverAtMillis &&
-                row.optDouble("price", Double.NaN) == event.price &&
-                row.optDouble("yield", Double.NaN) == event.yield) root.remove(event.code)
+            val normalizedCode = normalizeJapaneseSecurityCode(event.code)
+            root.keys().asSequence()
+                .filter { normalizeJapaneseSecurityCode(it) == normalizedCode }
+                .toList()
+                .forEach keyLoop@ { key ->
+                    val row = root.optJSONObject(key) ?: return@keyLoop
+                    if (row.optLong("deliverAtMillis") == event.deliverAtMillis &&
+                        row.optDouble("price", Double.NaN) == event.price &&
+                        row.optDouble("yield", Double.NaN) == event.yield) root.remove(key)
+                }
         }
         check(delivery.edit().putString("price_pending", root.toString()).commit()) { "通知履歴を保存できませんでした" }
     }
