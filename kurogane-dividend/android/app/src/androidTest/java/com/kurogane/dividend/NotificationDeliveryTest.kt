@@ -1,9 +1,12 @@
 package com.kurogane.dividend
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.rule.GrantPermissionRule
 import com.kurogane.dividend.data.CloudflareMarketQuote
 import com.kurogane.dividend.data.CloudflarePriceCatalogSnapshot
 import com.kurogane.dividend.data.LocalImportStore
@@ -13,6 +16,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.Assert.*
 import org.junit.runner.RunWith
@@ -21,6 +25,10 @@ import java.time.ZonedDateTime
 
 @RunWith(AndroidJUnit4::class)
 class NotificationDeliveryTest {
+    @get:Rule(order = 0) val notificationPermission: GrantPermissionRule = GrantPermissionRule.grant(
+        *if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
+    )
+
     private val app = ReviewApplication()
     private val store = NotificationStore(app)
     private val local = LocalImportStore(app)
