@@ -95,6 +95,8 @@ app.*.map.json
 /data/irbank/organized/d1/financial_periods.csv
 /data/irbank/cloudflare/import/financial_periods_annual_*.sql
 /data/irbank/cloudflare/.wrangler-market-dry-run/
+/data/irbank/cloudflare/migration-report.json
+/data/irbank/cloudflare/migration-checkpoint.json
 /data/irbank/cloudflare/fixtures/
 /data/market/yfinance/*.csv
 /data/market/yfinance/*.json

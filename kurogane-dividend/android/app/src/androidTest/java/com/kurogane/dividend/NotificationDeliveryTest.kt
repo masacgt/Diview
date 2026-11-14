@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.kurogane.dividend.data.CloudflareMarketQuote
+import com.kurogane.dividend.data.CloudflarePriceCatalogSnapshot
 import com.kurogane.dividend.data.LocalImportStore
 import com.kurogane.dividend.notifications.*
 import com.kurogane.dividend.model.*
@@ -14,7 +16,6 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.Assert.*
 import org.junit.runner.RunWith
-import java.io.IOException
 import java.time.LocalDate
 import java.time.ZonedDateTime
 
@@ -25,9 +26,9 @@ class NotificationDeliveryTest {
     private val local = LocalImportStore(app)
     private var currentTime = ZonedDateTime.parse("2026-10-05T08:30:00+09:00[Asia/Tokyo]")
     private val clock = { currentTime }
-    private var fetches = 0
+    private var cacheReads = 0
     private var posted = 0
-    private val names = listOf("local_import_store", "notification_preferences", "notification_delivery")
+    private val names = listOf("local_import_store", "notification_preferences", "notification_delivery", "notification_price_cache")
 
     private fun queueDueDividendRightsEvent() {
         val event = DividendRightsEvent(
@@ -60,19 +61,26 @@ class NotificationDeliveryTest {
         local.saveHoldings(listOf(Holding("h", "7203", "トヨタ", "輸送用機器", "東証", Category.JAPAN, 2500.0,
             shares = 100, acqPrice = 2000.0, dps = 100.0, yieldRate = 4.0, yoc = 5.0, nextPayoutTiming = "",
             nextPayoutAmount = "", dividendMonths = listOf(10), dividendType = "", accountType = "NISA", dailyChange = "", isPositive = true)))
+        NotificationPriceCache(app).merge(
+            CloudflarePriceCatalogSnapshot(
+                mapOf("7203" to CloudflareMarketQuote(2500.0, 100.0, quoteDate = currentTime.toLocalDate().toString())),
+                currentTime.toLocalDate().toString()
+            ),
+            currentTime.toInstant().toEpochMilli()
+        )
     }
 
     @After fun clean() { names.forEach { app.getSharedPreferences(it, Context.MODE_PRIVATE).edit().clear().commit() } }
 
     private fun engine(allowed: Boolean = true, publish: Boolean = true,
-        fetch: suspend () -> Map<String, Double> = { fetches++; mapOf("7203" to 2500.0) }) = NotificationDeliveryEngine(
-        app, fetch, clock, { allowed }, { _, _, _ -> posted++; publish })
+        load: suspend () -> Map<String, CachedNotificationPrice> = { cacheReads++; NotificationPriceCache(app).read() }) = NotificationDeliveryEngine(
+        app, load, clock, { allowed }, { _, _, _ -> posted++; publish })
 
     @Test fun disabledOrUnpermittedNotificationsDoNotFetchOrSend() = runBlocking {
         engine().run(NotificationKind.PRICE)
         store.setEnabled(NotificationKind.PRICE, true)
         engine(allowed = false).run(NotificationKind.PRICE)
-        assertEquals(0, fetches)
+        assertEquals(0, cacheReads)
         assertEquals(0, posted)
         assertTrue(store.priceStates().isEmpty())
     }
@@ -100,31 +108,88 @@ class NotificationDeliveryTest {
         assertEquals("2026-10-05", store.priceStates().getValue("7203").notifiedDate)
     }
 
-    @Test fun networkFailureDoesNotNotifyUsingCachedQuotes() = runBlocking {
+    @Test fun offlineNotificationUsesOnlyTheLocallySavedPriceCatalog() = runBlocking {
         store.setEnabled(NotificationKind.PRICE, true)
-        try { engine(fetch = { throw IOException("offline") }).run(NotificationKind.PRICE); fail("Expected network failure") }
-        catch (_: IOException) { }
+        engine().run(NotificationKind.PRICE)
+        currentTime = ZonedDateTime.parse("2026-10-05T17:30:00+09:00[Asia/Tokyo]")
+        engine().run(NotificationKind.PRICE)
+        assertEquals(1, posted)
+        assertEquals(2, cacheReads)
+    }
+
+    @Test fun offlineCachedPriceAlertPostsThroughAndroidNotificationManager() = runBlocking {
+        val notifications = app.getSystemService(android.app.NotificationManager::class.java)
+        val service = DiviewNotifications(app)
+        notifications.cancel(DiviewNotifications.PRICE_ID)
+        service.createChannels()
+        store.setEnabled(NotificationKind.PRICE, true)
+        try {
+            assertTrue("Android price notifications must be permitted", service.canPost(DiviewNotifications.PRICE_CHANNEL))
+            val cached = NotificationPriceCache(app).read()["7203"]
+                ?: throw AssertionError("The local price cache must contain the seeded quote")
+            assertEquals(2500.0, cached.price, 0.0)
+            assertEquals("2026-10-05", cached.quoteDate)
+            assertEquals(currentTime.toInstant().toEpochMilli(), cached.fetchedAtMillis)
+            assertEquals("2026-10-05", cached.marketDataDate)
+            assertEquals(null, cached.generation)
+
+            val delivery = NotificationDeliveryEngine(app, now = clock)
+            delivery.run(NotificationKind.PRICE)
+            currentTime = ZonedDateTime.parse("2026-10-05T17:30:00+09:00[Asia/Tokyo]")
+            delivery.run(NotificationKind.PRICE)
+
+            val postedNotification = notifications.activeNotifications
+                .firstOrNull { it.id == DiviewNotifications.PRICE_ID }
+            assertNotNull("A real Android price alert should be active", postedNotification)
+            val notification = postedNotification!!.notification
+            assertTrue(notification.extras.getCharSequence(android.app.Notification.EXTRA_TITLE)
+                .toString().contains("目標利回り"))
+            val text = (notification.extras.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)
+                ?: notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT)).toString()
+            assertTrue(text.contains("7203"))
+            assertTrue(text.contains("取得株価"))
+            assertTrue(text.contains("2,500"))
+            assertEquals("2026-10-05", store.priceStates().getValue("7203").notifiedDate)
+        } finally {
+            notifications.cancel(DiviewNotifications.PRICE_ID)
+        }
+    }
+
+    @Test fun staleQuoteCancelsAQueuedAlertBeforeDelivery() = runBlocking {
+        store.setEnabled(NotificationKind.PRICE, true)
+        engine().run(NotificationKind.PRICE)
+        assertEquals(1, store.pendingPriceAlerts().size)
+        currentTime = ZonedDateTime.parse("2026-10-09T17:30:00+09:00[Asia/Tokyo]")
+        engine().run(NotificationKind.PRICE)
+        assertEquals(0, posted)
+        assertTrue(store.pendingPriceAlerts().isEmpty())
+    }
+
+    @Test fun absentLocalQuoteDoesNotTriggerANetworkFallback() = runBlocking {
+        app.getSharedPreferences("notification_price_cache", Context.MODE_PRIVATE).edit().clear().commit()
+        store.setEnabled(NotificationKind.PRICE, true)
+        engine().run(NotificationKind.PRICE)
+        assertEquals(0, posted)
+        assertEquals(1, cacheReads)
+    }
+
+    @Test fun disableDuringCacheReadStopsLatePublication() = runBlocking {
+        store.setEnabled(NotificationKind.PRICE, true)
+        engine(load = { store.setEnabled(NotificationKind.PRICE, false); mapOf("7203" to CachedNotificationPrice(2500.0, "2026-10-05")) }).run(NotificationKind.PRICE)
         assertEquals(0, posted)
         assertTrue(store.priceStates().isEmpty())
     }
 
-    @Test fun disableDuringFetchStopsLatePublication() = runBlocking {
+    @Test fun deletedStockDuringCacheReadCannotBeNotified() = runBlocking {
         store.setEnabled(NotificationKind.PRICE, true)
-        engine(fetch = { store.setEnabled(NotificationKind.PRICE, false); mapOf("7203" to 2500.0) }).run(NotificationKind.PRICE)
-        assertEquals(0, posted)
-        assertTrue(store.priceStates().isEmpty())
-    }
-
-    @Test fun deletedStockDuringFetchCannotBeNotified() = runBlocking {
-        store.setEnabled(NotificationKind.PRICE, true)
-        engine(fetch = { local.saveWatchlist(emptyList()); mapOf("7203" to 2500.0) }).run(NotificationKind.PRICE)
+        engine(load = { local.saveWatchlist(emptyList()); mapOf("7203" to CachedNotificationPrice(2500.0, "2026-10-05")) }).run(NotificationKind.PRICE)
         assertEquals(0, posted)
     }
 
     @Test fun resetDuringFetchClearsBothKindsAndStopsLatePublication() = runBlocking {
         store.setEnabled(NotificationKind.PRICE, true)
         store.setEnabled(NotificationKind.DIVIDEND, true)
-        engine(fetch = { store.clear(); mapOf("7203" to 2500.0) }).run(NotificationKind.PRICE)
+        engine(load = { store.clear(); mapOf("7203" to CachedNotificationPrice(2500.0, "2026-10-05")) }).run(NotificationKind.PRICE)
         assertFalse(store.settings().priceEnabled)
         assertFalse(store.settings().dividendEnabled)
         assertEquals(0, posted)
@@ -133,7 +198,7 @@ class NotificationDeliveryTest {
 
     @Test fun cancellationIsPropagatedWithoutSending() = runBlocking {
         store.setEnabled(NotificationKind.PRICE, true)
-        try { engine(fetch = { throw CancellationException("cancel") }).run(NotificationKind.PRICE); fail("Expected cancellation") }
+        try { engine(load = { throw CancellationException("cancel") }).run(NotificationKind.PRICE); fail("Expected cancellation") }
         catch (_: CancellationException) { }
         assertEquals(0, posted)
     }
@@ -144,7 +209,7 @@ class NotificationDeliveryTest {
         engine().run(NotificationKind.DIVIDEND)
         engine().run(NotificationKind.DIVIDEND)
         assertEquals(1, posted)
-        assertEquals(0, fetches)
+        assertEquals(0, cacheReads)
         assertTrue(store.pendingDividendRightsEvents().isEmpty())
     }
 
@@ -154,7 +219,7 @@ class NotificationDeliveryTest {
         app.getSharedPreferences("local_import_store", Context.MODE_PRIVATE).edit().putString("holdings", "invalid").commit()
         engine().run(NotificationKind.DIVIDEND)
         assertEquals(1, posted)
-        assertEquals(0, fetches)
+        assertEquals(0, cacheReads)
         assertTrue(store.pendingDividendRightsEvents().isEmpty())
     }
 

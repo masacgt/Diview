@@ -15,7 +15,9 @@ class NotificationPolicyTest {
         dps = 100.0, currentYield = 99.0, targetYield = 4.0, targetPrice = 2500.0,
         dailyChange = "", isPositive = true, payoutMonths = listOf(10), payoutTiming = "", desc = "", alertEnabled = true)
     private fun plan(stocks: List<WatchlistStock> = listOf(stock()), prices: Map<String, Double> = mapOf("7203" to 2500.0),
-        states: Map<String, PriceAlertState> = emptyMap(), day: LocalDate = date) = NotificationPolicy.priceAlerts(stocks, prices, states, day)
+        states: Map<String, PriceAlertState> = emptyMap(), day: LocalDate = date) = NotificationPolicy.priceAlerts(
+        stocks, prices.mapValues { CachedNotificationPrice(it.value, day.toString()) }, states, day
+    )
 
     @Test fun exactThresholdIsAnArrival() {
         val result = plan()
@@ -70,12 +72,81 @@ class NotificationPolicyTest {
         }
     }
 
-    @Test fun normalizesCodesAndRemovesDisabledAndDeletedDeliveryMarkers() {
-        val previous = mapOf("DELETED" to PriceAlertState("old", true))
-        val result = plan(stocks = listOf(stock().copy(code = " aapl "), stock().copy(code = "AAPL")),
-            prices = mapOf("aapl" to 2500.0), states = previous)
-        assertEquals(1, result.hits.size)
-        assertEquals(setOf("AAPL"), result.states.keys)
+    @Test fun normalizesJapaneseCodesAndExcludesUsStocks() {
+        val normalized = plan(stocks = listOf(stock().copy(code = " 7203 ")))
+        assertEquals(1, normalized.hits.size)
+        val usStock = stock().copy(code = "AAPL", category = "us")
+        val result = plan(stocks = listOf(usStock), prices = mapOf("AAPL" to 2500.0))
+        assertTrue(result.hits.isEmpty())
+        assertTrue(result.eligibleCodes.isEmpty())
+    }
+
+    @Test fun normalizesPaddedStandardCodesAcrossQuotesAndPreviousStates() {
+        val paddedStock = stock().copy(code = "72030")
+        val quote = CachedNotificationPrice(2500.0, date.toString())
+        val previous = mapOf("72030" to PriceAlertState("4.0:100.0", true))
+
+        val result = NotificationPolicy.priceAlerts(
+            listOf(paddedStock), emptyList(), mapOf("7203" to quote), previous, date
+        )
+
+        assertTrue(result.hits.isEmpty())
+        assertEquals(setOf("7203"), result.eligibleCodes)
+        assertEquals(setOf("7203"), result.states.keys)
+    }
+
+    @Test fun quoteWithoutDateOrMoreThanThreeTseSessionsOldCannotNotify() {
+        val freshOnThursday = LocalDate.of(2026, 11, 5)
+        val quote = CachedNotificationPrice(2500.0, "2026-10-30")
+        val fresh = NotificationPolicy.priceAlerts(listOf(stock()), mapOf("7203" to quote), emptyMap(), freshOnThursday)
+        assertEquals(1, fresh.hits.size) // Nov 3 is a JPX holiday; sessions are Nov 2, 4, and 5.
+        val stale = NotificationPolicy.priceAlerts(listOf(stock()), mapOf("7203" to quote), emptyMap(), LocalDate.of(2026, 11, 6))
+        assertTrue(stale.hits.isEmpty())
+        assertTrue(stale.eligibleCodes.isEmpty())
+        assertFalse(TseTradingCalendar.isFreshQuote(null, freshOnThursday))
+        assertFalse(TseTradingCalendar.isFreshQuote("2026-11-06", freshOnThursday))
+        assertFalse(TseTradingCalendar.isFreshQuote("bad-date", freshOnThursday))
+        assertFalse(TseTradingCalendar.isFreshQuote("2026-11-01", freshOnThursday))
+        assertFalse(TseTradingCalendar.isFreshQuote("2026-11-03", freshOnThursday))
+    }
+
+    @Test fun officialTseClosuresAndSubstituteHolidaysAreNotTradingSessions() {
+        // JPX's published 2026 cash-market calendar, including exchange holidays and substitute days.
+        listOf(
+            "2026-01-01", "2026-01-02", "2026-01-03", "2026-01-12",
+            "2026-02-11", "2026-02-23", "2026-03-20", "2026-04-29",
+            "2026-05-03", "2026-05-04", "2026-05-05", "2026-05-06",
+            "2026-07-20", "2026-08-11", "2026-09-21", "2026-09-22",
+            "2026-09-23", "2026-10-12", "2026-11-03", "2026-11-23",
+            "2026-12-31",
+        ).forEach { date ->
+            assertFalse("$date should be a JPX cash-market closure", TseTradingCalendar.isTradingSession(LocalDate.parse(date)))
+        }
+        assertTrue(TseTradingCalendar.isTradingSession(LocalDate.of(2026, 11, 4)))
+    }
+
+    @Test fun officialTseClosuresFor2027AndThreeSessionFreshnessAreCorrect() {
+        // JPX published 2027 TSE cash-market holidays and exchange closures.
+        listOf(
+            "2027-01-01", "2027-01-02", "2027-01-03", "2027-01-11",
+            "2027-02-11", "2027-02-23", "2027-03-21", "2027-03-22",
+            "2027-04-29", "2027-05-03", "2027-05-04", "2027-05-05",
+            "2027-07-19", "2027-08-11", "2027-09-20", "2027-09-23",
+            "2027-10-11", "2027-11-03", "2027-11-23", "2027-12-31",
+        ).forEach { date ->
+            assertFalse("$date should be a JPX cash-market closure", TseTradingCalendar.isTradingSession(LocalDate.parse(date)))
+        }
+
+        assertTrue(TseTradingCalendar.isTradingSession(LocalDate.of(2027, 5, 6)))
+        assertTrue(TseTradingCalendar.isFreshQuote("2027-04-28", LocalDate.of(2027, 5, 7)))
+        assertFalse(TseTradingCalendar.isFreshQuote("2027-04-28", LocalDate.of(2027, 5, 10)))
+    }
+
+    @Test fun disabledStockDoesNotKeepOldState() {
+        val previous = mapOf("7203" to PriceAlertState("old", true))
+        val result = plan(stocks = listOf(stock().copy(alertEnabled = false)), states = previous)
+        assertTrue(result.hits.isEmpty())
+        assertTrue(result.states.isEmpty())
     }
 
     @Test fun settingsAreOptInForBothKinds() {

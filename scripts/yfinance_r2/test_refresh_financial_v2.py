@@ -71,6 +71,25 @@ class FinancialRefreshContractTests(TestCase):
         self.assertEqual(result["items"][0]["source_catalog_generation"], generation)
         self.assertEqual(build.call_args.args[-1], date(2026, 10, 19))
 
+    def test_income_advice_keeps_existing_jp_jpy_candidate_eligibility(self):
+        generation = "2026-10-19-" + "a" * 32
+        catalog = {"generation": generation, "market_data_date": "2026-10-19", "items": [
+            {"code": "4502", "category": "jp", "currency": "JPY", "security_type": "equity"},
+            {"code": "1343", "category": "jp", "currency": "JPY", "security_type": "etf"},
+            {"code": "8951", "category": "jp", "currency": "JPY", "security_type": "reit"},
+        ]}
+
+        def build(_client, _bucket, row, _years, _as_of):
+            return {"code": row["code"]}, None
+
+        with patch.object(advice, "build_candidate", side_effect=build) as build_candidate, \
+                redirect_stdout(io.StringIO()):
+            result, counts = advice.build_catalog(None, "test", catalog, workers=1)
+
+        self.assertEqual([row["code"] for row in result["items"]], ["1343", "4502", "8951"])
+        self.assertEqual({call.args[2]["code"] for call in build_candidate.call_args_list}, {"4502", "1343", "8951"})
+        self.assertEqual(counts["eligible_currency"], 3)
+
     def test_migration_preserves_explicit_mixed_unit_guard_and_raw_seed(self):
         row, _ = migration.merge_row(
             {

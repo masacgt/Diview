@@ -4,7 +4,23 @@ import financialUnitContract from './financial_unit_contract.json' with { type: 
 import jpxReitMarketMaster from './jpx_reit_market_master.json' with { type: 'json' };
 import { withMarketReadCache, sharedMarketJson, sharedMarketDocuments } from './market-read-cache.mjs';
 
-const ANALYSIS_CONCURRENCY = 8;
+// Synthetic 4,391-code replay measured at most 307 R2 calls per eight-security Cron batch; production skew and Cloudflare CPU remain unmeasured.
+const ANALYSIS_BATCH_SIZE = 8;
+const ANALYSIS_CONCURRENCY = 4;
+const ANALYSIS_JOB_STATE_KEY = 'analysis/v1/state/scheduled-job.json';
+// Cron invocations can remain alive for 15 minutes; keep the lease beyond that wall-time limit.
+const ANALYSIS_JOB_LEASE_MS = 16 * 60 * 1000;
+const ANALYSIS_CURRENT_PREFIX = 'analysis/v1/current/';
+const ANALYSIS_HISTORY_PREFIX = 'analysis/v1/history/';
+const ANALYSIS_SOURCE_KEY = 'analysis/v1/state/source.json';
+const ANALYSIS_RUN_PREFIX = 'operations/v1/runs/analysis/';
+const ANALYSIS_RETENTION_STATE_KEY = 'operations/v1/retention/analysis.json';
+const ANALYSIS_RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const ANALYSIS_RETENTION_BATCH_SIZE = 200;
+const ANALYSIS_RETENTION_LEASE_MS = 16 * 60 * 1000;
+const SCHEDULED_RUN_PREFIX = 'operations/v1/runs/';
+const DEFINITIONS_PREFIX = 'definitions/v1/';
+const DEFINITION_AUDIT_PREFIX = 'audit/v1/definitions/';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -14,7 +30,7 @@ function json(data, status = 200) {
       'cache-control': 'private, no-store',
       'access-control-allow-origin': '*',
       'access-control-allow-methods': 'GET, HEAD, POST, PUT, DELETE, OPTIONS',
-      'access-control-allow-headers': 'Content-Type, Range, X-Client-Id, X-Client-Secret, X-Admin-Secret',
+      'access-control-allow-headers': 'Content-Type, Range, X-Admin-Secret',
       'access-control-expose-headers': 'Accept-Ranges, Content-Length, Content-Range, ETag, Last-Modified',
       'access-control-max-age': '86400'
     }
@@ -27,14 +43,6 @@ function rateLimitedResponse(config) {
   return response;
 }
 
-async function readJson(request) {
-  try {
-    return await request.json();
-  } catch {
-    return null;
-  }
-}
-
 function normalizeCode(code) {
   if (/^\d{4}$/.test(code)) return `${code}0`;
   return code;
@@ -42,24 +50,6 @@ function normalizeCode(code) {
 
 function isoNow() {
   return new Date().toISOString();
-}
-
-function randomToken(bytes = 24) {
-  const data = new Uint8Array(bytes);
-  crypto.getRandomValues(data);
-  return [...data].map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function authenticateClient(request, env) {
-  const clientId = String(request.headers.get('X-Client-Id') || '').trim();
-  const secret = String(request.headers.get('X-Client-Secret') || '').trim();
-  if (!clientId || !secret) return null;
-  const row = await env.DB.prepare('SELECT client_secret_hash, disabled_at FROM clients WHERE client_id = ?').bind(clientId).first();
-  if (!row || row.disabled_at) return null;
-  const actual = await sha256Hex(secret);
-  if (actual !== row.client_secret_hash) return null;
-  await env.DB.prepare('UPDATE clients SET last_seen_at = ? WHERE client_id = ?').bind(isoNow(), clientId).run();
-  return clientId;
 }
 
 function daysOld(value) {
@@ -72,8 +62,6 @@ async function backendConfig(env) {
   const defaults = {
     market_stale_days: 3,
     rate_limit_window_seconds: 60,
-    rate_limit_register: 10,
-    rate_limit_authenticated: 120,
     rate_limit_public: 300,
   };
   const configured = await appDefinitionDocument(env, 'backend-config:v1') || {};
@@ -88,15 +76,22 @@ async function requestBucketKey(request, route, clientId = '') {
 async function enforceRateLimit(request, env, route, limit, clientId = '', config = null) {
   const activeConfig = config || await backendConfig(env);
   const windowSeconds = Number(activeConfig.rate_limit_window_seconds || 60);
-  const now = isoNow();
   const key = await requestBucketKey(request, route, clientId);
-  const row = await env.DB.prepare(`INSERT INTO api_request_log(bucket_key, request_count, window_started_at)
-    VALUES (?, 1, ?)
-    ON CONFLICT(bucket_key) DO UPDATE SET
-      request_count=CASE WHEN unixepoch(?) - unixepoch(api_request_log.window_started_at) >= ? THEN 1 ELSE api_request_log.request_count + 1 END,
-      window_started_at=CASE WHEN unixepoch(?) - unixepoch(api_request_log.window_started_at) >= ? THEN excluded.window_started_at ELSE api_request_log.window_started_at END
-    RETURNING request_count`).bind(key, now, now, windowSeconds, now, windowSeconds).first();
-  return Number(row?.request_count || 0) <= Number(limit);
+  if (!env.RATE_LIMITER) throw new Error('RATE_LIMITER binding is missing');
+  const id = env.RATE_LIMITER.idFromName(key);
+  const response = await env.RATE_LIMITER.get(id).fetch('https://rate-limit.internal/counter', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      bucket_key: key,
+      window_seconds: windowSeconds,
+      limit: Number(limit),
+      now_seconds: Math.floor(Date.now() / 1000),
+    }),
+  });
+  if (!response.ok) throw new Error(`rate limiter returned HTTP ${response.status}`);
+  const result = await response.json();
+  return result.allowed === true;
 }
 
 function publicRateLimitRoute(pathname) {
@@ -174,56 +169,105 @@ async function sha256Hex(value) {
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+async function readR2JsonWithEtag(env, key) {
+  const object = await env.MARKET_DATA.get(key);
+  if (!object) return null;
+  const value = await object.json();
+  const etag = object.etag;
+  if (!etag) throw new Error(`R2 object has no ETag: ${key}`);
+  return { value, etag };
+}
+
+function r2OnlyIfUnchanged(existing) {
+  return existing ? { etagMatches: existing.etag } : { etagDoesNotMatch: '*' };
+}
+
+async function analysisSourceTag(env, stockDefs, watchDefs, config) {
+  const [catalogObject, financialRevisionObject] = await Promise.all([
+    env.MARKET_DATA.head(`${YFINANCE_V2_ROOT}/catalog/current.json`),
+    env.MARKET_DATA.head(`${YFINANCE_V2_ROOT}/financial_revision.json`),
+  ]);
+  return JSON.stringify({
+    analysis_contract: 3,
+    catalog_etag: catalogObject?.httpEtag || catalogObject?.etag || null,
+    financial_revision_etag: financialRevisionObject?.httpEtag || financialRevisionObject?.etag || null,
+    stock_definition_sha256: await sha256Hex(JSON.stringify(stockDefs)),
+    watch_definition_sha256: await sha256Hex(JSON.stringify(watchDefs)),
+    market_stale_days: Number(config?.market_stale_days || 3),
+  });
+}
+
+async function advanceAnalysisSource(env, sourceTag, previousSourceTag) {
+  const [{ stockDefs, watchDefs }, config] = await Promise.all([
+    loadAnalysisDefinitions(env),
+    backendConfig(env),
+  ]);
+  if (await analysisSourceTag(env, stockDefs, watchDefs, config) !== sourceTag) return false;
+  const current = await readR2JsonWithEtag(env, ANALYSIS_SOURCE_KEY);
+  if (current?.value?.source_tag === sourceTag) return true;
+  if ((current?.value?.source_tag ?? null) !== previousSourceTag) return false;
+  const [{ stockDefs: latestStockDefs, watchDefs: latestWatchDefs }, latestConfig] = await Promise.all([
+    loadAnalysisDefinitions(env),
+    backendConfig(env),
+  ]);
+  if (await analysisSourceTag(env, latestStockDefs, latestWatchDefs, latestConfig) !== sourceTag) return false;
+  const result = await env.MARKET_DATA.put(
+    ANALYSIS_SOURCE_KEY,
+    JSON.stringify({ source_tag: sourceTag, updated_at: isoNow() }),
+    {
+      onlyIf: r2OnlyIfUnchanged(current),
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    },
+  );
+  return result !== null;
+}
+
 async function auditDefinition(env, key, definition) {
-  if (!definition || !env.DB) return;
+  if (!definition || !env.MARKET_DATA) return;
   const canonical = JSON.stringify(definition);
   const hash = await sha256Hex(canonical);
   const version = Number(definition.version || 1);
-  await env.DB.prepare(
-    `INSERT OR IGNORE INTO app_definition_audit(definition_key, version, content_hash, metadata_json)
-     VALUES (?, ?, ?, ?)`
-  ).bind(key, version, hash, JSON.stringify({ source: env.APP_DEFINITIONS ? 'kv_or_d1' : 'd1', observed_at: isoNow() })).run();
+  const objectKey = `${DEFINITION_AUDIT_PREFIX}${encodeURIComponent(key)}/${version}/${hash}.json`;
+  await env.MARKET_DATA.put(objectKey, JSON.stringify({
+    definition_key: key,
+    version,
+    content_hash: hash,
+    metadata: { source: 'r2', observed_at: isoNow() },
+  }), {
+    onlyIf: { etagDoesNotMatch: '*' },
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+  });
+}
+
+async function readDefinitionFromR2(env, key) {
+  const keyRoot = `${DEFINITIONS_PREFIX}${encodeURIComponent(key)}/`;
+  const pointer = await readV2Json(env, `${keyRoot}current.json`);
+  if (pointer?.version === undefined || pointer?.version === null) return null;
+  return readV2Json(env, `${keyRoot}${encodeURIComponent(String(pointer.version))}.json`);
+}
+
+class AnalysisDefinitionsUnavailableError extends Error {
+  constructor() {
+    super('Required R2 analysis definitions are unavailable');
+    this.name = 'AnalysisDefinitionsUnavailableError';
+  }
+}
+
+async function loadAnalysisDefinitions(env) {
+  const [stockDefs, watchDefs] = await Promise.all([
+    appDefinitionDocument(env, 'stock-analysis-definitions:v1'),
+    appDefinitionDocument(env, 'watchlist-analysis-definitions:v1'),
+  ]);
+  if (stockDefs === null || watchDefs === null) throw new AnalysisDefinitionsUnavailableError();
+  return { stockDefs, watchDefs };
 }
 
 async function appDefinitionItems(env, key) {
-  if (env.APP_DEFINITIONS) {
-    const raw = await env.APP_DEFINITIONS.get(key);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : parsed;
-    }
-  }
-  const queries = {
-    'diagnosis-definitions:v1': `SELECT min_score, max_score, grade, title, comment
-      FROM diagnosis_bands ORDER BY min_score DESC`,
-    'valuation-scenarios:v1': `SELECT id, per_max, pbr_max, title, badge, comment
-      FROM valuation_scenarios ORDER BY id`
-  };
-  const query = queries[key];
-  if (!query) return [];
-  const result = await env.DB.prepare(query).all();
-  return result.results || [];
+  return readDefinitionFromR2(env, key);
 }
 
 async function appDefinitionDocument(env, key) {
-  if (env.APP_DEFINITIONS) {
-    const raw = await env.APP_DEFINITIONS.get(key);
-    if (raw) return JSON.parse(raw);
-  }
-  const row = await env.DB.prepare(
-    'SELECT value_json FROM app_definition_documents WHERE definition_key = ?'
-  ).bind(key).first();
-  return row ? JSON.parse(row.value_json) : null;
-}
-
-async function loadMarketIndex(env) {
-  if (!env.MARKET_DATA) return new Map();
-  const object = await env.MARKET_DATA.get('market/yfinance/latest_market_data.json');
-  if (!object) return new Map();
-  const snapshot = JSON.parse(await object.text());
-  return new Map((snapshot.securities || [])
-    .filter(row => row?.symbol)
-    .map(row => [String(row.symbol).toUpperCase(), { row, snapshot }]));
+  return readDefinitionFromR2(env, key);
 }
 
 async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
@@ -338,6 +382,12 @@ function yfinanceV2Symbol(code) {
   return normalized ? `${normalized}.T` : null;
 }
 
+function tokyoDate(timestamp) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date(timestamp * 1000));
+}
+
 function selectedIrbankDividend(item) {
   const reportedYield = finiteNumber(item?.yield?.rate);
   const yieldRate = reportedYield !== null && reportedYield >= 0 ? reportedYield : null;
@@ -425,6 +475,38 @@ async function readIrbankDividendIndex(env, code = null) {
   return shard && shard.items && typeof shard.items === 'object'
     ? { source: manifest.source, attribution: manifest.attribution, items: shard.items }
     : { source: manifest.source, attribution: manifest.attribution, items: {} };
+}
+
+async function readIrbankDividendIndexesForCodes(env, codes) {
+  const manifest = await readV2Json(env, IRBANK_V2_DIVIDEND_SHARD_MANIFEST_KEY);
+  if (manifest?.schema_version !== 1 || manifest.prefix_length !== DIVIDEND_SHARD_PREFIX_LENGTH
+    || !['a', 'b'].includes(manifest.slot)
+    || !Array.isArray(manifest.prefixes)) {
+    return new Map([['*', await readIrbankDividendIndex(env)]]);
+  }
+
+  const prefixes = [...new Set(codes.map(yfinanceV2Code).filter(Boolean)
+    .map(code => code.slice(0, DIVIDEND_SHARD_PREFIX_LENGTH)))];
+  const listedPrefixes = new Set(manifest.prefixes);
+  const loaded = await Promise.all(prefixes.filter(prefix => listedPrefixes.has(prefix)).map(async prefix => {
+    const shard = await readV2Json(env, `${IRBANK_V2_DIVIDEND_SHARDS_ROOT}/${manifest.slot}/${prefix}.json`);
+    if (!shard || !shard.items || typeof shard.items !== 'object') return [prefix, null];
+    return [prefix, { source: manifest.source, attribution: manifest.attribution, items: shard.items }];
+  }));
+
+  // A manifest that points to a missing shard is incomplete. Keep the older
+  // full index as a compatibility fallback instead of treating rows as absent.
+  if (loaded.some(([, index]) => index === null)) {
+    return new Map([['*', await readIrbankDividendIndex(env)]]);
+  }
+
+  const indexes = new Map(loaded);
+  for (const prefix of prefixes) {
+    if (!indexes.has(prefix)) {
+      indexes.set(prefix, { source: manifest.source, attribution: manifest.attribution, items: {} });
+    }
+  }
+  return indexes;
 }
 
 function irbankDividendForCode(index, code) {
@@ -1439,360 +1521,10 @@ async function readV2MonthlyPrices(env, code, months) {
     .map(point => ({ month: point.month, date: point.date, close: point.close }));
 }
 
-const LIVE_MARKET_BATCH_SIZE = 2;
-const LIVE_MARKET_CONCURRENCY = 2;
-const LIVE_MARKET_ENQUEUE_LIMIT = 100;
-const LIVE_MARKET_LEGACY_BATCH_SIZE = 12;
-const LIVE_MARKET_LEGACY_GROUPS_PER_CRON = 100;
-const MARKET_PRICE_QUEUE = 'diview-market-prices';
-const MARKET_PRICE_DLQ = 'diview-market-prices-dlq';
 const LIVE_QUOTE_RUN_PREFIX = 'market/yfinance/live_quote_runs/';
-
-function tokyoDate(timestamp) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(timestamp * 1000));
-}
-
-async function saveDailyPricePoint(env, code, quote) {
-  const month = quote.date.slice(0, 7);
-  const key = `market/yfinance/daily_prices/${code}/${month}.json`;
-  const existing = await env.MARKET_DATA.get(key);
-  const document = existing ? await existing.json() : { code, month, prices: [] };
-  const points = new Map((document.prices || []).map(point => [String(point.date), point]));
-  points.set(quote.date, { date: quote.date, close: quote.close, volume: quote.volume });
-  await env.MARKET_DATA.put(key, JSON.stringify({
-    code,
-    month,
-    updated_at: quote.updated_at,
-    prices: [...points.values()].sort((a, b) => String(a.date).localeCompare(String(b.date))),
-  }), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
-}
 
 function liveQuoteRunObjectKey(runId, code) {
   return `${LIVE_QUOTE_RUN_PREFIX}${runId}/${code}.json`;
-}
-
-async function ensureLiveQuoteRun(env, runId, runDate, totalBatches, universeSize, enqueuedBatches = 0) {
-  const now = isoNow();
-  await env.DB.prepare(`INSERT OR IGNORE INTO market_price_refresh_runs
-    (run_id, run_date, total_batches, universe_size, enqueued_batches, status, started_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)`)
-    .bind(runId, runDate, totalBatches, universeSize, enqueuedBatches, now, now).run();
-}
-
-async function publishCompletedQuoteRun(env, run) {
-  if (!run || run.status !== 'complete' || !run.market_data_date) return;
-  const key = 'market/yfinance/live_quotes_completion.json';
-  const existingObject = await env.MARKET_DATA.get(key);
-  const existing = existingObject ? await existingObject.json() : {};
-  if (existing.last_completed_run_id === run.run_id && existing.last_completed_date === run.market_data_date) return;
-  if (String(existing.last_completed_run_id || '') > String(run.run_id || '')) return;
-  const completedAt = run.completed_at || isoNow();
-  await env.MARKET_DATA.put(key, JSON.stringify({
-    ...existing,
-    last_completed_date: run.market_data_date,
-    last_completed_run_id: run.run_id,
-    last_completed_at: completedAt,
-    last_failed_batches: 0,
-    live_quote_count: Number(run.processed_symbols || 0),
-    last_run_status: 'complete',
-    last_run_date: run.run_date,
-    last_run_batches_total: Number(run.total_batches || 0),
-    last_run_batches_completed: Number(run.completed_batches || 0),
-  }), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
-}
-
-async function refreshLiveMarketQuotes(env, requestedCodes, runId) {
-  const codes = [...new Set((requestedCodes || []).map(value => String(value || '').toUpperCase()).filter(code => /^[A-Z0-9]{4,5}$/.test(code)))];
-  if (!codes.length) return { processed: 0, failed: 0, marketDataDate: null, skipped: 'empty_batch' };
-  const now = isoNow();
-  let processed = 0;
-  let failed = 0;
-  let marketDataDate = null;
-  for (let start = 0; start < codes.length; start += LIVE_MARKET_CONCURRENCY) {
-    const group = codes.slice(start, start + LIVE_MARKET_CONCURRENCY);
-    const results = await Promise.all(group.map(async code => {
-      try {
-        const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(code)}.T?range=5d&interval=1d`, {
-          headers: { 'user-agent': 'Mozilla/5.0 Diview/1.0' },
-          signal: AbortSignal.timeout(8000),
-        });
-        if (!response.ok) return null;
-        const payload = await response.json();
-        const result = payload?.chart?.result?.[0];
-        const timestamps = result?.timestamp || [];
-        const quote = result?.indicators?.quote?.[0] || {};
-        let closeIndex = timestamps.length - 1;
-        while (closeIndex >= 0 && !(finiteNumber(quote.close?.[closeIndex]) > 0)) closeIndex -= 1;
-        if (closeIndex < 0) return null;
-        const price = finiteNumber(quote.close[closeIndex]);
-        const previousIndex = closeIndex - 1;
-        const previousClose = previousIndex >= 0 ? finiteNumber(quote.close?.[previousIndex]) : finiteNumber(result?.meta?.chartPreviousClose);
-        return {
-          code,
-          quote: {
-            symbol: result.meta?.symbol || `${code}.T`,
-            date: tokyoDate(timestamps[closeIndex]),
-            open: finiteNumber(quote.open?.[closeIndex]),
-            high: finiteNumber(quote.high?.[closeIndex]),
-            low: finiteNumber(quote.low?.[closeIndex]),
-            close: price,
-            adjusted_close: finiteNumber(result?.indicators?.adjclose?.[0]?.adjclose?.[closeIndex]) || price,
-            volume: finiteNumber(quote.volume?.[closeIndex]),
-            change: previousClose === null ? null : price - previousClose,
-            change_percent: previousClose === null || previousClose === 0 ? null : (price - previousClose) / previousClose * 100,
-            source: 'Yahoo Finance chart API',
-            generated_at: now,
-            updated_at: now,
-          }
-        };
-      } catch {
-        return null;
-      }
-    }));
-
-    await Promise.all(results.filter(Boolean).map(async ({ code, quote }) => {
-      const key = liveQuoteRunObjectKey(runId, code);
-      const existing = await env.MARKET_DATA.get(key);
-      const previous = existing ? await existing.json() : null;
-      if (!previous?.date || previous.date <= quote.date) {
-        await env.MARKET_DATA.put(key, JSON.stringify(quote), {
-          httpMetadata: { contentType: 'application/json; charset=utf-8' },
-          customMetadata: {
-            source: 'Yahoo Finance chart API',
-            quoteDate: quote.date,
-            close: String(quote.close),
-            adjustedClose: String(quote.adjusted_close),
-            volume: String(quote.volume ?? ''),
-          },
-        });
-        await saveDailyPricePoint(env, code, quote);
-      }
-      processed += 1;
-      if (!marketDataDate || quote.date > marketDataDate) marketDataDate = quote.date;
-    }));
-    failed += group.length - results.filter(Boolean).length;
-  }
-  return { processed, failed, marketDataDate };
-}
-
-async function enqueueDailyMarketQuotes(env, scheduledTime) {
-  if (!env.MARKET_PRICE_QUEUE) throw new Error('MARKET_PRICE_QUEUE binding is missing');
-  const date = new Date(scheduledTime || Date.now());
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en', {
-    timeZone: 'Asia/Tokyo', weekday: 'short', hour: '2-digit', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(date).map(part => [part.type, part.value]));
-  const runDate = `${parts.year}-${parts.month}-${parts.day}`;
-  const stateKey = 'market/yfinance/live_quotes_state.json';
-  const stateObject = await env.MARKET_DATA.get(stateKey);
-  let state = stateObject ? await stateObject.json() : {};
-  const completionObject = await env.MARKET_DATA.get('market/yfinance/live_quotes_completion.json');
-  const completion = completionObject ? await completionObject.json() : {};
-  const firstRunPending = !completion.last_completed_run_id && !completion.last_completed_date;
-  const legacyCurrentRunPending = !completion.last_completed_run_id && state.queue_run_date === runDate;
-  if (!firstRunPending && !legacyCurrentRunPending && (['Sat', 'Sun'].includes(parts.weekday) || Number(parts.hour) < 17)) return;
-  const latestActiveRun = await env.DB.prepare(`SELECT run_id FROM market_price_refresh_runs
-    WHERE status IN ('queued', 'running') ORDER BY run_date DESC LIMIT 1`).first();
-  if (latestActiveRun && latestActiveRun.run_id !== runDate) return;
-
-  const stateRunDate = String(state.queue_run_date || '');
-  const oldBatchSize = Number(state.queue_batch_size || LIVE_MARKET_LEGACY_BATCH_SIZE);
-  const oldTotalBatches = Number(state.queue_batches_total || 0);
-  const oldEnqueuedBatches = Number(state.queue_batches_enqueued || 0);
-  const universeRow = await env.DB.prepare(`SELECT COUNT(*) AS count FROM securities
-    WHERE length(security_code_display) BETWEEN 4 AND 5
-      AND security_code_display NOT GLOB '*[^A-Za-z0-9]*'`).first();
-  const universeSize = Number(universeRow?.count || 0);
-  if (universeSize <= 0) return;
-  const totalBatches = Math.ceil(universeSize / LIVE_MARKET_BATCH_SIZE);
-
-  if (stateRunDate === runDate && oldBatchSize !== LIVE_MARKET_BATCH_SIZE) {
-    const legacyPrefix = `market/yfinance/live_quote_batches/${runDate}/`;
-    const legacyResults = await env.MARKET_DATA.list({ prefix: legacyPrefix, limit: 1000, include: ['customMetadata'] });
-    const completedParents = (legacyResults.objects || []).map(object => {
-      const index = Number(object.key.slice(legacyPrefix.length).replace(/\.json$/, ''));
-      return Number.isInteger(index) && index >= 0 && ['complete', 'failed'].includes(object.customMetadata?.status) ? index : null;
-    }).filter(index => index !== null);
-    const neverEnqueuedParents = Array.from({ length: Math.max(0, oldTotalBatches - oldEnqueuedBatches) }, (_, index) => oldEnqueuedBatches + index);
-    const legacyBackfillIndexes = [...new Set([...completedParents, ...neverEnqueuedParents])].sort((a, b) => a - b);
-    state = {
-      ...state,
-      queue_run_date: runDate,
-      queue_batch_size: LIVE_MARKET_BATCH_SIZE,
-      queue_batches_total: totalBatches,
-      queue_batches_enqueued: totalBatches,
-      universe_size: universeSize,
-      legacy_batch_size: oldBatchSize,
-      legacy_total_batches: oldTotalBatches,
-      legacy_backfill_indexes: legacyBackfillIndexes,
-      legacy_backfill_cursor: 0,
-      legacy_backfilled_indexes: [],
-    };
-    await ensureLiveQuoteRun(env, runDate, runDate, totalBatches, universeSize, totalBatches);
-    await env.MARKET_DATA.put(stateKey, JSON.stringify(state), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
-  }
-
-  if (state.queue_run_date !== runDate) {
-    state = {
-      ...state,
-      queue_run_date: runDate,
-      queue_batch_size: LIVE_MARKET_BATCH_SIZE,
-      queue_batches_total: totalBatches,
-      queue_batches_enqueued: 0,
-      universe_size: universeSize,
-      last_enqueue_at: isoNow(),
-    };
-    await ensureLiveQuoteRun(env, runDate, runDate, totalBatches, universeSize, 0);
-    await env.MARKET_DATA.put(stateKey, JSON.stringify(state), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
-  }
-
-  if (Number(state.legacy_total_batches || 0) > 0 && !(stateRunDate === runDate && oldBatchSize !== LIVE_MARKET_BATCH_SIZE)) {
-    const legacyPrefix = `market/yfinance/live_quote_batches/${runDate}/`;
-    const legacyResults = await env.MARKET_DATA.list({ prefix: legacyPrefix, limit: 1000, include: ['customMetadata'] });
-    const newlyCompleted = (legacyResults.objects || []).map(object => {
-      const index = Number(object.key.slice(legacyPrefix.length).replace(/\.json$/, ''));
-      return Number.isInteger(index) && index >= 0 && ['complete', 'failed'].includes(object.customMetadata?.status) ? index : null;
-    }).filter(index => index !== null);
-    const known = new Set(state.legacy_backfill_indexes || []);
-    const additions = newlyCompleted.filter(index => !known.has(index));
-    if (additions.length) {
-      state = { ...state, legacy_backfill_indexes: [...known, ...additions].sort((a, b) => a - b) };
-      await env.MARKET_DATA.put(stateKey, JSON.stringify(state), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
-    }
-  }
-
-  if (state.legacy_backfill_indexes?.length) {
-    const backfilled = new Set(state.legacy_backfilled_indexes || []);
-    const remaining = state.legacy_backfill_indexes.filter(index => !backfilled.has(index)).slice(0, LIVE_MARKET_LEGACY_GROUPS_PER_CRON);
-    if (remaining.length) {
-      const statements = remaining.map(index => env.DB.prepare(`SELECT security_code_display AS code
-        FROM securities ORDER BY security_code LIMIT ? OFFSET ?`).bind(
-        Number(state.legacy_batch_size || LIVE_MARKET_LEGACY_BATCH_SIZE),
-        index * Number(state.legacy_batch_size || LIVE_MARKET_LEGACY_BATCH_SIZE),
-      ));
-      const legacyRows = await env.DB.batch(statements);
-      const messages = [];
-      const childrenPerParent = Math.ceil(Number(state.legacy_batch_size || LIVE_MARKET_LEGACY_BATCH_SIZE) / LIVE_MARKET_BATCH_SIZE);
-      legacyRows.forEach((result, parentOffset) => {
-        const symbols = (result.results || []).map(row => String(row.code || '').toUpperCase()).filter(code => /^[A-Z0-9]{4,5}$/.test(code));
-        for (let offset = 0; offset < symbols.length; offset += LIVE_MARKET_BATCH_SIZE) {
-          messages.push({ body: {
-            run_id: runDate,
-            run_date: runDate,
-            batch_index: remaining[parentOffset] * childrenPerParent + Math.floor(offset / LIVE_MARKET_BATCH_SIZE),
-            total_batches: totalBatches,
-            symbols: symbols.slice(offset, offset + LIVE_MARKET_BATCH_SIZE),
-          } });
-        }
-      });
-      for (let offset = 0; offset < messages.length; offset += LIVE_MARKET_ENQUEUE_LIMIT) {
-        await env.MARKET_PRICE_QUEUE.sendBatch(messages.slice(offset, offset + LIVE_MARKET_ENQUEUE_LIMIT));
-      }
-      remaining.forEach(index => backfilled.add(index));
-      state = {
-        ...state,
-        legacy_backfilled_indexes: [...backfilled].sort((a, b) => a - b),
-        legacy_backfill_cursor: Number(state.legacy_backfill_cursor || 0) + remaining.length,
-      };
-      await env.MARKET_DATA.put(stateKey, JSON.stringify(state), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
-    }
-  }
-
-  if (state.queue_batches_enqueued >= state.queue_batches_total) return;
-  const nextBatch = Number(state.queue_batches_enqueued || 0);
-  const batchCount = Math.min(LIVE_MARKET_ENQUEUE_LIMIT, state.queue_batches_total - nextBatch);
-  const result = await env.DB.prepare(`SELECT security_code_display AS code FROM securities
-    WHERE length(security_code_display) BETWEEN 4 AND 5
-      AND security_code_display NOT GLOB '*[^A-Za-z0-9]*'
-    ORDER BY security_code LIMIT ? OFFSET ?`).bind(batchCount * LIVE_MARKET_BATCH_SIZE, nextBatch * LIVE_MARKET_BATCH_SIZE).all();
-  const codes = (result.results || []).map(row => String(row.code || '').toUpperCase());
-  const messages = [];
-  for (let offset = 0; offset < codes.length; offset += LIVE_MARKET_BATCH_SIZE) {
-    messages.push({ body: {
-      run_id: runDate,
-      run_date: runDate,
-      batch_index: nextBatch + messages.length,
-      total_batches: state.queue_batches_total,
-      symbols: codes.slice(offset, offset + LIVE_MARKET_BATCH_SIZE),
-    } });
-  }
-  if (!messages.length) return;
-  await env.MARKET_PRICE_QUEUE.sendBatch(messages);
-  state = { ...state, queue_batches_enqueued: nextBatch + messages.length, last_enqueue_at: isoNow() };
-  await env.DB.prepare('UPDATE market_price_refresh_runs SET enqueued_batches = ?, updated_at = ? WHERE run_id = ?')
-    .bind(state.queue_batches_enqueued, isoNow(), runDate).run();
-  await env.MARKET_DATA.put(stateKey, JSON.stringify(state), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });
-}
-
-async function recordMarketBatchResult(env, message, status, processedSymbols = 0, marketDataDate = null) {
-  const runId = String(message?.run_id || message?.run_date || '');
-  const runDate = String(message?.run_date || runId);
-  const batchIndex = Number(message?.batch_index);
-  const totalBatches = Number(message?.total_batches);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(runId) || !/^\d{4}-\d{2}-\d{2}$/.test(runDate) || !Number.isInteger(batchIndex) || batchIndex < 0 || !Number.isInteger(totalBatches) || totalBatches < 1) {
-    throw new Error('Invalid market-price queue message');
-  }
-  await ensureLiveQuoteRun(env, runId, runDate, totalBatches, totalBatches * LIVE_MARKET_BATCH_SIZE, totalBatches);
-  const completedAt = isoNow();
-  const results = await env.DB.batch([
-    env.DB.prepare(`INSERT OR IGNORE INTO market_price_refresh_batches
-      (run_id, batch_index, status, processed_symbols, market_data_date, completed_at)
-      VALUES (?, ?, ?, ?, ?, ?)`)
-      .bind(runId, batchIndex, status, processedSymbols, marketDataDate, completedAt),
-    env.DB.prepare(`UPDATE market_price_refresh_runs SET
-        completed_batches = completed_batches + 1,
-        failed_batches = failed_batches + CASE WHEN ? = 'failed' THEN 1 ELSE 0 END,
-        processed_symbols = processed_symbols + ?,
-        market_data_date = CASE WHEN ? IS NULL THEN market_data_date
-          WHEN market_data_date IS NULL OR market_data_date < ? THEN ? ELSE market_data_date END,
-        status = CASE WHEN completed_batches + 1 >= total_batches
-          THEN CASE WHEN failed_batches + CASE WHEN ? = 'failed' THEN 1 ELSE 0 END > 0 THEN 'partial' ELSE 'complete' END
-          ELSE 'running' END,
-        last_batch_at = ?,
-        completed_at = CASE WHEN completed_batches + 1 >= total_batches THEN ? ELSE NULL END,
-        updated_at = ?
-      WHERE run_id = ? AND changes() = 1
-      RETURNING run_id, run_date, total_batches, completed_batches, failed_batches,
-        processed_symbols, market_data_date, status, completed_at`)
-      .bind(status, processedSymbols, marketDataDate, marketDataDate, marketDataDate, status,
-        completedAt, completedAt, completedAt, runId),
-  ]);
-  let run = results?.[1]?.results?.[0] || null;
-  if (!run) run = await env.DB.prepare(`SELECT run_id, run_date, total_batches, completed_batches,
-    failed_batches, processed_symbols, market_data_date, status, completed_at
-    FROM market_price_refresh_runs WHERE run_id = ?`).bind(runId).first();
-  if (run?.status === 'complete') await publishCompletedQuoteRun(env, run);
-}
-
-async function splitLegacyMarketQueueMessage(env, body) {
-  const runDate = String(body?.run_date || '');
-  const symbols = [...new Set((Array.isArray(body?.symbols) ? body.symbols : [])
-    .map(value => String(value || '').toUpperCase())
-    .filter(code => /^[A-Z0-9]{4,5}$/.test(code)))];
-  const parentIndex = Number(body?.batch_index);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(runDate) || !Number.isInteger(parentIndex) || parentIndex < 0 || !symbols.length) {
-    throw new Error('Invalid legacy market-price queue message');
-  }
-  const stateObject = await env.MARKET_DATA.get('market/yfinance/live_quotes_state.json');
-  const state = stateObject ? await stateObject.json() : {};
-  const legacyBatchSize = Number(state.legacy_batch_size || LIVE_MARKET_LEGACY_BATCH_SIZE);
-  const universeSize = Number(state.universe_size || Number(body.total_batches || 0) * legacyBatchSize);
-  const totalBatches = Math.ceil(universeSize / LIVE_MARKET_BATCH_SIZE);
-  if (!totalBatches) throw new Error('Market-price universe is empty');
-  await ensureLiveQuoteRun(env, runDate, runDate, totalBatches, universeSize, totalBatches);
-  const childrenPerParent = Math.ceil(legacyBatchSize / LIVE_MARKET_BATCH_SIZE);
-  const messages = [];
-  for (let offset = 0; offset < symbols.length; offset += LIVE_MARKET_BATCH_SIZE) {
-    messages.push({ body: {
-      run_id: runDate,
-      run_date: runDate,
-      batch_index: parentIndex * childrenPerParent + Math.floor(offset / LIVE_MARKET_BATCH_SIZE),
-      total_batches: totalBatches,
-      symbols: symbols.slice(offset, offset + LIVE_MARKET_BATCH_SIZE),
-    } });
-  }
-  for (let offset = 0; offset < messages.length; offset += LIVE_MARKET_ENQUEUE_LIMIT) {
-    await env.MARKET_PRICE_QUEUE.sendBatch(messages.slice(offset, offset + LIVE_MARKET_ENQUEUE_LIMIT));
-  }
 }
 
 async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
@@ -1852,8 +1584,10 @@ async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
 }
 
 async function buildAnalysisSnapshot(env, security, targetYield = null, preloaded = null) {
-  const stockDefs = preloaded?.stockDefs || await appDefinitionDocument(env, 'stock-analysis-definitions:v1') || {};
-  const watchDefs = preloaded?.watchDefs || await appDefinitionDocument(env, 'watchlist-analysis-definitions:v1') || {};
+  const definitions = preloaded?.stockDefs != null && preloaded?.watchDefs != null
+    ? { stockDefs: preloaded.stockDefs, watchDefs: preloaded.watchDefs }
+    : await loadAnalysisDefinitions(env);
+  const { stockDefs, watchDefs } = definitions;
   if (!preloaded?.skipDefinitionAudit) {
     await Promise.all([
       auditDefinition(env, 'stock-analysis-definitions:v1', stockDefs),
@@ -1895,297 +1629,618 @@ async function buildAnalysisSnapshot(env, security, targetYield = null, preloade
 }
 
 async function persistSnapshot(env, security, snapshot) {
-  const previous = await env.DB.prepare(
-    'SELECT overall_grade, buy_zone_status, analysis_json FROM stock_analysis_state WHERE security_code = ?'
-  ).bind(security.security_code).first();
+  if (!env.MARKET_DATA) throw new Error('MARKET_DATA binding is missing');
+  const currentKey = `${ANALYSIS_CURRENT_PREFIX}${security.security_code}.json`;
   const payload = JSON.stringify(snapshot);
-  let historyChanged = true;
-  if (previous?.analysis_json) {
-    try {
-      const oldSnapshot = JSON.parse(previous.analysis_json);
-      const newSnapshot = JSON.parse(payload);
-      delete oldSnapshot.observed_at;
-      delete newSnapshot.observed_at;
-      if (oldSnapshot.freshness) delete oldSnapshot.freshness.market_generated_at;
-      if (newSnapshot.freshness) delete newSnapshot.freshness.market_generated_at;
-      historyChanged = JSON.stringify(oldSnapshot) !== JSON.stringify(newSnapshot);
-    } catch {
-      // Preserve history if an older or malformed snapshot cannot be compared safely.
-    }
-  }
-  const statements = [];
-  if (historyChanged) {
-    statements.push(env.DB.prepare(
-      `INSERT INTO stock_analysis_history(
-        security_code, observed_at, market_date, definition_version, overall_score, overall_grade,
-        buy_zone_status, buy_zone_ratio, anomaly_flags_json, metrics_json, analysis_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      security.security_code,
-      snapshot.observed_at,
-      snapshot.market_date,
-      snapshot.definition_version,
-      snapshot.analysis.overall_score,
-      snapshot.analysis.overall_grade,
-      snapshot.buy_zone?.status ?? null,
-      snapshot.buy_zone_ratio,
-      JSON.stringify(snapshot.anomalies),
-      JSON.stringify(snapshot.values),
-      payload,
-    ));
-  }
-  statements.push(env.DB.prepare(
-      `INSERT INTO stock_analysis_state(
-        security_code, last_observed_at, market_date, definition_version, overall_score, overall_grade,
-        buy_zone_status, buy_zone_ratio, anomaly_flags_json, analysis_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(security_code) DO UPDATE SET
-        last_observed_at=excluded.last_observed_at,
-        market_date=excluded.market_date,
-        definition_version=excluded.definition_version,
-        overall_score=excluded.overall_score,
-        overall_grade=excluded.overall_grade,
-        buy_zone_status=excluded.buy_zone_status,
-        buy_zone_ratio=excluded.buy_zone_ratio,
-        anomaly_flags_json=excluded.anomaly_flags_json,
-        analysis_json=excluded.analysis_json`
-    ).bind(
-      security.security_code,
-      snapshot.observed_at,
-      snapshot.market_date,
-      snapshot.definition_version,
-      snapshot.analysis.overall_score,
-      snapshot.analysis.overall_grade,
-      snapshot.buy_zone?.status ?? null,
-      snapshot.buy_zone_ratio,
-      JSON.stringify(snapshot.anomalies),
-      payload,
-  ));
-  await env.DB.batch(statements);
-  const events = [];
-  if (previous?.overall_grade && previous.overall_grade !== snapshot.analysis.overall_grade) {
-    events.push({ type: 'GRADE_CHANGED', from: previous.overall_grade, to: snapshot.analysis.overall_grade });
-  }
-  if (previous?.buy_zone_status && previous.buy_zone_status !== snapshot.buy_zone?.status) {
-    events.push({ type: 'BUY_ZONE_CHANGED', from: previous.buy_zone_status, to: snapshot.buy_zone?.status ?? null });
-  }
-  for (const event of events) {
-    await env.DB.prepare(
-      `INSERT INTO notification_events(security_code, event_type, from_status, to_status, occurred_at, payload_json)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).bind(security.security_code, event.type, event.from, event.to, snapshot.observed_at, payload).run();
-  }
-}
+  const comparable = value => {
+    const copy = JSON.parse(JSON.stringify(value));
+    delete copy.observed_at;
+    if (copy.freshness) delete copy.freshness.market_generated_at;
+    return JSON.stringify(copy);
+  };
+  const incomingAt = Date.parse(snapshot.observed_at);
+  if (!Number.isFinite(incomingAt)) throw new Error(`Invalid analysis observed_at for ${security.security_code}`);
 
-async function compactAnalysisHistory(env) {
-  await env.DB.prepare(`DELETE FROM stock_analysis_history
-    WHERE observed_at < datetime('now','-30 days')
-      AND id NOT IN (
-        SELECT MAX(id) FROM stock_analysis_history
-        WHERE observed_at < datetime('now','-30 days')
-        GROUP BY security_code, date(observed_at)
-      )`).run();
-  await env.DB.prepare(`DELETE FROM stock_analysis_history
-    WHERE observed_at < datetime('now','-365 days')
-      AND id NOT IN (
-        SELECT MAX(id) FROM stock_analysis_history
-        WHERE observed_at < datetime('now','-365 days')
-        GROUP BY security_code, strftime('%Y-%m', observed_at)
-      )`).run();
-  await env.DB.prepare(`DELETE FROM api_request_log WHERE window_started_at < datetime('now','-1 day')`).run();
-  await env.DB.prepare(`DELETE FROM scheduled_run_log WHERE started_at < datetime('now','-365 days')`).run();
-  await env.DB.prepare(`DELETE FROM notification_events
-    WHERE occurred_at < datetime('now','-365 days')
-      AND (delivered_at IS NOT NULL OR json_extract(payload_json, '$.client_id') IS NULL)`).run();
-}
-
-function base64Url(bytes) {
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-}
-
-function utf8Base64Url(value) {
-  return base64Url(new TextEncoder().encode(value));
-}
-
-async function fcmAccessToken(env) {
-  if (!env.FCM_SERVICE_ACCOUNT_JSON) return null;
-  const serviceAccount = JSON.parse(env.FCM_SERVICE_ACCOUNT_JSON);
-  if (!serviceAccount.client_email || !serviceAccount.private_key) throw new Error('invalid_fcm_service_account');
-  const tokenUri = serviceAccount.token_uri || 'https://oauth2.googleapis.com/token';
-  const issuedAt = Math.floor(Date.now() / 1000);
-  const header = utf8Base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const claims = utf8Base64Url(JSON.stringify({
-    iss: serviceAccount.client_email,
-    scope: 'https://www.googleapis.com/auth/firebase.messaging',
-    aud: tokenUri,
-    iat: issuedAt,
-    exp: issuedAt + 3600,
-  }));
-  const unsigned = `${header}.${claims}`;
-  const pem = String(serviceAccount.private_key).replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, '');
-  const der = Uint8Array.from(atob(pem), character => character.charCodeAt(0));
-  const signingKey = await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
-  const signature = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', signingKey, new TextEncoder().encode(unsigned)));
-  const assertion = `${unsigned}.${base64Url(signature)}`;
-  const response = await fetch(tokenUri, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
-  });
-  if (!response.ok) throw new Error(`fcm_oauth_failed_${response.status}`);
-  const token = await response.json();
-  return token.access_token || null;
-}
-
-async function deliverPendingNotifications(env) {
-  if (!env.FCM_PROJECT_ID || !env.FCM_SERVICE_ACCOUNT_JSON) return { sent: 0, skipped: true, reason: 'fcm_not_configured' };
-  const accessToken = await fcmAccessToken(env);
-  if (!accessToken) return { sent: 0, skipped: true, reason: 'fcm_token_unavailable' };
-  const result = await env.DB.prepare(`SELECT id, payload_json FROM notification_events
-    WHERE delivered_at IS NULL AND json_extract(payload_json, '$.client_id') IS NOT NULL
-    ORDER BY occurred_at LIMIT 100`).all();
-  let sent = 0;
-  let failed = 0;
-  let noDevices = 0;
-  for (const row of result.results || []) {
-    const payload = JSON.parse(row.payload_json || '{}');
-    const clientId = payload.client_id;
-    const devices = await env.DB.prepare('SELECT device_token FROM push_devices WHERE client_id = ? AND enabled = 1').bind(clientId).all();
-    if (!(devices.results || []).length) { noDevices += 1; continue; }
-    for (const device of devices.results || []) {
-      const prior = await env.DB.prepare(`SELECT delivered_at, terminal_at FROM notification_deliveries WHERE event_id = ? AND device_token = ?`).bind(row.id, device.device_token).first();
-      if (prior?.delivered_at || prior?.terminal_at) continue;
-      const response = await fetch(`https://fcm.googleapis.com/v1/projects/${env.FCM_PROJECT_ID}/messages:send`, {
-        method: 'POST',
-        headers: { 'authorization': `Bearer ${accessToken}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ message: { token: device.device_token, notification: { title: 'Diview 買場通知', body: `${payload.name || payload.code || '銘柄'}の買場判定が更新されました。` }, data: { security_code: String(payload.code || ''), event_type: 'WATCHLIST_BUY_ZONE_CHANGED' } } })
-      });
-      const responseBody = await response.json().catch(() => ({}));
-      const errorDetails = responseBody?.error?.details || [];
-      const unregistered = errorDetails.some(detail => detail?.errorCode === 'UNREGISTERED');
-      const now = isoNow();
-      await env.DB.prepare(`INSERT INTO notification_deliveries(event_id, device_token, attempts, delivered_at, terminal_at, last_error, updated_at)
-        VALUES (?, ?, 1, ?, ?, ?, ?)
-        ON CONFLICT(event_id, device_token) DO UPDATE SET
-          attempts=notification_deliveries.attempts+1,
-          delivered_at=COALESCE(notification_deliveries.delivered_at, excluded.delivered_at),
-          terminal_at=COALESCE(notification_deliveries.terminal_at, excluded.terminal_at),
-          last_error=excluded.last_error,
-          updated_at=excluded.updated_at`)
-        .bind(row.id, device.device_token, response.ok ? now : null, unregistered ? now : null, response.ok ? null : String(responseBody?.error?.status || `http_${response.status}`).slice(0, 120), now).run();
-      if (response.ok) sent += 1;
-      else {
-        failed += 1;
-        if (unregistered) await env.DB.prepare('UPDATE push_devices SET enabled=0, updated_at=? WHERE client_id=? AND device_token=?').bind(now, clientId, device.device_token).run();
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const current = await readR2JsonWithEtag(env, currentKey);
+    const previous = current?.value || null;
+    if (previous) {
+      const previousAt = Date.parse(previous.observed_at);
+      if (!Number.isFinite(previousAt)) throw new Error(`Invalid current analysis observed_at for ${security.security_code}`);
+      if (previousAt > incomingAt) return;
+      if (previousAt === incomingAt) {
+        if (comparable(previous) === comparable(snapshot)) return;
+        throw new Error(`Conflicting analysis snapshots share observed_at: ${security.security_code}`);
       }
     }
-    const unresolved = await env.DB.prepare(`SELECT COUNT(*) AS count FROM push_devices d
-      LEFT JOIN notification_deliveries nd ON nd.event_id = ? AND nd.device_token = d.device_token
-      WHERE d.client_id = ? AND d.enabled = 1 AND nd.delivered_at IS NULL AND nd.terminal_at IS NULL`).bind(row.id, clientId).first();
-    if (Number(unresolved?.count || 0) === 0) await env.DB.prepare('UPDATE notification_events SET delivered_at=? WHERE id=?').bind(isoNow(), row.id).run();
+
+    const historyChanged = !previous || comparable(previous) !== comparable(snapshot);
+    if (historyChanged) {
+      const observedAt = new Date(snapshot.observed_at);
+      const yyyy = String(observedAt.getUTCFullYear());
+      const mm = String(observedAt.getUTCMonth() + 1).padStart(2, '0');
+      const stamp = observedAt.toISOString().slice(0, 10).replaceAll('-', '');
+      const transitionHash = await sha256Hex(`${previous?.observed_at || 'initial'}\n${comparable(snapshot)}`);
+      const historyKey = `${ANALYSIS_HISTORY_PREFIX}${security.security_code}/${yyyy}/${mm}/${stamp}-${transitionHash.slice(0, 16)}.json`;
+      const historyBody = JSON.stringify({
+        observed_at: snapshot.observed_at,
+        market_date: snapshot.market_date,
+        definition_version: snapshot.definition_version,
+        overall_score: snapshot.analysis.overall_score,
+        overall_grade: snapshot.analysis.overall_grade,
+        buy_zone_status: snapshot.buy_zone?.status ?? null,
+        buy_zone_ratio: snapshot.buy_zone_ratio,
+        anomaly_flags_json: JSON.stringify(snapshot.anomalies),
+        metrics_json: JSON.stringify(snapshot.values),
+        analysis_json: payload,
+      });
+      const written = await env.MARKET_DATA.put(historyKey, historyBody, {
+        onlyIf: { etagDoesNotMatch: '*' },
+        httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      });
+      if (written === null) {
+        const existingHistory = await readR2JsonWithEtag(env, historyKey);
+        let existingSnapshot = null;
+        try {
+          existingSnapshot = typeof existingHistory?.value?.analysis_json === 'string'
+            ? JSON.parse(existingHistory.value.analysis_json)
+            : existingHistory?.value?.analysis_json;
+        } catch {
+          // A malformed object at a deterministic immutable key is a conflict.
+        }
+        if (!existingSnapshot || comparable(existingSnapshot) !== comparable(snapshot)) {
+          throw new Error(`Conflicting analysis history object: ${historyKey}`);
+        }
+      }
+    }
+
+    const written = await env.MARKET_DATA.put(currentKey, payload, {
+      onlyIf: r2OnlyIfUnchanged(current),
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    });
+    if (written !== null) return;
   }
-  return { sent, failed, no_devices: noDevices, skipped: false };
+  throw new Error(`R2 current analysis changed concurrently: ${currentKey}`);
+}
+
+async function compactAnalysisHistory(env, nowMs = Date.now(), cursor = null, previousCandidate = null) {
+  if (!env.MARKET_DATA) throw new Error('MARKET_DATA binding is missing');
+  const dailyCutoff = nowMs - 30 * 86400000;
+  const monthlyCutoff = nowMs - 365 * 86400000;
+  const deleteKeys = [];
+  let candidate = previousCandidate || null;
+  const page = await env.MARKET_DATA.list({
+    prefix: ANALYSIS_HISTORY_PREFIX,
+    limit: ANALYSIS_RETENTION_BATCH_SIZE,
+    cursor: cursor || undefined,
+  });
+
+  for (const object of page.objects || []) {
+    const match = object.key.match(/^analysis\/v1\/history\/([A-Z0-9]{4,5})\/(\d{4})\/(\d{2})\/(\d{8})-[^/]+\.json$/);
+    if (!match) continue;
+    const keyDate = match[2] + '-' + match[3] + '-' + match[4].slice(6, 8);
+    const keyDateMs = Date.parse(keyDate + 'T00:00:00.000Z');
+    if (!Number.isFinite(keyDateMs) || new Date(keyDateMs).toISOString().slice(0, 10) !== keyDate || keyDateMs > dailyCutoff) continue;
+
+    const history = await readV2Json(env, object.key);
+    const observedMs = Date.parse(history?.observed_at || '');
+    if (!Number.isFinite(observedMs) || observedMs >= dailyCutoff) continue;
+    const observedAt = new Date(observedMs).toISOString();
+    const date = observedAt.slice(0, 10);
+    const month = observedAt.slice(0, 7);
+    const period = observedMs < monthlyCutoff ? match[1] + '/' + month : match[1] + '/' + date;
+    const uploadedAt = object.uploaded?.getTime?.() || 0;
+    const current = { key: object.key, period, observed_ms: observedMs, uploaded_at_ms: uploadedAt };
+
+    if (candidate?.period === period) {
+      const isLater = observedMs > candidate.observed_ms
+        || (observedMs === candidate.observed_ms && (uploadedAt > candidate.uploaded_at_ms
+          || (uploadedAt === candidate.uploaded_at_ms && object.key.localeCompare(candidate.key) > 0)));
+      if (isLater) {
+        deleteKeys.push(candidate.key);
+        candidate = current;
+      } else {
+        deleteKeys.push(object.key);
+      }
+    } else {
+      candidate = current;
+    }
+  }
+
+  if (deleteKeys.length > 0) await env.MARKET_DATA.delete(deleteKeys);
+  return {
+    deleted: deleteKeys.length,
+    done: !page.truncated,
+    cursor: page.truncated ? page.cursor || null : null,
+    candidate: page.truncated ? candidate : null,
+  };
+}
+
+function runStartedAtFromKey(key) {
+  const match = key.match(/^operations\/v1\/runs\/[^/]+\/([^/]+)\/summary\.json$/);
+  if (!match || match[1].startsWith('legacy-d1-')) return null;
+  const timestamp = match[1].match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(\d{3})Z-/);
+  if (!timestamp) return null;
+  return Date.UTC(Number(timestamp[1]), Number(timestamp[2]) - 1, Number(timestamp[3]),
+    Number(timestamp[4]), Number(timestamp[5]), Number(timestamp[6]), Number(timestamp[7]));
+}
+
+async function compactScheduledRunLogs(env, nowMs = Date.now(), cursor = null) {
+  if (!env.MARKET_DATA) throw new Error('MARKET_DATA binding is missing');
+  const cutoff = nowMs - 365 * 86400000;
+  const deleteKeys = [];
+  const page = await env.MARKET_DATA.list({
+    prefix: SCHEDULED_RUN_PREFIX,
+    limit: ANALYSIS_RETENTION_BATCH_SIZE,
+    cursor: cursor || undefined,
+  });
+  const terminalStatuses = new Set(['success', 'failed', 'partial', 'superseded']);
+
+  for (const object of page.objects || []) {
+    if (!object.key.endsWith('/summary.json')) continue;
+    let startedAt = runStartedAtFromKey(object.key);
+    let summary = null;
+    if (startedAt === null && /\/legacy-d1-\d+\/summary\.json$/.test(object.key)) {
+      summary = await readV2Json(env, object.key);
+      const parsed = Date.parse(summary?.started_at || '');
+      if (Number.isFinite(parsed)) startedAt = parsed;
+    }
+    if (startedAt === null || startedAt >= cutoff) continue;
+    if (!summary) summary = await readV2Json(env, object.key);
+    if (!summary?.finished_at || !terminalStatuses.has(String(summary.status || '').toLowerCase())) continue;
+    deleteKeys.push(object.key);
+  }
+
+  if (deleteKeys.length > 0) await env.MARKET_DATA.delete(deleteKeys);
+  return {
+    deleted: deleteKeys.length,
+    done: !page.truncated,
+    cursor: page.truncated ? page.cursor || null : null,
+  };
+}
+
+async function compactAnalysisRetentionIfDue(env, nowMs = Date.now()) {
+  if (!env.MARKET_DATA) throw new Error('MARKET_DATA binding is missing');
+  const state = await readR2JsonWithEtag(env, ANALYSIS_RETENTION_STATE_KEY);
+  const value = state?.value || {};
+  const completedAt = Date.parse(value.completed_at || '');
+  const leaseUntil = Date.parse(value.lease_until || '');
+  if (Number.isFinite(leaseUntil) && leaseUntil > nowMs) return { skipped: 'locked' };
+
+  const inProgress = value.phase === 'history' || value.phase === 'runs';
+  if (!inProgress && Number.isFinite(completedAt) && nowMs - completedAt < ANALYSIS_RETENTION_INTERVAL_MS) {
+    return { skipped: 'not_due' };
+  }
+  const base = inProgress ? value : {
+    completed_at: value.completed_at || null,
+    phase: 'history',
+    history_cursor: null,
+    history_candidate: null,
+    run_cursor: null,
+    history_deleted: 0,
+    run_logs_deleted: 0,
+  };
+  const leaseId = crypto.randomUUID();
+  const claimed = await env.MARKET_DATA.put(ANALYSIS_RETENTION_STATE_KEY, JSON.stringify({
+    ...base,
+    lease_id: leaseId,
+    lease_until: new Date(nowMs + ANALYSIS_RETENTION_LEASE_MS).toISOString(),
+  }), {
+    onlyIf: r2OnlyIfUnchanged(state),
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+  });
+  if (!claimed?.etag) return { skipped: 'claim_conflict' };
+
+  try {
+    let next = { ...base };
+    if (base.phase === 'history') {
+      const page = await compactAnalysisHistory(env, nowMs, base.history_cursor, base.history_candidate);
+      next.history_deleted = Number(base.history_deleted || 0) + page.deleted;
+      next.history_cursor = page.done ? null : page.cursor;
+      next.history_candidate = page.done ? null : page.candidate;
+      next.phase = page.done ? 'runs' : 'history';
+    } else {
+      const page = await compactScheduledRunLogs(env, nowMs, base.run_cursor);
+      next.run_logs_deleted = Number(base.run_logs_deleted || 0) + page.deleted;
+      next.run_cursor = page.done ? null : page.cursor;
+      next.phase = page.done ? 'complete' : 'runs';
+    }
+
+    if (next.phase === 'complete') next.completed_at = new Date(nowMs).toISOString();
+    next.lease_id = null;
+    next.lease_until = null;
+    next.last_error = null;
+    const written = await env.MARKET_DATA.put(ANALYSIS_RETENTION_STATE_KEY, JSON.stringify(next), {
+      onlyIf: { etagMatches: claimed.etag },
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    });
+    if (!written?.etag) throw new Error('R2 analysis-retention state changed during compaction');
+    return {
+      phase: next.phase,
+      done: next.phase === 'complete',
+      history_deleted: next.history_deleted,
+      run_logs_deleted: next.run_logs_deleted,
+    };
+  } catch (error) {
+    await env.MARKET_DATA.put(ANALYSIS_RETENTION_STATE_KEY, JSON.stringify({
+      ...base,
+      last_error_at: new Date(nowMs).toISOString(),
+      last_error: String(error?.message || error).slice(0, 200),
+      lease_id: null,
+      lease_until: null,
+    }), {
+      onlyIf: { etagMatches: claimed.etag },
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    }).catch(() => {});
+    throw error;
+  }
+}
+
+async function updateCurrentAnalysisRun(env, runKey, runId, startedAt) {
+  const pointerKey = `${ANALYSIS_RUN_PREFIX}current.json`;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const current = await readR2JsonWithEtag(env, pointerKey);
+    if (String(current?.value?.run_id || '') >= runId) return;
+    const written = await env.MARKET_DATA.put(pointerKey, JSON.stringify({
+      run_key: runKey,
+      run_id: runId,
+      started_at: startedAt,
+    }), {
+      onlyIf: r2OnlyIfUnchanged(current),
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    });
+    if (written !== null) return;
+  }
+  throw new Error('R2 current analysis run pointer changed concurrently');
+}
+
+async function updateAnalysisRunSummary(env, runKey, summary, etag) {
+  const written = await env.MARKET_DATA.put(runKey, JSON.stringify(summary), {
+    onlyIf: { etagMatches: etag },
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+  });
+  if (!written?.etag) throw new Error(`R2 analysis run summary changed concurrently: ${runKey}`);
+  return written.etag;
 }
 
 async function runScheduledAnalysis(env) {
+  if (!env.MARKET_DATA) throw new Error('MARKET_DATA binding is missing');
   const runStartedMs = Date.now();
   const startedAt = isoNow();
-  const log = await env.DB.prepare(`INSERT INTO scheduled_run_log(run_type, started_at, status) VALUES ('analysis', ?, 'running')`).bind(startedAt).run();
-  const runId = log.meta?.last_row_id;
-  let processed = 0;
-  let failed = 0;
-  const failureSamples = [];
-  try {
-    const stockDefs = await appDefinitionDocument(env, 'stock-analysis-definitions:v1') || {};
-    const watchDefs = await appDefinitionDocument(env, 'watchlist-analysis-definitions:v1') || {};
-    const config = await backendConfig(env);
-    await Promise.all([auditDefinition(env, 'stock-analysis-definitions:v1', stockDefs), auditDefinition(env, 'watchlist-analysis-definitions:v1', watchDefs)]);
-    const activeTargets = await env.DB.prepare(`SELECT s.security_code, s.security_code_display, s.name, s.metrics_json, w.client_id, w.target_yield
-      FROM securities s JOIN watchlist_targets w ON w.security_code = s.security_code
-      WHERE w.alert_enabled = 1 ORDER BY s.security_code, w.client_id`).all();
-    const targetsBySecurity = new Map();
-    const watchedBySecurity = new Map();
-    for (const row of activeTargets.results || []) {
-      watchedBySecurity.set(row.security_code, {
-        security_code: row.security_code,
-        security_code_display: row.security_code_display,
-        name: row.name,
-        metrics_json: row.metrics_json,
-      });
-      const targets = targetsBySecurity.get(row.security_code) || [];
-      targets.push({ client_id: row.client_id, target_yield: row.target_yield, alert_enabled: 1 });
-      targetsBySecurity.set(row.security_code, targets);
-    }
-    const latestState = await env.DB.prepare(`SELECT value_json FROM backend_state WHERE state_key = 'analysis_source'`).first();
-    const [catalogObject, financialRevisionObject] = await Promise.all([
-      env.MARKET_DATA?.head(`${YFINANCE_V2_ROOT}/catalog/current.json`),
-      env.MARKET_DATA?.head(`${YFINANCE_V2_ROOT}/financial_revision.json`),
-    ]);
-    const sourceTag = JSON.stringify({
-      analysis_contract: 2,
-      catalog_etag: catalogObject?.httpEtag || catalogObject?.etag || null,
-      financial_revision_etag: financialRevisionObject?.httpEtag || financialRevisionObject?.etag || null,
-      stock_version: stockDefs.version || 1,
-      watch_version: watchDefs.version || 1,
-    });
-    const sourceChanged = latestState?.value_json !== sourceTag;
-    const securities = sourceChanged
-      ? (await env.DB.prepare('SELECT security_code, security_code_display, name, metrics_json FROM securities ORDER BY security_code').all()).results || []
-      : [...watchedBySecurity.values()];
-    const marketIndex = securities.length ? await loadMarketIndex(env) : new Map();
-    const analysisStartedMs = Date.now();
-    for (let offset = 0; offset < securities.length; offset += ANALYSIS_CONCURRENCY) {
-      const group = securities.slice(offset, offset + ANALYSIS_CONCURRENCY);
-      await Promise.all(group.map(async security => {
-        try {
-          const targetRows = targetsBySecurity.get(security.security_code) || [];
-          const input = await loadSecurityAnalysisInput(env, security, marketIndex);
-          const preloaded = { stockDefs, watchDefs, config, input, skipDefinitionAudit: true };
-          const base = await buildAnalysisSnapshot(env, security, null, preloaded);
-          if (sourceChanged) await persistSnapshot(env, security, base);
-          if (!base.freshness.market_stale) {
-            for (const targetRow of targetRows) {
-              const targeted = await buildAnalysisSnapshot(env, security, Number(targetRow.target_yield), preloaded);
-              const previous = await env.DB.prepare(`SELECT to_status FROM notification_events WHERE security_code = ? AND event_type = ? AND json_extract(payload_json, '$.client_id') = ? ORDER BY occurred_at DESC LIMIT 1`).bind(security.security_code, 'WATCHLIST_BUY_ZONE_CHANGED', targetRow.client_id).first();
-              const currentStatus = targeted.buy_zone?.status ?? null;
-              if (currentStatus && previous?.to_status !== currentStatus) await env.DB.prepare(`INSERT INTO notification_events(security_code, event_type, from_status, to_status, occurred_at, payload_json) VALUES (?, ?, ?, ?, ?, ?)`).bind(security.security_code, 'WATCHLIST_BUY_ZONE_CHANGED', previous?.to_status ?? null, currentStatus, targeted.observed_at, JSON.stringify({ ...targeted, client_id: targetRow.client_id })).run();
-            }
-          }
-          processed += 1;
-        } catch (error) {
-          failed += 1;
-          if (failureSamples.length < 20) {
-            failureSamples.push({
-              security_code: security.security_code_display,
-              error: String(error?.name || 'Error').slice(0, 80),
-            });
-          }
-        }
-      }));
-    }
-    const analysisDurationMs = Date.now() - analysisStartedMs;
-    const sourceTagAdvanced = sourceChanged && failed === 0;
-    if (sourceTagAdvanced) await env.DB.prepare(`INSERT INTO backend_state(state_key, value_json, updated_at) VALUES ('analysis_source', ?, ?) ON CONFLICT(state_key) DO UPDATE SET value_json=excluded.value_json, updated_at=excluded.updated_at`).bind(sourceTag, isoNow()).run();
-    const cleanupStartedMs = Date.now();
-    await compactAnalysisHistory(env);
-    const cleanupDurationMs = Date.now() - cleanupStartedMs;
-    const notificationsStartedMs = Date.now();
-    const delivery = await deliverPendingNotifications(env);
-    const notificationsDurationMs = Date.now() - notificationsStartedMs;
-    const durations = {
-      analysis_ms: analysisDurationMs,
-      cleanup_ms: cleanupDurationMs,
-      notifications_ms: notificationsDurationMs,
-      total_ms: Date.now() - runStartedMs,
-    };
-    if (runId) await env.DB.prepare(`UPDATE scheduled_run_log SET finished_at=?, status=?, processed=?, failed=?, metadata_json=? WHERE id=?`).bind(isoNow(), failed ? 'partial' : 'success', processed, failed, JSON.stringify({ source_changed: sourceChanged, source_tag_advanced: sourceTagAdvanced, failure_samples: failureSamples, delivery, durations_ms: durations }), runId).run();
-    return { processed, failed, source_changed: sourceChanged, source_tag_advanced: sourceTagAdvanced, failure_samples: failureSamples, delivery, durations_ms: durations, observed_at: isoNow() };
-  } catch (error) {
-    if (runId) await env.DB.prepare(`UPDATE scheduled_run_log SET finished_at=?, status='failed', processed=?, failed=?, metadata_json=? WHERE id=?`).bind(isoNow(), processed, failed + 1, JSON.stringify({ error: String(error?.message || error), durations_ms: { total_ms: Date.now() - runStartedMs } }), runId).run();
-    throw error;
+  const [{ stockDefs, watchDefs }, config] = await Promise.all([
+    loadAnalysisDefinitions(env),
+    backendConfig(env),
+  ]);
+  const [latestState, catalog] = await Promise.all([
+    readV2Json(env, ANALYSIS_SOURCE_KEY),
+    readV2Catalog(env),
+  ]);
+  if (!Array.isArray(catalog?.items) || catalog.items.length === 0) {
+    throw new Error('R2 v2 security catalog is missing or empty');
   }
+  const securities = catalog.items.map(row => {
+    const displayCode = yfinanceV2Code(row?.code || row?.security_code_display || row?.symbol);
+    if (!displayCode) return null;
+    return {
+      security_code: displayCode.length === 4 ? displayCode + '0' : displayCode,
+      security_code_display: displayCode,
+      name: String(row?.name || row?.display_name || displayCode),
+    };
+  }).filter(Boolean);
+  if (securities.length === 0) throw new Error('R2 v2 security catalog has no valid security codes');
+
+  const sourceTag = await analysisSourceTag(env, stockDefs, watchDefs, config);
+  const previousSourceTag = latestState?.source_tag ?? null;
+  const sourceChanged = previousSourceTag !== sourceTag;
+  const generation = String(catalog.generation || 'unknown');
+  const total = securities.length;
+  const jobRead = await readR2JsonWithEtag(env, ANALYSIS_JOB_STATE_KEY);
+  const existingJob = jobRead?.value;
+  const resumableStatuses = new Set(['running', 'retrying', 'finalizing']);
+  const jobMatches = Boolean(existingJob
+    && existingJob.source_tag === sourceTag
+    && existingJob.catalog_generation === generation
+    && Number(existingJob.total) === total
+    && resumableStatuses.has(existingJob.status));
+
+  if (!sourceChanged && !(jobMatches && existingJob.status === 'finalizing')) {
+    return {
+      processed: 0,
+      failed: 0,
+      source_changed: false,
+      source_tag_advanced: false,
+      skipped: 'source_unchanged',
+      observed_at: isoNow(),
+    };
+  }
+
+  const nowMs = Date.now();
+  if (existingJob && resumableStatuses.has(existingJob.status)) {
+    const leaseUntil = Date.parse(existingJob.lease_until || '');
+    if (Number.isFinite(leaseUntil) && leaseUntil > nowMs) {
+      return { processed: 0, failed: 0, source_changed: sourceChanged, source_tag_advanced: false, skipped: 'lease_active' };
+    }
+  }
+  if (jobMatches) {
+    const retryAt = Date.parse(existingJob.retry_at || '');
+    if (existingJob.status === 'retrying' && Number.isFinite(retryAt) && retryAt > nowMs) {
+      return {
+        processed: 0,
+        failed: (existingJob.failed_codes || []).length,
+        source_changed: sourceChanged,
+        source_tag_advanced: false,
+        skipped: 'retry_backoff',
+        retry_at: existingJob.retry_at,
+      };
+    }
+  }
+
+  const job = jobMatches ? { ...existingJob } : (() => {
+    const runId = startedAt.replaceAll('-', '').replaceAll(':', '').replace('.', '') + '-' + crypto.randomUUID();
+    return {
+      source_tag: sourceTag,
+      previous_source_tag: previousSourceTag,
+      catalog_generation: generation,
+      total,
+      next_index: 0,
+      run_id: runId,
+      run_key: ANALYSIS_RUN_PREFIX + runId + '/summary.json',
+      started_at: startedAt,
+      status: 'running',
+      attempts: 0,
+      retry_at: null,
+      failed_codes: [],
+    };
+  })();
+  const leaseId = crypto.randomUUID();
+  const claimedJob = {
+    ...job,
+    status: job.status === 'finalizing' ? 'finalizing' : 'running',
+    lease_id: leaseId,
+    lease_until: new Date(nowMs + ANALYSIS_JOB_LEASE_MS).toISOString(),
+  };
+  const claimed = await env.MARKET_DATA.put(ANALYSIS_JOB_STATE_KEY, JSON.stringify(claimedJob), {
+    onlyIf: r2OnlyIfUnchanged(jobRead),
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+  });
+  if (!claimed?.etag) {
+    return { processed: 0, failed: 0, source_changed: sourceChanged, source_tag_advanced: false, skipped: 'claim_conflict' };
+  }
+  let jobEtag = claimed.etag;
+
+  if (existingJob && resumableStatuses.has(existingJob.status) && !jobMatches) {
+    const staleSummary = await readR2JsonWithEtag(env, existingJob.run_key);
+    if (staleSummary?.etag) {
+      await updateAnalysisRunSummary(env, existingJob.run_key, {
+        ...staleSummary.value,
+        finished_at: isoNow(),
+        status: 'partial',
+        metadata: {
+          ...(staleSummary.value.metadata || {}),
+          superseded_by_source_tag: sourceTag,
+          superseded_at: isoNow(),
+        },
+      }, staleSummary.etag);
+    }
+  }
+
+  if (!jobMatches) {
+    await Promise.all([
+      auditDefinition(env, 'stock-analysis-definitions:v1', stockDefs),
+      auditDefinition(env, 'watchlist-analysis-definitions:v1', watchDefs),
+    ]);
+  }
+
+  const saveJob = async nextJob => {
+    const written = await env.MARKET_DATA.put(ANALYSIS_JOB_STATE_KEY, JSON.stringify(nextJob), {
+      onlyIf: { etagMatches: jobEtag },
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    });
+    if (!written?.etag) throw new Error('R2 scheduled-analysis job state changed concurrently');
+    jobEtag = written.etag;
+  };
+
+  let runSummaryRead = await readR2JsonWithEtag(env, job.run_key);
+  if (!runSummaryRead) {
+    const initialSummary = {
+      run_id: job.run_id,
+      run_type: 'analysis',
+      started_at: job.started_at,
+      finished_at: null,
+      status: 'running',
+      processed: Number(job.next_index || 0),
+      failed: (job.failed_codes || []).length,
+      metadata: {
+        source_changed: true,
+        catalog_generation: generation,
+        total,
+        batch_size: ANALYSIS_BATCH_SIZE,
+        next_index: Number(job.next_index || 0),
+      },
+    };
+    const created = await env.MARKET_DATA.put(job.run_key, JSON.stringify(initialSummary), {
+      onlyIf: { etagDoesNotMatch: '*' },
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    });
+    runSummaryRead = created?.etag ? { value: initialSummary, etag: created.etag } : await readR2JsonWithEtag(env, job.run_key);
+  }
+  if (!runSummaryRead?.etag) throw new Error('R2 scheduled-analysis run summary is unavailable');
+  await updateCurrentAnalysisRun(env, job.run_key, job.run_id, job.started_at);
+  let runSummary = { ...runSummaryRead.value };
+  let runSummaryEtag = runSummaryRead.etag;
+
+  const persistRunSummary = async () => {
+    runSummaryEtag = await updateAnalysisRunSummary(env, job.run_key, runSummary, runSummaryEtag);
+  };
+  const finishJob = async finalizingJob => {
+    const advanced = await advanceAnalysisSource(env, sourceTag, job.previous_source_tag ?? null);
+    const finishedAt = isoNow();
+    runSummary = {
+      ...runSummary,
+      finished_at: finishedAt,
+      status: advanced ? 'success' : 'partial',
+      processed: advanced ? total : Number(finalizingJob.next_index || 0),
+      failed: (finalizingJob.failed_codes || []).length,
+      metadata: {
+        ...(runSummary.metadata || {}),
+        source_changed: true,
+        source_tag_advanced: advanced,
+        catalog_generation: generation,
+        total,
+        batch_size: ANALYSIS_BATCH_SIZE,
+        next_index: Number(finalizingJob.next_index || 0),
+        failure_samples: finalizingJob.last_failure_samples || [],
+        durations_ms: { total_ms: Date.now() - runStartedMs },
+      },
+    };
+    await persistRunSummary();
+    await saveJob({
+      ...finalizingJob,
+      status: advanced ? 'complete' : 'superseded',
+      retry_at: null,
+      lease_id: null,
+      lease_until: null,
+      finished_at: finishedAt,
+    });
+    return advanced;
+  };
+
+  if (job.status === 'finalizing') {
+    const sourceTagAdvanced = await finishJob(job);
+    return {
+      processed: sourceTagAdvanced ? total : Number(job.next_index || 0),
+      failed: (job.failed_codes || []).length,
+      source_changed: true,
+      source_tag_advanced: sourceTagAdvanced,
+      complete: sourceTagAdvanced,
+      next_index: Number(job.next_index || 0),
+      total,
+      observed_at: isoNow(),
+    };
+  }
+
+  const batchStart = Number(job.next_index || 0);
+  const batchEnd = Math.min(total, batchStart + ANALYSIS_BATCH_SIZE);
+  const batch = securities.slice(batchStart, batchEnd);
+  const batchFailures = [];
+  for (let offset = 0; offset < batch.length; offset += ANALYSIS_CONCURRENCY) {
+    const group = batch.slice(offset, offset + ANALYSIS_CONCURRENCY);
+    await Promise.all(group.map(async security => {
+      try {
+        const input = await loadSecurityAnalysisInput(env, security);
+        const snapshot = await buildAnalysisSnapshot(env, security, null, {
+          stockDefs, watchDefs, config, input, skipDefinitionAudit: true,
+        });
+        await persistSnapshot(env, security, snapshot);
+      } catch (error) {
+        if (batchFailures.length < 20) {
+          batchFailures.push({
+            security_code: security.security_code_display,
+            error: String(error?.name || 'Error').slice(0, 80),
+          });
+        }
+      }
+    }));
+  }
+
+  const batchCodes = new Set(batch.map(row => row.security_code_display));
+  const failedCodes = new Set((job.failed_codes || []).filter(code => !batchCodes.has(code)));
+  for (const failure of batchFailures) failedCodes.add(failure.security_code);
+  const commonJobFields = {
+    ...job,
+    failed_codes: [...failedCodes],
+    last_failure_samples: batchFailures,
+    retry_at: null,
+    lease_id: leaseId,
+    lease_until: claimedJob.lease_until,
+  };
+
+  if (batchFailures.length > 0) {
+    const attempts = Number(job.attempts || 0) + 1;
+    const delayMs = Math.min(60 * 60 * 1000, 60 * 1000 * (2 ** Math.min(attempts - 1, 6)));
+    const retryAt = new Date(Date.now() + delayMs).toISOString();
+    const retryingJob = {
+      ...commonJobFields,
+      status: 'retrying',
+      attempts,
+      retry_at: retryAt,
+      lease_id: null,
+      lease_until: null,
+    };
+    await saveJob(retryingJob);
+    runSummary = {
+      ...runSummary,
+      finished_at: null,
+      status: 'running',
+      processed: batchStart,
+      failed: failedCodes.size,
+      metadata: {
+        ...(runSummary.metadata || {}),
+        source_changed: true,
+        catalog_generation: generation,
+        total,
+        batch_size: ANALYSIS_BATCH_SIZE,
+        next_index: batchStart,
+        retry_at: retryAt,
+        failure_samples: batchFailures,
+      },
+    };
+    await persistRunSummary();
+    return {
+      processed: 0,
+      failed: batchFailures.length,
+      source_changed: true,
+      source_tag_advanced: false,
+      retry_at: retryAt,
+      next_index: batchStart,
+      total,
+      observed_at: isoNow(),
+    };
+  }
+
+  const nextIndex = batchEnd;
+  const finalizing = nextIndex >= total;
+  const completedBatchJob = {
+    ...commonJobFields,
+    next_index: nextIndex,
+    attempts: 0,
+    status: finalizing ? 'finalizing' : 'running',
+    lease_id: finalizing ? leaseId : null,
+    lease_until: finalizing ? claimedJob.lease_until : null,
+  };
+  await saveJob(completedBatchJob);
+  runSummary = {
+    ...runSummary,
+    finished_at: null,
+    status: 'running',
+    processed: nextIndex,
+    failed: failedCodes.size,
+    metadata: {
+      ...(runSummary.metadata || {}),
+      source_changed: true,
+      source_tag_advanced: false,
+      catalog_generation: generation,
+      total,
+      batch_size: ANALYSIS_BATCH_SIZE,
+      next_index: nextIndex,
+      failure_samples: [],
+      durations_ms: { last_batch_ms: Date.now() - runStartedMs },
+    },
+  };
+  await persistRunSummary();
+
+  let sourceTagAdvanced = false;
+  if (finalizing) sourceTagAdvanced = await finishJob(completedBatchJob);
+  return {
+    processed: batch.length,
+    failed: 0,
+    source_changed: true,
+    source_tag_advanced: sourceTagAdvanced,
+    complete: finalizing && sourceTagAdvanced,
+    next_index: nextIndex,
+    total,
+    observed_at: isoNow(),
+  };
 }
 
 async function irbankR2Object(env, key) {
@@ -2305,14 +2360,205 @@ function yfinanceV2Code(value) {
   return null;
 }
 
+function rateLimitLegacyImportUntil(env, nowSeconds, windowSeconds) {
+  if (!env.DB) return 0;
+  const rawFenceAt = env.RATE_LIMITER_D1_FENCE_AT;
+  const rawImportUntil = env.RATE_LIMITER_D1_IMPORT_UNTIL;
+  if (typeof rawFenceAt !== 'string' || !/^\d+$/.test(rawFenceAt) ||
+      typeof rawImportUntil !== 'string' || !/^\d+$/.test(rawImportUntil)) {
+    throw new Error('RATE_LIMITER_D1_FENCE_AT and RATE_LIMITER_D1_IMPORT_UNTIL must be Unix epoch timestamps in seconds');
+  }
+  const fenceAt = Number(rawFenceAt);
+  const importUntil = Number(rawImportUntil);
+  const requiredImportUntil = fenceAt + Math.ceil(windowSeconds);
+  if (!Number.isSafeInteger(fenceAt) || !Number.isSafeInteger(importUntil) ||
+      !Number.isSafeInteger(requiredImportUntil) || importUntil < requiredImportUntil) {
+    throw new Error('rate-limit D1 import deadline must cover a full window after the D1 fence');
+  }
+  if (fenceAt > nowSeconds) throw new Error('RATE_LIMITER_D1_FENCE_AT is in the future');
+  return importUntil;
+}
+
+export class RateLimitCounter {
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+    this.legacySeed = null;
+    this.cleanupAlarmTarget = null;
+    this.alarmSetup = Promise.resolve();
+    this.ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS rate_limit_state (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      window_started_at INTEGER NOT NULL,
+      request_count INTEGER NOT NULL,
+      window_seconds REAL NOT NULL
+    )`);
+    this.ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS rate_limit_legacy_seed (
+      id INTEGER PRIMARY KEY CHECK (id = 1)
+    )`);
+  }
+
+  async fetch(request) {
+    if (request.method !== 'POST') return new Response('method not allowed', { status: 405 });
+    let input;
+    try { input = await request.json(); } catch { return new Response('invalid json', { status: 400 }); }
+    const bucketKey = String(input.bucket_key || '');
+    const windowSeconds = Math.max(1, Number(input.window_seconds) || 60);
+    const limit = Number(input.limit);
+    const nowSeconds = Math.floor(Number(input.now_seconds) || Date.now() / 1000);
+    if (!bucketKey || !Number.isFinite(limit) || !Number.isFinite(nowSeconds)) {
+      return new Response('invalid rate-limit request', { status: 400 });
+    }
+    const importUntil = rateLimitLegacyImportUntil(this.env, nowSeconds, windowSeconds);
+
+    const readRow = () => Array.from(this.ctx.storage.sql.exec(
+      'SELECT window_started_at, request_count, window_seconds FROM rate_limit_state WHERE id = 1'
+    ))[0] || null;
+    let row = readRow();
+    let initial = null;
+    if (!row) {
+      if (!this.legacySeed) {
+        const alreadyImported = Array.from(this.ctx.storage.sql.exec(
+          'SELECT id FROM rate_limit_legacy_seed WHERE id = 1'
+        )).length > 0;
+        const canImportLegacy = Boolean(this.env.DB) && nowSeconds < importUntil;
+        this.legacySeed = alreadyImported || !canImportLegacy
+          ? Promise.resolve({ startedAt: nowSeconds, count: 0 })
+          : (async () => {
+              const legacy = await this.env.DB.prepare(
+                'SELECT request_count, window_started_at FROM api_request_log WHERE bucket_key = ?'
+              ).bind(bucketKey).first();
+              const legacyStart = legacy?.window_started_at ? Math.floor(Date.parse(legacy.window_started_at) / 1000) : NaN;
+              const legacyCount = Number(legacy?.request_count);
+              return Number.isFinite(legacyStart) && Number.isFinite(legacyCount) && legacyStart <= nowSeconds && nowSeconds - legacyStart < windowSeconds
+                ? { startedAt: legacyStart, count: Math.max(0, legacyCount) }
+                : { startedAt: nowSeconds, count: 0 };
+            })();
+      }
+      try { initial = await this.legacySeed; } catch (error) { this.legacySeed = null; throw error; }
+    }
+
+    let result;
+    this.ctx.storage.transactionSync(() => {
+      const markLegacySeeded = () => this.ctx.storage.sql.exec(
+        'INSERT OR IGNORE INTO rate_limit_legacy_seed(id) VALUES (1)'
+      );
+      if (!row) {
+        const legacyStartedAt = Number(initial?.startedAt);
+        const legacyCount = Number(initial?.count);
+        const legacyWindowActive = Number.isFinite(legacyStartedAt) && Number.isFinite(legacyCount) &&
+          legacyStartedAt <= nowSeconds && nowSeconds - legacyStartedAt < windowSeconds;
+        const startedAt = legacyWindowActive ? legacyStartedAt : nowSeconds;
+        const count = legacyWindowActive ? Math.max(0, legacyCount) + 1 : 1;
+        const inserted = Array.from(this.ctx.storage.sql.exec(
+          'INSERT OR IGNORE INTO rate_limit_state(id, window_started_at, request_count, window_seconds) VALUES (1, ?, ?, ?) RETURNING id',
+          startedAt, count, windowSeconds,
+        )).length > 0;
+        if (inserted) {
+          markLegacySeeded();
+          result = { allowed: count <= limit, count, window_started_at: startedAt };
+          return;
+        }
+        // A concurrent first request inserted the seed while this request waited on D1.
+        row = readRow();
+      }
+      markLegacySeeded();
+      const expired = nowSeconds - Number(row.window_started_at) >= windowSeconds;
+      const startedAt = expired ? nowSeconds : Number(row.window_started_at);
+      const count = expired ? 1 : Number(row.request_count) + 1;
+      this.ctx.storage.sql.exec(
+        'UPDATE rate_limit_state SET window_started_at = ?, request_count = ?, window_seconds = ? WHERE id = 1',
+        startedAt, count, windowSeconds,
+      );
+      result = { allowed: count <= limit, count, window_started_at: startedAt };
+    });
+
+    const cleanupAt = (Number(result.window_started_at) + windowSeconds) * 1000;
+    await this.scheduleCleanup(cleanupAt);
+
+    return Response.json(result);
+  }
+
+  async scheduleCleanup(cleanupAt) {
+    const operation = this.alarmSetup.then(async () => {
+      if (this.cleanupAlarmTarget === cleanupAt) return;
+      if (this.cleanupAlarmTarget === null) {
+        const existingAlarm = await this.ctx.storage.getAlarm();
+        if (existingAlarm === cleanupAt) {
+          this.cleanupAlarmTarget = cleanupAt;
+          return;
+        }
+      }
+      await this.ctx.storage.setAlarm(cleanupAt);
+      this.cleanupAlarmTarget = cleanupAt;
+    });
+    this.alarmSetup = operation.catch(() => {});
+    await operation;
+  }
+
+  async alarm() {
+    this.cleanupAlarmTarget = null;
+    const row = Array.from(this.ctx.storage.sql.exec(
+      'SELECT window_started_at, window_seconds FROM rate_limit_state WHERE id = 1'
+    ))[0] || null;
+    if (!row) return;
+
+    const windowStartedAt = Number(row.window_started_at);
+    const windowSeconds = Number(row.window_seconds);
+    const cleanupAt = (windowStartedAt + windowSeconds) * 1000;
+    if (!Number.isFinite(windowStartedAt) || !Number.isFinite(windowSeconds) || windowSeconds < 1 || !Number.isFinite(cleanupAt)) {
+      throw new Error('rate limiter stored window is invalid');
+    }
+    if (Date.now() < cleanupAt) {
+      await this.scheduleCleanup(cleanupAt);
+      return;
+    }
+
+    this.ctx.storage.sql.exec('INSERT OR IGNORE INTO rate_limit_legacy_seed(id) VALUES (1)');
+    this.ctx.storage.sql.exec('DELETE FROM rate_limit_state WHERE id = 1');
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     env = withMarketReadCache(env);
     const url = new URL(request.url);
 
-    const config = await backendConfig(env);
-
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: json(null).headers });
+
+    const deviceManagedRoutes = new Set([
+      '/api/v1/clients/register',
+      '/api/v1/push-devices',
+      '/api/v1/watchlist-targets',
+      '/api/v1/notification-events',
+    ]);
+    if (deviceManagedRoutes.has(url.pathname)) return json({ error: 'device_managed' }, 410);
+
+    if (url.pathname === '/api/v1/income-advice-candidates' && request.method === 'GET') {
+      const config = await backendConfig(env);
+      if (!await enforceRateLimit(
+        request,
+        env,
+        `public:${publicRateLimitRoute(url.pathname)}`,
+        config.rate_limit_public,
+        '',
+        config,
+      )) return rateLimitedResponse(config);
+      try {
+        const object = await env.MARKET_DATA?.get(`${YFINANCE_V2_ROOT}/derived/income_advice/current.json`);
+        if (!object) return json({ error: 'income_advice_unavailable' }, 503);
+        const catalog = await object.json();
+        if (!Array.isArray(catalog?.items) || !catalog?.generation || !catalog?.generated_at) {
+          return json({ error: 'income_advice_invalid' }, 503);
+        }
+        const response = json(catalog);
+        response.headers.set('cache-control', 'public, max-age=300');
+        return response;
+      } catch {
+        return json({ error: 'income_advice_unavailable' }, 503);
+      }
+    }
+
+    const config = await backendConfig(env);
 
     if (url.pathname === '/api/v1/feedback' && request.method === 'POST') {
       if (!await enforceRateLimit(request, env, 'support-feedback', 5, '', config)) return rateLimitedResponse(config);
@@ -2351,22 +2597,7 @@ export default {
       return json({ error: 'method_not_allowed' }, 405);
     }
 
-    const isClientScopedRead = url.pathname === '/api/v1/watchlist-targets' || url.pathname === '/api/v1/notification-events';
-    const d1IndependentRead = request.method === 'GET' && (
-      url.pathname === '/api/v1/health' ||
-      url.pathname === '/api/v1/security-search' ||
-      url.pathname === '/api/v1/search-catalog' ||
-      url.pathname === '/api/v1/security-categories' ||
-      url.pathname === '/api/v1/live-quotes' ||
-      url.pathname === '/api/v1/irbank/manifest' ||
-      url.pathname === '/api/v1/irbank/catalog' ||
-      url.pathname.startsWith('/api/v1/financial-data/') ||
-      url.pathname.startsWith('/api/v1/irbank/securities/') ||
-      url.pathname.startsWith('/api/v1/securities/')
-    );
-    const rateLimitRoute = request.method === 'GET' && !isClientScopedRead && !d1IndependentRead
-      ? publicRateLimitRoute(url.pathname)
-      : null;
+    const rateLimitRoute = request.method === 'GET' ? publicRateLimitRoute(url.pathname) : null;
     if (rateLimitRoute && !await enforceRateLimit(request, env, `public:${rateLimitRoute}`, config.rate_limit_public, '', config)) {
       return rateLimitedResponse(config);
     }
@@ -2374,101 +2605,35 @@ export default {
     if (url.pathname === '/api/v1/admin/run-analysis' && request.method === 'POST') {
       const provided = String(request.headers.get('X-Admin-Secret') || '');
       if (!env.ADMIN_SECRET || provided !== env.ADMIN_SECRET) return json({ error: 'unauthorized' }, 401);
-      return json(await runScheduledAnalysis(env));
-    }
-
-    if (url.pathname === '/api/v1/clients/register' && request.method === 'POST') {
-      if (!await enforceRateLimit(request, env, 'clients-register', config.rate_limit_register, '', config)) return rateLimitedResponse(config);
-      const clientId = crypto.randomUUID();
-      const secret = randomToken(32);
-      await env.DB.prepare('INSERT INTO clients(client_id, client_secret_hash, created_at, last_seen_at) VALUES (?, ?, ?, ?)').bind(clientId, await sha256Hex(secret), isoNow(), isoNow()).run();
-      return json({ client_id: clientId, client_secret: secret }, 201);
-    }
-
-    if (url.pathname === '/api/v1/push-devices' && request.method === 'PUT') {
-      const clientId = await authenticateClient(request, env);
-      if (!clientId) return json({ error: 'unauthorized' }, 401);
-      if (!await enforceRateLimit(request, env, 'push-devices-put', config.rate_limit_authenticated, clientId, config)) return rateLimitedResponse(config);
-      const body = await readJson(request);
-      const token = String(body?.device_token || '').trim();
-      const platform = String(body?.platform || 'android').trim();
-      if (!token || token.length > 4096 || !['android','ios','web'].includes(platform)) return json({ error: 'invalid_request' }, 400);
-      await env.DB.prepare(`INSERT INTO push_devices(client_id, device_token, platform, enabled, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?) ON CONFLICT(client_id, device_token) DO UPDATE SET platform=excluded.platform, enabled=1, updated_at=excluded.updated_at`).bind(clientId, token, platform, isoNow(), isoNow()).run();
-      return json({ ok: true });
-    }
-
-    if (url.pathname === '/api/v1/push-devices' && request.method === 'DELETE') {
-      const clientId = await authenticateClient(request, env);
-      if (!clientId) return json({ error: 'unauthorized' }, 401);
-      if (!await enforceRateLimit(request, env, 'push-devices-delete', config.rate_limit_authenticated, clientId, config)) return rateLimitedResponse(config);
-      const body = await readJson(request);
-      const token = String(body?.device_token || '').trim();
-      if (!token) return json({ error: 'invalid_request' }, 400);
-      await env.DB.prepare('UPDATE push_devices SET enabled=0, updated_at=? WHERE client_id=? AND device_token=?').bind(isoNow(), clientId, token).run();
-      return json({ ok: true });
-    }
-
-    if (url.pathname === '/api/v1/watchlist-targets' && request.method === 'PUT') {
-      const clientId = await authenticateClient(request, env);
-      if (!clientId) return json({ error: 'unauthorized' }, 401);
-      if (!await enforceRateLimit(request, env, 'watchlist-put', config.rate_limit_authenticated, clientId, config)) return rateLimitedResponse(config);
-      const body = await readJson(request);
-      const code = normalizeCode(String(body?.code || '').trim());
-      const targetYield = finiteNumber(body?.target_yield);
-      const alertEnabled = body?.alert_enabled === false ? 0 : 1;
-      if (!clientId || !code || targetYield === null || targetYield <= 0) {
-        return json({ error: 'invalid_request' }, 400);
+      try {
+        return json(await runScheduledAnalysis(env));
+      } catch (error) {
+        if (error instanceof AnalysisDefinitionsUnavailableError) return json({ error: 'definitions_unavailable' }, 503);
+        throw error;
       }
-      const security = await env.DB.prepare(
-        'SELECT security_code FROM securities WHERE security_code = ? OR security_code_display = ? LIMIT 1'
-      ).bind(code, String(body?.code || '').trim()).first();
-      if (!security) return json({ error: 'not_found' }, 404);
-      await env.DB.prepare(
-        `INSERT INTO watchlist_targets(client_id, security_code, target_yield, alert_enabled, updated_at)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(client_id, security_code) DO UPDATE SET
-           target_yield=excluded.target_yield,
-           alert_enabled=excluded.alert_enabled,
-           updated_at=excluded.updated_at`
-      ).bind(clientId, security.security_code, targetYield, alertEnabled, isoNow()).run();
-      return json({ ok: true });
-    }
-
-    if (url.pathname === '/api/v1/watchlist-targets' && request.method === 'GET') {
-      const clientId = await authenticateClient(request, env);
-      if (!clientId) return json({ error: 'unauthorized' }, 401);
-      if (!await enforceRateLimit(request, env, 'watchlist-get', config.rate_limit_authenticated, clientId, config)) return rateLimitedResponse(config);
-      const result = await env.DB.prepare(`SELECT s.security_code_display AS code, s.name, w.target_yield, w.alert_enabled, w.updated_at
-        FROM watchlist_targets w JOIN securities s ON s.security_code = w.security_code
-        WHERE w.client_id = ? ORDER BY s.security_code`).bind(clientId).all();
-      return json({ items: result.results || [] });
-    }
-
-    if (url.pathname === '/api/v1/watchlist-targets' && request.method === 'DELETE') {
-      const clientId = await authenticateClient(request, env);
-      if (!clientId) return json({ error: 'unauthorized' }, 401);
-      if (!await enforceRateLimit(request, env, 'watchlist-delete', config.rate_limit_authenticated, clientId, config)) return rateLimitedResponse(config);
-      const body = await readJson(request);
-      const code = normalizeCode(String(body?.code || '').trim());
-      if (!clientId || !code) return json({ error: 'invalid_request' }, 400);
-      await env.DB.prepare(
-        'DELETE FROM watchlist_targets WHERE client_id = ? AND security_code = ?'
-      ).bind(clientId, code).run();
-      return json({ ok: true });
     }
 
     if (url.pathname === '/api/v1/health' && request.method === 'GET') {
-      let latestRun = null;
-      let quoteRun = null;
-      let d1Available = true;
-      try {
-        latestRun = await env.DB.prepare(`SELECT started_at, finished_at, status, processed, failed FROM scheduled_run_log ORDER BY id DESC LIMIT 1`).first();
-        quoteRun = await env.DB.prepare(`SELECT run_date, total_batches, enqueued_batches, completed_batches,
-          processed_symbols, failed_batches, market_data_date, status, last_batch_at, completed_at
-          FROM market_price_refresh_runs ORDER BY run_date DESC LIMIT 1`).first();
-      } catch {
-        d1Available = false;
-      }
+      const [currentRunPointer, migratedRunPointer, v2Catalog] = await Promise.all([
+        readV2Json(env, `${ANALYSIS_RUN_PREFIX}current.json`),
+        readV2Json(env, `${SCHEDULED_RUN_PREFIX}legacy-d1/current.json`),
+        readV2Catalog(env),
+      ]);
+      const currentRunAt = Date.parse(currentRunPointer?.started_at || '');
+      const migratedRunAt = Date.parse(migratedRunPointer?.started_at || '');
+      const runPointer = Number.isFinite(migratedRunAt)
+        && (!Number.isFinite(currentRunAt) || migratedRunAt > currentRunAt)
+        ? migratedRunPointer
+        : currentRunPointer;
+      const runDocument = runPointer?.run_key ? await readV2Json(env, runPointer.run_key) : null;
+      const latestRun = runDocument ? {
+        started_at: runDocument.started_at,
+        finished_at: runDocument.finished_at,
+        status: runDocument.status,
+        processed: runDocument.processed,
+        failed: runDocument.failed,
+      } : null;
+      const quoteRun = null;
       const marketRefreshObject = await env.MARKET_DATA?.get('market/yfinance/live_quotes_state.json');
       const marketRefresh = marketRefreshObject ? await marketRefreshObject.json() : {};
       const marketCompletionObject = await env.MARKET_DATA?.get('market/yfinance/live_quotes_completion.json');
@@ -2476,25 +2641,53 @@ export default {
       const hasPublishedRun = !!marketCompletion.last_completed_run_id;
       const liveQuoteCount = Number((hasPublishedRun ? marketCompletion.live_quote_count : null) ?? quoteRun?.processed_symbols ?? marketRefresh.live_quote_count ?? 0);
       const marketObject = await env.MARKET_DATA?.head('market/yfinance/latest_market_data.json');
-      const marketUploadedAt = (hasPublishedRun ? marketCompletion.last_completed_at : null) || marketObject?.uploaded?.toISOString?.() || null;
-      const stockDefs = await appDefinitionDocument(env, 'stock-analysis-definitions:v1') || {};
-      const watchDefs = await appDefinitionDocument(env, 'watchlist-analysis-definitions:v1') || {};
-      return json({ ok: true, checked_at: isoNow(), d1: d1Available, market: {
-        available: !!marketObject,
+      const v2CatalogItems = Array.isArray(v2Catalog?.items) ? v2Catalog.items : [];
+      const v2CatalogAvailable = Array.isArray(v2Catalog?.items);
+      const v2MarketDataDate = /^\d{4}-\d{2}-\d{2}$/.test(String(v2Catalog?.market_data_date || ''))
+        ? v2Catalog.market_data_date : null;
+      const v2CatalogGeneratedAt = v2Catalog?.generated_at || null;
+      const v2CatalogAgeAnchor = v2CatalogGeneratedAt || (v2MarketDataDate ? `${v2MarketDataDate}T00:00:00.000Z` : null);
+      const legacySnapshotUploadedAt = marketObject?.uploaded?.toISOString?.() || null;
+      const marketUploadedAt = v2CatalogAgeAnchor
+        || (hasPublishedRun ? marketCompletion.last_completed_at : null)
+        || legacySnapshotUploadedAt;
+      const v2QuotedSecurityCount = v2CatalogItems.filter(row => Number(row?.price) > 0
+        && /^\d{4}-\d{2}-\d{2}$/.test(String(row?.quote_date || ''))).length;
+      let analysisDefinitions;
+      try {
+        analysisDefinitions = await loadAnalysisDefinitions(env);
+      } catch (error) {
+        if (error instanceof AnalysisDefinitionsUnavailableError) {
+          return json({ error: 'definitions_unavailable' }, 503);
+        }
+        throw error;
+      }
+      const { stockDefs, watchDefs } = analysisDefinitions;
+      return json({ ok: true, checked_at: isoNow(), d1: !!env.DB, market: {
+        available: !!marketObject || v2CatalogAvailable,
         uploaded: marketUploadedAt,
-        snapshot_uploaded: marketObject?.uploaded?.toISOString?.() || null,
+        snapshot_uploaded: legacySnapshotUploadedAt,
         age_days: marketUploadedAt ? daysOld(marketUploadedAt) : null,
+        legacy_snapshot_age_days: legacySnapshotUploadedAt ? daysOld(legacySnapshotUploadedAt) : null,
         stale_after_days: Number(config.market_stale_days || 3),
+        v2_catalog: {
+          available: v2CatalogAvailable,
+          generation: v2Catalog?.generation || null,
+          market_data_date: v2MarketDataDate,
+          generated_at: v2CatalogGeneratedAt,
+          item_count: v2CatalogItems.length,
+          quoted_security_count: v2QuotedSecurityCount,
+        },
         live_quote_count: liveQuoteCount,
         live_refresh_date: quoteRun?.run_date || marketRefresh.queue_run_date || null,
         live_refresh_batches_total: Number(quoteRun?.total_batches ?? marketRefresh.queue_batches_total ?? 0),
         live_refresh_batches_enqueued: Number(quoteRun?.enqueued_batches ?? marketRefresh.queue_batches_enqueued ?? 0),
-        live_refresh_batches_completed: Number(quoteRun?.completed_batches || 0),
+        live_refresh_batches_completed: Number(marketRefresh.queue_batches_completed || 0),
         live_refresh_last_batch_at: quoteRun?.last_batch_at || marketRefresh.last_batch_at || null,
         live_refresh_last_completed_date: hasPublishedRun ? marketCompletion.last_completed_date || null : null,
-        live_refresh_failed_batches: Number(quoteRun?.failed_batches ?? (hasPublishedRun ? marketCompletion.last_failed_batches : null) ?? 0),
-        live_refresh_status: quoteRun?.status || (hasPublishedRun ? marketCompletion.last_run_status : null) || null,
-        live_refresh_market_data_date: quoteRun?.market_data_date || (hasPublishedRun ? marketCompletion.last_completed_date : null) || null,
+        live_refresh_failed_batches: Number(marketRefresh.queue_failed_batches ?? (hasPublishedRun ? marketCompletion.last_failed_batches : null) ?? 0),
+        live_refresh_status: marketRefresh.queue_status || (hasPublishedRun ? marketCompletion.last_run_status : null) || null,
+        live_refresh_market_data_date: marketRefresh.market_data_date || (hasPublishedRun ? marketCompletion.last_completed_date : null) || null,
       }, definitions: { stock_version: stockDefs.version || null, watchlist_version: watchDefs.version || null }, latest_scheduled_run: latestRun || null });
     }
 
@@ -2911,7 +3104,10 @@ export default {
         if (!CATALOG_GENERATION_PATTERN.test(generation) || !marketDataDate) return json({ error: 'catalog_invalid' }, 503);
         if (requestedRunId && requestedRunId !== generation) return json({ error: 'catalog_generation_mismatch' }, 409);
         if (requestedDate && requestedDate !== marketDataDate) return json({ error: 'catalog_generation_mismatch' }, 409);
-        const irbankDividendIndex = await readIrbankDividendIndex(env);
+        const irbankDividendIndexes = requestedCodes
+          ? await readIrbankDividendIndexesForCodes(env, requestedCodes)
+          : null;
+        const irbankDividendIndex = requestedCodes ? null : await readIrbankDividendIndex(env);
         const catalogItems = catalog.items || [];
         const offset = Math.min(catalogItems.length, Number.parseInt(cursor || '0', 10));
         const requestedItems = requestedCodes
@@ -2919,7 +3115,10 @@ export default {
           : catalogItems.slice(offset, offset + limit);
         const items = await Promise.all(requestedItems.map(async row => {
           const code = String(row.code || '').toUpperCase();
-          const issuerDividend = irbankDividendForCode(irbankDividendIndex, code);
+          const issuerIndex = requestedCodes
+            ? irbankDividendIndexes.get(code.slice(0, DIVIDEND_SHARD_PREFIX_LENGTH)) ?? irbankDividendIndexes.get('*')
+            : irbankDividendIndex;
+          const issuerDividend = irbankDividendForCode(issuerIndex, code);
           const irbankDividend = searchDividend(row, issuerDividend, null);
           const catalogYield = row.yield_source === 'yfinance_reported_dividendYield' ? row.yield_rate : null;
           const itemYield = irbankDividend.dividend_status === 'unknown' ? null : irbankDividend.dividend_status === 'no_dividend' ? 0 : yieldFromDividend(
@@ -2982,22 +3181,6 @@ export default {
         return response;
       } catch {
         return json({ error: 'live_quotes_unavailable' }, 503);
-      }
-    }
-
-    if (url.pathname === '/api/v1/income-advice-candidates') {
-      const object = await env.MARKET_DATA?.get(`${YFINANCE_V2_ROOT}/derived/income_advice/current.json`);
-      if (!object) return json({ error: 'income_advice_unavailable' }, 503);
-      try {
-        const catalog = await object.json();
-        if (!Array.isArray(catalog?.items) || !catalog?.generation || !catalog?.generated_at) {
-          return json({ error: 'income_advice_invalid' }, 503);
-        }
-        const response = json(catalog);
-        response.headers.set('cache-control', 'public, max-age=300');
-        return response;
-      } catch {
-        return json({ error: 'income_advice_unavailable' }, 503);
       }
     }
 
@@ -3079,12 +3262,38 @@ export default {
     if (url.pathname === '/api/v1/security-search') {
       const query = String(url.searchParams.get('q') || '').trim().slice(0, 100);
       if (!query) return json({ items: [] });
-      const v2Catalog = await readV2Catalog(env);
+      const [v2Catalog, irbankCatalog] = await Promise.all([
+        readV2Catalog(env),
+        readV2Json(env, 'market/irbank/v1/catalog.json'),
+      ]);
       if (!v2Catalog) return json({ error: 'security_catalog_unavailable' }, 503);
       const irbankDividendIndex = await readIrbankDividendIndex(env);
       const normalizeSearchText = value => String(value || '').normalize('NFKC').toLowerCase();
       const needle = normalizeSearchText(query);
-      const items = (v2Catalog.items || [])
+      const irbankNamesByCode = new Map();
+      for (const row of irbankCatalog?.securities || []) {
+        const code = irbankR2Code(String(row?.code || ''));
+        const name = String(row?.name || '').trim();
+        if (code && name && !irbankNamesByCode.has(code)) irbankNamesByCode.set(code, name);
+      }
+      const itemsByCode = new Map();
+      for (const row of v2Catalog.items || []) {
+        const code = yfinanceV2Code(row?.code || row?.security_code_display || row?.symbol);
+        if (code && !itemsByCode.has(code)) {
+          itemsByCode.set(code, {
+            ...row,
+            code,
+            name: irbankNamesByCode.get(code) || row.name,
+          });
+        }
+      }
+      for (const row of irbankCatalog?.securities || []) {
+        const code = irbankR2Code(String(row?.code || ''));
+        if (code && !itemsByCode.has(code)) {
+          itemsByCode.set(code, { code, name: irbankNamesByCode.get(code) || code });
+        }
+      }
+      const items = [...itemsByCode.values()]
         .filter(row => normalizeSearchText(row.code).includes(needle)
           || normalizeSearchText(row.name).includes(needle))
         .sort((a, b) => {
@@ -3130,10 +3339,87 @@ export default {
       if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
       const code = yfinanceV2Code(securityMatch[1]);
       if (!code) return json({ error: 'invalid_security_code' }, 400);
-      const catalog = await readV2Catalog(env);
+      const [catalog, irbankCatalog] = await Promise.all([
+        readV2Catalog(env),
+        readV2Json(env, 'market/irbank/v1/catalog.json'),
+      ]);
       if (!catalog) return json({ error: 'security_catalog_unavailable' }, 503);
       const item = (catalog.items || []).find(row => String(row.code || '').toUpperCase() === code);
-      if (!item) return json({ error: 'not_found' }, 404);
+      const irbankMaster = (irbankCatalog?.securities || []).find(row => irbankR2Code(String(row?.code || '')) === code);
+      if (!item) {
+        const name = String(irbankMaster?.name || '').trim();
+        if (!name) return json({ error: 'not_found' }, 404);
+        return json({
+          code,
+          name,
+          dividend: {
+            annual_dps: null,
+            annual_dps_adjusted: null,
+            trailing_12_month_per_share: null,
+            fiscal_year: null,
+            yield_basis: null,
+            dividend_period: 'unknown',
+            amount_basis: null,
+            source: null,
+            field_status: { annual_dps: 'empty', forecast_dividend: 'empty' },
+          },
+          market_price: null,
+          market_yield_rate: null,
+          market_yield_source: null,
+          market_yield_as_of: null,
+          market_yield_attribution: null,
+          dividend_status: 'unknown',
+          valuation: {
+            per: null,
+            pbr: null,
+            source: null,
+            price_date: null,
+            statistics_last_fetched_session_date: null,
+            formulas: {},
+          },
+          data_retrieval: {
+            yfinance_ticker: null,
+            source: 'IRBANK R2 catalog',
+            currency: null,
+            last_attempt_at: null,
+            processing_status: 'master_only',
+            failure_reason: null,
+            company_info: {
+              status: 'master_only',
+              last_fetched_session_date: null,
+              last_fetched_at: null,
+              fetch_date_basis: null,
+              last_attempt_session_date: null,
+              last_attempt_at: null,
+              last_attempt_status: null,
+              refresh_pending: false,
+              failure_class: null,
+              failure_reason: null,
+            },
+            dividend_history: {
+              status: 'not_available',
+              last_attempt_status: null,
+              source: null,
+              yfinance_version: null,
+              stored_history_status: 'not_available',
+              stored_history_start: null,
+              stored_history_end: null,
+              last_coverage_start: null,
+              last_coverage_end: null,
+              full_history_coverage_end: null,
+              last_coverage_event_count: null,
+              period: null,
+            },
+            ex_dividend_calendar: {
+              date: null,
+              status: 'not_available',
+              last_attempt_status: null,
+              fetched_at: null,
+              source: null,
+            },
+          },
+        });
+      }
       const symbol = yfinanceV2Symbol(code);
       if (!symbol) return json({ error: 'invalid_security_code' }, 400);
       const base = `${YFINANCE_V2_ROOT}/securities/${symbol}`;
@@ -3307,97 +3593,101 @@ export default {
 
     if (url.pathname === '/api/v1/diagnosis-definitions') {
       const items = await appDefinitionItems(env, 'diagnosis-definitions:v1');
+      if (items === null) return json({ error: 'definitions_unavailable' }, 503);
       return json({ items });
     }
 
     if (url.pathname === '/api/v1/valuation-scenarios') {
       const items = await appDefinitionItems(env, 'valuation-scenarios:v1');
+      if (items === null) return json({ error: 'definitions_unavailable' }, 503);
       return json({ items });
     }
 
     if (url.pathname === '/api/v1/stock-analysis-definitions') {
-      return json(await appDefinitionDocument(env, 'stock-analysis-definitions:v1') || {});
+      const definition = await appDefinitionDocument(env, 'stock-analysis-definitions:v1');
+      if (definition === null) return json({ error: 'definitions_unavailable' }, 503);
+      return json(definition);
     }
 
     if (url.pathname === '/api/v1/watchlist-analysis-definitions') {
-      return json(await appDefinitionDocument(env, 'watchlist-analysis-definitions:v1') || {});
+      const definition = await appDefinitionDocument(env, 'watchlist-analysis-definitions:v1');
+      if (definition === null) return json({ error: 'definitions_unavailable' }, 503);
+      return json(definition);
     }
 
     if (url.pathname === '/api/v1/portfolio-analysis-definitions') {
-      return json(await appDefinitionDocument(env, 'portfolio-analysis-definitions:v1') || {});
+      const definition = await appDefinitionDocument(env, 'portfolio-analysis-definitions:v1');
+      if (definition === null) return json({ error: 'definitions_unavailable' }, 503);
+      return json(definition);
     }
 
     if (url.pathname === '/api/v1/definition-audit') {
-      const result = await env.DB.prepare(
-        `SELECT definition_key, version, content_hash, updated_at, metadata_json
-         FROM app_definition_audit ORDER BY updated_at DESC LIMIT 100`
-      ).all();
-      return json({ items: (result.results || []).map(row => ({
-        ...row,
-        metadata: JSON.parse(row.metadata_json || '{}'),
-      })) });
-    }
-
-    if (url.pathname === '/api/v1/notification-events') {
-      const clientId = await authenticateClient(request, env);
-      if (!clientId) return json({ error: 'unauthorized' }, 401);
-      if (!await enforceRateLimit(request, env, 'notification-events', config.rate_limit_authenticated, clientId, config)) return rateLimitedResponse(config);
-      const result = await env.DB.prepare(
-          `SELECT id, security_code, event_type, from_status, to_status, occurred_at, payload_json, delivered_at
-           FROM notification_events
-           WHERE json_extract(payload_json, '$.client_id') = ?
-           ORDER BY occurred_at DESC LIMIT 100`
-        ).bind(clientId).all();
-      return json({ items: (result.results || []).map(row => ({
-        ...row,
-        payload: JSON.parse(row.payload_json || '{}'),
-      })) });
+      if (!env.MARKET_DATA) return json({ error: 'market_data_unavailable' }, 503);
+      const objects = [];
+      let cursor;
+      do {
+        const page = await env.MARKET_DATA.list({ prefix: DEFINITION_AUDIT_PREFIX, limit: 1000, cursor });
+        objects.push(...(page.objects || []));
+        cursor = page.truncated ? page.cursor : undefined;
+      } while (cursor && objects.length < 5000);
+      const recent = objects.sort((a, b) => (b.uploaded?.getTime?.() || 0) - (a.uploaded?.getTime?.() || 0)).slice(0, 100);
+      const items = await Promise.all(recent.map(async item => {
+        const document = await readV2Json(env, item.key);
+        return document ? { ...document, updated_at: item.uploaded?.toISOString?.() || null } : null;
+      }));
+      return json({ items: items.filter(Boolean) });
     }
 
     const historyMatch = url.pathname.match(/^\/api\/v1\/analysis-history\/([^/]+)$/);
     if (historyMatch) {
       const requested = decodeURIComponent(historyMatch[1]);
       const code = normalizeCode(requested);
-      const result = await env.DB.prepare(
-        `SELECT observed_at, market_date, definition_version, overall_score, overall_grade,
-                buy_zone_status, buy_zone_ratio, anomaly_flags_json, metrics_json, analysis_json
-         FROM stock_analysis_history
-         WHERE security_code = ?
-         ORDER BY observed_at DESC LIMIT 90`
-      ).bind(code).all();
-      return json({ items: (result.results || []).map(row => ({
-        ...row,
-        anomaly_flags: JSON.parse(row.anomaly_flags_json || '[]'),
-        metrics: JSON.parse(row.metrics_json || '{}'),
-        analysis: JSON.parse(row.analysis_json || '{}'),
-      })) });
+      if (!env.MARKET_DATA) return json({ error: 'market_data_unavailable' }, 503);
+      const objects = [];
+      let cursor;
+      do {
+        const page = await env.MARKET_DATA.list({ prefix: `${ANALYSIS_HISTORY_PREFIX}${code}/`, limit: 1000, cursor });
+        objects.push(...(page.objects || []));
+        cursor = page.truncated ? page.cursor : undefined;
+      } while (cursor);
+      objects.sort((a, b) => b.key.localeCompare(a.key));
+      const rows = await Promise.all(objects.slice(0, 500).map(async item => readV2Json(env, item.key)));
+      const items = rows.filter(Boolean).sort((a, b) => String(b.observed_at || '').localeCompare(String(a.observed_at || ''))).slice(0, 90)
+        .map(row => ({
+          ...row,
+          anomaly_flags: JSON.parse(row.anomaly_flags_json || '[]'),
+          metrics: JSON.parse(row.metrics_json || '{}'),
+          analysis: JSON.parse(row.analysis_json || '{}'),
+        }));
+      return json({ items });
     }
 
     const analysisMatch = url.pathname.match(/^\/api\/v1\/analysis\/([^/]+)$/);
     if (analysisMatch) {
       const requested = decodeURIComponent(analysisMatch[1]);
-      const code = normalizeCode(requested);
-      let security = await env.DB.prepare(
-        'SELECT security_code, security_code_display, name, metrics_json FROM securities WHERE security_code = ? OR security_code_display = ? LIMIT 1'
-      ).bind(code, requested).first();
       const displayCode = yfinanceV2Code(requested);
-      const currentProfile = displayCode
+      if (!displayCode) return json({ error: 'invalid_security_code' }, 400);
+      const [currentProfile, catalog, irbankCatalog] = await Promise.all([displayCode
         ? await readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${yfinanceV2Symbol(displayCode)}/profile.json`)
-        : null;
-      if (security && currentProfile) {
-        security = { ...security, name: currentProfile.display_name || currentProfile.short_name || currentProfile.long_name || security.name };
-      }
-      if (!security) {
-        if (!currentProfile) return json({ error: 'not_found' }, 404);
-        security = {
-          security_code: displayCode.length === 4 ? `${displayCode}0` : displayCode,
-          security_code_display: displayCode,
-          name: currentProfile.display_name || currentProfile.short_name || currentProfile.long_name || displayCode,
-          metrics_json: '[]',
-        };
-      }
+        : null,
+      readV2Catalog(env),
+      readV2Json(env, 'market/irbank/v1/catalog.json')]);
+      const catalogItem = catalog?.items?.find(row => yfinanceV2Code(row?.code || row?.security_code_display || row?.symbol) === displayCode);
+      const irbankMaster = (irbankCatalog?.securities || []).find(row => irbankR2Code(String(row?.code || '')) === displayCode);
+      if (!currentProfile && !catalogItem && !irbankMaster) return json({ error: 'not_found' }, 404);
+      const security = {
+        security_code: displayCode.length === 4 ? `${displayCode}0` : displayCode,
+        security_code_display: displayCode,
+        name: currentProfile?.display_name || currentProfile?.short_name || currentProfile?.long_name
+          || irbankMaster?.name || catalogItem?.name || displayCode,
+      };
       const targetYield = url.searchParams.get('target_yield');
-      return json(await buildAnalysisSnapshot(env, security, targetYield === null ? null : Number(targetYield)));
+      try {
+        return json(await buildAnalysisSnapshot(env, security, targetYield === null ? null : Number(targetYield)));
+      } catch (error) {
+        if (error instanceof AnalysisDefinitionsUnavailableError) return json({ error: 'definitions_unavailable' }, 503);
+        throw error;
+      }
     }
 
     const match = url.pathname.match(/^\/api\/v1\/securities\/([^/]+)$/);
@@ -3472,10 +3762,16 @@ export default {
     return json({ error: 'not_found' }, 404);
   },
 
-  async scheduled(_controller, env, ctx) {
-    ctx.waitUntil(retryFeedbackEmails(env));
-    ctx.waitUntil(env.DB.prepare("DELETE FROM support_feedback WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-90 days')").run());
-    ctx.waitUntil(runScheduledAnalysis(env));
+  async scheduled(controller, env, ctx) {
+    if (controller?.cron === '*/5 * * * *') {
+      return compactAnalysisRetentionIfDue(env);
+    }
+    if (controller?.cron === '17 * * * *') {
+      ctx.waitUntil(retryFeedbackEmails(env));
+      ctx.waitUntil(env.DB.prepare("DELETE FROM support_feedback WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-90 days')").run());
+      return { maintenance: 'scheduled' };
+    }
+    return runScheduledAnalysis(env);
   },
 
   async queue(batch) {

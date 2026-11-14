@@ -2,10 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 
+function rateLimiter(currentCount = 1, onRequest = null) {
+  return {
+    idFromName: name => name,
+    get: name => ({ fetch: async (_url, init) => {
+      const input = JSON.parse(init.body);
+      onRequest?.({ name, input });
+      return Response.json({ allowed: currentCount <= input.limit, count: currentCount });
+    } }),
+  };
+}
+
 function environment(limit = 1, storageFails = false) {
   const rows = new Map();
   return {
     APP_DEFINITIONS: { get: async () => null },
+    RATE_LIMITER: rateLimiter(limit),
     MARKET_DATA: {
       get: async () => ({ json: async () => ({ security: { code: '7203' }, financials: { annual: [{ fiscal_year: '2026/03' }] }, dividends: { records: [{ fiscal_year: 2025, annual_dps_adjusted: 10 }] }, valuation: { history: [] }, officers: ['private-not-needed'] }) }),
       list: async () => ({ objects: [], truncated: false }),
@@ -18,6 +30,12 @@ function environment(limit = 1, storageFails = false) {
 }
 
 function dividendEnvironment(documents, marketAvailable = true, reads = null) {
+  const etags = new Map();
+  let etagCounter = 0;
+  const currentEtag = key => {
+    if (!etags.has(key) && documents.has(key)) etags.set(key, "seed:" + key);
+    return etags.get(key) || null;
+  };
   const indexKey = 'market/yfinance/v2/issuer_dividends/current.json';
   const manifestKey = 'market/yfinance/v2/issuer_dividends/shards/current.json';
   if (documents.has(indexKey) && !documents.has(manifestKey)) {
@@ -46,10 +64,31 @@ function dividendEnvironment(documents, marketAvailable = true, reads = null) {
   }
   return {
     APP_DEFINITIONS: { get: async () => null },
+    RATE_LIMITER: rateLimiter(),
     MARKET_DATA: marketAvailable ? {
       get: async key => {
         reads?.push(key);
-        return documents.has(key) ? { json: async () => documents.get(key) } : null;
+        return documents.has(key) ? {
+          etag: currentEtag(key),
+          json: async () => documents.get(key),
+          text: async () => JSON.stringify(documents.get(key)),
+        } : null;
+      },
+      head: async key => {
+        const etag = currentEtag(key);
+        return etag ? { etag, httpEtag: etag, uploaded: new Date(0), size: 0 } : null;
+      },
+      put: async (key, body, options = {}) => {
+        const etag = currentEtag(key);
+        const onlyIf = options.onlyIf || {};
+        if (onlyIf.etagDoesNotMatch === '*' && etag) return null;
+        if (onlyIf.etagMatches && onlyIf.etagMatches !== etag) return null;
+        if (onlyIf.etagDoesNotMatch && onlyIf.etagDoesNotMatch !== '*' && etag === onlyIf.etagDoesNotMatch) return null;
+        const value = typeof body === 'string' ? JSON.parse(body) : body;
+        documents.set(key, value);
+        const nextEtag = "test:" + (++etagCounter);
+        etags.set(key, nextEtag);
+        return { etag: nextEtag, httpEtag: nextEtag };
       },
       list: async ({ prefix }) => ({
         objects: [...documents.keys()].filter(key => key.startsWith(prefix)).map(key => ({ key })),
@@ -74,6 +113,123 @@ function dateOffset(date, offsetDays) {
 }
 const payload = () => ({ requestId: 'd982c634-a464-4a62-a266-35a1ee8c3821', category: 'feature', name: '', email: '', message: 'test' });
 const request = body => new Request('https://example.com/api/v1/feedback', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+test('income-advice candidates use the existing shared public limit and serve R2 without D1 access', async () => {
+  const key = 'market/yfinance/v2/derived/income_advice/current.json';
+  const catalog = {
+    generation: '2026-11-02-test',
+    generated_at: '2026-11-03T06:10:02.387792+09:00',
+    items: [{ code: '7203', uncovered_months: [6], rank: 1 }],
+  };
+  const reads = [];
+  const rateLimitCalls = [];
+  let d1Calls = 0;
+  const env = {
+    APP_DEFINITIONS: { get: async () => null },
+    RATE_LIMITER: rateLimiter(1, call => rateLimitCalls.push(call)),
+    MARKET_DATA: {
+      get: async objectKey => {
+        reads.push(objectKey);
+        return objectKey === key ? { json: async () => catalog } : null;
+      },
+    },
+    DB: { prepare: () => { d1Calls += 1; throw new Error('D1 must not be accessed'); } },
+  };
+
+  const response = await worker.fetch(new Request('https://example.com/api/v1/income-advice-candidates'), env);
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), catalog);
+  assert.ok(reads.includes(key));
+  assert.equal(rateLimitCalls.length, 1);
+  assert.match(rateLimitCalls[0].input.bucket_key, /^rl:public:income-advice-candidates:/);
+  assert.equal(rateLimitCalls[0].input.window_seconds, 60);
+  assert.equal(rateLimitCalls[0].input.limit, 300);
+  assert.equal(d1Calls, 0);
+});
+
+test('income-advice candidates stop at the shared public limit before reading R2', async () => {
+  let d1Calls = 0;
+  let candidateObjectReads = 0;
+  const env = {
+    APP_DEFINITIONS: { get: async () => null },
+    RATE_LIMITER: rateLimiter(301),
+    MARKET_DATA: { get: async objectKey => { if (objectKey === 'market/yfinance/v2/derived/income_advice/current.json') candidateObjectReads += 1; return null; } },
+    DB: { prepare: () => { d1Calls += 1; throw new Error('D1 must not be accessed'); } },
+  };
+
+  const response = await worker.fetch(new Request('https://example.com/api/v1/income-advice-candidates'), env);
+
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get('retry-after'), '60');
+  assert.deepEqual(await response.json(), { error: 'rate_limited' });
+  assert.equal(candidateObjectReads, 0);
+  assert.equal(d1Calls, 0);
+});
+
+test('R2-backed public GET routes retain the shared Durable Object limit without D1 access', async () => {
+  const routes = [
+    ['/api/v1/health', 'health'],
+    ['/api/v1/security-search?q=7203', 'security-search'],
+    ['/api/v1/search-catalog', 'search-catalog'],
+    ['/api/v1/security-categories', 'security-categories'],
+    ['/api/v1/live-quotes?codes=7203', 'live-quotes'],
+    ['/api/v1/irbank/manifest', 'irbank/manifest'],
+    ['/api/v1/irbank/catalog', 'irbank/catalog'],
+    ['/api/v1/financial-data/7203', 'financial-data/7203'],
+    ['/api/v1/irbank/securities/7203', 'irbank-security'],
+    ['/api/v1/securities/7203', 'security'],
+    ['/api/v1/analysis/7203', 'analysis'],
+    ['/api/v1/analysis-history/7203', 'analysis-history'],
+  ];
+
+  for (const [path, bucket] of routes) {
+    const calls = [];
+    let d1Calls = 0;
+    const env = {
+      APP_DEFINITIONS: { get: async () => null },
+      RATE_LIMITER: rateLimiter(301, call => calls.push(call)),
+      MARKET_DATA: {
+        get: async () => null,
+        head: async () => null,
+        list: async () => ({ objects: [], truncated: false }),
+      },
+      DB: { prepare: () => { d1Calls += 1; throw new Error('D1 must not be accessed'); } },
+    };
+
+    const response = await worker.fetch(new Request(`https://example.com${path}`), env);
+
+    assert.equal(response.status, 429, path);
+    assert.equal(response.headers.get('retry-after'), '60', path);
+    assert.deepEqual(await response.json(), { error: 'rate_limited' }, path);
+    assert.equal(calls.length, 1, path);
+    assert.ok(calls[0].input.bucket_key.startsWith(`rl:public:${bucket}:`), path);
+    assert.equal(calls[0].input.window_seconds, 60, path);
+    assert.equal(calls[0].input.limit, 300, path);
+    assert.equal(d1Calls, 0, path);
+  }
+});
+
+test('income-advice candidate R2 read failures return a controlled 503 response', async () => {
+  const env = {
+    APP_DEFINITIONS: { get: async () => null },
+    RATE_LIMITER: rateLimiter(),
+    MARKET_DATA: {
+      get: async key => {
+        if (key === 'market/yfinance/v2/derived/income_advice/current.json') {
+          throw new Error('temporary R2 read failure');
+        }
+        return null;
+      },
+    },
+    DB: { prepare: () => { throw new Error('D1 must not be accessed'); } },
+  };
+
+  const response = await worker.fetch(new Request('https://example.com/api/v1/income-advice-candidates'), env);
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: 'income_advice_unavailable' });
+});
 
 test('financial API only returns the necessary public document fields', async () => {
   const result = await worker.fetch(new Request('https://example.com/api/v1/financial-data/7203'), environment());
@@ -1273,6 +1429,39 @@ test('live-quotes pages an immutable v2 catalog generation and validates cursors
   assert.deepEqual((await second.json()).items.map(item => item.code), ['8306']);
   assert.equal((await worker.fetch(new Request('https://example.com/api/v1/live-quotes?run_id=../bad'), env)).status, 400);
   assert.equal((await worker.fetch(new Request(`https://example.com/api/v1/live-quotes?run_id=${generation}&market_data_date=2026-10-10`), env)).status, 409);
+});
+
+test('targeted live-quotes reads issuer shards and falls back to the legacy full index when needed', async () => {
+  const code = '7203';
+  const generation = '2026-10-09';
+  const indexKey = 'market/yfinance/v2/issuer_dividends/current.json';
+  const manifestKey = 'market/yfinance/v2/issuer_dividends/shards/current.json';
+  const documents = new Map([
+    ['market/yfinance/v2/catalog/current.json', {
+      generation,
+      market_data_date: generation,
+      items: [{ code, name: 'Example', security_type: 'equity', price: 2100, quote_date: generation, dividend_status: 'has_dividend' }],
+    }],
+    [indexKey, { items: { [code]: {
+      actual_status: 'available', forecast_status: 'not_requested', forecast: null,
+      actual: { fiscal_year: 2025, period_end: '2025-03-31', annual_dps: 100 },
+    } } }],
+  ]);
+  const reads = [];
+  const env = dividendEnvironment(documents, true, reads);
+  const response = await worker.fetch(new Request(`https://example.com/api/v1/live-quotes?codes=${code}`), env);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).items[0].annual_dividend_per_share, 100);
+  assert.ok(reads.includes(manifestKey));
+  assert.ok(reads.includes('market/yfinance/v2/issuer_dividends/shards/a/72.json'));
+  assert.ok(!reads.includes(indexKey));
+
+  documents.delete(manifestKey);
+  reads.length = 0;
+  const fallback = await worker.fetch(new Request(`https://example.com/api/v1/live-quotes?codes=${code}`), env);
+  assert.equal(fallback.status, 200);
+  assert.equal((await fallback.json()).items[0].annual_dividend_per_share, 100);
+  assert.ok(reads.includes(indexKey));
 });
 
 test('legacy trailing-distribution catalog rows are not exposed as annual DPS or yield', async () => {

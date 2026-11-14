@@ -3,6 +3,75 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { marketReadFixture } from './fixtures/market-read-fixture.mjs';
 
+test('security search includes R2 IRBANK master entries without quote data or D1 access', async () => {
+  const f = marketReadFixture('7203');
+  f.documents.set('market/irbank/v1/catalog.json', {
+    count: 1,
+    securities: [{ code: '1301', name: 'IRBANK only security', edinet_code: 'E00012', has_overview: true }],
+  });
+  f.env.DB.prepare = () => { throw new Error('security search must not access D1'); };
+
+  for (const query of ['1301', 'IRBANK only']) {
+    const response = await worker.fetch(
+      new Request(`https://example.com/api/v1/security-search?q=${encodeURIComponent(query)}`), f.env,
+    );
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.items.length, 1);
+    assert.equal(body.items[0].code, '1301');
+    assert.equal(body.items[0].name, 'IRBANK only security');
+    assert.equal(body.items[0].price, null);
+    assert.equal(body.items[0].yield_rate, null);
+  }
+
+  const detailResponse = await worker.fetch(
+    new Request('https://example.com/api/v1/securities/1301'), f.env,
+  );
+  assert.equal(detailResponse.status, 200);
+  const detail = await detailResponse.json();
+  assert.equal(detail.code, '1301');
+  assert.equal(detail.name, 'IRBANK only security');
+  assert.equal(detail.market_price, null);
+  assert.equal(detail.dividend_status, 'unknown');
+  assert.equal(detail.data_retrieval.processing_status, 'master_only');
+
+  const analysisResponse = await worker.fetch(
+    new Request('https://example.com/api/v1/analysis/1301'), f.env,
+  );
+  assert.equal(analysisResponse.status, 200);
+  const analysis = await analysisResponse.json();
+  assert.equal(analysis.code, '1301');
+  assert.equal(analysis.name, 'IRBANK only security');
+  assert.equal(analysis.market_date, null);
+});
+
+test('security search uses the IRBANK display name and preserves YFinance quote fields', async () => {
+  const f = marketReadFixture('7203');
+  const catalog = f.documents.get('market/yfinance/v2/catalog/current.json');
+  catalog.items[0].name = 'YFinance catalog label';
+  catalog.items[0].price = 3210;
+  f.documents.set('market/irbank/v1/catalog.json', {
+    count: 1,
+    securities: [{ code: '7203', name: 'IRBANK master label', has_overview: true }],
+  });
+  f.env.DB.prepare = () => { throw new Error('security search must not access D1'); };
+
+  const response = await worker.fetch(
+    new Request('https://example.com/api/v1/security-search?q=IRBANK%20master%20label'), f.env,
+  );
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.items.length, 1);
+  assert.equal(body.items[0].code, '7203');
+  assert.equal(body.items[0].name, 'IRBANK master label');
+  assert.equal(body.items[0].price, 3210);
+
+  const staleNameSearch = await worker.fetch(
+    new Request('https://example.com/api/v1/security-search?q=YFinance%20catalog%20label'), f.env,
+  );
+  assert.equal((await staleNameSearch.json()).items.length, 0);
+});
+
 test('empty issuer records remain unknown across security, quotes, and search; explicit zero remains no dividend', async () => {
   for (const [fixtureStatus, expected] of [['unknown', 'unknown'], ['no_dividend', 'no_dividend']]) {
     const f = marketReadFixture('8984', fixtureStatus);

@@ -1,0 +1,352 @@
+name: D1 to R2 migration (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Migration or audit phase
+        type: choice
+        required: true
+        options:
+          - d1-schema-audit
+          - d1-operational-audit
+          - market-audit
+          - market-source-audit
+          - analysis-current
+          - analysis-history
+          - scheduled-runs
+          - definitions
+          - definition-audit
+          - analysis-source
+          - legacy-market-archive
+      table:
+        description: Select a table only for operational audit, market-source audit, or legacy archive; keep the default for every other phase
+        type: choice
+        required: true
+        default: securities
+        options:
+          - backend_state
+          - securities
+          - financial_periods
+          - dividend_events
+          - issuer_dividend_periods
+          - market_price_refresh_runs
+          - market_price_refresh_batches
+          - scheduled_run_log
+      dry_run:
+        description: Read and report only (required for D1 inventory and market audits)
+        type: boolean
+        required: true
+        default: true
+      max_rows:
+        description: Maximum D1 rows_read for this dispatch (1-100000)
+        type: string
+        required: true
+        default: "500"
+      read_reserve_rows:
+        description: Additional account-wide D1 rows to leave unused today above max_rows
+        type: string
+        required: true
+        default: "100000"
+      batch_size:
+        description: Keyset page size (1-1000)
+        type: string
+        required: true
+        default: "100"
+      confirm_write:
+        description: Enter WRITE_R2 only after reviewing a dry-run report
+        type: string
+        required: false
+      checkpoint_run_id:
+        description: Optional prior workflow run ID containing a checkpoint artifact
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: d1-r2-migration
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require the pre-created, protected migration environment
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          if os.environ.get("GITHUB_REF") != "refs/heads/main":
+              raise SystemExit("D1-to-R2 migration must be dispatched from the main branch")
+
+          repository = os.environ["REPOSITORY"]
+          environment_name = "d1-r2-migration"
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+
+          def get(path):
+              request = Request(f"https://api.github.com/repos/{repository}/{path}", headers=headers)
+              with urlopen(request, timeout=20) as response:
+                  return json.load(response)
+
+          try:
+              main_branch = get("branches/main")
+          except HTTPError as error:
+              raise SystemExit(f"Could not verify main branch protection (HTTP {error.code})") from error
+          if main_branch.get("protected") is not True:
+              raise SystemExit("Protect the main branch before dispatching the D1-to-R2 migration")
+
+          try:
+              environment = get(f"environments/{environment_name}")
+          except HTTPError as error:
+              if error.code == 404:
+                  raise SystemExit(
+                      "Create and protect the d1-r2-migration environment before dispatch. "
+                      "A missing environment would otherwise be auto-created without protection rules or secrets."
+                  ) from error
+              raise SystemExit(f"Could not verify the migration environment (HTTP {error.code})") from error
+
+          if environment.get("can_admins_bypass") is not False:
+              raise SystemExit("Disable administrator bypass for the migration environment before dispatch")
+
+          rules = environment.get("protection_rules") or []
+          reviewers = next((rule for rule in rules if rule.get("type") == "required_reviewers"), None)
+          if not reviewers or not reviewers.get("reviewers") or not reviewers.get("prevent_self_review"):
+              raise SystemExit("The migration environment must require an independent reviewer and prevent self-review")
+
+          branch_policy = environment.get("deployment_branch_policy") or {}
+          if branch_policy.get("custom_branch_policies") is not True:
+              raise SystemExit("The migration environment must restrict deployments to the main branch")
+          policies = get(f"environments/{environment_name}/deployment-branch-policies").get("branch_policies") or []
+          if len(policies) != 1 or policies[0].get("type") != "branch" or policies[0].get("name") != "main":
+              raise SystemExit("The migration environment must allow only the main branch")
+
+          PY
+
+  migrate:
+    needs: preflight
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: d1-r2-migration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require dedicated migration credentials
+        shell: bash
+        env:
+          D1_R2_MIGRATION_ACCOUNT_ID: ${{ secrets.D1_R2_MIGRATION_ACCOUNT_ID }}
+          D1_R2_MIGRATION_READ_TOKEN: ${{ secrets.D1_R2_MIGRATION_READ_TOKEN }}
+          D1_R2_MIGRATION_ANALYTICS_READ_TOKEN: ${{ secrets.D1_R2_MIGRATION_ANALYTICS_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          required=(
+            D1_R2_MIGRATION_ACCOUNT_ID
+            D1_R2_MIGRATION_READ_TOKEN
+            D1_R2_MIGRATION_ANALYTICS_READ_TOKEN
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            [[ -n "${!name}" ]] || missing+=("$name")
+          done
+          if ((${#missing[@]})); then
+            printf '::error::Migration Environment is missing required secret value(s): %s\n' "${missing[*]}"
+            exit 1
+          fi
+      - name: Require R2 credentials for R2-backed phases
+        if: ${{ inputs.phase != 'd1-schema-audit' && inputs.phase != 'd1-operational-audit' }}
+        shell: bash
+        env:
+          D1_R2_MIGRATION_R2_ACCESS_KEY_ID: ${{ secrets.D1_R2_MIGRATION_R2_ACCESS_KEY_ID }}
+          D1_R2_MIGRATION_R2_SECRET_ACCESS_KEY: ${{ secrets.D1_R2_MIGRATION_R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          required=(D1_R2_MIGRATION_R2_ACCESS_KEY_ID D1_R2_MIGRATION_R2_SECRET_ACCESS_KEY)
+          missing=()
+          for name in "${required[@]}"; do
+            [[ -n "${!name}" ]] || missing+=("$name")
+          done
+          if ((${#missing[@]})); then
+            printf '::error::Migration Environment is missing required R2 secret value(s): %s\n' "${missing[*]}"
+            exit 1
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate dispatch and write confirmation
+        shell: bash
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          CONFIRM_WRITE: ${{ inputs.confirm_write }}
+          PHASE: ${{ inputs.phase }}
+          TARGET_REF: ${{ github.ref }}
+          MAX_ROWS: ${{ inputs.max_rows }}
+          READ_RESERVE_ROWS: ${{ inputs.read_reserve_rows }}
+          BATCH_SIZE: ${{ inputs.batch_size }}
+          CHECKPOINT_RUN_ID: ${{ inputs.checkpoint_run_id }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          if os.environ["TARGET_REF"] != "refs/heads/main":
+              raise SystemExit("D1-to-R2 migration is available only from the main branch")
+          dry_run = os.environ["DRY_RUN"].lower() == "true"
+          if not dry_run and os.environ["CONFIRM_WRITE"] != "WRITE_R2":
+              raise SystemExit("R2 write requires the exact confirm_write value WRITE_R2")
+          if os.environ["PHASE"] in {"d1-schema-audit", "d1-operational-audit", "market-audit", "market-source-audit"} and not dry_run:
+              raise SystemExit("D1 inventory and market audits are read-only and must run as dry-run")
+          for key, minimum, maximum in (("MAX_ROWS", 1, 100000), ("READ_RESERVE_ROWS", 0, 5000000), ("BATCH_SIZE", 1, 1000)):
+              value = int(os.environ[key])
+              if not minimum <= value <= maximum:
+                  raise SystemExit(f"{key} must be between {minimum} and {maximum}")
+          if int(os.environ["MAX_ROWS"]) + int(os.environ["READ_RESERVE_ROWS"]) > 5000000:
+              raise SystemExit("max_rows plus read_reserve_rows cannot exceed the 5,000,000-row Free allowance")
+          run_id = os.environ["CHECKPOINT_RUN_ID"]
+          if run_id and not re.fullmatch(r"[0-9]+", run_id):
+              raise SystemExit("checkpoint_run_id must be a numeric GitHub Actions run ID")
+          PY
+      - name: Check account-wide UTC D1 allowance before any D1 query
+        working-directory: data/irbank/cloudflare
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.D1_R2_MIGRATION_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.D1_R2_MIGRATION_ANALYTICS_READ_TOKEN }}
+          MAX_ROWS: ${{ inputs.max_rows }}
+          READ_RESERVE_ROWS: ${{ inputs.read_reserve_rows }}
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+
+          max_rows = int(os.environ["MAX_ROWS"])
+          reserve_rows = int(os.environ["READ_RESERVE_ROWS"])
+          required_rows = max_rows + reserve_rows
+          if not 1 <= required_rows <= 5_000_000:
+              raise SystemExit("D1 daily read budget is outside the Free allowance")
+          result = subprocess.run(
+              [sys.executable, "scripts/d1_daily_usage.py", "--minimum-rows-remaining", str(required_rows)],
+              check=False,
+          )
+          raise SystemExit(result.returncode)
+          PY
+      - name: Validate checkpoint run provenance
+        if: ${{ inputs.checkpoint_run_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          CHECKPOINT_RUN_ID: ${{ inputs.checkpoint_run_id }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from urllib.request import Request, urlopen
+
+          repository = os.environ["REPOSITORY"]
+          run_id = os.environ["CHECKPOINT_RUN_ID"]
+          request = Request(
+              f"https://api.github.com/repos/{repository}/actions/runs/{run_id}",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+          with urlopen(request, timeout=20) as response:
+              run = json.load(response)
+
+          same_repository = (run.get("head_repository") or {}).get("full_name", "").lower() == repository.lower()
+          workflow_path = str(run.get("path") or "").split("@", 1)[0]
+          valid = (
+              workflow_path == ".github/workflows/d1-r2-migration.yml"
+              and run.get("event") == "workflow_dispatch"
+              and run.get("head_branch") == "main"
+              and run.get("status") == "completed"
+              and run.get("conclusion") in {"success", "failure"}
+              and same_repository
+          )
+          if not valid:
+              raise SystemExit("Checkpoint run must be a completed migration workflow run from this repository's main branch")
+          PY
+      - name: Download a prior checkpoint
+        if: ${{ inputs.checkpoint_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: d1-r2-migration-checkpoint
+          path: checkpoint-input
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.checkpoint_run_id }}
+      - name: Restore checkpoint file
+        if: ${{ inputs.checkpoint_run_id != '' }}
+        shell: bash
+        run: cp checkpoint-input/migration-checkpoint.json data/irbank/cloudflare/migration-checkpoint.json
+      - name: Install R2 S3 client
+        if: ${{ inputs.phase != 'd1-schema-audit' && inputs.phase != 'd1-operational-audit' }}
+        run: python -m pip install 'boto3>=1.37,<2'
+      - name: Run D1-only inventory audit
+        if: ${{ inputs.phase == 'd1-schema-audit' || inputs.phase == 'd1-operational-audit' }}
+        working-directory: data/irbank/cloudflare
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.D1_R2_MIGRATION_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.D1_R2_MIGRATION_ANALYTICS_READ_TOKEN }}
+          CLOUDFLARE_MIGRATION_READ_TOKEN: ${{ secrets.D1_R2_MIGRATION_READ_TOKEN }}
+          PHASE: ${{ inputs.phase }}
+          TABLE: ${{ inputs.table }}
+          MAX_ROWS: ${{ inputs.max_rows }}
+          READ_RESERVE_ROWS: ${{ inputs.read_reserve_rows }}
+          BATCH_SIZE: ${{ inputs.batch_size }}
+        run: |
+          python scripts/migrate_d1_to_r2.py --phase "$PHASE" --table "$TABLE" \
+            --max-rows "$MAX_ROWS" --read-reserve-rows "$READ_RESERVE_ROWS" --batch-size "$BATCH_SIZE" --dry-run \
+            --checkpoint-in migration-checkpoint.json --checkpoint-out migration-checkpoint.json --report migration-report.json
+      - name: Run R2-backed migration or audit
+        if: ${{ inputs.phase != 'd1-schema-audit' && inputs.phase != 'd1-operational-audit' }}
+        working-directory: data/irbank/cloudflare
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.D1_R2_MIGRATION_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.D1_R2_MIGRATION_ANALYTICS_READ_TOKEN }}
+          CLOUDFLARE_MIGRATION_READ_TOKEN: ${{ secrets.D1_R2_MIGRATION_READ_TOKEN }}
+          R2_ACCESS_KEY_ID: ${{ secrets.D1_R2_MIGRATION_R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.D1_R2_MIGRATION_R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: diview-market-data
+          PHASE: ${{ inputs.phase }}
+          TABLE: ${{ inputs.table }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          MAX_ROWS: ${{ inputs.max_rows }}
+          READ_RESERVE_ROWS: ${{ inputs.read_reserve_rows }}
+          BATCH_SIZE: ${{ inputs.batch_size }}
+          CONFIRM_WRITE: ${{ inputs.confirm_write }}
+        run: |
+          args=(--phase "$PHASE" --table "$TABLE" --max-rows "$MAX_ROWS" \
+            --read-reserve-rows "$READ_RESERVE_ROWS" --batch-size "$BATCH_SIZE" \
+            --checkpoint-in migration-checkpoint.json --checkpoint-out migration-checkpoint.json --report migration-report.json)
+          if [[ "$DRY_RUN" != "true" ]]; then
+            args+=(--write-r2 --confirm-write "$CONFIRM_WRITE")
+          fi
+          python scripts/migrate_d1_to_r2.py "${args[@]}"
+      - name: Upload sanitized report and resumable checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-r2-migration-checkpoint
+          path: |
+            data/irbank/cloudflare/migration-report.json
+            data/irbank/cloudflare/migration-checkpoint.json
+          if-no-files-found: ignore
+          retention-days: 14
