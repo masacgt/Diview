@@ -117,6 +117,44 @@ class NotificationDeliveryTest {
         assertEquals(2, cacheReads)
     }
 
+    @Test fun offlineCachedPriceAlertPostsThroughAndroidNotificationManager() = runBlocking {
+        val notifications = app.getSystemService(android.app.NotificationManager::class.java)
+        val service = DiviewNotifications(app)
+        notifications.cancel(DiviewNotifications.PRICE_ID)
+        service.createChannels()
+        store.setEnabled(NotificationKind.PRICE, true)
+        try {
+            assertTrue("Android price notifications must be permitted", service.canPost(DiviewNotifications.PRICE_CHANNEL))
+            val cached = NotificationPriceCache(app).read()["7203"]
+                ?: throw AssertionError("The local price cache must contain the seeded quote")
+            assertEquals(2500.0, cached.price, 0.0)
+            assertEquals("2026-10-05", cached.quoteDate)
+            assertEquals(currentTime.toInstant().toEpochMilli(), cached.fetchedAtMillis)
+            assertEquals("2026-10-05", cached.marketDataDate)
+            assertEquals(null, cached.generation)
+
+            val delivery = NotificationDeliveryEngine(app, now = clock)
+            delivery.run(NotificationKind.PRICE)
+            currentTime = ZonedDateTime.parse("2026-10-05T17:30:00+09:00[Asia/Tokyo]")
+            delivery.run(NotificationKind.PRICE)
+
+            val postedNotification = notifications.activeNotifications
+                .firstOrNull { it.id == DiviewNotifications.PRICE_ID }
+            assertNotNull("A real Android price alert should be active", postedNotification)
+            val notification = postedNotification!!.notification
+            assertTrue(notification.extras.getCharSequence(android.app.Notification.EXTRA_TITLE)
+                .toString().contains("目標利回り"))
+            val text = (notification.extras.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)
+                ?: notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT)).toString()
+            assertTrue(text.contains("7203"))
+            assertTrue(text.contains("取得株価"))
+            assertTrue(text.contains("2,500"))
+            assertEquals("2026-10-05", store.priceStates().getValue("7203").notifiedDate)
+        } finally {
+            notifications.cancel(DiviewNotifications.PRICE_ID)
+        }
+    }
+
     @Test fun staleQuoteCancelsAQueuedAlertBeforeDelivery() = runBlocking {
         store.setEnabled(NotificationKind.PRICE, true)
         engine().run(NotificationKind.PRICE)
