@@ -19,6 +19,18 @@ migration = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(migration)
 
 
+def without_hash_values(value):
+    if isinstance(value, dict):
+        return {
+            key: without_hash_values(item)
+            for key, item in value.items()
+            if "hash" not in key.lower() and "digest" not in key.lower()
+        }
+    if isinstance(value, list):
+        return [without_hash_values(item) for item in value]
+    return value
+
+
 class FakeReader:
     def __init__(self, tables=None, reported_rows=None):
         self.tables = tables or {}
