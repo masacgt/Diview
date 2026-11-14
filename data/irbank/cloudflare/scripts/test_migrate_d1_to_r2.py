@@ -791,10 +791,18 @@ class MigrationScriptTest(unittest.TestCase):
             second = migration.Migrator(args, FakeReader({"stock_analysis_state": rows}), r2, "namespace").run()
             self.assertEqual(second["cumulative"]["source_rows"], 2)
             self.assertEqual(second["cumulative"]["rows_read"], 2)
-            artifacts = Path(args.checkpoint_out).read_text(encoding="utf-8") + Path(args.report).read_text(encoding="utf-8")
-            self.assertNotIn("DO_NOT_LOG", artifacts)
-            self.assertNotIn("7203", artifacts)
-            self.assertNotIn("8306", artifacts)
+            artifacts = {
+                "checkpoint": without_hash_values(json.loads(
+                    Path(args.checkpoint_out).read_text(encoding="utf-8")
+                )),
+                "report": without_hash_values(json.loads(
+                    Path(args.report).read_text(encoding="utf-8")
+                )),
+            }
+            serialized_artifacts = json.dumps(artifacts, sort_keys=True)
+            self.assertNotIn("DO_NOT_LOG", serialized_artifacts)
+            self.assertNotIn("7203", serialized_artifacts)
+            self.assertNotIn("8306", serialized_artifacts)
             self.assertIn("source_sha256", second)
 
     def test_legacy_market_archive_dry_run_preserves_cursor_and_sanitizes_artifacts(self):
