@@ -12,6 +12,9 @@ import com.kurogane.dividend.data.*
 import com.kurogane.dividend.ui.screens.AssetManagementScreen
 import com.kurogane.dividend.ui.theme.KuroganeDividendTheme
 import com.kurogane.dividend.viewmodel.DividendViewModel
+import com.kurogane.dividend.notifications.NotificationPriceCache
+import com.kurogane.dividend.notifications.TseTradingCalendar
+import com.kurogane.dividend.model.WatchlistStock
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
@@ -19,6 +22,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.util.concurrent.CopyOnWriteArrayList
@@ -31,6 +35,7 @@ class AssetDataRefreshTest {
     private val models = ViewModelStore()
     private val requests = CopyOnWriteArrayList<String>()
     private val requestUrls = CopyOnWriteArrayList<String>()
+    private val notificationQuoteDate = TseTradingCalendar.latestCompletedSessionDate().toString()
     @Volatile private var monthlyFixture = false
     @Volatile private var offline = false
     @Volatile private var emptyFinancial = false
@@ -39,18 +44,37 @@ class AssetDataRefreshTest {
     @Volatile private var quoteNoDividend = false
     @Volatile private var quoteUnknown = false
     @Volatile private var eventForecast = false
+    @Volatile private var liveQuoteFixture = false
+    @Volatile private var omit7203FromMultiCodeSnapshot = false
+    @Volatile private var failSecondNotificationPriceBatch = false
     private val prefs get() = app.getSharedPreferences("cloudflare_market_cache", Context.MODE_PRIVATE)
 
-    private fun model(refreshOnStart: Boolean = false): DividendViewModel {
+    private fun model(
+        refreshOnStart: Boolean = false,
+        notificationWatchlistCodes: List<String>? = null
+    ): DividendViewModel {
         seedReviewPortfolio(app)
+        notificationWatchlistCodes?.let { codes ->
+            LocalImportStore(app).saveWatchlist(codes.map(::notificationTestStock))
+        }
         val repository = CloudflareMarketRepository("https://example.com", connectionFactory = { url ->
             object : HttpURLConnection(url) {
+                private val requestBody = ByteArrayOutputStream()
+                private var retryAfterHeader: String? = null
                 override fun getResponseCode(): Int {
                     requests.add(url.path)
                     requestUrls.add(url.toString())
                     if (offline) throw IOException("test offline")
+                    if (url.path == "/api/v1/notification-prices" && failSecondNotificationPriceBatch
+                        && requests.count { it == url.path } == 2) {
+                        retryAfterHeader = "120"
+                        return 503
+                    }
                     return 200
                 }
+                override fun getHeaderField(name: String?): String? =
+                    if (name.equals("Retry-After", ignoreCase = true)) retryAfterHeader else null
+                override fun getOutputStream(): ByteArrayOutputStream = requestBody
                 override fun getInputStream(): ByteArrayInputStream {
                     val code = url.path.substringAfterLast('/')
                     val body = when {
@@ -68,6 +92,31 @@ class AssetDataRefreshTest {
                             val date = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"))
                             val symbol = if (url.query.contains("2914")) "2914.T" else if (url.query.contains("AAPL")) "AAPL" else "7203.T"
                             """{"as_of":"$date","items":[{"symbol":"$symbol","months":[6,12],"history_status":"available","requested_event_years":[${date.year}],"events":[{"date":"${date.withDayOfYear(1)}","amount":30}],"upcoming_event":{"ex_dividend_date":"${date.withMonth(12).withDayOfMonth(31)}"}}]}"""
+                        }
+                        url.path == "/api/v1/notification-prices" && liveQuoteFixture -> {
+                            val request = org.json.JSONObject(requestBody.toString(Charsets.UTF_8.name()))
+                            val requestedCodes = request.optJSONArray("codes")
+                            val marketDate = request.optString("market_data_date")
+                            val codes = (0 until (requestedCodes?.length() ?: 0))
+                                .mapNotNull { requestedCodes?.optString(it)?.takeIf(String::isNotBlank) }
+                            val returnedCodes = if (omit7203FromMultiCodeSnapshot && codes.size > 1) {
+                                codes.filterNot { it == "7203" }
+                            } else {
+                                codes
+                            }
+                            val items = returnedCodes.joinToString(",") { code ->
+                                """{"code":"$code","price":3000,"quote_date":"$marketDate","attribution":{"source_label":"Yahoo Finance via yfinance"}}"""
+                            }
+                            """{"items":[$items],"market_data_date":"$marketDate","run_id":"$marketDate","complete":true}"""
+                        }
+                        url.path == "/api/v1/live-quotes" && liveQuoteFixture -> {
+                            val encodedCodes = url.query.orEmpty().substringAfter("codes=", "").substringBefore('&')
+                            val codes = java.net.URLDecoder.decode(encodedCodes, Charsets.UTF_8.name())
+                                .split(',').filter(String::isNotBlank)
+                            val items = codes.joinToString(",") { code ->
+                                """{"code":"$code","price":3000,"annual_dividend_per_share":75,"dividend_status":"has_dividend","yield_rate":2.5,"yield_source":"irbank","quote_date":"2026-11-04"}"""
+                            }
+                            """{"items":[$items],"market_data_date":"2026-11-04","run_id":"2026-11-04","complete":true}"""
                         }
                         url.path.endsWith("dividend-months") ->
                             """{"as_of":"2026-10-25","items":[{"symbol":"7203.T","months":[6,12],"events":[]},{"symbol":"2914.T","months":[3,9],"events":[]}]}"""
@@ -90,6 +139,24 @@ class AssetDataRefreshTest {
         runBlocking { vm.awaitRestoration() }
         return vm
     }
+
+    private fun notificationTestStock(code: String) = WatchlistStock(
+        code = code,
+        name = "通知取得テスト $code",
+        market = "東証",
+        sector = "検証",
+        category = "jp",
+        price = 1_000.0,
+        dps = 10.0,
+        currentYield = 1.0,
+        targetYield = 2.0,
+        targetPrice = 500.0,
+        dailyChange = "—",
+        isPositive = true,
+        payoutMonths = emptyList(),
+        payoutTiming = "未取得",
+        desc = "通知価格更新の検証"
+    )
 
     private fun fill(vm: DividendViewModel) = runBlocking { vm.refreshAssetManagementData().join() }
 
@@ -149,6 +216,12 @@ class AssetDataRefreshTest {
         val count = requests.count { it == "/api/v1/securities/7203" }
         assertTrue(count > 0)
         missingPrice = false
+        prefs.edit()
+            .putLong(
+                "cloudflare_security_fetch_attempt_at_7203",
+                System.currentTimeMillis() - MarketFetchPolicy.FAILURE_RETRY_MILLIS - 1L
+            )
+            .commit()
         var owner: androidx.lifecycle.LifecycleOwner? = null
         compose.setContent { KuroganeDividendTheme { owner = LocalLifecycleOwner.current; AssetManagementScreen(vm) } }
         try {
@@ -205,6 +278,164 @@ class AssetDataRefreshTest {
         assertTrue(requests.isEmpty())
     }
 
+    @Test fun failedPriceRefreshRetriesAfterCooldownWhenStartupRefreshIsSuppressed() {
+        val now = System.currentTimeMillis()
+        val today = PriceRefreshPolicy.japanDate(now)
+        prefs.edit()
+            .putLong("startup_fetch_attempt_at", now)
+            .putString("startup_fetch_attempt_jst", today)
+            .putLong("last_price_fetch_attempt_at", now - 31_000L)
+            .putString("last_price_fetch_attempt_jst_date", today)
+            .putString("last_price_fetch_status", "failed")
+            .commit()
+
+        model(refreshOnStart = true)
+
+        compose.waitUntil(10_000) { requests.contains("/api/v1/notification-prices") }
+    }
+
+    @Test fun startupRechecksStaleSuccessfulPriceAfterDailyStartupWasAlreadyRecorded() {
+        val now = System.currentTimeMillis()
+        val today = PriceRefreshPolicy.japanDate(now)
+        val lastPriceAttempt = now - 24L * 60 * 60 * 1_000L
+        prefs.edit()
+            .putLong("startup_fetch_attempt_at", now - 60 * 60 * 1_000L)
+            .putString("startup_fetch_attempt_jst", today)
+            .putInt("irbank_yield_contract_version", 1)
+            .putLong("last_price_fetch_attempt_at", lastPriceAttempt)
+            .putString("last_price_fetch_attempt_jst_date", PriceRefreshPolicy.japanDate(lastPriceAttempt))
+            .putString("last_price_fetch_status", "ok")
+            .commit()
+
+        model(refreshOnStart = true)
+
+        compose.waitUntil(10_000) { requests.contains("/api/v1/notification-prices") }
+    }
+
+    @Test fun annualDpsContractRefreshDoesNotReplaceFreshNotificationPriceSnapshot() {
+        val now = System.currentTimeMillis()
+        val today = PriceRefreshPolicy.japanDate(now)
+        prefs.edit()
+            .putInt("annual_dps_contract_version", 2)
+            .putInt("irbank_yield_contract_version", 1)
+            .putLong("last_price_fetch_attempt_at", now)
+            .putString("last_price_fetch_attempt_jst_date", today)
+            .putString("last_price_fetch_status", "ok")
+            .commit()
+        liveQuoteFixture = true
+
+        model(refreshOnStart = true)
+
+        compose.waitUntil(10_000) { prefs.getInt("annual_dps_contract_version", 0) == 3 }
+        assertEquals(0, requests.count { it == "/api/v1/notification-prices" })
+        assertEquals(1, requests.count { it == "/api/v1/live-quotes" })
+        assertTrue(requests.none { "search-catalog" in it })
+        assertEquals(now, prefs.getLong("last_price_fetch_attempt_at", 0L))
+        assertEquals("ok", prefs.getString("last_price_fetch_status", null))
+        assertTrue(NotificationPriceCache(app).read().isEmpty())
+    }
+
+    @Test fun duePriceAndAnnualDpsRefreshShareOneTargetedQuoteSnapshot() {
+        val now = System.currentTimeMillis()
+        val previousFetchAt = now - 24L * 60 * 60 * 1_000L
+        prefs.edit()
+            .putInt("annual_dps_contract_version", 2)
+            .putInt("irbank_yield_contract_version", 1)
+            .putLong("last_price_fetch_attempt_at", previousFetchAt)
+            .putString("last_price_fetch_attempt_jst_date", PriceRefreshPolicy.japanDate(previousFetchAt))
+            .putString("last_price_fetch_status", "ok")
+            .commit()
+        liveQuoteFixture = true
+
+        model(refreshOnStart = true)
+
+        compose.waitUntil(10_000) {
+            prefs.getInt("annual_dps_contract_version", 0) == 3 &&
+                prefs.getString("last_price_fetch_status", null) == "ok"
+        }
+        assertEquals(1, requests.count { it == "/api/v1/notification-prices" })
+        assertEquals(1, requests.count { it == "/api/v1/live-quotes" })
+        assertTrue(requests.none { "search-catalog" in it })
+        val cachedPrices = NotificationPriceCache(app).read()
+        assertTrue(cachedPrices.containsKey("7203"))
+        assertEquals(notificationQuoteDate, cachedPrices.getValue("7203").quoteDate)
+    }
+
+    @Test fun missingHeldQuoteFallsBackForDpsButNotForNotificationPrice() {
+        val now = System.currentTimeMillis()
+        val previousFetchAt = now - 24L * 60 * 60 * 1_000L
+        prefs.edit()
+            .putInt("annual_dps_contract_version", 2)
+            .putInt("irbank_yield_contract_version", 1)
+            .putLong("last_price_fetch_attempt_at", previousFetchAt)
+            .putString("last_price_fetch_attempt_jst_date", PriceRefreshPolicy.japanDate(previousFetchAt))
+            .putString("last_price_fetch_status", "ok")
+            .commit()
+        liveQuoteFixture = true
+        omit7203FromMultiCodeSnapshot = true
+
+        model(refreshOnStart = true)
+
+        compose.waitUntil(10_000) {
+            prefs.getInt("annual_dps_contract_version", 0) == 3 &&
+                prefs.getString("last_price_fetch_status", null) == "ok"
+        }
+        assertEquals(1, requests.count { it == "/api/v1/notification-prices" })
+        assertEquals(1, requests.count { it == "/api/v1/live-quotes" })
+        val dividends = org.json.JSONObject(prefs.getString("dividend_per_share", "{}") ?: "{}")
+        assertEquals(75.0, dividends.getDouble("7203"), 0.0)
+        assertFalse(NotificationPriceCache(app).read().containsKey("7203"))
+    }
+
+    @Test fun laterNotificationPriceBatchFailurePersistsEarlierQuotesAndHonorsRetryAfter() {
+        val now = System.currentTimeMillis()
+        val today = PriceRefreshPolicy.japanDate(now)
+        val previousFetchAt = now - 24L * 60 * 60 * 1_000L
+        val targetCodes = (1000..1008).map(Int::toString)
+        prefs.edit()
+            .putInt("annual_dps_contract_version", 3)
+            .putInt("irbank_yield_contract_version", 1)
+            .putLong("startup_fetch_attempt_at", now)
+            .putString("startup_fetch_attempt_jst", today)
+            .putLong("last_price_fetch_attempt_at", previousFetchAt)
+            .putString("last_price_fetch_attempt_jst_date", PriceRefreshPolicy.japanDate(previousFetchAt))
+            .putString("last_price_fetch_status", "ok")
+            .commit()
+        liveQuoteFixture = true
+        failSecondNotificationPriceBatch = true
+
+        model(refreshOnStart = true, notificationWatchlistCodes = targetCodes)
+
+        compose.waitUntil(10_000) {
+            prefs.getString("last_price_fetch_status", null) == "failed" &&
+                NotificationPriceCache(app).read().size == 10
+        }
+
+        val cached = NotificationPriceCache(app).read()
+        val firstBatchCodes = setOf("7203", "2914") + (1000..1007).map(Int::toString)
+        assertEquals(firstBatchCodes, cached.keys)
+        assertEquals(2, requests.count { it == "/api/v1/notification-prices" })
+        val attemptedAt = prefs.getLong("last_price_fetch_attempt_at", 0L)
+        val retryAfterAt = prefs.getLong("last_price_fetch_retry_after_at", 0L)
+        assertTrue("partial response must retain a future retry deadline", retryAfterAt > attemptedAt)
+        assertTrue("Retry-After: 120 must be retained", retryAfterAt - attemptedAt in 119_000L..120_000L)
+        assertEquals("failed", prefs.getString("last_price_fetch_status", null))
+
+        val notificationRequestCount = requests.count { it == "/api/v1/notification-prices" }
+        val gateNow = System.currentTimeMillis()
+        prefs.edit()
+            .putLong("startup_fetch_attempt_at", gateNow)
+            .putString("startup_fetch_attempt_jst", PriceRefreshPolicy.japanDate(gateNow))
+            .putLong("last_price_fetch_attempt_at", gateNow - MarketFetchPolicy.FAILURE_RETRY_MILLIS - 1L)
+            .putString("last_price_fetch_attempt_jst_date", PriceRefreshPolicy.japanDate(gateNow))
+            .putString("last_price_fetch_status", "failed")
+            .putLong("last_price_fetch_retry_after_at", gateNow + 60_000L)
+            .commit()
+        model(refreshOnStart = true, notificationWatchlistCodes = targetCodes)
+        compose.waitForIdle()
+        assertEquals(notificationRequestCount, requests.count { it == "/api/v1/notification-prices"})
+    }
+
     @Test fun startupSkipsRecentFetchEvenAcrossDateBoundary() {
         val now = System.currentTimeMillis()
         prefs.edit().putLong("startup_fetch_attempt_at", now - 3_600_000L)
@@ -218,13 +449,17 @@ class AssetDataRefreshTest {
         val now = System.currentTimeMillis()
         prefs.edit().putLong("startup_fetch_attempt_at", now - 86_400_000L)
             .putString("startup_fetch_attempt_jst", PriceRefreshPolicy.japanDate(now - 86_400_000L))
+            .putInt("irbank_yield_contract_version", 1)
             .putLong("fx_fetch_attempt_at", now)
             .putString("fx_fetch_attempt_jst_date", PriceRefreshPolicy.japanDate(now)).commit()
         val vm = model(refreshOnStart = true)
         awaitFilled(vm)
         fill(vm)
         assertTrue(prefs.getLong("startup_fetch_attempt_at", 0L) >= now)
-        assertTrue(requests.none { "catalog" in it || "monthly-prices" in it || "share-splits" in it })
+        assertTrue(
+            "Unexpected startup asset requests: $requests",
+            requests.none { "catalog" in it || "monthly-prices" in it || "share-splits" in it },
+        )
     }
 
     @Test fun failedDataRetriesSameDayAfterCooldownAndSuccessStopsFurtherRequests() {

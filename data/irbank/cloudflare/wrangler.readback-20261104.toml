@@ -1,0 +1,55 @@
+name = "diview-irbank"
+compatibility_date = "2026-10-03"
+main = "src/index.js"
+
+[vars]
+FEEDBACK_EMAIL_FROM = "noreply@flipsave.org"
+FEEDBACK_EMAIL_TO = "gekidan.natuki800@gmail.com"
+
+[[send_email]]
+name = "FEEDBACK_EMAIL"
+destination_address = "gekidan.natuki800@gmail.com"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[triggers]
+crons = []
+
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimitCounter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimitCounter"]
+
+[[r2_buckets]]
+binding = "MARKET_DATA"
+bucket_name = "diview-market-data"
+remote = true
+
+[[queues.producers]]
+binding = "MARKET_PRICE_QUEUE"
+queue = "diview-market-prices"
+
+[[queues.consumers]]
+queue = "diview-market-prices"
+max_batch_size = 1
+max_batch_timeout = 5
+max_retries = 3
+dead_letter_queue = "diview-market-prices-dlq"
+max_concurrency = 1
+
+[[queues.consumers]]
+queue = "diview-market-prices-dlq"
+max_batch_size = 1
+max_batch_timeout = 5
+max_retries = 3
+max_concurrency = 1
+
+# Set the production namespace id before remote seed/deploy.
+[[kv_namespaces]]
+binding = "APP_DEFINITIONS"
+id = "5d84fbb50ce947ec8927dbc96c2e504a"

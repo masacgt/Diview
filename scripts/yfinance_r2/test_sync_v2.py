@@ -307,6 +307,154 @@ class IncomeAdviceFinancialUnitTests(TestCase):
         self.assertEqual(unknown_unit["fields"]["payout_ratio"], "unsupported")
 
 
+class IncomeAdvicePartitionFallbackTests(TestCase):
+    @staticmethod
+    def current_record():
+        return {
+            "price": {"currency": "JPY"},
+            "field_status": {
+                "dividend_history": "available",
+                "forecast_dividend": "available",
+            },
+            "dividend": {"next_fiscal_year_forecast_per_share": 60},
+        }
+
+    def test_missing_oldest_completed_year_is_read_when_it_completes_a_recurring_month(self):
+        missing_key = sync.object_key(
+            "securities", sync.safe_symbol("7203.T"), "dividends", "2023.json",
+        )
+        records = [{"date": "2023-03-15", "amount": 25.0}]
+
+        class Body:
+            def read(self):
+                return json.dumps({"records": records}).encode()
+
+        class Client:
+            def __init__(self):
+                self.keys = []
+
+            def get_object(self, **kwargs):
+                self.keys.append(kwargs["Key"])
+                if kwargs["Key"] == missing_key:
+                    return {"Body": Body()}
+                raise AssertionError(f"unexpected R2 read: {kwargs['Key']}")
+
+        client = Client()
+        candidate = sync.income_advice_candidate_with_missing_partition(
+            client, "bucket", "7203.T", "7203", "Toyota", self.current_record(),
+            [
+                {"date": "2024-03-15", "amount": 30.0},
+                {"date": "2025-09-15", "amount": 35.0},
+            ],
+            date(2026, 11, 16),
+            allow_missing_year_read=True,
+        )
+
+        self.assertEqual(candidate["observed_months"], [3])
+        self.assertEqual(client.keys, [missing_key])
+
+    def test_missing_oldest_year_expands_months_for_existing_candidate(self):
+        missing_key = sync.object_key(
+            "securities", sync.safe_symbol("7203.T"), "dividends", "2023.json",
+        )
+
+        class Body:
+            def read(self):
+                return json.dumps({"records": [{"date": "2023-06-15", "amount": 20.0}]}).encode()
+
+        class Client:
+            def __init__(self):
+                self.keys = []
+
+            def get_object(self, **kwargs):
+                self.keys.append(kwargs["Key"])
+                if kwargs["Key"] != missing_key:
+                    raise AssertionError("unexpected R2 read")
+                return {"Body": Body()}
+
+        client = Client()
+        candidate = sync.income_advice_candidate_with_missing_partition(
+            client, "bucket", "7203.T", "7203", "Toyota", self.current_record(),
+            [
+                {"date": "2024-03-15", "amount": 30.0},
+                {"date": "2024-06-15", "amount": 20.0},
+                {"date": "2025-03-15", "amount": 35.0},
+            ],
+            date(2026, 11, 16),
+            allow_missing_year_read=True,
+        )
+
+        self.assertEqual(candidate["observed_months"], [3, 6])
+        self.assertEqual(candidate["monthly_estimate_per_100_shares"], 3000.0)
+        self.assertEqual(client.keys, [missing_key])
+
+    def test_missing_year_is_not_read_without_recent_completed_year_dividends(self):
+        class Client:
+            def get_object(self, **kwargs):
+                raise AssertionError(f"unexpected R2 read: {kwargs['Key']}")
+
+        candidate = sync.income_advice_candidate_with_missing_partition(
+            Client(), "bucket", "7203.T", "7203", "Toyota", self.current_record(),
+            [{"date": "2026-03-15", "amount": 30.0}],
+            date(2026, 11, 16),
+            allow_missing_year_read=True,
+        )
+
+        self.assertIsNone(candidate)
+
+    def test_existing_oldest_year_is_not_read_again(self):
+        class Client:
+            def get_object(self, **kwargs):
+                raise AssertionError(f"unexpected R2 read: {kwargs['Key']}")
+
+        candidate = sync.income_advice_candidate_with_missing_partition(
+            Client(), "bucket", "7203.T", "7203", "Toyota", self.current_record(),
+            [
+                {"date": "2023-03-15", "amount": 25.0},
+                {"date": "2024-03-15", "amount": 30.0},
+                {"date": "2025-09-15", "amount": 35.0},
+            ],
+            date(2026, 11, 16),
+            allow_missing_year_read=True,
+        )
+
+        self.assertEqual(candidate["observed_months"], [3])
+
+    def test_missing_year_is_not_read_when_full_history_is_already_loaded(self):
+        class Client:
+            def get_object(self, **kwargs):
+                raise AssertionError(f"unexpected R2 read: {kwargs['Key']}")
+
+        candidate = sync.income_advice_candidate_with_missing_partition(
+            Client(), "bucket", "7203.T", "7203", "Toyota", self.current_record(),
+            [
+                {"date": "2024-03-15", "amount": 30.0},
+                {"date": "2025-09-15", "amount": 35.0},
+            ],
+            date(2026, 11, 16),
+            allow_missing_year_read=False,
+        )
+
+        self.assertIsNone(candidate)
+
+    def test_missing_year_read_failure_keeps_the_available_candidate(self):
+        class Client:
+            def get_object(self, **kwargs):
+                raise RuntimeError("temporary R2 read failure")
+
+        candidate = sync.income_advice_candidate_with_missing_partition(
+            Client(), "bucket", "7203.T", "7203", "Toyota", self.current_record(),
+            [
+                {"date": "2024-03-15", "amount": 30.0},
+                {"date": "2025-03-15", "amount": 35.0},
+            ],
+            date(2026, 11, 16),
+            allow_missing_year_read=True,
+        )
+
+        self.assertEqual(candidate["observed_months"], [3])
+
+
 class SyncPriceTests(TestCase):
     def test_daily_valuation_uses_close_and_latest_eps_or_book_value(self):
         self.assertEqual(
@@ -1755,11 +1903,10 @@ class OfflineFinancialSyncTests(TestCase):
             "generation": "2026-10-19", "market_data_date": "2026-10-19",
             "items": [old_item],
         }
-        test_etfs = [{"security_code_display": "7203", "listing_date": "2026-01-05"}]
         irbank_snapshot = build_snapshot(
-            merge_jpx_etfs(normalize_securities([{"code": "72030"}], minimum_security_count=1), test_etfs),
+            normalize_securities([{"code": "72030"}], minimum_security_count=1),
             "2026-10-19T12:00:00Z",
-            jpx_etf_count=len(test_etfs),
+            jpx_etf_count=0,
         )
         store = self.Store({
             sync.IRBANK_UNIVERSE_R2_KEY: irbank_snapshot,
@@ -1790,7 +1937,7 @@ class OfflineFinancialSyncTests(TestCase):
             stack.enter_context(patch.object(
                 sync, "validate_snapshot",
                 side_effect=lambda snapshot: validate_irbank_snapshot(
-                    snapshot, minimum_security_count=1, minimum_jpx_etf_count=1,
+                    snapshot, minimum_security_count=1, minimum_jpx_etf_count=0,
                 ),
             ))
             stack.enter_context(patch.object(sync, "latest_completed_xtks_session", return_value=date(2026, 10, 19)))
@@ -1821,3 +1968,30 @@ class OfflineFinancialSyncTests(TestCase):
             key = sync.object_key("catalog", "generations", generation + ".json")
             self.assertEqual(store.writes.count(key), 1)
             self.assertEqual(store.documents[key]["generation"], generation)
+
+    def test_catalog_publication_preserves_existing_advice_for_foreign_etfs(self):
+        previous = {
+            "generation": "2026-10-19-old",
+            "items": [{
+                "code": "162A",
+                "name": "Foreign ETF",
+                "status": "ok",
+                "security_type": "listed_security",
+                "jquants_product_category": "023",
+                "income_advice": {"code": "162A", "source_catalog_generation": "2026-10-19-old"},
+            }],
+        }
+
+        catalog = sync.publish_catalog(
+            None,
+            "unused",
+            [{"security_code_display": "162A", "security_type": "listed_security",
+              "jquants_product_category": "023"}],
+            date(2026, 10, 20),
+            previous,
+        )
+
+        self.assertEqual(
+            catalog["items"][0]["income_advice"],
+            {"code": "162A", "source_catalog_generation": catalog["generation"]},
+        )

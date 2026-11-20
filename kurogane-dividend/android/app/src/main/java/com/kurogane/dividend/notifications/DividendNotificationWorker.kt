@@ -3,9 +3,9 @@ package com.kurogane.dividend.notifications
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.kurogane.dividend.data.CloudflareMarketRepository
 import com.kurogane.dividend.data.LocalImportStore
 import com.kurogane.dividend.data.JPXTickSizeMaster
+import com.kurogane.dividend.data.normalizeJapaneseSecurityCode
 import com.kurogane.dividend.model.PortfolioMath
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +38,7 @@ class DividendNotificationWorker(context: Context, parameters: WorkerParameters)
 /** Delivery stays local; discovered events are held until the next 08:30 or 17:30 checkpoint. */
 class NotificationDeliveryEngine(
     context: Context,
-    private val fetchPrices: suspend () -> Map<String, Double> = { CloudflareMarketRepository().fetchPriceCatalog() },
+    private val loadPrices: suspend () -> Map<String, CachedNotificationPrice> = { NotificationPriceCache(context).read() },
     private val now: () -> ZonedDateTime = { ZonedDateTime.now(NotificationPolicy.japanZone) },
     private val canPost: (NotificationKind) -> Boolean = { kind ->
         DiviewNotifications(context).run { createChannels(); canPost(DiviewNotifications.channel(kind)) }
@@ -73,23 +73,23 @@ class NotificationDeliveryEngine(
                         return@withLock
                     }
 
-                    val prices = fetchPrices()
+                    val prices = loadPrices()
                     val stocks = portfolio.loadWatchlist().orEmpty()
                     val holdings = portfolio.loadHoldings().orEmpty()
                     val previousStates = store.priceStates()
-                    val plan = NotificationPolicy.priceAlerts(stocks, holdings, prices, previousStates, currentTime.toLocalDate())
+                    val plan = NotificationPolicy.priceAlerts(stocks, holdings, prices, previousStates, currentTime)
                     if (store.settings() != settings || !canPost(kind)) return@withLock
                     store.ifCurrent(settings) {
-                        val hitCodes = plan.hits.mapTo(mutableSetOf()) { PortfolioMath.normalizeCode(it.stock.code) }
+                        val hitCodes = plan.hits.mapTo(mutableSetOf()) { normalizeJapaneseSecurityCode(it.stock.code) }
                         val statesToPersist = plan.states.toMutableMap()
                         hitCodes.forEach { code ->
                             previousStates[code]?.let { statesToPersist[code] = it } ?: statesToPersist.remove(code)
                         }
                         store.savePriceStates(statesToPersist)
                         val enabledCodes = stocks.filter { it.alertEnabled }
-                            .map { PortfolioMath.normalizeCode(it.code) }.toSet()
+                            .map { normalizeJapaneseSecurityCode(it.code) }.toSet()
                         val cancelled = store.pendingPriceAlerts().filter { pending ->
-                            pending.code !in enabledCodes || plan.states[pending.code]?.ready != true
+                            pending.code !in enabledCodes || pending.code !in plan.eligibleCodes || plan.states[pending.code]?.ready != true
                         }
                         store.removePendingPriceAlerts(cancelled)
                         val deliverAt = NotificationPolicy.nextDeliveryAt(now()).toInstant().toEpochMilli()
@@ -102,7 +102,9 @@ class NotificationDeliveryEngine(
                                 yield = hit.yield,
                                 targetYield = hit.stock.targetYield,
                                 held = hit.held,
-                                deliverAtMillis = deliverAt
+                                deliverAtMillis = deliverAt,
+                                sourceLabel = hit.sourceLabel,
+                                processedBy = hit.processedBy
                             )
                         })
                     }
@@ -125,7 +127,11 @@ class NotificationDeliveryEngine(
         if (pending.isEmpty()) return
         val details = pending.take(5).joinToString("\n") { event ->
             val held = if (event.held) "・保有中" else ""
-            "${event.name.take(70)} (${event.code})$held：取得株価 ${event.currency}${com.kurogane.dividend.model.formatStockPriceDisplay(event.price, event.code)} / 利回り ${String.format(Locale.JAPAN, "%.2f", event.yield)}% / 目標 ${String.format(Locale.JAPAN, "%.2f", event.targetYield)}%"
+            val quote = "${event.name.take(70)} (${event.code})$held：取得株価 ${event.currency}${com.kurogane.dividend.model.formatStockPriceDisplay(event.price, event.code)} / 利回り ${String.format(Locale.JAPAN, "%.2f", event.yield)}% / 目標 ${String.format(Locale.JAPAN, "%.2f", event.targetYield)}%"
+            val source = event.sourceLabel?.let { label ->
+                "出典: $label" + event.processedBy?.let { "（加工: $it）" }.orEmpty()
+            }
+            if (source.isNullOrBlank()) quote else "$quote\n$source"
         } + if (pending.size > 5) "\nほか${pending.size - 5}銘柄" else ""
         store.ifCurrent(settings) {
             if (canPost(NotificationKind.PRICE) && post(NotificationKind.PRICE, "${pending.size}銘柄が目標利回りに到達", details)) {
@@ -135,7 +141,7 @@ class NotificationDeliveryEngine(
                     .toString()
                 val states = store.priceStates().toMutableMap()
                 pending.forEach { event ->
-                    val code = PortfolioMath.normalizeCode(event.code)
+                    val code = normalizeJapaneseSecurityCode(event.code)
                     val state = currentStates[code] ?: states[code]
                     if (state != null) states[code] = state.copy(notifiedDate = notifiedDate)
                 }

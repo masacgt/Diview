@@ -1,6 +1,9 @@
-# IRBANK → Cloudflare D1
+# IRBANK → Cloudflare Worker (D1 / R2)
 
-このディレクトリには、Cloudflare D1/R2を使うWorker APIがあります。D1は運用・分析データ、R2はIRBANKの保存データと市場データを保持します。検索・日次価格・月次価格・暦年の配当イベントは `market/yfinance/v2/` を参照します。現在の年間DPSと利回りは同じv2名前空間のIRBANK配当インデックスを優先し、IRBANK会社予想、次に分割調整済み実績を使います。銘柄別APIは全銘柄インデックスではなく、`issuer_dividends/shards/current.json` が示すコード先頭2文字のシャードを読みます。R2バケットは非公開で、アプリにはWorker APIを通じて配信します。
+このディレクトリにはCloudflare Worker APIがあります。合意済みの所有権変更では、市場データ・分析状態と履歴・完了ログ・定義をR2 `diview-market-data`、共有レート制限をDurable Objectsで管理し、問い合わせとメール再試行状態をD1に残します。旧テーブルと既存行は保持し、用途と移行を確認するまで削除しません。検索・日次価格・月次価格・暦年の配当イベントは `market/yfinance/v2/` を参照します。現在の年間DPSと利回りは同じv2名前空間のIRBANK配当インデックスを優先し、IRBANK会社予想、次に分割調整済み実績を使います。銘柄別APIは全銘柄インデックスではなく、`issuer_dividends/shards/current.json` が示すコード先頭2文字のシャードを読みます。R2バケットは非公開で、アプリにはWorker APIを通じて配信します。
+
+
+この作業ツリーでは所有権変更、手動移行Workflow、Worker CI、Androidのオフライン価格通知を準備しています。ローカル変更は本番Workerへデプロイしておらず、移行Workflowも起動していません。手順と未検証事項は [D1 to R2 migration runbook](docs/d1-r2-migration.md) と `ai_docs/d1-r2-device-data-ownership-spec.md` を参照してください。
 
 ## Android財務・問い合わせAPI
 
@@ -15,41 +18,43 @@ IRBANKの配当実績レコードが空の場合は `dividend_status=unknown` �
 問い合わせテーブルを初めて導入する場合は、次の移行SQLを実行します。既存テーブルとデータを削除せず、再実行できます。
 
 ```powershell
-npx wrangler d1 execute diview-irbank --remote --file migrations/0001_support_feedback.sql
+npx --yes wrangler@4.157.0 d1 execute diview-irbank --remote --file migrations/0001_support_feedback.sql
 ```
 
 `POST /api/v1/feedback` はJSONの `requestId`（UUID v4）、`category`、`message`、任意の `name` / `email` / `diagnostics` を検証し、D1の `support_feedback` に保存します。保存を確認できた場合だけ201と `accepted: true` / `receiptId` を返します。同じ受付番号と内容の再送は1件にまとめ、別内容の衝突は409、保存失敗は503です。本文は2万文字、要求全体は100KBまで。IP単位で既定60秒に5回までです。
 
 管理者はD1管理画面で内容を参照できます。`GET /api/v1/admin/feedback` は最新100件、`DELETE /api/v1/admin/feedback?id=受付番号` は指定した1件を削除します。どちらも既存の `ADMIN_SECRET` を `X-Admin-Secret` ヘッダーへ指定してください。鍵をソースやAndroidアプリへ保存しないでください。
 
-90日超の問い合わせは受付・管理参照および既存の定期処理で削除します。Cron枠が不足するアカウントでは、コードだけを公開する `npx wrangler versions upload` と、その返却バージョンを指定する `npx wrangler versions deploy バージョンID@100% --yes` を使えます。この方式はトリガーを変更しません。新しい定期トリガーが必要な場合は別途Cron枠を確保してください。
+90日超の問い合わせは受付・管理参照および既存の定期処理で削除します。Cron枠が不足するアカウントでは、コードだけを公開する `npx --yes wrangler@4.157.0 versions upload` と、その返却バージョンを指定する `npx --yes wrangler@4.157.0 versions deploy バージョンID@100% --yes` を使えます。この方式はトリガーを変更しません。新しい定期トリガーが必要な場合は別途Cron枠を確保してください。
 
 ```powershell
-node --test test/*.test.mjs
+node --test test/*.test.mjs test/*.test.cjs
 ```
 
 ## Cloudflareリソース
 
-`wrangler.toml` は `diview-irbank` D1と `diview-market-data` R2を参照します。Workerを公開するには次を実行します。
+`wrangler.toml` は `diview-irbank` D1、`diview-market-data` R2、および共有レート制限用Durable Objectを参照します。D1引継ぎ後のWorkerには、引継ぎ時に記録した `RATE_LIMITER_D1_FENCE_AT` と `RATE_LIMITER_D1_IMPORT_UNTIL` の両方が必要です。どちらもGit管理の設定値ではありません。値を省略してデプロイするとレート制限処理がfail-closedになり、対象APIがエラーになります。通常の再デプロイやロールバックにも同じ記録済みの値を渡してください。切替手順と値の決め方は [D1/R2移行手順](docs/d1-r2-migration.md#bounded-d1-counter-import) を参照してください。
+
+次のコマンドは、承認済みの引継ぎ記録から同じ2値を入力して実行します。移行ブリッジがリクエストを受けた後は、値を再計算しないでください。公開・D1操作コマンドは、ローカル検証で使用したWrangler 4.157.0を明示します。グローバルにインストールされた別バージョンや未固定の最新版に切り替えないでください。
 
 ```powershell
-npx wrangler deploy
+$rateLimiterD1FenceAt = Read-Host '承認済み記録の RATE_LIMITER_D1_FENCE_AT (Unix秒)'
+$rateLimiterD1ImportUntil = Read-Host '同じ記録の RATE_LIMITER_D1_IMPORT_UNTIL (Unix秒)'
+if ($rateLimiterD1FenceAt -notmatch '^\d+$' -or $rateLimiterD1ImportUntil -notmatch '^\d+$') { throw '引継ぎ記録のUnix秒を入力してください' }
+npx --yes wrangler@4.157.0 deploy --var "RATE_LIMITER_D1_FENCE_AT:$rateLimiterD1FenceAt" --var "RATE_LIMITER_D1_IMPORT_UNTIL:$rateLimiterD1ImportUntil"
 ```
 
 ## スキーマとアプリ定義
 
-```powershell
-npx wrangler d1 execute diview-irbank --remote --file ..\organized\d1\schema.sql
-npx wrangler d1 execute diview-irbank --remote --file ..\organized\d1\seed_app_definitions.sql
-```
+`../organized/d1/schema.sql` は `dev-local.ps1` が `--local` で使う開発用スキーマで、本番D1には実行しないでください。旧定義seed `../organized/d1/seed_app_definitions.sql` は `../organized/d1/seed_app_definitions.sql.disabled` に移し、通常のSQLファイルとして扱われないようにしました。これは履歴確認用であり、本番・ローカルどちらのseedにも使いません。問い合わせに必要なD1スキーマは、用途を確認したうえで該当する `migrations/` のSQLだけを適用します。
 
-診断基準・評価シナリオおよび分析定義はD1から取得します。`seed_app_definitions.sql` は `organized/d1` 内にあります。
+この作業ツリーのWorkerはアプリ定義をR2から読み、移行期間のKV読み取りフォールバックを使います。D1定義の読み取りとフォールバックはありません。
 
 ## D1とR2のデータ配置
 
-D1には銘柄マスター、API・分析・Watchlistなどの運用データ、株式分析に使う年次財務を保持します。四半期・半期財務はアプリとWorkerの現在の処理では参照されないため、R2の `market/irbank/v1/` 配下を配信元とし、D1の原本は `market/irbank/v1/archive/d1-financial-periods-qs-20261009.json` に全32,442行を退避しています。退避オブジェクトは取得ファイルのSHA-256と行数を照合済みです。
+移行前のD1には銘柄マスター、互換財務・配当、分析、定義、旧通知状態がありました。四半期・半期財務32,442行を含む過去のR2退避記録は当時の件数・SHA-256検証結果を示すもので、現在の全データ網羅性を保証しません。
 
-D1の財務インポートは年次だけを生成します。D1の `dividend_events` と年次 `financial_periods` は分析APIや互換処理で使われます。検索・日次価格・暦年配当イベント・月次価格の新しいデータ経路は、yfinance v2のR2カタログと銘柄別オブジェクトです。年間DPS・利回りはIRBANK APIの実績と開示予想をv2のIRBANK配当インデックスへ集約して配信します。IRBANKのカタログと銘柄概要APIは、IRBANKデータの参照用に引き続き提供します。
+この作業ツリーでは検索・価格・財務・配当・分析最新値と履歴・完了ログ・定義をR2から読み書きし、共有レート制限をDurable Objectsで扱います。ウォッチリストと端末通知状態はAndroid内に置きます。D1には問い合わせとメール再試行を残し、DOの初回状態引継ぎで有効な旧 `api_request_log` カウンターを一度だけ読み取ります。旧市場・分析・通知テーブルと既存行は保持します。現行本番の保存先・データ網羅性は本番切替前に再確認が必要です。
 
 ## J-Quants調整済み日足API
 
@@ -60,24 +65,16 @@ curl.exe -fL "https://diview-irbank.omasa.workers.dev/api/v1/jquants/daily-quote
 curl.exe -fL -r 0-1023 "https://diview-irbank.omasa.workers.dev/api/v1/jquants/daily-quotes" -o adjusted_daily_quotes_part.csv
 ```
 
-## 銘柄・財務・配当データのインポート
+## 旧D1市場データ取込の停止
 
-```powershell
-node ..\scripts\build-d1-import.cjs
-powershell -ExecutionPolicy Bypass -File .\import-d1.ps1 -ImportDir '<生成処理が表示した新規ディレクトリ>'
-```
+銘柄・財務・配当のD1インポートとD1向け財務修復は停止しました。`import-d1.ps1` と
+`apply-financial-repair.ps1` は誤投入防止のため直ちに失敗します。以前生成したSQLや
+修復プランもD1へ適用しないでください。オフラインの `plan-financial-repair.py` は
+履歴資料の照合用として残しています。
 
-旧 `import-d1.ps1` 単独実行は使用しません。生成処理が表示した新規ディレクトリを
-`powershell -ExecutionPolicy Bypass -File .\import-d1.ps1 -ImportDir <生成ディレクトリ>` に渡します。
-先にレビュー済みのマイグレーション（0005を含む）を適用してください。
-全SQLのマニフェストとSHA-256を検証してから投入し、再開状態はそのディレクトリ内の
-`import-state-v2.json` にファイルハッシュ付きで保存します。旧SQL・旧完了状態は再利用しません。
-
-期間キー破損の修復には、先に `wrangler d1 export` でバックアップを取得します。
-`scripts/plan-financial-repair.py --snapshot <SQLバックアップ> --source <元CSV> --output <新規出力先>`
-は本番へ接続せず、元CSVとの一致、復元、再実行の安全性をバックアップ上で検証します。
-生成後に `apply-financial-repair.ps1 -PlanDir <出力先>` を実行し、改めて本番をエクスポートして結果を照合します。
-この修復は確認できた破損キーのグループだけを復元し、元CSV全体の無条件再投入はしません。
+D1既存レコードからR2への移行準備は [移行runbook](docs/d1-r2-migration.md) を参照します。
+移行Workflowは手動実行専用で、本番実行・書き込み・Workerデプロイはまだ行っていません。
+市場データを今後更新する場合は既存のR2公開経路を使い、D1へ再投入しないでください。
 
 ## AndroidとWorker API
 
@@ -137,7 +134,7 @@ Androidは端末ごとに最終試行時刻、最終成功時刻、成功した�
 
 `GET /api/v1/dividend-months?symbols=7203.T` はv2の年別配当イベントから直近365日のイベント、配当月、金額基準、yfinance修復フラグを返します。`event_year=YYYY` は従来どおり1年分、`event_years=YYYY,...,YYYY` は最大10年分のイベントを1回で返し、要求した年を `requested_event_years` で応答します。配当月は引き続き直近365日から計算します。Androidの銘柄詳細画面は初期読み込みでグラフ用の暦年イベントをまとめて取得してキャッシュし、年の選択時はキャッシュを表示します。古いWorkerが年範囲を応答しない場合は、Androidが従来の年別要求へフォールバックします。権利日派生値は `market/yfinance/v2/derived/rights_dates/current.json` から読みます。将来の権利落ち日は、過去5年以内に同じ月の配当イベントが2年以上ある場合は履歴からの推定を優先し、該当しない場合に `Ticker.calendar`、最後に `Ticker.get_info` の日付を使います。履歴推定状態と情報源を応答に含めます。権利付き最終日と推定権利確定日は `.T` 銘柄にXTKS、米国銘柄にXNYSカレンダーを使って計算します。履歴推定イベントは権利日通知に使いません。正常に取得した空履歴と未取得状態は `history_status` で区別します。定期取得は固定したyfinance 1.7.0・SciPy 1.18.1で `history(period="max", interval="1d", actions=True, repair=True)` を使います。成功した取得範囲を正本として既存イベントを置き換え、取得失敗時は前回イベントを維持して失敗状態を記録します。配当・分割イベントは直近10年を通常領域、それより古いイベントを無期限アーカイブに保持します。
 
-財務APIには財務諸表・評価値の項目単位の旧データ互換処理が残っています。配当履歴はyfinance v2イベントだけを使い、v2公開前は `not_fetched` として扱います。分析のD1依存は移行完了まで維持します。IRBANK全体を一括アーカイブ・削除する処理は行いません。
+財務APIには財務諸表・評価値の項目単位の旧データ互換処理が残っています。配当履歴はyfinance v2イベントだけを使い、v2公開前は `not_fetched` として扱います。この作業ツリーでは分析の市場データ・状態・履歴・定義のD1参照を取り除いていますが、本番反映とデータ網羅性は未確認です。IRBANK全体を一括アーカイブ・削除する処理は行いません。
 
 ### 本番反映状況と有効化
 
@@ -147,14 +144,14 @@ Androidは端末ごとに最終試行時刻、最終成功時刻、成功した�
 
 ## バックエンド運用（分析・通知）
 
-匿名クライアント登録は `POST /api/v1/clients/register` です。返却される `client_id` と `client_secret` は端末内に保存し、Watchlist条件・通知履歴・Push端末登録では `X-Client-Id` / `X-Client-Secret` ヘッダーを送ります。`GET /api/v1/watchlist-targets` はそのクライアントの監視条件だけを返します。保有数量、取得単価、保有金額などのポートフォリオ情報はバックエンドへ送信しません。
+ウォッチリスト、目標利回り、通知設定・状態はAndroid端末内で管理します。旧クライアント登録・Push端末・ウォッチリスト・通知履歴API（`/api/v1/clients/register`、`/api/v1/push-devices`、`/api/v1/watchlist-targets`、`/api/v1/notification-events`）は `410 device_managed` を返します。対応するD1テーブルと既存データは削除せず、Workerからの読み書きとFCM配信を停止しています。
 
 ポートフォリオ診断の閾値・重みは KV の `portfolio-analysis-definitions:v1` で配信します。`scripts/seed-kv.ps1` で他の定義とまとめて登録します。`wrangler.toml` には `APP_DEFINITIONS` KV binding を本番 namespace ID とともに設定してください。
 
-Cron は市場スナップショットまたは分析定義が変わった場合に全銘柄を再評価し、それ以外の時間は通知対象のWatchlist銘柄だけを確認します。市場データが3日超古い場合は買場通知を抑止します。分析履歴は30日までは詳細を保持し、30日超は日次1件、365日超は月次1件へ圧縮します。
+Cron は市場スナップショットまたは分析定義が変わった場合にR2の銘柄カタログを使って全銘柄を再評価します。個人別Watchlistとの結合やサーバーFCM配信は行いません。この作業ツリーでは分析最新値・履歴・完了済み実行ログをR2へ保存します。既存D1の行は移行・保持確認が終わるまで変更・削除しません。実装は本番未デプロイです。
 
-定期分析では市場スナップショット・銘柄別の分析入力・Watchlist条件を実行内で再利用し、銘柄処理を最大8件ずつ並列化します。実行ログの `metadata_json.durations_ms` に分析・履歴整理・通知処理の所要時間を記録し、実データの負荷を見ながら次の調整を行います。
+定期分析では市場スナップショットと銘柄別の分析入力を実行内で再利用し、銘柄処理を最大8件ずつ並列化します。実行ログの `metadata_json.durations_ms` に分析・履歴整理の所要時間を記録します。
 
-公開読み取りAPIはIP単位、クライアントAPIは匿名クライアント単位でKV設定の回数制限を適用します。制限応答には `Retry-After` が付きます。JSON APIは既定で `private, no-store` とし、ブラウザの事前要求（CORS OPTIONS）にも応答します。`GET /api/v1/health` ではR2市場データの有無と経過日数、分析定義版、直近Cron結果を確認できます。Cron実行結果は `scheduled_run_log` に記録されます。
+公開読み取りAPIは現行のキー・時間窓・上限と `Retry-After` 応答を維持する共有レート制限を適用します。この作業ツリーではDurable Objectsを使い、初回のみ有効な旧D1カウンターを読み取って引き継ぐ設計です。JSON APIは既定で `private, no-store` とし、ブラウザの事前要求（CORS OPTIONS）にも応答します。`GET /api/v1/health` はR2市場データ、分析定義版、直近Cron結果を確認します。market内の`v2_catalog`には現行generation・市場日・生成日時・銘柄数・価格件数が入り、旧snapshot年齢とは分けて返します。実行ログの正本はR2です。
 
-FCM送信は `FCM_PROJECT_ID` と `FCM_SERVICE_ACCOUNT_JSON` が設定された場合に動作します。WorkerはGoogle OAuthの短期アクセストークンをサービスアカウント鍵で取得します。端末ごとの送達・再試行状態をD1へ記録し、無効になったFCM端末トークンを停止します。未設定時は通知イベントを保持し、Android端末内のWorkManager通知を引き続き利用します。サービスアカウントJSONはソースや `wrangler.toml` に直書きせず、Cloudflareのsecretとして設定してください。
+サーバーFCM配信は停止しています。株価などの端末通知はAndroidのWorkManagerがローカル設定・状態を使って処理します。旧 `clients`、`push_devices`、`watchlist_targets`、`notification_events`、`notification_deliveries` テーブルは現時点ではスキーマ・既存データを保持し、Workerは利用しません。

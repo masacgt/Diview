@@ -1,5 +1,6 @@
 package com.kurogane.dividend.notifications
 
+import com.kurogane.dividend.data.normalizeJapaneseSecurityCode
 import com.kurogane.dividend.model.Category
 import com.kurogane.dividend.model.Holding
 import com.kurogane.dividend.model.PortfolioMath
@@ -42,8 +43,19 @@ data class PriceAlertState(
     val notifiedDate: String? = null
 )
 
-data class PriceAlertHit(val stock: WatchlistStock, val price: Double, val yield: Double, val held: Boolean = false)
-data class PriceAlertPlan(val hits: List<PriceAlertHit>, val states: Map<String, PriceAlertState>)
+data class PriceAlertHit(
+    val stock: WatchlistStock,
+    val price: Double,
+    val yield: Double,
+    val held: Boolean = false,
+    val sourceLabel: String? = null,
+    val processedBy: String? = null
+)
+data class PriceAlertPlan(
+    val hits: List<PriceAlertHit>,
+    val states: Map<String, PriceAlertState>,
+    val eligibleCodes: Set<String>
+)
 
 data class PendingPriceAlert(
     val code: String,
@@ -53,7 +65,9 @@ data class PendingPriceAlert(
     val yield: Double,
     val targetYield: Double,
     val held: Boolean,
-    val deliverAtMillis: Long
+    val deliverAtMillis: Long,
+    val sourceLabel: String? = null,
+    val processedBy: String? = null
 )
 
 data class DividendRightsEvent(
@@ -102,40 +116,70 @@ object NotificationPolicy {
 
     fun priceAlerts(
         stocks: List<WatchlistStock>,
-        prices: Map<String, Double>,
+        quotes: Map<String, CachedNotificationPrice>,
         previous: Map<String, PriceAlertState>,
         date: LocalDate
-    ): PriceAlertPlan = priceAlerts(stocks, emptyList(), prices, previous, date)
+    ): PriceAlertPlan = priceAlerts(stocks, emptyList(), quotes, previous, date)
 
     /** Holdings reuse the matching watchlist stock's target yield. */
     fun priceAlerts(
         stocks: List<WatchlistStock>,
         holdings: List<Holding>,
-        prices: Map<String, Double>,
+        quotes: Map<String, CachedNotificationPrice>,
         previous: Map<String, PriceAlertState>
-    ): PriceAlertPlan = priceAlerts(stocks, holdings, prices, previous, LocalDate.now(japanZone))
+    ): PriceAlertPlan = priceAlerts(stocks, holdings, quotes, previous, ZonedDateTime.now(japanZone))
 
     fun priceAlerts(
         stocks: List<WatchlistStock>,
         holdings: List<Holding>,
-        prices: Map<String, Double>,
+        quotes: Map<String, CachedNotificationPrice>,
+        previous: Map<String, PriceAlertState>,
+        now: ZonedDateTime
+    ): PriceAlertPlan {
+        val japanNow = now.withZoneSameInstant(japanZone)
+        return priceAlerts(
+            stocks,
+            holdings,
+            quotes,
+            previous,
+            japanNow.toLocalDate(),
+            TseTradingCalendar.latestCompletedSessionDate(japanNow)
+        )
+    }
+
+    fun priceAlerts(
+        stocks: List<WatchlistStock>,
+        holdings: List<Holding>,
+        quotes: Map<String, CachedNotificationPrice>,
         previous: Map<String, PriceAlertState>,
         date: LocalDate
+    ): PriceAlertPlan = priceAlerts(stocks, holdings, quotes, previous, date, date)
+
+    private fun priceAlerts(
+        stocks: List<WatchlistStock>,
+        holdings: List<Holding>,
+        quotes: Map<String, CachedNotificationPrice>,
+        previous: Map<String, PriceAlertState>,
+        notificationDate: LocalDate,
+        completedSessionDate: LocalDate
     ): PriceAlertPlan {
         val hits = mutableListOf<PriceAlertHit>()
         val next = mutableMapOf<String, PriceAlertState>()
-        val normalizedPrices = prices.entries.associate { PortfolioMath.normalizeCode(it.key) to it.value }
+        val normalizedQuotes = quotes.entries
+            .sortedBy { it.key == normalizeJapaneseSecurityCode(it.key) }
+            .associate { normalizeJapaneseSecurityCode(it.key) to it.value }
+        val normalizedPrevious = previous.entries
+            .sortedBy { it.key == normalizeJapaneseSecurityCode(it.key) }
+            .associate { normalizeJapaneseSecurityCode(it.key) to it.value }
         val heldByCode = holdings.asSequence().filter { it.shares > 0 }
-            .associateBy { PortfolioMath.normalizeCode(it.code) }
-        val currentDate = date.toString()
-        stocks.distinctBy { PortfolioMath.normalizeCode(it.code) }.forEach { configuredStock ->
-            val code = PortfolioMath.normalizeCode(configuredStock.code)
+            .associateBy { normalizeJapaneseSecurityCode(it.code) }
+        val eligibleCodes = mutableSetOf<String>()
+        val currentDate = notificationDate.toString()
+        stocks.distinctBy { normalizeJapaneseSecurityCode(it.code) }.forEach { configuredStock ->
+            val code = normalizeJapaneseSecurityCode(configuredStock.code)
+            if (!configuredStock.category.equals("jp", ignoreCase = true)) return@forEach
             val holding = heldByCode[code]?.takeIf { holding ->
-                when (configuredStock.category.lowercase(java.util.Locale.ROOT)) {
-                    "jp" -> holding.category == Category.JAPAN
-                    "us" -> holding.category == Category.US
-                    else -> false
-                }
+                holding.category == Category.JAPAN
             }
             if (!configuredStock.alertEnabled) return@forEach
             val stock = if (holding != null && PortfolioMath.validMoney(holding.dps) && holding.dps > 0.0) {
@@ -143,12 +187,15 @@ object NotificationPolicy {
             } else configuredStock
             if (!PortfolioMath.validCode(code) || !PortfolioMath.validMoney(stock.dps) || stock.dps <= 0 ||
                 !stock.targetYield.isFinite() || stock.targetYield !in 0.1..100.0) return@forEach
-            val old = previous[code]
-            val price = normalizedPrices[code]
+            val old = normalizedPrevious[code]
+            val freshQuote = normalizedQuotes[code]
+                ?.takeIf { TseTradingCalendar.isFreshQuote(it.quoteDate, completedSessionDate) }
+            val price = freshQuote?.price
             if (price == null || !PortfolioMath.validMoney(price) || price <= 0) {
                 if (old != null) next[code] = old
                 return@forEach
             }
+            eligibleCodes += code
             val signature = "${stock.targetYield}:${stock.dps}"
             val yield = PortfolioMath.yieldPercent(stock.dps, price)
             val ready = yield >= stock.targetYield
@@ -158,11 +205,16 @@ object NotificationPolicy {
                 return@forEach
             }
             if (newlyReady) {
-                hits += PriceAlertHit(stock, price, yield, held = holding != null)
+                hits += PriceAlertHit(
+                    stock, price, yield,
+                    held = holding != null,
+                    sourceLabel = freshQuote?.sourceLabel,
+                    processedBy = freshQuote?.processedBy
+                )
             }
             next[code] = PriceAlertState(signature, ready, old?.notifiedDate)
         }
-        return PriceAlertPlan(hits, next)
+        return PriceAlertPlan(hits, next, eligibleCodes)
     }
 
     fun dividendHoldings(holdings: List<Holding>, date: LocalDate): List<Holding> = holdings.filter {

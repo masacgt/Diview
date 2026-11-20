@@ -3,10 +3,13 @@ package com.kurogane.dividend.data
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.io.OutputStream
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
@@ -154,6 +157,32 @@ class CloudflareMarketRepositoryTest {
         assertFalse(urls.any { "catalog" in it })
     }
 
+    @Test fun targetedPriceRefreshNormalizesPaddedCodesAndPreservesClassShares() = runBlocking {
+        val urls = mutableListOf<String>()
+        val marketDate = "2026-11-04"
+        val repo = repository(mutableListOf(
+            Connection(200, """{"run_id":"$marketDate","market_data_date":"$marketDate","complete":true,"items":[{"code":"7203","price":2800,"quote_date":"$marketDate"}]}"""),
+            Connection(200, """{"run_id":"$marketDate","market_data_date":"$marketDate","complete":true,"items":[{"code":"25935","price":3000,"quote_date":"$marketDate"}]}""")
+        ), urls)
+
+        val padded = repo.fetchTargetedPriceSnapshot(listOf("72030"), java.time.LocalDate.parse(marketDate))
+        val classShare = repo.fetchTargetedPriceSnapshot(listOf("25935"), java.time.LocalDate.parse(marketDate))
+
+        assertEquals(2800.0, padded.quotes.getValue("7203").price, 0.0)
+        assertEquals(3000.0, classShare.quotes.getValue("25935").price, 0.0)
+        assertTrue(urls.all { it.endsWith("/api/v1/notification-prices") })
+    }
+
+    @Test fun quoteFetchWithoutCatalogFallbackPropagatesHttpFailure() {
+        val urls = mutableListOf<String>()
+        val repo = repository(mutableListOf(Connection(503, "")), urls)
+        assertThrows(MarketHttpException::class.java) {
+            runBlocking { repo.fetchSearchQuotes(listOf("7203"), allowCatalogFallback = false) }
+        }
+        assertEquals(1, urls.size)
+        assertFalse(urls.any { "catalog" in it })
+    }
+
     @Test fun productCategoriesUseTheFullUniverseApiAndPreserveUnknownAndFiveDigitCodes() = runBlocking {
         val urls = mutableListOf<String>()
         val repo = repository(mutableListOf(Connection(200, """{"categories":{"1306":"014","8951":"013","25935":"011","285A":null,"9999":"014"}}""")), urls)
@@ -173,10 +202,15 @@ class CloudflareMarketRepositoryTest {
     }
 
     private class Connection(private val status: Int, private val body: String,
-                             private val failure: Exception? = null) : HttpURLConnection(URL("https://example.com")) {
+                             private val failure: Exception? = null,
+                             private val retryAfter: String? = null) : HttpURLConnection(URL("https://example.com")) {
         var disconnected = false
+        val output = ByteArrayOutputStream()
         override fun getResponseCode(): Int { failure?.let { throw it }; return status }
+        override fun getHeaderField(name: String?): String? =
+            if (name.equals("Retry-After", ignoreCase = true)) retryAfter else null
         override fun getInputStream(): InputStream = ByteArrayInputStream(body.toByteArray())
+        override fun getOutputStream(): OutputStream = output
         override fun disconnect() { disconnected = true }
         override fun connect() {}
         override fun usingProxy() = false
@@ -199,6 +233,19 @@ class CloudflareMarketRepositoryTest {
         assertEquals(2000.0, stock.marketPrice!!, 0.0)
         assertTrue(connection.disconnected)
         assertFalse(connection.instanceFollowRedirects)
+    }
+
+    @Test fun parsesIrbankMasterOnlySecurityWithoutInventingMarketData() = runBlocking {
+        val response = """{"code":"1301","name":"IRBANK only security","dividend":{"annual_dps":null,"annual_dps_adjusted":null,"dividend_period":"unknown","field_status":{"annual_dps":"empty"}},"market_price":null,"market_yield_rate":null,"dividend_status":"unknown","data_retrieval":{"processing_status":"master_only","company_info":{"status":"master_only"}}}"""
+        val stock = repository(Connection(200, response)).getSecurity("1301", allowCatalogFallback = false)!!
+
+        assertEquals("1301", stock.code)
+        assertEquals("IRBANK only security", stock.name)
+        assertNull(stock.marketPrice)
+        assertNull(stock.annualDividendPerShare)
+        assertFalse(stock.isNoDividendConfirmed)
+        assertTrue(stock.hasDividendStatus)
+        assertEquals("master_only", stock.dataRetrieval?.companyInfo?.status)
     }
 
     @Test fun missingDividendAndNullPriceRemainUnknown() = runBlocking {
@@ -354,6 +401,7 @@ class CloudflareMarketRepositoryTest {
         assertEquals("2026-10-09", snapshot.marketDataDate)
         assertEquals(setOf("7203", "9999", "1326", "8306"), snapshot.quotes.keys)
         assertEquals(2000.0, snapshot.quotes.getValue("7203").price, 0.0)
+        assertEquals("2026-10-09", snapshot.quotes.getValue("7203").quoteDate)
         assertEquals(100.0, snapshot.quotes.getValue("7203").annualDividendPerShare!!, 0.0)
         assertEquals(25.0, snapshot.quotes.getValue("9999").annualDividendPerShare!!, 0.0)
         assertNull(snapshot.quotes.getValue("1326").annualDividendPerShare)
@@ -369,6 +417,144 @@ class CloudflareMarketRepositoryTest {
 
         assertNull(snapshot.marketDataDate)
         assertTrue(snapshot.quotes.isEmpty())
+    }
+
+    @Test fun targetedPriceSnapshotUsesTenCodeBatchesAndPinsPublishedGeneration() = runBlocking {
+        val requestedDate = "2026-11-04"
+        val marketDate = "2026-11-03"
+        val generation = "$marketDate-daa434e899b0493a9fdf346067419041"
+        val codes = (1000..1020).map(Int::toString)
+        fun payload(batch: List<String>) = """{"run_id":"$generation","market_data_date":"$marketDate","complete":true,"items":[${batch.joinToString(",") { code ->
+            """{"code":"$code","price":1200,"quote_date":"$marketDate","annual_dividend_per_share":60,"dividend_status":"has_dividend","attribution":{"source_label":"Yahoo Finance via yfinance"}}"""
+        }}]}"""
+        val urls = mutableListOf<String>()
+        val connections = mutableListOf<Connection>()
+        val pending = mutableListOf(
+            Connection(200, payload(codes.take(10))),
+            Connection(200, payload(codes.drop(10).take(10))),
+            Connection(200, payload(codes.drop(20)))
+        )
+        val repo = CloudflareMarketRepository("https://example.com", Dispatchers.Unconfined) { url ->
+            urls += url.toString()
+            pending.removeAt(0).also(connections::add)
+        }
+        val snapshot = repo.fetchTargetedPriceSnapshot(codes, java.time.LocalDate.parse(requestedDate))
+
+        assertEquals(3, urls.size)
+        assertTrue(urls.all { it.endsWith("/api/v1/notification-prices") })
+        assertEquals(listOf(10, 10, 1), connections.map { JSONObject(it.output.toString(Charsets.UTF_8)).getJSONArray("codes").length() })
+        assertEquals(requestedDate, JSONObject(connections.first().output.toString(Charsets.UTF_8)).getString("market_data_date"))
+        assertFalse(JSONObject(connections.first().output.toString(Charsets.UTF_8)).has("run_id"))
+        assertEquals(generation, JSONObject(connections[1].output.toString(Charsets.UTF_8)).getString("run_id"))
+        assertTrue(connections.all { it.requestMethod == "POST" })
+        assertTrue(connections.all { it.getRequestProperty("Content-Type").startsWith("application/json") })
+        assertEquals(generation, snapshot.generation)
+        assertEquals(marketDate, snapshot.marketDataDate)
+        assertEquals(codes.toSet(), snapshot.quotes.keys)
+        assertEquals("Yahoo Finance via yfinance", snapshot.quotes.getValue("1000").sourceLabel)
+    }
+
+    @Test fun targetedPriceSnapshotRejectsDifferentGenerationsAcrossBatches() {
+        val marketDate = "2026-11-03"
+        val generation = "$marketDate-daa434e899b0493a9fdf346067419041"
+        val codes = (1000..1010).map(Int::toString)
+        val firstItems = codes.take(10).joinToString(",") {
+            """{"code":"$it","price":1200,"quote_date":"$marketDate"}"""
+        }
+        val connections = mutableListOf(
+            Connection(200, """{"run_id":"$generation","market_data_date":"$marketDate","complete":true,"items":[$firstItems]}"""),
+            Connection(200, """{"run_id":"$marketDate-ffeeddccbbaa00998877665544332211","market_data_date":"$marketDate","complete":true,"items":[{"code":"1010","price":1200,"quote_date":"$marketDate"}]}""")
+        )
+
+        assertThrows(java.io.IOException::class.java) {
+            runBlocking { repository(connections, mutableListOf()).fetchTargetedPriceSnapshot(codes, java.time.LocalDate.parse(marketDate)) }
+        }
+    }
+
+    @Test fun targetedPriceSnapshotKeepsEarlierBatchesAndRetryAfterOnTransientFailure() = runBlocking {
+        val marketDate = "2026-11-03"
+        val generation = "$marketDate-daa434e899b0493a9fdf346067419041"
+        val codes = (1000..1010).map(Int::toString)
+        val firstItems = codes.take(10).joinToString(",") {
+            """{"code":"$it","price":1200,"quote_date":"$marketDate"}"""
+        }
+        val connections = mutableListOf(
+            Connection(200, """{"run_id":"$generation","market_data_date":"$marketDate","complete":true,"items":[$firstItems]}"""),
+            Connection(503, "", retryAfter = "120")
+        )
+
+        val snapshot = repository(connections, mutableListOf())
+            .fetchTargetedPriceSnapshot(codes, java.time.LocalDate.parse(marketDate))
+
+        assertFalse(snapshot.isComplete)
+        assertEquals(120L, snapshot.retryAfterSeconds)
+        assertEquals(generation, snapshot.generation)
+        assertEquals(marketDate, snapshot.marketDataDate)
+        assertEquals(codes.take(10).toSet(), snapshot.quotes.keys)
+    }
+
+    @Test fun targetedPriceSnapshotDoesNotTreatGenerationConflictAsRetryablePartialData() {
+        val marketDate = "2026-11-03"
+        val generation = "$marketDate-daa434e899b0493a9fdf346067419041"
+        val codes = (1000..1010).map(Int::toString)
+        val firstItems = codes.take(10).joinToString(",") {
+            """{"code":"$it","price":1200,"quote_date":"$marketDate"}"""
+        }
+        val connections = mutableListOf(
+            Connection(200, """{"run_id":"$generation","market_data_date":"$marketDate","complete":true,"items":[$firstItems]}"""),
+            Connection(409, "", retryAfter = "30")
+        )
+
+        val error = assertThrows(MarketHttpException::class.java) {
+            runBlocking {
+                repository(connections, mutableListOf())
+                    .fetchTargetedPriceSnapshot(codes, java.time.LocalDate.parse(marketDate))
+            }
+        }
+
+        assertEquals(409, error.status)
+    }
+
+    @Test fun targetedPriceSnapshotPropagatesHttpFailuresAndLeavesMissingQuotesAbsent() = runBlocking {
+        val failed = repository(Connection(503, ""))
+        assertThrows(MarketHttpException::class.java) {
+            runBlocking { failed.fetchTargetedPriceSnapshot(listOf("7203")) }
+        }
+
+        val urls = mutableListOf<String>()
+        val connection = Connection(200, """{"run_id":"2026-11-03-daa434e899b0493a9fdf346067419041","market_data_date":"2026-11-03","complete":true,"items":[{"code":"7203","price":3000,"quote_date":"2026-11-03"},{"code":"8306","price":1200}]}""")
+        val repo = CloudflareMarketRepository("https://example.com", Dispatchers.Unconfined) { url ->
+            urls += url.toString()
+            connection
+        }
+        val partial = repo.fetchTargetedPriceSnapshot(listOf("7203", "8306"), java.time.LocalDate.parse("2026-11-03"))
+        assertEquals(setOf("7203"), partial.quotes.keys)
+        assertEquals(listOf("https://example.com/api/v1/notification-prices"), urls)
+        assertEquals(2, JSONObject(connection.output.toString(Charsets.UTF_8)).getJSONArray("codes").length())
+    }
+
+    @Test fun incomeAdviceCatalogFetchesAndParsesThePublishedCandidateApi() = runBlocking {
+        val generation = "2026-11-02-daa434e899b0493a9fdf346067419041"
+        val response = """{"generation":"$generation","generated_at":"2026-11-03T19:41:21.044036+00:00","items":[
+            {"code":" 7203 ","name":"Toyota","currency":"jpy","annual_dividend_per_share":100,"annual_dividend_basis":"next_fiscal_year_forecast","observed_months":[6,6,0,13,3],"monthly_estimate_per_100_shares":2400,"score":87,"source_catalog_generation":"$generation"},
+            {"code":"8306","name":"Mitsubishi UFJ","currency":"USD","annual_dividend_per_share":60,"observed_months":[6],"monthly_estimate_per_100_shares":1200,"score":80}
+        ]}"""
+        val urls = mutableListOf<String>()
+        val catalog = repository(mutableListOf(Connection(200, response)), urls).fetchIncomeAdviceCatalog()
+
+        assertEquals(generation, catalog.generation)
+        assertEquals("2026-11-03T19:41:21.044036+00:00", catalog.generatedAt)
+        assertEquals(
+            catalog.candidates,
+            repository(Connection(200, "{}")).parseIncomeAdviceCatalog(catalog.rawJson).candidates
+        )
+        assertEquals(listOf("7203"), catalog.candidates.map { it.code })
+        assertEquals(listOf(3, 6), catalog.candidates.single().observedMonths)
+        assertEquals("JPY", catalog.candidates.single().currency)
+        assertEquals("next_fiscal_year_forecast", catalog.candidates.single().annualDividendBasis)
+        assertEquals(2400.0, catalog.candidates.single().monthlyEstimatePer100Shares, 0.0)
+        assertEquals(87, catalog.candidates.single().score)
+        assertTrue(urls.single().endsWith("/api/v1/income-advice-candidates"))
     }
 
     @Test fun parsesCloudflareDividendMonthsAndKeepsOnlyRequestedSymbolsAndValidMonths() = runBlocking {

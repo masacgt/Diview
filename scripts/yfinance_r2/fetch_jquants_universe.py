@@ -21,6 +21,8 @@ SECURITY_TYPES = {
     "012": "equity",
     "013": "reit",
     "014": "etf",
+    # Product category definitions: https://jpx-jquants.com/en/spec/eq-master/product-category
+    "023": "etf",  # Foreign ETFs
 }
 
 

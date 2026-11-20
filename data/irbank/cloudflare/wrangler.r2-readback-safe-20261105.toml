@@ -1,0 +1,22 @@
+name = "diview-irbank-r2-readback"
+compatibility_date = "2026-10-03"
+main = "src/index.js"
+
+[observability]
+enabled = false
+
+[triggers]
+crons = []
+
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimitCounter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimitCounter"]
+
+[[r2_buckets]]
+binding = "MARKET_DATA"
+bucket_name = "diview-market-data"
+remote = true

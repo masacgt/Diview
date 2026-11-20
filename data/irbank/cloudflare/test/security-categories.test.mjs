@@ -16,8 +16,10 @@ const universe = {
 function environment(document = universe) {
   return {
     APP_DEFINITIONS: { get: async () => '{}' },
+    RATE_LIMITER: { idFromName: name => name, get: () => ({ fetch: async () => Response.json({ allowed: true, count: 1 }) }) },
     DB: { prepare: () => { throw Error('Category lookup must not use D1'); } },
     MARKET_DATA: { get: async key => {
+      if (key.startsWith('definitions/v1/')) return null;
       assert.equal(key, universeKey, 'Categories must not depend on price/catalog coverage');
       return document ? { json: async () => document } : null;
     } },

@@ -16,10 +16,11 @@ function database() {
   migrations.forEach(s => db.exec(s));
   return db;
 }
-// Read actual SQL from every Worker source file, including fallback query maps.
+// Read D1 SQL from Worker sources; Durable Object SQLite statements use a separate database.
 const queries = fs.readdirSync(path.join(root, 'src')).filter(f => /\.(mjs|js)$/.test(f))
   .flatMap(f => [...fs.readFileSync(path.join(root, 'src', f), 'utf8')
-    .matchAll(/(['"`])((?:SELECT|INSERT|UPDATE|DELETE)\s[\s\S]*?)\1/g)].map(m => m[2]));
+    .matchAll(/(['"`])((?:SELECT|INSERT|UPDATE|DELETE)\s[\s\S]*?)\1/g)].map(m => m[2]))
+  .filter(sql => !/\brate_limit_(?:state|legacy_seed)\b/.test(sql));
 const query = prefix => {
   const result = queries.find(s => s.startsWith(prefix));
   assert.ok(result, `SQL not found: ${prefix}`);
@@ -41,12 +42,22 @@ function fixtures(t) {
 
 test('all actual Worker SQL compiles against base plus migrations', t => {
   const db = database(); t.after(() => db.close());
-  assert.ok(queries.length >= 60, `Unexpected SQL inventory size: ${queries.length}`);
+  assert.ok(queries.length >= 10, `Unexpected SQL inventory size after retiring D1 market-data paths: ${queries.length}`);
   for (const sql of queries) {
     assert.ok(!sql.includes('${'), `Dynamic SQL needs explicit test expansion: ${sql}`);
     assert.doesNotThrow(() => db.prepare(sql), sql);
   }
   console.log(`Validated ${queries.length} Worker SQL literals`);
+});
+
+test('securities code lookup uses both indexed branches of the OR predicate', t => {
+  const db = database(); t.after(() => db.close());
+  const query = `SELECT security_code, security_code_display, name, metrics_json FROM securities
+    WHERE security_code = ? OR security_code_display = ? LIMIT ?`;
+  const plan = db.prepare(`EXPLAIN QUERY PLAN ${query}`).all('72030', '7203', 1)
+    .map(row => row.detail).join(' ');
+  assert.match(plan, /sqlite_autoindex_securities_1/);
+  assert.match(plan, /idx_securities_code_display/);
 });
 
 test('migration replay preserves existing rows and operator definitions; defaults are complete', t => {
@@ -66,20 +77,31 @@ test('migration replay preserves existing rows and operator definitions; default
   assert.deepEqual(snapshot(), before);
 });
 
-test('real rate-limit UPSERT increments and resets at the window boundary', t => {
+test('the Worker keeps a read-only legacy rate-limit lookup for first-use Durable Object handoff', t => {
   const db = database(); t.after(() => db.close());
-  const stmt = db.prepare(query('INSERT INTO api_request_log'));
-  const hit = now => stmt.get('bucket',now,now,60,now,60).request_count;
-  assert.equal(hit('2026-10-20T00:00:00Z'), 1);
-  assert.equal(hit('2026-10-20T00:00:59Z'), 2);
-  assert.equal(hit('2026-10-20T00:01:00Z'), 1);
+  db.prepare('INSERT INTO api_request_log(bucket_key, request_count, window_started_at) VALUES (?, ?, ?)')
+    .run('bucket', 4, '2026-10-20T00:00:00Z');
+  const statement = query('SELECT request_count, window_started_at FROM api_request_log');
+  assert.match(statement, /WHERE bucket_key = \?/);
+  assert.deepEqual({ ...db.prepare(statement).get('bucket') }, {
+    request_count: 4,
+    window_started_at: '2026-10-20T00:00:00Z',
+  });
 });
 
 test('notification retries preserve delivery and terminal status; event IDs are never reused', t => {
   const db = database(); t.after(() => db.close());
-  const insert = db.prepare(query('INSERT INTO notification_events'));
+  const insert = db.prepare(`INSERT INTO notification_events(
+    security_code,event_type,from_status,to_status,occurred_at,payload_json
+  ) VALUES (?,?,?,?,?,?)`);
   const event = insert.run('13010','GRADE_CHANGED',null,'A','now','{}').lastInsertRowid;
-  const delivery = db.prepare(query('INSERT INTO notification_deliveries'));
+  const delivery = db.prepare(`INSERT INTO notification_deliveries(event_id,device_token,attempts,delivered_at,terminal_at,last_error,updated_at)
+    VALUES (?, ?, 1, ?, ?, ?, ?)
+    ON CONFLICT(event_id,device_token) DO UPDATE SET
+      attempts=notification_deliveries.attempts+1,
+      delivered_at=COALESCE(excluded.delivered_at,notification_deliveries.delivered_at),
+      terminal_at=COALESCE(excluded.terminal_at,notification_deliveries.terminal_at),
+      last_error=excluded.last_error,updated_at=excluded.updated_at`);
   delivery.run(event,'token',null,null,'retry','t1');
   delivery.run(event,'token','t2',null,null,'t2');
   delivery.run(event,'token',null,'t3','terminal','t3');
@@ -89,18 +111,23 @@ test('notification retries preserve delivery and terminal status; event IDs are 
   assert.ok(insert.run('13010','GRADE_CHANGED','A','B','later','{}').lastInsertRowid > event);
 });
 
-test('snapshot UPSERT, nullable metrics, audit defaults, and raw backend source tags', t => {
+test('legacy analysis snapshots and checkpoints remain readable until an explicit retention decision', t => {
   const db = database(); t.after(() => db.close());
-  const state = db.prepare(query('INSERT INTO stock_analysis_state'));
-  state.run('13010','t1',null,1,null,null,null,null,'[]','{}');
-  state.run('13010','t2',null,2,80,'A','NEAR',0.95,'[]','{"updated":true}');
+  db.prepare(`INSERT INTO stock_analysis_state(
+    security_code,last_observed_at,market_date,definition_version,overall_score,overall_grade,
+    buy_zone_status,buy_zone_ratio,anomaly_flags_json,analysis_json
+  ) VALUES (?,?,?,?,?,?,?,?,?,?)`).run('13010','t2',null,2,80,'A','NEAR',0.95,'[]','{"updated":true}');
+  db.prepare(`INSERT INTO stock_analysis_history(
+    security_code,observed_at,market_date,definition_version,overall_score,overall_grade,
+    buy_zone_status,buy_zone_ratio,anomaly_flags_json,metrics_json,analysis_json
+  ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run('13010','t2',null,2,80,'A','NEAR',0.95,'[]','{}','{"updated":true}');
   assert.equal(db.prepare('SELECT count(*) n FROM stock_analysis_state').get().n,1);
   assert.equal(db.prepare('SELECT last_observed_at FROM stock_analysis_state').get().last_observed_at,'t2');
-  const audit = db.prepare(query('INSERT OR IGNORE INTO app_definition_audit'));
-  audit.run('key',1,'hash','{}'); audit.run('key',1,'hash','{}');
-  assert.ok(db.prepare('SELECT updated_at FROM app_definition_audit').get().updated_at);
-  assert.equal(db.prepare('SELECT count(*) n FROM app_definition_audit').get().n,1);
-  db.prepare(query('INSERT INTO backend_state')).run('raw-source-tag','now');
+  db.prepare(`INSERT INTO backend_state(state_key,value_json,updated_at) VALUES (?,?,?)`).run('analysis_source','legacy','t2');
+  const before = db.prepare('SELECT analysis_json FROM stock_analysis_history').get().analysis_json;
+  migrations.forEach(s => db.exec(s));
+  assert.equal(db.prepare('SELECT analysis_json FROM stock_analysis_history').get().analysis_json,before);
+  assert.equal(db.prepare('SELECT value_json FROM backend_state WHERE state_key=?').get('analysis_source').value_json,'legacy');
 });
 
 test('CSV round trip keeps full annual periods, numeric dividend years, escaping and NULLs', async t => {

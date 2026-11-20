@@ -15,7 +15,17 @@ enabled = true
 head_sampling_rate = 1
 
 [triggers]
-crons = ["17 * * * *"]
+# Hold market analysis until Workers Paid entitlement and controlled CPU measurement are confirmed.
+# Keep R2 retention and feedback retry/cleanup maintenance active.
+crons = ["*/5 * * * *", "17 * * * *"]
+
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimitCounter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimitCounter"]
 
 [[d1_databases]]
 binding = "DB"

@@ -19,8 +19,8 @@ DEFAULT_R2_KEY = "market/yfinance/v2/issuer_dividends/current.json"
 DEFAULT_OUTPUT = Path.home() / ".cache" / "diview-irbank-v2-dividend-batch.json"
 MAX_DAILY_REQUESTS = 200
 FORECAST_AUDIT_VERSION = 1
-MAX_DISCLOSURE_LIST_PAGES = 10
-MAX_FORECAST_DOCUMENTS = 8
+MAX_DISCLOSURE_LIST_PAGES = refresh.MAX_DISCLOSURE_LIST_PAGES
+MAX_FORECAST_DOCUMENTS = refresh.MAX_FORECAST_DOCUMENTS
 MAX_FORECAST_REQUESTS = MAX_DISCLOSURE_LIST_PAGES + MAX_FORECAST_DOCUMENTS
 
 
@@ -567,7 +567,7 @@ def main() -> int:
     if client:
         saved_digest, etag = publish_index(client, args.bucket, args.key, updated)
         print(json.dumps({"published_key": args.key, "etag": etag, "read_back_sha256": saved_digest}, ensure_ascii=False))
-    return 0
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":

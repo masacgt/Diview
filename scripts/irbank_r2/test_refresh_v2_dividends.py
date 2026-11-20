@@ -13,6 +13,7 @@ from refresh_v2_dividends import (
     DEFAULT_R2_KEY,
     DIVIDEND_SHARD_MANIFEST_KEY,
     DIVIDEND_SHARD_ROOT,
+    MAX_DISCLOSURE_LIST_PAGES,
     activate_dividend_index_shards,
     build_dividend_index_shards,
     fetch_latest_forecast,
@@ -23,6 +24,7 @@ from refresh_v2_dividends import (
 from refresh_v2_dividend_batch import is_due, publish_index, update_forecast, main as batch_main
 from refresh_v2_dividends import main as full_refresh_main
 from refresh_v2_dividend_yields import main as yield_refresh_main
+import run_irbank_forecast_daily as forecast_daily
 
 
 class MissingR2Key(Exception):
@@ -45,6 +47,65 @@ class FakeR2Client:
 
 
 class IrbankForecastParsingTests(unittest.TestCase):
+    def test_forecast_disclosure_pagination_stops_at_configured_page_limit(self):
+        listings = [
+            {"disclosures": [], "next_cursor": f"cursor-{page + 1}"}
+            for page in range(MAX_DISCLOSURE_LIST_PAGES)
+        ]
+        audit = {}
+
+        with patch("refresh_v2_dividends.request_json", side_effect=listings) as request:
+            forecast, _ = fetch_latest_forecast(
+                "7203", None, "test-token", as_of=date(2026, 11, 1), audit=audit
+            )
+
+        self.assertIsNone(forecast)
+        self.assertEqual(request.call_count, MAX_DISCLOSURE_LIST_PAGES)
+        self.assertEqual(audit["resolution"], "review_required")
+        self.assertEqual(audit["evidence"]["reason"], "disclosure_page_limit")
+        self.assertEqual(audit["evidence"]["disclosure_pages_read"], MAX_DISCLOSURE_LIST_PAGES)
+
+    def test_batch_reports_failure_with_nonzero_status_after_preserving_partial_output(self):
+        catalog = [{"code": "8984", "edinet_code": "G04516"}]
+        original = {"items": {"8984": {"forecast_status": "not_requested"}}}
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "input.json"
+            output = Path(directory) / "output.json"
+            source.write_text(json.dumps(original), encoding="utf-8")
+            with patch.dict(os.environ, {"IRBANK_API_KEY": "test"}), \
+                 patch.object(sys, "argv", ["batch", "--input", str(source), "--output", str(output),
+                                            "--max-api-requests", "20", "--forecast-codes", "8984"]), \
+                 patch("refresh_v2_dividend_batch.refresh.load_catalog", return_value=catalog), \
+                 patch("refresh_v2_dividend_batch.refresh.request_json", return_value={"remaining": 100}), \
+                 patch("refresh_v2_dividend_batch.refresh.fetch_latest_forecast",
+                       side_effect=NameError("simulated forecast regression")):
+                status = batch_main()
+            result = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(status, 1)
+        self.assertEqual(result["batch_sync"]["last_run_failures"], 1)
+        self.assertEqual(result["items"]["8984"]["forecast_last_error"], "NameError")
+
+    def test_daily_runner_audits_then_stops_when_a_batch_reports_failures(self):
+        batch_report = json.dumps({
+            "api_requests_this_run_including_usage": 21,
+            "codes_touched": 1,
+            "failures": 1,
+        })
+        with tempfile.TemporaryDirectory() as directory:
+            universe = Path(directory) / "universe.json"
+            universe.write_text(json.dumps({"complete": True, "securities": [{"code": "8984"}]}), encoding="utf-8")
+            with patch.object(sys, "argv", ["daily", "--universe-json", str(universe)]), \
+                 patch("run_irbank_forecast_daily.api.required_env", return_value="test-token"), \
+                 patch("run_irbank_forecast_daily.api.request_json", return_value={"remaining": 100}), \
+                 patch("run_irbank_forecast_daily.run", side_effect=[batch_report, json.dumps({"coverage_status": "partial"})]) as run:
+                status = forecast_daily.main()
+
+        self.assertEqual(status, 1)
+        self.assertEqual(run.call_count, 2)
+        self.assertTrue(run.call_args_list[0].kwargs["allow_nonzero"])
+        self.assertEqual(run.call_args_list[1].kwargs["label"], "audit R2 forecast coverage")
+
     def test_irbank_current_forecast_without_current_member_and_reject_ambiguous_values(self):
         doc = {"meta": {"doc_id": "20260806513247", "source": "tdnet"}, "xbrl_facts": [
             {"element_name": "FiscalYearEnd", "context": "CurrentYearInstant", "value": "2027-03-31"},
@@ -116,6 +177,7 @@ class IrbankForecastParsingTests(unittest.TestCase):
 
     def test_reit_forecast_is_due_after_first_forecast_period_and_empty_is_rechecked(self):
         item = {"edinet_code": "G04516", "forecast_status": "available",
+                "forecast_audit_version": 1,
                 "forecast_checked_at": "2027-02-27T00:00:00Z", "forecast": {"first_period_end": "2027-02-28"}}
         self.assertFalse(is_due(item, "forecast", None, datetime(2027, 2, 27, 12, tzinfo=timezone.utc), 60))
         self.assertTrue(is_due(item, "forecast", None, datetime(2027, 2, 27, 16, tzinfo=timezone.utc), 60))

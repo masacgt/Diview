@@ -66,20 +66,23 @@ class JreitStockDetailTest {
 
     @Test fun reitUsesDedicatedExplanationsWithoutOrdinaryPayoutThreshold() {
         open("8951", "東証33業種未分類")
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("参考情報").fetchSemanticsNodes().isNotEmpty() }
         val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
+        list.performScrollToNode(hasText("参考情報"))
+        compose.onNodeWithText("参考情報").assertIsDisplayed()
         list.performScrollToNode(hasText("J-REITの指標を参考表示します", substring = true))
         compose.onAllNodesWithText("J-REITの指標を参考表示します", substring = true)[0].assertIsDisplayed()
         compose.onNodeWithText("適正目安 30〜50%").assertDoesNotExist()
         list.performScrollToNode(hasText("配当指標の解説"))
         compose.onNodeWithText("配当指標の解説").assertIsDisplayed()
-        compose.onAllNodesWithText("J-REITの指標を参考表示します", substring = true)[1].performScrollTo().assertIsDisplayed()
+        list.performScrollToNode(hasText("帳簿上の純資産に対する投資口価格", substring = true))
+        compose.onNodeWithText("帳簿上の純資産に対する投資口価格", substring = true).assertIsDisplayed()
     }
 
     @Test fun unidentifiedProductDoesNotReceiveStockScore() {
         open("9999", "東証33業種未分類", offline = true)
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("分類未確認").fetchSemanticsNodes().isNotEmpty() }
         val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
+        list.performScrollToNode(hasText("分類未確認"))
+        compose.onNodeWithText("分類未確認").assertIsDisplayed()
         list.performScrollToNode(hasText("銘柄の種類を取得できないため", substring = true))
         compose.onNodeWithText("適正目安 30〜50%").assertDoesNotExist()
     }
@@ -101,8 +104,9 @@ class JreitStockDetailTest {
 
     @Test fun watchlistedReitUsesTheDedicatedDisplayWithoutAnInternetConnection() {
         open("8984", "東証33業種未分類", offline = true, watchlist = true)
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("参考情報").fetchSemanticsNodes().isNotEmpty() }
         val list = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex))
+        list.performScrollToNode(hasText("参考情報"))
+        compose.onNodeWithText("参考情報").assertIsDisplayed()
         list.performScrollToNode(hasText("J-REITの指標を参考表示します", substring = true))
         compose.onAllNodesWithText("J-REITの指標を参考表示します", substring = true)[0].assertIsDisplayed()
     }

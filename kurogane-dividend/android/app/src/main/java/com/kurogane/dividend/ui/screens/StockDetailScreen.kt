@@ -1321,13 +1321,13 @@ fun StockDetailScreen(
                                 val maxDps = history.maxOfOrNull { it.annualDividend ?: 0.0 }?.takeIf { it > 0 } ?: 1.0
                                 val prefix = currentHolding.currency
                                 val bars = history.map { point ->
-                                    val dps = point.annualDividend ?: 0.0
-                                    val dpsText = com.kurogane.dividend.model.formatFinancialAmountDisplay(dps)
+                                    val dps = point.annualDividend
+                                    val dpsText = dps?.let { com.kurogane.dividend.model.formatFinancialAmountDisplay(it) } ?: "未取得"
                                     val fiscalPeriodLabel = if (isJreit || useFiscalChart || financial?.issuerDividends.orEmpty().isNotEmpty()) "${point.year}期" else "${point.year}年"
                                     Triple(
                                         fiscalPeriodLabel,
                                         stringResource(R.string.add_holding_1_s_2_s_2, prefix, dpsText),
-                                        (dps / maxDps * 0.95).toFloat()
+                                        ((dps ?: 0.0) / maxDps * 0.95).toFloat()
                                     )
                                 }
                                 var barsVisible by remember(stockCode) { mutableStateOf(false) }

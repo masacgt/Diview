@@ -3339,8 +3339,9 @@ def collect_symbol(client: Any, bucket: str, code: str, symbol: str, as_of: date
         code, universe_entry or {"security_code_display": code}, profile, current, sync,
     )
     if catalog_item is not None:
-        catalog_item["income_advice"] = income_advice_candidate(
-            code, catalog_item["name"], current, dividends, as_of,
+        catalog_item["income_advice"] = income_advice_candidate_with_missing_partition(
+            client, bucket, symbol, code, catalog_item["name"], current, dividends, as_of,
+            allow_missing_year_read=not full_action_history_required and not full_history_refreshed,
         )
     return {"code": code, "symbol": symbol, "name": profile["display_name"], "price": close,
             "quote_date": price_date.isoformat() if price_date else None,
@@ -3622,6 +3623,51 @@ def income_advice_candidate(code: str, name: str, current: dict[str, Any],
         "computed_at": iso_now(),
         "source": "Yahoo Finance via yfinance V2",
     }
+
+
+def income_advice_candidate_with_missing_partition(
+    client: Any, bucket: str, symbol: str, code: str, name: str,
+    current: dict[str, Any], dividends: list[dict[str, Any]], as_of: date,
+    *, allow_missing_year_read: bool,
+) -> dict[str, Any] | None:
+    exclusions: dict[str, int] = {}
+    candidate = income_advice_candidate(code, name, current, dividends, as_of, exclusions)
+    if not allow_missing_year_read or (
+        candidate is None and not exclusions.get("no_recurring_dividend_months")
+    ):
+        return candidate
+
+    latest_completed_year = as_of.year - 1
+    missing_year = latest_completed_year - 2
+    recurring_window_years = {latest_completed_year - 1, latest_completed_year}
+    has_recent_completed_year_dividends = False
+    already_has_missing_year_dividend = False
+    for event in dividends:
+        event_date = date_value(event.get("date"))
+        amount = finite_number(event.get("amount"))
+        if event_date is None or amount is None or amount <= 0:
+            continue
+        if event_date.year in recurring_window_years:
+            has_recent_completed_year_dividends = True
+        if event_date.year == missing_year:
+            already_has_missing_year_dividend = True
+    if already_has_missing_year_dividend or not has_recent_completed_year_dividends:
+        return candidate
+
+    try:
+        older_dividends = load_year_records(
+            client, bucket, symbol, "dividends", {missing_year}, include_archive=False,
+        )
+    except Exception as exc:
+        print(
+            f"Income-advice older dividend partition unavailable for {symbol}: {type(exc).__name__}",
+            file=sys.stderr,
+        )
+        return candidate
+    if not older_dividends:
+        return candidate
+    combined_dividends = collector.merge_dated(dividends, older_dividends, "date")
+    return income_advice_candidate(code, name, current, combined_dividends, as_of)
 
 
 def catalog_item_from_documents(code: str, security: dict[str, Any], profile: dict[str, Any],

@@ -3,8 +3,13 @@ package com.kurogane.dividend
 import android.app.NotificationManager
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.WorkManager
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
 import com.kurogane.dividend.notifications.DiviewNotifications
+import com.kurogane.dividend.notifications.DividendNotificationWorker
 import com.kurogane.dividend.notifications.NotificationScheduler
 import com.kurogane.dividend.notifications.NotificationSettings
 import org.junit.Assert.*
@@ -18,10 +23,24 @@ class ReleaseNotificationPlatformTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val work = WorkManager.getInstance(context)
         try {
+            for (name in listOf(NotificationScheduler.PRICE_MORNING, NotificationScheduler.PRICE_EVENING)) {
+                val legacyRequest = PeriodicWorkRequestBuilder<DividendNotificationWorker>(24, TimeUnit.HOURS)
+                    .setInitialDelay(24, TimeUnit.HOURS)
+                    .setConstraints(
+                        Constraints.Builder()
+                            .setRequiredNetworkType(NetworkType.CONNECTED)
+                            .build(),
+                    )
+                    .addTag("diview.notifications")
+                    .build()
+                work.enqueueUniquePeriodicWork(name, ExistingPeriodicWorkPolicy.REPLACE, legacyRequest)
+                    .result.get(15, TimeUnit.SECONDS)
+            }
             repeat(2) { NotificationScheduler.sync(context, NotificationSettings(priceEnabled = true)) }
             for (name in listOf(NotificationScheduler.PRICE_MORNING, NotificationScheduler.PRICE_EVENING)) {
                 val unfinished = work.getWorkInfosForUniqueWork(name).get(15, TimeUnit.SECONDS).filterNot { it.state.isFinished }
                 assertEquals(1, unfinished.size)
+                assertEquals(NetworkType.NOT_REQUIRED, unfinished.single().constraints.requiredNetworkType)
             }
             NotificationScheduler.sync(context, NotificationSettings())
             for (name in listOf(NotificationScheduler.PRICE_MORNING, NotificationScheduler.PRICE_EVENING)) {

@@ -217,6 +217,10 @@ fun AssetManagementScreen(
 ) {
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
     var holdingsRestored by remember(viewModel) { mutableStateOf(false) }
+    val holdingsSnapshot by viewModel.holdings.collectAsStateWithLifecycle()
+    val hasMissingJapaneseHoldingPrices = remember(viewModel, holdingsSnapshot) {
+        viewModel.hasMissingJapaneseHoldingPrices()
+    }
     var hasAnimatedTotalAssets by remember(viewModel) { mutableStateOf(false) }
     val animateTotalAssets = holdingsRestored && !hasAnimatedTotalAssets
     LaunchedEffect(viewModel) {
@@ -227,11 +231,15 @@ fun AssetManagementScreen(
         if (holdingsRestored) viewModel.refreshAssetManagementSecurityCategories()
     }
     val lifecycleOwner = LocalLifecycleOwner.current
-    LaunchedEffect(viewModel, lifecycleOwner, holdingsRestored) {
-        if (holdingsRestored) lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            while (currentCoroutineContext().isActive) {
-                if (viewModel.hasMissingJapaneseHoldingPrices()) viewModel.retryMissingJapaneseHoldingPrices().join()
-                delay(MarketFetchPolicy.FAILURE_RETRY_MILLIS)
+    LaunchedEffect(viewModel, lifecycleOwner, holdingsRestored, hasMissingJapaneseHoldingPrices) {
+        if (holdingsRestored && hasMissingJapaneseHoldingPrices) {
+            lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                while (currentCoroutineContext().isActive && viewModel.hasMissingJapaneseHoldingPrices()) {
+                    viewModel.retryMissingJapaneseHoldingPrices().join()
+                    if (viewModel.hasMissingJapaneseHoldingPrices()) {
+                        delay(MarketFetchPolicy.FAILURE_RETRY_MILLIS)
+                    }
+                }
             }
         }
     }

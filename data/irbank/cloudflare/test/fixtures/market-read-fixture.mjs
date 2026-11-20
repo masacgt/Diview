@@ -1,3 +1,10 @@
+function rateLimiter() {
+  return {
+    idFromName: name => name,
+    get: () => ({ fetch: async () => Response.json({ allowed: true, count: 1 }) }),
+  };
+}
+
 export function marketReadFixture(code = '7203', status = 'available', archive = false) {
   const root = 'market/yfinance/v2';
   const base = `${root}/securities/${code}.T`;
@@ -27,6 +34,14 @@ export function marketReadFixture(code = '7203', status = 'available', archive =
     } } }],
     [`${root}/issuer_dividends/shards/current.json`, { schema_version: 1, prefix_length: 2, slot: 'a', prefixes: [code.slice(0, 2)] }],
   ]);
+  for (const [key, definition] of [
+    ['stock-analysis-definitions:v1', { version: 1, metric_rules: [], overall_bands: [] }],
+    ['watchlist-analysis-definitions:v1', { version: 1 }],
+  ]) {
+    const prefix = `definitions/v1/${encodeURIComponent(key)}/`;
+    documents.set(`${prefix}current.json`, { version: definition.version });
+    documents.set(`${prefix}${definition.version}.json`, definition);
+  }
   documents.set(`${root}/issuer_dividends/shards/a/${code.slice(0, 2)}.json`, {
     items: documents.get(`${root}/issuer_dividends/current.json`).items,
   });
@@ -36,10 +51,24 @@ export function marketReadFixture(code = '7203', status = 'available', archive =
   const reads = [], lists = [];
   const env = {
     APP_DEFINITIONS: { get: async () => null },
+    RATE_LIMITER: rateLimiter(),
     MARKET_DATA: {
       async get(key) {
         reads.push(key);
-        return documents.has(key) ? { json: async () => structuredClone(documents.get(key)) } : null;
+        return documents.has(key) ? {
+          etag: "fixture:" + key,
+          json: async () => structuredClone(documents.get(key)),
+          text: async () => JSON.stringify(documents.get(key)),
+        } : null;
+      },
+      async head(key) {
+        return documents.has(key) ? { etag: "fixture:" + key, httpEtag: "fixture:" + key, size: 0 } : null;
+      },
+      async put(key, body, options = {}) {
+        if (options.onlyIf?.etagDoesNotMatch === "*" && documents.has(key)) return null;
+        if (options.onlyIf?.etagMatches && options.onlyIf.etagMatches !== "fixture:" + key) return null;
+        documents.set(key, typeof body === "string" ? JSON.parse(body) : body);
+        return { etag: "fixture:" + key };
       },
       async list({ prefix }) {
         lists.push(prefix);

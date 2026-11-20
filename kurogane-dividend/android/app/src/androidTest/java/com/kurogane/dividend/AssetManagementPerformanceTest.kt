@@ -109,6 +109,8 @@ class AssetManagementPerformanceTest {
         restoration.setContent { KuroganeDividendTheme { AssetManagementScreen(model) } }
         compose.onNodeWithTag("asset_management_list").performScrollToNode(hasSetTextAction())
         compose.onNode(hasSetTextAction()).performTextInput("ZTEST299")
+        compose.onNode(hasSetTextAction()).assertTextEquals("ZTEST299")
+        compose.waitForIdle()
         compose.onNodeWithTag("asset_management_list").performScrollToKey("holding:asset-299")
         compose.onNodeWithText("表示検証銘柄 299").assertIsDisplayed()
         restoration.emulateSavedInstanceStateRestore()
