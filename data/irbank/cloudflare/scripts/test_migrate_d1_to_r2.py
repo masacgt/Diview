@@ -1,6 +1,8 @@
 import importlib.util
+import io
 import json
 import re
+import sqlite3
 import sys
 import tempfile
 import types
@@ -18,6 +20,12 @@ SPEC = importlib.util.spec_from_file_location("migrate_d1_to_r2", SCRIPT)
 migration = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(migration)
 
+CLI_FILE_ARGS = [
+    "--checkpoint-in", "unused-checkpoint-input.json",
+    "--checkpoint-out", "unused-checkpoint-output.json",
+    "--report", "unused-report.json",
+]
+
 
 def without_hash_values(value):
     if isinstance(value, dict):
@@ -31,15 +39,62 @@ def without_hash_values(value):
     return value
 
 
+def valid_irbank_source_snapshot(codes):
+    codes = sorted(codes)
+    return migration.canonical_json({
+        "schema_version": 2,
+        "source": "IRBANK Connect API v1 /securities",
+        "complete": True,
+        "security_count": len(codes),
+        "security_code_sha256": digest("\n".join(codes).encode("utf-8")).hexdigest(),
+        "securities": [{"security_code_display": code} for code in codes],
+    })
+
+
+def valid_irbank_catalog(codes):
+    return migration.canonical_json({
+        "schema_version": 1,
+        "source": "IRBANK Connect securities master",
+        "count": len(codes),
+        "securities": [{"code": code} for code in codes],
+    })
+
+
+def budget_usage_report(daily_report, effective_rows_read=None):
+    daily_rows_read = daily_report["rows_read"]
+    effective_rows_read = daily_rows_read if effective_rows_read is None else effective_rows_read
+    daily_limit_rows = daily_report.get("daily_limit_rows", migration.d1_daily_usage.DEFAULT_FREE_DAILY_LIMIT)
+    return {
+        **daily_report,
+        "daily_analytics_rows_read": daily_rows_read,
+        "daily_analytics_per_database": daily_report.get("per_database", []),
+        "minute_day_to_date_rows_read": effective_rows_read,
+        "minute_day_to_date_per_database": daily_report.get("per_database", []),
+        "minute_day_to_date_queried_at_utc": daily_report.get("queried_at_utc"),
+        "minute_day_to_date_confidence_bounds_verified": True,
+        "effective_rows_read": effective_rows_read,
+        "effective_rows_remaining": max(0, daily_limit_rows - effective_rows_read),
+        "effective_limit_exceeded": effective_rows_read > daily_limit_rows,
+        "effective_per_database": daily_report.get("per_database", []),
+        "budget_usage_source": "daily_and_minute_day_to_date",
+        "budget_usage_queried_at_utc": daily_report.get("queried_at_utc"),
+    }
+
+
 class FakeReader:
-    def __init__(self, tables=None, reported_rows=None):
+    def __init__(self, tables=None, reported_rows=None, query_plan_detail=None):
         self.tables = tables or {}
         self.reported_rows = reported_rows
+        self.query_plan_detail = query_plan_detail or (
+            "SEARCH scheduled_run_log USING INDEX idx_scheduled_run_log_completed_started_id"
+        )
         self.token = "test-token"
         self.queries = []
 
     def query(self, sql, params=None):
         self.queries.append((sql, params or []))
+        if sql.lstrip().upper().startswith("EXPLAIN QUERY PLAN"):
+            return [{"detail": self.query_plan_detail}], {"rows_read": 0}
         table_match = re.search(r"\bFROM\s+([a-z_]+)", sql, re.IGNORECASE)
         table = table_match.group(1) if table_match else ""
         rows = list(self.tables.get(table, []))
@@ -50,6 +105,20 @@ class FakeReader:
         elif re.search(r"\bWHERE\s+security_code_display\s*>", sql, re.IGNORECASE):
             cursor, limit = params
             rows = [row for row in rows if str(row.get("security_code_display", "")) > str(cursor)]
+            rows = rows[: int(limit)]
+        elif table == "scheduled_run_log" and "finished_at IS NOT NULL" in sql:
+            cutoff, cursor_started_at, cursor_id, limit = params
+            rows = [
+                row for row in rows
+                if row.get("finished_at") is not None
+                and str(row.get("status") or "").strip().lower()
+                in migration.SCHEDULED_RUN_TERMINAL_STATUSES
+                and migration.scheduled_runs_key_time(row.get("started_at")) is not None
+                and migration.scheduled_runs_key_time(row["started_at"]) >= cutoff
+                and (migration.scheduled_runs_key_time(row["started_at"]), int(row["id"]))
+                > (str(cursor_started_at), int(cursor_id))
+            ]
+            rows.sort(key=lambda row: (migration.scheduled_runs_key_time(row["started_at"]), int(row["id"])))
             rows = rows[: int(limit)]
         elif re.search(r"\bWHERE\s+id\s*>", sql, re.IGNORECASE):
             cursor, limit = params
@@ -212,16 +281,44 @@ class MigrationScriptTest(unittest.TestCase):
             dry_run=dry_run,
             max_rows=max_rows,
             batch_size=batch_size,
+            allow_d1_definition_fallback=False,
             checkpoint_in=str(root / "checkpoint.json"),
             checkpoint_out=str(root / "checkpoint.json"),
             report=str(root / "report.json"),
         )
 
-    def test_only_single_select_is_accepted(self):
+    def test_only_single_select_or_select_query_plan_is_accepted(self):
         reader = migration.D1Reader("account", "database", "token")
-        for sql in ("DELETE FROM securities", "SELECT 1; DELETE FROM securities", "WITH x AS (SELECT 1) SELECT * FROM x"):
+        for sql in (
+            "DELETE FROM securities",
+            "EXPLAIN QUERY PLAN DELETE FROM securities",
+            "EXPLAIN SELECT 1",
+            "SELECT 1; DELETE FROM securities",
+            "EXPLAIN QUERY PLAN SELECT 1; DELETE FROM securities",
+            "WITH x AS (SELECT 1) SELECT * FROM x",
+        ):
             with self.subTest(sql=sql), self.assertRaises(migration.MigrationError):
                 reader.query(sql)
+
+    def test_d1_reader_allows_only_read_only_explain_query_plan_select(self):
+        reader = migration.D1Reader("account", "database", "token")
+        sql = "EXPLAIN QUERY PLAN SELECT security_code FROM securities WHERE security_code = ?"
+        payload = {
+            "success": True,
+            "result": [{
+                "results": [{"detail": "SEARCH securities USING PRIMARY KEY (security_code=?)"}],
+                "meta": {"rows_read": 0},
+            }],
+        }
+        with patch.object(
+            migration, "urlopen", return_value=io.BytesIO(json.dumps(payload).encode("utf-8"))
+        ) as request_call:
+            rows, meta = reader.query(sql, ["7203"])
+
+        self.assertEqual(rows, payload["result"][0]["results"])
+        self.assertEqual(meta, {"rows_read": 0})
+        request = request_call.call_args.args[0]
+        self.assertEqual(json.loads(request.data.decode("utf-8")), {"sql": sql, "params": ["7203"]})
 
     def test_read_budget_requires_cloudflare_rows_read_metadata(self):
         with self.assertRaises(migration.MigrationError):
@@ -259,6 +356,24 @@ class MigrationScriptTest(unittest.TestCase):
             self.assertEqual(migrator.report["source_rows_returned"], 1)
             self.assertTrue(migrator.report["budget_exceeded"])
             self.assertEqual(migrator.report["d1_queries_attempted"], 1)
+
+    def test_report_hash_is_recomputed_after_repeated_checkpoint_saves(self):
+        with tempfile.TemporaryDirectory() as temp:
+            migrator = migration.Migrator(self.make_args(temp), FakeReader(), FakeR2(), "namespace")
+            migrator.report["status"] = "incomplete"
+            migrator.save_outputs()
+            first = json.loads(Path(migrator.args.report).read_text(encoding="utf-8"))
+            first_hash = first.pop("report_sha256")
+            self.assertEqual(digest(migration.canonical_json(first)).hexdigest(), first_hash)
+
+            migrator.report["rows_read"] = 5
+            migrator.report["complete"] = True
+            migrator.report["status"] = "complete"
+            migrator.save_outputs()
+            final = json.loads(Path(migrator.args.report).read_text(encoding="utf-8"))
+            final_hash = final.pop("report_sha256")
+            self.assertEqual(digest(migration.canonical_json(final)).hexdigest(), final_hash)
+            self.assertNotEqual(first_hash, final_hash)
 
     def test_missing_read_metadata_reports_returned_rows_as_uncertain_lower_bound(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -312,10 +427,10 @@ class MigrationScriptTest(unittest.TestCase):
             checkpoint_path = Path(temp) / "checkpoint.json"
             env = {
                 "CLOUDFLARE_ACCOUNT_ID": "account",
-                "CLOUDFLARE_API_TOKEN": "analytics-read-token",
-                "CLOUDFLARE_MIGRATION_READ_TOKEN": "read-token",
-                "R2_ACCESS_KEY_ID": "access",
-                "R2_SECRET_ACCESS_KEY": "secret",
+                "CLOUDFLARE_API_TOKEN": "ANALYTICS_TOKEN_SENTINEL",
+                "CLOUDFLARE_MIGRATION_READ_TOKEN": "D1_READ_TOKEN_SENTINEL",
+                "R2_ACCESS_KEY_ID": "R2_ACCESS_TOKEN_SENTINEL",
+                "R2_SECRET_ACCESS_KEY": "R2_SECRET_TOKEN_SENTINEL",
             }
             argv = [
                 "migrate_d1_to_r2.py", "--phase", "analysis-current",
@@ -325,13 +440,18 @@ class MigrationScriptTest(unittest.TestCase):
             config = {"d1_databases": [{"database_id": "database"}], "kv_namespaces": [{"id": "namespace"}]}
             usage_report = {
                 "utc_date": "2026-11-04", "queried_at_utc": "2026-11-04T09:00:00+00:00",
-                "rows_read": 100, "rows_remaining": 4_999_900,
+                "rows_read": 100, "rows_written": 0, "rows_remaining": 4_999_900,
                 "daily_limit_rows": 5_000_000, "limit_exceeded": False,
             }
             with (
                 patch("sys.argv", argv),
                 patch.dict("os.environ", env, clear=True),
                 patch.object(migration, "load_config", return_value=config),
+                patch.object(
+                    migration.d1_daily_usage,
+                    "fetch_budget_usage",
+                    return_value=budget_usage_report(usage_report),
+                ),
                 patch.object(migration.d1_daily_usage, "fetch_daily_usage", return_value=usage_report),
                 patch.object(migration, "D1Reader", return_value=FailingReader()),
                 patch.object(migration, "R2Store", return_value=FakeR2()),
@@ -342,6 +462,680 @@ class MigrationScriptTest(unittest.TestCase):
             self.assertEqual(report["d1_queries_attempted"], 1)
             self.assertTrue(report["d1_read_count_unknown"])
             self.assertEqual(report["failure"]["message"], "D1 read outcome is uncertain")
+            artifacts = report_path.read_text(encoding="utf-8") + checkpoint_path.read_text(encoding="utf-8")
+            for token in (
+                "ANALYTICS_TOKEN_SENTINEL",
+                "D1_READ_TOKEN_SENTINEL",
+                "R2_ACCESS_TOKEN_SENTINEL",
+                "R2_SECRET_TOKEN_SENTINEL",
+            ):
+                with self.subTest(token=token):
+                    self.assertNotIn(token, artifacts)
+            self.assertEqual(report["account_daily_usage_postflight"]["status"], "d1_read_count_unknown")
+
+    def test_account_usage_postflight_reconciles_target_and_reports_other_database_usage(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        preflight = {
+            "utc_date": utc_date,
+            "rows_read": 100,
+            "effective_rows_read": 120,
+            "rows_written": 10,
+            "per_database": [
+                {"database_id": "db-a", "rows_read": 70, "rows_written": 4},
+                {"database_id": "db-b", "rows_read": 30, "rows_written": 6},
+            ],
+        }
+        postflight = {
+            "utc_date": utc_date,
+            "queried_at_utc": "2026-11-14T08:00:00+00:00",
+            "rows_read": 140,
+            "rows_written": 15,
+            "rows_remaining": 4_999_860,
+            "daily_limit_rows": 5_000_000,
+            "per_database": [
+                {"database_id": "db-a", "rows_read": 85, "rows_written": 5},
+                {"database_id": "db-b", "rows_read": 55, "rows_written": 10},
+            ],
+        }
+        migration_report = {
+            "rows_read": 15,
+            "d1_read_count_unknown": False,
+            "d1_database_id": "db-a",
+        }
+
+        with patch.object(migration.d1_daily_usage, "fetch_daily_usage", return_value=postflight):
+            report = migration.account_daily_usage_postflight("account", preflight, migration_report)
+
+        self.assertEqual(report["status"], "reconciled")
+        self.assertEqual(report["account_rows_read_delta"], 40)
+        self.assertEqual(report["migration_meta_rows_read"], 15)
+        self.assertEqual(report["account_vs_migration_meta_rows_read_delta"], 25)
+        self.assertEqual(report["target_database_rows_read_delta"], 15)
+        self.assertEqual(report["other_databases_rows_read_delta"], 25)
+        self.assertEqual(report["target_database_vs_migration_meta_rows_read_delta"], 0)
+        self.assertTrue(report["per_database_delta_matches_account_delta"])
+        self.assertEqual(report["effective_account_rows_read"], 160)
+        self.assertEqual(report["effective_rows_remaining"], 4_999_840)
+        self.assertEqual(report["per_database_delta"], [
+            {"database_id": "db-a", "rows_read_delta": 15, "rows_written_delta": 1},
+            {"database_id": "db-b", "rows_read_delta": 25, "rows_written_delta": 4},
+        ])
+
+    def test_account_usage_preflight_gates_on_effective_day_to_date_total(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        daily = {
+            "utc_date": utc_date,
+            "queried_at_utc": f"{utc_date}T12:00:00+00:00",
+            "rows_read": 4_700_000,
+            "rows_written": 0,
+            "rows_remaining": 300_000,
+            "daily_limit_rows": 5_000_000,
+            "limit_exceeded": False,
+            "per_database": [{"database_id": "db-a", "rows_read": 4_700_000, "rows_written": 0}],
+        }
+        effective = budget_usage_report(daily, 4_950_000)
+        args = Namespace(max_rows=100_000, read_reserve_rows=100_000)
+
+        with (
+            patch.dict("os.environ", {"CLOUDFLARE_API_TOKEN": "analytics-token"}),
+            patch.object(migration.d1_daily_usage, "fetch_budget_usage", return_value=effective),
+        ):
+            with self.assertRaisesRegex(migration.MigrationError, "insufficient remaining allowance"):
+                migration.account_daily_usage_preflight("account", args)
+
+    def test_account_usage_preflight_preserves_daily_delta_baseline_and_effective_budget(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        daily = {
+            "utc_date": utc_date,
+            "queried_at_utc": f"{utc_date}T12:00:00+00:00",
+            "rows_read": 4_700_000,
+            "rows_written": 5,
+            "rows_remaining": 300_000,
+            "daily_limit_rows": 5_000_000,
+            "limit_exceeded": False,
+            "per_database": [{"database_id": "db-a", "rows_read": 4_700_000, "rows_written": 5}],
+        }
+        effective = budget_usage_report(daily, 4_800_000)
+        effective["budget_usage_queried_at_utc"] = f"{utc_date}T12:00:10+00:00"
+        args = Namespace(max_rows=100_000, read_reserve_rows=100_000)
+
+        with (
+            patch.dict("os.environ", {"CLOUDFLARE_API_TOKEN": "analytics-token"}),
+            patch.object(migration.d1_daily_usage, "fetch_budget_usage", return_value=effective),
+        ):
+            report = migration.account_daily_usage_preflight("account", args)
+
+        self.assertEqual(report["rows_read"], 4_700_000)
+        self.assertEqual(report["effective_rows_read"], 4_800_000)
+        self.assertEqual(report["rows_remaining"], 200_000)
+        self.assertEqual(report["queried_at_utc"], f"{utc_date}T12:00:10+00:00")
+        self.assertEqual(report["per_database"][0]["rows_read"], 4_700_000)
+
+    def test_account_usage_postflight_rejects_target_database_residual(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        preflight = {
+            "utc_date": utc_date,
+            "rows_read": 100,
+            "rows_written": 10,
+            "per_database": [{"database_id": "db-a", "rows_read": 100, "rows_written": 10}],
+        }
+        postflight = {
+            "utc_date": utc_date,
+            "queried_at_utc": "2026-11-14T08:00:00+00:00",
+            "rows_read": 125,
+            "rows_written": 10,
+            "rows_remaining": 4_999_875,
+            "daily_limit_rows": 5_000_000,
+            "per_database": [{"database_id": "db-a", "rows_read": 125, "rows_written": 10}],
+        }
+
+        with patch.object(migration.d1_daily_usage, "fetch_daily_usage", return_value=postflight):
+            report = migration.account_daily_usage_postflight(
+                "account", preflight, {"rows_read": 20, "d1_read_count_unknown": False, "d1_database_id": "db-a"}
+            )
+
+        self.assertEqual(report["status"], "unreconciled")
+        self.assertEqual(report["target_database_vs_migration_meta_rows_read_delta"], 5)
+
+    def test_account_usage_postflight_marks_matching_counts_reconciled(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        preflight = {
+            "utc_date": utc_date,
+            "rows_read": 100,
+            "rows_written": 8,
+            "per_database": [{"database_id": "db-a", "rows_read": 100, "rows_written": 8}],
+        }
+        postflight = {
+            "utc_date": utc_date,
+            "queried_at_utc": "2026-11-14T08:00:00+00:00",
+            "rows_read": 120,
+            "rows_written": 8,
+            "rows_remaining": 4_999_880,
+            "daily_limit_rows": 5_000_000,
+            "per_database": [{"database_id": "db-a", "rows_read": 120, "rows_written": 8}],
+        }
+
+        with patch.object(migration.d1_daily_usage, "fetch_daily_usage", return_value=postflight):
+            report = migration.account_daily_usage_postflight(
+                "account", preflight, {"rows_read": 20, "d1_read_count_unknown": False}
+            )
+
+        self.assertEqual(report["status"], "reconciled")
+        self.assertEqual(report["account_vs_migration_meta_rows_read_delta"], 0)
+
+    def test_account_usage_postflight_uses_exact_minute_groups_when_daily_analytics_lags(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        target_database_id = "11111111-1111-4111-8111-111111111111"
+        other_database_id = "22222222-2222-4222-8222-222222222222"
+        preflight = {
+            "utc_date": utc_date,
+            "queried_at_utc": f"{utc_date}T20:10:30+00:00",
+            "rows_read": 100,
+            "effective_rows_read": 140,
+            "rows_written": 0,
+            "rows_remaining": 4_999_900,
+            "daily_limit_rows": 5_000_000,
+            "per_database": [{"database_id": target_database_id, "rows_read": 100, "rows_written": 0}],
+        }
+        stale_daily = {
+            **preflight,
+            "queried_at_utc": f"{utc_date}T20:23:00+00:00",
+        }
+        migration_report = {
+            "rows_read": 480,
+            "d1_queries_attempted": 5,
+            "d1_read_count_unknown": False,
+            "d1_database_id": target_database_id,
+            "started_at": f"{utc_date}T20:18:04+00:00",
+            "finished_at": f"{utc_date}T20:22:33+00:00",
+            "read_reserve_rows": 100_000,
+        }
+        minute_usage = {
+            "start_utc": f"{utc_date}T20:10:00Z",
+            "end_utc": f"{utc_date}T20:23:00Z",
+            "rows_read": 495,
+            "read_queries": 7,
+            "analytics_groups": 3,
+            "confidence_bounds_verified": True,
+            "per_database": [
+                {"database_id": target_database_id, "rows_read": 480, "read_queries": 5},
+                {"database_id": other_database_id, "rows_read": 15, "read_queries": 2},
+            ],
+            "per_minute": [
+                {
+                    "datetime_minute": f"{utc_date}T20:11:00Z",
+                    "database_id": other_database_id,
+                    "rows_read": 10,
+                    "read_queries": 1,
+                    "rows_written": 0,
+                },
+                {
+                    "datetime_minute": f"{utc_date}T20:19:00Z",
+                    "database_id": target_database_id,
+                    "rows_read": 480,
+                    "read_queries": 5,
+                    "rows_written": 0,
+                },
+                {
+                    "datetime_minute": f"{utc_date}T20:20:00Z",
+                    "database_id": other_database_id,
+                    "rows_read": 5,
+                    "read_queries": 1,
+                    "rows_written": 0,
+                },
+            ],
+        }
+
+        with (
+            patch.object(migration.d1_daily_usage, "fetch_daily_usage", return_value=stale_daily),
+            patch.object(migration.d1_daily_usage, "fetch_minute_usage", return_value=minute_usage) as fetch_minute,
+        ):
+            report = migration.account_daily_usage_postflight("account", preflight, migration_report)
+
+        self.assertEqual(report["status"], "reconciled")
+        self.assertEqual(report["usage_source"], "daily_and_minute_window_observed")
+        self.assertEqual(report["target_database_rows_read_delta"], 0)
+        self.assertEqual(report["effective_account_rows_read"], 635)
+        self.assertEqual(report["rows_remaining"], 4_999_365)
+        self.assertEqual(report["minute_fallback"]["status"], "reconciled")
+        self.assertEqual(report["minute_fallback"]["target_database_rows_read"], 480)
+        self.assertEqual(report["minute_fallback"]["target_database_read_queries"], 5)
+        self.assertTrue(report["minute_fallback"]["confidence_bounds_verified"])
+        self.assertEqual(report["minute_fallback"]["other_databases_rows_read"], 5)
+        fetch_minute.assert_called_once()
+        call_args, call_kwargs = fetch_minute.call_args
+        self.assertEqual(call_args[0], "account")
+        self.assertEqual(call_args[2:], (preflight["queried_at_utc"], stale_daily["queried_at_utc"]))
+        self.assertEqual(call_kwargs, {"timeout_seconds": migration.POSTFLIGHT_ANALYTICS_TIMEOUT_SECONDS})
+
+    def test_minute_fallback_fails_closed_on_extra_target_database_activity(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        target_database_id = "11111111-1111-4111-8111-111111111111"
+        preflight = {
+            "utc_date": utc_date,
+            "queried_at_utc": f"{utc_date}T20:10:30+00:00",
+            "rows_read": 100,
+            "rows_written": 0,
+            "daily_limit_rows": 5_000_000,
+            "per_database": [{"database_id": target_database_id, "rows_read": 100, "rows_written": 0}],
+        }
+        stale_daily = {
+            "utc_date": utc_date,
+            "queried_at_utc": f"{utc_date}T20:23:00+00:00",
+            "rows_read": 100,
+            "rows_written": 0,
+            "rows_remaining": 4_999_900,
+            "daily_limit_rows": 5_000_000,
+            "limit_exceeded": False,
+            "per_database": [{"database_id": target_database_id, "rows_read": 100, "rows_written": 0}],
+        }
+        migration_report = {
+            "rows_read": 480,
+            "d1_queries_attempted": 5,
+            "d1_read_count_unknown": False,
+            "d1_database_id": target_database_id,
+            "started_at": f"{utc_date}T20:18:04+00:00",
+            "finished_at": f"{utc_date}T20:22:33+00:00",
+            "read_reserve_rows": 100_000,
+        }
+        minute_usage = {
+            "start_utc": f"{utc_date}T20:10:00Z",
+            "end_utc": f"{utc_date}T20:23:00Z",
+            "rows_read": 481,
+            "read_queries": 6,
+            "analytics_groups": 1,
+            "confidence_bounds_verified": True,
+            "per_database": [{"database_id": target_database_id, "rows_read": 481, "read_queries": 6}],
+            "per_minute": [{
+                "datetime_minute": f"{utc_date}T20:19:00Z",
+                "database_id": target_database_id,
+                "rows_read": 481,
+                "read_queries": 6,
+                "rows_written": 0,
+            }],
+        }
+
+        with (
+            patch.object(migration.d1_daily_usage, "fetch_daily_usage", return_value=stale_daily),
+            patch.object(migration.d1_daily_usage, "fetch_minute_usage", return_value=minute_usage),
+        ):
+            report = migration.account_daily_usage_postflight("account", preflight, migration_report)
+
+        self.assertEqual(report["status"], "unreconciled")
+        self.assertEqual(report["minute_fallback"]["status"], "target_activity_mismatch")
+
+    def test_postflight_retries_until_minute_analytics_contains_the_migration(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        target_database_id = "11111111-1111-4111-8111-111111111111"
+        preflight = {
+            "utc_date": utc_date,
+            "queried_at_utc": f"{utc_date}T20:10:30+00:00",
+            "rows_read": 100,
+            "rows_written": 0,
+            "per_database": [{"database_id": target_database_id, "rows_read": 100, "rows_written": 0}],
+        }
+        stale_daily_reports = [
+            {
+                "utc_date": utc_date,
+                "queried_at_utc": f"{utc_date}T20:23:0{second}+00:00",
+                "rows_read": 100,
+                "rows_written": 0,
+                "rows_remaining": 4_999_900,
+                "daily_limit_rows": 5_000_000,
+                "limit_exceeded": False,
+                "per_database": [{"database_id": target_database_id, "rows_read": 100, "rows_written": 0}],
+            }
+            for second in (0, 1)
+        ]
+        migration_report = {
+            "rows_read": 5,
+            "d1_queries_attempted": 1,
+            "d1_database_id": target_database_id,
+            "d1_read_count_unknown": False,
+            "started_at": f"{utc_date}T20:18:04+00:00",
+            "finished_at": f"{utc_date}T20:22:33+00:00",
+            "read_reserve_rows": 100_000,
+        }
+        minute_reports = [
+            {
+                "start_utc": f"{utc_date}T20:10:00Z",
+                "end_utc": f"{utc_date}T20:23:00Z",
+                "rows_read": 0,
+                "read_queries": 0,
+                "analytics_groups": 0,
+                "confidence_bounds_verified": False,
+                "per_database": [],
+                "per_minute": [],
+            },
+            {
+                "start_utc": f"{utc_date}T20:10:00Z",
+                "end_utc": f"{utc_date}T20:23:00Z",
+                "rows_read": 5,
+                "read_queries": 1,
+                "analytics_groups": 1,
+                "confidence_bounds_verified": True,
+                "per_database": [{"database_id": target_database_id, "rows_read": 5, "read_queries": 1}],
+                "per_minute": [{
+                    "datetime_minute": f"{utc_date}T20:19:00Z",
+                    "database_id": target_database_id,
+                    "rows_read": 5,
+                    "read_queries": 1,
+                    "rows_written": 0,
+                }],
+            },
+        ]
+        migrator = types.SimpleNamespace(
+            report={"account_daily_usage_preflight": preflight, **migration_report},
+            save_outputs=lambda: None,
+        )
+
+        with (
+            patch.object(
+                migration.d1_daily_usage,
+                "fetch_daily_usage",
+                side_effect=stale_daily_reports,
+            ) as fetch_daily,
+            patch.object(
+                migration.d1_daily_usage,
+                "fetch_minute_usage",
+                side_effect=minute_reports,
+            ) as fetch_minute,
+            patch.object(migration.time, "sleep") as sleep,
+        ):
+            result = migration.record_account_daily_usage_postflight(migrator, "account")
+
+        self.assertEqual(result["status"], "reconciled")
+        self.assertEqual(result["attempt"], 2)
+        self.assertEqual(result["minute_fallback"]["target_database_rows_read"], 5)
+        self.assertEqual(fetch_daily.call_count, 2)
+        self.assertEqual(fetch_minute.call_count, 2)
+        sleep.assert_called_once_with(migration.POSTFLIGHT_RETRY_INTERVAL_SECONDS)
+
+    def test_minute_fallback_includes_other_databases_in_reserve_check(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        target_database_id = "11111111-1111-4111-8111-111111111111"
+        other_database_id = "22222222-2222-4222-8222-222222222222"
+        preflight = {
+            "utc_date": utc_date,
+            "queried_at_utc": f"{utc_date}T20:10:30+00:00",
+            "rows_read": 4_899_990,
+            "rows_written": 0,
+            "daily_limit_rows": 5_000_000,
+            "per_database": [{"database_id": target_database_id, "rows_read": 4_899_990, "rows_written": 0}],
+        }
+        stale_daily = {
+            "utc_date": utc_date,
+            "queried_at_utc": f"{utc_date}T20:23:00+00:00",
+            "rows_read": 4_899_990,
+            "rows_written": 0,
+            "rows_remaining": 100_010,
+            "daily_limit_rows": 5_000_000,
+            "limit_exceeded": False,
+            "per_database": [{"database_id": target_database_id, "rows_read": 4_899_990, "rows_written": 0}],
+        }
+        migration_report = {
+            "rows_read": 5,
+            "d1_queries_attempted": 1,
+            "d1_read_count_unknown": False,
+            "d1_database_id": target_database_id,
+            "started_at": f"{utc_date}T20:18:04+00:00",
+            "finished_at": f"{utc_date}T20:22:33+00:00",
+            "read_reserve_rows": 100_000,
+        }
+        minute_usage = {
+            "start_utc": f"{utc_date}T20:10:00Z",
+            "end_utc": f"{utc_date}T20:23:00Z",
+            "rows_read": 20,
+            "read_queries": 2,
+            "analytics_groups": 2,
+            "confidence_bounds_verified": True,
+            "per_database": [
+                {"database_id": target_database_id, "rows_read": 5, "read_queries": 1},
+                {"database_id": other_database_id, "rows_read": 15, "read_queries": 1},
+            ],
+            "per_minute": [
+                {
+                    "datetime_minute": f"{utc_date}T20:19:00Z",
+                    "database_id": target_database_id,
+                    "rows_read": 5,
+                    "read_queries": 1,
+                    "rows_written": 0,
+                },
+                {
+                    "datetime_minute": f"{utc_date}T20:20:00Z",
+                    "database_id": other_database_id,
+                    "rows_read": 15,
+                    "read_queries": 1,
+                    "rows_written": 0,
+                },
+            ],
+        }
+
+        with (
+            patch.object(migration.d1_daily_usage, "fetch_daily_usage", return_value=stale_daily),
+            patch.object(migration.d1_daily_usage, "fetch_minute_usage", return_value=minute_usage),
+        ):
+            report = migration.account_daily_usage_postflight("account", preflight, migration_report)
+
+        self.assertEqual(report["status"], "reserve_breached")
+        self.assertFalse(report["reserve_satisfied"])
+        self.assertEqual(report["effective_account_rows_read"], 4_900_010)
+        self.assertEqual(report["effective_rows_remaining"], 99_990)
+
+    def test_account_usage_postflight_does_not_compare_across_utc_date_boundary(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        preflight = {"utc_date": "2026-11-13", "rows_read": 100, "rows_written": 8, "per_database": []}
+        postflight = {
+            "utc_date": utc_date,
+            "queried_at_utc": "2026-11-14T08:00:00+00:00",
+            "rows_read": 5,
+            "rows_written": 1,
+            "rows_remaining": 4_999_995,
+            "daily_limit_rows": 5_000_000,
+            "per_database": [],
+        }
+
+        with patch.object(migration.d1_daily_usage, "fetch_daily_usage", return_value=postflight):
+            report = migration.account_daily_usage_postflight(
+                "account", preflight, {"rows_read": 20, "d1_read_count_unknown": False}
+            )
+
+        self.assertEqual(report["status"], "utc_date_changed")
+        self.assertNotIn("account_rows_read_delta", report)
+
+    def test_postflight_waits_for_analytics_lag_then_reconciles_without_rerunning_d1(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        preflight = {
+            "utc_date": utc_date,
+            "rows_read": 100,
+            "rows_written": 10,
+            "rows_remaining": 4_999_900,
+            "per_database": [{"database_id": "db-a", "rows_read": 100, "rows_written": 10}],
+        }
+        delayed_reports = [
+            {
+                "utc_date": utc_date,
+                "queried_at_utc": "2026-11-14T08:00:00+00:00",
+                "rows_read": 100,
+                "rows_written": 10,
+                "rows_remaining": 4_999_900,
+                "daily_limit_rows": 5_000_000,
+                "per_database": [{"database_id": "db-a", "rows_read": 100, "rows_written": 10}],
+            },
+            {
+                "utc_date": utc_date,
+                "queried_at_utc": "2026-11-14T08:00:15+00:00",
+                "rows_read": 105,
+                "rows_written": 10,
+                "rows_remaining": 4_999_895,
+                "daily_limit_rows": 5_000_000,
+                "per_database": [{"database_id": "db-a", "rows_read": 105, "rows_written": 10}],
+            },
+        ]
+        saved = []
+        migrator = types.SimpleNamespace(
+            report={
+                "account_daily_usage_preflight": preflight,
+                "rows_read": 5,
+                "d1_database_id": "db-a",
+                "d1_read_count_unknown": False,
+                "read_reserve_rows": 100_000,
+            },
+            save_outputs=lambda: saved.append(True),
+        )
+
+        with (
+            patch.object(migration.d1_daily_usage, "fetch_daily_usage", side_effect=delayed_reports) as fetch,
+            patch.object(migration.time, "sleep") as sleep,
+        ):
+            result = migration.record_account_daily_usage_postflight(migrator, "account")
+
+        self.assertEqual(result["status"], "reconciled")
+        self.assertEqual(result["attempt"], 2)
+        self.assertEqual(fetch.call_count, 2)
+        sleep.assert_called_once_with(migration.POSTFLIGHT_RETRY_INTERVAL_SECONDS)
+        self.assertEqual(len(saved), 2)
+        self.assertEqual(
+            [item["target_database_rows_read_delta"] for item in migrator.report["account_daily_usage_postflight_attempts"]],
+            [0, 5],
+        )
+
+    def test_postflight_deadline_stops_retries_and_records_unreconciled_state(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        preflight = {
+            "utc_date": utc_date,
+            "rows_read": 100,
+            "rows_written": 10,
+            "rows_remaining": 4_999_900,
+            "per_database": [{"database_id": "db-a", "rows_read": 100, "rows_written": 10}],
+        }
+        undercounted = {
+            "utc_date": utc_date,
+            "queried_at_utc": "2026-11-14T08:00:00+00:00",
+            "rows_read": 100,
+            "rows_written": 10,
+            "rows_remaining": 4_999_900,
+            "daily_limit_rows": 5_000_000,
+            "per_database": [{"database_id": "db-a", "rows_read": 100, "rows_written": 10}],
+        }
+        saved = []
+        migrator = types.SimpleNamespace(
+            report={
+                "account_daily_usage_preflight": preflight,
+                "rows_read": 5,
+                "d1_database_id": "db-a",
+                "d1_read_count_unknown": False,
+                "read_reserve_rows": 100_000,
+            },
+            save_outputs=lambda: saved.append(True),
+        )
+
+        with (
+            patch.object(migration.d1_daily_usage, "fetch_daily_usage", return_value=undercounted) as fetch,
+            patch.object(migration.time, "monotonic", side_effect=[0.0, 0.0, 290.0, 300.0]),
+            patch.object(migration.time, "sleep") as sleep,
+        ):
+            result = migration.record_account_daily_usage_postflight(migrator, "account")
+
+        self.assertEqual(result["status"], "unreconciled")
+        self.assertEqual(result["attempt"], 1)
+        self.assertTrue(result["postflight_deadline_exceeded"])
+        self.assertTrue(migrator.report["account_daily_usage_postflight_deadline_exceeded"])
+        fetch.assert_called_once()
+        self.assertEqual(fetch.call_args.kwargs["timeout_seconds"], migration.POSTFLIGHT_ANALYTICS_TIMEOUT_SECONDS)
+        sleep.assert_called_once_with(10.0)
+        self.assertEqual(len(saved), 2)
+
+    def test_postflight_does_not_retry_when_analytics_rows_exceed_query_metadata(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        preflight = {
+            "utc_date": utc_date,
+            "rows_read": 100,
+            "rows_written": 10,
+            "rows_remaining": 4_999_900,
+            "per_database": [{"database_id": "db-a", "rows_read": 100, "rows_written": 10}],
+        }
+        postflight = {
+            "utc_date": utc_date,
+            "queried_at_utc": "2026-11-14T08:00:00+00:00",
+            "rows_read": 106,
+            "rows_written": 10,
+            "rows_remaining": 4_999_894,
+            "daily_limit_rows": 5_000_000,
+            "per_database": [{"database_id": "db-a", "rows_read": 106, "rows_written": 10}],
+        }
+        migrator = types.SimpleNamespace(
+            report={
+                "account_daily_usage_preflight": preflight,
+                "rows_read": 5,
+                "d1_database_id": "db-a",
+                "d1_read_count_unknown": False,
+                "read_reserve_rows": 100_000,
+            },
+            save_outputs=lambda: None,
+        )
+
+        with (
+            patch.object(migration.d1_daily_usage, "fetch_daily_usage", return_value=postflight) as fetch,
+            patch.object(migration.time, "sleep") as sleep,
+        ):
+            result = migration.record_account_daily_usage_postflight(migrator, "account")
+
+        self.assertEqual(result["status"], "unreconciled")
+        self.assertEqual(result["target_database_vs_migration_meta_rows_read_delta"], 1)
+        fetch.assert_called_once()
+        sleep.assert_not_called()
+
+    def test_main_returns_nonzero_when_account_usage_postflight_is_unreconciled(self):
+        with tempfile.TemporaryDirectory() as temp:
+            report_path = Path(temp) / "report.json"
+            checkpoint_path = Path(temp) / "checkpoint.json"
+            argv = [
+                "migrate_d1_to_r2.py", "--phase", "d1-schema-audit", "--dry-run",
+                "--checkpoint-in", str(Path(temp) / "missing.json"),
+                "--checkpoint-out", str(checkpoint_path), "--report", str(report_path),
+            ]
+            config = {"d1_databases": [{"database_id": "database"}], "kv_namespaces": []}
+            usage_report = {
+                "utc_date": datetime.now(timezone.utc).date().isoformat(),
+                "queried_at_utc": "2026-11-14T08:00:00+00:00",
+                "rows_read": 100,
+                "rows_written": 10,
+                "rows_remaining": 4_999_900,
+                "daily_limit_rows": 5_000_000,
+                "limit_exceeded": False,
+                "per_database": [],
+            }
+            postflight_report = {**usage_report, "rows_read": 101}
+            with (
+                patch("sys.argv", argv),
+                patch.dict("os.environ", {
+                    "CLOUDFLARE_ACCOUNT_ID": "account",
+                    "CLOUDFLARE_API_TOKEN": "analytics-token",
+                    "CLOUDFLARE_MIGRATION_READ_TOKEN": "d1-read-token",
+                }, clear=True),
+                patch.object(migration, "load_config", return_value=config),
+                patch.object(
+                    migration.d1_daily_usage,
+                    "fetch_budget_usage",
+                    return_value=budget_usage_report(usage_report),
+                ),
+                patch.object(
+                    migration.d1_daily_usage,
+                    "fetch_daily_usage",
+                    return_value=postflight_report,
+                ),
+                patch.object(migration, "D1Reader", return_value=FakeReader({"sqlite_schema": []})),
+                patch.object(migration, "R2Store", side_effect=AssertionError("R2 must not be constructed")),
+            ):
+                self.assertEqual(migration.main(), 3)
+
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertTrue(report["complete"])
+            self.assertEqual(report["status"], "complete")
+            self.assertEqual(report["account_daily_usage_postflight"]["status"], "per_database_delta_mismatch")
+            report_hash = report.pop("report_sha256")
+            self.assertEqual(digest(migration.canonical_json(report)).hexdigest(), report_hash)
 
     def test_main_fails_closed_when_analytics_token_is_missing_before_d1_client(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -361,7 +1155,7 @@ class MigrationScriptTest(unittest.TestCase):
                 patch.dict("os.environ", env, clear=True),
                 patch.object(migration, "load_config", return_value=config),
                 patch.object(migration, "D1Reader") as reader_factory,
-                patch.object(migration.d1_daily_usage, "fetch_daily_usage", wraps=migration.d1_daily_usage.fetch_daily_usage) as usage_query,
+                patch.object(migration.d1_daily_usage, "fetch_budget_usage", wraps=migration.d1_daily_usage.fetch_budget_usage) as usage_query,
             ):
                 self.assertEqual(migration.main(), 1)
             usage_query.assert_called_once()
@@ -399,7 +1193,11 @@ class MigrationScriptTest(unittest.TestCase):
                 patch.dict("os.environ", env, clear=True),
                 patch.object(migration, "datetime", FixedDateTime),
                 patch.object(migration, "load_config", return_value=config),
-                patch.object(migration.d1_daily_usage, "fetch_daily_usage", return_value=usage_report) as usage_query,
+                patch.object(
+                    migration.d1_daily_usage,
+                    "fetch_budget_usage",
+                    return_value=budget_usage_report(usage_report),
+                ) as usage_query,
                 patch.object(migration, "D1Reader") as reader_factory,
             ):
                 self.assertEqual(migration.main(), 1)
@@ -646,6 +1444,9 @@ class MigrationScriptTest(unittest.TestCase):
             {"id": 5, "run_type": "analysis", "started_at": "2026-11-01T00:00:00Z",
              "finished_at": "2026-11-01T00:01:00Z", "status": "success", "processed": 1,
              "failed": 0, "metadata_json": "{}"},
+            {"id": 6, "run_type": "analysis", "started_at": "2026-11-03T00:00:00Z",
+             "finished_at": "2026-11-03T00:01:00Z", "status": "running", "processed": 0,
+             "failed": 0, "metadata_json": "{}"},
         ]
         with tempfile.TemporaryDirectory() as temp:
             reader = FakeReader({"scheduled_run_log": rows})
@@ -659,17 +1460,91 @@ class MigrationScriptTest(unittest.TestCase):
             self.assertTrue(report["complete"])
             self.assertEqual(report["source_rows_returned"], 3)
             self.assertEqual(report["objects_written"], 4)
-            self.assertIn("started_at >= datetime('now','-365 days')", reader.queries[0][0])
+            query = next(sql for sql, _ in reader.queries if sql == migration.SCHEDULED_RUNS_QUERY)
+            self.assertIn("datetime(started_at) >= ?", query)
+            self.assertIn("status IN ('success', 'failed', 'partial', 'superseded')", query)
+            self.assertIn("(datetime(started_at), id) > (?, ?)", query)
+            self.assertIn("ORDER BY datetime(started_at), id LIMIT ?", query)
+            self.assertTrue(report["scheduled_runs_index_plan_verified"])
             self.assertIn("operations/v1/runs/analysis/legacy-d1-2/summary.json", r2.objects)
             self.assertIn("operations/v1/runs/analysis/legacy-d1-4/summary.json", r2.objects)
             self.assertIn("operations/v1/runs/analysis/legacy-d1-5/summary.json", r2.objects)
             self.assertNotIn("operations/v1/runs/analysis/legacy-d1-1/summary.json", r2.objects)
+            self.assertNotIn("operations/v1/runs/analysis/legacy-d1-6/summary.json", r2.objects)
             pointer = json.loads(r2.objects["operations/v1/runs/legacy-d1/current.json"])
             self.assertEqual(pointer["run_key"], "operations/v1/runs/analysis/legacy-d1-5/summary.json")
             self.assertEqual(pointer["run_id"], "5")
             checkpoint_text = Path(migrator.args.checkpoint_out).read_text(encoding="utf-8")
             self.assertNotIn('"run_key"', checkpoint_text)
             self.assertNotIn("operations/v1/runs/analysis/legacy-d1-5/summary.json", checkpoint_text)
+
+    def test_scheduled_runs_query_uses_partial_expression_index_and_normalizes_cutoff_day(self):
+        database = sqlite3.connect(":memory:")
+        try:
+            database.execute(
+                "CREATE TABLE scheduled_run_log ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, run_type TEXT NOT NULL, started_at TEXT NOT NULL, "
+                "finished_at TEXT, status TEXT NOT NULL, processed INTEGER NOT NULL DEFAULT 0, "
+                "failed INTEGER NOT NULL DEFAULT 0, metadata_json TEXT NOT NULL DEFAULT '{}')"
+            )
+            migration_sql = (
+                SCRIPT.parents[1] / "migrations" / "0009_scheduled_run_log_completed_started_index.sql"
+            )
+            database.executescript(migration_sql.read_text(encoding="utf-8"))
+            database.executemany(
+                "INSERT INTO scheduled_run_log(run_type, started_at, finished_at, status) VALUES (?, ?, ?, ?)",
+                [("analysis", "2026-11-01T13:00:00Z", None, "running") for _ in range(783)]
+                + [
+                    ("analysis", "2026-11-01T11:59:59Z", "2026-11-01T12:00:00Z", "success"),
+                    ("analysis", "2026-11-01 12:00:00", "2026-11-01 12:01:00", "success"),
+                    ("analysis", "2026-11-01T12:30:00Z", "2026-11-01T12:31:00Z", "success"),
+                    ("analysis", "2026-11-01T13:00:00+01:00", "2026-11-01T13:01:00+01:00", "success"),
+                    ("analysis", "2026-11-01T12:45:00Z", "2026-11-01T12:46:00Z", "running"),
+                ]
+            )
+            params = ("2026-11-01 12:00:00", "", 0, 10)
+            plan = database.execute(
+                f"EXPLAIN QUERY PLAN {migration.SCHEDULED_RUNS_QUERY}", params
+            ).fetchall()
+            self.assertTrue(any("idx_scheduled_run_log_completed_started_id" in row[-1] for row in plan))
+            rows = database.execute(migration.SCHEDULED_RUNS_QUERY, params).fetchall()
+            self.assertEqual([row[0] for row in rows], [785, 787, 786])
+        finally:
+            database.close()
+
+    def test_scheduled_run_migration_accepts_fractional_timestamp_at_cutoff_second(self):
+        row = {
+            "id": 1, "run_type": "analysis", "started_at": "2025-11-15T12:00:00.500Z",
+            "finished_at": "2025-11-15T12:01:00.000Z", "status": "success",
+            "processed": 1, "failed": 0, "metadata_json": "{}",
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            r2 = FakeR2()
+            migrator = migration.Migrator(
+                self.make_args(temp, phase="scheduled-runs", dry_run=False),
+                FakeReader({"scheduled_run_log": [row]}), r2, "namespace"
+            )
+            with patch.object(migration, "scheduled_runs_cutoff_utc", return_value="2025-11-15 12:00:00"):
+                report = migrator.run()
+
+            self.assertTrue(report["complete"])
+            self.assertEqual(report["source_rows_returned"], 1)
+            self.assertIn("operations/v1/runs/analysis/legacy-d1-1/summary.json", r2.objects)
+
+    def test_scheduled_runs_fails_closed_when_query_plan_does_not_use_partial_index(self):
+        with tempfile.TemporaryDirectory() as temp:
+            reader = FakeReader(query_plan_detail="SCAN scheduled_run_log")
+            migrator = migration.Migrator(
+                self.make_args(temp, phase="scheduled-runs"), reader, FakeR2(), "namespace"
+            )
+
+            with self.assertRaisesRegex(
+                migration.MigrationError, "does not use idx_scheduled_run_log_completed_started_id"
+            ):
+                migrator.run()
+
+            self.assertEqual(len(reader.queries), 1)
+            self.assertTrue(reader.queries[0][0].startswith("EXPLAIN QUERY PLAN"))
 
     def test_scheduled_run_pointer_is_not_published_until_the_phase_is_complete(self):
         rows = [
@@ -733,10 +1608,11 @@ class MigrationScriptTest(unittest.TestCase):
             report = migration.Migrator(args, FakeReader(), r2, "namespace").run()
 
             self.assertTrue(report["complete"])
-            pointer = json.loads(r2.objects["operations/v1/runs/legacy-d1/current.json"])
-            self.assertEqual(pointer["run_key"], old_key)
+            self.assertTrue(report["checkpoint_restarted_for_scheduled_runs_cursor_change"])
+            self.assertNotIn("operations/v1/runs/legacy-d1/current.json", r2.objects)
             checkpoint_text = Path(args.checkpoint_out).read_text(encoding="utf-8")
             report_text = Path(args.report).read_text(encoding="utf-8")
+            self.assertIn('"scheduled_runs_cursor_version":2', checkpoint_text)
             self.assertNotIn('"run_key"', checkpoint_text)
             self.assertNotIn(old_key, checkpoint_text + report_text)
 
@@ -803,18 +1679,10 @@ class MigrationScriptTest(unittest.TestCase):
             second = migration.Migrator(args, FakeReader({"stock_analysis_state": rows}), r2, "namespace").run()
             self.assertEqual(second["cumulative"]["source_rows"], 2)
             self.assertEqual(second["cumulative"]["rows_read"], 2)
-            artifacts = {
-                "checkpoint": without_hash_values(json.loads(
-                    Path(args.checkpoint_out).read_text(encoding="utf-8")
-                )),
-                "report": without_hash_values(json.loads(
-                    Path(args.report).read_text(encoding="utf-8")
-                )),
-            }
-            serialized_artifacts = json.dumps(artifacts, sort_keys=True)
-            self.assertNotIn("DO_NOT_LOG", serialized_artifacts)
-            self.assertNotIn("7203", serialized_artifacts)
-            self.assertNotIn("8306", serialized_artifacts)
+            artifacts = Path(args.checkpoint_out).read_text(encoding="utf-8") + Path(args.report).read_text(encoding="utf-8")
+            self.assertNotIn("DO_NOT_LOG", artifacts)
+            self.assertNotIn("7203", artifacts)
+            self.assertNotIn("8306", artifacts)
             self.assertIn("source_sha256", second)
 
     def test_legacy_market_archive_dry_run_preserves_cursor_and_sanitizes_artifacts(self):
@@ -844,10 +1712,14 @@ class MigrationScriptTest(unittest.TestCase):
             checkpoint_text = Path(args.checkpoint_out).read_text(encoding="utf-8")
             report_text = Path(args.report).read_text(encoding="utf-8")
             self.assertEqual(json.loads(checkpoint_text)["cursor"], 2)
-            self.assertNotIn("7203", checkpoint_text + report_text)
-            self.assertNotIn("8306", checkpoint_text + report_text)
-            self.assertNotIn("PRIVATE_COMPANY_NAME", checkpoint_text + report_text)
-            self.assertNotIn("DO_NOT_LOG", checkpoint_text + report_text)
+            public_text = json.dumps({
+                "checkpoint": without_hash_values(json.loads(checkpoint_text)),
+                "report": without_hash_values(json.loads(report_text)),
+            }, sort_keys=True)
+            self.assertNotIn("7203", public_text)
+            self.assertNotIn("8306", public_text)
+            self.assertNotIn("PRIVATE_COMPANY_NAME", public_text)
+            self.assertNotIn("DO_NOT_LOG", public_text)
 
     def test_legacy_analysis_current_code_cursor_restarts_from_numeric_rowid(self):
         rows = [
@@ -875,7 +1747,11 @@ class MigrationScriptTest(unittest.TestCase):
             self.assertEqual(resumed["cumulative"]["source_rows"], 2)
             checkpoint_text = Path(args.checkpoint_out).read_text(encoding="utf-8")
             report_text = Path(args.report).read_text(encoding="utf-8")
-            self.assertNotIn("7203", checkpoint_text + report_text)
+            public_text = json.dumps({
+                "checkpoint": without_hash_values(json.loads(checkpoint_text)),
+                "report": without_hash_values(json.loads(report_text)),
+            }, sort_keys=True)
+            self.assertNotIn("7203", public_text)
             self.assertNotIn('"run_key"', checkpoint_text)
 
     def test_write_mode_restarts_a_completed_dry_run_checkpoint(self):
@@ -907,9 +1783,11 @@ class MigrationScriptTest(unittest.TestCase):
             self.assertIn("analysis/v1/current/72030.json", r2.objects)
             self.assertIn("analysis/v1/current/83060.json", r2.objects)
 
-    def test_d1_schema_audit_lists_table_and_trigger_names_without_writing(self):
+    def test_d1_schema_audit_lists_table_index_and_trigger_names_without_writing(self):
         with tempfile.TemporaryDirectory() as temp:
             reader = FakeReader({"sqlite_schema": [
+                {"type": "index", "name": "idx_support_feedback_created_at", "tbl_name": "support_feedback"},
+                {"type": "table", "name": "_cf_KV", "tbl_name": "_cf_KV"},
                 {"type": "table", "name": "sqlite_sequence", "tbl_name": "sqlite_sequence"},
                 {"type": "table", "name": "support_feedback", "tbl_name": "support_feedback"},
                 {"type": "trigger", "name": "support_feedback_email_insert", "tbl_name": "support_feedback"},
@@ -920,10 +1798,17 @@ class MigrationScriptTest(unittest.TestCase):
             ).run()
 
             self.assertTrue(report["complete"])
-            self.assertEqual(report["source_rows"], 3)
+            self.assertEqual(report["source_rows"], 5)
             self.assertEqual(
                 report["schema_objects"],
                 [
+                    {"type": "index", "name": "idx_support_feedback_created_at", "table": "support_feedback"},
+                    {
+                        "type": "table",
+                        "name": "sha256:2601183a39b0e8003b6a908905e3765953734fa7c7bfca750938b70e95e11638",
+                        "table": "sha256:2601183a39b0e8003b6a908905e3765953734fa7c7bfca750938b70e95e11638",
+                        "classification": "cloudflare_reserved",
+                    },
                     {"type": "table", "name": "sqlite_sequence", "table": "sqlite_sequence"},
                     {"type": "table", "name": "support_feedback", "table": "support_feedback"},
                     {"type": "trigger", "name": "support_feedback_email_insert", "table": "support_feedback"},
@@ -948,13 +1833,13 @@ class MigrationScriptTest(unittest.TestCase):
             events = []
             usage_report = {
                 "utc_date": "2026-11-04", "queried_at_utc": "2026-11-04T09:00:00+00:00",
-                "rows_read": 100, "rows_remaining": 4_999_900,
+                "rows_read": 100, "rows_written": 0, "rows_remaining": 4_999_900,
                 "daily_limit_rows": 5_000_000, "limit_exceeded": False,
             }
 
             def fetch_usage(account_id, token, utc_date):
                 events.append(("analytics", account_id, token))
-                return {**usage_report, "utc_date": utc_date}
+                return budget_usage_report({**usage_report, "utc_date": utc_date})
 
             def create_reader(account_id, database_id, token):
                 events.append(("d1", account_id, token))
@@ -964,7 +1849,12 @@ class MigrationScriptTest(unittest.TestCase):
                 patch("sys.argv", args),
                 patch.dict("os.environ", env, clear=True),
                 patch.object(migration, "load_config", return_value=config),
-                patch.object(migration.d1_daily_usage, "fetch_daily_usage", side_effect=fetch_usage),
+                patch.object(migration.d1_daily_usage, "fetch_budget_usage", side_effect=fetch_usage),
+                patch.object(
+                    migration.d1_daily_usage,
+                    "fetch_daily_usage",
+                    return_value={**usage_report, "utc_date": datetime.now(timezone.utc).date().isoformat()},
+                ),
                 patch.object(migration, "D1Reader", side_effect=create_reader),
                 patch.object(migration, "R2Store", side_effect=AssertionError("R2 client must not be constructed")),
             ):
@@ -980,6 +1870,32 @@ class MigrationScriptTest(unittest.TestCase):
             self.assertNotIn("d1-read-only-token", json.dumps(report))
             report_hash = report.pop("report_sha256")
             self.assertEqual(digest(migration.canonical_json(report)).hexdigest(), report_hash)
+
+    def test_main_returns_nonzero_when_a_phase_is_incomplete(self):
+        with tempfile.TemporaryDirectory() as temp:
+            argv = [
+                "migrate_d1_to_r2.py", "--phase", "d1-schema-audit",
+                "--checkpoint-in", str(Path(temp) / "missing.json"),
+                "--checkpoint-out", str(Path(temp) / "checkpoint.json"),
+                "--report", str(Path(temp) / "report.json"),
+            ]
+            config = {"d1_databases": [{"database_id": "database"}], "kv_namespaces": []}
+            with (
+                patch("sys.argv", argv),
+                patch.dict("os.environ", {
+                    "CLOUDFLARE_ACCOUNT_ID": "account",
+                    "CLOUDFLARE_MIGRATION_READ_TOKEN": "read-only-token",
+                }, clear=True),
+                patch.object(migration, "load_config", return_value=config),
+                patch.object(migration, "account_daily_usage_preflight", return_value={}),
+                patch.object(migration, "D1Reader", return_value=FakeReader()),
+                patch.object(
+                    migration.Migrator,
+                    "run",
+                    return_value={"status": "incomplete", "complete": False},
+                ),
+            ):
+                self.assertEqual(migration.main(), 2)
 
     def test_d1_operational_audit_sanitizes_keys_and_resumes_from_rowid(self):
         rows = [
@@ -1007,6 +1923,56 @@ class MigrationScriptTest(unittest.TestCase):
             self.assertNotIn("user@example.invalid", json.dumps(resumed))
             self.assertNotIn("SENSITIVE_VALUE", json.dumps(resumed))
             self.assertNotIn("OTHER_SENSITIVE_VALUE", Path(args.checkpoint_out).read_text(encoding="utf-8"))
+
+    def test_checkpoint_artifact_drops_unrecognized_top_level_and_nested_payloads(self):
+        private_value = "DO_NOT_UPLOAD_user@example.invalid"
+        with tempfile.TemporaryDirectory() as temp:
+            args = self.make_args(temp, phase="d1-operational-audit", table="backend_state")
+            Path(args.checkpoint_in).write_text(json.dumps({
+                "phase": args.phase,
+                "table": args.table,
+                "dry_run": True,
+                "cursor": 1,
+                "rolling_hash": "0" * 64,
+                "private_payload": private_value,
+                "market_source_audit": {
+                    "rows_checked": 0,
+                    "sample": [{"security_code": private_value, "data_json": private_value}],
+                    "unrecognized_payload": private_value,
+                },
+                "market_audit_fields": {
+                    "name_mismatch_count": 0,
+                    "private_sample": private_value,
+                },
+                "operational_inventory": {
+                    "table": "backend_state",
+                    "row_count": 1,
+                    "status_counts": {"running": 1, "PRIVATE_CODE": 2},
+                    "date_ranges": {
+                        "updated_at": {
+                            "min": "2026-11-03T01:00:00Z",
+                            "max": "2026-11-03T01:00:00Z",
+                        },
+                        "private_date": {"min": private_value, "max": private_value},
+                    },
+                    "state_keys": ["analysis_source", "9432", private_value],
+                    "numeric_totals": {},
+                    "rows_without_completion_time": 0,
+                    "unrecognized_payload": private_value,
+                },
+            }), encoding="utf-8")
+
+            report = migration.Migrator(
+                args, FakeReader({"backend_state": []}), FakeR2(), "namespace"
+            ).run()
+            report_text = Path(args.report).read_text(encoding="utf-8")
+            checkpoint_text = Path(args.checkpoint_out).read_text(encoding="utf-8")
+            self.assertTrue(report["complete"])
+            self.assertNotIn(private_value, report_text + checkpoint_text)
+            self.assertNotIn("private_payload", checkpoint_text)
+            self.assertNotIn("unrecognized_payload", checkpoint_text)
+            self.assertNotIn("private_sample", checkpoint_text)
+            self.assertNotIn('"PRIVATE_CODE"', checkpoint_text)
 
     def test_d1_operational_audit_summarizes_market_refresh_runs_without_run_ids(self):
         row = {
@@ -1166,25 +2132,79 @@ class MigrationScriptTest(unittest.TestCase):
         ):
             with self.subTest(phase=phase), patch(
                 "sys.argv",
-                ["migrate_d1_to_r2.py", "--phase", phase, *table_args, "--write-r2", "--confirm-write", "WRITE_R2"],
+                ["migrate_d1_to_r2.py", "--phase", phase, *table_args, *CLI_FILE_ARGS,
+                 "--write-r2", "--confirm-write", "WRITE_R2"],
             ), self.assertRaises(SystemExit):
                 migration.arguments()
 
     def test_market_audit_reports_missing_rows_without_security_code_samples(self):
         with tempfile.TemporaryDirectory() as temp:
             catalog = migration.canonical_json({"generation": "g1", "items": [{"code": "7203"}]})
+            universe = migration.canonical_json({"securities": [
+                {
+                    "code": "8306", "status": "active", "security_type": "listed_security",
+                    "jquants_product_category": "011", "sources": ["IRBANK Connect API v1 /securities"],
+                },
+                {
+                    "code": "9600", "status": "active", "security_type": "etf",
+                    "jquants_product_category": "014", "sources": ["JPX Listed Issues - ETFs"],
+                },
+                {"code": "9432", "status": "inactive"},
+                {"code": "9501", "status": "unknown"},
+            ]})
             rows = [
                 {"migration_rowid": rowid, "security_code": code, "security_code_display": code}
                 for rowid, code in enumerate(("7203", "8306", "9432", "9501"), start=1)
             ]
+            source_codes = [f"{code:04d}" for code in range(1000, 4497)] + ["8306", "9501", "9600"]
+            source = valid_irbank_source_snapshot(source_codes)
+            irbank_catalog = valid_irbank_catalog(["83060", "95010"])
             migrator = migration.Migrator(
                 self.make_args(temp, phase="market-audit"),
                 FakeReader({"securities": rows}),
-                FakeR2({"market/yfinance/v2/catalog/current.json": catalog}),
+                FakeR2({
+                    "market/yfinance/v2/catalog/current.json": catalog,
+                    "market/yfinance/v2/universe/current.json": universe,
+                    "market/yfinance/v2/universe/irbank_source.json": source,
+                    "market/irbank/v1/catalog.json": irbank_catalog,
+                }),
                 "namespace",
             )
             report = migrator.run()
             self.assertEqual(report["d1_security_missing_count"], 3)
+            self.assertEqual(report["r2_universe_status"], "available")
+            self.assertEqual(report["r2_universe_count"], 4)
+            self.assertEqual(report["r2_universe_active_count"], 2)
+            self.assertEqual(report["r2_universe_inactive_count"], 1)
+            self.assertEqual(report["r2_active_universe_missing_catalog_count"], 2)
+            self.assertEqual(report["r2_catalog_outside_active_universe_count"], 1)
+            self.assertEqual(report["r2_irbank_source_universe_status"], "available")
+            self.assertEqual(report["r2_irbank_source_universe_count"], 3500)
+            self.assertEqual(report["r2_active_catalog_missing_in_irbank_source_count"], 2)
+            self.assertEqual(report["r2_active_universe_in_irbank_source_count"], 2)
+            self.assertEqual(report["r2_active_universe_not_in_irbank_source_count"], 0)
+            self.assertEqual(report["r2_irbank_source_not_active_universe_count"], 3498)
+            self.assertEqual(report["r2_irbank_catalog_status"], "available")
+            self.assertEqual(report["r2_irbank_catalog_count"], 2)
+            self.assertEqual(report["r2_active_universe_in_irbank_catalog_count"], 1)
+            self.assertEqual(report["r2_active_universe_supported_by_catalogs_count"], 1)
+            self.assertEqual(report["r2_active_universe_missing_both_catalogs_count"], 1)
+            self.assertEqual(report["r2_active_universe_by_security_type"], {"etf": 1, "listed_security": 1})
+            self.assertEqual(report["r2_active_universe_missing_both_by_security_type"], {"etf": 1})
+            self.assertEqual(report["r2_active_universe_missing_both_by_product_category"], {"014": 1})
+            self.assertEqual(report["r2_active_universe_missing_both_by_source"], {"JPX Listed Issues - ETFs": 1})
+            self.assertEqual(report["market_audit_fields"]["d1_security_missing_active_count"], 1)
+            self.assertEqual(
+                report["market_audit_fields"]["d1_security_missing_active_in_irbank_source_count"],
+                1,
+            )
+            self.assertEqual(
+                report["market_audit_fields"]["d1_security_missing_active_in_irbank_catalog_count"],
+                1,
+            )
+            self.assertEqual(report["market_audit_fields"]["d1_security_missing_active_uncovered_count"], 0)
+            self.assertEqual(report["market_audit_fields"]["d1_security_missing_inactive_count"], 1)
+            self.assertEqual(report["market_audit_fields"]["d1_security_missing_unclassified_count"], 1)
             self.assertNotIn("d1_security_missing_sample", report)
             self.assertTrue(report["complete"])
             self.assertEqual(report["r2_catalog_generation"], "g1")
@@ -1195,6 +2215,128 @@ class MigrationScriptTest(unittest.TestCase):
             self.assertNotIn("d1_security_missing_sample", checkpoint)
             self.assertNotIn('"8306"', json.dumps(artifact))
             self.assertNotIn('"9432"', json.dumps(checkpoint))
+
+    def test_market_audit_rejects_changed_irbank_source_universe_on_resume(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args = self.make_args(temp, phase="market-audit")
+            catalog = migration.canonical_json({"generation": "g1", "items": []})
+            initial_codes = [f"{code:04d}" for code in range(1000, 4498)] + ["8306", "9501"]
+            first = migration.Migrator(
+                args,
+                FakeReader({"securities": []}),
+                FakeR2({
+                    "market/yfinance/v2/catalog/current.json": catalog,
+                    "market/yfinance/v2/universe/irbank_source.json": valid_irbank_source_snapshot(initial_codes),
+                }),
+                "namespace",
+            )
+            self.assertTrue(first.run()["complete"])
+
+            changed_codes = [code for code in initial_codes if code != "9501"] + ["9998"]
+            resumed = migration.Migrator(
+                args,
+                FakeReader({"securities": []}),
+                FakeR2({
+                    "market/yfinance/v2/catalog/current.json": catalog,
+                    "market/yfinance/v2/universe/irbank_source.json": valid_irbank_source_snapshot(changed_codes),
+                }),
+                "namespace",
+            )
+            with self.assertRaisesRegex(migration.MigrationError, "source universe changed"):
+                resumed.run()
+
+    def test_market_audit_rejects_changed_irbank_catalog_on_resume(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args = self.make_args(temp, phase="market-audit")
+            catalog = migration.canonical_json({"generation": "g1", "items": []})
+            first = migration.Migrator(
+                args,
+                FakeReader({"securities": []}),
+                FakeR2({
+                    "market/yfinance/v2/catalog/current.json": catalog,
+                    "market/irbank/v1/catalog.json": valid_irbank_catalog(["83060"]),
+                }),
+                "namespace",
+            )
+            self.assertTrue(first.run()["complete"])
+
+            resumed = migration.Migrator(
+                args,
+                FakeReader({"securities": []}),
+                FakeR2({
+                    "market/yfinance/v2/catalog/current.json": catalog,
+                    "market/irbank/v1/catalog.json": valid_irbank_catalog(["95010"]),
+                }),
+                "namespace",
+            )
+            with self.assertRaisesRegex(migration.MigrationError, "IRBANK catalog changed"):
+                resumed.run()
+
+    def test_market_audit_rejects_changed_active_universe_on_resume(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args = self.make_args(temp, phase="market-audit")
+            catalog = migration.canonical_json({"generation": "g1", "items": []})
+            first_universe = migration.canonical_json({"securities": [
+                {"code": "7203", "status": "active"},
+            ]})
+            first = migration.Migrator(
+                args,
+                FakeReader({"securities": []}),
+                FakeR2({
+                    "market/yfinance/v2/catalog/current.json": catalog,
+                    "market/yfinance/v2/universe/current.json": first_universe,
+                }),
+                "namespace",
+            )
+            self.assertTrue(first.run()["complete"])
+
+            changed_universe = migration.canonical_json({"securities": [
+                {"code": "7203", "status": "inactive"},
+            ]})
+            resumed = migration.Migrator(
+                args,
+                FakeReader({"securities": []}),
+                FakeR2({
+                    "market/yfinance/v2/catalog/current.json": catalog,
+                    "market/yfinance/v2/universe/current.json": changed_universe,
+                }),
+                "namespace",
+            )
+            with self.assertRaisesRegex(migration.MigrationError, "active-universe snapshot changed"):
+                resumed.run()
+
+    def test_market_audit_restarts_precoverage_checkpoint_before_resuming(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args = self.make_args(temp, phase="market-audit")
+            Path(args.checkpoint_in).write_text(json.dumps({
+                "phase": args.phase,
+                "table": args.table,
+                "dry_run": True,
+                "cursor": None,
+                "rolling_hash": "0" * 64,
+                "r2_readback_sha256": "0" * 64,
+                "write_set_sha256": "0" * 64,
+                "write_set_digest_algorithm": migration.WRITE_SET_DIGEST_ALGORITHM,
+                "market_audit_fields": {"d1_security_missing_active_count": 99},
+            }), encoding="utf-8")
+            migrator = migration.Migrator(
+                args,
+                FakeReader({"securities": [{
+                    "migration_rowid": 1,
+                    "security_code": "83060",
+                    "security_code_display": "8306",
+                }]}),
+                FakeR2({"market/yfinance/v2/catalog/current.json": migration.canonical_json({"generation": "g1", "items": []})}),
+                "namespace",
+            )
+            report = migrator.run()
+            self.assertTrue(report["checkpoint_restarted_for_market_audit_version_change"])
+            self.assertTrue(report["complete"])
+            self.assertEqual(report["source_rows"], 1)
+            self.assertEqual(report["d1_security_missing_count"], 1)
+            self.assertEqual(report["market_audit_fields"]["d1_security_missing_active_count"], 0)
+            checkpoint = json.loads(Path(args.checkpoint_out).read_text(encoding="utf-8"))
+            self.assertEqual(checkpoint["market_audit_version"], migration.MARKET_AUDIT_VERSION)
 
     def test_market_audit_rowid_paging_counts_duplicate_and_invalid_display_codes(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -1407,6 +2549,7 @@ class MigrationScriptTest(unittest.TestCase):
                 "dry_run": True,
                 "cursor": 1200,
                 "rolling_hash": "a" * 64,
+                "market_source_audit_version": migration.FINANCIAL_AUDIT_VERSION - 1,
                 "market_source_audit": {"rows_checked": 500},
             }), encoding="utf-8")
             migrator = migration.Migrator(args, FakeReader({"financial_periods": []}), FakeR2(), "namespace")
@@ -1453,9 +2596,76 @@ class MigrationScriptTest(unittest.TestCase):
             args = self.make_args(changed_temp, phase="market-source-audit", table="financial_periods")
             report = migration.Migrator(args, FakeReader({"financial_periods": [changed]}), r2, "namespace").run()
             self.assertEqual(report["market_source_audit"]["status_counts"], {"source_values_differ": 1})
+            self.assertEqual(report["market_source_audit"]["anomaly_counts_by_period_type_and_year"], {
+                "source_values_differ|annual|2025": 1,
+            })
             artifacts = Path(args.report).read_text(encoding="utf-8") + Path(args.checkpoint_out).read_text(encoding="utf-8")
             self.assertNotIn("9999", artifacts)
+            self.assertNotIn("7203", artifacts)
             self.assertIn("sales", artifacts)
+
+    def test_market_source_audit_keeps_aggregates_across_checkpoint_pages(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args = self.make_args(
+                temp,
+                phase="market-source-audit",
+                table="financial_periods",
+                max_rows=20,
+                batch_size=1,
+            )
+            rows = []
+            objects = {}
+            for index in range(4):
+                code = str(7203 + index)
+                source_key = f"market/irbank/v1/securities/{code}/overview.json"
+                year = f"202{index}/03"
+                payload = {
+                    "fiscal_year": year,
+                    "sales": 1234 + index,
+                    "field_units": {"sales": "million_jpy"},
+                }
+                objects[source_key] = migration.canonical_json({
+                    "financials": {
+                        "annual": [{
+                            **payload,
+                            "accounting_standard": "J-GAAP",
+                            "is_consolidated": True,
+                        }],
+                    },
+                })
+                rows.append({
+                    "migration_rowid": index + 1,
+                    "source_security_code": code,
+                    "security_code_display": code,
+                    "period_type": "annual",
+                    "fiscal_year": year,
+                    "accounting_standard": "J-GAAP",
+                    "is_consolidated": 1,
+                    "data_json": json.dumps(payload),
+                })
+
+            r2 = FakeR2(objects)
+            report = migration.Migrator(
+                args,
+                FakeReader({"financial_periods": rows}),
+                r2,
+                "namespace",
+            ).run()
+
+            audit = report["market_source_audit"]
+            self.assertTrue(report["complete"])
+            self.assertEqual(audit["rows_checked"], 4)
+            self.assertEqual(audit["status_counts"], {"source_values_match": 4})
+            self.assertEqual(audit["r2_source_lookups"], 4)
+            self.assertEqual(len(r2.get_calls), 4)
+            self.assertNotEqual(audit["r2_source_sha256"], "0" * 64)
+
+            saved_report = json.loads(Path(args.report).read_text(encoding="utf-8"))
+            saved_checkpoint = json.loads(Path(args.checkpoint_out).read_text(encoding="utf-8"))
+            self.assertEqual(saved_report["market_source_audit"]["rows_checked"], 4)
+            self.assertEqual(saved_checkpoint["market_source_audit"]["status_counts"], {
+                "source_values_match": 4,
+            })
 
     def test_market_source_audit_distinguishes_full_year_rows_in_other_categories(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -1510,6 +2720,10 @@ class MigrationScriptTest(unittest.TestCase):
             self.assertEqual(audit["source_category_mismatch_counts"], {
                 "annual->quarterly": 1,
                 "annual->semiannual": 1,
+            })
+            self.assertEqual(audit["anomaly_counts_by_period_type_and_year"], {
+                "source_category_mismatch|annual|2025": 1,
+                "source_period_missing|annual|2024": 1,
             })
             artifacts = Path(args.report).read_text(encoding="utf-8")
             self.assertNotIn("92384711", artifacts)
@@ -1628,7 +2842,7 @@ class MigrationScriptTest(unittest.TestCase):
             audit = report["market_source_audit"]
             self.assertEqual(audit["status_counts"], {"period_granularity_gap": 1})
             self.assertNotIn("sample", audit)
-            serialized = json.dumps(report)
+            serialized = json.dumps(without_hash_values(report))
             self.assertNotIn("7203", serialized)
             self.assertNotIn(key, serialized)
 
@@ -1659,7 +2873,9 @@ class MigrationScriptTest(unittest.TestCase):
             self.assertNotIn("sample", audit)
             for artifact_path in (args.report, args.checkpoint_out):
                 artifact = Path(artifact_path).read_text(encoding="utf-8")
-                self.assertNotIn("7203", artifact)
+                parsed_artifact = json.loads(artifact)
+                sanitized_artifact = json.dumps(without_hash_values(parsed_artifact))
+                self.assertNotIn("7203", sanitized_artifact)
                 self.assertNotIn(key, artifact)
                 self.assertNotIn('"sample"', artifact)
 
@@ -1729,7 +2945,8 @@ class MigrationScriptTest(unittest.TestCase):
 
     def test_market_source_audit_is_read_only(self):
         with patch("sys.argv", ["migrate_d1_to_r2.py", "--phase", "market-source-audit",
-                                "--table", "financial_periods", "--write-r2", "--confirm-write", "WRITE_R2"]):
+                                "--table", "financial_periods", *CLI_FILE_ARGS,
+                                "--write-r2", "--confirm-write", "WRITE_R2"]):
             with self.assertRaises(SystemExit):
                 migration.arguments()
 
@@ -1738,6 +2955,7 @@ class MigrationScriptTest(unittest.TestCase):
         first_key = next(iter(migration.DEFINITION_FILES))
         with tempfile.TemporaryDirectory() as temp:
             args = self.make_args(temp, phase="definitions", max_rows=1)
+            args.allow_d1_definition_fallback = True
             reader = FakeReader({"app_definition_documents": [{"value_json": json.dumps(definitions[first_key])}]})
             r2 = FakeR2()
             with patch.object(migration.Migrator, "read_kv", side_effect=lambda key: None if key == first_key else definitions[key]):
@@ -1754,6 +2972,36 @@ class MigrationScriptTest(unittest.TestCase):
             self.assertEqual(resumed["cumulative"]["rows_read"], 1)
             checkpoint = json.loads(Path(args.checkpoint_out).read_text(encoding="utf-8"))
             self.assertNotIn("cursor", checkpoint)
+
+    def test_definition_phase_fails_closed_without_kv_by_default(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args = self.make_args(temp, phase="definitions")
+            reader = FakeReader({"app_definition_documents": [{"value_json": json.dumps({"version": 1})}]})
+            r2 = FakeR2()
+            with patch.object(migration.Migrator, "read_kv", return_value=None):
+                with self.assertRaisesRegex(migration.MigrationError, "KV definition missing"):
+                    migration.Migrator(args, reader, r2, "namespace").run()
+
+            self.assertEqual(reader.queries, [])
+            self.assertEqual(r2.objects, {})
+
+    def test_explicit_definition_fallback_reads_legacy_table(self):
+        target_key = "diagnosis-definitions:v1"
+        fallback_rows = [{"min_score": 90, "max_score": 100, "grade": "A"}]
+        with tempfile.TemporaryDirectory() as temp:
+            args = self.make_args(temp, phase="definitions", max_rows=20)
+            args.allow_d1_definition_fallback = True
+            reader = FakeReader({"diagnosis_bands": fallback_rows})
+            with patch.object(
+                migration.Migrator,
+                "read_kv",
+                side_effect=lambda key: None if key == target_key else {"version": 1, "key": key},
+            ):
+                report = migration.Migrator(args, reader, FakeR2(), "namespace").run()
+
+            self.assertEqual(report["rows_read"], 1)
+            self.assertEqual(len(reader.queries), 1)
+            self.assertIn("FROM diagnosis_bands", reader.queries[0][0])
 
     def test_definition_phase_prefers_live_kv_over_stale_d1_document(self):
         target_key = "stock-analysis-definitions:v1"
@@ -1787,14 +3035,30 @@ class MigrationScriptTest(unittest.TestCase):
             self.assertEqual(json.loads(r2.get(pointer_key)), {"version": 2})
 
     def test_cli_rejects_conflicting_dry_run_and_write_flags(self):
-        with patch("sys.argv", ["migrate_d1_to_r2.py", "--phase", "analysis-current", "--dry-run", "--write-r2", "--confirm-write", "WRITE_R2"]):
+        with patch("sys.argv", ["migrate_d1_to_r2.py", "--phase", "analysis-current", *CLI_FILE_ARGS,
+                                "--dry-run", "--write-r2", "--confirm-write", "WRITE_R2"]):
+            with self.assertRaises(SystemExit):
+                migration.arguments()
+
+    def test_cli_limits_d1_definition_fallback_to_definitions_phase(self):
+        with patch("sys.argv", ["migrate_d1_to_r2.py", "--phase", "definitions",
+                                *CLI_FILE_ARGS, "--allow-d1-definition-fallback"]):
+            args = migration.arguments()
+            self.assertTrue(args.allow_d1_definition_fallback)
+        with patch("sys.argv", ["migrate_d1_to_r2.py", "--phase", "analysis-current",
+                                *CLI_FILE_ARGS, "--allow-d1-definition-fallback"]):
+            with self.assertRaises(SystemExit):
+                migration.arguments()
+
+    def test_cli_requires_isolated_checkpoint_and_report_paths(self):
+        with patch("sys.argv", ["migrate_d1_to_r2.py", "--phase", "analysis-current"]):
             with self.assertRaises(SystemExit):
                 migration.arguments()
 
     def test_cli_rejects_table_choices_for_phases_that_do_not_select_a_table(self):
         for phase in ("analysis-history", "scheduled-runs", "definitions", "market-audit"):
             with self.subTest(phase=phase), patch(
-                "sys.argv", ["migrate_d1_to_r2.py", "--phase", phase, "--table", "backend_state"]
+                "sys.argv", ["migrate_d1_to_r2.py", "--phase", phase, "--table", "backend_state", *CLI_FILE_ARGS]
             ), self.assertRaises(SystemExit):
                 migration.arguments()
 
@@ -1805,7 +3069,7 @@ class MigrationScriptTest(unittest.TestCase):
             ("legacy-market-archive", "securities"),
         ):
             with self.subTest(phase=phase), patch(
-                "sys.argv", ["migrate_d1_to_r2.py", "--phase", phase, "--table", table]
+                "sys.argv", ["migrate_d1_to_r2.py", "--phase", phase, "--table", table, *CLI_FILE_ARGS]
             ):
                 args = migration.arguments()
                 self.assertEqual(args.table, table)
@@ -1815,6 +3079,7 @@ class MigrationScriptTest(unittest.TestCase):
             "sys.argv",
             [
                 "migrate_d1_to_r2.py", "--phase", "analysis-current",
+                *CLI_FILE_ARGS,
                 "--max-rows", "100000", "--read-reserve-rows", "4900001",
             ],
         ), self.assertRaises(SystemExit):

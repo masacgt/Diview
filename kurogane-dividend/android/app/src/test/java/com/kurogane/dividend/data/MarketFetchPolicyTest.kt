@@ -13,6 +13,14 @@ class MarketFetchPolicyTest {
         assertTrue(MarketFetchPolicy.shouldFetch(attempt + 30_000, attempt, date, true))
     }
 
+    @Test fun serverRetryAfterExtendsTheMinimumFailureDelay() {
+        val retryAfterAt = attempt + 120_000L
+        assertFalse(MarketFetchPolicy.shouldFetch(attempt + 30_000L, attempt, date, true, retryAfterAt))
+        assertFalse(MarketFetchPolicy.shouldFetch(retryAfterAt - 1L, attempt, date, true, retryAfterAt))
+        assertTrue(MarketFetchPolicy.shouldFetch(retryAfterAt, attempt, date, true, retryAfterAt))
+        assertTrue(MarketFetchPolicy.shouldFetchOnStartup(retryAfterAt, attempt, date, "failed", retryAfterAt))
+    }
+
     @Test fun interruptedAndSupersededCatalogAttemptsUseTheFailureRetryWindow() {
         listOf("running", "failed", "superseded", "unknown").forEach {
             assertTrue(MarketFetchPolicy.isUnsuccessfulStatus(it))

@@ -64,8 +64,8 @@
 - 完了した定期処理のログ・成果物はR2で管理し、D1には保存しない。
 - ウォッチリスト、通知設定、目標値、通知済み状態、通知履歴は端末で管理する。
 - 価格通知の対象は日本株とする。アプリ起動時に更新を判定し、通常取得は日本時間で同日に重ねず、前回の試行から12時間以上経過している場合に行う。取得結果を端末に保存し、指定時刻の価格通知は保存済みデータだけで判定する。アプリが起動されない日は新しい価格を取得できないため、通知時の鮮度判定で扱う。
-- 通常の価格取得は保有・ウォッチリスト対象の日本株に限定し、価格と価格日を端末へ保存する。IRBANK利回り契約の更新が必要な場合のみ、通常のJST日付・12時間ゲート内で全カタログを取得する。通知処理は端末キャッシュを使い、ネットワークへ接続しない。
-- 保存価格が有効な価格日から東証の3営業日を超えて古い場合、または価格がない場合は価格通知を見送る。更新失敗時もこの条件で判定し、古い値を新しい値として扱わない。
+- 通常の価格取得は保有・ウォッチリスト対象の日本株に限定し、Workerが既存の `market/yfinance/v2/securities/{code}.T/current.json` を読み、価格と価格日を端末へ保存する。価格取得のデータ経路はD1を参照せず、アプリ起動時に銘柄ごとのIRBANK価格APIも呼ばない。v2価格が欠落・無効なら項目を省略し、IRBANKへの外部取得へフォールバックしない。Durable Objectのレート制限初期化時は、有効な旧カウンターを引き継ぐためD1行を一度読む場合がある。配当表示用データは既存R2索引/API経由で読み、通知処理は端末キャッシュだけで判定してネットワークへ接続しない。
+- 保存価格が有効な価格日から東証の3営業日を超えて古い場合、または価格がない場合は価格通知を見送る。鮮度は判定時点の日本時間から見た最新の完了済み東証営業日を基準にする。通知済みの重複抑止は鮮度基準とは別にJST暦日で行う。更新失敗時もこの条件で判定し、古い値を新しい値として扱わない。
 - 分析APIの共有レート制限はDurable Objectsで厳密に維持する。
 - インカム空白月候補は既存のR2カタログ・API・端末内順位付けの流れを維持する。D1への移行対象にはしない。
 - D1が得意な小規模な関係データや処理中の制御状態は、用途に応じてD1に残してよい。
@@ -135,10 +135,10 @@ D1再投入につながる経路を棚卸しし、`import-d1.ps1` と `apply-fin
 
 ### 定期処理・運用状態
 
-- Worker Cron は `17 * * * *` で毎時起動する。定期分析はR2カタログと財務リビジョンの世代を比較し、入力が変わった場合は銘柄一覧を再分析する。今回のWorkerソース変更後は、世代が変わらない実行では個別銘柄を処理せず、D1のサーバー側ウォッチリストを参照しない。個人別の目標値判定と通知はサーバー処理に依存させない。
-- `scheduled_run_log` は開始中の状態と完了ログを兼ねる。移行時に完了ログ・成果物をR2へ移し、実行中状態はD1またはDurable Objectsに分離する。
+- Worker Cron は `17 * * * *` で毎時起動する。定期分析はR2のactive universe、価格カタログ、財務リビジョンの世代を比較し、入力が変わった場合はactive銘柄全体を再分析する。今回のWorkerソース変更後は、世代が変わらない実行では個別銘柄を処理せず、D1のサーバー側ウォッチリストを参照しない。個人別の目標値判定と通知はサーバー処理に依存させない。
+- 旧D1の `scheduled_run_log` は実行中状態と完了ログを兼ねる。移行対象は開始から365日以内で `finished_at` があり、状態が `success`、`failed`、`partial`、`superseded` の行に限る。未完了・非終端状態はR2の完了履歴へ移さず、原因・保持・バックアップを決めるまでD1に残す。候補Workerの新しい定期分析は `analysis/v1/state/scheduled-job.json` に実行中の状態を置き、`operations/v1/runs/analysis/{run_id}/summary.json` に要約を保存する。候補のR2実装は本番未反映であり、旧D1行の状態を遡って完了扱いにしない。
 - 旧価格更新キュー用のD1ヘルパーとバインディングは残っているが、現在のCron経路はキューを投入・消費していない。キューコンシューマーは受信メッセージをACKする実装であるため、廃止前に本番の未処理メッセージと外部投入元を確認する。`market_price_refresh_runs` は `/api/v1/health` が引き続き参照するため、現行のD1読み取りとして扱う。`market_price_refresh_batches` などの旧キュー表は、Worker・Actions・運用スクリプトの書き込みがないことを本番状態と合わせて確認してから整理する。
-- `/api/v1/health` は現在、D1から最新の定期分析・価格更新状態を読む。完了状況はR2、実行中状態は選定した制御ストアから読むようにする。
+- 本番Version 84の `/api/v1/health` は旧D1の状態を読む。候補Workerは最新の定期分析状態をR2から読み、D1はバインディング有無だけを表示する。旧価格更新状態のD1表は別途残っており、キューの保持・外部投入元と合わせて廃止可否を判断する。
 - `backend_state.analysis_source` は、R2カタログと財務リビジョンを前回処理した世代と比較するチェックポイントである。履歴ログと混ぜず、重複実行を防げる小さな状態として維持する。
 - 現行の保持処理は、`api_request_log` を1日、`support_feedback` を90日、`scheduled_run_log` と対象の `notification_events` を365日で整理する。R2へ移すログ・履歴にも、該当する保持規則を維持する。
 
@@ -165,7 +165,7 @@ GitHub ActionsのD1移行ジョブは、対象データだけを読み、D1読�
 
 分析・設定APIには市場データ以外のD1アクセスも残る。`appDefinitionDocument` と `appDefinitionItems` はKVに値がない場合D1へフォールバックする。`auditDefinition` は分析実行時にD1へ監査記録を書く。これらをR2定義・監査へ移し、D1フォールバックとリクエストごとのD1監査書き込みをなくす。監査は定義変更時のイベントとして追記し、通常の分析リクエストごとには書かない。
 
-`enforceRateLimit` はルートとクライアントまたはIPごとのカウンターを `api_request_log` に更新する。分析APIなど、このレート制限の対象APIは、銘柄検索をR2へ移した後もD1アクセスが残る。決定済みの方式はDurable Objectsで、既存の共有制限のキー・窓幅・上限・拒否動作を保つ。切替後に `api_request_log` はレート制限カウンターとして使わず、現行の1日保持期間を経過したカウンター履歴の移行は不要とする。
+`enforceRateLimit` はルートとクライアントまたはIPごとのカウンターを `api_request_log` に更新する。決定済みの移行先はDurable Objectsで、既存の共有制限のキー・窓幅・上限・拒否動作を保つ。切替時、未初期化のDOカウンターは設定した引継ぎ期限までの初回要求でのみ、期限内のD1カウンターを一度読み取り、DOへ引き継ぐ。引継ぎ期限はD1の書き込み停止時刻から既存の最大レート制限窓が満了する時刻までとし、期限後はD1を参照しない。切替後に `api_request_log` はレート制限カウンターとして使わず、現行の1日保持期間を経過したカウンター履歴の移行は不要とする。
 
 ### 端末通知と旧サーバーFCM
 
@@ -179,7 +179,7 @@ Workerソースでは `/api/v1/clients/register`、`/api/v1/push-devices`、`/ap
 
 価格カタログ取得と価格通知判定を別ジョブにする。アプリ起動時に更新を判定し、通常取得は日本時間で同日に重ねず、前回の試行から12時間以上経過している場合に日本株カタログを取得する。これは「暦日で最大1回」と「前回試行から最低12時間」の両方を満たす条件である。取得失敗は通常の成功時ゲートとは分け、現行の30秒再試行間隔を引き継ぐ。アプリが起動されない日は新しい価格を取得しない。取得結果は端末に保存し、銘柄ごとの価格・価格日・取得日時とカタログの市場データ日・取得状態を記録する。失敗時は最後に成功した値を残すが、その価格日を更新したり新鮮な値と見なしたりしない。
 
-アプリ起動時の通常価格更新では、保有中またはウォッチリスト登録中の日本株コードだけを取得する。API呼び出しは最大50コード単位で、すべて同じ公開済みgenerationと市場データ日に固定する。取得した価格・価格日を銘柄別端末キャッシュへ保存し、応答に含まれない銘柄の既存値は消さない。IRBANK利回り契約が旧版の場合だけ、通常のJST日付・12時間ゲートを満たした価格更新時に全カタログを一度取得して契約を更新する。この契約更新は同日・12時間未満の追加取得を発生させない。
+アプリ起動時の通常価格更新では、保有中またはウォッチリスト登録中の日本株コードだけを取得する。API呼び出しは最大10コード単位とし、価格は既存のYFinance v2銘柄別R2オブジェクトから読む。Workerは公開ポインター`publications/current.json`の世代・市場データ日を応答に含め、要求側は最初のバッチで受け取った世代IDを後続バッチへ渡す。Workerは各銘柄の`current.json`が公開完了時刻より新しくないことと、読み取り前後で公開ポインターが変わっていないことを確認し、異なる世代が混ざる場合は409で全体を失敗させる。公開カタログ日が要求日の前日以前でも応答可能とし、鮮度は銘柄ごとの価格日で判定する。価格取得のために銘柄ごとにIRBANK APIを呼び出さず、v2に価格がない場合はその銘柄を応答から省く。取得した価格・価格日を銘柄別端末キャッシュへ保存し、応答に含まれない銘柄の既存値は消さない。後続バッチが408/425/429/5xxまたは通信エラーで失敗した場合、取得済みバッチの価格を部分スナップショットとして端末保存し、全体状態は未完了として再試行する。数値の`Retry-After`があれば30秒の最低再試行間隔と比較して遅い方を待つ。409の世代競合、世代不一致、不正な応答では部分結果を保存しない。IRBANK利回り契約が旧版の場合だけ、通常のJST日付・12時間ゲートを満たした価格更新時に全カタログを一度取得して契約を更新する。この契約更新は既存R2のカタログを使い、IRBANK APIへの価格取得を行わず、同日・12時間未満の追加取得を発生させない。
 
 指定時刻の価格通知はネットワーク制約を持たず、ウォッチリストと端末キャッシュだけで動作する。日本株のみを対象にし、有効な価格がない銘柄、または価格日が東証の完了済み営業日から3営業日を超えて古い銘柄は通知を見送る。銘柄ごとに価格日を判定し、カタログ全体の取得時刻だけで鮮度を判断しない。同一アプリプロセス内で起動時処理と保有銘柄追加処理が重なっても二重更新しないよう、更新判定と取得を直列化する。ネットワーク失敗、プロセス中断、世代競合で結果を公開できなかった試行は、30秒以上空けて再試行できる。米国株はこのオフライン価格通知と日次価格カタログ取得の対象外とする。
 
@@ -206,7 +206,7 @@ Workerソースでは `/api/v1/clients/register`、`/api/v1/push-devices`、`/ap
 5. **対象ごとにバックフィルする。** 手動Actionsで表ごとに小さい再開可能な単位で読み出し、R2に公開する。`securities`・財務・配当はR2の被覆を突き合わせて不足分だけ扱う。分析状態/履歴は保持規則を反映し、完了済み実行ログはR2へ、実行中制御状態は選定先へ分ける。データ本体をActionsログや通常アーティファクトへ保存しない。既存R2を無条件に上書きせず、D1からの読み取り量と残り枠を各バッチで監視する。
 6. **R2の読み戻しと差分を確認する。** バッチごとの件数・ハッシュ・期間範囲を照合し、代表銘柄でAPI応答を比較する。途中失敗は同じチェックポイントから再開し、成功扱いにしない。R2側のcurrentポインターは全データがそろった後に切り替える。
 7. **Workerを切り替える。** `/api/v1/analysis/{code}` の銘柄確認、定期分析の一覧・状態・履歴、定義・監査、health表示をR2へ切り替える。Durable Objectsのレート制限を有効にする際は、現行 `api_request_log` の有効期間中のカウンターを引き継ぐか、各制限窓が切れるまで旧制限を維持する。実装は各DOの初回利用時に対象カウンターを一度だけ読み取り、DO状態へ移す。切替直後にカウンターを空にして制限を一時解除しない。読み取り・書き込みを確認後、手順承認を経てREADME記載のWorkerデプロイを行う。
-8. **Androidの価格取得と通知を切り替える。** 起動時の通常更新は保有・ウォッチ対象の日本株コードに限定し、50コード単位で取得した価格と価格日を端末キャッシュへ保存する。通常更新のJST同日1回・前回試行から12時間以上というゲートを維持する。価格なし／3東証営業日超過時の見送り、欠落銘柄の既存価格保持、端末バックアップ範囲をエミュレータで検証する。
+8. **Androidの価格取得と通知を切り替える。** 起動時の通常更新は保有・ウォッチ対象の日本株コードに限定し、最大10コードずつ `/api/v1/notification-prices` へ依頼する。Workerは既存のYFinance v2銘柄別R2価格だけを読み、銘柄ごとのIRBANKプロバイダー呼び出しや外部取得へのフォールバックを行わない。v2価格がない銘柄は応答から省き、価格と価格日を端末キャッシュへ保存する。通常更新のJST同日1回・前回試行から12時間以上というゲートを維持する。価格なし／3東証営業日超過時の見送り、欠落銘柄の既存価格保持、端末バックアップ範囲をエミュレータで検証する。IRBANKのAPI利用枠は別系統の配当更新Workflowに残す。
 9. **全体を受け入れてから旧経路を整理する。** CI、Worker API・Cron、Android、R2読み戻し、D1使用量を検証し、旧サーバー通知API・キュー・スクリプトの外部利用と未処理メッセージを確認する。問い合わせ等で必要なD1は維持する。バックアップ・保持要件・外部利用を確認するまでは、移行元データやテーブルを削除しない。市場データのD1再投入スクリプトだけを停止・修正する。
 
 ## 完了条件
@@ -218,7 +218,8 @@ Workerソースでは `/api/v1/clients/register`、`/api/v1/push-devices`、`/ap
 - DO初期化後の分析API呼び出しで市場データ目的のD1検索、D1定義フォールバック、D1監査書き込み、D1レート制限更新を行わない。初期化時の一度限りの有効カウンター読み取りはDOへ状態を引き継ぐためのものとし、通常リクエストで繰り返さない。
 - Worker変更を検査するGitHub Actionsが関連パスで起動し、D1→R2の移行Actionsは手動実行・再開可能・照合可能である。既存の定期R2公開Actionsは維持し、本番D1への意図しない書き込みがない。
 - Durable Objectsへの切替時に有効なレート制限窓を引き継ぐか、旧窓の期限切れを待ち、一時的な制限リセットが起きない。
-- 価格取得はアプリ起動時に判定し、通常取得は日本時間で同日に1回まで、かつ前回試行から12時間以上空ける。失敗後は30秒間隔で再試行できる。対象は日本株。価格通知はネットワークなしで端末保存データから判定し、価格欠損または3東証営業日を超える古い価格では通知を見送る。WorkManagerの実行遅延を含め、指定時刻ちょうどの実行を保証しない。
+- 価格取得はアプリ起動時に判定し、通常取得は日本時間で同日に1回まで、かつ前回試行から12時間以上空ける。失敗後は最低30秒、サーバーから数値の`Retry-After`が返った場合はその指定時刻以降に再試行できる。対象は日本株。未キャッシュ価格の取得は最大10銘柄ずつWorkerへ依頼し、WorkerはR2に既存のYFinance v2価格オブジェクトだけを読む。価格取得のデータ経路ではD1行を読まず、銘柄ごとのIRBANK価格取得やR2書き込みは行わない。ただし、レート制限Durable Objectの初期化時は有効な旧カウンターの引継ぎに旧D1行を一度読む場合がある。v2価格がない場合はIRBANK等へ追加取得せず、端末に残る直近価格だけを3東証営業日以内に限って利用する。価格がなく、または3東証営業日を超えて古い場合は通知を見送る。後続バッチの一時失敗では成功済み価格を端末保存しつつ更新全体を未完了とし、世代競合では部分結果を保存しない。価格と価格日を端末に保存し、価格通知はネットワークなしで端末保存データから判定する。WorkManagerの実行遅延を含め、指定時刻ちょうどの実行を保証しない。
+- 定期分析はR2 `universe/current.json` の `status=active` 全銘柄を対象にし、検索価格カタログにない銘柄も価格欠損だけを理由に除外しない。個別のv2 `current.json` がない場合は検索カタログの価格・価格日を参照し、それもなければ旧市場スナップショットから補完せず価格をnullのまま分析する。inactive銘柄は除外し、universeの変更も分析再実行の入力として検知する。
 - 分析APIのレート制限はDurable Objectsの共有状態を使い、現行のキー・上限・期間・拒否応答が維持される。
 - 問い合わせと必要な処理中制御状態が従来どおり動く。端末管理へ切り替えたWorkerソースは個人別ウォッチリストを読み書きせず、FCMを送らない。旧D1テーブル・データは別途バックアップと保持要件を確認するまで削除しない。
 - D1の行読み取り量を移行前後で比較し、残存するD1クエリの用途と量を説明できる。
@@ -1320,6 +1321,8 @@ Sanitized reports（Git外）: source SQL inventory `worker-source-sql-audit-202
 
 この確認はlocal bundle/config validationのみ。remote upload/deploy、DO migration実行、D1 SQL、Cron変更、production route/invocation確認は行っていない。`wrangler.cutover-paused.toml`の`crons=[]`と通常configのschedule復帰は、別々の明示承認ゲートとして維持する。
 
+現在の候補`wrangler.toml`は`*/5 * * * *`のR2分析履歴整理と`17 * * * *`の問い合わせメール再試行・90日保持整理だけを継続し、市場分析Cronを含めない。Workers Paidの有効化と制御されたCPU測定が確認されるまで、分析Cronを保留する。最終D1スナップショット中は`wrangler.cutover-paused.toml`で全Cronを一時停止し、切替後は通常設定で保守Cronだけを再開する。
+
 
 ## 2026-11-06 JST 10:42 live rate-limit handoff snapshot
 
@@ -1540,6 +1543,14 @@ Sanitized reports outside Git: event-level readback `C:\Codex\r2-d1-ownership-au
 
 With JDK 17.0.20.1, the task-specific Android 35 emulator passed `AssetDataRefreshTest#unknownQuoteDoesNotBecomeNoDividendOnAssetAndDetailScreens` (1/1) and `ReleaseNotificationPlatformTest` (2/2). The previously failing focused Compose case now passes. The candidate debug APK was reinstalled from this worktree, and the built APK hash matched the installed `base.apk`: `78FE1D70DD3B508FB1E62AE4150795EFE3FFB9FB871D2A501BE162ED08261F08`. No physical device or manual app launch was used.
 
+## 2026-11-19 JST price-catalog scope decision
+
+The 65 D1 codes absent from the YFinance v2 price catalog are not copied into that catalog and do not receive synthetic prices. `/api/v1/security-search` can return a matching R2 IRBANK master record as search metadata with `price=null` and `yield_rate=null`; it does not query D1. App-start notification-price refresh remains restricted to existing YFinance v2 per-security quote objects and omits missing or invalid prices without an IRBANK/provider fallback. This separates search-master coverage from price coverage and follows the user's v2-only notification-source decision.
+
+The read-only 2026-11-19 audit returned 3,960 D1 security codes (`meta.rows_read=3,960`). The current `market/irbank/v1/catalog.json` contains all 3,960 codes with names, including the 65 absent from YFinance v2; its SHA-256 is `325443a6366f23416b408be5b688168b2843182da15998dca30a0166e3d8624d` and LastModified is `2026-10-10T06:07:47Z`. This confirms R2 catalog coverage, not that the candidate search route is live; production Worker deployment and API read-back remain pending. A read-only check of the 65 corresponding v2 `current.json` objects found 4 valid positive prices with nonfuture dates, 40 missing objects, and 21 objects without a valid positive price/date. Notification refresh must return only available v2 prices and omit the other 61 without trying IRBANK or another provider.
+
+The 553 name differences, 21 financial provenance anomalies, and 969 unfinished run records remain separate unresolved migration items; do not overwrite R2 names, serve discrepant financial rows, or classify unfinished runs as completed. Account Analytics increased from 183,710 at `05:52:17Z` to 187,670 at `05:58:22Z`, matching the first SELECT's `meta.rows_read=3,960`. It then increased to 191,630 at `06:01:30Z`, matching the second SELECT's 3,960 rows after an intermediate stale snapshot. Both query-level reads reconcile with account-level Analytics. At `06:01:30Z`, usage was 191,630 / 5,000,000 rows, with 4,808,370 remaining.
+
 ## 2026-11-06 UTC 19:41: candidate lease and GitHub Environment recheck
 
 Cloudflare documents a 15-minute maximum wall time for Cron invocations. The candidate's analysis and retention R2 leases were shorter at 5 and 10 minutes, respectively. They are now both 16 minutes, with assertions; the scheduled-analysis suite passed 22/22, the full Worker suite passed 123/123, and all 91 migration/workflow utility tests passed. A hard termination can delay recovery until the lease expires, while the longer lease prevents another Cron from claiming the same job during the documented maximum execution window. Cron entitlement and production CPU behavior are still unresolved, so this does not authorize schedule restoration.
@@ -1551,3 +1562,25 @@ GitHub Environment UI readback confirmed administrator bypass is already disable
 ## 2026-11-06 UTC 20:00 Android verification
 
 Microsoft OpenJDK 17.0.20.1 `:app:assembleDebug` succeeded. `:app:testDebugUnitTest --rerun-tasks` passed 277/277, and the Android 35 audit emulator passed all 24 `AssetDataRefreshTest` instrumentation cases, including the visible automatic retry of missing Japanese prices. The APK installed from this worktree matched the emulator's `base.apk` at SHA-256 `78FE1D70DD3B508FB1E62AE4150795EFE3FFB9FB871D2A501BE162ED08261F08`; `MainActivity` resumed. No physical device was connected or used.
+
+## 2026-11-19 UTC 12:56 app-start price source and GitHub settings recheck
+
+The user confirmed that app-start notification-price refresh must use existing YFinance v2 prices and must not make a per-security IRBANK provider request. The candidate Worker reads the published R2 v2 security `current.json` objects; missing or invalid prices are omitted, with no external-provider fallback. The notification worker uses the device cache offline.
+
+The GitHub tab at `https://github.com/masacgt/Diview/settings/environments` displayed a sign-in link and a 404 page. The current branch-protection and Environment settings could not be re-read after the user's reauthentication message. The earlier saved/read-back report remains historical evidence, not a current verification. No GitHub setting was changed during this check.
+
+## 2026-11-19 offline notification acceptance follow-up
+
+The app-start notification-price source remains the existing YFinance v2 R2 per-security `current.json`; missing or invalid v2 prices are omitted, with no per-security IRBANK call or IRBANK price-budget reservation. The 200-request daily IRBANK allowance remains relevant to the separate dividend-refresh workflow. Notification evaluation itself reads the on-device cache only.
+
+The notification-price route test passed 7/7, the full local Worker suite 143/143, Python migration/usage/workflow suites 116/116, and Android JDK 17 JVM tests 285/285. After adding `GrantPermissionRule` to the opt-in scheduled acceptance test, Microsoft OpenJDK 17.0.20.1 rebuilt the app and AndroidTest APKs successfully. Both APKs installed on the disposable API 35 `emulator-5556` with matching built/installed SHA-256 values. The morning WorkManager phase queued an alert from a fresh local cache fixture; after advancing the AVD clock, the evening WorkManager phase posted the actual Android notification and verified title/body and delivery state. Both phases passed 1/1 with no active default network, and the test automatically granted `POST_NOTIFICATIONS` after the permission began denied.
+
+This verifies the offline device path against a local fixture; it does not verify production Worker API delivery or production-sourced notification prices. Production deployment/API read-back and D1 usage before/after comparison remain pending. The emulator clock, Wi-Fi, and airplane-mode state were restored after the run. No physical device, production Cloudflare state, or GitHub settings were changed.
+
+## 2026-11-20 UTC income-advice daily-sync year-window correction
+
+Income-advice eligibility counts dividend months across the three latest completed calendar years. During 2026 that is 2023–2025, while the normal daily-sync loader reads 2024–2026. The missing 2023 partition could therefore hide a recurring month or leave an existing candidate's observed months incomplete.
+
+The candidate daily sync now checks the missing oldest completed-year R2 dividend partition when it has not already loaded that year and positive events exist in the other completed years. It merges the dated records and recalculates both newly eligible and existing candidates. It makes no Yahoo or J-Quants request, D1 query, or R2 write. A qualifying security adds at most one R2 object GET; the exact count in a production invocation remains unmeasured. If the partition is empty or its read fails, the sync keeps the result from already loaded records and continues.
+
+The local yfinance suite passed 180/180 under isolated CPython 3.13.15, including six regressions for the missing-year cases. This is candidate-worktree evidence only; the correction has not been published or deployed, and no candidate pointer was changed.

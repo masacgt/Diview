@@ -4,6 +4,7 @@ import io
 import json
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -20,6 +21,34 @@ def group(database_id: str, rows_read: int, rows_written: int = 0) -> dict:
     return {
         "dimensions": {"date": UTC_DATE, "databaseId": database_id},
         "sum": {"rowsRead": rows_read, "rowsWritten": rows_written},
+    }
+
+
+def minute_group(
+    database_id: str,
+    datetime_minute: str,
+    read_queries: int,
+    rows_read: int,
+    rows_written: int = 0,
+) -> dict:
+    def exact_confidence(value: int) -> dict:
+        return {
+            "estimate": value,
+            "lower": value,
+            "upper": value,
+            "sampleSize": 5,
+            "isValid": False,
+        }
+
+    return {
+        "dimensions": {"datetimeMinute": datetime_minute, "databaseId": database_id},
+        "sum": {"readQueries": read_queries, "rowsRead": rows_read, "rowsWritten": rows_written},
+        "confidence": {
+            "sum": {
+                "readQueries": exact_confidence(read_queries),
+                "rowsRead": exact_confidence(rows_read),
+            },
+        },
     }
 
 
@@ -97,6 +126,203 @@ class DailyUsageTests(unittest.TestCase):
         self.assertNotIn(token, json.dumps(report))
         self.assertEqual(report["rows_read"], 123)
 
+    def test_query_uses_caller_supplied_timeout(self):
+        response_body = {
+            "data": {
+                "viewer": {
+                    "accounts": [{"d1AnalyticsAdaptiveGroups": [group(DB_A, 0)]}],
+                },
+            },
+        }
+        captured = {}
+
+        def fake_open(request, timeout):
+            captured["timeout"] = timeout
+            return FakeResponse(json.dumps(response_body).encode("utf-8"))
+
+        usage.fetch_daily_usage(ACCOUNT_ID, "secret", UTC_DATE, opener=fake_open, timeout_seconds=4.5)
+        self.assertEqual(captured["timeout"], 4.5)
+
+    def test_minute_report_sums_account_and_database_counts_for_a_bounded_window(self):
+        report = usage.build_minute_usage_report(
+            ACCOUNT_ID,
+            "2026-11-04T20:18:47Z",
+            "2026-11-04T20:20:02+00:00",
+            [
+                minute_group(DB_A, "2026-11-04T20:18:00Z", 2, 480, 1),
+                minute_group(DB_B, "2026-11-04T20:20:00+00:00", 1, 5),
+            ],
+        )
+
+        self.assertEqual(report["start_utc"], "2026-11-04T20:18:00Z")
+        self.assertEqual(report["end_utc"], "2026-11-04T20:20:00Z")
+        self.assertEqual(report["read_queries"], 3)
+        self.assertEqual(report["rows_read"], 485)
+        self.assertEqual(report["rows_written"], 1)
+        self.assertEqual(report["rows_remaining"], usage.DEFAULT_FREE_DAILY_LIMIT - 485)
+        self.assertTrue(report["confidence_bounds_verified"])
+        self.assertEqual(report["per_database"][0], {
+            "database_id": DB_A, "read_queries": 2, "rows_read": 480, "rows_written": 1,
+        })
+        self.assertEqual(len(report["per_minute"]), 2)
+
+    def test_minute_report_rejects_invalid_windows_groups_and_metrics(self):
+        with self.assertRaises(usage.UsageQueryError):
+            usage.build_minute_usage_report(ACCOUNT_ID, "2026-11-04T20:00:00", "2026-11-04T20:01:00Z", [])
+        with self.assertRaises(usage.UsageQueryError):
+            usage.build_minute_usage_report(ACCOUNT_ID, "2026-11-04T20:00:00Z", "2026-11-05T20:00:00Z", [])
+        with self.assertRaises(usage.UsageQueryError):
+            usage.build_minute_usage_report(
+                ACCOUNT_ID,
+                "2026-11-04T20:00:00Z",
+                "2026-11-04T20:00:00Z",
+                [minute_group(DB_A, "2026-11-04T20:01:00Z", 1, 1)],
+            )
+        bad_metric = minute_group(DB_A, "2026-11-04T20:00:00Z", 1, 1)
+        del bad_metric["sum"]["readQueries"]
+        with self.assertRaises(usage.UsageQueryError):
+            usage.build_minute_usage_report(
+                ACCOUNT_ID,
+                "2026-11-04T20:00:00Z",
+                "2026-11-04T20:00:00Z",
+                [bad_metric],
+            )
+        sampled = minute_group(DB_A, "2026-11-04T20:00:00Z", 1, 1)
+        sampled["confidence"]["sum"]["rowsRead"]["lower"] = 0
+        with self.assertRaisesRegex(usage.UsageQueryError, "uncertain"):
+            usage.build_minute_usage_report(
+                ACCOUNT_ID,
+                "2026-11-04T20:00:00Z",
+                "2026-11-04T20:00:00Z",
+                [sampled],
+            )
+
+    def test_minute_query_uses_utc_window_and_returns_no_token(self):
+        token = "minute-secret-test-token"
+        response_body = {
+            "data": {
+                "viewer": {
+                    "accounts": [{
+                        "d1AnalyticsAdaptiveGroups": [
+                            minute_group(DB_A, "2026-11-04T20:19:00Z", 5, 480),
+                        ],
+                    }],
+                },
+            },
+        }
+        captured = {}
+
+        def fake_open(request, timeout):
+            captured["request"] = request
+            captured["timeout"] = timeout
+            return FakeResponse(json.dumps(response_body).encode("utf-8"))
+
+        report = usage.fetch_minute_usage(
+            ACCOUNT_ID,
+            token,
+            "2026-11-04T20:18:59Z",
+            "2026-11-04T20:20:01Z",
+            opener=fake_open,
+            timeout_seconds=4.5,
+        )
+        request = captured["request"]
+        payload = json.loads(request.data)
+        self.assertEqual(captured["timeout"], 4.5)
+        self.assertEqual(request.get_header("Authorization"), f"Bearer {token}")
+        self.assertEqual(payload["variables"], {
+            "accountTag": ACCOUNT_ID,
+            "start": "2026-11-04T20:18:00Z",
+            "end": "2026-11-04T20:20:00Z",
+        })
+        self.assertIn("datetimeMinute_geq", payload["query"])
+        self.assertIn("readQueries", payload["query"])
+        self.assertIn("confidence(level: 0.95)", payload["query"])
+        self.assertNotIn("SELECT", payload["query"].upper())
+        self.assertNotIn(token, json.dumps(report))
+        self.assertEqual(report["rows_read"], 480)
+
+    def test_budget_report_uses_conservative_per_database_maximum(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        daily = usage.build_usage_report(
+            ACCOUNT_ID,
+            utc_date,
+            [
+                {"dimensions": {"date": utc_date, "databaseId": DB_A}, "sum": {"rowsRead": 100, "rowsWritten": 0}},
+                {"dimensions": {"date": utc_date, "databaseId": DB_B}, "sum": {"rowsRead": 200, "rowsWritten": 0}},
+            ],
+        )
+        minute = {
+            "rows_read": 200,
+            "per_database": [
+                {"database_id": DB_A, "rows_read": 150},
+                {"database_id": "33333333-3333-4333-8333-333333333333", "rows_read": 50},
+            ],
+            "analytics_groups": 2,
+            "confidence_bounds_verified": True,
+            "queried_at_utc": f"{utc_date}T12:00:00+00:00",
+        }
+
+        report = usage.build_budget_usage_report(daily, minute)
+
+        self.assertEqual(report["rows_read"], 300)  # daily snapshot remains available for reconciliation
+        self.assertEqual(report["daily_analytics_rows_read"], 300)
+        self.assertEqual(report["minute_day_to_date_rows_read"], 200)
+        self.assertEqual(report["effective_rows_read"], 400)
+        self.assertEqual(report["effective_rows_remaining"], 4_999_600)
+        self.assertEqual(report["budget_usage_source"], "daily_and_minute_day_to_date")
+
+    def test_budget_report_fails_closed_when_minute_data_omits_daily_reads(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        daily = usage.build_usage_report(ACCOUNT_ID, utc_date, [{
+            "dimensions": {"date": utc_date, "databaseId": DB_A},
+            "sum": {"rowsRead": 10, "rowsWritten": 0},
+        }])
+        minute = {
+            "rows_read": 0,
+            "per_database": [],
+            "analytics_groups": 0,
+            "confidence_bounds_verified": False,
+            "queried_at_utc": f"{utc_date}T12:00:00+00:00",
+        }
+
+        with self.assertRaisesRegex(usage.UsageQueryError, "omitted rows"):
+            usage.build_budget_usage_report(daily, minute)
+
+    def test_fetch_budget_usage_queries_current_utc_day_minutes(self):
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+        daily = usage.build_usage_report(ACCOUNT_ID, utc_date, [{
+            "dimensions": {"date": utc_date, "databaseId": DB_A},
+            "sum": {"rowsRead": 100, "rowsWritten": 0},
+        }])
+        minute = {
+            "rows_read": 150,
+            "per_database": [{"database_id": DB_A, "rows_read": 150}],
+            "analytics_groups": 1,
+            "confidence_bounds_verified": True,
+            "queried_at_utc": f"{utc_date}T12:00:00+00:00",
+        }
+        with (
+            patch.object(usage, "fetch_daily_usage", return_value=daily),
+            patch.object(usage, "fetch_minute_usage", return_value=minute) as fetch_minute,
+        ):
+            report = usage.fetch_budget_usage(ACCOUNT_ID, "secret", utc_date)
+
+        self.assertEqual(report["effective_rows_read"], 150)
+        fetch_minute.assert_called_once()
+        self.assertEqual(fetch_minute.call_args.args[2], f"{utc_date}T00:00:00Z")
+
+    def test_fetch_budget_usage_skips_minute_query_for_historical_utc_date(self):
+        daily = usage.build_usage_report(ACCOUNT_ID, UTC_DATE, [group(DB_A, 123)])
+        with (
+            patch.object(usage, "fetch_daily_usage", return_value=daily),
+            patch.object(usage, "fetch_minute_usage") as fetch_minute,
+        ):
+            report = usage.fetch_budget_usage(ACCOUNT_ID, "secret", UTC_DATE)
+
+        self.assertEqual(report["effective_rows_read"], 123)
+        self.assertEqual(report["budget_usage_source"], "daily_analytics_only")
+        fetch_minute.assert_not_called()
+
     def test_graphql_errors_are_sanitized(self):
         def fake_open(request, timeout):
             return FakeResponse(json.dumps({"errors": [{"message": "private detail"}]}).encode("utf-8"))
@@ -120,6 +346,12 @@ class DailyUsageTests(unittest.TestCase):
         self.assertTrue(usage.has_sufficient_remaining_budget({"rows_remaining": 1000, "limit_exceeded": False}, 1000))
         self.assertFalse(usage.has_sufficient_remaining_budget({"rows_remaining": 999, "limit_exceeded": False}, 1000))
         self.assertFalse(usage.has_sufficient_remaining_budget({"rows_remaining": 0, "limit_exceeded": True}, 0))
+        self.assertFalse(usage.has_sufficient_remaining_budget({
+            "rows_remaining": 4_000_000,
+            "limit_exceeded": False,
+            "effective_rows_remaining": 999,
+            "effective_limit_exceeded": False,
+        }, 1000))
         with self.assertRaises(usage.UsageQueryError):
             usage.has_sufficient_remaining_budget({"rows_remaining": 100, "limit_exceeded": False}, True)
 
@@ -131,7 +363,7 @@ class DailyUsageTests(unittest.TestCase):
             "os.environ",
             {"CLOUDFLARE_ACCOUNT_ID": ACCOUNT_ID, "CLOUDFLARE_API_TOKEN": "test-token"},
         ), patch.object(
-            usage, "fetch_daily_usage", return_value=report
+            usage, "fetch_budget_usage", return_value=report
         ), redirect_stdout(stdout), redirect_stderr(stderr):
             exit_code = usage.main(["--minimum-rows-remaining", "1000"])
         self.assertEqual(exit_code, 2)
@@ -146,7 +378,7 @@ class DailyUsageTests(unittest.TestCase):
             "os.environ",
             {"CLOUDFLARE_ACCOUNT_ID": ACCOUNT_ID, "CLOUDFLARE_API_TOKEN": "test-token"},
         ), patch.object(
-            usage, "fetch_daily_usage", return_value=report
+            usage, "fetch_budget_usage", return_value=report
         ), redirect_stdout(stdout), redirect_stderr(io.StringIO()):
             exit_code = usage.main(["--minimum-rows-remaining", "1000"])
         self.assertEqual(exit_code, 0)

@@ -9,6 +9,12 @@ test('security search includes R2 IRBANK master entries without quote data or D1
     count: 1,
     securities: [{ code: '1301', name: 'IRBANK only security', edinet_code: 'E00012', has_overview: true }],
   });
+  f.documents.set('market/yfinance/v2/universe/current.json', {
+    securities: [{ code: '1301', symbol: '1301.T', name: 'IRBANK only security', status: 'active' }],
+  });
+  f.documents.set('market/yfinance/latest_market_data.json', {
+    securities: [{ symbol: '1301.T', latest_daily_price: { close: 1234, date: '2026-10-26' } }],
+  });
   f.env.DB.prepare = () => { throw new Error('security search must not access D1'); };
 
   for (const query of ['1301', 'IRBANK only']) {
@@ -35,6 +41,8 @@ test('security search includes R2 IRBANK master entries without quote data or D1
   assert.equal(detail.dividend_status, 'unknown');
   assert.equal(detail.data_retrieval.processing_status, 'master_only');
 
+  f.documents.set('market/irbank/v1/catalog.json', { count: 0, securities: [] });
+  f.reads.length = 0;
   const analysisResponse = await worker.fetch(
     new Request('https://example.com/api/v1/analysis/1301'), f.env,
   );
@@ -43,6 +51,8 @@ test('security search includes R2 IRBANK master entries without quote data or D1
   assert.equal(analysis.code, '1301');
   assert.equal(analysis.name, 'IRBANK only security');
   assert.equal(analysis.market_date, null);
+  assert.equal(f.reads.includes('market/yfinance/latest_market_data.json'), false,
+    'an active universe member without a v2 quote must not fall back to a legacy price');
 });
 
 test('security search uses the IRBANK display name and preserves YFinance quote fields', async () => {

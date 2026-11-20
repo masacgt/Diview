@@ -102,6 +102,8 @@ class NotificationStore(context: Context) {
                 .put("yield", alert.yield)
                 .put("targetYield", alert.targetYield)
                 .put("held", alert.held)
+                .put("sourceLabel", alert.sourceLabel ?: JSONObject.NULL)
+                .put("processedBy", alert.processedBy ?: JSONObject.NULL)
                 .put("deliverAtMillis", deliverAt))
         }
         check(delivery.edit().putString("price_pending", root.toString()).commit()) { "通知履歴を保存できませんでした" }
@@ -122,7 +124,9 @@ class NotificationStore(context: Context) {
                     yield = row.optDouble("yield", Double.NaN),
                     targetYield = row.optDouble("targetYield", Double.NaN),
                     held = row.optBoolean("held"),
-                    deliverAtMillis = row.optLong("deliverAtMillis")
+                    deliverAtMillis = row.optLong("deliverAtMillis"),
+                    sourceLabel = row.optString("sourceLabel").takeIf { it != "null" && it.isNotBlank() },
+                    processedBy = row.optString("processedBy").takeIf { it != "null" && it.isNotBlank() }
                 )
                 if (event.name.isBlank() || !event.price.isFinite() || !event.yield.isFinite() ||
                     !event.targetYield.isFinite() || (nowMillis != null && event.deliverAtMillis > nowMillis)) return@forEach

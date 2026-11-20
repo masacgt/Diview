@@ -110,6 +110,19 @@ class NotificationPolicyTest {
         assertFalse(TseTradingCalendar.isFreshQuote("2026-11-03", freshOnThursday))
     }
 
+    @Test fun quoteAgeUsesCompletedSessionAtMorningAndEveningNotificationTimes() {
+        val quote = CachedNotificationPrice(2500.0, "2026-10-30")
+        val morning = ZonedDateTime.parse("2026-11-06T08:30:00+09:00[Asia/Tokyo]")
+        val evening = ZonedDateTime.parse("2026-11-06T17:30:00+09:00[Asia/Tokyo]")
+        val morningSession = TseTradingCalendar.latestCompletedSessionDate(morning)
+        val eveningSession = TseTradingCalendar.latestCompletedSessionDate(evening)
+
+        assertEquals(LocalDate.of(2026, 11, 5), morningSession)
+        assertEquals(LocalDate.of(2026, 11, 6), eveningSession)
+        assertEquals(1, NotificationPolicy.priceAlerts(listOf(stock()), emptyList(), mapOf("7203" to quote), emptyMap(), morning).hits.size)
+        assertTrue(NotificationPolicy.priceAlerts(listOf(stock()), emptyList(), mapOf("7203" to quote), emptyMap(), evening).hits.isEmpty())
+    }
+
     @Test fun officialTseClosuresAndSubstituteHolidaysAreNotTradingSessions() {
         // JPX's published 2026 cash-market calendar, including exchange holidays and substitute days.
         listOf(

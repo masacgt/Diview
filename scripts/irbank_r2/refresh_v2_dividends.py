@@ -36,6 +36,8 @@ EDINET_CODE_RE = re.compile(r"^[EG]\d{5}$")
 SECURITY_CODE_RE = re.compile(r"^[A-Z0-9]{4,5}$")
 FORECAST_TITLE_RE = re.compile(r"配当|分配|決算|業績|運用状況|dividend|distribution|earnings|results|forecast", re.IGNORECASE)
 FORECAST_CORRECTION_TITLE_RE = re.compile(r"訂正|修正|変更|correction|revision|amend", re.IGNORECASE)
+MAX_DISCLOSURE_LIST_PAGES = 10
+MAX_FORECAST_DOCUMENTS = 8
 # IRBANK currently allows 60 requests/minute per account. Keep a small margin
 # for requests made outside this process while reducing idle time between calls.
 API_REQUEST_INTERVAL_SECONDS = 1.02

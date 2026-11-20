@@ -13,9 +13,10 @@ import math
 import os
 import re
 import sys
+import time
 import tomllib
 import unicodedata
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -31,6 +32,10 @@ from scripts import d1_daily_usage
 
 
 DEFAULT_READ_RESERVE_ROWS = 100_000
+POSTFLIGHT_MAX_ATTEMPTS = 15
+POSTFLIGHT_RETRY_INTERVAL_SECONDS = 15
+POSTFLIGHT_MAX_DURATION_SECONDS = 300.0
+POSTFLIGHT_ANALYTICS_TIMEOUT_SECONDS = 5.0
 WRITE_SET_DIGEST_ALGORITHM = "rolling-sha256-v1"
 ALLOWED_PHASES = {
     "market-audit",
@@ -45,6 +50,8 @@ ALLOWED_PHASES = {
     "analysis-source",
     "legacy-market-archive",
 }
+
+CLOUDFLARE_D1_RESERVED_TABLES = frozenset({"_cf_kv"})
 ARCHIVE_TABLES = {
     "securities",
     "financial_periods",
@@ -77,13 +84,45 @@ DEFINITION_FILES = {
     "watchlist-analysis-definitions:v1": "watchlist-analysis-definitions",
     "portfolio-analysis-definitions:v1": "portfolio-analysis-definitions",
 }
+
+SCHEDULED_RUN_TERMINAL_STATUSES = frozenset({"success", "failed", "partial", "superseded"})
+SCHEDULED_RUN_TERMINAL_STATUS_SQL = "('success', 'failed', 'partial', 'superseded')"
+
+SCHEDULED_RUNS_QUERY = (
+    "SELECT id, run_type, started_at, finished_at, status, processed, failed, metadata_json "
+    f"FROM scheduled_run_log WHERE finished_at IS NOT NULL AND status IN {SCHEDULED_RUN_TERMINAL_STATUS_SQL} "
+    "AND datetime(started_at) >= ? "
+    "AND (datetime(started_at), id) > (?, ?) ORDER BY datetime(started_at), id LIMIT ?"
+)
+
+
+def scheduled_runs_cutoff_utc() -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=365)).replace(
+        microsecond=0
+    ).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def scheduled_runs_key_time(value: object) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).replace(microsecond=0).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
 DEFINITION_TABLES = {
     "diagnosis-definitions:v1": "SELECT min_score, max_score, grade, title, comment FROM diagnosis_bands ORDER BY min_score DESC",
     "valuation-scenarios:v1": "SELECT id, per_max, pbr_max, title, badge, comment FROM valuation_scenarios ORDER BY id",
 }
 
 
-FINANCIAL_AUDIT_VERSION = 3
+FINANCIAL_AUDIT_VERSION = 4
+MARKET_AUDIT_VERSION = 1
 IRBANK_D1_FINANCIAL_FIELD_UNITS = {
     "sales": "million_jpy",
     "operating_profit": "million_jpy",
@@ -98,6 +137,32 @@ IRBANK_D1_FINANCIAL_FIELD_UNITS = {
     "net_assets": "million_jpy",
     "total_liabilities": "million_jpy",
     "equity_ratio_computed": "percent",
+}
+MARKET_AUDIT_COUNT_FIELDS = {
+    "name_mismatch_count", "edinet_mismatch_count", "issuer_index_missing_count",
+    "metrics_nonempty_count", "metrics_invalid_count", "metrics_compared_count",
+    "metrics_mismatch_count", "metrics_r2_profile_missing_count", "metrics_r2_invalid_count",
+    "d1_security_missing_active_count", "d1_security_missing_active_in_irbank_source_count",
+    "d1_security_missing_active_in_irbank_catalog_count", "d1_security_missing_active_uncovered_count",
+    "d1_security_missing_inactive_count", "d1_security_missing_unclassified_count",
+}
+OPERATIONAL_STATUS_VALUES = {
+    "queued", "running", "success", "succeeded", "complete", "completed", "partial",
+    "superseded", "failed", "error", "retrying", "finalizing", "unknown", "skipped",
+}
+OPERATIONAL_DATE_FIELDS = {
+    "backend_state": {"updated_at"},
+    "scheduled_run_log": {"started_at", "finished_at"},
+    "market_price_refresh_runs": {"run_date", "started_at", "last_batch_at", "completed_at", "updated_at"},
+    "market_price_refresh_batches": {"market_data_date", "completed_at"},
+}
+OPERATIONAL_NUMERIC_FIELDS = {
+    "backend_state": set(),
+    "scheduled_run_log": {"processed", "failed"},
+    "market_price_refresh_runs": {
+        "total_batches", "enqueued_batches", "completed_batches", "failed_batches", "processed_symbols",
+    },
+    "market_price_refresh_batches": {"processed_symbols"},
 }
 JPY_UNITS_TO_JPY = {
     "jpy": 1.0,
@@ -244,8 +309,10 @@ class D1Reader:
         self.token = token
 
     def query(self, sql: str, params: list[object] | None = None) -> tuple[list[dict], dict]:
-        if not re.match(r"^\s*SELECT\b", sql, re.IGNORECASE) or ";" in sql:
-            raise MigrationError("D1 migration queries must be a single SELECT statement")
+        is_select = re.match(r"^\s*SELECT\b", sql, re.IGNORECASE)
+        is_query_plan = re.match(r"^\s*EXPLAIN\s+QUERY\s+PLAN\s+SELECT\b", sql, re.IGNORECASE)
+        if not (is_select or is_query_plan) or ";" in sql:
+            raise MigrationError("D1 migration queries must be one SELECT or EXPLAIN QUERY PLAN SELECT")
         request = Request(
             self.endpoint,
             data=json.dumps({"sql": sql, "params": params or []}).encode("utf-8"),
@@ -407,7 +474,10 @@ class Migrator:
             "checkpoint_restarted_for_mode_change": False,
             "checkpoint_restarted_for_cursor_change": False,
             "checkpoint_restarted_for_financial_audit_version_change": False,
+            "checkpoint_restarted_for_market_audit_version_change": False,
             "read_budget_rows": args.max_rows,
+            "read_reserve_rows": getattr(args, "read_reserve_rows", 100_000),
+            "d1_database_id": getattr(args, "d1_database_id", None),
             "account_daily_usage_preflight": getattr(args, "account_daily_usage_preflight", None),
             "rows_read": 0,
             "d1_queries_attempted": 0,
@@ -470,6 +540,22 @@ class Migrator:
                 "write_set_digest_algorithm": WRITE_SET_DIGEST_ALGORITHM,
                 "write_set_hash_prefix_complete": True,
             }
+        if self.args.phase == "scheduled-runs" and value.get("scheduled_runs_cursor_version") != 2:
+            self.report["checkpoint_restarted_for_scheduled_runs_cursor_change"] = True
+            return {
+                "phase": self.args.phase,
+                "table": self.args.table,
+                "dry_run": self.args.dry_run,
+                "cursor": 0,
+                "scheduled_runs_cursor_version": 2,
+                "scheduled_runs_cursor_started_at": "",
+                "scheduled_runs_cutoff_at": scheduled_runs_cutoff_utc(),
+                "rolling_hash": "0" * 64,
+                "r2_readback_sha256": "0" * 64,
+                "write_set_sha256": "0" * 64,
+                "write_set_digest_algorithm": WRITE_SET_DIGEST_ALGORITHM,
+                "write_set_hash_prefix_complete": True,
+            }
         if (
             self.args.phase == "market-source-audit"
             and self.args.table == "financial_periods"
@@ -486,6 +572,34 @@ class Migrator:
                 "write_set_digest_algorithm": WRITE_SET_DIGEST_ALGORITHM,
                 "write_set_hash_prefix_complete": True,
             }
+        if self.args.phase == "market-audit" and value.get("market_audit_version") != MARKET_AUDIT_VERSION:
+            cursor = value.get("cursor")
+            audit_counts = value.get("market_audit_fields")
+            progress_counts = [value.get("d1_security_missing_count"), value.get("d1_security_invalid_count")]
+            if isinstance(audit_counts, dict):
+                progress_counts.extend(audit_counts.values())
+            has_progress = cursor not in {None, 0}
+            for count in progress_counts:
+                if count is None:
+                    continue
+                try:
+                    if int(count) != 0:
+                        has_progress = True
+                except (TypeError, ValueError):
+                    has_progress = True
+            if has_progress:
+                self.report["checkpoint_restarted_for_market_audit_version_change"] = True
+                return {
+                    "phase": self.args.phase,
+                    "table": self.args.table,
+                    "dry_run": self.args.dry_run,
+                    "cursor": None,
+                    "rolling_hash": "0" * 64,
+                    "write_set_sha256": "0" * 64,
+                    "write_set_digest_algorithm": WRITE_SET_DIGEST_ALGORITHM,
+                    "write_set_hash_prefix_complete": True,
+                    "market_audit_version": MARKET_AUDIT_VERSION,
+                }
         if not re.fullmatch(r"[a-fA-F0-9]{64}", str(value.get("rolling_hash") or "")):
             raise MigrationError("Checkpoint has an invalid rolling hash")
         if not re.fullmatch(r"[a-fA-F0-9]{64}", str(value.get("r2_readback_sha256") or "0" * 64)):
@@ -558,9 +672,290 @@ class Migrator:
         latest_run = value.get("latest_scheduled_run")
         if isinstance(latest_run, dict):
             latest_run.pop("run_key", None)
-        return value
+        return self.sanitize_checkpoint(value)
+
+    @staticmethod
+    def _checkpoint_count(value: object) -> int | None:
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return value
+        return None
+
+    @staticmethod
+    def _checkpoint_key(value: object, pattern: str) -> str:
+        text = str(value)
+        if re.fullmatch(pattern, text):
+            return text
+        return f"sha256:{sha256(text.encode('utf-8'))}"
+
+    @classmethod
+    def _checkpoint_count_map(
+        cls,
+        value: object,
+        *,
+        allowed: set[str] | None = None,
+        pattern: str = r"[a-z][a-z0-9_]{0,63}",
+    ) -> dict[str, int]:
+        if not isinstance(value, dict):
+            return {}
+        result = {}
+        for key, raw_count in value.items():
+            count = cls._checkpoint_count(raw_count)
+            if count is None or not isinstance(key, str):
+                continue
+            if allowed is not None and key in allowed:
+                safe_key = key
+            else:
+                safe_key = cls._checkpoint_key(key, pattern)
+            result[safe_key] = count
+        return result
+
+    @classmethod
+    def _checkpoint_time_ranges(cls, value: object, allowed_fields: set[str] | None = None) -> dict:
+        if not isinstance(value, dict):
+            return {}
+        result = {}
+        for raw_field, bounds in value.items():
+            if not isinstance(raw_field, str) or not isinstance(bounds, dict):
+                continue
+            if allowed_fields is not None and raw_field not in allowed_fields:
+                continue
+            field = cls._checkpoint_key(raw_field, r"[a-z][a-z0-9_]{0,63}")
+            minimum = Migrator.normalize_time(bounds.get("min"))
+            maximum = Migrator.normalize_time(bounds.get("max"))
+            if minimum is not None and maximum is not None:
+                result[field] = {"min": minimum, "max": maximum}
+        return result
+
+    def sanitize_checkpoint(self, value: dict) -> dict:
+        """Keep only resumable metadata and aggregate fields in checkpoint artifacts."""
+        clean = {
+            "phase": self.args.phase,
+            "table": self.args.table,
+            "dry_run": bool(self.args.dry_run),
+        }
+        if "cursor" in value:
+            cursor = value.get("cursor")
+            if cursor is not None and self._checkpoint_count(cursor) is None:
+                clean["_invalid_cursor"] = True
+            else:
+                clean["cursor"] = cursor
+        if value.get("cursor_kind") == "rowid-v1":
+            clean["cursor_kind"] = "rowid-v1"
+        if self.args.phase == "scheduled-runs" and value.get("scheduled_runs_cursor_version") == 2:
+            cursor_started_at = value.get("scheduled_runs_cursor_started_at", "")
+            if (
+                not isinstance(cursor_started_at, str)
+                or len(cursor_started_at) > 64
+                or (cursor_started_at and not re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", cursor_started_at))
+            ):
+                raise MigrationError("Checkpoint has an invalid scheduled-runs timestamp cursor")
+            cursor_key_time = scheduled_runs_key_time(cursor_started_at) if cursor_started_at else ""
+            if cursor_key_time is None:
+                raise MigrationError("Checkpoint has an invalid scheduled-runs timestamp cursor")
+            if value.get("cursor") not in {None, 0} and not cursor_key_time:
+                raise MigrationError("Checkpoint is missing its scheduled-runs timestamp cursor")
+            cutoff = scheduled_runs_key_time(value.get("scheduled_runs_cutoff_at"))
+            if cutoff is None:
+                raise MigrationError("Checkpoint has an invalid scheduled-runs cutoff")
+            clean["scheduled_runs_cursor_version"] = 2
+            clean["scheduled_runs_cursor_started_at"] = cursor_key_time
+            clean["scheduled_runs_cutoff_at"] = cutoff
+
+        hash_fields = (
+            "rolling_hash", "r2_readback_sha256", "write_set_sha256", "r2_catalog_sha256",
+            "r2_universe_sha256", "r2_irbank_source_universe_sha256", "r2_irbank_catalog_sha256",
+            "r2_issuer_index_sha256", "r2_irbank_manifest_sha256",
+        )
+        for field in hash_fields:
+            raw_hash = value.get(field)
+            if raw_hash is not None and re.fullmatch(r"[a-fA-F0-9]{64}", str(raw_hash)):
+                clean[field] = str(raw_hash).lower()
+        if clean.get("rolling_hash") is None:
+            clean["rolling_hash"] = "0" * 64
+        if clean.get("r2_readback_sha256") is None:
+            clean["r2_readback_sha256"] = "0" * 64
+        write_set_hash = value.get("write_set_sha256")
+        if write_set_hash is not None and "write_set_sha256" not in clean:
+            raise MigrationError("Checkpoint has an invalid write-set digest")
+        clean["write_set_sha256"] = clean.get("write_set_sha256", "0" * 64)
+        clean["write_set_digest_algorithm"] = WRITE_SET_DIGEST_ALGORITHM
+        prefix_complete = value.get("write_set_hash_prefix_complete", True)
+        if not isinstance(prefix_complete, bool):
+            raise MigrationError("Checkpoint has an invalid write-set digest completeness flag")
+        clean["write_set_hash_prefix_complete"] = prefix_complete
+
+        totals = value.get("totals")
+        total_fields = {
+            "rows_read", "source_rows", "objects_written", "objects_planned", "objects_unchanged",
+            "objects_skipped_newer", "objects_superseded_newer", "objects_verified", "verification_failures",
+        }
+        if isinstance(totals, dict):
+            clean["totals"] = {
+                key: count for key, raw in totals.items()
+                if key in total_fields and (count := self._checkpoint_count(raw)) is not None
+            }
+        else:
+            clean["totals"] = {}
+        for field in ("source_time_ranges", "r2_time_ranges"):
+            clean[field] = self._checkpoint_time_ranges(value.get(field))
+        if isinstance(value.get("complete"), bool):
+            clean["complete"] = value["complete"]
+        updated_at = self.normalize_time(value.get("updated_at"))
+        if updated_at is not None:
+            clean["updated_at"] = updated_at
+
+        for field in ("market_source_audit_version", "market_audit_version", "definition_index"):
+            count = self._checkpoint_count(value.get(field))
+            if count is not None:
+                clean[field] = count
+        for field in ("d1_security_missing_count", "d1_security_invalid_count"):
+            count = self._checkpoint_count(value.get(field))
+            if count is not None:
+                clean[field] = count
+
+        source_hashes = value.get("market_source_object_hashes")
+        if isinstance(source_hashes, dict):
+            clean["market_source_object_hashes"] = {
+                key.lower(): object_hash.lower()
+                for key, object_hash in source_hashes.items()
+                if isinstance(key, str)
+                and re.fullmatch(r"[a-fA-F0-9]{64}", key)
+                and isinstance(object_hash, str)
+                and (object_hash == "missing" or re.fullmatch(r"[a-fA-F0-9]{64}", object_hash))
+            }
+
+        source_audit = value.get("market_source_audit")
+        if isinstance(source_audit, dict):
+            audit = {}
+            for field in ("comparison_version", "rows_checked", "r2_source_lookups"):
+                count = self._checkpoint_count(source_audit.get(field))
+                if count is not None:
+                    audit[field] = count
+            audit["r2_source_sha256"] = (
+                str(source_audit.get("r2_source_sha256")).lower()
+                if re.fullmatch(r"[a-fA-F0-9]{64}", str(source_audit.get("r2_source_sha256") or ""))
+                else "0" * 64
+            )
+            status_keys = {
+                "security_reference_missing", "unsupported_security_code", "r2_source_missing",
+                "unsupported_period_type", "source_identity_mismatch", "source_category_mismatch",
+                "source_period_missing", "unit_metadata_incomplete", "source_values_match",
+                "source_values_differ", "schema_not_comparable", "period_granularity_gap",
+            }
+            for field in ("status_counts",):
+                audit[field] = self._checkpoint_count_map(
+                    source_audit.get(field), allowed=status_keys, pattern=r"[a-z][a-z0-9_]{0,63}"
+                )
+            field_pattern = r"[a-z][a-z0-9_]{0,63}"
+            for field in (
+                "missing_field_counts", "different_field_counts", "unit_metadata_incomplete_counts",
+            ):
+                audit[field] = self._checkpoint_count_map(source_audit.get(field), pattern=field_pattern)
+            audit["unit_conversion_counts"] = self._checkpoint_count_map(
+                source_audit.get("unit_conversion_counts"),
+                pattern=r"[a-z][a-z0-9_]{0,63}->[a-z][a-z0-9_]{0,63}",
+            )
+            audit["source_category_mismatch_counts"] = self._checkpoint_count_map(
+                source_audit.get("source_category_mismatch_counts"),
+                allowed={"annual->quarterly", "annual->semiannual"},
+                pattern=r"(?:annual|quarterly|semiannual)->(?:annual|quarterly|semiannual)",
+            )
+            audit["anomaly_counts_by_period_type_and_year"] = self._checkpoint_count_map(
+                source_audit.get("anomaly_counts_by_period_type_and_year"),
+                pattern=(
+                    r"(?:security_reference_missing|unsupported_security_code|r2_source_missing|"
+                    r"unsupported_period_type|source_identity_mismatch|source_category_mismatch|"
+                    r"source_period_missing|unit_metadata_incomplete|source_values_match|"
+                    r"source_values_differ|schema_not_comparable|period_granularity_gap)"
+                    r"\|(?:annual|quarterly|semiannual|other)\|(?:[0-9]{4}|unknown)"
+                ),
+            )
+            period_range = source_audit.get("period_range")
+            if isinstance(period_range, dict):
+                period = {}
+                for edge in ("min", "max"):
+                    raw = period_range.get(edge)
+                    normalized = normalize_period(raw) if isinstance(raw, str) else ""
+                    if re.fullmatch(r"[0-9]{4}(?:-[0-9]{2})?", normalized):
+                        period[edge] = normalized
+                if period:
+                    audit["period_range"] = period
+            clean["market_source_audit"] = audit
+
+        market_fields = value.get("market_audit_fields")
+        if isinstance(market_fields, dict):
+            clean["market_audit_fields"] = {
+                field: count for field in MARKET_AUDIT_COUNT_FIELDS
+                if (count := self._checkpoint_count(market_fields.get(field))) is not None
+            }
+
+        for field in (
+            "r2_universe_status", "r2_irbank_source_universe_status", "r2_irbank_catalog_status",
+        ):
+            status = value.get(field)
+            if status in {"available", "missing", "invalid"}:
+                clean[field] = status
+        generation = value.get("r2_catalog_generation")
+        if isinstance(generation, str) and re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", generation):
+            clean["r2_catalog_generation"] = generation
+
+        latest = value.get("latest_scheduled_run")
+        if isinstance(latest, dict):
+            run_id = latest.get("run_id")
+            run_type = latest.get("run_type")
+            started_at = self.normalize_time(latest.get("started_at"))
+            if (
+                isinstance(run_id, (str, int)) and not isinstance(run_id, bool)
+                and re.fullmatch(r"[0-9]{1,20}", str(run_id))
+                and isinstance(run_type, str)
+                and re.fullmatch(r"[a-z][a-z0-9._-]{0,63}", run_type)
+                and started_at is not None
+            ):
+                clean["latest_scheduled_run"] = {
+                    "run_id": str(run_id), "run_type": run_type, "started_at": started_at,
+                }
+
+        inventory = value.get("operational_inventory")
+        table = self.args.table
+        if isinstance(inventory, dict) and table in OPERATIONAL_AUDIT_TABLES and inventory.get("table") == table:
+            safe_inventory = {"table": table}
+            for field in ("row_count", "rows_without_completion_time", "invalid_numeric_fields"):
+                count = self._checkpoint_count(inventory.get(field))
+                if count is not None:
+                    safe_inventory[field] = count
+            safe_inventory["status_counts"] = self._checkpoint_count_map(
+                inventory.get("status_counts"), allowed=OPERATIONAL_STATUS_VALUES,
+                pattern=r"[a-z][a-z0-9._-]{0,63}",
+            )
+            if isinstance(inventory.get("run_type_counts"), dict):
+                safe_inventory["run_type_counts"] = self._checkpoint_count_map(
+                    inventory.get("run_type_counts"), pattern=r"[a-z][a-z0-9._-]{0,63}"
+                )
+            safe_inventory["numeric_totals"] = self._checkpoint_count_map(
+                inventory.get("numeric_totals"), allowed=OPERATIONAL_NUMERIC_FIELDS[table]
+            )
+            safe_inventory["date_ranges"] = self._checkpoint_time_ranges(
+                inventory.get("date_ranges"), OPERATIONAL_DATE_FIELDS[table]
+            )
+            state_keys = inventory.get("state_keys")
+            if isinstance(state_keys, list):
+                safe_inventory["state_keys"] = sorted({
+                    self._checkpoint_key(key, r"[A-Za-z][A-Za-z0-9._-]{0,127}")
+                    for key in state_keys if isinstance(key, str)
+                })
+            clean["operational_inventory"] = safe_inventory
+
+        return clean
 
     def save_outputs(self) -> None:
+        self.checkpoint["source_time_ranges"] = self.source_time_ranges
+        self.checkpoint["r2_time_ranges"] = self.r2_time_ranges
+        self.checkpoint = self.sanitize_checkpoint(self.checkpoint)
+        self.source_time_ranges = self.checkpoint.get("source_time_ranges", {})
+        self.r2_time_ranges = self.checkpoint.get("r2_time_ranges", {})
+        for field in ("market_source_audit", "market_audit_fields", "operational_inventory"):
+            if field in self.report and field in self.checkpoint:
+                self.report[field] = self.checkpoint[field]
         self.report["source_sha256"] = self.digest
         cumulative = {key: self.base_totals[key] + int(self.report.get(key, 0)) for key in self.base_totals}
         self.report["cumulative"] = cumulative
@@ -575,6 +970,9 @@ class Migrator:
             and self.report.get("status") != "failed"
         )
         self.report["finished_at"] = datetime.now(timezone.utc).isoformat()
+        # Each page checkpoint saves the report. Do not include the previous
+        # report hash when calculating the replacement hash for this snapshot.
+        self.report.pop("report_sha256", None)
         report_body = canonical_json(self.report)
         self.report["report_sha256"] = sha256(report_body)
         Path(self.args.report).write_bytes(canonical_json(self.report) + b"\n")
@@ -956,18 +1354,13 @@ class Migrator:
             "source_category_mismatch_counts": {},
             "unit_metadata_incomplete_counts": {},
             "unit_conversion_counts": {},
+            "anomaly_counts_by_period_type_and_year": {},
             "period_range": {},
             "r2_source_lookups": 0,
             "r2_source_sha256": "0" * 64,
         })
         if table == "financial_periods":
             summary["comparison_version"] = FINANCIAL_AUDIT_VERSION
-        counts = summary.setdefault("status_counts", {})
-        missing_field_counts = summary.setdefault("missing_field_counts", {})
-        different_field_counts = summary.setdefault("different_field_counts", {})
-        source_category_mismatch_counts = summary.setdefault("source_category_mismatch_counts", {})
-        unit_metadata_incomplete_counts = summary.setdefault("unit_metadata_incomplete_counts", {})
-        unit_conversion_counts = summary.setdefault("unit_conversion_counts", {})
 
         if table == "financial_periods":
             query = (
@@ -997,6 +1390,16 @@ class Migrator:
             )
 
         def audit(row: dict) -> None:
+            audit_summary = self.checkpoint.setdefault("market_source_audit", summary)
+            counts = audit_summary.setdefault("status_counts", {})
+            missing_field_counts = audit_summary.setdefault("missing_field_counts", {})
+            different_field_counts = audit_summary.setdefault("different_field_counts", {})
+            source_category_mismatch_counts = audit_summary.setdefault("source_category_mismatch_counts", {})
+            unit_metadata_incomplete_counts = audit_summary.setdefault("unit_metadata_incomplete_counts", {})
+            unit_conversion_counts = audit_summary.setdefault("unit_conversion_counts", {})
+            anomaly_counts_by_period_type_and_year = audit_summary.setdefault(
+                "anomaly_counts_by_period_type_and_year", {}
+            )
             unit_metadata_incomplete_fields: list[str] = []
             row_unit_conversion_counts: dict[str, int] = {}
             code = str(row.get("security_code_display") or "").strip().upper()
@@ -1142,13 +1545,22 @@ class Migrator:
                             else:
                                 status = "source_values_match"
 
-            summary["rows_checked"] = int(summary.get("rows_checked", 0)) + 1
+            audit_summary["rows_checked"] = int(audit_summary.get("rows_checked", 0)) + 1
             normalized_period = normalize_period(row.get("fiscal_period") or row.get("fiscal_year"))
             if normalized_period:
-                period_range = summary.setdefault("period_range", {})
+                period_range = audit_summary.setdefault("period_range", {})
                 period_range["min"] = min(str(period_range.get("min") or normalized_period), normalized_period)
                 period_range["max"] = max(str(period_range.get("max") or normalized_period), normalized_period)
             counts[status] = int(counts.get(status, 0)) + 1
+            if table == "financial_periods" and status != "source_values_match":
+                category = str(row.get("period_type") or "")
+                category = category if category in {"annual", "quarterly", "semiannual"} else "other"
+                fiscal_year = normalize_period(row.get("fiscal_year"))[:4]
+                fiscal_year = fiscal_year if re.fullmatch(r"\d{4}", fiscal_year) else "unknown"
+                group = f"{status}|{category}|{fiscal_year}"
+                anomaly_counts_by_period_type_and_year[group] = (
+                    int(anomaly_counts_by_period_type_and_year.get(group, 0)) + 1
+                )
             for field in set(missing_fields):
                 missing_field_counts[field] = int(missing_field_counts.get(field, 0)) + 1
             for field in set(different_fields):
@@ -1157,7 +1569,7 @@ class Migrator:
                 unit_metadata_incomplete_counts[field] = int(unit_metadata_incomplete_counts.get(field, 0)) + 1
             for pair, count in row_unit_conversion_counts.items():
                 unit_conversion_counts[pair] = int(unit_conversion_counts.get(pair, 0)) + count
-            self.report["market_source_audit"] = summary
+            self.report["market_source_audit"] = audit_summary
 
         self.page_loop(
             query,
@@ -1166,9 +1578,10 @@ class Migrator:
             audit,
             max_rows_per_result=2,
         )
-        self.report["market_source_audit"] = summary
+        self.report["market_source_audit"] = self.checkpoint.get("market_source_audit", summary)
 
     def run_market_audit(self) -> None:
+        self.checkpoint["market_audit_version"] = MARKET_AUDIT_VERSION
         catalog_key = "market/yfinance/v2/catalog/current.json"
         object_body = self.r2.get(catalog_key)
         if object_body is None:
@@ -1189,6 +1602,214 @@ class Migrator:
             for row in catalog_items
             if isinstance(row, dict) and str(row.get("code", "")).strip()
         }
+
+        universe_key = "market/yfinance/v2/universe/current.json"
+        universe_body = self.r2.get(universe_key)
+        universe_hash = sha256(universe_body) if universe_body is not None else None
+        universe_status = "missing"
+        universe_by_code: dict[str, str] = {}
+        universe_rows: list[dict] = []
+        if universe_body is not None:
+            if self.checkpoint.get("r2_universe_sha256") not in {None, universe_hash}:
+                raise MigrationError("R2 active-universe snapshot changed during audit; restart with a new checkpoint")
+            try:
+                universe = json.loads(universe_body)
+            except json.JSONDecodeError:
+                universe = None
+            raw_universe_rows = universe.get("securities") if isinstance(universe, dict) else None
+            if isinstance(raw_universe_rows, list):
+                universe_rows = [row for row in raw_universe_rows if isinstance(row, dict)]
+                if len(universe_rows) == len(raw_universe_rows):
+                    for row in universe_rows:
+                        code = str(row.get("code", "")).strip().upper()
+                        status = str(row.get("status", "")).strip().lower()
+                        if not re.fullmatch(r"[A-Z0-9]{4,5}", code) or code in universe_by_code:
+                            universe_by_code = {}
+                            universe_status = "invalid"
+                            break
+                        if status not in {"active", "inactive"}:
+                            status = "unknown"
+                        universe_by_code[code] = status
+                    else:
+                        universe_status = "available"
+                else:
+                    universe_status = "invalid"
+            else:
+                universe_status = "invalid"
+            if self.checkpoint.get("r2_universe_status") not in {None, universe_status}:
+                raise MigrationError("R2 active-universe status changed during audit; restart with a new checkpoint")
+        elif self.checkpoint.get("r2_universe_status") not in {None, "missing"}:
+            raise MigrationError("R2 active-universe status changed during audit; restart with a new checkpoint")
+        self.checkpoint["r2_universe_status"] = universe_status
+        self.checkpoint["r2_universe_sha256"] = universe_hash
+        active_universe_codes = {
+            code for code, status in universe_by_code.items() if status == "active"
+        }
+        catalog_codes = set(catalog_by_code)
+        catalog_missing_active_count = (
+            len(active_universe_codes - catalog_codes) if universe_status == "available" else None
+        )
+        catalog_outside_active_count = (
+            len(catalog_codes - active_universe_codes) if universe_status == "available" else None
+        )
+
+        source_universe_key = "market/yfinance/v2/universe/irbank_source.json"
+        source_universe_body = self.r2.get(source_universe_key)
+        source_universe_hash = sha256(source_universe_body) if source_universe_body is not None else None
+        source_universe_status = "missing"
+        source_universe_codes: set[str] = set()
+        if source_universe_body is not None:
+            if self.checkpoint.get("r2_irbank_source_universe_sha256") not in {None, source_universe_hash}:
+                raise MigrationError("R2 IRBANK source universe changed during audit; restart with a new checkpoint")
+            try:
+                source_universe = json.loads(source_universe_body)
+            except json.JSONDecodeError:
+                source_universe = None
+            raw_source_rows = source_universe.get("securities") if isinstance(source_universe, dict) else None
+            if (
+                isinstance(source_universe, dict)
+                and source_universe.get("schema_version") == 2
+                and source_universe.get("source") == "IRBANK Connect API v1 /securities"
+                and source_universe.get("complete") is True
+                and isinstance(raw_source_rows, list)
+                and isinstance(source_universe.get("security_count"), int)
+                and source_universe["security_count"] == len(raw_source_rows)
+            ):
+                for row in raw_source_rows:
+                    code = str(row.get("security_code_display", "")).strip().upper() if isinstance(row, dict) else ""
+                    raw_source_code = str(row.get("irbank_source_code") or code).strip().upper() if isinstance(row, dict) else ""
+                    normalized_source_code = (
+                        raw_source_code[:-1]
+                        if len(raw_source_code) == 5 and raw_source_code.endswith("0")
+                        else raw_source_code
+                    )
+                    if (
+                        not re.fullmatch(r"[A-Z0-9]{4,5}", code)
+                        or not re.fullmatch(r"[A-Z0-9]{4,5}", raw_source_code)
+                        or normalized_source_code != code
+                        or code in source_universe_codes
+                    ):
+                        source_universe_codes = set()
+                        break
+                    source_universe_codes.add(code)
+                if (
+                    len(source_universe_codes) == len(raw_source_rows)
+                    and len(source_universe_codes) >= 3500
+                ):
+                    ordered_codes = sorted(source_universe_codes)
+                    expected_code_hash = hashlib.sha256("\n".join(ordered_codes).encode("utf-8")).hexdigest()
+                    if (
+                        [str(row.get("security_code_display")) for row in raw_source_rows] == ordered_codes
+                        and source_universe.get("security_code_sha256") == expected_code_hash
+                    ):
+                        source_universe_status = "available"
+                    else:
+                        source_universe_codes = set()
+            if self.checkpoint.get("r2_irbank_source_universe_status") not in {None, source_universe_status}:
+                raise MigrationError("R2 IRBANK source universe status changed during audit; restart with a new checkpoint")
+        elif self.checkpoint.get("r2_irbank_source_universe_status") not in {None, "missing"}:
+            raise MigrationError("R2 IRBANK source universe status changed during audit; restart with a new checkpoint")
+        self.checkpoint["r2_irbank_source_universe_status"] = source_universe_status
+        self.checkpoint["r2_irbank_source_universe_sha256"] = source_universe_hash
+        source_catalog_missing_active_overlap_count = (
+            len((active_universe_codes - catalog_codes) & source_universe_codes)
+            if universe_status == "available" and source_universe_status == "available"
+            else None
+        )
+        active_source_overlap_count = (
+            len(active_universe_codes & source_universe_codes)
+            if universe_status == "available" and source_universe_status == "available"
+            else None
+        )
+        active_not_in_source_count = (
+            len(active_universe_codes - source_universe_codes)
+            if universe_status == "available" and source_universe_status == "available"
+            else None
+        )
+        source_not_active_count = (
+            len(source_universe_codes - active_universe_codes)
+            if universe_status == "available" and source_universe_status == "available"
+            else None
+        )
+
+        irbank_catalog_key = "market/irbank/v1/catalog.json"
+        irbank_catalog_body = self.r2.get(irbank_catalog_key)
+        irbank_catalog_hash = sha256(irbank_catalog_body) if irbank_catalog_body is not None else None
+        irbank_catalog_status = "missing"
+        irbank_catalog_codes: set[str] = set()
+        if irbank_catalog_body is not None:
+            if self.checkpoint.get("r2_irbank_catalog_sha256") not in {None, irbank_catalog_hash}:
+                raise MigrationError("R2 IRBANK catalog changed during audit; restart with a new checkpoint")
+            try:
+                irbank_catalog = json.loads(irbank_catalog_body)
+            except json.JSONDecodeError:
+                irbank_catalog = None
+            raw_irbank_rows = irbank_catalog.get("securities") if isinstance(irbank_catalog, dict) else None
+            if (
+                isinstance(irbank_catalog, dict)
+                and irbank_catalog.get("schema_version") == 1
+                and irbank_catalog.get("source") == "IRBANK Connect securities master"
+                and isinstance(raw_irbank_rows, list)
+                and isinstance(irbank_catalog.get("count"), int)
+                and irbank_catalog["count"] == len(raw_irbank_rows)
+            ):
+                for row in raw_irbank_rows:
+                    raw_code = str(row.get("code", "")).strip().upper() if isinstance(row, dict) else ""
+                    code = raw_code[:4] if re.fullmatch(r"[A-Z0-9]{4}0", raw_code) else raw_code
+                    if not re.fullmatch(r"[A-Z0-9]{4}", code) or code in irbank_catalog_codes:
+                        irbank_catalog_codes = set()
+                        break
+                    irbank_catalog_codes.add(code)
+                if len(irbank_catalog_codes) == len(raw_irbank_rows):
+                    irbank_catalog_status = "available"
+            if self.checkpoint.get("r2_irbank_catalog_status") not in {None, irbank_catalog_status}:
+                raise MigrationError("R2 IRBANK catalog status changed during audit; restart with a new checkpoint")
+        elif self.checkpoint.get("r2_irbank_catalog_status") not in {None, "missing"}:
+            raise MigrationError("R2 IRBANK catalog status changed during audit; restart with a new checkpoint")
+        self.checkpoint["r2_irbank_catalog_status"] = irbank_catalog_status
+        self.checkpoint["r2_irbank_catalog_sha256"] = irbank_catalog_hash
+        active_in_irbank_catalog_count = (
+            len(active_universe_codes & irbank_catalog_codes)
+            if universe_status == "available" and irbank_catalog_status == "available"
+            else None
+        )
+        active_supported_by_either_catalog_count = (
+            len(active_universe_codes & (catalog_codes | irbank_catalog_codes))
+            if universe_status == "available" and irbank_catalog_status == "available"
+            else None
+        )
+        active_missing_both_catalogs_count = (
+            len(active_universe_codes - (catalog_codes | irbank_catalog_codes))
+            if universe_status == "available" and irbank_catalog_status == "available"
+            else None
+        )
+        universe_rows_by_code = {
+            str(row.get("code", "")).strip().upper(): row
+            for row in universe_rows
+            if str(row.get("code", "")).strip()
+        }
+
+        def count_universe_values(codes: set[str], field: str) -> dict[str, int] | None:
+            if universe_status != "available" or irbank_catalog_status != "available":
+                return None
+            counts: dict[str, int] = {}
+            for code in codes:
+                value = universe_rows_by_code.get(code, {}).get(field)
+                if field == "sources":
+                    values = sorted({str(item).strip() for item in value if str(item).strip()}) if isinstance(value, list) else []
+                    if not values:
+                        values = ["unknown"]
+                else:
+                    values = [str(value).strip() if value is not None and str(value).strip() else "unknown"]
+                for item in values:
+                    counts[item] = counts.get(item, 0) + 1
+            return dict(sorted(counts.items()))
+
+        active_missing_both_catalogs = active_universe_codes - (catalog_codes | irbank_catalog_codes)
+        active_universe_by_type = count_universe_values(active_universe_codes, "security_type")
+        active_missing_both_by_type = count_universe_values(active_missing_both_catalogs, "security_type")
+        active_missing_both_by_category = count_universe_values(active_missing_both_catalogs, "jquants_product_category")
+        active_missing_both_by_source = count_universe_values(active_missing_both_catalogs, "sources")
 
         issuer_key = "market/yfinance/v2/issuer_dividends/current.json"
         issuer_body = self.r2.get(issuer_key)
@@ -1250,11 +1871,21 @@ class Migrator:
             "metrics_mismatch_count": 0,
             "metrics_r2_profile_missing_count": 0,
             "metrics_r2_invalid_count": 0,
+            "d1_security_missing_active_count": 0,
+            "d1_security_missing_active_in_irbank_source_count": 0,
+            "d1_security_missing_active_in_irbank_catalog_count": 0,
+            "d1_security_missing_active_uncovered_count": 0,
+            "d1_security_missing_inactive_count": 0,
+            "d1_security_missing_unclassified_count": 0,
         })
         for field in (
             "name_mismatch_count", "edinet_mismatch_count", "issuer_index_missing_count",
             "metrics_nonempty_count", "metrics_invalid_count", "metrics_compared_count",
             "metrics_mismatch_count", "metrics_r2_profile_missing_count", "metrics_r2_invalid_count",
+            "d1_security_missing_active_count", "d1_security_missing_active_in_irbank_source_count",
+            "d1_security_missing_active_in_irbank_catalog_count", "d1_security_missing_active_uncovered_count",
+            "d1_security_missing_inactive_count",
+            "d1_security_missing_unclassified_count",
         ):
             field_audit.setdefault(field, 0)
         missing_count = int(self.checkpoint.get("d1_security_missing_count") or 0)
@@ -1320,6 +1951,31 @@ class Migrator:
                 missing_count += 1
                 self.checkpoint["d1_security_missing_count"] = missing_count
                 self.report["d1_security_missing_count"] = missing_count
+                universe_status_for_code = universe_by_code.get(code)
+                if universe_status_for_code == "active":
+                    field_audit["d1_security_missing_active_count"] = int(
+                        field_audit["d1_security_missing_active_count"]
+                    ) + 1
+                    if source_universe_status == "available" and code in source_universe_codes:
+                        field_audit["d1_security_missing_active_in_irbank_source_count"] = int(
+                            field_audit["d1_security_missing_active_in_irbank_source_count"]
+                        ) + 1
+                    if irbank_catalog_status == "available" and code in irbank_catalog_codes:
+                        field_audit["d1_security_missing_active_in_irbank_catalog_count"] = int(
+                            field_audit["d1_security_missing_active_in_irbank_catalog_count"]
+                        ) + 1
+                    elif irbank_catalog_status == "available":
+                        field_audit["d1_security_missing_active_uncovered_count"] = int(
+                            field_audit["d1_security_missing_active_uncovered_count"]
+                        ) + 1
+                elif universe_status_for_code == "inactive":
+                    field_audit["d1_security_missing_inactive_count"] = int(
+                        field_audit["d1_security_missing_inactive_count"]
+                    ) + 1
+                else:
+                    field_audit["d1_security_missing_unclassified_count"] = int(
+                        field_audit["d1_security_missing_unclassified_count"]
+                    ) + 1
                 return
 
             d1_name = unicodedata.normalize("NFKC", str(row.get("name") or "")).strip()
@@ -1346,6 +2002,37 @@ class Migrator:
         self.report["r2_catalog_generation"] = catalog.get("generation")
         self.report["r2_catalog_count"] = len(catalog_by_code)
         self.report["r2_catalog_sha256"] = catalog_hash
+        self.report["r2_universe_status"] = universe_status
+        self.report["r2_universe_sha256"] = universe_hash
+        self.report["r2_universe_count"] = len(universe_rows) if universe_status == "available" else None
+        self.report["r2_universe_active_count"] = len(active_universe_codes) if universe_status == "available" else None
+        self.report["r2_universe_inactive_count"] = (
+            sum(status == "inactive" for status in universe_by_code.values())
+            if universe_status == "available" else None
+        )
+        self.report["r2_active_universe_missing_catalog_count"] = catalog_missing_active_count
+        self.report["r2_catalog_outside_active_universe_count"] = catalog_outside_active_count
+        self.report["r2_irbank_source_universe_status"] = source_universe_status
+        self.report["r2_irbank_source_universe_sha256"] = source_universe_hash
+        self.report["r2_irbank_source_universe_count"] = (
+            len(source_universe_codes) if source_universe_status == "available" else None
+        )
+        self.report["r2_active_catalog_missing_in_irbank_source_count"] = source_catalog_missing_active_overlap_count
+        self.report["r2_active_universe_in_irbank_source_count"] = active_source_overlap_count
+        self.report["r2_active_universe_not_in_irbank_source_count"] = active_not_in_source_count
+        self.report["r2_irbank_source_not_active_universe_count"] = source_not_active_count
+        self.report["r2_irbank_catalog_status"] = irbank_catalog_status
+        self.report["r2_irbank_catalog_sha256"] = irbank_catalog_hash
+        self.report["r2_irbank_catalog_count"] = (
+            len(irbank_catalog_codes) if irbank_catalog_status == "available" else None
+        )
+        self.report["r2_active_universe_in_irbank_catalog_count"] = active_in_irbank_catalog_count
+        self.report["r2_active_universe_supported_by_catalogs_count"] = active_supported_by_either_catalog_count
+        self.report["r2_active_universe_missing_both_catalogs_count"] = active_missing_both_catalogs_count
+        self.report["r2_active_universe_by_security_type"] = active_universe_by_type
+        self.report["r2_active_universe_missing_both_by_security_type"] = active_missing_both_by_type
+        self.report["r2_active_universe_missing_both_by_product_category"] = active_missing_both_by_category
+        self.report["r2_active_universe_missing_both_by_source"] = active_missing_both_by_source
         self.report["r2_issuer_index_status"] = issuer_index_status
         self.report["r2_issuer_index_sha256"] = issuer_hash
         self.report["r2_irbank_manifest_status"] = irbank_manifest_status
@@ -1404,13 +2091,70 @@ class Migrator:
             migrate,
         )
 
+    def verify_scheduled_runs_index_plan(
+        self,
+        cutoff_at: str,
+        cursor_started_at: str,
+        cursor_id: int,
+    ) -> None:
+        if self.report["rows_read"] >= self.args.max_rows:
+            raise MigrationError("D1 read budget is exhausted before scheduled-run query-plan check")
+        self.report["d1_queries_attempted"] += 1
+        try:
+            rows, meta = self.reader.query(
+                f"EXPLAIN QUERY PLAN {SCHEDULED_RUNS_QUERY}",
+                [cutoff_at, cursor_started_at, cursor_id, 1],
+            )
+        except Exception:
+            self.report["d1_read_count_unknown"] = True
+            raise
+        try:
+            count = rate_rows(meta)
+        except MigrationError:
+            self.report["d1_read_count_unknown"] = True
+            raise
+        total = self.report["rows_read"] + count
+        self.report["rows_read"] = total
+        if total > self.args.max_rows:
+            self.report["budget_exceeded"] = True
+            raise MigrationError("D1 query-plan check exceeded the configured read budget")
+        details = [
+            str(row.get("detail") or "") if isinstance(row, dict) else " ".join(map(str, row))
+            for row in rows
+        ]
+        if not any("idx_scheduled_run_log_completed_started_id" in detail for detail in details):
+            raise MigrationError(
+                "scheduled-runs query plan does not use idx_scheduled_run_log_completed_started_id; "
+                "apply the schema migration before running this phase"
+            )
+        self.report["scheduled_runs_index_plan_verified"] = True
+
     def run_scheduled_runs(self) -> None:
-        cursor = int(self.checkpoint.get("cursor") or 0)
+        if self.checkpoint.get("scheduled_runs_cursor_version") != 2:
+            self.checkpoint["scheduled_runs_cursor_version"] = 2
+            self.checkpoint["scheduled_runs_cursor_started_at"] = ""
+            self.checkpoint["scheduled_runs_cutoff_at"] = scheduled_runs_cutoff_utc()
+        cursor_id = int(self.checkpoint.get("cursor") or 0)
+        cursor_started_at = str(self.checkpoint.get("scheduled_runs_cursor_started_at") or "")
+        cutoff_at = str(self.checkpoint["scheduled_runs_cutoff_at"])
+        self.verify_scheduled_runs_index_plan(cutoff_at, cursor_started_at, cursor_id)
 
         def migrate(row: dict) -> None:
             started_at = self.normalize_time(row.get("started_at"))
             if started_at is None:
                 raise MigrationError("Invalid started_at in scheduled_run_log")
+            if row.get("finished_at") is None:
+                raise MigrationError("Scheduled-run query returned an unfinished row")
+            status = str(row.get("status") or "").strip().lower()
+            if status not in SCHEDULED_RUN_TERMINAL_STATUSES:
+                raise MigrationError("Scheduled-run query returned a non-terminal row")
+            cutoff = self.normalize_time(cutoff_at)
+            if cutoff is None:
+                raise MigrationError("Scheduled-run query returned a row outside its retention window")
+            started_datetime = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+            cutoff_datetime = datetime.fromisoformat(cutoff.replace("Z", "+00:00"))
+            if started_datetime < cutoff_datetime:
+                raise MigrationError("Scheduled-run query returned a row outside its retention window")
             summary = {
                 "run_id": str(row["id"]),
                 "run_type": row.get("run_type"),
@@ -1435,12 +2179,30 @@ class Migrator:
             elif self.scheduled_run_order(candidate) == self.scheduled_run_order(latest) and candidate != latest:
                 raise MigrationError("Scheduled-run source changed at the same run position")
 
-        self.page_loop(
-            "SELECT id, run_type, started_at, finished_at, status, processed, failed, metadata_json FROM scheduled_run_log WHERE id > ? AND finished_at IS NOT NULL AND started_at >= datetime('now','-365 days') ORDER BY id LIMIT ?",
-            cursor,
-            "id",
-            migrate,
-        )
+        while self.report["rows_read"] < self.args.max_rows:
+            remaining = self.args.max_rows - self.report["rows_read"]
+            limit = min(self.args.batch_size, remaining)
+            rows = self.read_page(
+                SCHEDULED_RUNS_QUERY,
+                [cutoff_at, cursor_started_at, cursor_id, limit],
+            )
+            if not rows:
+                self.report["complete"] = True
+                break
+            for row in rows:
+                self.record_source_row(row)
+                migrate(row)
+                next_cursor_time = scheduled_runs_key_time(row.get("started_at"))
+                if next_cursor_time is None:
+                    raise MigrationError("Invalid scheduled-run keyset timestamp")
+                cursor_started_at = next_cursor_time
+                cursor_id = int(row["id"])
+                self.checkpoint["cursor"] = cursor_id
+                self.checkpoint["scheduled_runs_cursor_started_at"] = cursor_started_at
+            self.save_outputs()
+            if len(rows) < limit:
+                self.report["complete"] = True
+                break
         latest = self.checkpoint.get("latest_scheduled_run")
         if self.report["complete"] and isinstance(latest, dict):
             self.put_latest_scheduled_run_pointer(latest)
@@ -1456,6 +2218,8 @@ class Migrator:
                 self.report["complete"] = False
                 return
             kv_value = self.read_kv(logical_key)
+            if kv_value is None and not getattr(self.args, "allow_d1_definition_fallback", False):
+                raise MigrationError("KV definition missing; D1 definition fallback is disabled")
             if kv_value is not None:
                 value = kv_value
             elif logical_key in DEFINITION_TABLES:
@@ -1609,19 +2373,24 @@ class Migrator:
     def run_d1_schema_audit(self) -> None:
         rows = self.read_page(
             "SELECT type, name, tbl_name FROM sqlite_schema "
-            "WHERE type IN ('table', 'trigger') ORDER BY type, name",
+            "WHERE type IN ('table', 'index', 'trigger') ORDER BY type, name",
             [],
         )
         for row in rows:
             self.record_source_row(row)
-        self.report["schema_objects"] = [
-            {
+        schema_objects = []
+        for row in rows:
+            item = {
                 "type": self.inventory_token(row.get("type"), limit=16),
                 "name": self.inventory_token(row.get("name")),
                 "table": self.inventory_token(row.get("tbl_name")),
             }
-            for row in rows
-        ]
+            object_type = str(row.get("type") or "").casefold()
+            object_name = str(row.get("name") or "").casefold()
+            if object_type == "table" and object_name in CLOUDFLARE_D1_RESERVED_TABLES:
+                item["classification"] = "cloudflare_reserved"
+            schema_objects.append(item)
+        self.report["schema_objects"] = schema_objects
         self.report["complete"] = True
 
     def run_d1_operational_audit(self) -> None:
@@ -1785,6 +2554,8 @@ class Migrator:
         )
 
     def run(self) -> dict:
+        if self.checkpoint.pop("_invalid_cursor", False):
+            raise MigrationError("Migration checkpoint has an invalid rowid cursor")
         if self.args.phase == "d1-schema-audit":
             self.run_d1_schema_audit()
         elif self.args.phase == "d1-operational-audit":
@@ -1828,19 +2599,26 @@ def arguments() -> argparse.Namespace:
         help="minimum account-wide D1 rows-read allowance to leave unused after this phase",
     )
     parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument(
+        "--allow-d1-definition-fallback",
+        action="store_true",
+        help="allow missing KV definitions to use legacy D1/checked-in sources (definitions phase only)",
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", dest="dry_run")
     mode.add_argument("--write-r2", action="store_true")
     parser.set_defaults(dry_run=True)
     parser.add_argument("--confirm-write", default="")
-    parser.add_argument("--checkpoint-in", default="migration-checkpoint.json")
-    parser.add_argument("--checkpoint-out", default="migration-checkpoint.json")
-    parser.add_argument("--report", default="migration-report.json")
+    parser.add_argument("--checkpoint-in", required=True, help="Checkpoint to resume, or a unique nonexistent path for a new phase")
+    parser.add_argument("--checkpoint-out", required=True, help="Checkpoint output path; use an isolated path outside the repository")
+    parser.add_argument("--report", required=True, help="Report output path; use an isolated path outside the repository")
     args = parser.parse_args()
     if args.write_r2 and args.confirm_write != "WRITE_R2":
         parser.error("R2 writes require --confirm-write WRITE_R2")
     if args.write_r2:
         args.dry_run = False
+    if args.allow_d1_definition_fallback and args.phase != "definitions":
+        parser.error("--allow-d1-definition-fallback is only valid for the definitions phase")
     if args.phase in {"market-audit", "market-source-audit", "d1-schema-audit", "d1-operational-audit"} and args.write_r2:
         parser.error(f"{args.phase} is read-only; omit --write-r2")
     allowed_tables = TABLE_SELECTION_PHASES.get(args.phase)
@@ -1862,7 +2640,7 @@ def account_daily_usage_preflight(account_id: str, args: argparse.Namespace) -> 
     token = os.environ.get("CLOUDFLARE_API_TOKEN", "")
     utc_date = datetime.now(timezone.utc).date().isoformat()
     try:
-        usage = d1_daily_usage.fetch_daily_usage(account_id, token, utc_date)
+        usage = d1_daily_usage.fetch_budget_usage(account_id, token, utc_date)
         sufficient = d1_daily_usage.has_sufficient_remaining_budget(usage, required_rows)
     except d1_daily_usage.UsageQueryError as error:
         raise MigrationError(f"Account-wide D1 daily usage preflight failed: {error}") from error
@@ -1873,12 +2651,362 @@ def account_daily_usage_preflight(account_id: str, args: argparse.Namespace) -> 
         )
     return {
         "utc_date": usage["utc_date"],
+        "queried_at_utc": usage["budget_usage_queried_at_utc"],
+        "daily_analytics_queried_at_utc": usage["queried_at_utc"],
+        "rows_read": usage["daily_analytics_rows_read"],
+        "effective_rows_read": usage["effective_rows_read"],
+        "rows_written": usage.get("rows_written", 0),
+        "rows_remaining": usage["effective_rows_remaining"],
+        "daily_limit_rows": usage["daily_limit_rows"],
+        "budget_usage_source": usage["budget_usage_source"],
+        "minute_day_to_date_rows_read": usage["minute_day_to_date_rows_read"],
+        "minute_day_to_date_queried_at_utc": usage["minute_day_to_date_queried_at_utc"],
+        "required_rows_remaining": required_rows,
+        "per_database": usage.get("daily_analytics_per_database", []),
+        "effective_per_database": usage.get("effective_per_database", []),
+    }
+
+
+def account_daily_usage_postflight(
+    account_id: str,
+    preflight: dict,
+    migration_report: dict,
+    timeout_seconds: float = POSTFLIGHT_ANALYTICS_TIMEOUT_SECONDS,
+) -> dict:
+    token = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+    postflight_date = datetime.now(timezone.utc).date().isoformat()
+    try:
+        usage = d1_daily_usage.fetch_daily_usage(
+            account_id,
+            token,
+            postflight_date,
+            timeout_seconds=timeout_seconds,
+        )
+    except d1_daily_usage.UsageQueryError as error:
+        return {
+            "status": "unavailable",
+            "utc_date": postflight_date,
+            "error": str(error),
+        }
+
+    result = {
+        "status": "utc_date_changed",
+        "utc_date": usage["utc_date"],
         "queried_at_utc": usage["queried_at_utc"],
         "rows_read": usage["rows_read"],
+        "rows_written": usage["rows_written"],
         "rows_remaining": usage["rows_remaining"],
         "daily_limit_rows": usage["daily_limit_rows"],
-        "required_rows_remaining": required_rows,
+        "per_database": usage.get("per_database", []),
+        "migration_meta_rows_read": migration_report.get("rows_read"),
+        "required_rows_remaining": migration_report.get("read_reserve_rows", 0),
+        "usage_source": "daily_analytics",
+        "effective_account_rows_read": usage["rows_read"],
+        "effective_rows_remaining": usage["rows_remaining"],
     }
+    if preflight.get("utc_date") != usage["utc_date"]:
+        return result
+
+    before_read = preflight.get("rows_read")
+    before_write = preflight.get("rows_written")
+    after_read = usage.get("rows_read")
+    after_write = usage.get("rows_written")
+    meta_read = migration_report.get("rows_read")
+    valid_counts = all(
+        isinstance(value, int) and not isinstance(value, bool) and value >= 0
+        for value in (before_read, before_write, after_read, after_write, meta_read)
+    )
+    if not valid_counts:
+        result["status"] = "invalid_usage_counts"
+        return result
+
+    before_by_database = {
+        item["database_id"]: item
+        for item in preflight.get("per_database", [])
+        if isinstance(item, dict) and isinstance(item.get("database_id"), str)
+    }
+    after_by_database = {
+        item["database_id"]: item
+        for item in usage.get("per_database", [])
+        if isinstance(item, dict) and isinstance(item.get("database_id"), str)
+    }
+    database_deltas = []
+    per_database_read_delta = {}
+    for database_id in sorted(before_by_database.keys() | after_by_database.keys()):
+        before = before_by_database.get(database_id, {})
+        after = after_by_database.get(database_id, {})
+        rows_read_delta = int(after.get("rows_read", 0)) - int(before.get("rows_read", 0))
+        per_database_read_delta[database_id] = rows_read_delta
+        database_deltas.append({
+            "database_id": database_id,
+            "rows_read_delta": rows_read_delta,
+            "rows_written_delta": int(after.get("rows_written", 0)) - int(before.get("rows_written", 0)),
+        })
+
+    account_read_delta = after_read - before_read
+    account_write_delta = after_write - before_write
+    account_vs_meta_delta = account_read_delta - meta_read
+    target_database_id = migration_report.get("d1_database_id")
+    target_database_read_delta = (
+        per_database_read_delta.get(target_database_id, 0)
+        if isinstance(target_database_id, str)
+        else account_read_delta
+    )
+    other_database_read_delta = account_read_delta - target_database_read_delta
+    target_database_meta_delta = target_database_read_delta - meta_read
+    per_database_total_matches = sum(per_database_read_delta.values()) == account_read_delta
+    result.update({
+        "account_rows_read_delta": account_read_delta,
+        "account_rows_written_delta": account_write_delta,
+        "account_vs_migration_meta_rows_read_delta": account_vs_meta_delta,
+        "target_database_id": target_database_id,
+        "target_database_rows_read_delta": target_database_read_delta,
+        "other_databases_rows_read_delta": other_database_read_delta,
+        "target_database_vs_migration_meta_rows_read_delta": target_database_meta_delta,
+        "per_database_delta_matches_account_delta": per_database_total_matches,
+        "reserve_satisfied": usage["rows_remaining"] >= result["required_rows_remaining"],
+        "per_database_delta": database_deltas,
+    })
+    before_effective_read = preflight.get("effective_rows_read", before_read)
+    if (
+        isinstance(before_effective_read, bool)
+        or not isinstance(before_effective_read, int)
+        or before_effective_read < 0
+    ):
+        result["status"] = "invalid_usage_counts"
+        return result
+    effective_after_read = max(after_read, before_effective_read + max(0, account_read_delta))
+    effective_limit = usage.get("daily_limit_rows", d1_daily_usage.DEFAULT_FREE_DAILY_LIMIT)
+    effective_after_remaining = max(0, effective_limit - effective_after_read)
+    result.update({
+        "effective_account_rows_read": effective_after_read,
+        "effective_rows_remaining": effective_after_remaining,
+        "daily_analytics_rows_read": after_read,
+        "effective_rows_read_preflight": before_effective_read,
+        "usage_source": "daily_delta_from_effective_preflight",
+        "reserve_satisfied": effective_after_remaining >= result["required_rows_remaining"],
+    })
+    if not result["reserve_satisfied"] or effective_after_read > effective_limit:
+        result["status"] = "reserve_breached"
+    elif migration_report.get("d1_read_count_unknown") is True:
+        result["status"] = "d1_read_count_unknown"
+    elif not per_database_total_matches:
+        result["status"] = "per_database_delta_mismatch"
+    else:
+        result["status"] = "reconciled" if target_database_meta_delta == 0 else "unreconciled"
+
+    if (
+        result["status"] == "unreconciled"
+        and target_database_read_delta < meta_read
+        and 0 <= target_database_read_delta
+    ):
+        started_at = migration_report.get("started_at")
+        finished_at = migration_report.get("finished_at")
+        preflight_queried_at = preflight.get("queried_at_utc")
+        expected_queries = migration_report.get("d1_queries_attempted")
+        fallback = {"status": "not_attempted"}
+        try:
+            if not isinstance(target_database_id, str) or not started_at or not finished_at or not preflight_queried_at:
+                raise d1_daily_usage.UsageQueryError("preflight or migration report is missing its D1 database or time window")
+            if (
+                isinstance(expected_queries, bool)
+                or not isinstance(expected_queries, int)
+                or expected_queries < 0
+            ):
+                raise d1_daily_usage.UsageQueryError("migration report is missing its D1 query count")
+            migration_start_minute = d1_daily_usage.parse_utc_minute(started_at)
+            migration_end_minute = d1_daily_usage.parse_utc_minute(finished_at)
+            usage_start_minute = d1_daily_usage.parse_utc_minute(preflight_queried_at)
+            usage_end_minute = d1_daily_usage.parse_utc_minute(usage["queried_at_utc"])
+            if migration_end_minute < migration_start_minute:
+                raise d1_daily_usage.UsageQueryError("migration minute window is invalid")
+            if usage_start_minute > migration_start_minute or usage_end_minute < migration_end_minute:
+                raise d1_daily_usage.UsageQueryError("preflight and postflight do not enclose the migration window")
+            if any(
+                minute.date().isoformat() != usage["utc_date"]
+                for minute in (migration_start_minute, migration_end_minute, usage_start_minute, usage_end_minute)
+            ):
+                raise d1_daily_usage.UsageQueryError("minute usage window does not match the current UTC date")
+            minute_usage = d1_daily_usage.fetch_minute_usage(
+                account_id,
+                token,
+                preflight_queried_at,
+                usage["queried_at_utc"],
+                timeout_seconds=timeout_seconds,
+            )
+        except d1_daily_usage.UsageQueryError as error:
+            fallback["status"] = "unavailable"
+            fallback["error"] = str(error)
+        else:
+            minute_groups = minute_usage.get("per_minute")
+            if not isinstance(minute_groups, list):
+                fallback.update({"status": "unavailable", "error": "minute analytics report omitted per-minute groups"})
+                result["minute_fallback"] = fallback
+                return result
+            migration_groups = [
+                item
+                for item in minute_groups
+                if migration_start_minute
+                <= d1_daily_usage.parse_utc_minute(item["datetime_minute"])
+                <= migration_end_minute
+            ]
+            target_groups = [item for item in migration_groups if item["database_id"] == target_database_id]
+            target_minute_rows = sum(item["rows_read"] for item in target_groups)
+            target_minute_queries = sum(item["read_queries"] for item in target_groups)
+            migration_window_rows = sum(item["rows_read"] for item in migration_groups)
+            daily_limit_candidates = [
+                value
+                for value in (preflight.get("daily_limit_rows"), usage.get("daily_limit_rows"))
+                if isinstance(value, int) and not isinstance(value, bool) and value >= 0
+            ]
+            effective_daily_limit = min(daily_limit_candidates) if daily_limit_candidates else d1_daily_usage.DEFAULT_FREE_DAILY_LIMIT
+            effective_account_rows_read = max(
+                effective_after_read,
+                before_effective_read + minute_usage["rows_read"],
+            )
+            effective_rows_remaining = max(0, effective_daily_limit - effective_account_rows_read)
+            reserve_satisfied = effective_rows_remaining >= result["required_rows_remaining"]
+            target_is_exact = target_minute_rows == meta_read and target_minute_queries == expected_queries
+            target_is_over = target_minute_rows > meta_read or target_minute_queries > expected_queries
+            fallback.update({
+                "status": "reconciled" if target_is_exact else (
+                    "target_activity_mismatch" if target_is_over else "not_yet_visible"
+                ),
+                "usage_window_start_utc": minute_usage["start_utc"],
+                "usage_window_end_utc": minute_usage["end_utc"],
+                "account_window_rows_read": minute_usage["rows_read"],
+                "account_window_read_queries": minute_usage["read_queries"],
+                "migration_window_start_utc": d1_daily_usage.format_utc_minute(migration_start_minute),
+                "migration_window_end_utc": d1_daily_usage.format_utc_minute(migration_end_minute),
+                "migration_window_rows_read": migration_window_rows,
+                "target_database_id": target_database_id,
+                "target_database_rows_read": target_minute_rows,
+                "target_database_read_queries": target_minute_queries,
+                "other_databases_rows_read": migration_window_rows - target_minute_rows,
+                "migration_meta_rows_read": meta_read,
+                "migration_d1_queries_attempted": expected_queries,
+                "effective_account_rows_read": effective_account_rows_read,
+                "effective_rows_remaining": effective_rows_remaining,
+                "effective_daily_limit_rows": effective_daily_limit,
+                "reserve_satisfied": reserve_satisfied,
+                "analytics_groups": minute_usage["analytics_groups"],
+                "confidence_bounds_verified": minute_usage["confidence_bounds_verified"],
+                "per_database": minute_usage["per_database"],
+            })
+            result.update({
+                "usage_source": "daily_and_minute_window_observed",
+                "daily_analytics_rows_remaining": usage["rows_remaining"],
+                "daily_analytics_rows_read": after_read,
+                "effective_account_rows_read": effective_account_rows_read,
+                "effective_rows_remaining": effective_rows_remaining,
+                "rows_remaining": effective_rows_remaining,
+                "effective_daily_limit_rows": effective_daily_limit,
+                "reserve_satisfied": reserve_satisfied,
+            })
+            if not reserve_satisfied or usage.get("limit_exceeded") is True:
+                result["status"] = "reserve_breached"
+            elif migration_report.get("d1_read_count_unknown") is True:
+                result["status"] = "d1_read_count_unknown"
+            elif target_is_exact:
+                result["status"] = "reconciled"
+            else:
+                result["status"] = "unreconciled"
+        result["minute_fallback"] = fallback
+    return result
+
+
+def record_account_daily_usage_postflight(migrator: Migrator, account_id: str) -> dict | None:
+    preflight = migrator.report.get("account_daily_usage_preflight")
+    if not isinstance(preflight, dict) or not preflight.get("utc_date"):
+        return None
+    attempts = []
+    deadline = time.monotonic() + POSTFLIGHT_MAX_DURATION_SECONDS
+    result = None
+
+    def record_deadline_exceeded() -> None:
+        if result is None:
+            return
+        result["postflight_deadline_exceeded"] = True
+        if result.get("status") == "reconciled":
+            result["status"] = "postflight_deadline_exceeded"
+        migrator.report["account_daily_usage_postflight"] = result
+        migrator.report["account_daily_usage_postflight_deadline_exceeded"] = True
+        if attempts:
+            attempts[-1]["status"] = result.get("status")
+            attempts[-1]["postflight_deadline_exceeded"] = True
+        migrator.report["account_daily_usage_postflight_attempts"] = attempts
+        migrator.save_outputs()
+
+    for attempt in range(1, POSTFLIGHT_MAX_ATTEMPTS + 1):
+        remaining_seconds = deadline - time.monotonic()
+        if remaining_seconds <= 0:
+            record_deadline_exceeded()
+            break
+
+        result = account_daily_usage_postflight(
+            account_id,
+            preflight,
+            migrator.report,
+            timeout_seconds=min(POSTFLIGHT_ANALYTICS_TIMEOUT_SECONDS, remaining_seconds),
+        )
+        result["attempt"] = attempt
+        migrator.report["account_daily_usage_postflight"] = result
+        summary_fields = (
+            "status",
+            "usage_source",
+            "queried_at_utc",
+            "account_rows_read_delta",
+            "target_database_rows_read_delta",
+            "other_databases_rows_read_delta",
+            "target_database_vs_migration_meta_rows_read_delta",
+            "rows_remaining",
+            "effective_account_rows_read",
+            "effective_rows_remaining",
+            "reserve_satisfied",
+        )
+        attempts.append({key: result[key] for key in summary_fields if key in result})
+        minute_fallback = result.get("minute_fallback")
+        if isinstance(minute_fallback, dict):
+            attempts[-1]["minute_fallback_status"] = minute_fallback.get("status")
+            for key in ("account_window_rows_read", "target_database_rows_read", "effective_rows_remaining"):
+                if key in minute_fallback:
+                    attempts[-1][f"minute_fallback_{key}"] = minute_fallback[key]
+        attempts[-1]["attempt"] = attempt
+        migrator.report["account_daily_usage_postflight_attempts"] = attempts
+        migrator.save_outputs()
+
+        expected_rows = migrator.report.get("rows_read")
+        actual_target_rows = result.get("target_database_rows_read_delta")
+        is_analytics_lag = (
+            result.get("status") == "unreconciled"
+            and (not isinstance(result.get("minute_fallback"), dict)
+                 or result["minute_fallback"].get("status") != "target_activity_mismatch")
+            and isinstance(expected_rows, int)
+            and not isinstance(expected_rows, bool)
+            and isinstance(actual_target_rows, int)
+            and not isinstance(actual_target_rows, bool)
+            and 0 <= actual_target_rows < expected_rows
+        )
+        remaining_seconds = deadline - time.monotonic()
+        if remaining_seconds <= 0:
+            record_deadline_exceeded()
+            break
+        if not is_analytics_lag or attempt == POSTFLIGHT_MAX_ATTEMPTS:
+            break
+
+        retry_delay_seconds = min(POSTFLIGHT_RETRY_INTERVAL_SECONDS, remaining_seconds)
+
+        print(json.dumps({
+            "phase": "account_usage_postflight_wait",
+            "attempt": attempt,
+            "max_attempts": POSTFLIGHT_MAX_ATTEMPTS,
+            "max_duration_seconds": POSTFLIGHT_MAX_DURATION_SECONDS,
+            "target_database_rows_read_delta": actual_target_rows,
+            "migration_meta_rows_read": expected_rows,
+            "retry_in_seconds": retry_delay_seconds,
+        }, sort_keys=True), flush=True)
+        time.sleep(retry_delay_seconds)
+    return result
 
 
 def main() -> int:
@@ -1889,6 +3017,7 @@ def main() -> int:
         account_id = os.environ["CLOUDFLARE_ACCOUNT_ID"]
         args.account_daily_usage_preflight = account_daily_usage_preflight(account_id, args)
         database_id = os.environ.get("CLOUDFLARE_D1_DATABASE_ID") or config["d1_databases"][0]["database_id"]
+        args.d1_database_id = database_id
         reader = D1Reader(account_id, database_id, os.environ["CLOUDFLARE_MIGRATION_READ_TOKEN"])
         d1_only_phase = args.phase in {"d1-schema-audit", "d1-operational-audit"}
         if d1_only_phase:
@@ -1904,7 +3033,14 @@ def main() -> int:
             )
         migrator = Migrator(args, reader, r2, namespace_id)
         report = migrator.run()
+        postflight = record_account_daily_usage_postflight(migrator, account_id)
+        report = migrator.report
         print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+        if report.get("status") != "complete" or report.get("complete") is not True:
+            return 2
+        if not postflight or postflight.get("status") != "reconciled":
+            print("Account Analytics postflight did not reconcile with the migration query metadata", file=sys.stderr)
+            return 3
         return 0
     except (KeyError, OSError, tomllib.TOMLDecodeError, MigrationError) as error:
         if migrator is not None:
@@ -1914,7 +3050,8 @@ def main() -> int:
                 "message": str(error),
             }
             try:
-                migrator.save_outputs()
+                if record_account_daily_usage_postflight(migrator, os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")) is None:
+                    migrator.save_outputs()
             except Exception as report_error:
                 print(f"migration failure report could not be saved: {report_error}", file=sys.stderr)
         print(f"migration failed: {error}", file=sys.stderr)

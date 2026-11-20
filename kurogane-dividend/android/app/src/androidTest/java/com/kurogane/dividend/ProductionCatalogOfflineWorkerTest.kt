@@ -1,5 +1,6 @@
 package com.kurogane.dividend
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
@@ -9,6 +10,7 @@ import android.os.SystemClock
 import android.service.notification.StatusBarNotification
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -22,6 +24,7 @@ import com.kurogane.dividend.notifications.DiviewNotifications
 import com.kurogane.dividend.notifications.DividendNotificationWorker
 import com.kurogane.dividend.notifications.NotificationKind
 import com.kurogane.dividend.notifications.NotificationPriceCache
+import com.kurogane.dividend.notifications.NotificationScheduler
 import com.kurogane.dividend.notifications.NotificationStore
 import com.kurogane.dividend.notifications.TseTradingCalendar
 import kotlinx.coroutines.runBlocking
@@ -30,6 +33,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.LocalDate
@@ -43,6 +47,10 @@ import java.util.concurrent.TimeUnit
  */
 @RunWith(AndroidJUnit4::class)
 class ProductionCatalogOfflineWorkerTest {
+    @get:Rule(order = 0) val notificationPermission: GrantPermissionRule = GrantPermissionRule.grant(
+        *if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
+    )
+
     private val context: Context
         get() = InstrumentationRegistry.getInstrumentation().targetContext
 
@@ -118,10 +126,7 @@ class ProductionCatalogOfflineWorkerTest {
 
         val quote = NotificationPriceCache(context).read()["7203"]
             ?: throw AssertionError("Production quote must remain in the device cache")
-        val isFresh = TseTradingCalendar.isFreshQuote(
-            quote.quoteDate,
-            LocalDate.now(com.kurogane.dividend.notifications.NotificationPolicy.japanZone)
-        )
+        val isFresh = TseTradingCalendar.isFreshQuote(quote.quoteDate, TseTradingCalendar.latestCompletedSessionDate(ZonedDateTime.now()))
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.cancel(DiviewNotifications.PRICE_ID)
         val info = enqueuePriceWorker(morning = true)
@@ -143,10 +148,7 @@ class ProductionCatalogOfflineWorkerTest {
 
         val cached = NotificationPriceCache(context).read()["7203"]
             ?: throw AssertionError("Production quote must remain in the device cache")
-        val isFresh = TseTradingCalendar.isFreshQuote(
-            cached.quoteDate,
-            LocalDate.now(com.kurogane.dividend.notifications.NotificationPolicy.japanZone)
-        )
+        val isFresh = TseTradingCalendar.isFreshQuote(cached.quoteDate, TseTradingCalendar.latestCompletedSessionDate(ZonedDateTime.now()))
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.cancel(DiviewNotifications.PRICE_ID)
         val info = enqueuePriceWorker(morning = false)
@@ -171,8 +173,7 @@ class ProductionCatalogOfflineWorkerTest {
         context.getSystemService(NotificationManager::class.java).cancel(DiviewNotifications.PRICE_ID)
         listOf("local_import_store", "notification_preferences", "notification_delivery", "notification_price_cache")
             .forEach { name -> context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit() }
-        var marketDate = LocalDate.now(com.kurogane.dividend.notifications.NotificationPolicy.japanZone)
-        while (!TseTradingCalendar.isTradingSession(marketDate)) marketDate = marketDate.minusDays(1)
+        val marketDate = TseTradingCalendar.latestCompletedSessionDate(ZonedDateTime.now())
         seedWatchlistAndCache(price = 2_500.0, quoteDate = marketDate.toString())
     }
 
@@ -206,6 +207,102 @@ class ProductionCatalogOfflineWorkerTest {
             LocalDate.now(com.kurogane.dividend.notifications.NotificationPolicy.japanZone).toString(),
             NotificationStore(context).priceStates().getValue("7203").notifiedDate
         )
+    }
+
+    @Test fun scheduledMorningWorkQueuesFreshLocalFixtureWithoutNetwork() {
+        requireExplicitDisposableAvdRun()
+        assertOffline()
+        assertBeforeCheckpoint(com.kurogane.dividend.notifications.NotificationPolicy.morning)
+
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val work = WorkManager.getInstance(context)
+        val store = NotificationStore(context)
+        val originalSettings = store.settings()
+        val originalPreferences = snapshotAcceptancePreferences()
+        assertTrue("Use an empty disposable AVD app store for this acceptance test", originalPreferences.values.all { it.isEmpty() })
+        assertTrue(
+            "Do not replace an existing price notification on the QA AVD",
+            manager.activeNotifications.none { it.id == DiviewNotifications.PRICE_ID }
+        )
+        listOf(NotificationScheduler.PRICE_MORNING, NotificationScheduler.PRICE_EVENING).forEach { name ->
+            assertTrue(
+                "Do not replace existing scheduled work on the QA AVD",
+                work.getWorkInfosForUniqueWork(name).get(15, TimeUnit.SECONDS).none { !it.state.isFinished }
+            )
+        }
+
+        var fixturePrepared = false
+        try {
+            seedFreshLocalQuote()
+            context.getSharedPreferences("notification_delivery", Context.MODE_PRIVATE)
+                .edit().putBoolean("offline_acceptance_fixture", true).commit()
+            // Register both app checkpoints. The morning run queues the alert for 17:30 JST.
+            NotificationScheduler.sync(context, store.settings())
+            val scheduled = work.getWorkInfosForUniqueWork(NotificationScheduler.PRICE_MORNING)
+                .get(15, TimeUnit.SECONDS)
+                .filterNot { it.state.isFinished }
+            assertEquals(1, scheduled.size)
+
+            awaitPendingPriceAlert(TimeUnit.MINUTES.toMillis(3))
+            val pending = store.pendingPriceAlerts()
+            assertEquals(1, pending.size)
+            val deliverAt = java.time.Instant.ofEpochMilli(pending.single().deliverAtMillis)
+                .atZone(com.kurogane.dividend.notifications.NotificationPolicy.japanZone)
+            assertEquals(LocalDate.now(com.kurogane.dividend.notifications.NotificationPolicy.japanZone), deliverAt.toLocalDate())
+            assertEquals(com.kurogane.dividend.notifications.NotificationPolicy.evening, deliverAt.toLocalTime())
+            assertTrue("Morning schedule queues the notification for the evening checkpoint", manager.activeNotifications.none {
+                it.id == DiviewNotifications.PRICE_ID
+            })
+            fixturePrepared = true
+        } finally {
+            if (!fixturePrepared) {
+                work.cancelUniqueWork(NotificationScheduler.PRICE_MORNING).result.get(30, TimeUnit.SECONDS)
+                work.cancelUniqueWork(NotificationScheduler.PRICE_EVENING).result.get(30, TimeUnit.SECONDS)
+                clearAcceptancePreferences()
+                NotificationScheduler.sync(context, originalSettings)
+                manager.cancel(DiviewNotifications.PRICE_ID)
+            }
+        }
+    }
+
+    @Test fun scheduledEveningWorkPostsQueuedFixtureWithoutNetwork() {
+        requireExplicitDisposableAvdRun()
+        assertOffline()
+        assertBeforeCheckpoint(com.kurogane.dividend.notifications.NotificationPolicy.evening)
+
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val work = WorkManager.getInstance(context)
+        val store = NotificationStore(context)
+        val fixtureMarker = context.getSharedPreferences("notification_delivery", Context.MODE_PRIVATE)
+            .getBoolean("offline_acceptance_fixture", false)
+        assertTrue("Run the morning acceptance phase first", fixtureMarker)
+
+        try {
+            assertEquals(1, store.pendingPriceAlerts().size)
+            assertTrue(manager.activeNotifications.none { it.id == DiviewNotifications.PRICE_ID })
+            work.cancelUniqueWork(NotificationScheduler.PRICE_EVENING).result.get(30, TimeUnit.SECONDS)
+            // Recompute the app's periodic schedule after the host advances the disposable AVD clock.
+            NotificationScheduler.sync(context, store.settings())
+            val scheduled = work.getWorkInfosForUniqueWork(NotificationScheduler.PRICE_EVENING)
+                .get(15, TimeUnit.SECONDS)
+                .filterNot { it.state.isFinished }
+            assertEquals(1, scheduled.size)
+
+            val active = awaitPriceNotification(manager, TimeUnit.MINUTES.toMillis(3))
+            assertNotNull("Scheduled offline WorkManager job must post the queued price alert", active)
+            assertAlertNotification(active!!.notification)
+            assertTrue(store.pendingPriceAlerts().isEmpty())
+            assertEquals(
+                LocalDate.now(com.kurogane.dividend.notifications.NotificationPolicy.japanZone).toString(),
+                store.priceStates().getValue("7203").notifiedDate
+            )
+        } finally {
+            work.cancelUniqueWork(NotificationScheduler.PRICE_MORNING).result.get(30, TimeUnit.SECONDS)
+            work.cancelUniqueWork(NotificationScheduler.PRICE_EVENING).result.get(30, TimeUnit.SECONDS)
+            clearAcceptancePreferences()
+            NotificationScheduler.sync(context, store.settings())
+            manager.cancel(DiviewNotifications.PRICE_ID)
+        }
     }
 
     private suspend fun seedWatchlistAndCache(price: Double, quoteDate: String) {
@@ -252,6 +349,39 @@ class ProductionCatalogOfflineWorkerTest {
         assertTrue("Notification permission and channel must allow posting", notifications.canPost(DiviewNotifications.PRICE_CHANNEL))
     }
 
+    private fun seedFreshLocalQuote() {
+        val marketDate = TseTradingCalendar.latestCompletedSessionDate(ZonedDateTime.now())
+        runBlocking { seedWatchlistAndCache(price = 2_500.0, quoteDate = marketDate.toString()) }
+    }
+
+    private fun snapshotAcceptancePreferences(): Map<String, Map<String, Any?>> =
+        listOf("local_import_store", "notification_preferences", "notification_delivery", "notification_price_cache")
+            .associateWith { name ->
+                context.getSharedPreferences(name, Context.MODE_PRIVATE).all.mapValues { (_, value) -> value }
+            }
+
+    private fun clearAcceptancePreferences() {
+        listOf("local_import_store", "notification_preferences", "notification_delivery", "notification_price_cache")
+            .forEach { name -> context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit() }
+    }
+
+    private fun assertBeforeCheckpoint(checkpoint: java.time.LocalTime) {
+        val japanTime = ZonedDateTime.now()
+            .withZoneSameInstant(com.kurogane.dividend.notifications.NotificationPolicy.japanZone)
+            .toLocalTime()
+        assertTrue(
+            "Start shortly before $checkpoint JST",
+            japanTime >= checkpoint.minusMinutes(2) && japanTime < checkpoint
+        )
+    }
+
+    private fun awaitPendingPriceAlert(timeoutMillis: Long) {
+        val deadline = SystemClock.elapsedRealtime() + timeoutMillis
+        while (NotificationStore(context).pendingPriceAlerts().isEmpty() && SystemClock.elapsedRealtime() < deadline) {
+            SystemClock.sleep(100)
+        }
+    }
+
     private fun assertAlertNotification(notification: Notification) {
         val title = notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
         val body = (notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
@@ -261,8 +391,11 @@ class ProductionCatalogOfflineWorkerTest {
         assertTrue(body.contains("取得株価"))
     }
 
-    private fun awaitPriceNotification(manager: NotificationManager): StatusBarNotification? {
-        val deadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(5)
+    private fun awaitPriceNotification(
+        manager: NotificationManager,
+        timeoutMillis: Long = TimeUnit.SECONDS.toMillis(5)
+    ): StatusBarNotification? {
+        val deadline = SystemClock.elapsedRealtime() + timeoutMillis
         var active = manager.activeNotifications.firstOrNull { it.id == DiviewNotifications.PRICE_ID }
         while (active == null && SystemClock.elapsedRealtime() < deadline) {
             SystemClock.sleep(50)

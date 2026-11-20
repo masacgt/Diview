@@ -3,6 +3,7 @@ import { safelyDeliverFeedbackEmail, retryFeedbackEmails } from './feedback-emai
 import financialUnitContract from './financial_unit_contract.json' with { type: 'json' };
 import jpxReitMarketMaster from './jpx_reit_market_master.json' with { type: 'json' };
 import { withMarketReadCache, sharedMarketJson, sharedMarketDocuments } from './market-read-cache.mjs';
+import { notificationPricesPostResponse } from './notification-prices.mjs';
 
 // Synthetic 4,391-code replay measured at most 307 R2 calls per eight-security Cron batch; production skew and Cloudflare CPU remain unmeasured.
 const ANALYSIS_BATCH_SIZE = 8;
@@ -103,6 +104,7 @@ function publicRateLimitRoute(pathname) {
   if (pathname === '/api/v1/security-search') return 'security-search';
   if (pathname === '/api/v1/search-catalog') return 'search-catalog';
   if (pathname === '/api/v1/live-quotes') return 'live-quotes';
+  if (pathname === '/api/v1/notification-prices') return 'notification-prices';
   if (pathname.startsWith('/api/v1/')) return pathname.slice('/api/v1/'.length);
   return null;
 }
@@ -183,13 +185,15 @@ function r2OnlyIfUnchanged(existing) {
 }
 
 async function analysisSourceTag(env, stockDefs, watchDefs, config) {
-  const [catalogObject, financialRevisionObject] = await Promise.all([
+  const [catalogObject, universeObject, financialRevisionObject] = await Promise.all([
     env.MARKET_DATA.head(`${YFINANCE_V2_ROOT}/catalog/current.json`),
+    env.MARKET_DATA.head(`${YFINANCE_V2_ROOT}/universe/current.json`),
     env.MARKET_DATA.head(`${YFINANCE_V2_ROOT}/financial_revision.json`),
   ]);
   return JSON.stringify({
-    analysis_contract: 3,
+    analysis_contract: 4,
     catalog_etag: catalogObject?.httpEtag || catalogObject?.etag || null,
+    universe_etag: universeObject?.httpEtag || universeObject?.etag || null,
     financial_revision_etag: financialRevisionObject?.httpEtag || financialRevisionObject?.etag || null,
     stock_definition_sha256: await sha256Hex(JSON.stringify(stockDefs)),
     watch_definition_sha256: await sha256Hex(JSON.stringify(watchDefs)),
@@ -270,15 +274,17 @@ async function appDefinitionDocument(env, key) {
   return readDefinitionFromR2(env, key);
 }
 
-async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
+async function latestMarketForSecurity(env, displayCode, { catalogItem = null, activeUniverseMember = false } = {}) {
   if (!env.MARKET_DATA) return null;
   const normalizedCode = yfinanceV2Code(displayCode);
+  let profileDocument = null;
   if (normalizedCode) {
     const symbol = `${normalizedCode}.T`;
-    const [current, profileDocument] = await Promise.all([
+    const [current, profile] = await Promise.all([
       readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`),
       readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/profile.json`),
     ]);
+    profileDocument = profile;
     if (current) {
       const profile = profileDocument || {};
       const price = current.price || {};
@@ -308,15 +314,60 @@ async function latestMarketForSecurity(env, displayCode, marketIndex = null) {
       }};
     }
   }
-  const symbol = `${displayCode}.T`.toUpperCase();
-  let indexed = marketIndex?.get(symbol);
-  if (!marketIndex) {
-    const object = await env.MARKET_DATA.get('market/yfinance/latest_market_data.json');
-    if (!object) return null;
-    const snapshot = JSON.parse(await object.text());
-    const row = (snapshot.securities || []).find(item => String(item.symbol || '').toUpperCase() === symbol);
-    if (row) indexed = { row, snapshot };
+  if (catalogItem) {
+    const catalogPrice = finiteNumber(catalogItem.price);
+    const close = catalogPrice !== null && catalogPrice > 0 ? catalogPrice : null;
+    const rawQuoteDate = String(catalogItem.quote_date || '');
+    const quoteDate = /^\d{4}-\d{2}-\d{2}$/.test(rawQuoteDate) ? rawQuoteDate : null;
+    return {
+      summary: { ...catalogItem, symbol: `${normalizedCode}.T`, shortName: catalogItem.name || null },
+      dividend: { yield_rate: finiteNumber(catalogItem.yield_rate) },
+      price: {
+        symbol: `${normalizedCode}.T`,
+        date: quoteDate,
+        open: null,
+        high: null,
+        low: null,
+        close,
+        adjusted_close: null,
+        volume: null,
+        change: null,
+        change_percent: null,
+        source: 'Yahoo Finance via yfinance',
+        generated_at: quoteDate ? `${quoteDate}T06:00:00.000Z` : null,
+        status: close === null ? 'empty' : 'available',
+      },
+    };
   }
+  if (activeUniverseMember) {
+    const profile = profileDocument || {};
+    return {
+      summary: { symbol: `${normalizedCode}.T`, shortName: profile.display_name || profile.short_name || null },
+      dividend: null,
+      price: {
+        symbol: `${normalizedCode}.T`,
+        date: null,
+        open: null,
+        high: null,
+        low: null,
+        close: null,
+        adjusted_close: null,
+        volume: null,
+        change: null,
+        change_percent: null,
+        source: 'Yahoo Finance via yfinance',
+        generated_at: null,
+        status: 'empty',
+      },
+    };
+  }
+  const symbol = `${displayCode}.T`.toUpperCase();
+  let indexed = null;
+  const object = await env.MARKET_DATA.get('market/yfinance/latest_market_data.json');
+  if (!object) return null;
+  const legacySnapshot = JSON.parse(await object.text());
+  const legacyRow = (legacySnapshot.securities || []).find(item => String(item.symbol || '').toUpperCase() === symbol);
+  if (legacyRow) indexed = { row: legacyRow, snapshot: legacySnapshot };
   const row = indexed?.row;
   if (!row) return null;
   const snapshot = indexed.snapshot;
@@ -1527,11 +1578,11 @@ function liveQuoteRunObjectKey(runId, code) {
   return `${LIVE_QUOTE_RUN_PREFIX}${runId}/${code}.json`;
 }
 
-async function loadSecurityAnalysisInput(env, security, marketIndex = null) {
+async function loadSecurityAnalysisInput(env, security, marketContext = {}) {
   env = withMarketReadCache(env);
   const symbol = yfinanceV2Symbol(security.security_code_display);
   const [marketData, v2Payload, yfinanceCurrent] = await Promise.all([
-    latestMarketForSecurity(env, security.security_code_display, marketIndex),
+    latestMarketForSecurity(env, security.security_code_display, marketContext),
     readV2FinancialPayload(env, security.security_code_display),
     symbol ? readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`) : null,
   ]);
@@ -1594,7 +1645,7 @@ async function buildAnalysisSnapshot(env, security, targetYield = null, preloade
       auditDefinition(env, 'watchlist-analysis-definitions:v1', watchDefs),
     ]);
   }
-  const input = preloaded?.input || await loadSecurityAnalysisInput(env, security, preloaded?.marketIndex);
+  const input = preloaded?.input || await loadSecurityAnalysisInput(env, security, preloaded?.marketContext);
   const analysis = evaluateStockAnalysis(input.values, stockDefs);
   const flags = anomalyFlags(input.values);
   const target = finiteNumber(targetYield);
@@ -1604,7 +1655,7 @@ async function buildAnalysisSnapshot(env, security, targetYield = null, preloade
   return {
     code: security.security_code_display,
     canonical_code: security.security_code,
-    name: security.name,
+    name: input.marketData?.summary?.shortName || security.name,
     observed_at: isoNow(),
     market_date: input.marketData?.price?.date ?? null,
     definition_version: Number(stockDefs.version || 1),
@@ -1911,28 +1962,43 @@ async function runScheduledAnalysis(env) {
     loadAnalysisDefinitions(env),
     backendConfig(env),
   ]);
-  const [latestState, catalog] = await Promise.all([
+  const [latestState, catalog, universe] = await Promise.all([
     readV2Json(env, ANALYSIS_SOURCE_KEY),
     readV2Catalog(env),
+    readV2Json(env, `${YFINANCE_V2_ROOT}/universe/current.json`),
   ]);
-  if (!Array.isArray(catalog?.items) || catalog.items.length === 0) {
-    throw new Error('R2 v2 security catalog is missing or empty');
+  if (!universe || !universe.updated_at || !/^[a-f0-9]{64}$/i.test(String(universe.security_code_sha256 || ''))
+    || !Array.isArray(universe.securities) || universe.securities.length === 0) {
+    throw new Error('R2 v2 security universe is missing or invalid');
   }
-  const securities = catalog.items.map(row => {
+  if (catalog && !Array.isArray(catalog.items)) throw new Error('R2 v2 security catalog is invalid');
+  const catalogItemsByCode = new Map();
+  for (const row of catalog?.items || []) {
     const displayCode = yfinanceV2Code(row?.code || row?.security_code_display || row?.symbol);
-    if (!displayCode) return null;
+    if (!displayCode) continue;
+    catalogItemsByCode.set(displayCode, row);
+  }
+  const seenActiveCodes = new Set();
+  const securities = universe.securities.filter(row => row?.status === 'active').map(row => {
+    const displayCode = yfinanceV2Code(row?.code || row?.security_code_display || row?.symbol);
+    if (!displayCode) throw new Error('R2 v2 security universe contains an invalid active security code');
+    if (seenActiveCodes.has(displayCode)) throw new Error('R2 v2 security universe contains a duplicate active security code');
+    seenActiveCodes.add(displayCode);
     return {
       security_code: displayCode.length === 4 ? displayCode + '0' : displayCode,
       security_code_display: displayCode,
-      name: String(row?.name || row?.display_name || displayCode),
+      name: String(catalogItemsByCode.get(displayCode)?.name || catalogItemsByCode.get(displayCode)?.display_name
+        || row?.name || row?.display_name || displayCode),
     };
-  }).filter(Boolean);
-  if (securities.length === 0) throw new Error('R2 v2 security catalog has no valid security codes');
+  });
+  if (securities.length === 0) throw new Error('R2 v2 security universe has no active security codes');
 
   const sourceTag = await analysisSourceTag(env, stockDefs, watchDefs, config);
   const previousSourceTag = latestState?.source_tag ?? null;
   const sourceChanged = previousSourceTag !== sourceTag;
-  const generation = String(catalog.generation || 'unknown');
+  const generation = String(catalog?.generation || 'unavailable');
+  const universeUpdatedAt = String(universe.updated_at);
+  const universeCodeSha256 = String(universe.security_code_sha256).toLowerCase();
   const total = securities.length;
   const jobRead = await readR2JsonWithEtag(env, ANALYSIS_JOB_STATE_KEY);
   const existingJob = jobRead?.value;
@@ -1940,6 +2006,7 @@ async function runScheduledAnalysis(env) {
   const jobMatches = Boolean(existingJob
     && existingJob.source_tag === sourceTag
     && existingJob.catalog_generation === generation
+    && existingJob.universe_code_sha256 === universeCodeSha256
     && Number(existingJob.total) === total
     && resumableStatuses.has(existingJob.status));
 
@@ -1981,6 +2048,8 @@ async function runScheduledAnalysis(env) {
       source_tag: sourceTag,
       previous_source_tag: previousSourceTag,
       catalog_generation: generation,
+      universe_code_sha256: universeCodeSha256,
+      universe_updated_at: universeUpdatedAt,
       total,
       next_index: 0,
       run_id: runId,
@@ -2053,6 +2122,8 @@ async function runScheduledAnalysis(env) {
       metadata: {
         source_changed: true,
         catalog_generation: generation,
+        universe_code_sha256: universeCodeSha256,
+        universe_updated_at: universeUpdatedAt,
         total,
         batch_size: ANALYSIS_BATCH_SIZE,
         next_index: Number(job.next_index || 0),
@@ -2086,6 +2157,8 @@ async function runScheduledAnalysis(env) {
         source_changed: true,
         source_tag_advanced: advanced,
         catalog_generation: generation,
+        universe_code_sha256: universeCodeSha256,
+        universe_updated_at: universeUpdatedAt,
         total,
         batch_size: ANALYSIS_BATCH_SIZE,
         next_index: Number(finalizingJob.next_index || 0),
@@ -2127,7 +2200,10 @@ async function runScheduledAnalysis(env) {
     const group = batch.slice(offset, offset + ANALYSIS_CONCURRENCY);
     await Promise.all(group.map(async security => {
       try {
-        const input = await loadSecurityAnalysisInput(env, security);
+        const input = await loadSecurityAnalysisInput(env, security, {
+          catalogItem: catalogItemsByCode.get(security.security_code_display) || null,
+          activeUniverseMember: true,
+        });
         const snapshot = await buildAnalysisSnapshot(env, security, null, {
           stockDefs, watchDefs, config, input, skipDefinitionAudit: true,
         });
@@ -2178,6 +2254,8 @@ async function runScheduledAnalysis(env) {
         ...(runSummary.metadata || {}),
         source_changed: true,
         catalog_generation: generation,
+        universe_code_sha256: universeCodeSha256,
+        universe_updated_at: universeUpdatedAt,
         total,
         batch_size: ANALYSIS_BATCH_SIZE,
         next_index: batchStart,
@@ -2220,6 +2298,8 @@ async function runScheduledAnalysis(env) {
       source_changed: true,
       source_tag_advanced: false,
       catalog_generation: generation,
+      universe_code_sha256: universeCodeSha256,
+      universe_updated_at: universeUpdatedAt,
       total,
       batch_size: ANALYSIS_BATCH_SIZE,
       next_index: nextIndex,
@@ -2559,6 +2639,22 @@ export default {
     }
 
     const config = await backendConfig(env);
+
+    if (url.pathname === '/api/v1/notification-prices' && request.method === 'POST') {
+      const route = publicRateLimitRoute(url.pathname);
+      if (!await enforceRateLimit(request, env, `public:${route}`, config.rate_limit_public, '', config)) {
+        return rateLimitedResponse(config);
+      }
+      return notificationPricesPostResponse(request, env, {
+        json,
+        normalizeCode: yfinanceV2Code,
+        readPublication: async () => readV2Json(env, `${YFINANCE_V2_ROOT}/publications/current.json`),
+        readSecurity: async (_requestEnv, code) => {
+          const symbol = yfinanceV2Symbol(code);
+          return symbol ? readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${symbol}/current.json`) : null;
+        },
+      });
+    }
 
     if (url.pathname === '/api/v1/feedback' && request.method === 'POST') {
       if (!await enforceRateLimit(request, env, 'support-feedback', 5, '', config)) return rateLimitedResponse(config);
@@ -3667,23 +3763,28 @@ export default {
       const requested = decodeURIComponent(analysisMatch[1]);
       const displayCode = yfinanceV2Code(requested);
       if (!displayCode) return json({ error: 'invalid_security_code' }, 400);
-      const [currentProfile, catalog, irbankCatalog] = await Promise.all([displayCode
+      const [currentProfile, catalog, irbankCatalog, universe] = await Promise.all([displayCode
         ? await readV2Json(env, `${YFINANCE_V2_ROOT}/securities/${yfinanceV2Symbol(displayCode)}/profile.json`)
         : null,
       readV2Catalog(env),
-      readV2Json(env, 'market/irbank/v1/catalog.json')]);
+      readV2Json(env, 'market/irbank/v1/catalog.json'),
+      readV2Json(env, `${YFINANCE_V2_ROOT}/universe/current.json`)]);
       const catalogItem = catalog?.items?.find(row => yfinanceV2Code(row?.code || row?.security_code_display || row?.symbol) === displayCode);
       const irbankMaster = (irbankCatalog?.securities || []).find(row => irbankR2Code(String(row?.code || '')) === displayCode);
-      if (!currentProfile && !catalogItem && !irbankMaster) return json({ error: 'not_found' }, 404);
+      const universeMember = (universe?.securities || []).find(row => yfinanceV2Code(row?.code || row?.security_code_display || row?.symbol) === displayCode);
+      const activeUniverseMember = universeMember?.status === 'active';
+      if (!currentProfile && !catalogItem && !irbankMaster && !activeUniverseMember) return json({ error: 'not_found' }, 404);
       const security = {
         security_code: displayCode.length === 4 ? `${displayCode}0` : displayCode,
         security_code_display: displayCode,
         name: currentProfile?.display_name || currentProfile?.short_name || currentProfile?.long_name
-          || irbankMaster?.name || catalogItem?.name || displayCode,
+          || irbankMaster?.name || catalogItem?.name || universeMember?.name || universeMember?.display_name || displayCode,
       };
       const targetYield = url.searchParams.get('target_yield');
       try {
-        return json(await buildAnalysisSnapshot(env, security, targetYield === null ? null : Number(targetYield)));
+        return json(await buildAnalysisSnapshot(env, security, targetYield === null ? null : Number(targetYield), {
+          marketContext: { catalogItem, activeUniverseMember },
+        }));
       } catch (error) {
         if (error instanceof AnalysisDefinitionsUnavailableError) return json({ error: 'definitions_unavailable' }, 503);
         throw error;

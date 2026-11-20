@@ -2848,7 +2848,10 @@ class DividendViewModel @JvmOverloads constructor(
         val priceFetchFailed = MarketFetchPolicy.isUnsuccessfulStatus(
             marketPreferences.getString("last_price_fetch_status", null)
         )
-        val regularPriceRefreshDue = MarketFetchPolicy.shouldFetch(now, lastFetchAt, lastFetchJstDate, priceFetchFailed)
+        val priceRetryAfterAt = marketPreferences.getLong("last_price_fetch_retry_after_at", 0L)
+        val regularPriceRefreshDue = MarketFetchPolicy.shouldFetch(
+            now, lastFetchAt, lastFetchJstDate, priceFetchFailed, priceRetryAfterAt
+        )
         val needsIrbankYieldRefresh = marketPreferences.getInt("irbank_yield_contract_version", 0) < IRBANK_YIELD_CONTRACT_VERSION
         val shouldFetchPrices = regularPriceRefreshDue
         val needsAnnualDpsRefresh = marketPreferences.getInt("annual_dps_contract_version", 0) < ANNUAL_DPS_CONTRACT_VERSION
@@ -2877,7 +2880,7 @@ class DividendViewModel @JvmOverloads constructor(
                 .putString("last_price_fetch_status", "running")
                 .apply()
         }
-        val targetedPriceSnapshot = if (shouldFetchDailyPriceSnapshot && !refreshFullCatalogForContract) {
+        val targetedPriceSnapshot = if (shouldFetchDailyPriceSnapshot) {
             runCatchingCancellable { marketRepository.fetchTargetedPriceSnapshot(notificationPriceCodes) }
         } else null
         val heldCodeSet = heldCodes.toSet()
@@ -2897,7 +2900,12 @@ class DividendViewModel @JvmOverloads constructor(
             }
             .orEmpty()
         val heldCodesNeedingFetch = if (targetedPriceSnapshot?.isSuccess == true) {
-            heldCodes.filterNot { it in reusedHeldQuotes }
+            // Notification snapshots are price-only; still fetch the dividend
+            // contract for held securities without annual-DPS coverage.
+            heldCodes.filter { code ->
+                val quote = reusedHeldQuotes[code]
+                quote?.annualDividendPerShare == null && quote?.isNoDividendConfirmed != true
+            }
         } else {
             heldCodes
         }
@@ -2964,6 +2972,28 @@ class DividendViewModel @JvmOverloads constructor(
         if (!shouldFetchPrices) return
         if (notificationPriceCodes.isEmpty()) return
 
+        var notificationFetchError: Throwable? = targetedPriceSnapshot?.exceptionOrNull()
+        var notificationRetryAfterSeconds =
+            (notificationFetchError as? com.kurogane.dividend.data.MarketHttpException)?.retryAfterSeconds
+        targetedPriceSnapshot?.getOrNull()?.let { notificationSnapshot ->
+            if (!notificationSnapshot.isComplete) {
+                notificationFetchError = java.io.IOException("通知用の価格取得は一部未完了です")
+                notificationRetryAfterSeconds = maxOf(
+                    notificationRetryAfterSeconds ?: 0L,
+                    notificationSnapshot.retryAfterSeconds ?: 0L
+                ).takeIf { it > 0L }
+            }
+            if (generation != dataGeneration.get()) {
+                marketPreferences.edit().putString("last_price_fetch_status", "superseded").apply()
+                return
+            }
+            val targetedNotificationSnapshot = notificationSnapshot.copy(
+                quotes = notificationSnapshot.quotes.filterKeys { it in notificationPriceCodes }
+            )
+            if (!NotificationPriceCache(getApplication()).mergeAndCommit(targetedNotificationSnapshot, now)) {
+                notificationFetchError = java.io.IOException("通知用の価格キャッシュを保存できませんでした")
+            }
+        }
         val priceSnapshotResult = if (refreshFullCatalogForContract) {
             runCatchingCancellable { marketRepository.fetchPriceCatalogSnapshot() }
         } else {
@@ -2975,10 +3005,13 @@ class DividendViewModel @JvmOverloads constructor(
                     marketPreferences.edit().putString("last_price_fetch_status", "superseded").apply()
                     return@onSuccess
                 }
-                val notificationSnapshot = snapshot.copy(
-                    quotes = snapshot.quotes.filterKeys { it in notificationPriceCodes }
-                )
-                NotificationPriceCache(getApplication()).merge(notificationSnapshot, now)
+                if (!snapshot.isComplete) {
+                    notificationFetchError = notificationFetchError ?: java.io.IOException("価格カタログ取得は一部未完了です")
+                    notificationRetryAfterSeconds = maxOf(
+                        notificationRetryAfterSeconds ?: 0L,
+                        snapshot.retryAfterSeconds ?: 0L
+                    ).takeIf { it > 0L }
+                }
                 val fetchedQuotes = snapshot.quotes
                 val fetchedPrices = fetchedQuotes.mapValues { it.value.price }
                 val cachedDividendsPerShare = readCachedDividendsPerShare().toMutableMap()
@@ -3020,6 +3053,10 @@ class DividendViewModel @JvmOverloads constructor(
                 val dividendJson = JSONObject().apply { cachedDividendsPerShare.forEach { (code, dps) -> put(code, dps) } }
                 val noDividendJson = JSONArray().apply { cachedNoDividendCodes.sorted().forEach { put(it) } }
                 val dividendStatusJson = JSONArray().apply { cachedDividendStatusCodes.sorted().forEach { put(it) } }
+                val retryAfterAt = notificationRetryAfterSeconds
+                    ?.coerceIn(1L, MAX_PRICE_RETRY_AFTER_SECONDS)
+                    ?.let { seconds -> System.currentTimeMillis() + seconds * 1_000L } ?: 0L
+                val completedAt = System.currentTimeMillis()
                 marketPreferences.edit()
                     .putString("prices", json.toString())
                     .putString("dividend_per_share", dividendJson.toString())
@@ -3031,21 +3068,44 @@ class DividendViewModel @JvmOverloads constructor(
                     .putString("yfinance_yield_rates", JSONObject().apply {
                         cachedYfinanceYieldRates.forEach { (code, rate) -> put(code, rate) }
                     }.toString())
-                    .putLong("last_price_fetch_at", now)
-                    .putString("last_price_fetch_jst_date", PriceRefreshPolicy.japanDate(now))
-                    .putString("last_price_fetch_status", "ok")
-                    .remove("last_price_fetch_error")
+                    .putLong("last_price_fetch_at", completedAt)
+                    .putLong("last_price_fetch_attempt_at", completedAt)
+                    .putString("last_price_fetch_jst_date", PriceRefreshPolicy.japanDate(completedAt))
+                    .putString("last_price_fetch_attempt_jst_date", PriceRefreshPolicy.japanDate(completedAt))
+                    .putString("last_price_fetch_status", if (notificationFetchError == null) "ok" else "failed")
+                    .putLong("last_price_fetch_retry_after_at", retryAfterAt)
                     .apply()
+                if (notificationFetchError == null) {
+                    marketPreferences.edit().remove("last_price_fetch_error").remove("last_price_fetch_retry_after_at").apply()
+                } else {
+                    marketPreferences.edit()
+                        .putString("last_price_fetch_error", notificationFetchError!!::class.java.simpleName)
+                        .apply()
+                }
                 if (refreshFullCatalogForContract) {
                     marketPreferences.edit().putInt("irbank_yield_contract_version", IRBANK_YIELD_CONTRACT_VERSION).apply()
                 }
                 applyPrices(mergedPrices, cachedDividendsPerShare, cachedNoDividendCodes,
                     cachedDividendStatusCodes, cachedYieldRates, cachedYfinanceYieldRates)
+                if (notificationFetchError != null) {
+                    android.util.Log.w("CloudflareMarket", "通知用価格の取得または保存に失敗しました", notificationFetchError)
+                }
             }
             .onFailure { error ->
+                notificationRetryAfterSeconds = maxOf(
+                    notificationRetryAfterSeconds ?: 0L,
+                    (error as? com.kurogane.dividend.data.MarketHttpException)?.retryAfterSeconds ?: 0L
+                ).takeIf { it > 0L }
+                val retryAfterAt = notificationRetryAfterSeconds
+                    ?.coerceIn(1L, MAX_PRICE_RETRY_AFTER_SECONDS)
+                    ?.let { seconds -> System.currentTimeMillis() + seconds * 1_000L } ?: 0L
+                val completedAt = System.currentTimeMillis()
                 marketPreferences.edit()
+                    .putLong("last_price_fetch_attempt_at", completedAt)
+                    .putString("last_price_fetch_attempt_jst_date", PriceRefreshPolicy.japanDate(completedAt))
                     .putString("last_price_fetch_status", "failed")
                     .putString("last_price_fetch_error", error::class.java.simpleName)
+                    .putLong("last_price_fetch_retry_after_at", retryAfterAt)
                     .apply()
                 android.util.Log.w("CloudflareMarket", "価格一覧の取得に失敗しました", error)
             }
@@ -3610,7 +3670,8 @@ class DividendViewModel @JvmOverloads constructor(
                         ?: marketPreferences.getString("last_price_fetch_jst_date", null)
                     val priceFetchStatus = marketPreferences.getString("last_price_fetch_status", null)
                     if (MarketFetchPolicy.shouldFetchOnStartup(
-                            now, lastPriceAttemptAt, lastPriceAttemptJstDate, priceFetchStatus
+                            now, lastPriceAttemptAt, lastPriceAttemptJstDate, priceFetchStatus,
+                            marketPreferences.getLong("last_price_fetch_retry_after_at", 0L)
                         )) {
                         launch { refreshMarketPricesIfDue() }
                     }
@@ -3634,6 +3695,7 @@ class DividendViewModel @JvmOverloads constructor(
     }
 
     private companion object {
+        const val MAX_PRICE_RETRY_AFTER_SECONDS = 7L * 24L * 60L * 60L
         val CACHED_SECURITY_CODE = Regex("[A-Z0-9.\\-]{1,16}")
         const val IRBANK_DIVIDEND_CACHE_VERSION = 3
         const val QUOTE_CHANGE_CONTRACT_VERSION = 1

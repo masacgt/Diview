@@ -15,7 +15,10 @@ data class CachedNotificationPrice(
     val quoteDate: String,
     val fetchedAtMillis: Long,
     val marketDataDate: String?,
-    val generation: String?
+    val generation: String?,
+    val sourceLabel: String? = null,
+    val licenseNote: String? = null,
+    val processedBy: String? = null
 ) {
     constructor(price: Double, quoteDate: String) : this(price, quoteDate, 0L, null, null)
 }
@@ -43,7 +46,10 @@ class NotificationPriceCache(context: Context) {
                         marketDataDate = item.optString("market_data_date")
                             .takeIf { it != "null" && validDate(it) },
                         generation = item.optString("generation")
-                            .takeIf { it != "null" && validGeneration(it) }
+                            .takeIf { it != "null" && validGeneration(it) },
+                        sourceLabel = item.optString("source_label").takeIf { it != "null" && it.isNotBlank() },
+                        licenseNote = item.optString("license_note").takeIf { it != "null" && it.isNotBlank() },
+                        processedBy = item.optString("processed_by").takeIf { it != "null" && it.isNotBlank() }
                     )
                     val previous = get(code)
                     if (previous == null || quoteDate > previous.quoteDate ||
@@ -85,7 +91,10 @@ class NotificationPriceCache(context: Context) {
                     .put("quote_date", quote.quoteDate)
                     .put("fetched_at_millis", quote.fetchedAtMillis)
                     .put("market_data_date", quote.marketDataDate)
-                    .put("generation", quote.generation))
+                    .put("generation", quote.generation)
+                    .put("source_label", quote.sourceLabel ?: JSONObject.NULL)
+                    .put("license_note", quote.licenseNote ?: JSONObject.NULL)
+                    .put("processed_by", quote.processedBy ?: JSONObject.NULL))
             }
         }
         val editor = preferences.edit()
@@ -135,7 +144,10 @@ class NotificationPriceCache(context: Context) {
                         quoteDate = date,
                         fetchedAtMillis = fetchedAtMillis.coerceAtLeast(0L),
                         marketDataDate = marketDataDate?.takeIf(::validDate),
-                        generation = generation?.takeIf(::validGeneration)
+                        generation = generation?.takeIf(::validGeneration),
+                        sourceLabel = quote.sourceLabel,
+                        licenseNote = quote.licenseNote,
+                        processedBy = quote.processedBy
                     ))
                 }
             }

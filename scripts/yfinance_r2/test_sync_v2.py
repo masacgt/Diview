@@ -307,6 +307,154 @@ class IncomeAdviceFinancialUnitTests(TestCase):
         self.assertEqual(unknown_unit["fields"]["payout_ratio"], "unsupported")
 
 
+class IncomeAdvicePartitionFallbackTests(TestCase):
+    @staticmethod
+    def current_record():
+        return {
+            "price": {"currency": "JPY"},
+            "field_status": {
+                "dividend_history": "available",
+                "forecast_dividend": "available",
+            },
+            "dividend": {"next_fiscal_year_forecast_per_share": 60},
+        }
+
+    def test_missing_oldest_completed_year_is_read_when_it_completes_a_recurring_month(self):
+        missing_key = sync.object_key(
+            "securities", sync.safe_symbol("7203.T"), "dividends", "2023.json",
+        )
+        records = [{"date": "2023-03-15", "amount": 25.0}]
+
+        class Body:
+            def read(self):
+                return json.dumps({"records": records}).encode()
+
+        class Client:
+            def __init__(self):
+                self.keys = []
+
+            def get_object(self, **kwargs):
+                self.keys.append(kwargs["Key"])
+                if kwargs["Key"] == missing_key:
+                    return {"Body": Body()}
+                raise AssertionError(f"unexpected R2 read: {kwargs['Key']}")
+
+        client = Client()
+        candidate = sync.income_advice_candidate_with_missing_partition(
+            client, "bucket", "7203.T", "7203", "Toyota", self.current_record(),
+            [
+                {"date": "2024-03-15", "amount": 30.0},
+                {"date": "2025-09-15", "amount": 35.0},
+            ],
+            date(2026, 11, 16),
+            allow_missing_year_read=True,
+        )
+
+        self.assertEqual(candidate["observed_months"], [3])
+        self.assertEqual(client.keys, [missing_key])
+
+    def test_missing_oldest_year_expands_months_for_existing_candidate(self):
+        missing_key = sync.object_key(
+            "securities", sync.safe_symbol("7203.T"), "dividends", "2023.json",
+        )
+
+        class Body:
+            def read(self):
+                return json.dumps({"records": [{"date": "2023-06-15", "amount": 20.0}]}).encode()
+
+        class Client:
+            def __init__(self):
+                self.keys = []
+
+            def get_object(self, **kwargs):
+                self.keys.append(kwargs["Key"])
+                if kwargs["Key"] != missing_key:
+                    raise AssertionError("unexpected R2 read")
+                return {"Body": Body()}
+
+        client = Client()
+        candidate = sync.income_advice_candidate_with_missing_partition(
+            client, "bucket", "7203.T", "7203", "Toyota", self.current_record(),
+            [
+                {"date": "2024-03-15", "amount": 30.0},
+                {"date": "2024-06-15", "amount": 20.0},
+                {"date": "2025-03-15", "amount": 35.0},
+            ],
+            date(2026, 11, 16),
+            allow_missing_year_read=True,
+        )
+
+        self.assertEqual(candidate["observed_months"], [3, 6])
+        self.assertEqual(candidate["monthly_estimate_per_100_shares"], 3000.0)
+        self.assertEqual(client.keys, [missing_key])
+
+    def test_missing_year_is_not_read_without_recent_completed_year_dividends(self):
+        class Client:
+            def get_object(self, **kwargs):
+                raise AssertionError(f"unexpected R2 read: {kwargs['Key']}")
+
+        candidate = sync.income_advice_candidate_with_missing_partition(
+            Client(), "bucket", "7203.T", "7203", "Toyota", self.current_record(),
+            [{"date": "2026-03-15", "amount": 30.0}],
+            date(2026, 11, 16),
+            allow_missing_year_read=True,
+        )
+
+        self.assertIsNone(candidate)
+
+    def test_existing_oldest_year_is_not_read_again(self):
+        class Client:
+            def get_object(self, **kwargs):
+                raise AssertionError(f"unexpected R2 read: {kwargs['Key']}")
+
+        candidate = sync.income_advice_candidate_with_missing_partition(
+            Client(), "bucket", "7203.T", "7203", "Toyota", self.current_record(),
+            [
+                {"date": "2023-03-15", "amount": 25.0},
+                {"date": "2024-03-15", "amount": 30.0},
+                {"date": "2025-09-15", "amount": 35.0},
+            ],
+            date(2026, 11, 16),
+            allow_missing_year_read=True,
+        )
+
+        self.assertEqual(candidate["observed_months"], [3])
+
+    def test_missing_year_is_not_read_when_full_history_is_already_loaded(self):
+        class Client:
+            def get_object(self, **kwargs):
+                raise AssertionError(f"unexpected R2 read: {kwargs['Key']}")
+
+        candidate = sync.income_advice_candidate_with_missing_partition(
+            Client(), "bucket", "7203.T", "7203", "Toyota", self.current_record(),
+            [
+                {"date": "2024-03-15", "amount": 30.0},
+                {"date": "2025-09-15", "amount": 35.0},
+            ],
+            date(2026, 11, 16),
+            allow_missing_year_read=False,
+        )
+
+        self.assertIsNone(candidate)
+
+    def test_missing_year_read_failure_keeps_the_available_candidate(self):
+        class Client:
+            def get_object(self, **kwargs):
+                raise RuntimeError("temporary R2 read failure")
+
+        candidate = sync.income_advice_candidate_with_missing_partition(
+            Client(), "bucket", "7203.T", "7203", "Toyota", self.current_record(),
+            [
+                {"date": "2024-03-15", "amount": 30.0},
+                {"date": "2025-03-15", "amount": 35.0},
+            ],
+            date(2026, 11, 16),
+            allow_missing_year_read=True,
+        )
+
+        self.assertEqual(candidate["observed_months"], [3])
+
+
 class SyncPriceTests(TestCase):
     def test_daily_valuation_uses_close_and_latest_eps_or_book_value(self):
         self.assertEqual(

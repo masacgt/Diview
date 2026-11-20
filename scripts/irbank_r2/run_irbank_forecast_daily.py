@@ -17,7 +17,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_UNIVERSE = Path.home() / ".cache" / "irbank-security-catalog-20261102.json"
 
 
-def run(command: list[str], *, label: str, env: dict[str, str]) -> str:
+def run(command: list[str], *, label: str, env: dict[str, str], allow_nonzero: bool = False) -> str:
     print(f"Starting: {label}", flush=True)
     result = subprocess.run(command, cwd=SCRIPT_DIR.parents[1], env=env,
                             capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -25,7 +25,7 @@ def run(command: list[str], *, label: str, env: dict[str, str]) -> str:
         print(result.stdout.rstrip(), flush=True)
     if result.stderr:
         print(result.stderr.rstrip(), file=sys.stderr, flush=True)
-    if result.returncode != 0:
+    if result.returncode != 0 and not allow_nonzero:
         raise RuntimeError(f"{label} exited with status {result.returncode}")
     return result.stdout
 
@@ -105,7 +105,8 @@ def main() -> int:
             "--target-days", str(args.target_days),
             "--bucket", args.bucket,
             "--key", args.key,
-        ], label=f"forecast batch {batch_number}/{args.max_batches}", env=env)
+        ], label=f"forecast batch {batch_number}/{args.max_batches}", env=env,
+            allow_nonzero=True)
         reports = json_objects(output)
         report = next((row for row in reports if "api_requests_this_run_including_usage" in row), None)
         if report is None:
@@ -118,6 +119,8 @@ def main() -> int:
         total_forecast_updates += int(report.get("forecast_updates") or 0)
         total_forecast_cache_reuses += int(report.get("forecast_cache_reuses") or 0)
         total_failures += int(report.get("failures") or 0)
+        if int(report.get("failures") or 0) > 0:
+            break
         if used <= 1 or int(report.get("codes_touched") or 0) == 0:
             break
 
@@ -144,7 +147,7 @@ def main() -> int:
         "failures": total_failures,
         "coverage_audit": audit_report,
     }, ensure_ascii=False), flush=True)
-    return 0
+    return 1 if total_failures else 0
 
 
 if __name__ == "__main__":

@@ -7,10 +7,15 @@ function fixture() {
   const root = 'market/yfinance/v2';
   const heads = new Map([
     [`${root}/catalog/current.json`, { httpEtag: '"catalog-a"' }],
+    [`${root}/universe/current.json`, { httpEtag: '"universe-a"' }],
     [`${root}/financial_revision.json`, { httpEtag: '"financial-a"' }],
   ]);
   const documents = new Map([
     [`${root}/catalog/current.json`, { generation: '2026-10-20', items: [{ code: '7203', name: 'Toyota' }] }],
+    [`${root}/universe/current.json`, {
+      updated_at: '2026-10-20T00:00:00Z', security_code_sha256: 'a'.repeat(64),
+      securities: [{ code: '7203', symbol: '7203.T', status: 'active' }],
+    }],
     [`${root}/securities/7203.T/current.json`, {
       updated_at: new Date().toISOString(), price: { close: 100, date: '2026-10-20' },
       statistics: { trailingEps: 10 }, statistics_field_units: { trailingEps: 'jpy_per_share', payoutRatio: 'ratio' }, dividend: {},
@@ -102,10 +107,10 @@ function fixture() {
   return { root, heads, documents, state, env, run };
 }
 
-test('Cron configuration separates minute analysis batches from hourly maintenance', () => {
+test('Cron configuration keeps maintenance active while scheduled analysis is held for capacity approval', () => {
   const activeConfig = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
   const pausedConfig = readFileSync(new URL('../wrangler.cutover-paused.toml', import.meta.url), 'utf8');
-  assert.match(activeConfig, /crons\s*=\s*\["\* \* \* \* \*", "\*\/5 \* \* \* \*", "17 \* \* \* \*"\]/);
+  assert.match(activeConfig, /crons\s*=\s*\["\*\/5 \* \* \* \*", "17 \* \* \* \*"\]/);
   assert.match(pausedConfig, /crons\s*=\s*\[\]/);
   assert.doesNotMatch(activeConfig, /^\[limits\]/m);
   const source = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
@@ -217,7 +222,7 @@ test('health prefers a newer R2 analysis run over the migrated D1 run pointer', 
   assert.equal(f.state.d1Reads, 0);
 });
 
-test('scheduled analysis persists unwatched securities on either v2 source change, skips unchanged sources', async () => {
+test('scheduled analysis persists the active universe on any v2 source change and skips unchanged sources', async () => {
   const f = fixture();
   assert.equal((await f.run()).source_tag_advanced, true);
   assert.equal(f.state.snapshots.length, 1);
@@ -236,23 +241,52 @@ test('scheduled analysis persists unwatched securities on either v2 source chang
   assert.equal((await f.run()).source_tag_advanced, true);
   assert.equal(f.state.snapshots.length, 3);
   assert.equal(f.state.snapshots.at(-1).values.equity_ratio, 40);
+
+  f.documents.get(`${f.root}/universe/current.json`).securities.push({ code: '8306', symbol: '8306.T', status: 'active' });
+  f.documents.get(`${f.root}/universe/current.json`).security_code_sha256 = 'c'.repeat(64);
+  f.heads.set(`${f.root}/universe/current.json`, { httpEtag: '"universe-b"' });
+  const universeChangeRun = await f.run();
+  assert.equal(universeChangeRun.processed, 2);
+  assert.equal(f.state.snapshots.length, 5);
+  assert.ok(f.state.snapshots.some(snapshot => snapshot.code === '8306'));
   assert.equal((await f.run()).source_changed, false);
   assert.deepEqual(new Set(f.state.headKeys.filter(key => key.startsWith(f.root))), new Set([
-    `${f.root}/catalog/current.json`, `${f.root}/financial_revision.json`,
+    `${f.root}/catalog/current.json`, `${f.root}/universe/current.json`, `${f.root}/financial_revision.json`,
   ]));
   assert.equal(f.state.d1Reads, 0);
 });
 
-test('scheduled analysis resumes the next catalog batch and advances the source only after completion', async () => {
+test('scheduled analysis resumes active-universe batches and keeps prices null when v2 coverage is missing', async () => {
   const f = fixture();
   const codes = ['7203', ...Array.from({ length: 12 }, (_, index) => String(1000 + index))];
   const catalogKey = `${f.root}/catalog/current.json`;
+  const universeKey = `${f.root}/universe/current.json`;
   f.documents.set(catalogKey, {
     generation: '2026-11-06-multi-batch',
-    items: codes.map(code => ({ code, name: `Security ${code}` })),
+    items: codes.filter(code => code !== '1000').map(code => ({
+      code,
+      name: `Security ${code}`,
+    })),
+  });
+  f.documents.set(universeKey, {
+    updated_at: '2026-11-06T00:00:00Z',
+    security_code_sha256: 'b'.repeat(64),
+    securities: [
+      ...codes.map(code => ({ code, symbol: `${code}.T`, status: 'active' })),
+      { code: '9999', symbol: '9999.T', status: 'inactive' },
+    ],
   });
   f.heads.set(catalogKey, { httpEtag: '"catalog-multi-batch"' });
-  for (const code of codes.slice(1)) {
+  f.heads.set(universeKey, { httpEtag: '"universe-multi-batch"' });
+  f.documents.set('market/yfinance/latest_market_data.json', {
+    generated_at: '2026-10-20T06:00:00.000Z',
+    securities: [{
+      symbol: '1000.T',
+      trailingPE: 12,
+      latest_daily_price: { close: 100, date: '2026-10-20' },
+    }],
+  });
+  for (const code of codes.slice(2)) {
     f.documents.set(`${f.root}/securities/${code}.T/current.json`, {
       updated_at: new Date().toISOString(),
       price: { close: 100, date: '2026-10-20' },
@@ -267,6 +301,11 @@ test('scheduled analysis resumes the next catalog batch and advances the source 
   assert.equal(first.source_tag_advanced, false);
   assert.equal(first.next_index, 8);
   assert.equal(f.state.snapshots.length, 8);
+  const missingPriceSnapshot = f.state.snapshots.find(snapshot => snapshot.code === '1000');
+  assert.ok(missingPriceSnapshot, 'active R2 universe securities remain in the analysis batch without a catalog entry');
+  assert.equal(missingPriceSnapshot.market_date, null);
+  assert.equal(missingPriceSnapshot.freshness.market_stale, true);
+  assert.equal(f.state.snapshots.some(snapshot => snapshot.code === '9999'), false, 'inactive universe members are excluded');
   assert.equal(f.documents.get('analysis/v1/state/scheduled-job.json').status, 'running');
 
   const second = await f.run();

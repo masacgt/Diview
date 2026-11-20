@@ -3,12 +3,26 @@ package com.kurogane.dividend.notifications
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.Month
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.temporal.TemporalAdjusters
 import kotlin.math.floor
 
 /** Offline approximation of TSE cash-market sessions from Japanese public holidays. */
 object TseTradingCalendar {
     const val MAX_QUOTE_AGE_SESSIONS = 3
+    private val japanZone = ZoneId.of("Asia/Tokyo")
+    private val dailyCloseAvailableAfter = LocalTime.of(16, 0)
+
+    /** Selects the most recent completed TSE cash-market session for a daily quote request. */
+    fun latestCompletedSessionDate(now: ZonedDateTime = ZonedDateTime.now(japanZone)): LocalDate {
+        val japanNow = now.withZoneSameInstant(japanZone)
+        var date = japanNow.toLocalDate()
+        if (!isTradingSession(date) || japanNow.toLocalTime() < dailyCloseAvailableAfter) date = date.minusDays(1)
+        while (!isTradingSession(date)) date = date.minusDays(1)
+        return date
+    }
 
     fun isFreshQuote(quoteDate: String?, today: LocalDate): Boolean {
         val quotedOn = quoteDate?.let { runCatching { LocalDate.parse(it).takeIf { parsed -> parsed.toString() == it } }.getOrNull() }

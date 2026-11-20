@@ -1,6 +1,7 @@
 package com.kurogane.dividend.data
 
 import com.kurogane.dividend.BuildConfig
+import com.kurogane.dividend.notifications.TseTradingCalendar
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,6 +17,7 @@ import java.time.LocalDate
 
 private val defaultMarketConnectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection }
 private val sharedMarketRequests = MarketRequestSharing()
+private const val NOTIFICATION_PRICE_BATCH_SIZE = 10
 
 data class CloudflareSearchHit(
     val code: String,
@@ -187,13 +189,18 @@ data class CloudflareMarketQuote(
     val yieldRate: Double? = null,
     val yieldAsOf: String? = null,
     val yieldSource: String? = null,
-    val quoteDate: String? = null
+    val quoteDate: String? = null,
+    val sourceLabel: String? = null,
+    val licenseNote: String? = null,
+    val processedBy: String? = null
 )
 
 data class CloudflarePriceCatalogSnapshot(
     val quotes: Map<String, CloudflareMarketQuote>,
     val marketDataDate: String?,
-    val generation: String? = null
+    val generation: String? = null,
+    val isComplete: Boolean = true,
+    val retryAfterSeconds: Long? = null
 )
 
 data class CloudflareIncomeAdviceCandidate(
@@ -636,39 +643,69 @@ class CloudflareMarketRepository(
             root.optString("generation").takeIf(String::isNotBlank))
     }
 
-    /** Fetches only the requested Japanese quotes and pins every batch to one published catalog generation. */
-    suspend fun fetchTargetedPriceSnapshot(codes: Collection<String>): CloudflarePriceCatalogSnapshot = withContext(ioDispatcher) {
+    /** Fetches requested notification quotes from existing YFinance v2 security records only. */
+    suspend fun fetchTargetedPriceSnapshot(
+        codes: Collection<String>,
+        marketDataDate: LocalDate = TseTradingCalendar.latestCompletedSessionDate()
+    ): CloudflarePriceCatalogSnapshot = withContext(ioDispatcher) {
         val requestedCodes = codes.map(::normalizeJapaneseSecurityCode)
             .filter { it.matches(Regex("[A-Z0-9]{4,5}")) }
             .distinct()
         if (requestedCodes.isEmpty()) return@withContext CloudflarePriceCatalogSnapshot(emptyMap(), null)
 
+        val requestedDate = marketDataDate.toString()
         var generation: String? = null
-        var marketDataDate: String? = null
         val quotes = linkedMapOf<String, CloudflareMarketQuote>()
-        for (batch in requestedCodes.chunked(50)) {
-            val encodedCodes = URLEncoder.encode(batch.joinToString(","), Charsets.UTF_8.name())
-            val pin = if (generation == null || marketDataDate == null) "" else
-                "&run_id=${URLEncoder.encode(generation, Charsets.UTF_8.name())}" +
-                    "&market_data_date=${URLEncoder.encode(marketDataDate, Charsets.UTF_8.name())}"
-            val response = getJson("/api/v1/live-quotes?codes=$encodedCodes$pin", bypassHttpCache = true)
+        for (batch in requestedCodes.chunked(NOTIFICATION_PRICE_BATCH_SIZE)) {
+            val requestBody = JSONObject()
+                .put("codes", org.json.JSONArray(batch))
+                .put("market_data_date", requestedDate)
+            generation?.let { requestBody.put("run_id", it) }
+            val response = try {
+                postJson("/api/v1/notification-prices", requestBody)
+            } catch (error: MarketHttpException) {
+                val retryable = error.status == 408 || error.status == 425 || error.status == 429 || error.status in 500..599
+                if (generation == null || !retryable) throw error
+                return@withContext CloudflarePriceCatalogSnapshot(
+                    quotes = quotes.toMap(),
+                    marketDataDate = generation.take(10),
+                    generation = generation,
+                    isComplete = false,
+                    retryAfterSeconds = error.retryAfterSeconds
+                )
+            } catch (error: IOException) {
+                if (generation == null) throw error
+                return@withContext CloudflarePriceCatalogSnapshot(
+                    quotes = quotes.toMap(),
+                    marketDataDate = generation.take(10),
+                    generation = generation,
+                    isComplete = false
+                )
+            }
             val responseGeneration = response.optString("run_id").trim()
             val responseMarketDate = response.optString("market_data_date").trim()
             val validGeneration = responseGeneration.matches(Regex("\\d{4}-\\d{2}-\\d{2}(?:-[0-9a-f]{32})?"))
-            val validMarketDate = isIsoDate(responseMarketDate)
-            if (!response.optBoolean("complete", false) || !validGeneration || !validMarketDate) {
+                && isIsoDate(responseGeneration.take(10))
+            if (!response.optBoolean("complete", false) || !validGeneration || !isIsoDate(responseMarketDate)
+                || responseMarketDate > requestedDate || responseGeneration.take(10) != responseMarketDate) {
                 throw IOException("Cloudflareの銘柄別価格応答に有効な世代情報がありません")
             }
-            if (generation != null && (generation != responseGeneration || marketDataDate != responseMarketDate)) {
+            if (generation != null && generation != responseGeneration) {
                 throw IOException("Cloudflareの銘柄別価格応答でカタログ世代が一致しません")
             }
             generation = responseGeneration
-            marketDataDate = responseMarketDate
 
-            parseSearchQuotes(response, batch.toSet()).forEach { (code, quote) ->
-                val price = quote.price ?: return@forEach
-                val quoteDate = quote.quoteDate?.takeIf(::isIsoDate) ?: return@forEach
-                if (quoteDate > responseMarketDate) return@forEach
+            val items = response.optJSONArray("items")
+                ?: throw IOException("Cloudflareの銘柄別価格応答にitemsがありません")
+            for (index in 0 until items.length()) {
+                val item = items.optJSONObject(index) ?: continue
+                val code = normalizeJapaneseSecurityCode(item.optString("code"))
+                if (code !in batch) continue
+                val quote = parseSearchQuote(item) ?: continue
+                val price = quote.price?.takeIf { PortfolioMath.validMoney(it) && it > 0.0 } ?: continue
+                val quoteDate = quote.quoteDate?.takeIf(::isIsoDate) ?: continue
+                if (quoteDate > responseMarketDate) continue
+                val attribution = item.optJSONObject("attribution")
                 quotes[code] = CloudflareMarketQuote(
                     price = price,
                     annualDividendPerShare = quote.annualDividendPerShare,
@@ -677,11 +714,14 @@ class CloudflareMarketRepository(
                     yieldRate = quote.yieldRate,
                     yieldAsOf = quote.yieldAsOf,
                     yieldSource = quote.yieldSource,
-                    quoteDate = quoteDate
+                    quoteDate = quoteDate,
+                    sourceLabel = attribution?.stringOrNull("source_label"),
+                    licenseNote = attribution?.stringOrNull("license_note"),
+                    processedBy = attribution?.stringOrNull("processed_by")
                 )
             }
         }
-        CloudflarePriceCatalogSnapshot(quotes, marketDataDate, generation)
+        CloudflarePriceCatalogSnapshot(quotes, generation?.take(10), generation)
     }
 
     private fun isIsoDate(value: String): Boolean = runCatching {
@@ -962,6 +1002,36 @@ class CloudflareMarketRepository(
         return JSONObject(requests.read(key) { readJsonBody(path, bypassHttpCache) })
     }
 
+    private fun postJson(path: String, body: JSONObject): JSONObject {
+        val base = URI(baseUrl)
+        require(base.scheme == "https" && !base.host.isNullOrBlank() && base.userInfo == null && base.query == null && base.fragment == null) {
+            "Cloudflare API URLは認証情報を含まないHTTPSで設定してください"
+        }
+        val connection = connectionFactory(URL(baseUrl.trimEnd('/') + path))
+        try {
+            connection.requestMethod = "POST"
+            connection.instanceFollowRedirects = false
+            connection.connectTimeout = 8_000
+            connection.readTimeout = 12_000
+            connection.setRequestProperty("Accept", "application/json")
+            val bytes = body.toString().toByteArray(Charsets.UTF_8)
+            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            connection.setFixedLengthStreamingMode(bytes.size)
+            connection.doOutput = true
+            connection.outputStream.use { it.write(bytes) }
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                val retryAfterSeconds = connection.getHeaderField("Retry-After")
+                    ?.trim()?.toLongOrNull()?.takeIf { it > 0L }
+                throw MarketHttpException(status, retryAfterSeconds)
+            }
+            val response = connection.inputStream.use { it.readBoundedBytes(8 * 1024 * 1024).toString(Charsets.UTF_8) }
+            return JSONObject(response)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     private fun readJsonBody(path: String, bypassHttpCache: Boolean): String {
         val connection = connectionFactory(URL(baseUrl.trimEnd('/') + path))
         try {
@@ -1015,7 +1085,10 @@ private fun JSONObject.hasTrailingTwelveMonthPeriod(): Boolean =
 
 private fun JSONObject.hasDividendStatus(): Boolean = has("dividend_status") || has("is_no_dividend")
 
-class MarketHttpException(val status: Int) : IOException("Cloudflare API HTTP $status")
+class MarketHttpException(
+    val status: Int,
+    val retryAfterSeconds: Long? = null
+) : IOException("Cloudflare API HTTP $status")
 
 /** Refreshes at most once per Japan-local date and never more often than every twelve hours. */
 object PriceRefreshPolicy {

@@ -43,30 +43,35 @@ class MigrationWorkflowPolicyTests(unittest.TestCase):
         self.assertIn('if main_branch.get("protected") is not True:', preflight)
         self.assertIn("Protect the main branch before dispatching", preflight)
 
-    def test_migration_environment_must_explicitly_disable_admin_bypass(self) -> None:
+    def test_migration_environment_requires_single_operator_and_rejects_other_gates(self) -> None:
         marker = "          python - <<'PY'\n"
         start = self.workflow.index(marker)
         end = self.workflow.index("\n          PY\n", start)
         preflight_script = textwrap.dedent(self.workflow[start + len(marker):end])
         compile(preflight_script, str(WORKFLOW) + ":preflight", "exec")
+        self.assertNotIn('environment.get("can_admins_bypass")', preflight_script)
+        self.assertIn('protection_rules = environment.get("protection_rules")', preflight_script)
 
+        reviewer_rule = {
+            "type": "required_reviewers",
+            "reviewers": [{"type": "User", "reviewer": {"login": "reviewer"}}],
+            "prevent_self_review": True,
+        }
+        branch_policy_rule = {"type": "branch_policy"}
         cases = (
-            ("enabled", True, "Disable administrator bypass"),
-            ("missing", None, "Disable administrator bypass"),
-            ("disabled", False, None),
+            ("single-operator", [branch_policy_rule], None),
+            ("zero-wait-timer", [branch_policy_rule, {"type": "wait_timer", "wait_timer": 0}], None),
+            ("required-reviewer", [reviewer_rule], "must not require reviewers"),
+            ("positive-wait-timer", [{"type": "wait_timer", "wait_timer": 10}], "must not require reviewers"),
+            ("unknown-gate", [{"type": "custom_rule"}], "must not require reviewers"),
+            ("missing-rules", None, "Could not verify the migration environment protection rules"),
         )
-        for label, can_admins_bypass, expected_error in cases:
+        for label, protection_rules, expected_error in cases:
             with self.subTest(state=label):
                 environment = {
-                    "protection_rules": [{
-                        "type": "required_reviewers",
-                        "reviewers": [{"type": "User", "reviewer": {"login": "reviewer"}}],
-                        "prevent_self_review": True,
-                    }],
+                    "protection_rules": protection_rules,
                     "deployment_branch_policy": {"custom_branch_policies": True},
                 }
-                if can_admins_bypass is not None:
-                    environment["can_admins_bypass"] = can_admins_bypass
 
                 def fake_urlopen(request, timeout: int = 20) -> BytesIO:
                     url = request.full_url

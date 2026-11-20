@@ -799,7 +799,7 @@
 
 ## 2026-11-05 JST WorkerのD1参照確認
 
-- [x] Worker runtimeのD1 SQL参照を静的に確認した。根拠: `src/index.js`で市場データ、銘柄検索、分析定義・履歴、定期分析に使うD1 SQLは見つからない。定期分析はR2 catalog/definitions/inputとR2履歴を使う。
+- [x] Worker runtimeのD1 SQL参照を静的に確認した。根拠: `src/index.js`で市場データ、銘柄検索、分析定義・履歴、定期分析に使うD1 SQLは見つからない。定期分析はR2 active universe/catalog/definitions/inputとR2履歴を使う。
 - [x] 残るD1用途を確認した。`api_request_log`は空のDurable Object状態を一度だけ引き継ぐ読取、`support_feedback`は問い合わせ保存・管理読取・90日保持処理。health routeはD1 bindingの有無だけを返す。これらは市場データ読取とは別用途。
 - [ ] `api_request_log`のDO引継ぎ完了・有効window中カウンター保持と、旧ログの保持条件を本番切替前に確認する。Queue backlog未確認のため、運用ログや処理状態の整理・削除は保留する。
 
@@ -1926,3 +1926,536 @@ Reports（Git外、`C:\Codex\r2-d1-ownership-audit-20261106`）:
 
 - [x] With Microsoft OpenJDK 17.0.20.1, `:app:assembleDebug` succeeded and `:app:testDebugUnitTest --rerun-tasks` passed 277/277 with no failures, errors, or skips.
 - [x] Android 35 audit emulator instrumentation passed `AssetDataRefreshTest` 24/24, including `visibleAssetScreenAutomaticallyRetriesMissingJapanesePrice`. Installed the explicit Debug APK from this worktree using `adb install -r`; its SHA-256 matched emulator `base.apk` (`78FE1D70DD3B508FB1E62AE4150795EFE3FFB9FB871D2A501BE162ED08261F08`) and `MainActivity` resumed. No uninstall or physical-device install occurred.
+
+## 2026-11-19 JST offline notification price source
+
+- [x] App startup notification-price refresh batches up to 10 Japanese codes per `POST /api/v1/notification-prices`. The quote-data path reads existing YFinance v2 objects from R2, makes no per-security IRBANK request, and performs no D1 quote lookup or R2 write. If the Durable Object rate limiter is not initialized, its one-time counter handoff may read the active legacy `api_request_log` row. The app retains quote date/source on-device, uses a prior cached quote only within three completed TSE sessions, and skips notification when no eligible quote exists.
+- [x] Verification passed: Node 24.21.0 Worker suite 140/140, including the missing-v2/no-IRBANK fallback assertions; Android unit suite rerun with JDK 17.0.20.1 passed 282/282 (0 failures/errors/skips). `AssetDataRefreshTest` 24/24 and `NotificationDeliveryTest` 14/14 also passed on a task-specific Android 35 emulator with airplane mode enabled and no default network.
+- [x] JDK 17.0.20.1+1 build and emulator installation passed. Built APK SHA-256 `265C39145C91076C0F1D6D5585B085D06A47DB3F315FDF07E61EC1564C069C6A` matched installed `base.apk`. No physical-device installation occurred.
+- [x] Natural offline monitor completed for 08:30–09:32 JST with airplane mode on and no default network. Worker ran during the morning checkpoint, but no notification was posted and one price alert remained pending (`notifiedDate` empty, notification inactive). Cleanup succeeded and all four fixture preference stores were empty afterward. Sanitized report: `C:\Codex\r2-d1-ownership-audit-20261116T095823Z\android-offline-natural-delivery-20261119.txt`, SHA-256 `B0AC4062493C86B35D39EEC7CA7947D500708AAD08B3D164AF38182090F8A789`.
+- [x] The earlier morning monitor ended before the evening checkpoint, so that run alone did not confirm delivery. A later two-phase scheduled offline acceptance on the dedicated AVD verified morning detection followed by evening delivery; details are recorded below.
+- [ ] GitHub-hosted CI, production API readback and D1 usage before/after comparison remain open; the Worker route is not deployed. No production write, deployment, commit, or push occurred.
+## 2026-11-19 JST fresh Account Analytics usage check
+
+- [x] Read-only `scripts/d1_daily_usage.py --minimum-rows-remaining 100000` at `2026-11-19T00:40:15.742130Z` reported 4,141 account-wide rows read / 200 written for UTC date 2026-11-19, leaving 4,995,859 of the 5,000,000-row daily limit. Production D1 accounted for 4,126 reads / 197 writes; the other database accounted for 15 / 3. The 100,000-row reserve passed. This GraphQL Analytics read issued no D1 SQL and does not reconcile the historical 130-row query/account-usage discrepancy.
+
+## 2026-11-19 JST IRBANK forecast batch failure reporting
+
+- [x] Centralized the disclosure-page and forecast-document bounds used by the forecast fetcher and batch budget, and made per-security failures produce a nonzero batch/daily-runner exit after reporting and coverage audit. Evidence: regression tests cover ten-page termination, failure exit status, and stopping subsequent batches; all IRBANK script tests pass 37/37; `py_compile` and `git diff --check` pass.
+- [ ] After the fix is merged and the next normal IRBANK schedule runs, inspect its job conclusion, per-security failure counts, and R2 read-back separately. The 2026-11-18 run #31 remains evidence of the pre-fix defect (3,963 `NameError` failures; no forecast updates), not a live verification of this local change.
+
+## 2026-11-19 JST migration Environment single-operator policy
+
+- [x] Updated the migration workflow preflight to match the user's approved reviewerless Environment mode. It still requires protected `main`, disabled administrator bypass, and a deployment policy allowing only `main`; a required-reviewers rule now fails closed as a configuration mismatch. Regression coverage accepts the verified no-reviewer setup and rejects a reviewer-gated setup; the focused workflow suite passed 12/12 and all Cloudflare migration utility tests passed 91/91.
+- [x] Current GitHub Settings readback supersedes the historical reviewer-required checklist entries above: `d1-r2-migration` has administrator bypass off, `main` as its sole deployment branch, no required reviewers, and all five dedicated secrets present by name. The user chose single-operator operation; prior requests to add an independent reviewer are no longer active.
+- [x] Workflow validation is complete: `actionlint` 1.7.12 passed, the preflight Python compiled and passed the 12-case workflow policy suite, and all Cloudflare migration utility tests passed 91/91. No workflow dispatch, production migration, Cloudflare write, commit, or push has occurred.
+
+## 2026-11-19 JST latest production and hosted-workflow readback
+
+- [x] Account Analytics at `2026-11-19T01:12:05Z` reported 4,149 account-wide rows read / 201 written, leaving 4,995,851 of 5,000,000 reads. Production D1 was 4,126 / 197; the other database was 23 / 4. The 100,000-row reserve passed. This was a GraphQL Analytics query only; no D1 SQL ran.
+- [x] Workers Scripts Read still lists the production deployment created `2026-11-03T12:26:30Z`, version `4981c1e0-e337-4392-9f5b-909b52c5bc0c` at 100%. The deployed bundle remains the pre-candidate runtime; the notification-price endpoint and DO limiter are not live.
+- [x] GitHub PR #70 remains open and mergeable at head `ce2a8a7b6ec4e25b8aa09622a09f941b9ca60ce5`. Its three latest PR workflows (Cloudflare Worker CI, YFinance sync tests, Android release checks) succeeded on 2026-11-14; 19 check runs include five successes and 14 skipped matrix/manual jobs. The current local dirty changes are not part of that PR head and have no GitHub-hosted CI result.
+- [x] Latest scheduled IRBANK run `44420354832` (2026-11-18 23:23 UTC, main SHA `b3f3a7b75bc54d30ec468fc085922791f99e340b`) is a false-green: the Workflow concluded success, but its batch log reports 3,963 forecast failures, all `NameError` for the missing disclosure-page bound, zero forecast updates, and `coverage_complete=false`; it still published/read back the incomplete R2 pointer. The local fix and nonzero-failure propagation passed all 37 IRBANK refresh tests; the fix is not in `main`.
+- [x] Latest scheduled YFinance run `44391697151` (2026-11-18 20:30 UTC, same main SHA) failed. Its `v2-daily-sync` published generation `2026-11-18-e5051793bf404937a602f71bdb940825` with 4,420 successful and 156 failed records, catalog count 4,395; the logs also contain unavailable daily-close results. Treat this as a partial generation, not proof that every notification quote is fresh. The device cache continues to reject prices older than three TSE sessions.
+- [x] Current local verification: Worker suite 140/140, IRBANK refresh suite 37/37, migration utility suite 91/91, workflow policy suite 12/12, notification-price route suite 4/4, `actionlint` 1.7.12 and `git diff --check` passed.
+- [x] Scheduled offline delivery was subsequently verified with actual WorkManager periodic jobs in two clock-adjusted phases on the dedicated AVD; see the 2026-11-19 offline acceptance section below.
+- [ ] Production candidate API/R2 readback and D1 before/after comparison remain pending deployment approval; do not call the current D1-backed production API to avoid creating production D1 usage.
+
+## 2026-11-19 JST two-phase scheduled offline notification acceptance
+
+- [x] Added an opt-in Android instrumentation acceptance that uses the app's `NotificationScheduler` and actual WorkManager periodic jobs. With the network disconnected and a fresh local quote, the morning job queued one price alert for the same day's 17:30 JST checkpoint without posting; after advancing the disposable AVD clock, the evening job posted the Android notification, cleared the pending event, and recorded the notified date. Both focused instrumentation phases passed.
+- [x] Built with Temurin JDK 17.0.20.1+1. The app APK SHA-256 matched the installed AVD `base.apk`; the Android test APK SHA-256 also matched its installed copy. Only `emulator-5556` (`DiviewNotificationV2QA20261119`) was used; no physical device was touched.
+- [x] The test began with empty app preference stores and no active price notification, then cleared the four fixture stores and price jobs. The AVD clock was returned to automatic time, Wi-Fi/mobile-data settings were restored, and the app has no active notification or scheduled Worker job.
+- [x] The initial one-phase evening attempt did not post because it detected the alert at 17:30 and correctly deferred it to the next checkpoint. The test now models the policy's morning-detection/evening-delivery sequence.
+- [ ] This verifies local-cache offline scheduling with a synthetic quote on the disposable AVD. Production R2/API readback and the D1 before/after usage comparison remain unverified pending deployment approval.
+
+## 2026-11-19 UTC 02:09 Account Analytics refresh
+
+- [x] Read-only `scripts/d1_daily_usage.py --minimum-rows-remaining 100000` at `2026-11-19T02:09:43.276029Z` reported 8,291 account-wide rows read / 400 written, leaving 4,991,709 of the 5,000,000-row daily read limit. The 100,000-row reserve passed. This was an Account Analytics GraphQL query only; no D1 SQL ran, and the historical query-metadata discrepancy remains unresolved.
+
+## 2026-11-19 UTC 02:16 Queue readback
+
+- [x] Read-only Queue list and metrics GETs reported zero backlog for `diview-market-prices` and its DLQ. The primary Queue has one registered `diview-irbank` Worker producer and consumer; the DLQ has one consumer and no producer. Metrics are point-in-time and best-effort. No message was read or mutated.
+- [x] Workers Scripts Read matched deployment `7731b2d6-75e8-4b13-8985-9f47a4960f95`, version `4981c1e0-e337-4392-9f5b-909b52c5bc0c` at 100%. Its single `index.js` module SHA-256 is `262388d871931f4321bb3946937cd9faa2e72313297ef51ef60f4629bea4ad9a`; a marker scan found no `MARKET_PRICE_QUEUE` or `sendBatch` source reference and one queue handler ACK call. This establishes the currently deployed code path, while Queue metadata still lists the producer binding. The raw source was not saved.
+- [ ] Both Wrangler configurations retain the producer binding and ACKing consumers. Decide the binding's disposition in the reviewed cutover change, refresh both Queue metrics immediately before cutover, and preserve Queue resources and D1 run/batch rows until then.
+
+## 2026-11-19 UTC 02:26 local suite refresh
+
+- [x] Node 24.21.0 CI-exact `node --test test/*.test.mjs test/*.test.cjs` passed 140/140, including all four notification-price route tests. Python migration/workflow utilities passed 91/91 and IRBANK refresh scripts passed 37/37. These are local results; GitHub-hosted CI remains unverified for the unpushed worktree.
+
+## 2026-11-19 UTC 02:32–02:54 read-only cutover precheck
+
+- [x] Refreshed the D1 securities/R2 market audit: 3,960 rows, 40 queries, 65 codes missing from the R2 catalog and 553 name mismatches; no conflicts or writes. Evidence: `C:\Codex\r2-d1-ownership-audit-20261116T095823Z\market-audit-dryrun-20261119T023214Z.report.json`.
+- [x] Compared all 49,592 `financial_periods` rows with the IRBANK R2 source: 49,571 values match, 15 source periods are missing, two rows have category mismatches, and four rows differ in values. D1/R2 input hashes match the 2026-11-18 audit; no unit metadata is incomplete. Evidence: `financial-periods-source-dryrun-20261119T023340Z.report.json` (99,184 D1 rows read; zero writes/conflicts/verification failures).
+- [x] Confirmed `dividend_events` and `issuer_dividend_periods` each contain zero rows. The fresh schema inventory has 25 tables and two triggers; its only hashed name matches Cloudflare-managed `_cf_KV`. Evidence: the two `*-source-dryrun-20261119T0244*.report.json` files and `d1-schema-audit-cutover-precheck-20261119T024649Z.report.json`.
+- [x] Refreshed operational state: `backend_state` has zero rows; `scheduled_run_log` has 969 analysis rows, all `running` with no completion time and processed/failed totals of zero; price refresh has two run records (`partial` and `running`) and 2,080 batches (2,020 complete, 60 failed). Preserve these rows and queues; do not classify running runs as completed history. Evidence: the four `operational-*-20261119T0248*.report.json` / `operational-*-20261119T0249*.report.json` reports.
+- [x] A fresh `analysis-current` dry-run read 248 rows and planned 248 R2 objects, with zero conflicts and writes. Evidence: `analysis-current-cutover-precheck-20261119T025221Z.report.json`.
+- [x] Intermediate Account Analytics snapshots: 14,325 reads at `02:33:41Z`, then 115,571 at `02:54:24Z`. The apparent 1,332-row gap against phase metadata was later reduced to 14 after Analytics caught up; see the 03:04 reconciliation below. Evidence: phase reports above and `d1-usage-after-readonly-migration-audits-20261119T025424Z.sanitized.json`.
+- [x] Rechecked the market and financial discrepancies with bounded read-only queries. All 65 D1-only catalog codes exist in the R2 issuer-dividend index; 553 names differ, including 18 formatting-only differences and 535 string-content differences. The 27 annual rows for the two previously identified financial references reproduce all 4 value differences, 2 category mismatches, and 15 periods without an IRBANK source match. Sanitized evidence is recorded in the 03:19 and 03:23 reports below; raw codes, names, and financial values were not retained.
+- [x] Price-catalog scope decided: do not promote the 65 D1 codes missing from YFinance v2 into the YFinance price catalog. Security search may return a matching R2 IRBANK master record with null price/yield; notification prices still come only from existing YFinance v2 objects. Evidence: `market-read-routes.test.mjs` asserts an IRBANK-master-only search result has null price/yield with D1 disabled, and `notification-prices.test.mjs` asserts a missing v2 quote is omitted without an IRBANK R2 read or external fetch.
+- [x] Read back the current R2 IRBANK master catalog: all 3,960 normalized D1 security codes are present with names, including the 65 codes absent from YFinance v2. R2 master SHA-256 `325443a6366f23416b408be5b688168b2843182da15998dca30a0166e3d8624d`; LastModified `2026-10-10T06:07:47Z`. This establishes catalog coverage, not current deployed API behavior; the production Worker read-back remains pending.
+- [ ] Do not copy these codes or overwrite R2 names from D1. Keep the four value-difference rows, two category-mismatch rows, and 15 unmatched period rows out of serving data until provenance is resolved; preserve them only in the reviewed migration archive. Keep the 969 unfinished analysis runs and price-refresh logs until their status, retention, and recovery requirements are settled.
+- [ ] Candidate Worker deployment/API read-back, post-deployment D1 usage comparison, GitHub-hosted CI, and pre-cutover Queue recheck remain pending. No production D1/R2 write, Worker deployment, workflow dispatch, commit, or push occurred.
+
+## 2026-11-19 UTC 02:59–03:02 analysis-history and scheduled-run recheck
+
+- [x] Refreshed `analysis-history`: D1 contains 47,350 rows, all 47,350 planned as R2 objects, with zero conflicts or writes. This is 664 more rows than the 46,686-row report from 2026-11-18; newest `observed_at` is `2026-11-19T02:18:07.027Z`. Evidence: `analysis-history-cutover-precheck-20261119T025956Z.report.json`.
+- [x] `scheduled-runs` read all 969 rows but planned zero completed summaries; preserve them as unfinished state. Evidence: `scheduled-runs-cutover-precheck-20261119T030220Z.report.json` (zero R2 writes).
+- [x] Account Analytics preflight at `03:02:21Z` reported 159,819 reads / 4,840,181 remaining. This was an intermediate snapshot; a later refresh after the scheduled-run dry-run brought the cumulative account delta within 14 rows of migration-query metadata.
+- [ ] Backfill the history only after reviewing the active writer and final-delta procedure; production history is still in D1 and the current dry-run plans all rows for R2.
+
+## 2026-11-19 UTC 03:04 account-usage reconciliation
+
+- [x] Account Analytics at `03:04:26Z` reported 167,290 reads / 4,832,710 remaining. Compared with the `02:32:14Z` preflight before the read-only migration phases (12,419), the increase was 154,871; summed D1 `meta.rows_read` was 154,857, a 14-row difference. This supersedes intermediate snapshots that lagged. Evidence: `d1-usage-after-scheduled-run-audit-20261119T030426Z.sanitized.json` and the phase reports above. The Analytics response also counted 599 account-wide written rows; none of this task's dry-run phases wrote D1 or R2.
+- [ ] Repeat the comparison after the approved production cutover; the local dry-run reconciliation does not establish post-deployment D1 usage.
+
+## 2026-11-19 UTC 03:19–03:25 targeted discrepancy recheck
+
+- [x] A bounded `financial_periods` query for the two references from the earlier identity review returned 27 annual rows with `meta.rows_read=85`; two R2 IRBANK overview objects were read. The current comparison found 4 value-difference rows, 2 annual-to-quarterly/semiannual category mismatches, 15 rows without an IRBANK period match, and 6 matches. Unit-aware comparison recorded 42 `million_jpy->jpy` conversions. Report `C:\Codex\r2-d1-ownership-audit-20261116T095823Z\financial-period-targeted-recheck-20261119.sanitized.json`, SHA-256 `560B9976467447A5F4FFC3E30D69E7626DBD473FF417734AEF57EA98156911A5`. It contains record fingerprints and field names only; no source values, codes, or names. D1/R2 writes: zero.
+- [x] A bounded `securities` query returned 3,960 rows with `meta.rows_read=3,960`; the current YFinance catalog has 4,395 codes and its issuer-dividend index has 4,023. The 65 D1 codes absent from the catalog all exist in the issuer-dividend index. The 553 NFKC-normalized name differences comprise 18 formatting-only, 187 both-CJK, 324 both-non-CJK, 21 D1-CJK/R2-non-CJK, and 3 D1-non-CJK/R2-CJK differences. Report `C:\Codex\r2-d1-ownership-audit-20261116T095823Z\market-universe-targeted-recheck-20261119.sanitized.json`, SHA-256 `9FDD4FAF4F24AE0F8B7F46928EE300C6ADFFD442EEA2755A800BEE656D7870E6`. It stores only code fingerprints and aggregate categories; no raw codes or names. D1/R2 writes: zero.
+- [x] Account Analytics at `03:25:21Z` reported 175,488 account-wide rows read and 4,824,512 remaining. Compared with `03:15:39Z` (167,290), the increase was 8,198; these two targeted SQL queries account for 4,045 by their D1 metadata. The remaining 4,153 rows are not attributable from account-wide Analytics. The `03:23:45Z` snapshot was intermediate; its next interval increased by 3,962, matching the 3,960-row securities query within two rows. No D1 writes were issued by these checks. This does not replace the post-cutover usage comparison.
+- [x] The 65 codes absent from YFinance v2 stay out of its price catalog; R2 IRBANK master data is a separate search-only source and does not supply notification prices. Current R2 master read-back confirms all 65 with names (catalog SHA-256 `325443a6366f23416b408be5b688168b2843182da15998dca30a0166e3d8624d`, LastModified `2026-10-10T06:07:47Z`); production API read-back remains pending.
+- [ ] Keep all 21 anomalous financial rows out of serving objects until source provenance is resolved; archive preservation is not production migration approval.
+
+## 2026-11-19 JST active-universe scheduled analysis behavior
+
+- [x] Scheduled analysis now uses every `status=active` security in R2 `universe/current.json`, including securities absent from the price catalog. It uses v2 current/catalog prices when available and keeps price null when neither exists, without falling back to the legacy snapshot; universe changes also invalidate the analysis source tag. The read-only R2 snapshot contained 4,576 active securities, 4,395 catalog items, and 181 active codes absent from the catalog (156 had no per-security current object; 25 had no valid positive quote). Evidence: Worker regression tests cover universe expansion, inactive exclusion, and a catalog/current-missing active security with a seeded stale legacy quote; `node --check src/index.js` and the full Worker suite passed 140/140. Sanitized coverage report: `C:\Codex\r2-d1-ownership-audit-20261116T095823Z\active-universe-price-coverage-20261119.sanitized.json`, SHA-256 `1BEF291886659CC60A1C43F3F1FD125526B905957F8696F3F267D8A4E1F5938D`.
+- [ ] Production Worker remains on the prior deployed version; this local behavior still needs the approved deployment and post-deployment R2/API read-back.
+
+## 2026-11-19 JST scheduled analysis Cron hold
+
+- [x] The normal candidate `wrangler.toml` now retains only `*/5 * * * *` for R2 history retention and `17 * * * *` for feedback retry/cleanup. The every-minute market-analysis Cron is held until Workers Paid entitlement and controlled CPU measurement are confirmed. `wrangler.cutover-paused.toml` remains empty-Cron for the short final D1 fence/snapshot window.
+- [x] Regression coverage asserts both schedules; Node 22.23.5 Worker suite passed 140/140. Wrangler 4.136.1 `deploy --dry-run` passed for both configs; no upload, schedule change, or production invocation occurred.
+- [ ] Production still runs its existing hourly Cron until an approved cutover. Restore candidate analysis only after the plan entitlement and controlled measurement gates pass.
+
+## 2026-11-19 UTC 04:44 production read-only preflight
+
+- [x] Account Analytics at `2026-11-19T04:44:33.705230Z` reported 179,568 account-wide reads / 864 writes and 4,820,432 reads remaining. Production D1 was 179,457 / 793; two other databases were 97 / 11 and 14 / 60. The 100,000-row reserve passed. This was GraphQL Analytics only; no D1 SQL ran.
+- [x] Workers Scripts Read GETs around 04:45 UTC confirmed deployment `7731b2d6-75e8-4b13-8985-9f47a4960f95`, version `4981c1e0-e337-4392-9f5b-909b52c5bc0c` at 100%, production Cron `17 * * * *`, and `usage_model=standard`; the settings response exposes no numeric CPU limit. Queue GET metrics showed zero backlog for the primary price Queue and its DLQ. No Worker invocation, D1 SQL, R2/Queue mutation, or deployment occurred.
+- [ ] Candidate route, R2/API readback, and D1 before/after usage comparison remain pending deployment approval. Keep candidate analysis Cron disabled until Workers Paid entitlement and controlled CPU measurement are confirmed.
+
+## 2026-11-19 UTC 05:52–06:01 read-only catalog and quote coverage check
+
+- [x] Account Analytics preflight at `05:52:17Z` reported 183,710 account-wide reads and 4,816,290 remaining. One read-only `SELECT security_code_display FROM securities ORDER BY rowid` returned 3,960 rows (`meta.rows_read=3,960`, `rows_written=0`). Current R2 `market/irbank/v1/catalog.json` contains all 3,960 normalized D1 codes with names; all 65 D1 codes absent from YFinance v2 are included. The R2 catalog SHA-256 is `325443a6366f23416b408be5b688168b2843182da15998dca30a0166e3d8624d`, LastModified `2026-10-10T06:07:47Z`. No D1 or R2 writes occurred.
+- [x] Account Analytics at `05:58:22Z` reported 187,670 reads / 4,812,330 remaining, an increase of 3,960 from the `05:52:17Z` preflight. This matches the first D1 query's `meta.rows_read=3,960`; the `05:54:21Z` snapshot was intermediate and had not yet reflected that query.
+- [x] A second read-only `securities` SELECT returned 3,960 codes (`meta.rows_read=3,960`, `rows_written=0`). R2 GETs for the 65 D1 codes absent from YFinance v2 found 4 `current.json` objects with a valid positive price and nonfuture date, 40 missing objects, and 21 objects without a valid positive price/date. No external provider calls or D1/R2 writes occurred. This supports the v2-only rule: use the four available v2 prices and omit the other 61 from price responses.
+- [x] Account Analytics at `06:01:30Z` reported 191,630 reads / 4,808,370 remaining, a 3,960-row increase from `05:58:22Z` that matches the second SELECT's `meta.rows_read=3,960`. The `05:59:41Z` snapshot was intermediate; both SELECTs now reconcile with the account-level Analytics deltas. Production API read-back and post-cutover usage comparison remain pending.
+
+## 2026-11-19 JST offline notification emulator verification
+
+- [x] With JDK 17.0.20.1, built `:app:assembleDebug :app:assembleDebugAndroidTest` from this candidate worktree and installed only to `emulator-5556` (`DiviewNotificationV2QA20261119`). `NotificationDeliveryTest#offlineNotificationUsesOnlyTheLocallySavedPriceCatalog` and `#offlineCachedPriceAlertPostsThroughAndroidNotificationManager` passed (2/2). The second test asserted a real Android notification using a test-seeded local quote; the test harness uses a unique preference prefix, and the app was updated in place without uninstall or app-data clear. Built APK SHA-256 `192F297E86E601E73E2888D78D5A98A717F71C630260EF55E7495561B92B1FE5` matched the emulator's installed `base.apk`. No physical device, D1, R2, or external price provider was used by these tests; production quote freshness and deployed API behavior remain separate gates.
+
+## 2026-11-19 JST migration Environment preflight API check
+
+- [x] GitHub's documented Environment response includes `protection_rules` and `deployment_branch_policy`, but not `can_admins_bypass`; the candidate preflight now validates the API-visible gates and fails closed on missing/malformed rules. Focused migration-workflow tests passed 12/12 and `git diff --check` passed. See [Get an environment](https://docs.github.com/en/rest/deployments/environments#get-an-environment).
+- [ ] Verify in GitHub Settings that administrator bypass is disabled for `d1-r2-migration`; the browser is currently signed out and the API cannot read this setting. Do not dispatch the migration workflow before that manual check and final approval.
+
+## 2026-11-19 UTC 07:39 migration read-guard review
+
+- [x] Ported the current migration CLI's delayed Account Analytics postflight reconciliation and scheduled-run query-plan guard into the isolated PR-based candidate. The migration now returns nonzero unless same-day target-D1 usage reconciles with D1 `meta.rows_read`, and `scheduled-runs` stops unless `idx_scheduled_run_log_completed_started_id` is selected. The separate migration `0009` is included but is not applied by the CLI or workflow. Focused migration, usage, and Workflow tests passed 116/116; `git diff --check` passed.
+- [ ] Apply migration `0009` only as a separately reviewed D1 schema-write operation, then read back its definition and query plan. The production index was absent in the last recorded schema audit.
+- [ ] Keep row-migration phases fail-closed until the account-level usage and query-metadata discrepancy is resolved; this local test run made no production D1 SQL, R2 writes, deploy, or workflow dispatch.
+
+## 2026-11-19 UTC 07:46–08:03 candidate-tree local verification
+
+- [x] In the isolated PR-based candidate, Node 24.21.0 `node --test test/*.test.mjs test/*.test.cjs` passed 140/140; migration CLI/daily-usage/Workflow Python tests passed 116/116; IRBANK refresh tests passed 23/23.
+- [x] With JDK 17.0.20.1, `:app:testDebugUnitTest --rerun-tasks` passed 282/282 and both `:app:assembleDebug` and `:app:assembleDebugAndroidTest` succeeded. `:app:connectedDebugAndroidTest` on API 35 `emulator-5556` completed with 141 passed, 9 skipped, and zero failures/errors. All 14 `NotificationDeliveryTest` cases passed, including the local-cache-only notification and Android notification-post assertions. The 8 production R2 acceptance tests were skipped because `allowLiveR2NotificationAcceptance` was not enabled; one live-read test also skipped with the AVD offline. The built APK SHA-256 `192F297E86E601E73E2888D78D5A98A717F71C630260EF55E7495561B92B1FE5` matched the installed `base.apk`; `MainActivity` launched and airplane mode remained enabled. The connected physical device was not used.
+- [ ] GitHub-hosted CI remains unverified: PR #70 is still at `ce2a8a7b6ec4e25b8aa09622a09f941b9ca60ce5`, while these candidate changes are local and uncommitted. Production API read-back, post-cutover D1 usage comparison, migration dispatch, and Worker deployment remain pending their respective review/approval gates.
+
+## 2026-11-19 UTC 08:08 Analytics discrepancy follow-up
+
+- [x] A later Account Analytics snapshot at `2026-11-19T17:08:22+09:00` showed 203,693 reads for the target D1 and 203,860 account-wide. The target rose by 8,104 from the earlier 195,589 snapshot, but concurrent production traffic prevents attributing that increase to the 3,960-row dry-run. D1 Insights showed a 3,960-row, one-run securities aggregate in its 2-hour window; Cloudflare documents Insights as sampled, so it is corroborative only. Per-query `meta.rows_read` remains the precise query metric. No SQL was rerun and the migration guard remains fail-closed. References: [D1 metrics](https://developers.cloudflare.com/d1/observability/metrics-analytics/) and [expensive query insights](https://developers.cloudflare.com/d1/observability/find-expensive-queries/).
+- [ ] After the user's reported reauthentication, the GitHub settings tab still displayed Sign in/Sign up. Current Environment and `main` branch-protection settings could not be read back; no settings changed and migration dispatch remains held.
+
+## 2026-11-19 JST natural offline WorkManager monitor closed
+
+- [x] The monitor recorded 120 checks through `09:32:21+09:00` with airplane mode enabled and no default network. The alert remained pending, `natural_delivery_confirmed=False`, and morning/evening WorkManager jobs stayed ENQUEUED; no notification was delivered. PID file `monitor-offline-natural-delivery-20261119.pid` named PID 4436, which is no longer running. The report records `cleanup_exit=0` and all four test preference stores empty. Evidence: `C:\Codex\r2-d1-ownership-audit-20261116T095823Z\android-offline-natural-delivery-20261119.txt`.
+- [x] The monitor ended at 09:32 JST, before the policy's 17:30 delivery checkpoint. Its pending alert and no-post result were expected for that observation window; the later two-phase acceptance below verifies the scheduled delivery.
+- [x] On a new API 35 AVD `DiviewNotificationAcceptance20261119`, with `Active default network: none`, the exact scheduled morning WorkManager test queued a locally seeded price alert for 17:30 JST (`OK (1 test)`, 86.721 s), then the exact scheduled evening test posted the Android notification from that local cache offline (`OK (1 test)`, 86.25 s). JDK 17.0.20.1 was selected; candidate app/test APK SHA-256 values `192F297E86E601E73E2888D78D5A98A717F71C630260EF55E7495561B92B1FE5` and `FD8A63C60B8C402924A45DE6A2D4776D67ECDF3C2687576421C6B941D6FC6599` matched the installed APKs. The tests use a synthetic fixture, and their cleanup clears the fixture and notification. Logs: `C:\Codex\Diview-notification-acceptance-avd-20261119\scheduled-morning-test-attempt-2.txt` and `C:\Codex\Diview-notification-acceptance-avd-20261119\scheduled-evening-test.txt`. No production R2/Worker/API or D1 was used.
+- [ ] Production quote freshness, deployed Worker route behavior, and post-cutover D1 usage remain unverified; this offline test uses a synthetic quote and local candidate build.
+
+## 2026-11-19 UTC 09:10 D1 usage preflight
+
+- [x] Read-only Account Analytics at `2026-11-19T09:10:56.828426Z` reported 208,002 account-wide D1 rows read / 1,629 written, with 4,791,998 reads remaining. The target database was 207,819 reads / 1,549 writes; the 100,000-row reserve passed. This used the GraphQL Analytics endpoint only; no D1 SQL, R2 write, or deployment occurred. The prior `meta.rows_read` discrepancy remains unresolved because this snapshot cannot attribute usage to a particular request or Worker.
+
+## 2026-11-19 production Worker source readback
+
+- [x] Workers Scripts Read GET confirmed deployment `7731b2d6-75e8-4b13-8985-9f47a4960f95`, version `4981c1e0-e337-4392-9f5b-909b52c5bc0c` at 100%, created 2026-11-03. The 121,118-character source response SHA-256 was `DE86D1B357836E6ECF984F94F1B42913D240BDF218AFC1DE67FC22815F486E81`; it contains no `notification-prices` route or v2 per-security R2 key marker and does contain `api_request_log` and `env.DB.prepare`. No Worker invocation, D1 SQL, R2 mutation, or deployment occurred. The v2-only notification route remains candidate-only.
+- [ ] Keep production behavior pending until the reviewed candidate is deployed and its API/R2 readback plus D1 before/after usage are verified.
+
+## 2026-11-19 UTC 09:24 Workers Observability scheduled Cron dry query
+
+- [x] Cloudflare Workers Observability Telemetry API completed a `dry=true`, `view=invocations` query for production service `diview-irbank` and trigger `17 * * * *`. The window `2026-11-18T07:36:00Z`–`2026-11-19T09:24:14Z` returned 26 invocation groups and 26 scheduled events; all outcomes were `exceededCpu`, with maximum CPU time 2,050 ms and wall time 48,988 ms. The API reported zero errors and `run.dry=true`; only aggregate counts were printed, with no raw log messages or invocation IDs saved. This confirms the production Cron failure is ongoing; it does not establish the account's exact CPU entitlement.
+- [ ] Confirm the current Workers Paid entitlement and run the controlled candidate CPU measurement before restoring the analysis Cron.
+
+## 2026-11-19 UTC 09:27 Workers plan and CPU-limit readback
+
+- [x] Billing Read GET `/accounts/{account_id}/subscriptions` returned only `Teams Free Base` and `R2 Paid`; no Workers Paid subscription was present. Workers Scripts Read GET for `diview-irbank/settings` returned `usage_model=standard` but no script-level `limits.cpu_ms`. These readbacks explain neither the recurring 2,050 ms `exceededCpu` event nor establish the effective Cron CPU entitlement; no setting was changed.
+- [ ] Reconcile the Standard usage-model field with the Free Base subscription and the observed CPU termination. Keep analysis Cron disabled until the actual entitlement and a controlled candidate CPU run are confirmed.
+
+## 2026-11-19 UTC 09:36 active Worker runtime and Queue readback
+
+- [x] A fresh Workers Deployments GET confirmed version `4981c1e0-e337-4392-9f5b-909b52c5bc0c` still receives 100% traffic (deployment created `2026-11-03T12:26:30Z`). Its version-detail GET exposes runtime fields `compatibility_date` and `usage_model=standard`, with no `limits.cpu_ms`; the Workers account-settings GET also reports `default_usage_model=standard`. Together with the 09:27 Billing subscription readback (Teams Free Base and R2 Paid only), this still does not reveal the effective CPU ceiling behind `exceededCpu` at 2,050 ms. No settings changed.
+- [x] Queue Read GET at `2026-11-19T09:36:25Z` found exactly two account queues, `diview-market-prices` and `diview-market-prices-dlq`. Both metrics GETs succeeded with backlog count 0, backlog bytes 0, and oldest-message timestamp 0. Queue metrics are best-effort point-in-time values; no messages were read or changed. Reference: https://developers.cloudflare.com/api/resources/queues/methods/get_metrics/.
+- [ ] Recheck Queue and DLQ metrics immediately before cutover; keep the CPU entitlement and controlled Cron measurement gate unresolved.
+
+## 2026-11-19 UTC 09:37 production Cron schedule readback
+
+- [x] Workers Scripts Read GET at `2026-11-19T09:37:48Z` confirmed production `diview-irbank` has one active schedule, `17 * * * *`, last modified `2026-10-14T01:05:15.578999Z`. No schedule was changed. This aligns with the 26 recent scheduled `exceededCpu` events; production Cron remains separate from the candidate's held analysis schedule.
+- [ ] Include this active hourly trigger in the approved cutover fence and restore procedure; do not enable candidate analysis Cron before the entitlement and controlled CPU gates pass.
+
+## 2026-11-19 UTC 09:46 fresh usage and GitHub gate check
+
+- [x] `python scripts/d1_daily_usage.py --minimum-rows-remaining 100000` queried Account Analytics only at `2026-11-19T09:46:14Z`: account-wide 212,136 rows read / 1,827 written, 4,787,864 reads remaining; `diview-irbank` 211,945 reads / 1,746 writes. The 100,000-row reserve passed. No D1 SQL or R2 write occurred.
+- [x] The reviewerless migration Environment contract test passed 12/12 and `git diff --check` passed for the workflow/migration files. GitHub MCP confirmed PR #70 is open at head `ce2a8a7b6ec4e25b8aa09622a09f941b9ca60ce5` against main `b3f3a7b75bc54d30ec468fc085922791f99e340b`; Worker CI run 43654716779 on that head passed. These results do not cover the newer uncommitted candidate changes.
+- [x] GitHub branch metadata now reports `main` as protected. The detailed branch-protection GET returned 403, the connected GitHub API rejected the Environment settings endpoint, and the Chrome Settings tab currently renders the signed-out 404 page. No GitHub setting changed.
+- [ ] Before dispatch, regain an authenticated Settings readback for the exact `main` rule and migration Environment state. After a separate explicit commit/push instruction, update PR #70 with the current candidate and verify hosted CI on its new head.
+
+## 2026-11-19 UTC 09:50 candidate regression re-run and D1 callsite scan
+
+- [x] On the current migration candidate, Node Worker tests passed 140/140; migration CLI, Account Analytics usage, and Workflow tests passed 116/116; `scripts/irbank_r2/test_refresh_v2_dividends.py` passed 23/23. These are local tests and do not establish hosted CI or production behavior.
+- [x] A full `src/` D1-call scan found database calls only for support-feedback storage/email retry and the bounded legacy rate-limit counter import; health reports whether the binding exists. No candidate market/search/analysis/definition route uses D1. The legacy counter `SELECT` is allowed only for a new DO bucket before its configured import deadline; tests cover cutoff and fail-closed timestamp validation.
+- [ ] Production source is still the pre-migration Worker. Verify these zero-market-D1 claims with deployed source/API readback and post-cutover Account Analytics; keep the unreconciled 3,960-row audit gate closed and do not repeat its D1 SQL.
+
+## 2026-11-19 UTC 09:56 current R2 income-advice readback
+
+- [x] Two direct R2 `GetObject` calls read `market/yfinance/v2/catalog/current.json` and `market/yfinance/v2/derived/income_advice/current.json`. Both are generation `2026-11-18-e5051793bf404937a602f71bdb940825`, market date `2026-11-18`; the catalog has 4,395 unique items and income advice has 3,200 unique items. The advice object has no duplicate codes, catalog omissions, or source-generation mismatches, and all 3,200 records exactly match their catalog-embedded advice. No Worker API, D1 SQL, R2 write, or external provider call occurred. Catalog SHA-256 `3735197d4eac148375dc9a101797112c3170c9916d4e45c2be5680949ddcb6d2`; advice SHA-256 `adb5f7dfc935048821f14487d41a51b5f45146bb7372a9c9e5683feec49f6b7f`.
+- Evidence: `C:\Codex\r2-d1-ownership-audit-20261116T095823Z\income-advice-r2-current-readback-20261119T0956Z.sanitized.json`, SHA-256 `0bc7ab60d39555399e9e433be01579e22d1d7d72f5e663c735d438595a378e20`.
+- [x] Read-only income-advice recomputation has now been completed from both the canonical worktree source and the migration-candidate source. Both runs used the existing generation `2026-11-18-e5051793bf404937a602f71bdb940825`, blocked external YFinance calls, guarded R2 against writes, and confirmed the catalog, advice object, and financial-revision pointer stayed unchanged. No D1 SQL, Worker API, R2 write, or external provider fetch occurred.
+- [ ] Fresh production API parity remains unverified. The current deployed Worker is still the D1-backed version; do not call that route until the candidate is deployed and production D1 usage can be measured before and after.
+
+## 2026-11-19 UTC 10:42 read-only income-advice recomputation
+
+- [x] Canonical worktree recomputation completed with 4,395 catalog rows: 3,200 published candidates and 3,223 recomputed candidates; all published candidates remain present and 23 additional candidates are `status=partial` (22 equity, 1 listed security). No read failures or blocked R2 writes; the current catalog, advice object, and revision marker were byte-for-byte unchanged. Report: `C:\Codex\r2-d1-ownership-audit-20261116T095823Z\income-advice-recomputed-20261119T1002Z-readonly.json`, SHA-256 `6DDD3D3BEBBCB99645FB393327530FC15D2C5B3048A25C822F93C4AD42B23B33`.
+- [x] Migration-candidate recomputation at HEAD `ce2a8a7b6ec4e25b8aa09622a09f941b9ca60ce5` produced the same 3,223 candidates; all 3,200 published candidates remain present, with the same 23 partial additions. Candidate output also differs from published values in `monthly_estimate_per_100_shares` and `observed_months` for 23 common items, and in score fields for one common item each. No read failures or blocked writes; source markers stayed byte-for-byte unchanged. It performed 4,395 R2 list calls and 54,168 `GetObject` calls; 3,425 optional objects returned `NoSuchKey`. Report: `C:\Codex\r2-d1-ownership-audit-20261116T095823Z\income-advice-recomputed-20261119T1015Z-candidate-readonly.json`, SHA-256 `8870681860E2A87AA1AE18A6CB287161F8E1B703F3054E6D4E4518F3CCF59D09`.
+- [ ] Review the 23 newly eligible partial records and the one common candidate with changed score fields against source provenance before publishing a regenerated R2 advice catalog. The reports intentionally retain counts and hashes, not security codes or financial values.
+- [x] Fresh Account Analytics GET at `2026-11-19T10:44:55Z` reported 216,238 account-wide rows read / 1,978 written, leaving 4,783,762 reads; the 100,000-row reserve passed. Target `diview-irbank` was 216,031 reads / 1,895 writes. No D1 SQL or R2 write occurred.
+
+## 2026-11-19 UTC Android notification-price batch recovery
+
+- [x] Candidate Android repository keeps successful same-generation notification-price batches if a later batch hits a retryable HTTP/network failure, marks the snapshot incomplete, and passes numeric `Retry-After` into the retry gate. Generation conflict and invalid response paths do not persist partial results. JDK 17.0.20.1 unit tests passed: CloudflareMarketRepositoryTest 41/41, MarketFetchPolicyTest 8/8, NotificationPriceCacheTest 4/4.
+- [x] Run offline notification and app-start targeted-price instrumentation on disposable AVD `DiviewNotificationV2QA20261119` (API 35): `NotificationDeliveryTest` passed 14/14 and `AssetDataRefreshTest` passed 24/24, including the v2-only targeted quote and missing-price cases. Installed debug APK SHA-256 matches the built APK: `7C27587F40CD3859B9518F776DFADD39DAF486A576326ABBAED8DC6C501C9B92`.
+- [x] On disposable API 35 AVD `DiviewNotificationV2QA20261119`, `AssetDataRefreshTest#laterNotificationPriceBatchFailurePersistsEarlierQuotesAndHonorsRetryAfter` passed 1/1 and the full `AssetDataRefreshTest` class passed 25/25. The test sends 11 codes in two batches, returns HTTP 503 with `Retry-After: 120` on batch two, confirms the first 10 quotes are durably cached and status remains failed, then confirms startup does not retry before the deadline.
+- [ ] Production Worker deployment/API parity, D1 usage before/after comparison, and physical-device acceptance remain unverified and gated.
+
+## 2026-11-19 UTC Worker CI and v2-only notification refresh review
+
+- [x] The candidate `.github/workflows/cloudflare-worker-ci.yml` runs on Cloudflare Worker source and workflow changes, grants only `contents: read`, and runs Worker plus migration/usage contract tests without a deployment step. The same local commands passed: Worker 143/143 and Python migration/usage/Workflow tests 116/116.
+- [x] Targeted notification-price retrieval reads existing YFinance v2 per-security R2 objects through `/api/v1/notification-prices`; it makes no per-security IRBANK provider request, and missing or invalid v2 prices are omitted. Quote retrieval itself does not query D1. The request is rate-limited by a Durable Object; during the configured cutover window, the first request to an uninitialized counter may read its active `api_request_log` row once to preserve the current limit, after which the counter is stored in the DO. The separate annual-dividend contract refresh reads already-published catalog data and does not fetch IRBANK prices.
+- [ ] GitHub-hosted CI has not run on these newer uncommitted candidate changes. Production route/API parity, D1 usage before/after comparison, deployment, and physical-device acceptance remain gated.
+
+## 2026-11-19 UTC 12:03 Account Analytics read-only refresh
+
+- [x] Cloudflare GraphQL Analytics reported 220,348 account-wide rows read and 2,130 written, leaving 4,779,652 of the 5,000,000-row daily allowance. Target D1 diview-irbank reported 220,117 reads and 2,044 writes. The 100,000-row reserve passed. No D1 SQL was issued; the usage increase since the previous snapshot is not attributed to a specific workload.
+- [x] Focused Worker route and Durable Object tests passed 20/20. They verify the notification route reads only published-generation YFinance v2 R2 prices, omits missing/invalid quotes, rate-limits before R2 access, imports an active D1 counter once during the handoff window, then stops D1 lookups and fails closed on invalid handoff timestamps.
+
+## 2026-11-19 UTC 12:05 GitHub remote read-only check
+
+- [x] GitHub API readback shows PR #70 remains open and mergeable, head ce2a8a7b6ec4e25b8aa09622a09f941b9ca60ce5, base main at b3f3a7b75bc54d30ec468fc085922791f99e340b; Worker CI run 43654716779 passed on that head. Main branch metadata reports protected=true. These checks do not include the newer local uncommitted changes.
+- [ ] The exact migration Environment bypass and `main` protection settings remain unreadable. On 2026-11-19 12:26 UTC, the GitHub connector authenticated as `masacgt` and read PR #70, but branch-protection GETs returned 403 `Resource not accessible by integration`; Chrome's Environment Settings tab remains signed out/404. No settings changed and no workflow was dispatched.
+
+## 2026-11-19 UTC 12:08 notification quote R2 read-only probe
+
+- [x] Direct R2 GETs read only the publication pointer and 7203 v2 current object. Both align to generation 2026-11-18-e5051793bf404937a602f71bdb940825 / market date 2026-11-18; 7203 contains a Yahoo Finance via yfinance close of JPY 3,428 dated 2026-11-16. No D1 SQL, Worker API request, R2 write, or provider fetch occurred.
+- [ ] A local Worker using a remote R2 binding could not start because Wrangler authentication with the configured API token failed. The direct R2 result validates source availability, not route/API parity; production parity remains gated.
+
+## 2026-11-19 UTC 12:16 D1 schema audit usage reconciliation
+
+- [x] A read-only D1 schema audit ran one query and returned 65 schema objects (25 tables, 38 indexes, 2 triggers); D1 query metadata reported 130 rows read and zero written. The report is C:\Codex\r2-d1-ownership-audit-20261116T095823Z\d1-schema-audit-20261119T1209Z.report.json, SHA-256 E70563E365B2AB47D3D442FFBB8E9B0CEF357BCBB7A938ADEA7404DD1F2D2310. No R2 objects were planned or written.
+- [x] Account Analytics stayed at 220,117 target-D1 reads / 220,348 account-wide reads through 15 postflight checks over 225 seconds. The migration CLI exited 1 with status unreconciled and target read delta 0, despite query metadata reporting 130. Further usage GETs at 12:17:51 and 12:22:12 UTC remained unchanged. The exact remaining allowance is unknown; subtracting only these 130 rows gives an upper bound of 4,779,522 before any other unreported activity, so this figure is not valid as a migration budget. No more D1 SQL until reconciliation is resolved.
+- [x] At 12:19 UTC, read-only D1 Query Insights showed the schema query once with 130 rows read and also showed recent stock_analysis_state/history reads and writes. Query Insights is sampled, so it corroborates the query metadata but cannot reconcile the account total. Cloudflare documents per-query row counts as precise and Query Insights as sampled: [metrics and analytics](https://developers.cloudflare.com/d1/observability/metrics-analytics/) and [query insights](https://developers.cloudflare.com/d1/observability/find-expensive-queries/).
+- [x] Later minute-level D1 Analytics reconciled the schema query: the 2026-11-19 12:12 UTC bucket reports one read query / 130 rows, matching D1 metadata. The missing completed/started scheduled-run index remains a separate schema review item.
+
+## 2026-11-19 UTC 12:31-12:38 Cloudflare plan, Queue and Cron read-only baseline
+
+- [x] Account Subscriptions API read with the configured Billing Read token returned Teams Free Base and R2 Paid; it did not return a separate Workers Paid subscription. This is only the subscription-list evidence, not proof of Workers CPU entitlement. No billing changes were made.
+- [x] Cloudflare Queues REST read returned best-effort backlog metrics of 0 messages / 0 bytes for diview-market-prices and diview-market-prices-dlq. The primary queue still registers diview-irbank as a producer, has one consumer linked to the DLQ, 86,400-second retention, and delivery_paused=null; the DLQ has one consumer, no producer, the same retention, and delivery_paused=null. No messages were read or changed.
+- [x] Workers Scripts Read confirms the same production deployment/version remains at 100% (deployment 7731b2d6-75e8-4b13-8985-9f47a4960f95, version 4981c1e0-e337-4392-9f5b-909b52c5bc0c). The schedules endpoint still returns 17 * * * *. The earlier source-content readback for this same version found no literal Queue producer call path but did find the legacy Queue ACK handler; registration metadata still identifies the producer. The production hourly trigger therefore remains active.
+- [ ] Keep scheduled analysis Cron held until Workers CPU entitlement and a controlled candidate run are verified. Re-read both Queue backlogs immediately before cutover; this baseline is not a cutover-time reading.
+- [ ] Keep both Queues and D1 market_price_refresh_runs / market_price_refresh_batches. Resolve the registered producer, delivery pause state, and in-flight consumer handling during the approved short Cron fence before removing bindings or completing migration.
+
+## 2026-11-19 UTC 12:41 Account Analytics delayed refresh
+
+- [x] Read-only Account Analytics returned 224,614 account-wide rows read, including 224,375 for diview-irbank, and 2,330 writes. The reported remaining allowance was 4,775,386; the 100,000-row reserve passed.
+- [x] Compared with 12:03, target reads increased by 4,258 and account reads by 4,266. The 12:17 and 12:22 snapshots had stayed flat after the schema query reported meta.rows_read=130; the later increase includes concurrent account activity and cannot be attributed to that query. No D1 SQL was issued for this refresh.
+- [x] Later minute-level Analytics explains the 12:03–12:41 target-D1 increase of 4,258 rows as 130 + 4,091 + 35 + 2 in the 12:12, 12:17, 12:18, and 12:23 UTC buckets; the account increase of 4,266 includes eight rows on other databases. The 4,775,386 remainder is historical. Any new D1 SQL still requires a fresh usage preflight.
+
+## 2026-11-19 UTC 12:45 app-start market-data call-path clarification
+
+- [x] Traced the candidate app-start flow: notification quotes use the Worker notification-prices route; annual-DPS compatibility refresh may also request live-quotes or search-catalog. Those Worker routes read existing YFinance v2 catalog/security objects and the published R2 issuer-dividend index. The Worker source and Android repository contain no IRBANK API URL or IRBANK_API_KEY call path. This may cause Worker/R2 reads, but it does not consume the IRBANK provider's per-day request quota.
+- [x] Existing behavior omits absent or invalid v2 prices and does not fall back to an IRBANK provider request; the notification worker remains offline and uses the device cache.
+
+## 2026-11-19 UTC 12:47 D1 Insights sampled follow-up
+
+- [x] Read-only Query Insights for one hour showed the schema audit query once with 130 rows read. The returned patterns also included stock_analysis_state/history reads and writes and one api_request_log read/write; the displayed patterns summed to 251 rows read. This confirms the schema query is represented in Insights and production D1 writers remain active.
+- [x] Query Insights alone was too sampled to explain the 4,266 account-wide increase. Later minute-level D1 Analytics reconciled the 130-row schema query and the full target-database increase; the 4,091/35/2 buckets remain unattributed to a specific workload.
+
+## 2026-11-19 UTC 12:49 R2 master-only search contract
+
+- [x] The accepted search behavior is R2 IRBANK-master-only codes return search metadata with price and yield null; analysis reports master_only. The candidate route test suite passed 12/12, including no D1 access for these results.
+- [ ] Production API readback of master-only search and missing-v2-price omission remains pending the reviewed Worker deployment.
+
+## 2026-11-19 UTC 12:56 app-start price-source decision and GitHub recheck
+
+- [x] The user confirmed that app-start notification-price refresh must use existing YFinance v2 R2 prices and must not call the IRBANK provider once per security. The candidate route reads per-security v2 `current.json`; absent or invalid prices are omitted, and there is no external-provider fallback. The existing route tests cover these conditions; no code change was needed for this clarification.
+- [ ] GitHub Settings could not be re-read: the exact Environment URL displayed a sign-in link and 404 after the user's reauthentication message. Treat the earlier saved/read-back result as historical until a fresh authenticated settings readback. No GitHub setting was changed in this check.
+
+## 2026-11-19 UTC offline notification acceptance follow-up
+
+- [x] The notification-price route test passed 7/7; the local Worker suite passed 143/143, Python migration/usage/workflow suites 116/116, and Android JDK 17 JVM tests 285/285. These are candidate/local checks, not production deployment evidence.
+- [x] Added `GrantPermissionRule` to `ProductionCatalogOfflineWorkerTest` so a fresh Android 13+ emulator grants `POST_NOTIFICATIONS` during the test. Rebuilt with Microsoft OpenJDK 17.0.20.1; `:app:assembleDebug` and `:app:assembleDebugAndroidTest` succeeded. Installed app APK hash `6353697F218201A59C4F36F11A4A70EACDB1FCCA0227859AEDE01A9D4A4AFD1C` and AndroidTest APK hash `137B79FD97E876FEBAB128A179591DDCAAB6ED55E8FE7EC4BAA1B4A957D57A2F` matched their installed `base.apk` files on disposable `emulator-5556`.
+- [x] Scheduled morning and evening WorkManager acceptance methods each passed 1/1 on `emulator-5556` with no active default network. The morning phase queued the fresh local fixture; the evening phase posted the real Android notification and verified its title/body, consumed delivery state, and notified date. The test permission rule auto-granted notification permission after it was explicitly revoked before the run.
+- [ ] Production Worker deployment/API read-back, production D1 usage before/after comparison, and a production-sourced offline notification run remain pending. The scheduled acceptance used a local fixture and does not establish live Worker delivery. The emulator clock and Wi-Fi/airplane settings were restored; no physical device, Cloudflare write, Worker deploy, GitHub setting change, or workflow dispatch occurred.
+
+## 2026-11-19 UTC 14:00 D1 usage cross-check
+
+- [x] Read-only Account Analytics for the current UTC date reported 228,676 account-wide rows read (228,421 for `diview-irbank`) and 4,771,324 rows remaining; the 100,000-row reserve passed. No D1 SQL was issued.
+- [x] Cloudflare D1 Billing documentation identifies GraphQL Analytics as the dashboard account-level billable usage source; the 228,676 account-wide / 228,421 target-database figure is the current daily baseline. `wrangler d1 info` zero fields and an empty, sampled Insights result are not comparable account-wide billing totals.
+- [x] The 2026-11-04 `market-audit` dry-run reconciles at minute resolution: Account Analytics `datetimeMinute` buckets 00:10–00:14 UTC total 3,960 `rowsRead` and 49 `readQueries`, matching the two reports (100 rows/10 queries, then 3,860 rows/39 queries). All five buckets report `sampleInterval=1`; daily aggregation had obscured this match.
+- [x] The 2026-11-19 `market-audit` dry-run also reconciles exactly: its 02:32 UTC bucket reports 3,960 `rowsRead` and 40 `readQueries` with `sampleInterval=1`, matching the report's 3,960 rows and 40 attempted queries.
+- [ ] The 2026-11-19 02:32:14 UTC preflight reported 12,419 account-wide rows, while a later unsampled minute sum through 02:31 totals 12,425 (12,378 target-D1 plus 47 on another database), a six-row snapshot difference. Repeat minute-window and account-wide/target-D1 pre/post checks for each approved dispatch; this historical query-level match is not a current cutover baseline.
+- [x] At 16:13 UTC on 2026-11-19, read-only Account Analytics reported 236,888 account-wide rows read (236,593 for `diview-irbank`), with `sampleInterval=1`; 4,763,112 of the 5,000,000-row allowance remained. This snapshot issued no D1 SQL.
+
+## 2026-11-19 UTC 14:11 candidate Worker D1 source inventory
+
+- [x] A static scan of both the candidate and canonical `data/irbank/cloudflare/src` found no D1 SQL for market catalog/security search, analysis state/history, or app definitions/audits. Remaining D1 calls are support-feedback/email storage and the one-time `api_request_log` read that seeds a Durable Object rate-limit counter during the configured handoff window; health only reports whether the D1 binding exists.
+- [ ] This verifies local source only. The deployed Worker is still the pre-migration version; production route/source readback and post-cutover D1 usage comparison remain required.
+
+## 2026-11-19 UTC 14:13 production deployment gate recheck
+
+- [x] Read-only Wrangler deployment metadata still shows the 2026-11-03 production deployment/version `4981c1e0-e337-4392-9f5b-909b52c5bc0c` at 100%; the candidate is not deployed. No production API route was called.
+- [ ] Keep production API parity, D1 before/after comparison, and notification acceptance open until a reviewed deployment is explicitly approved and completed.
+
+## 2026-11-19 UTC 14:15 R2 v2 notification-price source check
+
+- [x] Direct R2 GET confirmed the published v2 generation and a valid positive `7203.T` quote; its quote date is 2026-11-16 and its record belongs to the 2026-11-18 published generation. No IRBANK request or R2 write occurred.
+- [ ] The quote is at the three-TSE-session freshness boundary on 2026-11-19; verify the production Worker/API and device cache behavior only after reviewed deployment. R2 source availability alone does not prove API parity or production notification delivery.
+
+## 2026-11-19 UTC 14:18 GitHub settings authentication recheck
+
+- [x] After the user's reauthentication confirmation, Chrome still showed `https://github.com/masacgt/Diview/settings/environments` as signed out with GitHub Sign in/Sign up links and a 404 page. The GitHub connector's branch-protection read had returned 403 earlier; `gh` CLI is not installed. No settings were changed.
+- [ ] Read back `main` protection and the `d1-r2-migration` Environment after the user signs in manually in the existing Chrome tab. Earlier approval to disable the two review requirements remains specific to that settings change; do not treat it as saved until readback confirms.
+
+## 2026-11-19 UTC 14:30 scheduled YFinance v2 sync inspection
+
+- [x] Read-only GitHub Actions run listing showed the scheduled main runs on 2026-11-16, 2026-11-17, and 2026-11-18 all concluded with failure. The latest run is [44391697151](https://github.com/masacgt/Diview/actions/runs/44391697151) at commit b3f3a7b75bc54d30ec468fc085922791f99e340b.
+- [x] Its v2-daily-sync log reports 4,420/4,576 processed, 156 failed, and generation 2026-11-18-e5051793bf404937a602f71bdb940825 published before exit code 1. The same log says no 2026-11-18 close was returned for 7203.T; the existing R2 quote readback is dated 2026-11-16 and is at the three-TSE-session age limit for 2026-11-19.
+- [ ] Determine whether the partial-generation publication and failed-symbol handling preserve the notification freshness contract. Keep production workflow reruns, R2 writes, and deployment behind the final approval gate; none was triggered in this check.
+## 2026-11-19 UTC 14:44 scheduled price misses and R2 quote-date census
+
+- [x] Read-only run-log comparison confirmed the market calendar selected 2026-11-16, 2026-11-17, and 2026-11-18 as completed XTKS sessions. Exact-session close misses rose from 20 to 4,365 to 4,370 securities across those three scheduled runs; the latest log has 4,392 distinct daily-close failures in total. The same 156 top-level failure codes persisted across all three runs.
+- [x] One read-only GET of R2 catalog/current.json confirmed generation 2026-11-18-e5051793bf404937a602f71bdb940825, market date 2026-11-18, 4,395 positive-price entries, and no missing/invalid quote dates. Their quote dates are: 4,350 on 2026-11-16, three on 2026-11-17, 28 on 2026-11-18, and 14 older than 2026-11-16. Thus 14 quotes are already over the three-session limit on 2026-11-19; 4,350 reach the limit that day.
+- [x] Local code requires an exact-session close and keeps the prior quote date with price status failed when the provider omits that session; it does not relabel the prior close as current. The notification cache rejects quotes more than three TSE sessions old.
+- [ ] The logs establish a broad missing-close result but do not distinguish Yahoo response lag from a provider/library or scheduling issue. Verify a later published generation and its quote-date distribution before treating offline notification prices as ready; do not add an IRBANK per-security fallback.
+- [ ] No D1 query, provider fetch, workflow rerun, R2 write, deployment, or device action was performed for this inspection.
+## 2026-11-19 UTC 14:49 PR and CI readback
+
+- [x] Read-only GitHub metadata shows PR 70 remains open and mergeable, based on main SHA b3f3a7b75bc54d30ec468fc085922791f99e340b with head SHA ce2a8a7b6ec4e25b8aa09622a09f941b9ca60ce5.
+- [x] PR-head checks completed successfully: Cloudflare Worker CI run 43654716779, yfinance R2 run 43654716786, and Android release checks run 43654716771.
+- [ ] These results cover the committed PR head only. The current worktrees contain uncommitted changes, which have not been pushed or covered by those checks. Preserve them and review their scoped diff before any publication; no commit, push, or merge occurred.
+## 2026-11-19 UTC 14:52 notification-price route publication gap
+
+- [x] GitHub PR 70's changed-file list contains 68 files but excludes data/irbank/cloudflare/src/notification-prices.mjs and its test. The candidate worktree has both as untracked files and has a local index.js route change; the earlier 7/7 route test result is local-only and not covered by PR-head CI.
+- [ ] Review the complete local diff and include the R2-only notification-price route plus its tests in the eventual reviewed change. The user-approved behavior (existing YFinance v2 prices, no per-security IRBANK request) is not in the open PR yet. No staging, commit, push, or merge occurred.
+
+## 2026-11-20 UTC income-advice daily-sync year-window correction
+
+- [x] The local daily-sync path now reads the missing oldest completed-year dividend partition from R2 when needed, then recalculates newly eligible and existing candidates. It performs no Yahoo/J-Quants request, D1 query, or R2 write. The full yfinance test suite passed 180/180 under isolated CPython 3.13.15, including six missing-partition regressions.
+- [x] 2026-11-20 JST read-only replay against published generation `2026-11-18-e5051793bf404937a602f71bdb940825` found 3,417 active catalog entries with 2024/2025 dividend partitions. With the missing-year fallback enabled for every entry, 3,351 extra 2023-partition GETs were attempted (3,054 found, 297 expected 404); the recomputed output added 23 candidates, changed 23 existing candidates, and removed none. Candidate output SHA-256: `beeb3885fb6eaa8ace4436e7443e0090a640bdc108cd70e741448e2ecd8a8a6f`. This is a current-snapshot upper-bound replay, not a deployed scheduled-run measurement; no provider fetch, D1 query, R2 write, or workflow run occurred.
+- [ ] Measure the actual additional GET count and candidate output for the deployed daily-sync revision before publishing a candidate pointer. This source correction is local and uncommitted; no workflow rerun, R2 write, or deployment occurred.
+
+## 2026-11-19 UTC 15:34 scheduled v2 publication timing
+
+- [x] The public Actions API still lists scheduled run #404 (run 44391697151, created 2026-11-18 20:30 UTC) as the latest YFinance v2 run; it failed after publishing generation 2026-11-18-e5051793bf404937a602f71bdb940825. The workflow's configured cron is `17 12 * * 1-5` (12:17 UTC); at 2026-11-19 15:34 UTC that day's scheduled time had passed, but no Nov 19 run was listed. The prior run's creation timestamp was 8h13 after its scheduled time. GitHub documents that scheduled runs may be delayed or dropped during high load; this evidence does not establish which happened here.
+- [x] The latest read-only R2 census recorded 4,350 quotes dated 2026-11-16. At 2026-11-20 00:34 JST those are exactly three completed XTKS sessions old, still within the notification policy; the candidate cache rejects them after the age exceeds three sessions. The v2-only rule remains in force and no IRBANK price request was made.
+- [ ] After the next scheduled run, read its conclusion and published quote-date distribution before treating the v2 catalog as fresh. Do not manually rerun the workflow or add an IRBANK price fallback.
+
+## 2026-11-19 UTC 16:25 production R2 v2 state and active-universe coverage
+
+- [x] Read-only R2 GETs of publication, catalog, universe, and `7203.T/current.json` confirm generation `2026-11-18-e5051793bf404937a602f71bdb940825`, market date 2026-11-18, 4,395 catalog prices, and a 7203 close of 3,428 dated 2026-11-16. Dates remain 4,350 on Nov16, three on Nov17, 28 on Nov18, and 14 older. No D1 SQL or R2 write occurred.
+- [x] The R2 universe contains 4,576 active securities and 46 inactive members. Existing sanitized coverage report `active-universe-price-coverage-20261119.sanitized.json` found 181 active codes absent from the catalog: 156 have no per-security current object and 25 have no valid price. Candidate Cron reads the active R2 universe, retains active securities with missing prices using `market_date: null`, and excludes inactive members; `scheduled-analysis.test.mjs` covers this behavior.
+- [x] Read-only GitHub Actions listing still shows YFinance run #404 as the latest schedule at 16:25 UTC. Chrome still shows GitHub signed out; no Settings change or Environment secret registration occurred.
+- [ ] Keep the candidate active-universe/null-price behavior, but verify a later publication and per-security quote dates before enabling production notifications. The 2026-11-16 prices are exactly three completed XTKS sessions old at this point and will exceed the configured age limit after the next completed session if not refreshed.
+
+## 2026-11-19 UTC 16:47 current worktree verification
+
+- [x] Re-ran the CI-exact Cloudflare Worker suite from the candidate worktree: node --test test/*.test.mjs test/*.test.cjs passed 143/143. The R2 v2 notification-price route tests passed within that run.
+- [x] Re-ran migration, daily-usage, and workflow tests from data/irbank/cloudflare/: 116/116 passed. Android :app:testDebugUnitTest --rerun-tasks --no-daemon passed with Microsoft OpenJDK 17.0.20.1; its 40 XML reports contain 285 tests and zero failures, errors, or skips.
+- [x] Re-ran the complete YFinance R2 test suite using the isolated CPython 3.13.15 environment: 180/180 passed. Cloudflare, R2, IRBANK, J-Quants, and AWS credential variables were removed from that test process; the universe-refresh test uses a mocked fetch and an in-memory R2 client.
+- [x] Re-ran the IRBANK refresh suite with the same production credential variables removed: 37/37 passed. Quota and provider-call counts in its output are generated by the mocked test fixtures; no provider credential was available to issue a request.
+- [x] git diff --check passed; only Git's LF-to-CRLF notices were emitted. The candidate worktree remains dirty and uncommitted.
+- [ ] Rechecked https://github.com/masacgt/Diview/settings/environments in Chrome; it still shows GitHub sign-in/sign-up and a 404. Read back main protection, the d1-r2-migration Environment, and secrets after a manual sign-in. No GitHub settings or secrets were changed.
+- [ ] PR 70 remains open. Its successful CI is for committed HEAD ce2a8a7b6ec4e25b8aa09622a09f941b9ca60ce5; uncommitted candidate changes, including the notification-price route and test, are not covered or published.
+
+## 2026-11-20 UTC on-demand analysis active-universe alignment
+
+- [x] `/api/v1/analysis/{code}` now resolves active membership from R2 `universe/current.json`, accepts active members without a catalog/profile row, and avoids the legacy full-market price fallback when no per-security v2 quote exists. Regression coverage seeds a stale legacy quote for an active IRBANK master row and verifies `market_date: null` with no legacy object read. The CI-exact Worker suite passed 143/143.
+- [ ] Production API/R2 parity remains unverified; publish only through the existing approval gates and then verify active-universe analysis and v2-only notification prices against production.
+
+## 2026-11-19 UTC D1 usage read-only check
+
+- [x] Account Analytics GraphQL reported 241,022 rows read and 2,934 rows written for the current UTC day against the 5,000,000-row Free allowance (4,758,978 rows remaining). Three databases reported usage. This query issued no D1 SQL. A preliminary query for 2026-11-20 UTC returned no groups because it was still 2026-11-19 UTC.
+- [x] A fresh `market-audit` dry-run read 3,960 D1 rows in 40 SELECTs and planned/wrote zero R2 objects. It read catalog generation `2026-11-18-e5051793bf404937a602f71bdb940825`; aggregates include 65 D1 codes absent from the YFinance price catalog, 36 name mismatches, and one active missing-price code covered by the source catalogs. Report: `C:\Codex\r2-d1-ownership-audit-20261116T095823Z\market-audit-20261119T1700Z.report.json`, SHA-256 `B38985595AA380F12022F41D0E26C49171AD568B5A811161410FCE1C1A1931D0`.
+- [x] At the 17:05 UTC postflight, the daily snapshot still reported 241,022. Later minute-level Analytics showed 40 reads / 3,960 rows at 17:01, exactly matching this audit; the discrepancy was delayed daily aggregation, not missing usage. No D1 SQL was issued for this follow-up.
+
+## 2026-11-19 UTC 17:16 production Queue readback and GitHub access check
+
+- [x] Read-only Queue metrics returned zero backlog for both the price queue and DLQ. Queue metadata still lists `diview-irbank` as a producer, one consumer on each queue, three retries, concurrency 1, and 86,400-second retention. The active Worker deployment remains version `4981c1e0-e337-4392-9f5b-909b52c5bc0c` at 100%. Keep both queues and legacy D1 queue records; zero backlog alone does not establish retirement safety.
+- [x] After the user's latest reauthentication confirmation, the exact GitHub Environment settings tab still shows Sign in/Sign up and 404. No branch protection, Environment, or secret settings were changed. The Computer-use skill forbids automating authentication; manual sign-in is still required before the already-authorized settings can be read or saved.
+- [ ] Recheck GitHub settings and Environment secrets after manual sign-in. Do not infer saved state from prior approval.
+
+## 2026-11-19 UTC 17:26 production R2 v2 refresh and D1 usage
+
+- [x] Read-only S3 GETs confirmed the published YFinance v2 generation remains `2026-11-18-e5051793bf404937a602f71bdb940825`, market date `2026-11-18`, with 4,395 positive catalog prices. Quote dates: 4,350 on Nov 16, three on Nov 17, 28 on Nov 18, and 14 earlier. `7203.T` remains at 3,428 dated Nov 16. No provider call or R2 write occurred.
+- [x] GitHub Actions API still lists the Nov 18 YFinance run as latest and failed. The configured 12:17 UTC Nov 19 schedule had passed, but no Nov 19 run was listed at 17:26 UTC. GitHub documents that scheduled runs can be delayed or dropped under high load; the cause is unresolved. Do not rerun manually or add an IRBANK fallback.
+- [x] Account Analytics GraphQL at 17:27 UTC reported 249,116 account-wide rows read / 3,132 written, 4,750,884 read rows remaining; `diview-irbank` accounted for 248,805 reads. This check issued no D1 SQL.
+- [x] The 3,960-row dry-run discrepancy was explained by delayed daily aggregation: the 17:01 UTC minute group reported 40 queries / 3,960 rows for the target database, matching the dry-run. Later 12:03–12:41 minute groups also reconciled the 4,258 target-D1 rows and eight reads on other databases; see the 2026-11-20 JST minute-level reconciliation below.
+
+## 2026-11-19 UTC 17:30 scheduled YFinance run diagnosis
+
+- [x] Read-only job logs for scheduled run `44391697151` showed 4,392 distinct symbols with missing daily closes: 4,370 exact-session misses for Nov 18 and 22 YFinance no-data / possibly delisted errors. It published 4,395 catalog items from 4,420 successes / 156 failures, then exited 1. The cause of broad exact-session misses is not established.
+- [ ] Keep v2-only notification behavior. Verify the next scheduled generation and quote-date distribution before considering prices fresh; do not rerun the workflow or add an IRBANK fallback.
+
+## 2026-11-19 UTC 17:38 Workers Observability Cron refresh
+
+- [x] A `dry=true`, `view=invocations` query for production service `diview-irbank` and trigger `17 * * * *` covered 2026-11-18 17:38:43–2026-11-19 17:38:43 UTC. It returned 24 invocation groups / 24 events, all `exceededCpu`; maximum CPU was 2,050 ms and wall time 48,988 ms. The API returned success, `run.dry=true`, and zero API errors. Only aggregates were retained; raw logs and invocation IDs were not saved. This confirms recurring production Cron failures but does not establish the effective CPU entitlement. The query API requires Workers Observability Write; Cloudflare documents that `dry=true` does not persist query results: https://developers.cloudflare.com/api/resources/workers/subresources/observability/subresources/telemetry/methods/query/.
+- [ ] Keep analysis Cron restoration gated until the actual Workers CPU entitlement and a controlled candidate CPU measurement are confirmed. No D1 SQL, Worker setting change, schedule change, deployment, or workflow dispatch occurred.
+
+## 2026-11-20 JST D1 Analytics minute-level reconciliation
+
+- [x] Read-only GraphQL Analytics at 18:52:11 UTC confirmed the 2026-11-19 12:12 bucket had `readQueries=1` / `rowsRead=130`, matching the schema audit (started 12:12:20, finished 12:15:58), and the 17:01 bucket had `readQueries=40` / `rowsRead=3,960`, matching the market audit (40 queries, 3,960 rows). The daily snapshots had lagged; both query-level mismatches are reconciled by minute grouping.
+- [x] The 12:03–12:41 target-D1 increase of 4,258 rows equals the minute buckets 130 + 4,091 + 35 + 2; the account-wide increase was 4,266, with the remaining eight rows on the other databases. The 4,091/35/2 workload source is not identified, but the usage totals reconcile.
+- [x] At 18:49:14 UTC, Account Analytics reported 253,252 account-wide rows read / 3,414 written and 252,891 / 3,185 for `diview-irbank`, leaving 4,746,748 account rows under the 5,000,000 daily allowance. The 100,000-row reserve passed. No D1 SQL was issued; any next row query still needs a fresh preflight.
+
+## 2026-11-20 JST D1 Analytics postflight fallback
+
+- [x] Added minute-level Account Analytics fallback to D1 migration postflight. It requires exact 95% confidence bounds, matches target-D1 minute rows and `readQueries` to `meta.rows_read` and attempted query count, and computes a conservative account budget from the preflight total plus every database's minute reads. The 111 D1 usage/migration tests pass. The final-version production read-only dry-run reconciled 480 rows / 5 queries on attempt 11 with confidence bounds verified, planned 480 objects, wrote 0 R2 objects, and reported 262,987 observed account reads / 4,737,013 remaining under the 5,000,000 limit (100,000 reserve satisfied). Report SHA-256: `8a6a5df7a1387903bd08bd038faaa45af5f15d4a0e9308ccb1f0be9b6e779b57`.
+- [ ] Keep deployment and production R2 writes gated. GitHub-hosted CI, approved Workflow execution, and post-deployment API/readback remain pending.
+
+## 2026-11-20 JST v2-only notification price verification
+
+- [x] The user reconfirmed that app-start price refresh must use existing YFinance v2 prices and make no per-security IRBANK request. The candidate Worker reads the published R2 v2 per-security `current.json` objects and omits missing, invalid, or future-dated prices. `node --test test/notification-prices.test.mjs` passed 7/7; Android `CloudflareMarketRepositoryTest` passed 41/41 with Microsoft OpenJDK 17. No IRBANK fallback, production request, or R2 write occurred.
+- [x] Android notification-price cache merges by each security's quote date, preserves prices for omitted codes, and does not replace a newer local quote with older v2 data. `NotificationPriceCacheTest.partialRefreshKeepsPreviousQuoteAndOlderDataCannotReplaceNewerQuote` covers this boundary; the previously recorded full Android unit suite passed 286/286 with JDK 17.
+- [ ] Production Worker/API readback and the D1 usage comparison remain gated on reviewed deployment; this local candidate test does not prove production parity.
+
+## 2026-11-20 UTC candidate regression suites
+
+- [x] Candidate CI-equivalent local suites passed: Worker 143/143, migration workflow 12/12, D1-to-R2 tool 91/91, D1 usage 13/13, YFinance v2 180/180, and IRBANK dividend refresh 23/23. Android `:app:testDebugUnitTest` passed 285/285 using Microsoft OpenJDK 17.0.20.1. YFinance dependencies were installed in an isolated Python 3.12.15 environment under `C:\Codex`.
+- [ ] These results cover local uncommitted work only. GitHub-hosted CI, production Worker/API readback, production D1 usage comparison, and production cutover remain pending.
+
+## 2026-11-20 JST notification freshness boundary
+
+- [x] Fixed quote freshness to use the latest completed TSE session at the actual JST notification time, while keeping once-per-day notification suppression keyed to JST calendar date. The boundary test covers 08:30 versus 17:30 JST on the same day.
+- [x] Full Android `:app:testDebugUnitTest` passed 286/286 with Microsoft OpenJDK 17.0.20.1; `:app:assembleDebugAndroidTest` also produced the instrumentation APK. No physical device was targeted.
+- [x] Updated offline scheduled-notification instrumentation passed on disposable API 35 AVD `emulator-5556`: morning queue 1/1 and evening Android notification 1/1 using a local quote fixture with no default network. JDK 17 Debug APK SHA-256 matched installed `base.apk` (`E33A59B15E1E15A46A302EFCCDCB78BD8DC3D51EC014A627B347C638927B8659`). The temporary Android user was removed; owner data, clock automation, Wi-Fi, and airplane mode were restored.
+- [ ] Production Worker/API readback and the D1 usage comparison remain gated on reviewed deployment; the local fixture does not prove production price delivery.
+
+## 2026-11-19 UTC 20:10 current R2, D1, and scheduled YFinance recheck
+
+- [x] Direct read-only R2 GET at 20:07 UTC confirmed publication `2026-11-18-e5051793bf404937a602f71bdb940825`, market date 2026-11-18, 4,395 catalog prices, and `7203.T` close 3,428 dated 2026-11-16. No R2 write or provider request occurred.
+- [x] Account Analytics GraphQL at 20:09:52 UTC reported 257,413 account-wide rows read / 3,669 written, with 4,742,587 rows remaining; `diview-irbank` accounted for 257,017 reads / 3,382 writes. The 100,000-row reserve passed. This was an analytics query, not D1 SQL.
+- [x] A fresh Billing Read request still lists only `Teams Free Base` and `R2 Paid`; the production Worker settings return `usage_model=standard`, `limits=null`, and no `cpu_ms`. This does not establish a Workers Paid CPU entitlement or explain the recorded `exceededCpu` events. No billing or Worker setting was changed.
+- [x] Read-only GitHub schedule listing still showed YFinance run #404 (Nov 18) as latest, failed at commit `b3f3a7b75bc54d30ec468fc085922791f99e340b`. The Nov 19 schedule time (12:17 UTC) had passed by 7h52, while the previous scheduled run started 8h13 late; absence at this read is not enough to conclude GitHub dropped the Nov 19 run.
+- [x] GitHub metadata confirms `main` still points to `b3f3a7b75bc54d30ec468fc085922791f99e340b` and reports `protected=true`; PR #70 remains open and mergeable from `codex/r2-d1-ownership-20261104-final` at `ce2a8a7b6ec4e25b8aa09622a09f941b9ca60ce5`. Settings details and the migration Environment remain unread because the browser session is signed out.
+- [x] Rechecked scheduled runs and R2 publication after the delay window. Runs #44174198951 (Nov 17), #44391697151 (Nov 18), and #44610267432 (Nov 19) all failed at `v2-daily-sync`; no manual sync was dispatched and no IRBANK per-security price fallback was added.
+
+## 2026-11-20 JST 06:12 production R2 and PR baseline recheck
+
+- [x] Read-only R2 GETs confirmed generation `2026-11-19-47856d94355d4eefa328d64c9d3c021c`, publication market date `2026-11-19`, completed at `2026-11-19T21:07:57.413184Z`, with 4,394 catalog entries. Quote dates: 4,348 on Nov 16, 3 on Nov 17, 1 on Nov 18, 30 on Nov 19, and 12 earlier. `7203.T` remains dated Nov 16. At 06:12 JST, that date is exactly three completed XTKS sessions old; after the Nov 20 session completes it will exceed the notification freshness limit. No R2 write or provider request occurred.
+- [x] PR #70 remains open and mergeable at head `ce2a8a7b6ec4e25b8aa09622a09f941b9ca60ce5`. Its associated Cloudflare Worker CI #8, YFinance R2 #401, and Android release checks #134 succeeded. These checks cover the committed PR head only; the current worktree changes remain uncommitted and are not covered.
+- [x] Static scan of candidate Worker sources found no D1 calls in market search, analysis, or definition reads. Remaining D1 access is confined to support-feedback storage/email retry/90-day cleanup and the bounded legacy `api_request_log` seed read for a new Durable Object bucket; `/api/v1/health` only reports whether the binding exists. This is source-level evidence, not production parity.
+- [x] Account Analytics GraphQL at `2026-11-19T21:20:57Z` reported 267,121 account-wide rows read / 4,065 written, with 4,732,879 rows remaining; `diview-irbank` accounted for 266,709 reads / 3,776 writes. The 100,000-row reserve passed. This is a pre-deployment snapshot, not a before/after cutover comparison; no D1 SQL was issued. Report: `C:\Codex\r2-d1-ownership-audit-20261116T095823Z\d1-usage-live-20261119T212057Z.sanitized.json` (SHA-256 `A27246E25156C72C04396F38B3E718D2EE4D3F2A5D17094CA0ADFF2F8389ADF9`).
+- [x] Cloudflare Workers Scripts Read at `2026-11-19T21:25Z` still shows deployment `7731b2d6-75e8-4b13-8985-9f47a4960f95`, version `4981c1e0-e337-4392-9f5b-909b52c5bc0c` at 100%, created Nov 3. Read-only settings show D1, KV, R2, email, and Queue bindings, with no `RATE_LIMITER` Durable Object binding. Candidate route and DO changes remain undeployed; no Worker setting was changed.
+- [ ] Keep production API parity, D1 usage before/after comparison, and production cutover pending reviewed publication. Recheck the next scheduled YFinance publication; do not manually dispatch it or add an IRBANK price fallback.
+
+## 2026-11-19 UTC 21:32 current definition seed preflight
+
+- [x] Read-only R2 listing found zero objects under `definitions/v1/`. The candidate migration CLI read the six current KV definitions and planned 12 version/current objects; it used zero D1 queries/rows, wrote zero R2 objects, and reported zero conflicts. Account Analytics pre/post both reported 267,129 account rows read with 4,732,871 remaining; the 100,000-row reserve passed. Report: `C:\Codex\r2-d1-ownership-audit-20261116T095823Z\definitions-readonly-20261119T2132Z.report.json` (SHA-256 `B4341851317A1ED6A6D8382CCB368C573D7F833F16220F4EEF763E710CBC6802`).
+- [ ] Seed and read back all 12 definition objects before deploying the candidate Worker; runtime definition reads have no D1/KV fallback and return unavailable when the required R2 definitions are absent. R2 write, workflow dispatch, and deployment remain gated.
+
+## 2026-11-20 JST / 2026-11-19 UTC 21:37 financial_periods current R2 re-audit
+
+- [x] The read-only `market-source-audit` dry-run completed against 49,592 `financial_periods` rows using 199 D1 queries and 3,061 R2 lookups. It found 49,571 matches, 15 source periods missing, 2 category mismatches, and 4 value differences. It planned/wrote 0 objects and had 0 verification failures. Minute-level Account Analytics postflight reconciled the audit window with confidence bounds verified; the conservative account total was 366,313 rows read / 4,633,687 remaining, above the 100,000-row reserve. Report SHA-256: `86E307AB6106515E31CD61C809C4488E9FC025DF607D67AA4B2BAF2AC418A5B1` (`C:\Codex\r2-d1-ownership-audit-20261116T095823Z\financial-periods-current-202611192137.report.json`).
+- [x] Classified the current audit anomalies against the earlier targeted read-only probes: the 15 missing records are security 2708's October-labeled annual periods from 2011/10 through 2025/10; the 2 category mismatches are security 1301's consolidated J-GAAP annual FY2025/03 and FY2026/03 rows, which are not equivalent to the R2 quarterly or semiannual candidates; the 4 value discrepancies are 1301 FY2017/03, FY2023/03, FY2024/03, and 2708 FY2014/03. The current report's anomaly-year counts match those classifications. Keep these D1 rows out of serving R2 pending provenance/source resolution.
+- [ ] Decide backup and retention for the excluded D1 rows, and resolve the source identity of 1301 FY2025/03 and FY2026/03 and 2708 FY2014/03. No D1 rows were deleted and no financial-period objects were written to R2.
+
+## 2026-11-20 JST analysis-history complete dry-run
+
+- [x] Re-ran the complete current `analysis-history` dry-run with a 100,000-row phase cap and 100,000-row account reserve. It read 47,862 D1 rows in 96 queries and planned 47,862 R2 objects; conflicts, verification failures, and R2 writes were 0. After 12 postflight attempts, the minute-level Account Analytics window reconciled 47,862 target-D1 rows / 96 queries plus one read on another database, with confidence bounds verified. Conservative account usage was 414,176 rows read / 4,585,824 remaining, with the reserve satisfied. Report: `C:\Codex\r2-d1-ownership-audit-20261116T095823Z\analysis-history-final-202611192200.report.json` (SHA-256 `FECADA557C2CDEF10E9D7A8A2F5BFEB2342E9D48629D370EB7DCB20B7A45ACF7`).
+- [ ] The planned analysis-history objects are not yet in production R2; write, read-back, and pointer cutover remain gated on final review and approval.
+
+## 2026-11-20 JST analysis-current complete dry-run
+
+- [x] Re-ran the complete current `analysis-current` dry-run with the 100,000-row phase cap and 100,000-row account reserve. It read 248 rows in one D1 query and planned 248 R2 objects; conflicts, verification failures, and R2 writes were 0. Minute-level Account Analytics reconciled 248 target-D1 rows / one query with confidence bounds verified. Conservative account usage was 366,561 rows read / 4,633,439 remaining, with the reserve satisfied. Report: `C:\Codex\r2-d1-ownership-audit-20261116T095823Z\analysis-current-final-202611192205.report.json` (SHA-256 `236FEE723936ED0FCAC295FAC4E95EDB8EDB4394CE6FB0047675331CC8531CF1`).
+- [ ] The planned analysis-current objects are not yet in production R2; write, read-back, and pointer cutover remain gated on final review and approval.
+
+## 2026-11-20 JST scheduled_run_log current operational inventory
+
+- [x] Read-only `d1-operational-audit` found 988 `scheduled_run_log` rows, all `analysis` / `running`, all without `finished_at`, with `processed=0` and `failed=0`; starts range from 2026-10-04 through 2026-11-19 UTC. It read 988 rows in 2 queries, planned/wrote 0 R2 objects, and had 0 verification failures. Minute-level Account Analytics reconciled the audit window with confidence bounds verified; conservative account use was 367,301 rows / 4,632,699 remaining, reserve satisfied. Report SHA-256: `EE71C063636A266A57573AD4E2641345FD40424D07472E653598CCA7CD1CD421` (`C:\Codex\r2-d1-ownership-audit-20261116T095823Z\scheduled-run-log-operational-202611192213.report.json`).
+- [x] The `scheduled-runs` migration dry-run failed closed because the query plan does not use `idx_scheduled_run_log_completed_started_id`; the candidate index migration is not applied in production. No schema or R2 write was made.
+- [ ] Determine whether these 988 incomplete runs are stale failures or still-active state, and decide their archive/retention treatment before changing status, migrating, or deleting them. Review the required index migration separately before any production schema change.
+
+## 2026-11-20 JST delayed Account Analytics reconciliation
+
+- [x] After the three latest read-only audits finished, a fresh Account Analytics query at `2026-11-19T22:11:35Z` reported 415,419 account-wide rows read / 4,584,581 remaining. The target D1 was 414,991 rows; relative to the 22:03 preflight, its increase of 49,098 exactly matches the completed `analysis-history` (47,862), `analysis-current` (248), and `scheduled_run_log` operational audit (988) metadata reads. Other databases added 8 reads and 1 write, which are not attributed to these audits. The 100,000-row reserve passed. Sanitized report SHA-256: `55D3F82C2CC8A89B32637FF11615936D0D78CD9886E14F675E481FB11E05AFE6` (`C:\Codex\r2-d1-ownership-audit-20261116T095823Z\d1-usage-live-20261119T221135Z.sanitized.json`).
+- [ ] Immediate per-phase postflight can precede the account-wide daily aggregate update; use a fresh account usage read after the propagation delay before starting another D1 phase or quoting the combined daily total.
+
+## 2026-11-20 JST account-wide day-to-date usage gate
+
+- [x] Updated the usage helper and D1 migration preflight to combine current-UTC-day daily Analytics with exact minute groups from midnight, using the larger rows-read count per database for the budget gate while retaining the raw daily snapshot for delta reconciliation. Postflight carries that effective preflight baseline forward; daily/minute disagreement that cannot be bounded fails closed. The D1 usage and migration suites passed together (117 tests).
+- [x] The updated read-only helper queried current Account Analytics at 2026-11-19 22:38 UTC: daily and minute totals both reported 419,513 rows read, leaving 4,580,487 / 5,000,000; the 100,000-row reserve passed. Sanitized report SHA-256 `10BD850E7B09BA8056707874064F833D494406F843F6C0FE81C9A9455B60FE99` (`C:\Codex\r2-d1-ownership-audit-20261116T095823Z\d1-usage-effective-live-20261119T2238Z.sanitized.json`). No D1 SQL, R2 write, Worker deployment, or migration dispatch was part of this local change; every later row-reading dispatch still needs its own fresh gate.
+
+## 2026-11-20 JST migration workflow postflight review
+
+- [x] Reviewed the manual migration Workflow and its called CLI. It checks account-wide allowance before any D1 query; the CLI records per-phase Analytics preflight/postflight, compares the target-database read delta with D1 `meta.rows_read`, uses exact minute groups when daily Analytics lags, retries for up to five minutes, and reports an unreconciled result as failure. The workflow uploads the sanitized migration report and checkpoint; no additional workflow-level aggregate comparison was added because the CLI already performs the stricter per-phase reconciliation.
+- [x] Re-ran the read-only usage, migration, and workflow-policy suites: 129/129 passed. `actionlint` 1.7.12 passed for every `.github/workflows/*.yml` file. No live D1 SQL, R2 write, Workflow dispatch, deployment, or device action occurred in this review.
+- [ ] These checks are local only and still do not cover the uncommitted candidate in GitHub-hosted CI. Preserve the deployment approval gate for production D1/R2 changes and Worker cutover.
+
+## 2026-11-20 JST scheduled-run terminal-state migration guard
+
+- [x] Tightened `scheduled-runs` eligibility to require both `finished_at` and terminal status `success`, `failed`, `partial`, or `superseded`; added the same predicate to the partial expression index and a defensive runtime rejection. The migration tests now include a `running` row with a non-null finish time and prove it is not archived. `python -m unittest -v test_migrate_d1_to_r2` passed 97/97, including the SQLite query-plan/index test; `git diff --check` was clean.
+- [x] Updated the runbook and ownership specification to distinguish unresolved legacy D1 rows from the candidate Worker's R2 job state. No production D1 schema change, D1 row query, R2 write, workflow dispatch, deploy, commit, or push occurred.
+- [ ] Production still has 991 observed `analysis/running` rows without `finished_at` as of the 00:24 UTC read-only audit. Keep them in D1; diagnose and approve retention/backup handling before any state change. The new index migration and candidate Worker remain local and unreviewed by hosted CI.
+
+## 2026-11-20 JST financial-period serving-path reconciliation
+
+- [x] Compared the `main` base source (`b3f3a7b75bc54d30ec468fc085922791f99e340b`) and candidate Worker: `/api/v1/financial-data/{code}` builds its response from YFinance v2 and IRBANK R2 objects through `readV2FinancialPayload`; neither path reads D1 `financial_periods` as a fallback. The 15 source-period-missing and other unresolved D1 rows therefore remain legacy records, not data newly removed from this serving path. No D1 query or R2 write was made.
+- [ ] Preserve the unresolved D1 rows until source identity, backup, retention, and external-use requirements are decided. Production Worker/API parity still requires a readback after reviewed deployment; this source comparison alone is not a production response test.
+
+## 2026-11-20 JST 09:54 D1 active rate-limit counter snapshot
+
+- [x] A read-only query over the preceding 60 seconds found 0 active `api_request_log` buckets and 0 counted requests. D1 query metadata reported 1 row read and 0 rows written. Account Analytics at `2026-11-20T00:54:38Z` reported 6,093 account-wide reads, including 6,078 for the target database, with 4,993,907 remaining; this matched the `00:51:16Z` preflight. No production request, D1 write, or R2 write was made.
+- [x] Delayed Account Analytics postflight at `2026-11-20T01:12:32Z` reported 6,102 account reads / 4,993,898 remaining and 6,079 target-D1 reads. Relative to the `00:51:16Z` preflight, the target database increased by exactly 1 read, matching the D1 query's `meta.rows_read=1`; the other database increased by 8 reads and 1 write, which are not attributed to this query. Minute-level confidence bounds were verified.
+- [ ] Repeat the active-counter snapshot immediately before the Durable Object handoff. This point-in-time D1 result does not prove the production Worker has the candidate DO binding or that its handoff has occurred.
+
+## 2026-11-20 JST 10:09 YFinance scheduled publication and quote freshness
+
+- [x] Read-only GitHub Actions inspection found three consecutive scheduled `v2-daily-sync` failures on Nov 17–19. The Nov 19 job still published generation `2026-11-19-47856d94355d4eefa328d64c9d3c021c` (`success=4,429`, `failed=156`, catalog 4,394) before exiting unsuccessfully. Its log recorded 4,367 missing closes for the Nov 19 Japan session and 142 symbol HTTP 404 failures; the Nov 18 job showed the same missing-close pattern (4,392) and 142 HTTP 404 failures.
+- [x] Direct read-only R2 GET confirmed the current catalog pointer is that generation with `market_data_date=2026-11-19`. `7203.T` has close 3,428 JPY dated Nov 16, although its object was last modified Nov 19; its `sync.json` is `partial` with `Field fetch failed: price` and a retry session of Nov 19. At the Nov 20 morning check the quote was exactly three completed XTKS sessions old; if unchanged after the Nov 20 session, the offline notification policy will exclude it. No provider request, D1 query, R2 write, or workflow dispatch occurred in this recheck.
+- [x] Cloudflare Workers Scripts Read at `2026-11-20T01:12Z` still reports deployment `7731b2d6-75e8-4b13-8985-9f47a4960f95`, version 84 (`4981c1e0-e337-4392-9f5b-909b52c5bc0c`) at 100%, created Nov 3. Current binding names include `DB`, `MARKET_DATA`, and `MARKET_PRICE_QUEUE`, with no `RATE_LIMITER`; this agrees with the prior source audit that the notification-price route is not deployed. No Worker setting or deployment changed.
+- [ ] Diagnose repeated YFinance missing-close and 404 failures and confirm the next scheduled catalog has fresh per-security quote dates. Keep the three-session cutoff and v2-only app-start source; do not replace missing prices with per-security IRBANK calls.
+
+## 2026-11-20 UTC 01:29 Cron telemetry and D1 usage correlation
+
+- [x] Cloudflare Workers Observability dry queries (dry=true) confirmed one scheduled invocation for diview-irbank, trigger 17 * * * *, at 2026-11-20T01:18:09.592Z: outcome exceededCpu, CPU 2,050 ms, wall time 36,594 ms. The query result was not persisted and raw messages/invocation IDs were not retained. The Observability statistics.rows_read (~3.5 million) counts telemetry rows and is not D1 quota usage.
+- [x] Account Analytics minute buckets for 01:16Z–01:20Z reported 38 target-D1 read queries, 4,126 rows read, and 197 rows written with confidence bounds verified: 01:17Z = 30 queries / 4,086 rows / 149 writes; 01:18Z = 8 queries / 40 rows / 48 writes. The 01:28:51Z daily postflight reported 10,228 account reads and 10,205 target-D1 reads, or 4,126 more in each than the 01:12:32Z snapshot.
+- [ ] The D1 increment and Cron event overlap in time, but Analytics has no Worker-invocation join; do not attribute all 4,126 reads or 197 writes to Cron. Diagnose the repeated CPU failure and identify the D1 caller before using this as migration before/after evidence.
+- [x] Rechecked the candidate notification-price source after the user's decision: Android batches codes to POST /api/v1/notification-prices; the Worker reads existing YFinance v2 R2 current.json objects. It has no per-security IRBANK price call or provider fallback. Missing/invalid quotes are omitted and the device's existing cache is preserved. No source changes or tests were run in this evidence update.
+- [ ] The candidate route and Durable Object are still not deployed. Production remains Version 84 without RATE_LIMITER; API parity, cutover usage delta, and live-device proof are outstanding.
+- [ ] GitHub remains signed out in the active Chrome tab, including the migration Environment settings page. The already-authorized security-settings/hosted-CI preparation cannot proceed until the user completes sign-in in that tab. No GitHub settings or secrets changed.
+
+## 2026-11-20 UTC 01:35 analysis Cron source-path comparison
+
+- [x] Read-only source inspection of repository commit b3f3a7b75bc54d30ec468fc085922791f99e340b (2026-11-03) found one configured hourly Cron, 17 * * * *. Its scheduled handler starts feedback-email retry, old-feedback cleanup, and runScheduledAnalysis. That analysis path begins with a D1 scheduled_run_log insert and reads definitions/configuration plus active securities joined to watchlist_targets. The current candidate config keeps 17 * * * * for maintenance and */5 * * * * for retention; it does not schedule analysis.
+- [ ] The Cloudflare Version 84 deployment has not been cryptographically or operationally mapped to this exact repository commit in this check. The source path makes the scheduled D1 spike plausible, but the timing correlation is not caller attribution. Keep production CPU diagnosis and analysis-Cron restoration on hold.
+## 2026-11-20 UTC 01:52 latest production read-only migration checks
+
+- [x] A fresh `d1-operational-audit` read 992 `scheduled_run_log` rows in 10 queries; all were `analysis` / `running` with no `finished_at`. The newest row started at `2026-11-20T01:17:33.048Z`. It planned and wrote 0 R2 objects. Effective account usage reconciled at 11,229 reads / 4,988,771 remaining, above the 100,000-row reserve. Report SHA-256: `9871882e374d29a24f9429e1f85c0d4c5c080ee3ef503324eb52dcfac73329e5` (`C:\Codex\r2-d1-ownership-audit-20261116T095823Z\scheduled-run-log-operational-current-20261120T0146Z.report.json`).
+- [x] The `definitions` dry-run planned 12 R2 objects with 0 D1 queries/rows, 0 conflicts, 0 verification failures, and 0 writes. Report SHA-256: `9b18cb396cca6de7392e763c4ff09e3d94b9aeff1607f5558668491ddf39fd27` (`C:\Codex\r2-d1-ownership-audit-20261116T095823Z\definitions-readonly-current-20261120T0150Z.report.json`).
+- [x] A `scheduled-runs` dry-run stopped at `EXPLAIN QUERY PLAN`: production does not select `idx_scheduled_run_log_completed_started_id`. It read 0 rows and wrote 0 R2 objects; the report records 1 metadata query and the failed index guard. Report SHA-256: `f90035c10d1fc981cc5272a2197b62448e917e772530b19868b85cf552396c05` (`C:\Codex\r2-d1-ownership-audit-20261116T095823Z\scheduled-runs-eligibility-current-20261120T0152Z.report.json`). The production D1 schema was not changed.
+- [ ] Apply migration `0009` only through a separately reviewed D1 schema-write operation, then read back its definition and confirm the exact query plan before retrying `scheduled-runs`. Keep unfinished rows in D1 until their lifecycle and retention treatment are resolved.
+- [x] The user reconfirmed app-start prices must come from existing YFinance v2 R2 objects, with no per-security IRBANK request. The candidate Worker and Android route continue to follow this rule; local verification already recorded 143/143 Worker tests, 129/129 migration/usage/workflow tests, and 286/286 Android JDK 17 unit tests. No source edit, production write, workflow dispatch, deployment, or device install was made for this evidence update.## 2026-11-20 UTC Android JDK 17 build and install
+
+- [x] Rebuilt the candidate from this worktree with Microsoft OpenJDK 17.0.20.1 using `testDebugUnitTest assembleDebug assembleDebugAndroidTest`; Gradle completed successfully (71 tasks were up-to-date). Debug APK SHA-256: `E33A59B15E1E15A46A302EFCCDCB78BD8DC3D51EC014A627B347C638927B8659`.
+- [x] Installed the exact APK with `adb install -r` on the dedicated API 35 `DiviewNotificationV2QA20261119` AVD and the connected SCG01. Both installed `base.apk` hashes matched the build. `MainActivity` launched on both; no uninstall or app-data clear was performed.
+- [x] The same APK hash was previously used by the offline WorkManager acceptance run: morning queued the local fresh-price alert and evening posted the Android notification, each 1/1 with network disabled. This is local-fixture acceptance, not a production API/R2 cutover check.
