@@ -33,6 +33,7 @@ class NotificationDeliveryTest {
     private val store = NotificationStore(app)
     private val local = LocalImportStore(app)
     private var currentTime = ZonedDateTime.parse("2026-10-05T08:30:00+09:00[Asia/Tokyo]")
+    private val freshQuoteDate = LocalDate.of(2026, 10, 2).toString()
     private val clock = { currentTime }
     private var cacheReads = 0
     private var posted = 0
@@ -71,8 +72,8 @@ class NotificationDeliveryTest {
             nextPayoutAmount = "", dividendMonths = listOf(10), dividendType = "", accountType = "NISA", dailyChange = "", isPositive = true)))
         NotificationPriceCache(app).merge(
             CloudflarePriceCatalogSnapshot(
-                mapOf("7203" to CloudflareMarketQuote(2500.0, 100.0, quoteDate = currentTime.toLocalDate().toString())),
-                currentTime.toLocalDate().toString()
+                mapOf("7203" to CloudflareMarketQuote(2500.0, 100.0, quoteDate = freshQuoteDate)),
+                freshQuoteDate
             ),
             currentTime.toInstant().toEpochMilli()
         )
@@ -136,9 +137,9 @@ class NotificationDeliveryTest {
             val cached = NotificationPriceCache(app).read()["7203"]
                 ?: throw AssertionError("The local price cache must contain the seeded quote")
             assertEquals(2500.0, cached.price, 0.0)
-            assertEquals("2026-10-05", cached.quoteDate)
+            assertEquals(freshQuoteDate, cached.quoteDate)
             assertEquals(currentTime.toInstant().toEpochMilli(), cached.fetchedAtMillis)
-            assertEquals("2026-10-05", cached.marketDataDate)
+            assertEquals(freshQuoteDate, cached.marketDataDate)
             assertEquals(null, cached.generation)
 
             val delivery = NotificationDeliveryEngine(app, now = clock)
@@ -183,21 +184,21 @@ class NotificationDeliveryTest {
 
     @Test fun disableDuringCacheReadStopsLatePublication() = runBlocking {
         store.setEnabled(NotificationKind.PRICE, true)
-        engine(load = { store.setEnabled(NotificationKind.PRICE, false); mapOf("7203" to CachedNotificationPrice(2500.0, "2026-10-05")) }).run(NotificationKind.PRICE)
+        engine(load = { store.setEnabled(NotificationKind.PRICE, false); mapOf("7203" to CachedNotificationPrice(2500.0, freshQuoteDate)) }).run(NotificationKind.PRICE)
         assertEquals(0, posted)
         assertTrue(store.priceStates().isEmpty())
     }
 
     @Test fun deletedStockDuringCacheReadCannotBeNotified() = runBlocking {
         store.setEnabled(NotificationKind.PRICE, true)
-        engine(load = { local.saveWatchlist(emptyList()); mapOf("7203" to CachedNotificationPrice(2500.0, "2026-10-05")) }).run(NotificationKind.PRICE)
+        engine(load = { local.saveWatchlist(emptyList()); mapOf("7203" to CachedNotificationPrice(2500.0, freshQuoteDate)) }).run(NotificationKind.PRICE)
         assertEquals(0, posted)
     }
 
     @Test fun resetDuringFetchClearsBothKindsAndStopsLatePublication() = runBlocking {
         store.setEnabled(NotificationKind.PRICE, true)
         store.setEnabled(NotificationKind.DIVIDEND, true)
-        engine(load = { store.clear(); mapOf("7203" to CachedNotificationPrice(2500.0, "2026-10-05")) }).run(NotificationKind.PRICE)
+        engine(load = { store.clear(); mapOf("7203" to CachedNotificationPrice(2500.0, freshQuoteDate)) }).run(NotificationKind.PRICE)
         assertFalse(store.settings().priceEnabled)
         assertFalse(store.settings().dividendEnabled)
         assertEquals(0, posted)

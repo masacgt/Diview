@@ -2459,3 +2459,9 @@ Reports（Git外、`C:\Codex\r2-d1-ownership-audit-20261106`）:
 - [x] Rebuilt the candidate from this worktree with Microsoft OpenJDK 17.0.20.1 using `testDebugUnitTest assembleDebug assembleDebugAndroidTest`; Gradle completed successfully (71 tasks were up-to-date). Debug APK SHA-256: `E33A59B15E1E15A46A302EFCCDCB78BD8DC3D51EC014A627B347C638927B8659`.
 - [x] Installed the exact APK with `adb install -r` on the dedicated API 35 `DiviewNotificationV2QA20261119` AVD and the connected SCG01. Both installed `base.apk` hashes matched the build. `MainActivity` launched on both; no uninstall or app-data clear was performed.
 - [x] The same APK hash was previously used by the offline WorkManager acceptance run: morning queued the local fresh-price alert and evening posted the Android notification, each 1/1 with network disabled. This is local-fixture acceptance, not a production API/R2 cutover check.
+
+## 2026-11-20 UTC Android notification freshness fixture
+
+- [x] Diagnosed the five API 26 CI failures: the test seeded an October 5 quote, but simulated 08:30 on Monday October 5, when the latest completed TSE session was Friday October 2. The production freshness guard correctly rejected that future quote. Updated only the instrumentation fixture to use the October 2 quote date; no application behavior changed.
+- [x] With Microsoft OpenJDK 17.0.20.1, `NotificationDeliveryTest` passed on the API 35 AVD: 14 tests, 0 failures, 0 errors, 0 skipped. The exact debug APK SHA-256 `E33A59B15E1E15A46A302EFCCDCB78BD8DC3D51EC014A627B347C638927B8659` was installed with `adb install -r` on `emulator-5556` and `RFCNC0E4H8J`; both installed `base.apk` hashes matched. No app data was cleared.
+- [ ] Push the corrected fixture and await the new API 26/API 35 hosted test results. The prior API 26 result is from the uncorrected commit; the API 35 retry of that commit is still running.
